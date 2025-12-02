@@ -5,9 +5,8 @@ use anyhow::Result;
 use cairo::Context;
 use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// Text displayer
 ///
@@ -15,8 +14,7 @@ use std::rc::Rc;
 pub struct TextDisplayer {
     id: String,
     name: String,
-    drawing_area: DrawingArea,
-    data: Rc<RefCell<DisplayData>>,
+    data: Arc<Mutex<DisplayData>>,
 }
 
 #[derive(Clone)]
@@ -28,27 +26,15 @@ struct DisplayData {
 
 impl TextDisplayer {
     pub fn new() -> Self {
-        let drawing_area = DrawingArea::new();
-        let data = Rc::new(RefCell::new(DisplayData {
+        let data = Arc::new(Mutex::new(DisplayData {
             text: "No data".to_string(),
             font_size: 24.0,
             color: (1.0, 1.0, 1.0), // White
         }));
 
-        // Set up draw function
-        let data_clone = data.clone();
-        drawing_area.set_draw_func(move |_, cr, width, height| {
-            let data = data_clone.borrow();
-            Self::draw_internal(cr, width, height, &data);
-        });
-
-        // Set minimum size
-        drawing_area.set_size_request(200, 100);
-
         Self {
             id: "text".to_string(),
             name: "Text Display".to_string(),
-            drawing_area,
             data,
         }
     }
@@ -66,7 +52,7 @@ impl TextDisplayer {
         cr.set_font_size(data.font_size);
 
         // Get text dimensions
-        let extents = cr.text_extents(&data.text).unwrap();
+        let extents = cr.text_extents(&data.text).unwrap_or_default();
 
         // Center text
         let x = (width as f64 - extents.width()) / 2.0 - extents.x_bearing();
@@ -93,7 +79,22 @@ impl Displayer for TextDisplayer {
     }
 
     fn create_widget(&self) -> Widget {
-        self.drawing_area.clone().upcast()
+        let drawing_area = DrawingArea::new();
+
+        // Set minimum size
+        drawing_area.set_size_request(200, 100);
+
+        // Set up draw function
+        let data_clone = self.data.clone();
+        drawing_area.set_draw_func(move |widget, cr, width, height| {
+            if let Ok(data) = data_clone.lock() {
+                Self::draw_internal(cr, width, height, &data);
+            }
+            // Schedule another redraw to keep updating
+            widget.queue_draw();
+        });
+
+        drawing_area.upcast()
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
@@ -115,18 +116,16 @@ impl Displayer for TextDisplayer {
         }
 
         // Update display data
-        {
-            let mut display_data = self.data.borrow_mut();
+        // The widget will redraw automatically on its next draw cycle
+        if let Ok(mut display_data) = self.data.lock() {
             display_data.text = text;
         }
-
-        // Trigger redraw
-        self.drawing_area.queue_draw();
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
-        let data = self.data.borrow();
-        Self::draw_internal(cr, width as i32, height as i32, &data);
+        if let Ok(data) = self.data.lock() {
+            Self::draw_internal(cr, width as i32, height as i32, &data);
+        }
         Ok(())
     }
 
@@ -152,24 +151,24 @@ impl Displayer for TextDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        let mut data = self.data.borrow_mut();
-
-        if let Some(font_size) = config.get("font_size") {
-            if let Some(size) = font_size.as_f64() {
-                data.font_size = size;
-            }
-        }
-
-        if let Some(color) = config.get("color") {
-            if let Some(color_str) = color.as_str() {
-                // Parse hex color (e.g., "#FFFFFF")
-                if let Some(rgb) = Self::parse_hex_color(color_str) {
-                    data.color = rgb;
+        if let Ok(mut data) = self.data.lock() {
+            if let Some(font_size) = config.get("font_size") {
+                if let Some(size) = font_size.as_f64() {
+                    data.font_size = size;
                 }
             }
+
+            if let Some(color) = config.get("color") {
+                if let Some(color_str) = color.as_str() {
+                    // Parse hex color (e.g., "#FFFFFF")
+                    if let Some(rgb) = Self::parse_hex_color(color_str) {
+                        data.color = rgb;
+                    }
+                }
+            }
+
         }
 
-        self.drawing_area.queue_draw();
         Ok(())
     }
 
