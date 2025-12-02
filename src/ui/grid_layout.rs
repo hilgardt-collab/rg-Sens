@@ -101,17 +101,21 @@ impl GridLayout {
             let occupied = occupied_cells.borrow();
             let preview = drag_preview_cell.borrow();
 
+            // Calculate available columns and rows based on actual widget size
+            let available_cols = (width as f64 / (config.cell_width + config.spacing) as f64).floor() as u32;
+            let available_rows = (height as f64 / (config.cell_height + config.spacing) as f64).floor() as u32;
+
             // Draw grid lines
             cr.set_source_rgba(0.3, 0.3, 0.3, 0.3);
             cr.set_line_width(1.0);
 
-            for col in 0..=config.columns {
+            for col in 0..=available_cols {
                 let x = col as f64 * (config.cell_width + config.spacing) as f64;
                 cr.move_to(x, 0.0);
                 cr.line_to(x, height as f64);
             }
 
-            for row in 0..=config.rows {
+            for row in 0..=available_rows {
                 let y = row as f64 * (config.cell_height + config.spacing) as f64;
                 cr.move_to(0.0, y);
                 cr.line_to(width as f64, y);
@@ -392,6 +396,12 @@ impl GridLayout {
                         if let Ok(fixed) = parent.downcast::<Fixed>() {
                             let (current_x, current_y) = fixed.child_position(&state.frame);
 
+                            // Calculate available grid size based on container size
+                            let container_width = fixed.width() as f64;
+                            let container_height = fixed.height() as f64;
+                            let available_cols = (container_width / (config.cell_width + config.spacing) as f64).floor() as u32;
+                            let available_rows = (container_height / (config.cell_height + config.spacing) as f64).floor() as u32;
+
                             // Calculate grid position
                             let grid_x = ((current_x + config.cell_width as f64 / 2.0)
                                 / (config.cell_width + config.spacing) as f64)
@@ -400,8 +410,8 @@ impl GridLayout {
                                 / (config.cell_height + config.spacing) as f64)
                                 .floor() as u32;
 
-                            let grid_x = grid_x.min(config.columns.saturating_sub(1));
-                            let grid_y = grid_y.min(config.rows.saturating_sub(1));
+                            let grid_x = grid_x.min(available_cols.saturating_sub(1));
+                            let grid_y = grid_y.min(available_rows.saturating_sub(1));
 
                             // Check collision
                             let geom = state.panel.blocking_read().geometry;
