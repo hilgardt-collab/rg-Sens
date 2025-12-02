@@ -291,10 +291,14 @@ impl GridLayout {
             Rc::new(RefCell::new(HashMap::new()));
         let initial_positions_clone = initial_positions.clone();
 
+        // Clone for drag_begin closure
+        let selected_panels_begin = selected_panels.clone();
+        let panel_states_begin = panel_states.clone();
+
         drag_gesture.connect_drag_begin(move |_, _, _| {
             // Store initial positions of all selected panels
-            let selected = selected_panels.borrow();
-            let states = panel_states.borrow();
+            let selected = selected_panels_begin.borrow();
+            let states = panel_states_begin.borrow();
 
             let mut positions = initial_positions_clone.borrow_mut();
             positions.clear();
@@ -314,9 +318,15 @@ impl GridLayout {
         let initial_positions_clone2 = initial_positions.clone();
         let frame_clone = frame.clone();
 
+        // Clone for drag_update closure
+        let selected_panels_update = selected_panels.clone();
+        let panel_states_update = panel_states.clone();
+        let drag_preview_cell_update = drag_preview_cell.clone();
+        let drop_zone_layer_update = drop_zone_layer.clone();
+
         drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
-            let selected = selected_panels.borrow();
-            let states = panel_states.borrow();
+            let selected = selected_panels_update.borrow();
+            let states = panel_states_update.borrow();
             let positions = initial_positions_clone2.borrow();
 
             // Move all selected panels
@@ -343,18 +353,25 @@ impl GridLayout {
                         / (config.cell_height + config.spacing) as f64)
                         .floor() as u32;
 
-                    *drag_preview_cell.borrow_mut() = Some((grid_x, grid_y));
-                    drop_zone_layer.queue_draw();
+                    *drag_preview_cell_update.borrow_mut() = Some((grid_x, grid_y));
+                    drop_zone_layer_update.queue_draw();
                 }
             }
         });
 
         let panel_id_clone = panel_id.clone();
 
+        // Clone for drag_end closure
+        let selected_panels_end = selected_panels.clone();
+        let panel_states_end = panel_states.clone();
+        let occupied_cells_end = occupied_cells.clone();
+        let drag_preview_cell_end = drag_preview_cell.clone();
+        let drop_zone_layer_end = drop_zone_layer.clone();
+
         drag_gesture.connect_drag_end(move |_, _, _| {
-            let selected = selected_panels.borrow();
-            let states = panel_states.borrow();
-            let mut occupied = occupied_cells.borrow_mut();
+            let selected = selected_panels_end.borrow();
+            let states = panel_states_end.borrow();
+            let mut occupied = occupied_cells_end.borrow_mut();
 
             // Clear current occupied cells for selected panels
             for id in selected.iter() {
@@ -439,8 +456,8 @@ impl GridLayout {
             }
 
             // Clear drop preview
-            *drag_preview_cell.borrow_mut() = None;
-            drop_zone_layer.queue_draw();
+            *drag_preview_cell_end.borrow_mut() = None;
+            drop_zone_layer_end.queue_draw();
         });
 
         frame.add_controller(drag_gesture);
