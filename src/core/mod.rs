@@ -6,8 +6,8 @@ mod panel;
 mod registry;
 mod update_manager;
 
-pub use data_source::{DataSource, SourceMetadata};
-pub use displayer::{Displayer, ConfigSchema};
-pub use panel::Panel;
-pub use registry::Registry;
+pub use data_source::{BoxedDataSource, DataSource, SourceMetadata};
+pub use displayer::{BoxedDisplayer, ConfigSchema, Displayer};
+pub use panel::{Panel, PanelGeometry};
+pub use registry::{global_registry, Registry};
 pub use update_manager::UpdateManager;

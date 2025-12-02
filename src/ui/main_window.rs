@@ -1,6 +1,7 @@
 //! Main application window
 
-use gtk4::{Widget, Box as GtkBox};
+use gtk4::prelude::*;
+use gtk4::{Box as GtkBox, Widget};
 
 pub struct MainWindow {
     container: GtkBox,
