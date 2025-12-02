@@ -1,0 +1,30 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Configuration (user-specific)
+config.json
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+
+# Testing
+coverage/
+*.profraw
+*.profdata
+
+# Generated files
+/doc

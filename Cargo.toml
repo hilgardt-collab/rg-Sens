@@ -1,0 +1,67 @@
+[package]
+name = "rg-sens"
+version = "0.1.0"
+edition = "2021"
+authors = ["rg-Sens Contributors"]
+description = "A fast, customizable system monitoring dashboard for Linux"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hilgardt-collab/rg-Sens"
+keywords = ["system-monitor", "gtk", "dashboard", "linux"]
+categories = ["gui", "visualization"]
+
+[dependencies]
+# GTK4 and graphics
+gtk4 = { version = "0.9", features = ["v4_10"] }
+gdk4 = "0.9"
+cairo-rs = { version = "0.20", features = ["png"] }
+pango = "0.20"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# System information
+sysinfo = "0.31"
+nvml-wrapper = { version = "0.10", optional = true }  # NVIDIA GPU support
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+anyhow = "1"
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+crossbeam = "0.8"
+arc-swap = "1"
+
+# Configuration
+directories = "5"
+
+# Future: Dynamic plugin loading (commented for now)
+# libloading = "0.8"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = ["nvidia"]
+nvidia = ["nvml-wrapper"]  # NVIDIA GPU support
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 1  # Slightly optimized debug builds for better performance during development
+
+[[bin]]
+name = "rg-sens"
+path = "src/main.rs"
+
+[lib]
+name = "rg_sens"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]  # cdylib for future plugin system
