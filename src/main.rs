@@ -1,6 +1,7 @@
+use gtk4::gdk::Display;
 use gtk4::glib;
 use gtk4::prelude::*;
-use gtk4::Application;
+use gtk4::{Application, CssProvider};
 use log::info;
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig, GridLayout};
@@ -33,6 +34,9 @@ fn main() {
 
 fn build_ui(app: &Application) {
     info!("Building UI");
+
+    // Load CSS for selection styling
+    load_css();
 
     // Create grid configuration
     let grid_config = GridConfig {
@@ -123,4 +127,23 @@ fn build_ui(app: &Application) {
 
     window.present();
     info!("Window presented with {} panels", grid_layout.panels().len());
+}
+
+/// Load CSS styling for the application
+fn load_css() {
+    let provider = CssProvider::new();
+    provider.load_from_data(
+        "
+        .selected {
+            border: 3px solid #00ff00;
+            border-radius: 4px;
+        }
+        ",
+    );
+
+    gtk4::style_context_add_provider_for_display(
+        &Display::default().expect("Could not connect to a display."),
+        &provider,
+        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
 }
