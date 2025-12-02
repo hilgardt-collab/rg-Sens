@@ -51,14 +51,16 @@ impl TextDisplayer {
         cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
         cr.set_font_size(data.font_size);
 
-        // Get text dimensions
-        let extents = cr.text_extents(&data.text).unwrap_or_default();
+        // Get text dimensions and center text
+        if let Ok(extents) = cr.text_extents(&data.text) {
+            let x = (width as f64 - extents.width()) / 2.0 - extents.x_bearing();
+            let y = (height as f64 - extents.height()) / 2.0 - extents.y_bearing();
+            cr.move_to(x, y);
+        } else {
+            // Fallback: place text at center without measuring
+            cr.move_to(width as f64 / 2.0, height as f64 / 2.0);
+        }
 
-        // Center text
-        let x = (width as f64 - extents.width()) / 2.0 - extents.x_bearing();
-        let y = (height as f64 - extents.height()) / 2.0 - extents.y_bearing();
-
-        cr.move_to(x, y);
         cr.show_text(&data.text).ok();
     }
 }
