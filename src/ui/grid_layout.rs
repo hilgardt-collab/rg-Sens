@@ -298,20 +298,41 @@ impl GridLayout {
 
         let menu = gio::Menu::new();
 
-        // Configure option
-        menu.append(Some("Configure..."), Some(&format!("panel.configure.{}", panel_id)));
-
-        // Resize option
-        menu.append(Some("Resize"), Some(&format!("panel.resize.{}", panel_id)));
+        // Properties option (combines configure + resize)
+        menu.append(Some("Properties..."), Some("panel.properties"));
 
         menu.append(Some("---"), None);
 
         // Delete option
-        menu.append(Some("Delete"), Some(&format!("panel.delete.{}", panel_id)));
+        menu.append(Some("Delete"), Some("panel.delete"));
 
         let popover = PopoverMenu::from_model(Some(&menu));
         popover.set_parent(widget);
         popover.set_has_arrow(false);
+
+        // Setup action group for this panel
+        let action_group = gio::SimpleActionGroup::new();
+
+        // Properties action
+        let panel_clone = panel.clone();
+        let panel_id_clone = panel_id.clone();
+        let properties_action = gio::SimpleAction::new("properties", None);
+        properties_action.connect_activate(move |_, _| {
+            info!("Opening properties dialog for panel: {}", panel_id_clone);
+            show_panel_properties_dialog(&panel_clone);
+        });
+        action_group.add_action(&properties_action);
+
+        // Delete action
+        let panel_id_clone2 = panel_id.clone();
+        let delete_action = gio::SimpleAction::new("delete", None);
+        delete_action.connect_activate(move |_, _| {
+            info!("Delete requested for panel: {}", panel_id_clone2);
+            // TODO: Implement delete with confirmation
+        });
+        action_group.add_action(&delete_action);
+
+        widget.insert_action_group("panel", Some(&action_group));
 
         // Right-click gesture
         let gesture_secondary = GestureClick::new();
@@ -586,6 +607,92 @@ impl GridLayout {
     pub fn config(&self) -> &GridConfig {
         &self.config
     }
+}
+
+/// Show panel properties dialog
+fn show_panel_properties_dialog(panel: &Arc<RwLock<Panel>>) {
+    use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Window, WindowType};
+
+    let panel_guard = match panel.try_read() {
+        Ok(guard) => guard,
+        Err(_) => {
+            log::warn!("Failed to lock panel for properties dialog");
+            return;
+        }
+    };
+
+    // Create dialog window
+    let dialog = Window::builder()
+        .title(format!("Panel Properties - {}", panel_guard.id))
+        .modal(true)
+        .default_width(400)
+        .default_height(300)
+        .build();
+
+    // Main container
+    let vbox = GtkBox::new(Orientation::Vertical, 12);
+    vbox.set_margin_top(12);
+    vbox.set_margin_bottom(12);
+    vbox.set_margin_start(12);
+    vbox.set_margin_end(12);
+
+    // Panel Size section
+    let size_label = Label::new(Some("Panel Size"));
+    size_label.add_css_class("heading");
+    vbox.append(&size_label);
+
+    let size_box = GtkBox::new(Orientation::Horizontal, 6);
+    size_box.set_margin_start(12);
+
+    // Width control
+    let width_label = Label::new(Some("Width:"));
+    let width_spin = SpinButton::with_range(1.0, 10.0, 1.0);
+    width_spin.set_value(panel_guard.geometry.width as f64);
+
+    // Height control
+    let height_label = Label::new(Some("Height:"));
+    let height_spin = SpinButton::with_range(1.0, 10.0, 1.0);
+    height_spin.set_value(panel_guard.geometry.height as f64);
+
+    size_box.append(&width_label);
+    size_box.append(&width_spin);
+    size_box.append(&height_label);
+    size_box.append(&height_spin);
+
+    vbox.append(&size_box);
+
+    // Buttons
+    let button_box = GtkBox::new(Orientation::Horizontal, 6);
+    button_box.set_halign(gtk4::Align::End);
+    button_box.set_margin_top(12);
+
+    let cancel_button = Button::with_label("Cancel");
+    let apply_button = Button::with_label("Apply");
+    apply_button.add_css_class("suggested-action");
+
+    let dialog_clone = dialog.clone();
+    cancel_button.connect_clicked(move |_| {
+        dialog_clone.close();
+    });
+
+    let panel_clone = panel.clone();
+    let dialog_clone2 = dialog.clone();
+    apply_button.connect_clicked(move |_| {
+        if let Ok(mut panel_guard) = panel_clone.try_write() {
+            panel_guard.geometry.width = width_spin.value() as u32;
+            panel_guard.geometry.height = height_spin.value() as u32;
+            info!("Updated panel geometry: {:?}", panel_guard.geometry);
+        }
+        dialog_clone2.close();
+    });
+
+    button_box.append(&cancel_button);
+    button_box.append(&apply_button);
+
+    vbox.append(&button_box);
+
+    dialog.set_child(Some(&vbox));
+    dialog.present();
 }
 
 impl Default for GridLayout {
