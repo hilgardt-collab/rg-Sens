@@ -161,16 +161,16 @@ fn build_ui(app: &Application) {
     });
 
     // Setup save-on-close confirmation
-    let window_weak = window.downgrade();
     let panels_clone = panels.clone();
     let config_dirty_clone4 = config_dirty.clone();
+    let grid_config_for_close = grid_config;
 
     window.connect_close_request(move |window| {
         let is_dirty = *config_dirty_clone4.borrow();
 
         if is_dirty {
             // Show save confirmation dialog
-            show_save_dialog(window, &panels_clone, grid_config_clone);
+            show_save_dialog(window, &panels_clone, grid_config_for_close);
             glib::Propagation::Stop // Prevent immediate close
         } else {
             glib::Propagation::Proceed // Close without saving
@@ -199,46 +199,40 @@ fn build_ui(app: &Application) {
 
 /// Show save confirmation dialog on close
 fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: UiGridConfig) {
-    use gtk4::{ButtonsType, DialogFlags, MessageDialog, MessageType, ResponseType};
+    use gtk4::AlertDialog;
 
-    let dialog = MessageDialog::new(
-        Some(window),
-        DialogFlags::MODAL,
-        MessageType::Question,
-        ButtonsType::None,
-        "Save configuration before closing?",
-    );
-
-    dialog.add_button("Don't Save", ResponseType::No);
-    dialog.add_button("Cancel", ResponseType::Cancel);
-    dialog.add_button("Save", ResponseType::Yes);
-    dialog.set_default_response(ResponseType::Yes);
+    let dialog = AlertDialog::builder()
+        .message("Save configuration before closing?")
+        .detail("Your panel layout and window size have been modified.")
+        .modal(true)
+        .buttons(vec!["Don't Save", "Cancel", "Save"])
+        .default_button(2) // "Save" button
+        .cancel_button(1) // "Cancel" button
+        .build();
 
     let window_clone = window.clone();
     let panels_clone = panels.to_vec();
 
-    dialog.connect_response(move |dialog, response| {
+    dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
         match response {
-            ResponseType::Yes => {
-                // Save and close
+            Ok(2) => {
+                // Save button (index 2)
                 info!("User chose to save configuration");
                 save_config(&window_clone, &panels_clone, grid_config);
                 window_clone.close();
             }
-            ResponseType::No => {
-                // Close without saving
+            Ok(0) => {
+                // Don't Save button (index 0)
                 info!("User chose not to save configuration");
                 window_clone.close();
             }
-            ResponseType::Cancel | _ => {
-                // Don't close
+            Ok(1) | Err(_) => {
+                // Cancel button (index 1) or dialog dismissed
                 info!("User cancelled close operation");
             }
+            _ => {}
         }
-        dialog.close();
     });
-
-    dialog.present();
 }
 
 /// Save current configuration to disk
