@@ -1,12 +1,15 @@
 use gtk4::gdk::Display;
 use gtk4::glib;
 use gtk4::prelude::*;
-use gtk4::{Application, CssProvider};
+use gtk4::{Application, ApplicationWindow, CssProvider};
 use log::{info, warn};
-use rg_sens::config::AppConfig;
+use rg_sens::config::{AppConfig, PanelConfig, WindowConfig};
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig, GridLayout};
 use rg_sens::{displayers, sources};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -136,6 +139,17 @@ fn build_ui(app: &Application) {
     // Set grid as window content
     window.set_child(Some(&grid_layout.widget()));
 
+    // Setup config saving
+    let window_weak = window.downgrade();
+    let panels_clone = panels.clone();
+    let grid_config_clone = grid_config;
+
+    grid_layout.set_on_change(move || {
+        if let Some(window) = window_weak.upgrade() {
+            save_config(&window, &panels_clone, grid_config_clone);
+        }
+    });
+
     // Spawn tokio runtime for update loop
     let update_manager_clone = update_manager.clone();
     std::thread::spawn(move || {
@@ -154,6 +168,60 @@ fn build_ui(app: &Application) {
 
     window.present();
     info!("Window presented with {} panels", grid_layout.panels().len());
+}
+
+/// Save current configuration to disk
+fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: GridConfig) {
+    // Get window dimensions
+    let (width, height) = (window.default_width(), window.default_height());
+
+    // Convert panels to PanelConfig
+    let panel_configs: Vec<PanelConfig> = panels
+        .iter()
+        .filter_map(|panel| {
+            if let Ok(panel_guard) = panel.try_read() {
+                Some(PanelConfig {
+                    id: panel_guard.id.clone(),
+                    x: panel_guard.geometry.x,
+                    y: panel_guard.geometry.y,
+                    width: panel_guard.geometry.width,
+                    height: panel_guard.geometry.height,
+                    source: panel_guard.source.metadata().id.clone(),
+                    displayer: panel_guard.displayer.id().to_string(),
+                    settings: HashMap::new(), // TODO: Save displayer/source settings
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Create config
+    let config = AppConfig {
+        version: 1,
+        window: WindowConfig {
+            width,
+            height,
+            x: None, // GTK4 doesn't provide window position
+            y: None,
+        },
+        grid: rg_sens::config::GridConfig {
+            columns: grid_config.columns,
+            rows: grid_config.rows,
+            spacing: grid_config.spacing as u32,
+        },
+        panels: panel_configs,
+    };
+
+    // Save to disk
+    match config.save() {
+        Ok(()) => {
+            info!("Configuration saved successfully");
+        }
+        Err(e) => {
+            warn!("Failed to save configuration: {}", e);
+        }
+    }
 }
 
 /// Create a panel from configuration parameters

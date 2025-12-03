@@ -53,6 +53,7 @@ pub struct GridLayout {
     selected_panels: Rc<RefCell<HashSet<String>>>,
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
     drag_preview_cell: Rc<RefCell<Option<(u32, u32)>>>,
+    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
 }
 
 impl GridLayout {
@@ -85,10 +86,19 @@ impl GridLayout {
             selected_panels: Rc::new(RefCell::new(HashSet::new())),
             occupied_cells: Rc::new(RefCell::new(HashSet::new())),
             drag_preview_cell: Rc::new(RefCell::new(None)),
+            on_change: Rc::new(RefCell::new(None)),
         };
 
         grid_layout.setup_drop_zone_drawing();
         grid_layout
+    }
+
+    /// Set a callback to be called when panel positions change
+    pub fn set_on_change<F>(&mut self, callback: F)
+    where
+        F: Fn() + 'static,
+    {
+        *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
     /// Setup drop zone visualization
@@ -367,6 +377,7 @@ impl GridLayout {
         let occupied_cells_end = occupied_cells.clone();
         let drag_preview_cell_end = drag_preview_cell.clone();
         let drop_zone_layer_end = drop_zone_layer.clone();
+        let on_change_end = self.on_change.clone();
 
         drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
             let selected = selected_panels_end.borrow();
@@ -463,6 +474,11 @@ impl GridLayout {
                         }
                     }
                 }
+            }
+
+            // Notify that panel positions have changed
+            if let Some(callback) = on_change_end.borrow().as_ref() {
+                callback();
             }
 
             // Clear drop preview
