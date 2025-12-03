@@ -2,7 +2,8 @@ use gtk4::gdk::Display;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, CssProvider};
-use log::info;
+use log::{info, warn};
+use rg_sens::config::AppConfig;
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig, GridLayout};
 use rg_sens::{displayers, sources};
@@ -38,25 +39,41 @@ fn build_ui(app: &Application) {
     // Load CSS for selection styling
     load_css();
 
-    // Create grid configuration
-    let grid_config = GridConfig {
-        rows: 2,
-        columns: 2,
-        cell_width: 300,
-        cell_height: 200,
-        spacing: 8,
+    // Load configuration from disk (or use defaults)
+    let app_config = match AppConfig::load() {
+        Ok(config) => {
+            info!("Loaded configuration from disk");
+            config
+        }
+        Err(e) => {
+            warn!("Failed to load config, using defaults: {}", e);
+            AppConfig::default()
+        }
     };
 
-    // Create the main window
-    let window_width = grid_config.columns as i32 * (grid_config.cell_width + grid_config.spacing);
-    let window_height = grid_config.rows as i32 * (grid_config.cell_height + grid_config.spacing);
+    // Create grid configuration from loaded config
+    let grid_config = GridConfig {
+        rows: app_config.grid.rows,
+        columns: app_config.grid.columns,
+        cell_width: 300,  // Fixed for now, could be configurable
+        cell_height: 200, // Fixed for now, could be configurable
+        spacing: app_config.grid.spacing as i32,
+    };
 
+    // Create the main window with saved dimensions
     let window = gtk4::ApplicationWindow::builder()
         .application(app)
         .title("rg-Sens - System Monitor")
-        .default_width(window_width)
-        .default_height(window_height)
+        .default_width(app_config.window.width)
+        .default_height(app_config.window.height)
         .build();
+
+    // Restore window position if saved
+    if let (Some(x), Some(y)) = (app_config.window.x, app_config.window.y) {
+        // Note: GTK4 doesn't directly support setting window position
+        // This would need to be handled via window manager hints
+        info!("Window position saved as ({}, {}), but GTK4 doesn't support direct positioning", x, y);
+    }
 
     // Create grid layout
     let mut grid_layout = GridLayout::new(grid_config);
@@ -67,43 +84,53 @@ fn build_ui(app: &Application) {
     // Create update manager
     let update_manager = Arc::new(UpdateManager::new());
 
-    // Create multiple panels in different grid positions
-    let panel_configs = vec![
-        ("panel-1", 0, 0, 1, 1, "CPU Monitor 1"),
-        ("panel-2", 1, 0, 1, 1, "CPU Monitor 2"),
-        ("panel-3", 0, 1, 2, 1, "CPU Monitor 3 (wide)"),
-    ];
-
     let mut panels = Vec::new();
 
-    for (id, x, y, width, height, _name) in panel_configs {
-        // Create source and displayer
-        let source = registry
-            .create_source("cpu")
-            .expect("Failed to create CPU source");
-        let displayer = registry
-            .create_displayer("text")
-            .expect("Failed to create text displayer");
+    // Create panels from configuration
+    if app_config.panels.is_empty() {
+        info!("No panels in config, creating default panels");
 
-        // Create panel
-        let panel = Panel::new(
-            id.to_string(),
-            PanelGeometry {
-                x,
-                y,
-                width,
-                height,
-            },
-            source,
-            displayer,
-        );
+        // Create default panels
+        let default_panels = vec![
+            ("panel-1", 0, 0, 1, 1, "cpu", "text"),
+            ("panel-2", 1, 0, 1, 1, "cpu", "text"),
+            ("panel-3", 0, 1, 2, 1, "cpu", "text"),
+        ];
 
-        let panel = Arc::new(RwLock::new(panel));
+        for (id, x, y, width, height, source_id, displayer_id) in default_panels {
+            match create_panel_from_config(id, x, y, width, height, source_id, displayer_id, &registry) {
+                Ok(panel) => {
+                    grid_layout.add_panel(panel.clone());
+                    panels.push(panel);
+                }
+                Err(e) => {
+                    warn!("Failed to create default panel {}: {}", id, e);
+                }
+            }
+        }
+    } else {
+        info!("Loading {} panels from config", app_config.panels.len());
 
-        // Add panel to grid
-        grid_layout.add_panel(panel.clone());
-
-        panels.push(panel);
+        for panel_config in &app_config.panels {
+            match create_panel_from_config(
+                &panel_config.id,
+                panel_config.x,
+                panel_config.y,
+                panel_config.width,
+                panel_config.height,
+                &panel_config.source,
+                &panel_config.displayer,
+                &registry,
+            ) {
+                Ok(panel) => {
+                    grid_layout.add_panel(panel.clone());
+                    panels.push(panel);
+                }
+                Err(e) => {
+                    warn!("Failed to create panel {}: {}", panel_config.id, e);
+                }
+            }
+        }
     }
 
     // Set grid as window content
@@ -127,6 +154,42 @@ fn build_ui(app: &Application) {
 
     window.present();
     info!("Window presented with {} panels", grid_layout.panels().len());
+}
+
+/// Create a panel from configuration parameters
+fn create_panel_from_config(
+    id: &str,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    source_id: &str,
+    displayer_id: &str,
+    registry: &rg_sens::core::Registry,
+) -> anyhow::Result<Arc<RwLock<Panel>>> {
+    // Create source and displayer
+    let source = registry
+        .create_source(source_id)
+        .ok_or_else(|| anyhow::anyhow!("Unknown source: {}", source_id))?;
+
+    let displayer = registry
+        .create_displayer(displayer_id)
+        .ok_or_else(|| anyhow::anyhow!("Unknown displayer: {}", displayer_id))?;
+
+    // Create panel
+    let panel = Panel::new(
+        id.to_string(),
+        PanelGeometry {
+            x,
+            y,
+            width,
+            height,
+        },
+        source,
+        displayer,
+    );
+
+    Ok(Arc::new(RwLock::new(panel)))
 }
 
 /// Load CSS styling for the application
