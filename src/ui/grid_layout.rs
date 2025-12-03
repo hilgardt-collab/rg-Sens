@@ -54,6 +54,7 @@ pub struct GridLayout {
     selected_panels: Rc<RefCell<HashSet<String>>>,
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
     drag_preview_cell: Rc<RefCell<Option<(u32, u32)>>>,
+    is_dragging: Rc<RefCell<bool>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
 }
 
@@ -87,6 +88,7 @@ impl GridLayout {
             selected_panels: Rc::new(RefCell::new(HashSet::new())),
             occupied_cells: Rc::new(RefCell::new(HashSet::new())),
             drag_preview_cell: Rc::new(RefCell::new(None)),
+            is_dragging: Rc::new(RefCell::new(false)),
             on_change: Rc::new(RefCell::new(None)),
         };
 
@@ -107,8 +109,14 @@ impl GridLayout {
         let config = self.config;
         let occupied_cells = self.occupied_cells.clone();
         let drag_preview_cell = self.drag_preview_cell.clone();
+        let is_dragging = self.is_dragging.clone();
 
         self.drop_zone_layer.set_draw_func(move |_, cr, width, height| {
+            // Only draw grid when actively dragging
+            if !*is_dragging.borrow() {
+                return;
+            }
+
             let occupied = occupied_cells.borrow();
             let preview = drag_preview_cell.borrow();
 
@@ -378,6 +386,7 @@ impl GridLayout {
         let panel_states = self.panel_states.clone();
         let occupied_cells = self.occupied_cells.clone();
         let drag_preview_cell = self.drag_preview_cell.clone();
+        let is_dragging = self.is_dragging.clone();
         let drop_zone_layer = self.drop_zone_layer.clone();
 
         let panel_id = panel.blocking_read().id.clone();
@@ -390,8 +399,14 @@ impl GridLayout {
         // Clone for drag_begin closure
         let selected_panels_begin = selected_panels.clone();
         let panel_states_begin = panel_states.clone();
+        let is_dragging_begin = is_dragging.clone();
+        let drop_zone_begin = drop_zone_layer.clone();
 
         drag_gesture.connect_drag_begin(move |_, _, _| {
+            // Enable grid visualization
+            *is_dragging_begin.borrow_mut() = true;
+            drop_zone_begin.queue_draw();
+
             // Store initial positions of all selected panels
             let selected = selected_panels_begin.borrow();
             let states = panel_states_begin.borrow();
@@ -458,6 +473,7 @@ impl GridLayout {
         let panel_states_end = panel_states.clone();
         let occupied_cells_end = occupied_cells.clone();
         let drag_preview_cell_end = drag_preview_cell.clone();
+        let is_dragging_end = is_dragging.clone();
         let drop_zone_layer_end = drop_zone_layer.clone();
         let on_change_end = self.on_change.clone();
 
@@ -562,6 +578,9 @@ impl GridLayout {
             if let Some(callback) = on_change_end.borrow().as_ref() {
                 callback();
             }
+
+            // Disable grid visualization
+            *is_dragging_end.borrow_mut() = false;
 
             // Clear drop preview
             *drag_preview_cell_end.borrow_mut() = None;
