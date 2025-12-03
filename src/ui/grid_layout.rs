@@ -674,7 +674,7 @@ impl GridLayout {
             let mut occupied = occupied_cells_end.borrow_mut();
             let positions = initial_positions.borrow();
 
-            // Clear current occupied cells for selected panels
+            // Phase 1: Clear current occupied cells for ALL selected panels
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
                     let geom = state.panel.blocking_read().geometry;
@@ -686,79 +686,111 @@ impl GridLayout {
                 }
             }
 
-            // Snap all selected panels
+            // Phase 2: Calculate new positions for ALL selected panels and check for ANY collisions
+            let mut new_positions: Vec<(String, u32, u32, f64, f64)> = Vec::new();
+            let mut group_has_collision = false;
+
+            // Get container dimensions for bounds checking
+            let (available_cols, available_rows) = if let Some(state) = states.values().next() {
+                if let Some(parent) = state.frame.parent() {
+                    if let Ok(fixed) = parent.downcast::<Fixed>() {
+                        let container_width = fixed.width() as f64;
+                        let container_height = fixed.height() as f64;
+                        (
+                            (container_width / (config.cell_width + config.spacing) as f64).floor() as u32,
+                            (container_height / (config.cell_height + config.spacing) as f64).floor() as u32,
+                        )
+                    } else {
+                        (config.columns, config.rows)
+                    }
+                } else {
+                    (config.columns, config.rows)
+                }
+            } else {
+                (config.columns, config.rows)
+            };
+
+            // Calculate new positions and check collisions
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    if let Some(parent) = state.frame.parent() {
-                        if let Ok(fixed) = parent.downcast::<Fixed>() {
-                            // Calculate final position based on initial position + drag offset
-                            let (orig_x, orig_y) = positions.get(id).unwrap_or(&(0.0, 0.0));
-                            let final_x = orig_x + offset_x;
-                            let final_y = orig_y + offset_y;
+                    let (orig_x, orig_y) = positions.get(id).unwrap_or(&(0.0, 0.0));
+                    let final_x = orig_x + offset_x;
+                    let final_y = orig_y + offset_y;
 
-                            // Calculate available grid size based on container size
-                            let container_width = fixed.width() as f64;
-                            let container_height = fixed.height() as f64;
-                            let available_cols = (container_width / (config.cell_width + config.spacing) as f64).floor() as u32;
-                            let available_rows = (container_height / (config.cell_height + config.spacing) as f64).floor() as u32;
+                    // Calculate grid position from final position
+                    let grid_x = ((final_x + config.cell_width as f64 / 2.0)
+                        / (config.cell_width + config.spacing) as f64)
+                        .floor() as u32;
+                    let grid_y = ((final_y + config.cell_height as f64 / 2.0)
+                        / (config.cell_height + config.spacing) as f64)
+                        .floor() as u32;
 
-                            // Calculate grid position from final position
-                            let grid_x = ((final_x + config.cell_width as f64 / 2.0)
-                                / (config.cell_width + config.spacing) as f64)
-                                .floor() as u32;
-                            let grid_y = ((final_y + config.cell_height as f64 / 2.0)
-                                / (config.cell_height + config.spacing) as f64)
-                                .floor() as u32;
+                    let grid_x = grid_x.min(available_cols.saturating_sub(1));
+                    let grid_y = grid_y.min(available_rows.saturating_sub(1));
 
-                            let grid_x = grid_x.min(available_cols.saturating_sub(1));
-                            let grid_y = grid_y.min(available_rows.saturating_sub(1));
-
-                            // Check collision
-                            let geom = state.panel.blocking_read().geometry;
-                            let mut has_collision = false;
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    if occupied.contains(&(grid_x + dx, grid_y + dy)) {
-                                        has_collision = true;
-                                    }
-                                }
+                    // Check if this panel would collide
+                    let geom = state.panel.blocking_read().geometry;
+                    for dx in 0..geom.width {
+                        for dy in 0..geom.height {
+                            let cell = (grid_x + dx, grid_y + dy);
+                            if occupied.contains(&cell) {
+                                group_has_collision = true;
+                                info!("Multi-panel drag collision detected at cell {:?} for panel {}", cell, id);
+                                break;
                             }
+                        }
+                        if group_has_collision {
+                            break;
+                        }
+                    }
 
-                            // Only move if no collision
-                            if !has_collision {
-                                // Snap to grid
-                                let snapped_x =
-                                    grid_x as f64 * (config.cell_width + config.spacing) as f64;
-                                let snapped_y =
-                                    grid_y as f64 * (config.cell_height + config.spacing) as f64;
+                    // Calculate snapped pixel position
+                    let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
+                    let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
+
+                    new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
+                }
+            }
+
+            // Phase 3: Apply movement based on collision check
+            if group_has_collision {
+                // Restore ALL panels to original positions
+                info!("Collision detected - restoring all selected panels to original positions");
+                for id in selected.iter() {
+                    if let Some(state) = states.get(id) {
+                        let geom = state.panel.blocking_read().geometry;
+
+                        // Restore occupied cells
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.insert((geom.x + dx, geom.y + dy));
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Move ALL panels to new positions
+                info!("Moving {} selected panels together", new_positions.len());
+                for (id, grid_x, grid_y, snapped_x, snapped_y) in new_positions {
+                    if let Some(state) = states.get(&id) {
+                        // Move widget
+                        if let Some(parent) = state.frame.parent() {
+                            if let Ok(fixed) = parent.downcast::<Fixed>() {
                                 fixed.move_(&state.frame, snapped_x, snapped_y);
+                            }
+                        }
 
-                                // Update geometry
-                                if let Ok(mut panel_guard) = state.panel.try_write() {
-                                    panel_guard.geometry.x = grid_x;
-                                    panel_guard.geometry.y = grid_y;
-                                }
+                        // Update geometry
+                        if let Ok(mut panel_guard) = state.panel.try_write() {
+                            panel_guard.geometry.x = grid_x;
+                            panel_guard.geometry.y = grid_y;
+                        }
 
-                                // Mark new cells as occupied
-                                for dx in 0..geom.width {
-                                    for dy in 0..geom.height {
-                                        occupied.insert((grid_x + dx, grid_y + dy));
-                                    }
-                                }
-                            } else {
-                                // Collision! Snap back to original position
-                                let orig_x =
-                                    geom.x as f64 * (config.cell_width + config.spacing) as f64;
-                                let orig_y =
-                                    geom.y as f64 * (config.cell_height + config.spacing) as f64;
-                                fixed.move_(&state.frame, orig_x, orig_y);
-
-                                // Restore occupied cells
-                                for dx in 0..geom.width {
-                                    for dy in 0..geom.height {
-                                        occupied.insert((geom.x + dx, geom.y + dy));
-                                    }
-                                }
+                        // Mark new cells as occupied
+                        let geom = state.panel.blocking_read().geometry;
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.insert((grid_x + dx, grid_y + dy));
                             }
                         }
                     }
