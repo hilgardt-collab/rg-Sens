@@ -460,21 +460,27 @@ impl GridLayout {
                     }
                 }
             } else {
-                // Clear other selections
-                for (id, state) in states.iter_mut() {
-                    if state.selected && id != &panel_id_clone {
-                        state.selected = false;
-                        state.frame.remove_css_class("selected");
+                // If clicking on an already-selected panel that's part of a multi-selection,
+                // keep the current selection (to allow dragging multiple panels)
+                // Otherwise, clear other selections and select only this panel
+                if !selected.contains(&panel_id_clone) || selected.len() == 1 {
+                    // Clear other selections
+                    for (id, state) in states.iter_mut() {
+                        if state.selected && id != &panel_id_clone {
+                            state.selected = false;
+                            state.frame.remove_css_class("selected");
+                        }
+                    }
+                    selected.clear();
+
+                    // Select this panel
+                    selected.insert(panel_id_clone.clone());
+                    if let Some(state) = states.get_mut(&panel_id_clone) {
+                        state.selected = true;
+                        frame_clone.add_css_class("selected");
                     }
                 }
-                selected.clear();
-
-                // Select this panel
-                selected.insert(panel_id_clone.clone());
-                if let Some(state) = states.get_mut(&panel_id_clone) {
-                    state.selected = true;
-                    frame_clone.add_css_class("selected");
-                }
+                // else: panel is already selected in a multi-selection, keep it as-is
             }
         });
 
