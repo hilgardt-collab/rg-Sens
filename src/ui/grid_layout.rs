@@ -598,10 +598,34 @@ impl GridLayout {
             *is_dragging_begin.borrow_mut() = true;
             drop_zone_begin.queue_draw();
 
-            // Store initial positions of all selected panels
-            let selected = selected_panels_begin.borrow();
-            let states = panel_states_begin.borrow();
+            // Ensure the dragged panel is in the selected set
+            let mut selected = selected_panels_begin.borrow_mut();
+            let mut states = panel_states_begin.borrow_mut();
 
+            if !selected.contains(&panel_id) {
+                // If dragging a non-selected panel, clear selection and select only this panel
+                info!("Dragging non-selected panel {} - clearing other selections", panel_id);
+
+                // Deselect all other panels
+                for (id, state) in states.iter_mut() {
+                    if selected.contains(id) {
+                        state.selected = false;
+                        state.frame.remove_css_class("selected");
+                    }
+                }
+                selected.clear();
+
+                // Select the dragged panel
+                selected.insert(panel_id.clone());
+                if let Some(state) = states.get_mut(&panel_id) {
+                    state.selected = true;
+                    state.frame.add_css_class("selected");
+                }
+            } else {
+                info!("Dragging selected panel {} with {} total selected panels", panel_id, selected.len());
+            }
+
+            // Store initial positions of all selected panels
             let mut positions = initial_positions_clone.borrow_mut();
             positions.clear();
 
