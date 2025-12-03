@@ -144,9 +144,27 @@ fn build_ui(app: &Application) {
     let panels_clone = panels.clone();
     let grid_config_clone = grid_config;
 
+    // Save when panels are moved
     grid_layout.set_on_change(move || {
         if let Some(window) = window_weak.upgrade() {
             save_config(&window, &panels_clone, grid_config_clone);
+        }
+    });
+
+    // Save when window is resized
+    let window_weak2 = window.downgrade();
+    let panels_clone2 = panels.clone();
+    window.connect_default_width_notify(move |_| {
+        if let Some(window) = window_weak2.upgrade() {
+            save_config(&window, &panels_clone2, grid_config_clone);
+        }
+    });
+
+    let window_weak3 = window.downgrade();
+    let panels_clone3 = panels.clone();
+    window.connect_default_height_notify(move |_| {
+        if let Some(window) = window_weak3.upgrade() {
+            save_config(&window, &panels_clone3, grid_config_clone);
         }
     });
 
