@@ -339,7 +339,11 @@ impl GridLayout {
                     if let Some(parent) = state.frame.parent() {
                         if let Ok(fixed) = parent.downcast::<Fixed>() {
                             if let Some((orig_x, orig_y)) = positions.get(id) {
-                                fixed.move_(&state.frame, orig_x + offset_x, orig_y + offset_y);
+                                let new_x = orig_x + offset_x;
+                                let new_y = orig_y + offset_y;
+                                eprintln!("Moving panel {} from ({:.1}, {:.1}) to ({:.1}, {:.1})",
+                                         id, orig_x, orig_y, new_x, new_y);
+                                fixed.move_(&state.frame, new_x, new_y);
                             }
                         }
                     }
@@ -362,6 +366,10 @@ impl GridLayout {
 
                     // Only update and redraw if the grid cell changed
                     if *preview_cell != new_preview {
+                        eprintln!(
+                            "Preview change: old={:?} new={:?} pos=({:.1}, {:.1}) offset=({:.1}, {:.1})",
+                            *preview_cell, new_preview, current_x, current_y, offset_x, offset_y
+                        );
                         *preview_cell = new_preview;
                         drop_zone_layer_update.queue_draw();
                     }
