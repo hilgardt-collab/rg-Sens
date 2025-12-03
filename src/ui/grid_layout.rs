@@ -329,50 +329,32 @@ impl GridLayout {
         let drop_zone_layer_update = drop_zone_layer.clone();
 
         drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
-            let selected = selected_panels_update.borrow();
-            let states = panel_states_update.borrow();
             let positions = initial_positions_clone2.borrow();
 
-            // Move all selected panels
-            for id in selected.iter() {
-                if let Some(state) = states.get(id) {
-                    if let Some(parent) = state.frame.parent() {
-                        if let Ok(fixed) = parent.downcast::<Fixed>() {
-                            if let Some((orig_x, orig_y)) = positions.get(id) {
-                                let new_x = orig_x + offset_x;
-                                let new_y = orig_y + offset_y;
-                                eprintln!("Moving panel {} from ({:.1}, {:.1}) to ({:.1}, {:.1})",
-                                         id, orig_x, orig_y, new_x, new_y);
-                                fixed.move_(&state.frame, new_x, new_y);
-                            }
-                        }
-                    }
-                }
-            }
+            // Don't move panels during drag - this causes a feedback loop!
+            // Instead, calculate the preview position from the initial position + offset
 
-            // Update drop preview only if grid position changed
-            if let Some(parent) = frame_clone.parent() {
-                if let Ok(fixed) = parent.downcast::<Fixed>() {
-                    let (current_x, current_y) = fixed.child_position(&frame_clone);
-                    let grid_x = ((current_x + config.cell_width as f64 / 2.0)
-                        / (config.cell_width + config.spacing) as f64)
-                        .floor() as u32;
-                    let grid_y = ((current_y + config.cell_height as f64 / 2.0)
-                        / (config.cell_height + config.spacing) as f64)
-                        .floor() as u32;
+            // Get the initial position of the dragged panel
+            if let Some((orig_x, orig_y)) = positions.values().next() {
+                // Calculate where the panel would be
+                let new_x = orig_x + offset_x;
+                let new_y = orig_y + offset_y;
 
-                    let new_preview = Some((grid_x, grid_y));
-                    let mut preview_cell = drag_preview_cell_update.borrow_mut();
+                // Calculate grid position from the prospective location
+                let grid_x = ((new_x + config.cell_width as f64 / 2.0)
+                    / (config.cell_width + config.spacing) as f64)
+                    .floor() as u32;
+                let grid_y = ((new_y + config.cell_height as f64 / 2.0)
+                    / (config.cell_height + config.spacing) as f64)
+                    .floor() as u32;
 
-                    // Only update and redraw if the grid cell changed
-                    if *preview_cell != new_preview {
-                        eprintln!(
-                            "Preview change: old={:?} new={:?} pos=({:.1}, {:.1}) offset=({:.1}, {:.1})",
-                            *preview_cell, new_preview, current_x, current_y, offset_x, offset_y
-                        );
-                        *preview_cell = new_preview;
-                        drop_zone_layer_update.queue_draw();
-                    }
+                let new_preview = Some((grid_x, grid_y));
+                let mut preview_cell = drag_preview_cell_update.borrow_mut();
+
+                // Only update and redraw if the grid cell changed
+                if *preview_cell != new_preview {
+                    *preview_cell = new_preview;
+                    drop_zone_layer_update.queue_draw();
                 }
             }
         });
@@ -386,10 +368,11 @@ impl GridLayout {
         let drag_preview_cell_end = drag_preview_cell.clone();
         let drop_zone_layer_end = drop_zone_layer.clone();
 
-        drag_gesture.connect_drag_end(move |_, _, _| {
+        drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
             let selected = selected_panels_end.borrow();
             let states = panel_states_end.borrow();
             let mut occupied = occupied_cells_end.borrow_mut();
+            let positions = initial_positions.borrow();
 
             // Clear current occupied cells for selected panels
             for id in selected.iter() {
@@ -408,7 +391,10 @@ impl GridLayout {
                 if let Some(state) = states.get(id) {
                     if let Some(parent) = state.frame.parent() {
                         if let Ok(fixed) = parent.downcast::<Fixed>() {
-                            let (current_x, current_y) = fixed.child_position(&state.frame);
+                            // Calculate final position based on initial position + drag offset
+                            let (orig_x, orig_y) = positions.get(id).unwrap_or(&(0.0, 0.0));
+                            let final_x = orig_x + offset_x;
+                            let final_y = orig_y + offset_y;
 
                             // Calculate available grid size based on container size
                             let container_width = fixed.width() as f64;
@@ -416,11 +402,11 @@ impl GridLayout {
                             let available_cols = (container_width / (config.cell_width + config.spacing) as f64).floor() as u32;
                             let available_rows = (container_height / (config.cell_height + config.spacing) as f64).floor() as u32;
 
-                            // Calculate grid position
-                            let grid_x = ((current_x + config.cell_width as f64 / 2.0)
+                            // Calculate grid position from final position
+                            let grid_x = ((final_x + config.cell_width as f64 / 2.0)
                                 / (config.cell_width + config.spacing) as f64)
                                 .floor() as u32;
-                            let grid_y = ((current_y + config.cell_height as f64 / 2.0)
+                            let grid_y = ((final_y + config.cell_height as f64 / 2.0)
                                 / (config.cell_height + config.spacing) as f64)
                                 .floor() as u32;
 
