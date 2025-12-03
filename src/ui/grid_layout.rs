@@ -630,16 +630,20 @@ impl GridLayout {
             let mut positions = initial_positions_clone.borrow_mut();
             positions.clear();
 
+            info!("=== DRAG BEGIN DEBUG ===");
+            info!("Storing initial positions for {} selected panels", selected.len());
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
                     if let Some(parent) = state.frame.parent() {
                         if let Ok(fixed) = parent.downcast::<Fixed>() {
                             let pos = fixed.child_position(&state.frame);
+                            info!("Panel {} initial position: ({}, {})", id, pos.0, pos.1);
                             positions.insert(id.clone(), pos);
                         }
                     }
                 }
             }
+            info!("Stored {} initial positions", positions.len());
         });
 
         let initial_positions_clone2 = initial_positions.clone();
@@ -699,6 +703,13 @@ impl GridLayout {
             let mut occupied = occupied_cells_end.borrow_mut();
             let positions = initial_positions.borrow();
 
+            info!("=== DRAG END DEBUG ===");
+            info!("Offset: ({}, {})", offset_x, offset_y);
+            info!("Selected panels count: {}", selected.len());
+            info!("Selected panel IDs: {:?}", selected.iter().collect::<Vec<_>>());
+            info!("Initial positions count: {}", positions.len());
+            info!("Initial positions: {:?}", positions);
+
             // Phase 1: Clear current occupied cells for ALL selected panels
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
@@ -739,8 +750,10 @@ impl GridLayout {
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
                     let (orig_x, orig_y) = positions.get(id).unwrap_or(&(0.0, 0.0));
+                    info!("Panel {} - original position: ({}, {})", id, orig_x, orig_y);
                     let final_x = orig_x + offset_x;
                     let final_y = orig_y + offset_y;
+                    info!("Panel {} - final position: ({}, {})", id, final_x, final_y);
 
                     // Calculate grid position from final position
                     let grid_x = ((final_x + config.cell_width as f64 / 2.0)
@@ -752,6 +765,8 @@ impl GridLayout {
 
                     let grid_x = grid_x.min(available_cols.saturating_sub(1));
                     let grid_y = grid_y.min(available_rows.saturating_sub(1));
+
+                    info!("Panel {} - grid position: ({}, {})", id, grid_x, grid_y);
 
                     // Check if this panel would collide
                     let geom = state.panel.blocking_read().geometry;
@@ -778,6 +793,11 @@ impl GridLayout {
             }
 
             // Phase 3: Apply movement based on collision check
+            info!("New positions calculated: {} panels", new_positions.len());
+            for (id, gx, gy, px, py) in &new_positions {
+                info!("  Panel {} -> grid({}, {}) pixel({}, {})", id, gx, gy, px, py);
+            }
+
             if group_has_collision {
                 // Restore ALL panels to original positions
                 info!("Collision detected - restoring all selected panels to original positions");
@@ -798,11 +818,17 @@ impl GridLayout {
                 info!("Moving {} selected panels together", new_positions.len());
                 for (id, grid_x, grid_y, snapped_x, snapped_y) in new_positions {
                     if let Some(state) = states.get(&id) {
+                        info!("Moving panel {} to pixel({}, {})", id, snapped_x, snapped_y);
                         // Move widget
                         if let Some(parent) = state.frame.parent() {
                             if let Ok(fixed) = parent.downcast::<Fixed>() {
                                 fixed.move_(&state.frame, snapped_x, snapped_y);
+                                info!("Successfully moved widget for panel {}", id);
+                            } else {
+                                info!("Failed to downcast parent to Fixed for panel {}", id);
                             }
+                        } else {
+                            info!("No parent found for panel {}", id);
                         }
 
                         // Update geometry
