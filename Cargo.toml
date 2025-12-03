@@ -34,6 +34,7 @@ log = "0.4"
 env_logger = "0.11"
 crossbeam = "0.8"
 arc-swap = "1"
+rand = "0.8"
 
 # Configuration
 directories = "5"
