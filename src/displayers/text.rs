@@ -5,9 +5,7 @@ use anyhow::Result;
 use cairo::Context;
 use gtk4::{glib, prelude::*, DrawingArea, Widget};
 use serde_json::Value;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 /// Text displayer
@@ -17,7 +15,6 @@ pub struct TextDisplayer {
     id: String,
     name: String,
     data: Arc<Mutex<DisplayData>>,
-    widget: Rc<RefCell<Option<DrawingArea>>>,
 }
 
 #[derive(Clone)]
@@ -39,7 +36,6 @@ impl TextDisplayer {
             id: "text".to_string(),
             name: "Text Display".to_string(),
             data,
-            widget: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -96,11 +92,17 @@ impl Displayer for TextDisplayer {
             if let Ok(data) = data_clone.lock() {
                 Self::draw_internal(cr, width, height, &data);
             }
-            // No automatic redraw - only redraw when data changes
         });
 
-        // Store widget reference for triggering redraws
-        *self.widget.borrow_mut() = Some(drawing_area.clone());
+        // Set up periodic redraw using timeout
+        // This requests a redraw every 500ms to update the display without creating an infinite loop
+        glib::timeout_add_local(std::time::Duration::from_millis(500), {
+            let drawing_area = drawing_area.clone();
+            move || {
+                drawing_area.queue_draw();
+                glib::ControlFlow::Continue
+            }
+        });
 
         drawing_area.upcast()
     }
@@ -124,13 +126,9 @@ impl Displayer for TextDisplayer {
         }
 
         // Update display data
+        // The widget will redraw on the next timeout callback (every 500ms)
         if let Ok(mut display_data) = self.data.lock() {
             display_data.text = text;
-        }
-
-        // Trigger redraw only when data changes
-        if let Some(widget) = self.widget.borrow().as_ref() {
-            widget.queue_draw();
         }
     }
 
