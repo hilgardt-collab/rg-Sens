@@ -592,6 +592,7 @@ impl GridLayout {
         let panel_states_begin = panel_states.clone();
         let is_dragging_begin = is_dragging.clone();
         let drop_zone_begin = drop_zone_layer.clone();
+        let panel_id_for_drag_begin = panel_id.clone();
 
         drag_gesture.connect_drag_begin(move |_, _, _| {
             // Enable grid visualization
@@ -602,9 +603,9 @@ impl GridLayout {
             let mut selected = selected_panels_begin.borrow_mut();
             let mut states = panel_states_begin.borrow_mut();
 
-            if !selected.contains(&panel_id) {
+            if !selected.contains(&panel_id_for_drag_begin) {
                 // If dragging a non-selected panel, clear selection and select only this panel
-                info!("Dragging non-selected panel {} - clearing other selections", panel_id);
+                info!("Dragging non-selected panel {} - clearing other selections", panel_id_for_drag_begin);
 
                 // Deselect all other panels
                 for (id, state) in states.iter_mut() {
@@ -616,13 +617,13 @@ impl GridLayout {
                 selected.clear();
 
                 // Select the dragged panel
-                selected.insert(panel_id.clone());
-                if let Some(state) = states.get_mut(&panel_id) {
+                selected.insert(panel_id_for_drag_begin.clone());
+                if let Some(state) = states.get_mut(&panel_id_for_drag_begin) {
                     state.selected = true;
                     state.frame.add_css_class("selected");
                 }
             } else {
-                info!("Dragging selected panel {} with {} total selected panels", panel_id, selected.len());
+                info!("Dragging selected panel {} with {} total selected panels", panel_id_for_drag_begin, selected.len());
             }
 
             // Store initial positions of all selected panels
