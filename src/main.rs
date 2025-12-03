@@ -3,9 +3,9 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider};
 use log::{info, warn};
-use rg_sens::config::{AppConfig, PanelConfig, WindowConfig};
+use rg_sens::config::{AppConfig, GridConfig as ConfigGridConfig, PanelConfig, WindowConfig};
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
-use rg_sens::ui::{GridConfig, GridLayout};
+use rg_sens::ui::{GridConfig as UiGridConfig, GridLayout};
 use rg_sens::{displayers, sources};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -55,7 +55,7 @@ fn build_ui(app: &Application) {
     };
 
     // Create grid configuration from loaded config
-    let grid_config = GridConfig {
+    let grid_config = UiGridConfig {
         rows: app_config.grid.rows,
         columns: app_config.grid.columns,
         cell_width: 300,  // Fixed for now, could be configurable
@@ -171,7 +171,7 @@ fn build_ui(app: &Application) {
 }
 
 /// Save current configuration to disk
-fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: GridConfig) {
+fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: UiGridConfig) {
     // Get window dimensions
     let (width, height) = (window.default_width(), window.default_height());
 
@@ -205,7 +205,7 @@ fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_c
             x: None, // GTK4 doesn't provide window position
             y: None,
         },
-        grid: rg_sens::config::GridConfig {
+        grid: ConfigGridConfig {
             columns: grid_config.columns,
             rows: grid_config.rows,
             spacing: grid_config.spacing as u32,
