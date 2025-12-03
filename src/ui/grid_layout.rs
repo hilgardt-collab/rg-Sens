@@ -1,9 +1,10 @@
 //! Grid layout manager for panels with advanced features
 
-use crate::core::{Panel, PanelGeometry};
+use crate::core::Panel;
 use gtk4::gdk::{Key, ModifierType};
 use gtk4::glib;
 use gtk4::{prelude::*, DrawingArea, EventControllerKey, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
+use log::info;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -611,7 +612,7 @@ impl GridLayout {
 
 /// Show panel properties dialog
 fn show_panel_properties_dialog(panel: &Arc<RwLock<Panel>>) {
-    use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Window, WindowType};
+    use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Window};
 
     let panel_guard = match panel.try_read() {
         Ok(guard) => guard,
