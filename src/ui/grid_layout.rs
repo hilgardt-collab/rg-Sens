@@ -55,6 +55,7 @@ pub struct GridLayout {
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
     drag_preview_cell: Rc<RefCell<Option<(u32, u32)>>>,
     is_dragging: Rc<RefCell<bool>>,
+    selection_box: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
 }
 
@@ -89,10 +90,12 @@ impl GridLayout {
             occupied_cells: Rc::new(RefCell::new(HashSet::new())),
             drag_preview_cell: Rc::new(RefCell::new(None)),
             is_dragging: Rc::new(RefCell::new(false)),
+            selection_box: Rc::new(RefCell::new(None)),
             on_change: Rc::new(RefCell::new(None)),
         };
 
         grid_layout.setup_drop_zone_drawing();
+        grid_layout.setup_container_interaction();
         grid_layout
     }
 
@@ -110,9 +113,32 @@ impl GridLayout {
         let occupied_cells = self.occupied_cells.clone();
         let drag_preview_cell = self.drag_preview_cell.clone();
         let is_dragging = self.is_dragging.clone();
+        let selection_box = self.selection_box.clone();
 
         self.drop_zone_layer.set_draw_func(move |_, cr, width, height| {
-            // Only draw grid when actively dragging
+            let sel_box = selection_box.borrow();
+
+            // Draw selection box if present
+            if let Some((x1, y1, x2, y2)) = *sel_box {
+                let rect_x = x1.min(x2);
+                let rect_y = y1.min(y2);
+                let rect_width = (x2 - x1).abs();
+                let rect_height = (y2 - y1).abs();
+
+                // Fill
+                cr.set_source_rgba(0.2, 0.5, 0.8, 0.2);
+                cr.rectangle(rect_x, rect_y, rect_width, rect_height);
+                cr.fill().ok();
+
+                // Border
+                cr.set_source_rgba(0.2, 0.5, 0.8, 0.8);
+                cr.set_line_width(2.0);
+                cr.rectangle(rect_x, rect_y, rect_width, rect_height);
+                cr.stroke().ok();
+            }
+            drop(sel_box);
+
+            // Only draw grid when actively dragging panels
             if !*is_dragging.borrow() {
                 return;
             }
@@ -174,6 +200,169 @@ impl GridLayout {
                 cr.stroke().ok();
             }
         });
+    }
+
+    /// Setup container interaction for box selection and deselection
+    fn setup_container_interaction(&self) {
+        // Click on empty space to deselect all
+        let click_gesture = GestureClick::new();
+        click_gesture.set_button(1);
+
+        let panel_states = self.panel_states.clone();
+        let selected_panels = self.selected_panels.clone();
+
+        click_gesture.connect_pressed(move |_, _, x, y| {
+            // Check if click is on empty space (not on any panel)
+            let states = panel_states.borrow();
+            let mut clicked_on_panel = false;
+
+            for state in states.values() {
+                if let Some(parent) = state.frame.parent() {
+                    if let Ok(fixed) = parent.downcast::<Fixed>() {
+                        let (panel_x, panel_y) = fixed.child_position(&state.frame);
+                        let panel_width = state.frame.width() as f64;
+                        let panel_height = state.frame.height() as f64;
+
+                        if x >= panel_x && x <= panel_x + panel_width
+                            && y >= panel_y && y <= panel_y + panel_height {
+                            clicked_on_panel = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // If click is on empty space, deselect all
+            if !clicked_on_panel {
+                let mut selected = selected_panels.borrow_mut();
+                for (id, state) in states.iter() {
+                    if selected.contains(id) {
+                        state.frame.remove_css_class("selected");
+                    }
+                }
+                selected.clear();
+                info!("Deselected all panels");
+            }
+        });
+
+        self.container.add_controller(click_gesture);
+
+        // Drag from empty space for box selection
+        let drag_gesture = GestureDrag::new();
+        drag_gesture.set_button(1);
+
+        let selection_box = self.selection_box.clone();
+        let drop_zone_layer = self.drop_zone_layer.clone();
+        let panel_states_drag = self.panel_states.clone();
+        let selected_panels_drag = self.selected_panels.clone();
+
+        // Store whether drag started on empty space
+        let drag_on_empty_space: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
+        let drag_start_pos: Rc<RefCell<Option<(f64, f64)>>> = Rc::new(RefCell::new(None));
+
+        let drag_on_empty_space_begin = drag_on_empty_space.clone();
+        let drag_start_pos_begin = drag_start_pos.clone();
+        let panel_states_begin = panel_states_drag.clone();
+
+        drag_gesture.connect_drag_begin(move |gesture, x, y| {
+            // Check if drag started on empty space
+            let states = panel_states_begin.borrow();
+            let mut on_panel = false;
+
+            for state in states.values() {
+                if let Some(parent) = state.frame.parent() {
+                    if let Ok(fixed) = parent.downcast::<Fixed>() {
+                        let (panel_x, panel_y) = fixed.child_position(&state.frame);
+                        let panel_width = state.frame.width() as f64;
+                        let panel_height = state.frame.height() as f64;
+
+                        if x >= panel_x && x <= panel_x + panel_width
+                            && y >= panel_y && y <= panel_y + panel_height {
+                            on_panel = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            *drag_on_empty_space_begin.borrow_mut() = !on_panel;
+            if !on_panel {
+                *drag_start_pos_begin.borrow_mut() = Some((x, y));
+            }
+        });
+
+        let drag_on_empty_space_update = drag_on_empty_space.clone();
+        let drag_start_pos_update = drag_start_pos.clone();
+        let selection_box_update = selection_box.clone();
+        let drop_zone_update = drop_zone_layer.clone();
+
+        drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
+            if *drag_on_empty_space_update.borrow() {
+                if let Some((start_x, start_y)) = *drag_start_pos_update.borrow() {
+                    let end_x = start_x + offset_x;
+                    let end_y = start_y + offset_y;
+
+                    *selection_box_update.borrow_mut() = Some((start_x, start_y, end_x, end_y));
+                    drop_zone_update.queue_draw();
+                }
+            }
+        });
+
+        let drag_on_empty_space_end = drag_on_empty_space.clone();
+        let drag_start_pos_end = drag_start_pos.clone();
+
+        drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
+            if *drag_on_empty_space_end.borrow() {
+                if let Some((start_x, start_y)) = *drag_start_pos_end.borrow() {
+                    let end_x = start_x + offset_x;
+                    let end_y = start_y + offset_y;
+
+                    // Calculate selection rectangle
+                    let rect_x1 = start_x.min(end_x);
+                    let rect_y1 = start_y.min(end_y);
+                    let rect_x2 = start_x.max(end_x);
+                    let rect_y2 = start_y.max(end_y);
+
+                    // Find panels that intersect with selection box
+                    let mut states = panel_states_drag.borrow_mut();
+                    let mut selected = selected_panels_drag.borrow_mut();
+
+                    for (id, state) in states.iter_mut() {
+                        if let Some(parent) = state.frame.parent() {
+                            if let Ok(fixed) = parent.downcast::<Fixed>() {
+                                let (panel_x, panel_y) = fixed.child_position(&state.frame);
+                                let panel_width = state.frame.width() as f64;
+                                let panel_height = state.frame.height() as f64;
+                                let panel_x2 = panel_x + panel_width;
+                                let panel_y2 = panel_y + panel_height;
+
+                                // Check if rectangles intersect
+                                let intersects = !(rect_x2 < panel_x || rect_x1 > panel_x2
+                                    || rect_y2 < panel_y || rect_y1 > panel_y2);
+
+                                if intersects {
+                                    if !selected.contains(id) {
+                                        selected.insert(id.clone());
+                                        state.selected = true;
+                                        state.frame.add_css_class("selected");
+                                        info!("Selected panel: {}", id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Clear selection box
+                *selection_box.borrow_mut() = None;
+                *drag_start_pos_end.borrow_mut() = None;
+                drop_zone_layer.queue_draw();
+            }
+
+            *drag_on_empty_space_end.borrow_mut() = false;
+        });
+
+        self.container.add_controller(drag_gesture);
     }
 
     /// Add a panel to the grid
