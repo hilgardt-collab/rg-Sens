@@ -139,32 +139,41 @@ fn build_ui(app: &Application) {
     // Set grid as window content
     window.set_child(Some(&grid_layout.widget()));
 
-    // Setup config saving
+    // Track if configuration has changed (dirty flag)
+    let config_dirty = Rc::new(RefCell::new(false));
+
+    // Mark config as dirty when panels are moved
+    let config_dirty_clone = config_dirty.clone();
+    grid_layout.set_on_change(move || {
+        *config_dirty_clone.borrow_mut() = true;
+        info!("Configuration marked as modified");
+    });
+
+    // Mark config as dirty when window is resized
+    let config_dirty_clone2 = config_dirty.clone();
+    window.connect_default_width_notify(move |_| {
+        *config_dirty_clone2.borrow_mut() = true;
+    });
+
+    let config_dirty_clone3 = config_dirty.clone();
+    window.connect_default_height_notify(move |_| {
+        *config_dirty_clone3.borrow_mut() = true;
+    });
+
+    // Setup save-on-close confirmation
     let window_weak = window.downgrade();
     let panels_clone = panels.clone();
-    let grid_config_clone = grid_config;
+    let config_dirty_clone4 = config_dirty.clone();
 
-    // Save when panels are moved
-    grid_layout.set_on_change(move || {
-        if let Some(window) = window_weak.upgrade() {
-            save_config(&window, &panels_clone, grid_config_clone);
-        }
-    });
+    window.connect_close_request(move |window| {
+        let is_dirty = *config_dirty_clone4.borrow();
 
-    // Save when window is resized
-    let window_weak2 = window.downgrade();
-    let panels_clone2 = panels.clone();
-    window.connect_default_width_notify(move |_| {
-        if let Some(window) = window_weak2.upgrade() {
-            save_config(&window, &panels_clone2, grid_config_clone);
-        }
-    });
-
-    let window_weak3 = window.downgrade();
-    let panels_clone3 = panels.clone();
-    window.connect_default_height_notify(move |_| {
-        if let Some(window) = window_weak3.upgrade() {
-            save_config(&window, &panels_clone3, grid_config_clone);
+        if is_dirty {
+            // Show save confirmation dialog
+            show_save_dialog(window, &panels_clone, grid_config_clone);
+            glib::Propagation::Stop // Prevent immediate close
+        } else {
+            glib::Propagation::Proceed // Close without saving
         }
     });
 
@@ -186,6 +195,50 @@ fn build_ui(app: &Application) {
 
     window.present();
     info!("Window presented with {} panels", grid_layout.panels().len());
+}
+
+/// Show save confirmation dialog on close
+fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: UiGridConfig) {
+    use gtk4::{ButtonsType, DialogFlags, MessageDialog, MessageType, ResponseType};
+
+    let dialog = MessageDialog::new(
+        Some(window),
+        DialogFlags::MODAL,
+        MessageType::Question,
+        ButtonsType::None,
+        "Save configuration before closing?",
+    );
+
+    dialog.add_button("Don't Save", ResponseType::No);
+    dialog.add_button("Cancel", ResponseType::Cancel);
+    dialog.add_button("Save", ResponseType::Yes);
+    dialog.set_default_response(ResponseType::Yes);
+
+    let window_clone = window.clone();
+    let panels_clone = panels.to_vec();
+
+    dialog.connect_response(move |dialog, response| {
+        match response {
+            ResponseType::Yes => {
+                // Save and close
+                info!("User chose to save configuration");
+                save_config(&window_clone, &panels_clone, grid_config);
+                window_clone.close();
+            }
+            ResponseType::No => {
+                // Close without saving
+                info!("User chose not to save configuration");
+                window_clone.close();
+            }
+            ResponseType::Cancel | _ => {
+                // Don't close
+                info!("User cancelled close operation");
+            }
+        }
+        dialog.close();
+    });
+
+    dialog.present();
 }
 
 /// Save current configuration to disk
