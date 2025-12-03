@@ -219,12 +219,12 @@ fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], g
                 // Save button (index 2)
                 info!("User chose to save configuration");
                 save_config(&window_clone, &panels_clone, grid_config);
-                window_clone.close();
+                window_clone.destroy(); // Use destroy to bypass close handler
             }
             Ok(0) => {
                 // Don't Save button (index 0)
                 info!("User chose not to save configuration");
-                window_clone.close();
+                window_clone.destroy(); // Use destroy to bypass close handler
             }
             Ok(1) | Err(_) => {
                 // Cancel button (index 1) or dialog dismissed
