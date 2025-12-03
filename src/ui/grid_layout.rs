@@ -346,7 +346,7 @@ impl GridLayout {
                 }
             }
 
-            // Update drop preview
+            // Update drop preview only if grid position changed
             if let Some(parent) = frame_clone.parent() {
                 if let Ok(fixed) = parent.downcast::<Fixed>() {
                     let (current_x, current_y) = fixed.child_position(&frame_clone);
@@ -357,8 +357,14 @@ impl GridLayout {
                         / (config.cell_height + config.spacing) as f64)
                         .floor() as u32;
 
-                    *drag_preview_cell_update.borrow_mut() = Some((grid_x, grid_y));
-                    drop_zone_layer_update.queue_draw();
+                    let new_preview = Some((grid_x, grid_y));
+                    let mut preview_cell = drag_preview_cell_update.borrow_mut();
+
+                    // Only update and redraw if the grid cell changed
+                    if *preview_cell != new_preview {
+                        *preview_cell = new_preview;
+                        drop_zone_layer_update.queue_draw();
+                    }
                 }
             }
         });
