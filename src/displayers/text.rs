@@ -3,9 +3,11 @@
 use crate::core::{ConfigOption, ConfigSchema, Displayer};
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{prelude::*, DrawingArea, Widget};
+use gtk4::{glib, prelude::*, DrawingArea, Widget};
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 /// Text displayer
@@ -15,6 +17,7 @@ pub struct TextDisplayer {
     id: String,
     name: String,
     data: Arc<Mutex<DisplayData>>,
+    widget: Rc<RefCell<Option<DrawingArea>>>,
 }
 
 #[derive(Clone)]
@@ -36,6 +39,7 @@ impl TextDisplayer {
             id: "text".to_string(),
             name: "Text Display".to_string(),
             data,
+            widget: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -88,13 +92,15 @@ impl Displayer for TextDisplayer {
 
         // Set up draw function
         let data_clone = self.data.clone();
-        drawing_area.set_draw_func(move |widget, cr, width, height| {
+        drawing_area.set_draw_func(move |_widget, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
                 Self::draw_internal(cr, width, height, &data);
             }
-            // Schedule another redraw to keep updating
-            widget.queue_draw();
+            // No automatic redraw - only redraw when data changes
         });
+
+        // Store widget reference for triggering redraws
+        *self.widget.borrow_mut() = Some(drawing_area.clone());
 
         drawing_area.upcast()
     }
@@ -118,9 +124,13 @@ impl Displayer for TextDisplayer {
         }
 
         // Update display data
-        // The widget will redraw automatically on its next draw cycle
         if let Ok(mut display_data) = self.data.lock() {
             display_data.text = text;
+        }
+
+        // Trigger redraw only when data changes
+        if let Some(widget) = self.widget.borrow().as_ref() {
+            widget.queue_draw();
         }
     }
 
