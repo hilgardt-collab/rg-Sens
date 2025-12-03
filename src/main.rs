@@ -168,13 +168,8 @@ fn create_panel_from_config(
     registry: &rg_sens::core::Registry,
 ) -> anyhow::Result<Arc<RwLock<Panel>>> {
     // Create source and displayer
-    let source = registry
-        .create_source(source_id)
-        .ok_or_else(|| anyhow::anyhow!("Unknown source: {}", source_id))?;
-
-    let displayer = registry
-        .create_displayer(displayer_id)
-        .ok_or_else(|| anyhow::anyhow!("Unknown displayer: {}", displayer_id))?;
+    let source = registry.create_source(source_id)?;
+    let displayer = registry.create_displayer(displayer_id)?;
 
     // Create panel
     let panel = Panel::new(
