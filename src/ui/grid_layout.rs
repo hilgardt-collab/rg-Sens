@@ -3,7 +3,7 @@
 use crate::core::{Panel, PanelGeometry};
 use gtk4::gdk::{Key, ModifierType};
 use gtk4::glib;
-use gtk4::{prelude::*, DrawingArea, EventControllerKey, Fixed, Frame, GestureDrag, Overlay, Widget};
+use gtk4::{prelude::*, DrawingArea, EventControllerKey, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -282,8 +282,53 @@ impl GridLayout {
 
         widget.add_controller(gesture_click);
 
+        // Right-click context menu
+        let panel_clone = panel.clone();
+        let panel_id_clone2 = panel_id.clone();
+
+        self.setup_context_menu(widget, panel_clone, panel_id_clone2);
+
         // Drag gesture
         self.setup_drag_gesture(frame, panel);
+    }
+
+    /// Setup context menu for panel
+    fn setup_context_menu(&self, widget: &Widget, panel: Arc<RwLock<Panel>>, panel_id: String) {
+        use gtk4::gio;
+
+        let menu = gio::Menu::new();
+
+        // Configure option
+        menu.append(Some("Configure..."), Some(&format!("panel.configure.{}", panel_id)));
+
+        // Resize option
+        menu.append(Some("Resize"), Some(&format!("panel.resize.{}", panel_id)));
+
+        menu.append(Some("---"), None);
+
+        // Delete option
+        menu.append(Some("Delete"), Some(&format!("panel.delete.{}", panel_id)));
+
+        let popover = PopoverMenu::from_model(Some(&menu));
+        popover.set_parent(widget);
+        popover.set_has_arrow(false);
+
+        // Right-click gesture
+        let gesture_secondary = GestureClick::new();
+        gesture_secondary.set_button(3); // Right mouse button
+
+        gesture_secondary.connect_pressed(move |gesture, _, x, y| {
+            popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
+                x as i32,
+                y as i32,
+                1,
+                1,
+            )));
+            popover.popup();
+            gesture.set_state(gtk4::EventSequenceState::Claimed);
+        });
+
+        widget.add_controller(gesture_secondary);
     }
 
     /// Setup drag gesture for a panel
