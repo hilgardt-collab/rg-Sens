@@ -335,6 +335,7 @@ impl GridLayout {
         let properties_action = gio::SimpleAction::new("properties", None);
         properties_action.connect_activate(move |_, _| {
             info!("Opening properties dialog for panel: {}", panel_id_clone);
+            let registry = crate::core::global_registry();
             show_panel_properties_dialog(
                 &panel_clone,
                 config,
@@ -343,6 +344,7 @@ impl GridLayout {
                 container.clone(),
                 on_change.clone(),
                 drop_zone.clone(),
+                registry,
             );
         });
         action_group.add_action(&properties_action);
@@ -653,8 +655,9 @@ fn show_panel_properties_dialog(
     container: Fixed,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     drop_zone: DrawingArea,
+    registry: &'static mut crate::core::Registry,
 ) {
-    use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Window};
+    use gtk4::{Box as GtkBox, Button, ComboBoxText, Label, Orientation, SpinButton, Window};
 
     let panel_guard = match panel.try_read() {
         Ok(guard) => guard,
@@ -666,6 +669,8 @@ fn show_panel_properties_dialog(
 
     let panel_id = panel_guard.id.clone();
     let old_geometry = panel_guard.geometry;
+    let old_source_id = panel_guard.source.metadata().id.clone();
+    let old_displayer_id = panel_guard.displayer.id().to_string();
 
     // Create dialog window
     let dialog = Window::builder()
@@ -707,6 +712,60 @@ fn show_panel_properties_dialog(
 
     vbox.append(&size_box);
 
+    // Data Source section
+    let source_label = Label::new(Some("Data Source"));
+    source_label.add_css_class("heading");
+    source_label.set_margin_top(12);
+    vbox.append(&source_label);
+
+    let source_box = GtkBox::new(Orientation::Horizontal, 6);
+    source_box.set_margin_start(12);
+
+    let source_combo_label = Label::new(Some("Source:"));
+    let source_combo = ComboBoxText::new();
+
+    // Populate source combo
+    let sources = registry.list_sources();
+    let mut selected_source_idx = 0;
+    for (idx, source_id) in sources.iter().enumerate() {
+        source_combo.append_text(source_id);
+        if source_id == &old_source_id {
+            selected_source_idx = idx;
+        }
+    }
+    source_combo.set_active(Some(selected_source_idx as u32));
+
+    source_box.append(&source_combo_label);
+    source_box.append(&source_combo);
+    vbox.append(&source_box);
+
+    // Displayer section
+    let displayer_label = Label::new(Some("Display Type"));
+    displayer_label.add_css_class("heading");
+    displayer_label.set_margin_top(12);
+    vbox.append(&displayer_label);
+
+    let displayer_box = GtkBox::new(Orientation::Horizontal, 6);
+    displayer_box.set_margin_start(12);
+
+    let displayer_combo_label = Label::new(Some("Displayer:"));
+    let displayer_combo = ComboBoxText::new();
+
+    // Populate displayer combo
+    let displayers = registry.list_displayers();
+    let mut selected_displayer_idx = 0;
+    for (idx, displayer_id) in displayers.iter().enumerate() {
+        displayer_combo.append_text(displayer_id);
+        if displayer_id == &old_displayer_id {
+            selected_displayer_idx = idx;
+        }
+    }
+    displayer_combo.set_active(Some(selected_displayer_idx as u32));
+
+    displayer_box.append(&displayer_combo_label);
+    displayer_box.append(&displayer_combo);
+    vbox.append(&displayer_box);
+
     // Buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
     button_box.set_halign(gtk4::Align::End);
@@ -729,19 +788,31 @@ fn show_panel_properties_dialog(
         let new_width = width_spin.value() as u32;
         let new_height = height_spin.value() as u32;
 
-        // Check if size actually changed
-        if new_width == old_geometry.width && new_height == old_geometry.height {
-            info!("Panel size unchanged, skipping update");
+        // Get selected source and displayer
+        let new_source_id = source_combo.active_text()
+            .map(|s| s.to_string())
+            .unwrap_or(old_source_id.clone());
+        let new_displayer_id = displayer_combo.active_text()
+            .map(|s| s.to_string())
+            .unwrap_or(old_displayer_id.clone());
+
+        // Check if anything changed
+        let size_changed = new_width != old_geometry.width || new_height != old_geometry.height;
+        let source_changed = new_source_id != old_source_id;
+        let displayer_changed = new_displayer_id != old_displayer_id;
+
+        if !size_changed && !source_changed && !displayer_changed {
+            info!("No changes made to panel, skipping update");
             dialog_clone2.close();
             return;
         }
 
-        info!("Resizing panel {} from {}x{} to {}x{}",
-              panel_id, old_geometry.width, old_geometry.height, new_width, new_height);
+        info!("Updating panel {}: size_changed={}, source_changed={}, displayer_changed={}",
+              panel_id, size_changed, source_changed, displayer_changed);
 
         // Get panel state
-        let states = panel_states.borrow();
-        let state = match states.get(&panel_id) {
+        let mut states = panel_states.borrow_mut();
+        let state = match states.get_mut(&panel_id) {
             Some(s) => s,
             None => {
                 log::warn!("Panel state not found for {}", panel_id);
@@ -750,82 +821,137 @@ fn show_panel_properties_dialog(
             }
         };
 
-        // Clear old occupied cells
-        let mut occupied = occupied_cells.borrow_mut();
-        for dx in 0..old_geometry.width {
-            for dy in 0..old_geometry.height {
-                occupied.remove(&(old_geometry.x + dx, old_geometry.y + dy));
-            }
-        }
+        // Handle size change (collision check)
+        if size_changed {
+            let mut occupied = occupied_cells.borrow_mut();
 
-        // Check if new size would cause collision
-        let mut has_collision = false;
-        for dx in 0..new_width {
-            for dy in 0..new_height {
-                let cell = (old_geometry.x + dx, old_geometry.y + dy);
-                if occupied.contains(&cell) {
-                    has_collision = true;
-                    info!("Collision detected at cell {:?}", cell);
+            // Clear old occupied cells
+            for dx in 0..old_geometry.width {
+                for dy in 0..old_geometry.height {
+                    occupied.remove(&(old_geometry.x + dx, old_geometry.y + dy));
+                }
+            }
+
+            // Check if new size would cause collision
+            let mut has_collision = false;
+            for dx in 0..new_width {
+                for dy in 0..new_height {
+                    let cell = (old_geometry.x + dx, old_geometry.y + dy);
+                    if occupied.contains(&cell) {
+                        has_collision = true;
+                        info!("Collision detected at cell {:?}", cell);
+                        break;
+                    }
+                }
+                if has_collision {
                     break;
                 }
             }
-            if has_collision {
-                break;
-            }
-        }
 
-        if has_collision {
-            // Restore old occupied cells
-            for dx in 0..old_geometry.width {
-                for dy in 0..old_geometry.height {
+            if has_collision {
+                // Restore old occupied cells
+                for dx in 0..old_geometry.width {
+                    for dy in 0..old_geometry.height {
+                        occupied.insert((old_geometry.x + dx, old_geometry.y + dy));
+                    }
+                }
+                drop(occupied);
+                drop(states);
+
+                log::warn!("Cannot resize panel: collision detected");
+
+                // Show error dialog
+                let error_dialog = gtk4::AlertDialog::builder()
+                    .message("Cannot Resize Panel")
+                    .detail("The new size would overlap with another panel.")
+                    .modal(true)
+                    .buttons(vec!["OK"])
+                    .build();
+
+                let dialog_ref = dialog_clone2.clone();
+                error_dialog.choose(Some(&dialog_clone2), gtk4::gio::Cancellable::NONE, move |_| {
+                    dialog_ref.present();
+                });
+                return;
+            }
+
+            // Mark new cells as occupied
+            for dx in 0..new_width {
+                for dy in 0..new_height {
                     occupied.insert((old_geometry.x + dx, old_geometry.y + dy));
                 }
             }
-            drop(occupied);
-
-            log::warn!("Cannot resize panel: collision detected");
-
-            // Show error dialog
-            let error_dialog = gtk4::AlertDialog::builder()
-                .message("Cannot Resize Panel")
-                .detail("The new size would overlap with another panel.")
-                .modal(true)
-                .buttons(vec!["OK"])
-                .build();
-
-            let dialog_ref = dialog_clone2.clone();
-            error_dialog.choose(Some(&dialog_clone2), gtk4::gio::Cancellable::NONE, move |_| {
-                dialog_ref.present();
-            });
-            return;
         }
 
-        // Mark new cells as occupied
-        for dx in 0..new_width {
-            for dy in 0..new_height {
-                occupied.insert((old_geometry.x + dx, old_geometry.y + dy));
+        // Update panel geometry, source, and displayer
+        if let Ok(mut panel_guard) = panel_clone.try_write() {
+            // Update size if changed
+            if size_changed {
+                panel_guard.geometry.width = new_width;
+                panel_guard.geometry.height = new_height;
+                info!("Updated panel geometry: {:?}", panel_guard.geometry);
+            }
+
+            // Update source if changed
+            if source_changed {
+                match registry.create_source(&new_source_id) {
+                    Ok(new_source) => {
+                        panel_guard.source = new_source;
+                        info!("Updated panel source to: {}", new_source_id);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to create source {}: {}", new_source_id, e);
+                    }
+                }
+            }
+
+            // Update displayer if changed
+            if displayer_changed {
+                match registry.create_displayer(&new_displayer_id) {
+                    Ok(new_displayer) => {
+                        // Create new widget from new displayer
+                        let new_widget = new_displayer.create_widget();
+
+                        // Calculate pixel dimensions
+                        let pixel_width = panel_guard.geometry.width as i32 * config.cell_width
+                            + (panel_guard.geometry.width as i32 - 1) * config.spacing;
+                        let pixel_height = panel_guard.geometry.height as i32 * config.cell_height
+                            + (panel_guard.geometry.height as i32 - 1) * config.spacing;
+                        new_widget.set_size_request(pixel_width, pixel_height);
+
+                        // Replace widget in frame
+                        state.frame.set_child(Some(&new_widget));
+
+                        // Update panel displayer
+                        panel_guard.displayer = new_displayer;
+
+                        // Update panel state widget reference
+                        state.widget = new_widget;
+
+                        info!("Updated panel displayer to: {}", new_displayer_id);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to create displayer {}: {}", new_displayer_id, e);
+                    }
+                }
             }
         }
-        drop(occupied);
 
-        // Update panel geometry
-        if let Ok(mut panel_guard) = panel_clone.try_write() {
-            panel_guard.geometry.width = new_width;
-            panel_guard.geometry.height = new_height;
-            info!("Updated panel geometry: {:?}", panel_guard.geometry);
+        // Update widget and frame sizes if size changed (and displayer wasn't replaced)
+        if size_changed && !displayer_changed {
+            let pixel_width = new_width as i32 * config.cell_width
+                + (new_width as i32 - 1) * config.spacing;
+            let pixel_height = new_height as i32 * config.cell_height
+                + (new_height as i32 - 1) * config.spacing;
+
+            state.widget.set_size_request(pixel_width, pixel_height);
+            state.frame.set_size_request(pixel_width, pixel_height);
+
+            info!("Resized panel widget to {}x{} pixels", pixel_width, pixel_height);
         }
 
-        // Calculate new pixel dimensions
-        let pixel_width = new_width as i32 * config.cell_width
-            + (new_width as i32 - 1) * config.spacing;
-        let pixel_height = new_height as i32 * config.cell_height
-            + (new_height as i32 - 1) * config.spacing;
-
-        // Update widget and frame sizes
-        state.widget.set_size_request(pixel_width, pixel_height);
-        state.frame.set_size_request(pixel_width, pixel_height);
-
-        info!("Resized panel widget to {}x{} pixels", pixel_width, pixel_height);
+        // Release panel_states borrow
+        drop(states);
 
         // Trigger redraw of drop zone layer
         drop_zone.queue_draw();
