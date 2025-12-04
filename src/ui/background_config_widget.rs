@@ -148,16 +148,19 @@ impl BackgroundConfigWidget {
             };
 
             let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
+            let config_clone2 = config_clone.clone();
+            let preview_clone2 = preview_clone.clone();
+            let on_change_clone2 = on_change_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone.borrow_mut();
+                    let mut cfg = config_clone2.borrow_mut();
                     cfg.background = BackgroundType::Solid { color: new_color };
                     drop(cfg);
 
-                    preview_clone.queue_draw();
+                    preview_clone2.queue_draw();
 
-                    if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
                         callback();
                     }
                 }
