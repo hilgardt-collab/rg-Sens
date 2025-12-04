@@ -45,7 +45,7 @@ struct PanelState {
 ///
 /// Manages multiple panels with drag-and-drop, collision detection, and multi-select.
 pub struct GridLayout {
-    config: GridConfig,
+    config: Rc<RefCell<GridConfig>>,
     overlay: Overlay,
     container: Fixed,
     drop_zone_layer: DrawingArea,
@@ -69,9 +69,15 @@ impl GridLayout {
         let drop_zone_layer = DrawingArea::new();
         drop_zone_layer.set_can_target(false); // Don't capture events
 
+        // Wrap config in Rc<RefCell<>> for shared mutable access
+        let config = Rc::new(RefCell::new(config));
+
         // Set the container size
-        let width = config.columns as i32 * (config.cell_width + config.spacing) - config.spacing;
-        let height = config.rows as i32 * (config.cell_height + config.spacing) - config.spacing;
+        let config_borrow = config.borrow();
+        let width = config_borrow.columns as i32 * (config_borrow.cell_width + config_borrow.spacing) - config_borrow.spacing;
+        let height = config_borrow.rows as i32 * (config_borrow.cell_height + config_borrow.spacing) - config_borrow.spacing;
+        drop(config_borrow); // Drop borrow before moving config
+
         container.set_size_request(width, height);
         drop_zone_layer.set_size_request(width, height);
 
@@ -109,13 +115,14 @@ impl GridLayout {
 
     /// Setup drop zone visualization
     fn setup_drop_zone_drawing(&self) {
-        let config = self.config;
+        let config = self.config.clone();
         let occupied_cells = self.occupied_cells.clone();
         let drag_preview_cell = self.drag_preview_cell.clone();
         let is_dragging = self.is_dragging.clone();
         let selection_box = self.selection_box.clone();
 
         self.drop_zone_layer.set_draw_func(move |_, cr, width, height| {
+            let config = config.borrow();
             let sel_box = selection_box.borrow();
 
             // Draw selection box if present
@@ -376,12 +383,14 @@ impl GridLayout {
         };
 
         // Calculate pixel position
-        let x = geometry.x as i32 * (self.config.cell_width + self.config.spacing);
-        let y = geometry.y as i32 * (self.config.cell_height + self.config.spacing);
-        let width = geometry.width as i32 * self.config.cell_width
-            + (geometry.width as i32 - 1) * self.config.spacing;
-        let height = geometry.height as i32 * self.config.cell_height
-            + (geometry.height as i32 - 1) * self.config.spacing;
+        let config = self.config.borrow();
+        let x = geometry.x as i32 * (config.cell_width + config.spacing);
+        let y = geometry.y as i32 * (config.cell_height + config.spacing);
+        let width = geometry.width as i32 * config.cell_width
+            + (geometry.width as i32 - 1) * config.spacing;
+        let height = geometry.height as i32 * config.cell_height
+            + (geometry.height as i32 - 1) * config.spacing;
+        drop(config);
 
         // Create displayer widget
         let widget = {
@@ -548,7 +557,7 @@ impl GridLayout {
         // Properties action
         let panel_clone = panel.clone();
         let panel_id_clone = panel_id.clone();
-        let config = self.config;
+        let config = self.config.clone();
         let panel_states = self.panel_states.clone();
         let occupied_cells = self.occupied_cells.clone();
         let container = self.container.clone();
@@ -561,7 +570,7 @@ impl GridLayout {
             let registry = crate::core::global_registry();
             show_panel_properties_dialog(
                 &panel_clone,
-                config,
+                *config.borrow(),
                 panel_states.clone(),
                 occupied_cells.clone(),
                 container.clone(),
@@ -606,7 +615,7 @@ impl GridLayout {
         let drag_gesture = GestureDrag::new();
         drag_gesture.set_button(1);
 
-        let config = self.config;
+        let config = self.config.clone();
         let selected_panels = self.selected_panels.clone();
         let panel_states = self.panel_states.clone();
         let occupied_cells = self.occupied_cells.clone();
@@ -684,6 +693,7 @@ impl GridLayout {
         let drop_zone_layer_update = drop_zone_layer.clone();
 
         drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
+            let config = config.borrow();
             let positions = initial_positions_clone2.borrow();
 
             // Don't move panels during drag - this causes a feedback loop!
@@ -726,6 +736,7 @@ impl GridLayout {
         let on_change_end = self.on_change.clone();
 
         drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
+            let config = config.borrow();
             let selected = selected_panels_end.borrow();
             let states = panel_states_end.borrow();
             let mut occupied = occupied_cells_end.borrow_mut();
@@ -917,13 +928,19 @@ impl GridLayout {
 
     /// Update grid cell size and spacing
     pub fn update_grid_size(&mut self, cell_width: i32, cell_height: i32, spacing: i32) {
-        self.config.cell_width = cell_width;
-        self.config.cell_height = cell_height;
-        self.config.spacing = spacing;
+        // Update config values
+        {
+            let mut config = self.config.borrow_mut();
+            config.cell_width = cell_width;
+            config.cell_height = cell_height;
+            config.spacing = spacing;
+        }
 
         // Update container size
-        let width = self.config.columns as i32 * (cell_width + spacing) - spacing;
-        let height = self.config.rows as i32 * (cell_height + spacing) - spacing;
+        let config = self.config.borrow();
+        let width = config.columns as i32 * (cell_width + spacing) - spacing;
+        let height = config.rows as i32 * (cell_height + spacing) - spacing;
+        drop(config);
         self.container.set_size_request(width, height);
         self.drop_zone_layer.set_size_request(width, height);
 
@@ -953,16 +970,16 @@ impl GridLayout {
         self.drop_zone_layer.queue_draw();
     }
 
-    pub fn set_config(&mut self, config: GridConfig) {
-        self.config = config;
-        let width = config.columns as i32 * (config.cell_width + config.spacing) - config.spacing;
-        let height = config.rows as i32 * (config.cell_height + config.spacing) - config.spacing;
+    pub fn set_config(&mut self, new_config: GridConfig) {
+        *self.config.borrow_mut() = new_config;
+        let width = new_config.columns as i32 * (new_config.cell_width + new_config.spacing) - new_config.spacing;
+        let height = new_config.rows as i32 * (new_config.cell_height + new_config.spacing) - new_config.spacing;
         self.container.set_size_request(width, height);
         self.drop_zone_layer.set_size_request(width, height);
     }
 
-    pub fn config(&self) -> &GridConfig {
-        &self.config
+    pub fn config(&self) -> GridConfig {
+        *self.config.borrow()
     }
 }
 
