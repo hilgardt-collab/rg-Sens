@@ -497,12 +497,12 @@ impl BackgroundConfigWidget {
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
-        // Polygon size
+        // Tile size
         let size_box = GtkBox::new(Orientation::Horizontal, 6);
-        size_box.append(&Label::new(Some("Size:")));
+        size_box.append(&Label::new(Some("Tile Size:")));
 
-        let size_spin = SpinButton::with_range(20.0, 500.0, 10.0);
-        size_spin.set_value(100.0);
+        let size_spin = SpinButton::with_range(10.0, 200.0, 5.0);
+        size_spin.set_value(60.0);
         size_spin.set_hexpand(true);
 
         let config_clone = config.clone();
@@ -512,7 +512,7 @@ impl BackgroundConfigWidget {
         size_spin.connect_value_changed(move |spin| {
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
-                poly.polygon_size = spin.value() as u32;
+                poly.tile_size = spin.value() as u32;
                 drop(cfg);
                 preview_clone.queue_draw();
 
@@ -525,22 +525,22 @@ impl BackgroundConfigWidget {
         size_box.append(&size_spin);
         page.append(&size_box);
 
-        // Variation
-        let var_box = GtkBox::new(Orientation::Horizontal, 6);
-        var_box.append(&Label::new(Some("Variation:")));
+        // Number of sides
+        let sides_box = GtkBox::new(Orientation::Horizontal, 6);
+        sides_box.append(&Label::new(Some("Sides:")));
 
-        let var_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
-        var_scale.set_value(0.2);
-        var_scale.set_hexpand(true);
+        let sides_spin = SpinButton::with_range(3.0, 12.0, 1.0);
+        sides_spin.set_value(6.0);
+        sides_spin.set_hexpand(true);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
-        var_scale.connect_value_changed(move |scale| {
+        sides_spin.connect_value_changed(move |spin| {
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
-                poly.color_variation = scale.value();
+                poly.num_sides = spin.value() as u32;
                 drop(cfg);
                 preview_clone.queue_draw();
 
@@ -550,8 +550,117 @@ impl BackgroundConfigWidget {
             }
         });
 
-        var_box.append(&var_scale);
-        page.append(&var_box);
+        sides_box.append(&sides_spin);
+        page.append(&sides_box);
+
+        // Rotation angle
+        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
+        angle_box.append(&Label::new(Some("Rotation:")));
+
+        let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 5.0);
+        angle_scale.set_value(0.0);
+        angle_scale.set_hexpand(true);
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+
+        angle_scale.connect_value_changed(move |scale| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                poly.rotation_angle = scale.value();
+                drop(cfg);
+                preview_clone.queue_draw();
+
+                if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    callback();
+                }
+            }
+        });
+
+        angle_box.append(&angle_scale);
+        page.append(&angle_box);
+
+        // Color buttons
+        page.append(&Label::new(Some("Colors:")));
+
+        let color1_button = Button::with_label("Color 1");
+        let color2_button = Button::with_label("Color 2");
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+
+        color1_button.connect_clicked(move |btn| {
+            let current_color = if let BackgroundType::Polygons(ref poly) = config_clone.borrow().background {
+                poly.colors.first().copied().unwrap_or_default()
+            } else {
+                Color::default()
+            };
+
+            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
+            let config_clone2 = config_clone.clone();
+            let preview_clone2 = preview_clone.clone();
+            let on_change_clone2 = on_change_clone.clone();
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
+                    let mut cfg = config_clone2.borrow_mut();
+                    if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                        if poly.colors.is_empty() {
+                            poly.colors.push(new_color);
+                        } else {
+                            poly.colors[0] = new_color;
+                        }
+                        drop(cfg);
+                        preview_clone2.queue_draw();
+
+                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                            callback();
+                        }
+                    }
+                }
+            });
+        });
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+
+        color2_button.connect_clicked(move |btn| {
+            let current_color = if let BackgroundType::Polygons(ref poly) = config_clone.borrow().background {
+                poly.colors.get(1).copied().unwrap_or_default()
+            } else {
+                Color::default()
+            };
+
+            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
+            let config_clone2 = config_clone.clone();
+            let preview_clone2 = preview_clone.clone();
+            let on_change_clone2 = on_change_clone.clone();
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
+                    let mut cfg = config_clone2.borrow_mut();
+                    if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                        if poly.colors.len() < 2 {
+                            poly.colors.push(new_color);
+                        } else {
+                            poly.colors[1] = new_color;
+                        }
+                        drop(cfg);
+                        preview_clone2.queue_draw();
+
+                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                            callback();
+                        }
+                    }
+                }
+            });
+        });
+
+        page.append(&color1_button);
+        page.append(&color2_button);
 
         page
     }

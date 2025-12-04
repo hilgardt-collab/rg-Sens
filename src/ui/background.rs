@@ -116,25 +116,25 @@ impl Default for RadialGradientConfig {
     }
 }
 
-/// Tessellated polygons configuration
+/// Tiling polygons configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PolygonConfig {
-    pub polygon_size: u32,    // Approximate size of each polygon
-    pub color_variation: f64, // How much colors vary (0.0 to 1.0)
-    pub base_colors: Vec<Color>,
-    pub seed: u32, // Random seed for reproducibility
+    pub tile_size: u32,           // Size of each tile
+    pub num_sides: u32,            // Number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, etc.)
+    pub rotation_angle: f64,       // Rotation angle in degrees
+    pub colors: Vec<Color>,        // Colors that alternate for tiles
 }
 
 impl Default for PolygonConfig {
     fn default() -> Self {
         Self {
-            polygon_size: 100,
-            color_variation: 0.2,
-            base_colors: vec![
+            tile_size: 60,
+            num_sides: 6, // Hexagons by default
+            rotation_angle: 0.0,
+            colors: vec![
+                Color::new(0.2, 0.2, 0.25, 1.0),
                 Color::new(0.15, 0.15, 0.2, 1.0),
-                Color::new(0.1, 0.1, 0.15, 1.0),
             ],
-            seed: 42,
         }
     }
 }
@@ -318,55 +318,163 @@ fn render_image_background(
     Ok(())
 }
 
-/// Render tessellated polygon background using Voronoi-like pattern
+/// Render tiling polygon background
 fn render_polygon_background(
     cr: &cairo::Context,
     config: &PolygonConfig,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    use rand::{Rng, SeedableRng};
-    use rand::rngs::StdRng;
+    if config.colors.is_empty() {
+        return Ok(());
+    }
 
-    let mut rng = StdRng::seed_from_u64(config.seed as u64);
+    let size = config.tile_size as f64;
+    let sides = config.num_sides.max(3); // Minimum 3 sides
+    let angle = config.rotation_angle.to_radians();
 
-    // Generate points for Voronoi cells
-    let cols = ((width / config.polygon_size as f64).ceil() as usize).max(2);
-    let rows = ((height / config.polygon_size as f64).ceil() as usize).max(2);
+    match sides {
+        3 => render_triangle_tiling(cr, size, angle, &config.colors, width, height)?,
+        4 => render_square_tiling(cr, size, angle, &config.colors, width, height)?,
+        6 => render_hexagon_tiling(cr, size, angle, &config.colors, width, height)?,
+        _ => render_generic_polygon_tiling(cr, size, sides, angle, &config.colors, width, height)?,
+    }
 
-    let mut points = Vec::new();
-    for row in 0..rows {
-        for col in 0..cols {
-            let base_x = (col as f64 + 0.5) * width / cols as f64;
-            let base_y = (row as f64 + 0.5) * height / rows as f64;
+    Ok(())
+}
 
-            // Add some randomness
-            let jitter_x = rng.gen_range(-width / cols as f64 * 0.4..width / cols as f64 * 0.4);
-            let jitter_y = rng.gen_range(-height / rows as f64 * 0.4..height / rows as f64 * 0.4);
+/// Draw a regular polygon
+fn draw_polygon(cr: &cairo::Context, cx: f64, cy: f64, radius: f64, sides: u32, rotation: f64) {
+    let angle_step = 2.0 * std::f64::consts::PI / sides as f64;
 
-            points.push((base_x + jitter_x, base_y + jitter_y));
+    for i in 0..sides {
+        let angle = rotation + i as f64 * angle_step;
+        let x = cx + radius * angle.cos();
+        let y = cy + radius * angle.sin();
+
+        if i == 0 {
+            cr.move_to(x, y);
+        } else {
+            cr.line_to(x, y);
         }
     }
+    cr.close_path();
+}
 
-    // For simplicity, draw rectangles for now (full Voronoi would be complex)
-    // We can enhance this later
-    for (i, (px, py)) in points.iter().enumerate() {
-        // Pick a base color
-        let base_color = &config.base_colors[i % config.base_colors.len()];
+/// Render triangle tiling
+fn render_triangle_tiling(
+    cr: &cairo::Context,
+    size: f64,
+    rotation: f64,
+    colors: &[Color],
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let height_step = size * 0.866; // sqrt(3)/2
+    let rows = (height / height_step).ceil() as i32 + 2;
+    let cols = (width / size).ceil() as i32 + 2;
 
-        // Add variation
-        let variation = config.color_variation;
-        let r = (base_color.r + rng.gen_range(-variation..variation)).clamp(0.0, 1.0);
-        let g = (base_color.g + rng.gen_range(-variation..variation)).clamp(0.0, 1.0);
-        let b = (base_color.b + rng.gen_range(-variation..variation)).clamp(0.0, 1.0);
+    let mut color_index = 0;
+    for row in -1..rows {
+        for col in -1..cols {
+            let x = col as f64 * size + if row % 2 == 1 { size / 2.0 } else { 0.0 };
+            let y = row as f64 * height_step;
 
-        cr.set_source_rgba(r, g, b, base_color.a);
+            colors[color_index % colors.len()].apply_to_cairo(cr);
+            draw_polygon(cr, x, y, size * 0.577, 3, rotation); // 0.577 ≈ 1/sqrt(3)
+            cr.fill()?;
 
-        // Draw a polygon (simplified as rectangle for now)
-        let size = config.polygon_size as f64 * 0.8;
-        cr.rectangle(px - size / 2.0, py - size / 2.0, size, size);
-        cr.fill()?;
+            color_index += 1;
+        }
     }
+    Ok(())
+}
 
+/// Render square tiling
+fn render_square_tiling(
+    cr: &cairo::Context,
+    size: f64,
+    rotation: f64,
+    colors: &[Color],
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let rows = (height / size).ceil() as i32 + 2;
+    let cols = (width / size).ceil() as i32 + 2;
+
+    let mut color_index = 0;
+    for row in -1..rows {
+        for col in -1..cols {
+            let x = col as f64 * size + size / 2.0;
+            let y = row as f64 * size + size / 2.0;
+
+            colors[color_index % colors.len()].apply_to_cairo(cr);
+            draw_polygon(cr, x, y, size * 0.707, 4, rotation); // 0.707 ≈ 1/sqrt(2)
+            cr.fill()?;
+
+            color_index += 1;
+        }
+    }
+    Ok(())
+}
+
+/// Render hexagon tiling (honeycomb pattern)
+fn render_hexagon_tiling(
+    cr: &cairo::Context,
+    size: f64,
+    rotation: f64,
+    colors: &[Color],
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let hex_width = size * 1.5;
+    let hex_height = size * 0.866 * 2.0; // sqrt(3) * size
+
+    let rows = (height / (hex_height * 0.75)).ceil() as i32 + 2;
+    let cols = (width / hex_width).ceil() as i32 + 2;
+
+    let mut color_index = 0;
+    for row in -1..rows {
+        for col in -1..cols {
+            let x = col as f64 * hex_width + if row % 2 == 1 { hex_width / 2.0 } else { 0.0 };
+            let y = row as f64 * hex_height * 0.75;
+
+            colors[color_index % colors.len()].apply_to_cairo(cr);
+            draw_polygon(cr, x, y, size, 6, rotation);
+            cr.fill()?;
+
+            color_index += 1;
+        }
+    }
+    Ok(())
+}
+
+/// Render generic polygon tiling (best effort, may have gaps)
+fn render_generic_polygon_tiling(
+    cr: &cairo::Context,
+    size: f64,
+    sides: u32,
+    rotation: f64,
+    colors: &[Color],
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let spacing = size * 1.2;
+    let rows = (height / spacing).ceil() as i32 + 2;
+    let cols = (width / spacing).ceil() as i32 + 2;
+
+    let mut color_index = 0;
+    for row in -1..rows {
+        for col in -1..cols {
+            let x = col as f64 * spacing + if row % 2 == 1 { spacing / 2.0 } else { 0.0 };
+            let y = row as f64 * spacing;
+
+            colors[color_index % colors.len()].apply_to_cairo(cr);
+            draw_polygon(cr, x, y, size * 0.5, sides, rotation);
+            cr.fill()?;
+
+            color_index += 1;
+        }
+    }
     Ok(())
 }
