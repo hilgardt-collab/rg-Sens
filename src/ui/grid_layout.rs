@@ -994,7 +994,7 @@ fn show_panel_properties_dialog(
     drop_zone: DrawingArea,
     registry: &'static mut crate::core::Registry,
 ) {
-    use gtk4::{Box as GtkBox, Button, ComboBoxText, Label, Orientation, SpinButton, Window};
+    use gtk4::{Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
 
     let panel_guard = match panel.try_read() {
         Ok(guard) => guard,
@@ -1059,18 +1059,20 @@ fn show_panel_properties_dialog(
     source_box.set_margin_start(12);
 
     let source_combo_label = Label::new(Some("Source:"));
-    let source_combo = ComboBoxText::new();
 
-    // Populate source combo
+    // Populate source dropdown
     let sources = registry.list_sources();
     let mut selected_source_idx = 0;
     for (idx, source_id) in sources.iter().enumerate() {
-        source_combo.append_text(source_id);
         if source_id == &old_source_id {
             selected_source_idx = idx;
         }
     }
-    source_combo.set_active(Some(selected_source_idx as u32));
+
+    let source_strings: Vec<&str> = sources.iter().map(|s| s.as_str()).collect();
+    let source_list = StringList::new(&source_strings);
+    let source_combo = DropDown::new(Some(source_list), Option::<gtk4::Expression>::None);
+    source_combo.set_selected(selected_source_idx as u32);
 
     source_box.append(&source_combo_label);
     source_box.append(&source_combo);
@@ -1086,18 +1088,20 @@ fn show_panel_properties_dialog(
     displayer_box.set_margin_start(12);
 
     let displayer_combo_label = Label::new(Some("Displayer:"));
-    let displayer_combo = ComboBoxText::new();
 
-    // Populate displayer combo
+    // Populate displayer dropdown
     let displayers = registry.list_displayers();
     let mut selected_displayer_idx = 0;
     for (idx, displayer_id) in displayers.iter().enumerate() {
-        displayer_combo.append_text(displayer_id);
         if displayer_id == &old_displayer_id {
             selected_displayer_idx = idx;
         }
     }
-    displayer_combo.set_active(Some(selected_displayer_idx as u32));
+
+    let displayer_strings: Vec<&str> = displayers.iter().map(|s| s.as_str()).collect();
+    let displayer_list = StringList::new(&displayer_strings);
+    let displayer_combo = DropDown::new(Some(displayer_list), Option::<gtk4::Expression>::None);
+    displayer_combo.set_selected(selected_displayer_idx as u32);
 
     displayer_box.append(&displayer_combo_label);
     displayer_box.append(&displayer_combo);
@@ -1144,13 +1148,13 @@ fn show_panel_properties_dialog(
         let new_width = width_spin.value() as u32;
         let new_height = height_spin.value() as u32;
 
-        // Get selected source and displayer
-        let new_source_id = source_combo.active_text()
-            .map(|s| s.to_string())
-            .unwrap_or(old_source_id.clone());
-        let new_displayer_id = displayer_combo.active_text()
-            .map(|s| s.to_string())
-            .unwrap_or(old_displayer_id.clone());
+        // Get selected source and displayer by index
+        let new_source_id = sources.get(source_combo.selected() as usize)
+            .cloned()
+            .unwrap_or_else(|| old_source_id.clone());
+        let new_displayer_id = displayers.get(displayer_combo.selected() as usize)
+            .cloned()
+            .unwrap_or_else(|| old_displayer_id.clone());
 
         // Get new background config
         let new_background = background_widget_clone.get_config();

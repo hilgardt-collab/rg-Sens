@@ -1,7 +1,7 @@
 //! Background configuration widget
 
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, ComboBoxText, DrawingArea, Entry, FileChooserAction, FileChooserDialog, Label, Orientation, ResponseType, Scale, SpinButton, Stack, Switch};
+use gtk4::{Box as GtkBox, Button, DropDown, DrawingArea, Entry, Label, Orientation, Scale, SpinButton, Stack, StringList, Switch};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -14,9 +14,9 @@ pub struct BackgroundConfigWidget {
     config: Rc<RefCell<BackgroundConfig>>,
     preview: DrawingArea,
     config_stack: Stack,
-    type_combo: ComboBoxText,
+    type_dropdown: DropDown,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    type_combo_handler_id: gtk4::glib::SignalHandlerId,
+    type_dropdown_handler_id: gtk4::glib::SignalHandlerId,
 }
 
 impl BackgroundConfigWidget {
@@ -34,15 +34,17 @@ impl BackgroundConfigWidget {
         let type_box = GtkBox::new(Orientation::Horizontal, 6);
         type_box.append(&Label::new(Some("Background Type:")));
 
-        let type_combo = ComboBoxText::new();
-        type_combo.append(Some("solid"), "Solid Color");
-        type_combo.append(Some("linear_gradient"), "Linear Gradient");
-        type_combo.append(Some("radial_gradient"), "Radial Gradient");
-        type_combo.append(Some("image"), "Image");
-        type_combo.append(Some("polygons"), "Tessellated Polygons");
-        type_combo.set_active_id(Some("solid"));
+        let type_options = StringList::new(&[
+            "Solid Color",
+            "Linear Gradient",
+            "Radial Gradient",
+            "Image",
+            "Tessellated Polygons",
+        ]);
+        let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
+        type_dropdown.set_selected(0); // Default to Solid Color
 
-        type_box.append(&type_combo);
+        type_box.append(&type_dropdown);
         container.append(&type_box);
 
         // Preview
@@ -91,34 +93,33 @@ impl BackgroundConfigWidget {
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
-        let type_combo_handler_id = type_combo.connect_changed(move |combo| {
-            if let Some(active_id) = combo.active_id() {
-                log::info!("type_combo.connect_changed handler fired with active_id: {}", active_id);
-                stack_clone.set_visible_child_name(&active_id);
+        let type_dropdown_handler_id = type_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            let (page_name, background_type) = match selected {
+                0 => ("solid", BackgroundType::Solid {
+                    color: Color::new(0.15, 0.15, 0.15, 1.0),
+                }),
+                1 => ("linear_gradient", BackgroundType::LinearGradient(LinearGradientConfig::default())),
+                2 => ("radial_gradient", BackgroundType::RadialGradient(RadialGradientConfig::default())),
+                3 => ("image", BackgroundType::Image {
+                    path: String::new(),
+                    stretch: false,
+                }),
+                4 => ("polygons", BackgroundType::Polygons(PolygonConfig::default())),
+                _ => ("solid", BackgroundType::default()),
+            };
 
-                // Update config type
-                let mut cfg = config_clone.borrow_mut();
-                log::info!("Creating new default background for type: {}", active_id);
-                cfg.background = match active_id.as_str() {
-                    "solid" => BackgroundType::Solid {
-                        color: Color::new(0.15, 0.15, 0.15, 1.0),
-                    },
-                    "linear_gradient" => BackgroundType::LinearGradient(LinearGradientConfig::default()),
-                    "radial_gradient" => BackgroundType::RadialGradient(RadialGradientConfig::default()),
-                    "image" => BackgroundType::Image {
-                        path: String::new(),
-                        stretch: false,
-                    },
-                    "polygons" => BackgroundType::Polygons(PolygonConfig::default()),
-                    _ => BackgroundType::default(),
-                };
-                drop(cfg);
+            stack_clone.set_visible_child_name(page_name);
 
-                preview_clone.queue_draw();
+            // Update config type
+            let mut cfg = config_clone.borrow_mut();
+            cfg.background = background_type;
+            drop(cfg);
 
-                if let Some(callback) = on_change_clone.borrow().as_ref() {
-                    callback();
-                }
+            preview_clone.queue_draw();
+
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
             }
         });
 
@@ -127,9 +128,9 @@ impl BackgroundConfigWidget {
             config,
             preview,
             config_stack,
-            type_combo,
+            type_dropdown,
             on_change,
-            type_combo_handler_id,
+            type_dropdown_handler_id,
         }
     }
 
@@ -428,42 +429,38 @@ impl BackgroundConfigWidget {
         let on_change_clone = on_change.clone();
 
         browse_button.connect_clicked(move |btn| {
-            let dialog = FileChooserDialog::new(
-                Some("Select Image"),
-                btn.root().and_downcast_ref::<gtk4::Window>(),
-                FileChooserAction::Open,
-                &[("Cancel", ResponseType::Cancel), ("Open", ResponseType::Accept)],
-            );
+            use gtk4::FileDialog;
+
+            let dialog = FileDialog::builder()
+                .title("Select Image")
+                .modal(true)
+                .build();
 
             let config_clone2 = config_clone.clone();
             let preview_clone2 = preview_clone.clone();
             let path_entry_clone2 = path_entry_clone.clone();
             let on_change_clone2 = on_change_clone.clone();
 
-            dialog.connect_response(move |dialog, response| {
-                if response == ResponseType::Accept {
-                    if let Some(file) = dialog.file() {
-                        if let Some(path) = file.path() {
-                            let path_str = path.to_string_lossy().to_string();
-                            path_entry_clone2.set_text(&path_str);
+            let window = btn.root().and_downcast::<gtk4::Window>();
+            dialog.open(window.as_ref(), gtk4::gio::Cancellable::NONE, move |result| {
+                if let Ok(file) = result {
+                    if let Some(path) = file.path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        path_entry_clone2.set_text(&path_str);
 
-                            let mut cfg = config_clone2.borrow_mut();
-                            if let BackgroundType::Image { ref mut path, .. } = cfg.background {
-                                *path = path_str;
-                                drop(cfg);
-                                preview_clone2.queue_draw();
+                        let mut cfg = config_clone2.borrow_mut();
+                        if let BackgroundType::Image { ref mut path, .. } = cfg.background {
+                            *path = path_str;
+                            drop(cfg);
+                            preview_clone2.queue_draw();
 
-                                if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                                    callback();
-                                }
+                            if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                                callback();
                             }
                         }
                     }
                 }
-                dialog.close();
             });
-
-            dialog.show();
         });
 
         let config_clone = config.clone();
@@ -674,29 +671,37 @@ impl BackgroundConfigWidget {
     pub fn set_config(&self, new_config: BackgroundConfig) {
         log::info!("BackgroundConfigWidget::set_config called with: {:?}", new_config);
 
-        // Determine the type ID from the config
-        let type_id = match &new_config.background {
-            BackgroundType::Solid { .. } => "solid",
-            BackgroundType::LinearGradient(_) => "linear_gradient",
-            BackgroundType::RadialGradient(_) => "radial_gradient",
-            BackgroundType::Image { .. } => "image",
-            BackgroundType::Polygons(_) => "polygons",
+        // Determine the type index from the config
+        let type_index = match &new_config.background {
+            BackgroundType::Solid { .. } => 0,
+            BackgroundType::LinearGradient(_) => 1,
+            BackgroundType::RadialGradient(_) => 2,
+            BackgroundType::Image { .. } => 3,
+            BackgroundType::Polygons(_) => 4,
         };
 
         *self.config.borrow_mut() = new_config;
         log::info!("Config stored, verifying: {:?}", self.config.borrow().background);
 
         // Block the signal handler to prevent it from overwriting our config
-        self.type_combo.block_signal(&self.type_combo_handler_id);
+        self.type_dropdown.block_signal(&self.type_dropdown_handler_id);
 
-        // Update the combo box selection (this won't trigger the handler now)
-        self.type_combo.set_active_id(Some(type_id));
+        // Update the dropdown selection (this won't trigger the handler now)
+        self.type_dropdown.set_selected(type_index);
 
         // Unblock the signal handler
-        self.type_combo.unblock_signal(&self.type_combo_handler_id);
+        self.type_dropdown.unblock_signal(&self.type_dropdown_handler_id);
 
         // Update the visible stack page to match the background type
-        self.config_stack.set_visible_child_name(type_id);
+        let page_name = match type_index {
+            0 => "solid",
+            1 => "linear_gradient",
+            2 => "radial_gradient",
+            3 => "image",
+            4 => "polygons",
+            _ => "solid",
+        };
+        self.config_stack.set_visible_child_name(page_name);
 
         self.preview.queue_draw();
     }
