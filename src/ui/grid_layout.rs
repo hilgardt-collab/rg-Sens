@@ -1098,8 +1098,6 @@ fn show_panel_properties_dialog(
             return;
         }
 
-              panel_id, size_changed, source_changed, displayer_changed);
-
         // Get panel state
         let mut states = panel_states.borrow_mut();
         let state = match states.get_mut(&panel_id) {
