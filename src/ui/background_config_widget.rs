@@ -16,6 +16,7 @@ pub struct BackgroundConfigWidget {
     config_stack: Stack,
     type_combo: ComboBoxText,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    type_combo_handler_id: gtk4::glib::SignalHandlerId,
 }
 
 impl BackgroundConfigWidget {
@@ -90,7 +91,7 @@ impl BackgroundConfigWidget {
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
-        type_combo.connect_changed(move |combo| {
+        let type_combo_handler_id = type_combo.connect_changed(move |combo| {
             if let Some(active_id) = combo.active_id() {
                 stack_clone.set_visible_child_name(&active_id);
 
@@ -126,6 +127,7 @@ impl BackgroundConfigWidget {
             config_stack,
             type_combo,
             on_change,
+            type_combo_handler_id,
         }
     }
 
@@ -567,8 +569,14 @@ impl BackgroundConfigWidget {
 
         *self.config.borrow_mut() = new_config;
 
-        // Update the combo box selection
+        // Block the signal handler to prevent it from overwriting our config
+        self.type_combo.block_signal(&self.type_combo_handler_id);
+
+        // Update the combo box selection (this won't trigger the handler now)
         self.type_combo.set_active_id(Some(type_id));
+
+        // Unblock the signal handler
+        self.type_combo.unblock_signal(&self.type_combo_handler_id);
 
         // Update the visible stack page to match the background type
         self.config_stack.set_visible_child_name(type_id);
