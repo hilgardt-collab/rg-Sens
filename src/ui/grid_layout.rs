@@ -398,8 +398,17 @@ impl GridLayout {
         // Setup background rendering
         let panel_clone_bg = panel.clone();
         background_area.set_draw_func(move |_, cr, w, h| {
-            if let Ok(panel_guard) = panel_clone_bg.try_read() {
-                let _ = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64);
+            match panel_clone_bg.try_read() {
+                Ok(panel_guard) => {
+                    log::info!("Drawing background: type={:?}, size={}x{}",
+                        std::mem::discriminant(&panel_guard.background.background), w, h);
+                    if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64) {
+                        log::warn!("Failed to render background: {}", e);
+                    }
+                }
+                Err(_) => {
+                    log::warn!("Failed to acquire panel read lock for background rendering");
+                }
             }
         });
 
@@ -1184,6 +1193,7 @@ fn show_panel_properties_dialog(
 
             // Update background if changed
             if background_changed {
+                log::info!("Updating panel background to: {:?}", std::mem::discriminant(&new_background.background));
                 panel_guard.background = new_background;
             }
 
@@ -1234,6 +1244,7 @@ fn show_panel_properties_dialog(
 
         // Queue redraw of background AFTER releasing the panel write lock
         if background_changed {
+            log::info!("Queueing background redraw");
             background_area.queue_draw();
         }
 
