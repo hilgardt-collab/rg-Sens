@@ -329,6 +329,11 @@ fn load_css() {
             border: 3px solid #00ff00;
             border-radius: 4px;
         }
+
+        .transparent-background {
+            background: transparent;
+            background-color: transparent;
+        }
         ",
     );
 

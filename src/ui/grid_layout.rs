@@ -415,6 +415,9 @@ impl GridLayout {
         // Create overlay to stack background and widget
         let overlay = Overlay::new();
         overlay.set_child(Some(&background_area));
+
+        // Make the widget transparent so the background shows through
+        widget.add_css_class("transparent-background");
         overlay.add_overlay(&widget);
 
         // Create frame for selection visual feedback
