@@ -687,13 +687,14 @@ impl GridLayout {
         let frame_clone = frame.clone();
 
         // Clone for drag_update closure
+        let config_for_update = config.clone();
         let selected_panels_update = selected_panels.clone();
-        let panel_states_update = panel_states.clone();
+        let _panel_states_update = panel_states.clone();
         let drag_preview_cell_update = drag_preview_cell.clone();
         let drop_zone_layer_update = drop_zone_layer.clone();
 
         drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
-            let config = config.borrow();
+            let config = config_for_update.borrow();
             let positions = initial_positions_clone2.borrow();
 
             // Don't move panels during drag - this causes a feedback loop!
@@ -724,9 +725,10 @@ impl GridLayout {
             }
         });
 
-        let panel_id_clone = panel_id.clone();
+        let _panel_id_clone = panel_id.clone();
 
         // Clone for drag_end closure
+        let config_for_end = config.clone();
         let selected_panels_end = selected_panels.clone();
         let panel_states_end = panel_states.clone();
         let occupied_cells_end = occupied_cells.clone();
@@ -736,7 +738,7 @@ impl GridLayout {
         let on_change_end = self.on_change.clone();
 
         drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
-            let config = config.borrow();
+            let config = config_for_end.borrow();
             let selected = selected_panels_end.borrow();
             let states = panel_states_end.borrow();
             let mut occupied = occupied_cells_end.borrow_mut();
@@ -822,7 +824,7 @@ impl GridLayout {
             }
 
             // Phase 3: Apply movement based on collision check
-            for (id, gx, gy, px, py) in &new_positions {
+            for (_id, _gx, _gy, _px, _py) in &new_positions {
             }
 
             if group_has_collision {
@@ -945,7 +947,7 @@ impl GridLayout {
         self.drop_zone_layer.set_size_request(width, height);
 
         // Update all panel sizes and positions
-        for (panel_id, state) in self.panel_states.borrow_mut().iter_mut() {
+        for (_panel_id, state) in self.panel_states.borrow_mut().iter_mut() {
             if let Ok(panel_guard) = state.panel.try_read() {
                 let geom = &panel_guard.geometry;
 
@@ -989,7 +991,7 @@ fn show_panel_properties_dialog(
     config: GridConfig,
     panel_states: Rc<RefCell<HashMap<String, PanelState>>>,
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
-    container: Fixed,
+    _container: Fixed,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     drop_zone: DrawingArea,
     registry: &'static mut crate::core::Registry,
