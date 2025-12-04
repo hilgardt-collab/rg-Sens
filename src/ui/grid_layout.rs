@@ -1139,6 +1139,9 @@ fn show_panel_properties_dialog(
             }
         };
 
+        // Clone background_area for later use (to avoid borrow conflicts)
+        let background_area = state.background_area.clone();
+
         // Handle size change (collision check)
         if size_changed {
             let mut occupied = occupied_cells.borrow_mut();
@@ -1216,9 +1219,7 @@ fn show_panel_properties_dialog(
                 info!("Updated panel background");
 
                 // Queue redraw of the background area to show new background
-                if let Some(state) = states.get(&panel_id) {
-                    state.background_area.queue_draw();
-                }
+                background_area.queue_draw();
             }
 
             // Update source if changed

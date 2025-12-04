@@ -107,7 +107,7 @@ impl GradientEditor {
         // Add stop button
         let add_button = Button::with_label("Add Color Stop");
         let stops_clone = stops.clone();
-        let stops_container_clone = stops_container.clone();
+        let _stops_container_clone = stops_container.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
