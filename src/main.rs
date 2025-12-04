@@ -247,27 +247,27 @@ fn build_ui(app: &Application) {
 
         let menu = gio::Menu::new();
 
-        // New panel
-        menu.append(Some("New Panel"), Some("window.new-panel"));
+        // Section 1: New panel
+        let section1 = gio::Menu::new();
+        section1.append(Some("New Panel"), Some("window.new-panel"));
+        menu.append_section(None, &section1);
 
-        menu.append(Some("---"), None);
+        // Section 2: Save layout
+        let section2 = gio::Menu::new();
+        section2.append(Some("Save Layout"), Some("window.save-layout"));
+        menu.append_section(None, &section2);
 
-        // Save layout
-        menu.append(Some("Save Layout"), Some("window.save-layout"));
+        // Section 3: Save/Load from file
+        let section3 = gio::Menu::new();
+        section3.append(Some("Save Layout to File..."), Some("window.save-to-file"));
+        section3.append(Some("Load Layout from File..."), Some("window.load-from-file"));
+        menu.append_section(None, &section3);
 
-        menu.append(Some("---"), None);
-
-        // Save/Load from file
-        menu.append(Some("Save Layout to File..."), Some("window.save-to-file"));
-        menu.append(Some("Load Layout from File..."), Some("window.load-from-file"));
-
-        menu.append(Some("---"), None);
-
-        // Options
-        menu.append(Some("Options"), Some("window.options"));
-
-        // Quit
-        menu.append(Some("Quit"), Some("window.quit"));
+        // Section 4: Options and Quit
+        let section4 = gio::Menu::new();
+        section4.append(Some("Options"), Some("window.options"));
+        section4.append(Some("Quit"), Some("window.quit"));
+        menu.append_section(None, &section4);
 
         let popover = PopoverMenu::from_model(Some(&menu));
         popover.set_parent(&window_for_menu);

@@ -554,13 +554,15 @@ impl GridLayout {
 
         let menu = gio::Menu::new();
 
-        // Properties option (combines configure + resize)
-        menu.append(Some("Properties..."), Some("panel.properties"));
+        // Section 1: Properties
+        let section1 = gio::Menu::new();
+        section1.append(Some("Properties..."), Some("panel.properties"));
+        menu.append_section(None, &section1);
 
-        menu.append(Some("---"), None);
-
-        // Delete option
-        menu.append(Some("Delete"), Some("panel.delete"));
+        // Section 2: Delete
+        let section2 = gio::Menu::new();
+        section2.append(Some("Delete"), Some("panel.delete"));
+        menu.append_section(None, &section2);
 
         let popover = PopoverMenu::from_model(Some(&menu));
         popover.set_parent(widget);
@@ -1043,7 +1045,7 @@ fn show_panel_properties_dialog(
     drop_zone: DrawingArea,
     registry: &'static crate::core::Registry,
 ) {
-    use gtk4::{Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
+    use gtk4::{Box as GtkBox, Button, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
 
     let panel_guard = match panel.try_read() {
         Ok(guard) => guard,
@@ -1062,8 +1064,8 @@ fn show_panel_properties_dialog(
     let dialog = Window::builder()
         .title(format!("Panel Properties - {}", panel_id))
         .modal(true)
-        .default_width(400)
-        .default_height(300)
+        .default_width(500)
+        .default_height(450)
         .build();
 
     // Main container
@@ -1073,10 +1075,21 @@ fn show_panel_properties_dialog(
     vbox.set_margin_start(12);
     vbox.set_margin_end(12);
 
+    // Create notebook for tabs
+    let notebook = Notebook::new();
+    notebook.set_vexpand(true);
+
+    // === Tab 1: Panel Properties ===
+    let panel_props_box = GtkBox::new(Orientation::Vertical, 12);
+    panel_props_box.set_margin_top(12);
+    panel_props_box.set_margin_bottom(12);
+    panel_props_box.set_margin_start(12);
+    panel_props_box.set_margin_end(12);
+
     // Panel Size section
     let size_label = Label::new(Some("Panel Size"));
     size_label.add_css_class("heading");
-    vbox.append(&size_label);
+    panel_props_box.append(&size_label);
 
     let size_box = GtkBox::new(Orientation::Horizontal, 6);
     size_box.set_margin_start(12);
@@ -1096,13 +1109,33 @@ fn show_panel_properties_dialog(
     size_box.append(&height_label);
     size_box.append(&height_spin);
 
-    vbox.append(&size_box);
+    panel_props_box.append(&size_box);
 
-    // Data Source section
+    // Background section
+    let background_label = Label::new(Some("Background"));
+    background_label.add_css_class("heading");
+    background_label.set_margin_top(12);
+    panel_props_box.append(&background_label);
+
+    let background_widget = crate::ui::BackgroundConfigWidget::new();
+    background_widget.set_config(panel_guard.background.clone());
+    panel_props_box.append(background_widget.widget());
+
+    // Wrap background_widget in Rc so we can share it with the closure
+    let background_widget = Rc::new(background_widget);
+
+    notebook.append_page(&panel_props_box, Some(&Label::new(Some("Panel Properties"))));
+
+    // === Tab 2: Data Source ===
+    let source_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    source_tab_box.set_margin_top(12);
+    source_tab_box.set_margin_bottom(12);
+    source_tab_box.set_margin_start(12);
+    source_tab_box.set_margin_end(12);
+
     let source_label = Label::new(Some("Data Source"));
     source_label.add_css_class("heading");
-    source_label.set_margin_top(12);
-    vbox.append(&source_label);
+    source_tab_box.append(&source_label);
 
     let source_box = GtkBox::new(Orientation::Horizontal, 6);
     source_box.set_margin_start(12);
@@ -1125,13 +1158,20 @@ fn show_panel_properties_dialog(
 
     source_box.append(&source_combo_label);
     source_box.append(&source_combo);
-    vbox.append(&source_box);
+    source_tab_box.append(&source_box);
 
-    // Displayer section
+    notebook.append_page(&source_tab_box, Some(&Label::new(Some("Data Source"))));
+
+    // === Tab 3: Display Type ===
+    let displayer_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    displayer_tab_box.set_margin_top(12);
+    displayer_tab_box.set_margin_bottom(12);
+    displayer_tab_box.set_margin_start(12);
+    displayer_tab_box.set_margin_end(12);
+
     let displayer_label = Label::new(Some("Display Type"));
     displayer_label.add_css_class("heading");
-    displayer_label.set_margin_top(12);
-    vbox.append(&displayer_label);
+    displayer_tab_box.append(&displayer_label);
 
     let displayer_box = GtkBox::new(Orientation::Horizontal, 6);
     displayer_box.set_margin_start(12);
@@ -1154,20 +1194,12 @@ fn show_panel_properties_dialog(
 
     displayer_box.append(&displayer_combo_label);
     displayer_box.append(&displayer_combo);
-    vbox.append(&displayer_box);
+    displayer_tab_box.append(&displayer_box);
 
-    // Background section
-    let background_label = Label::new(Some("Background"));
-    background_label.add_css_class("heading");
-    background_label.set_margin_top(12);
-    vbox.append(&background_label);
+    notebook.append_page(&displayer_tab_box, Some(&Label::new(Some("Display Type"))));
 
-    let background_widget = crate::ui::BackgroundConfigWidget::new();
-    background_widget.set_config(panel_guard.background.clone());
-    vbox.append(background_widget.widget());
-
-    // Wrap background_widget in Rc so we can share it with the closure
-    let background_widget = Rc::new(background_widget);
+    // Add notebook to main vbox
+    vbox.append(&notebook);
 
     // Buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
