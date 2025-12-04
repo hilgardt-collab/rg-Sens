@@ -4,12 +4,14 @@
 //! Each displayer renders data in a specific visual format.
 
 mod text;
+mod text_config;
 // mod level_bar;
 // mod arc_gauge;
 // mod line_graph;
 // mod analog_clock;
 
 pub use text::TextDisplayer;
+pub use text_config::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
 // pub use level_bar::LevelBarDisplayer;
 // pub use arc_gauge::ArcGaugeDisplayer;
 // pub use line_graph::LineGraphDisplayer;
