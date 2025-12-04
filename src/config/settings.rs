@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::ui::background::BackgroundConfig;
+
 /// Application-wide configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -73,6 +75,7 @@ pub struct WindowConfig {
     pub height: i32,
     pub x: Option<i32>,
     pub y: Option<i32>,
+    pub background: BackgroundConfig,
 }
 
 impl Default for WindowConfig {
@@ -82,6 +85,7 @@ impl Default for WindowConfig {
             height: 600,
             x: None,
             y: None,
+            background: BackgroundConfig::default(),
         }
     }
 }
@@ -91,7 +95,9 @@ impl Default for WindowConfig {
 pub struct GridConfig {
     pub columns: u32,
     pub rows: u32,
-    pub spacing: u32,
+    pub cell_width: i32,
+    pub cell_height: i32,
+    pub spacing: i32,
 }
 
 impl Default for GridConfig {
@@ -99,6 +105,8 @@ impl Default for GridConfig {
         Self {
             columns: 4,
             rows: 3,
+            cell_width: 300,
+            cell_height: 200,
             spacing: 4,
         }
     }

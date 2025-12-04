@@ -915,6 +915,44 @@ impl GridLayout {
         self.overlay.clone().upcast()
     }
 
+    /// Update grid cell size and spacing
+    pub fn update_grid_size(&mut self, cell_width: i32, cell_height: i32, spacing: i32) {
+        self.config.cell_width = cell_width;
+        self.config.cell_height = cell_height;
+        self.config.spacing = spacing;
+
+        // Update container size
+        let width = self.config.columns as i32 * (cell_width + spacing) - spacing;
+        let height = self.config.rows as i32 * (cell_height + spacing) - spacing;
+        self.container.set_size_request(width, height);
+        self.drop_zone_layer.set_size_request(width, height);
+
+        // Update all panel sizes and positions
+        for (panel_id, state) in self.panel_states.borrow_mut().iter_mut() {
+            if let Ok(panel_guard) = state.panel.try_read() {
+                let geom = &panel_guard.geometry;
+
+                // Calculate new pixel dimensions
+                let pixel_width = geom.width as i32 * cell_width + (geom.width as i32 - 1) * spacing;
+                let pixel_height = geom.height as i32 * cell_height + (geom.height as i32 - 1) * spacing;
+                let x = (geom.x as i32 * (cell_width + spacing)) as f64;
+                let y = (geom.y as i32 * (cell_height + spacing)) as f64;
+
+                // Update frame size and position
+                state.frame.set_size_request(pixel_width, pixel_height);
+                self.container.move_(&state.frame, x, y);
+
+                // Update widget size
+                state.widget.set_size_request(pixel_width, pixel_height);
+
+                // Update background area size
+                state.background_area.set_size_request(pixel_width, pixel_height);
+            }
+        }
+
+        self.drop_zone_layer.queue_draw();
+    }
+
     pub fn set_config(&mut self, config: GridConfig) {
         self.config = config;
         let width = config.columns as i32 * (config.cell_width + config.spacing) - config.spacing;

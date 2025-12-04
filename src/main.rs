@@ -1,7 +1,7 @@
 use gtk4::gdk::Display;
 use gtk4::glib;
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, CssProvider};
+use gtk4::{Application, ApplicationWindow, CssProvider, EventControllerKey, Overlay};
 use log::{info, warn};
 use rg_sens::config::{AppConfig, GridConfig as ConfigGridConfig, PanelConfig, WindowConfig};
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
@@ -58,9 +58,9 @@ fn build_ui(app: &Application) {
     let grid_config = UiGridConfig {
         rows: app_config.grid.rows,
         columns: app_config.grid.columns,
-        cell_width: 300,  // Fixed for now, could be configurable
-        cell_height: 200, // Fixed for now, could be configurable
-        spacing: app_config.grid.spacing as i32,
+        cell_width: app_config.grid.cell_width,
+        cell_height: app_config.grid.cell_height,
+        spacing: app_config.grid.spacing,
     };
 
     // Create the main window with saved dimensions
@@ -136,8 +136,21 @@ fn build_ui(app: &Application) {
         }
     }
 
-    // Set grid as window content
-    window.set_child(Some(&grid_layout.widget()));
+    // Create window background
+    let window_background = gtk4::DrawingArea::new();
+    let window_bg_config = app_config.window.background.clone();
+    window_background.set_draw_func(move |_, cr, width, height| {
+        use rg_sens::ui::background::render_background;
+        let _ = render_background(cr, &window_bg_config, width as f64, height as f64);
+    });
+
+    // Create overlay to show background behind grid
+    let window_overlay = gtk4::Overlay::new();
+    window_overlay.set_child(Some(&window_background));
+    window_overlay.add_overlay(&grid_layout.widget());
+
+    // Set overlay as window content
+    window.set_child(Some(&window_overlay));
 
     // Track if configuration has changed (dirty flag)
     let config_dirty = Rc::new(RefCell::new(false));
@@ -193,8 +206,34 @@ fn build_ui(app: &Application) {
         });
     });
 
+    // Add keyboard shortcut for settings (Ctrl+Comma)
+    let key_controller = gtk4::EventControllerKey::new();
+    let window_clone_for_settings = window.clone();
+    let app_config_for_settings = Rc::new(RefCell::new(app_config.clone()));
+    let window_bg_for_settings = window_background.clone();
+    let grid_layout_for_settings = Rc::new(RefCell::new(grid_layout));
+    let config_dirty_for_settings = config_dirty.clone();
+
+    key_controller.connect_key_pressed(move |_, key, _code, modifiers| {
+        if modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK)
+            && key == gtk4::gdk::Key::comma {
+            show_window_settings_dialog(
+                &window_clone_for_settings,
+                &app_config_for_settings,
+                &window_bg_for_settings,
+                &grid_layout_for_settings,
+                &config_dirty_for_settings,
+            );
+            glib::Propagation::Stop
+        } else {
+            glib::Propagation::Proceed
+        }
+    });
+
+    window.add_controller(key_controller);
+
     window.present();
-    info!("Window presented with {} panels", grid_layout.panels().len());
+    info!("Window presented with {} panels", grid_layout_for_settings.borrow().panels().len());
 }
 
 /// Show save confirmation dialog on close
@@ -236,6 +275,57 @@ fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], g
 }
 
 /// Save current configuration to disk
+fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>]) {
+    // Get window dimensions
+    let (width, height) = (window.default_width(), window.default_height());
+
+    // Convert panels to PanelConfig
+    let panel_configs: Vec<PanelConfig> = panels
+        .iter()
+        .filter_map(|panel| {
+            if let Ok(panel_guard) = panel.try_read() {
+                Some(PanelConfig {
+                    id: panel_guard.id.clone(),
+                    x: panel_guard.geometry.x,
+                    y: panel_guard.geometry.y,
+                    width: panel_guard.geometry.width,
+                    height: panel_guard.geometry.height,
+                    source: panel_guard.source.metadata().id.clone(),
+                    displayer: panel_guard.displayer.id().to_string(),
+                    settings: HashMap::new(), // TODO: Save displayer/source settings
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Create config with all settings
+    let config = AppConfig {
+        version: 1,
+        window: WindowConfig {
+            width,
+            height,
+            x: None, // GTK4 doesn't provide window position
+            y: None,
+            background: app_config.window.background.clone(),
+        },
+        grid: app_config.grid.clone(),
+        panels: panel_configs,
+    };
+
+    // Save to disk
+    match config.save() {
+        Ok(()) => {
+            info!("Configuration saved successfully");
+        }
+        Err(e) => {
+            warn!("Failed to save configuration: {}", e);
+        }
+    }
+}
+
+/// Save current configuration to disk (legacy version)
 fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: UiGridConfig) {
     // Get window dimensions
     let (width, height) = (window.default_width(), window.default_height());
@@ -269,11 +359,14 @@ fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_c
             height,
             x: None, // GTK4 doesn't provide window position
             y: None,
+            background: Default::default(),
         },
         grid: ConfigGridConfig {
             columns: grid_config.columns,
             rows: grid_config.rows,
-            spacing: grid_config.spacing as u32,
+            cell_width: grid_config.cell_width,
+            cell_height: grid_config.cell_height,
+            spacing: grid_config.spacing,
         },
         panels: panel_configs,
     };
@@ -287,6 +380,153 @@ fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_c
             warn!("Failed to save configuration: {}", e);
         }
     }
+}
+
+/// Show window settings dialog
+fn show_window_settings_dialog(
+    parent_window: &ApplicationWindow,
+    app_config: &Rc<RefCell<AppConfig>>,
+    window_background: &gtk4::DrawingArea,
+    grid_layout: &Rc<RefCell<GridLayout>>,
+    config_dirty: &Rc<RefCell<bool>>,
+) {
+    use gtk4::{Box as GtkBox, Button, Dialog, Label, Orientation, SpinButton};
+    use rg_sens::ui::BackgroundConfigWidget;
+
+    let dialog = Dialog::builder()
+        .title("Window Settings")
+        .transient_for(parent_window)
+        .modal(true)
+        .default_width(500)
+        .default_height(600)
+        .build();
+
+    let vbox = GtkBox::new(Orientation::Vertical, 12);
+    vbox.set_margin_start(12);
+    vbox.set_margin_end(12);
+    vbox.set_margin_top(12);
+    vbox.set_margin_bottom(12);
+
+    // Window Background Section
+    let bg_label = Label::new(Some("Window Background"));
+    bg_label.add_css_class("heading");
+    bg_label.set_margin_top(12);
+    vbox.append(&bg_label);
+
+    let background_widget = BackgroundConfigWidget::new();
+    background_widget.set_config(app_config.borrow().window.background.clone());
+    vbox.append(background_widget.widget());
+
+    let background_widget = Rc::new(background_widget);
+
+    // Grid Settings Section
+    let grid_label = Label::new(Some("Grid Settings"));
+    grid_label.add_css_class("heading");
+    grid_label.set_margin_top(12);
+    vbox.append(&grid_label);
+
+    // Cell Width
+    let cell_width_box = GtkBox::new(Orientation::Horizontal, 6);
+    cell_width_box.append(&Label::new(Some("Cell Width:")));
+    let cell_width_spin = SpinButton::with_range(50.0, 1000.0, 10.0);
+    cell_width_spin.set_value(app_config.borrow().grid.cell_width as f64);
+    cell_width_spin.set_hexpand(true);
+    cell_width_box.append(&cell_width_spin);
+    vbox.append(&cell_width_box);
+
+    // Cell Height
+    let cell_height_box = GtkBox::new(Orientation::Horizontal, 6);
+    cell_height_box.append(&Label::new(Some("Cell Height:")));
+    let cell_height_spin = SpinButton::with_range(50.0, 1000.0, 10.0);
+    cell_height_spin.set_value(app_config.borrow().grid.cell_height as f64);
+    cell_height_spin.set_hexpand(true);
+    cell_height_box.append(&cell_height_spin);
+    vbox.append(&cell_height_box);
+
+    // Spacing
+    let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
+    spacing_box.append(&Label::new(Some("Spacing:")));
+    let spacing_spin = SpinButton::with_range(0.0, 50.0, 1.0);
+    spacing_spin.set_value(app_config.borrow().grid.spacing as f64);
+    spacing_spin.set_hexpand(true);
+    spacing_box.append(&spacing_spin);
+    vbox.append(&spacing_box);
+
+    // Buttons
+    let button_box = GtkBox::new(Orientation::Horizontal, 6);
+    button_box.set_halign(gtk4::Align::End);
+    button_box.set_margin_top(12);
+
+    let cancel_button = Button::with_label("Cancel");
+    let apply_button = Button::with_label("Apply");
+    let accept_button = Button::with_label("Accept");
+    accept_button.add_css_class("suggested-action");
+
+    let dialog_clone = dialog.clone();
+    cancel_button.connect_clicked(move |_| {
+        dialog_clone.close();
+    });
+
+    // Apply logic
+    let app_config_clone = app_config.clone();
+    let background_widget_clone = background_widget.clone();
+    let window_background_clone = window_background.clone();
+    let grid_layout_clone = grid_layout.clone();
+    let config_dirty_clone = config_dirty.clone();
+
+    let apply_changes = Rc::new(move || {
+        let new_background = background_widget_clone.get_config();
+        let new_cell_width = cell_width_spin.value() as i32;
+        let new_cell_height = cell_height_spin.value() as i32;
+        let new_spacing = spacing_spin.value() as i32;
+
+        // Update app config
+        let mut cfg = app_config_clone.borrow_mut();
+        cfg.window.background = new_background.clone();
+        cfg.grid.cell_width = new_cell_width;
+        cfg.grid.cell_height = new_cell_height;
+        cfg.grid.spacing = new_spacing;
+        drop(cfg);
+
+        // Update window background rendering
+        let bg_config = new_background;
+        window_background_clone.set_draw_func(move |_, cr, width, height| {
+            use rg_sens::ui::background::render_background;
+            let _ = render_background(cr, &bg_config, width as f64, height as f64);
+        });
+        window_background_clone.queue_draw();
+
+        // Update grid layout
+        grid_layout_clone.borrow_mut().update_grid_size(new_cell_width, new_cell_height, new_spacing);
+
+        // Mark config as dirty
+        *config_dirty_clone.borrow_mut() = true;
+
+        info!("Window settings applied");
+    });
+
+    // Apply button
+    let apply_changes_clone = apply_changes.clone();
+    apply_button.connect_clicked(move |_| {
+        apply_changes_clone();
+    });
+
+    // Accept button
+    let apply_changes_clone2 = apply_changes.clone();
+    let dialog_clone2 = dialog.clone();
+    accept_button.connect_clicked(move |_| {
+        apply_changes_clone2();
+        dialog_clone2.close();
+    });
+
+    button_box.append(&cancel_button);
+    button_box.append(&apply_button);
+    button_box.append(&accept_button);
+
+    vbox.append(&button_box);
+
+    dialog.set_child(Some(&vbox));
+    dialog.present();
 }
 
 /// Create a panel from configuration parameters
