@@ -400,8 +400,8 @@ impl GridLayout {
         background_area.set_draw_func(move |_, cr, w, h| {
             match panel_clone_bg.try_read() {
                 Ok(panel_guard) => {
-                    log::info!("Drawing background: type={:?}, size={}x{}",
-                        std::mem::discriminant(&panel_guard.background.background), w, h);
+                    log::info!("draw_func: Reading panel background: {:?}, size={}x{}",
+                        panel_guard.background, w, h);
                     if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64) {
                         log::warn!("Failed to render background: {}", e);
                     }

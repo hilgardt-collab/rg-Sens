@@ -184,11 +184,14 @@ pub fn render_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
+    log::info!("render_background called with config: {:?}, size: {}x{}", config, width, height);
     match &config.background {
         BackgroundType::Solid { color } => {
+            log::info!("Rendering solid color: r={}, g={}, b={}, a={}", color.r, color.g, color.b, color.a);
             color.apply_to_cairo(cr);
             cr.rectangle(0.0, 0.0, width, height);
             cr.fill()?;
+            log::info!("Solid color fill completed");
         }
         BackgroundType::LinearGradient(grad) => {
             render_linear_gradient(cr, grad, width, height)?;
