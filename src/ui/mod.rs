@@ -7,6 +7,7 @@ mod color_picker;
 pub mod background;
 mod gradient_editor;
 mod background_config_widget;
+mod image_picker;
 
 pub use main_window::MainWindow;
 pub use grid_layout::{GridConfig, GridLayout};
@@ -15,3 +16,4 @@ pub use color_picker::ColorPickerDialog;
 pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background};
 pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
+pub use image_picker::ImagePicker;

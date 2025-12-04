@@ -429,34 +429,7 @@ impl BackgroundConfigWidget {
         let on_change_clone = on_change.clone();
 
         browse_button.connect_clicked(move |btn| {
-            use gtk4::{FileDialog, FileFilter};
-
-            // Create image file filter
-            let filter = FileFilter::new();
-            filter.set_name(Some("Image Files"));
-            filter.add_mime_type("image/png");
-            filter.add_mime_type("image/jpeg");
-            filter.add_mime_type("image/jpg");
-            filter.add_mime_type("image/gif");
-            filter.add_mime_type("image/bmp");
-            filter.add_mime_type("image/webp");
-            filter.add_mime_type("image/svg+xml");
-            filter.add_pattern("*.png");
-            filter.add_pattern("*.jpg");
-            filter.add_pattern("*.jpeg");
-            filter.add_pattern("*.gif");
-            filter.add_pattern("*.bmp");
-            filter.add_pattern("*.webp");
-            filter.add_pattern("*.svg");
-
-            let filters = gtk4::gio::ListStore::new::<FileFilter>();
-            filters.append(&filter);
-
-            let dialog = FileDialog::builder()
-                .title("Select Background Image")
-                .modal(true)
-                .filters(&filters)
-                .build();
+            let picker = crate::ui::ImagePicker::new("Select Background Image");
 
             let config_clone2 = config_clone.clone();
             let preview_clone2 = preview_clone.clone();
@@ -464,21 +437,19 @@ impl BackgroundConfigWidget {
             let on_change_clone2 = on_change_clone.clone();
 
             let window = btn.root().and_downcast::<gtk4::Window>();
-            dialog.open(window.as_ref(), gtk4::gio::Cancellable::NONE, move |result| {
-                if let Ok(file) = result {
-                    if let Some(path) = file.path() {
-                        let path_str = path.to_string_lossy().to_string();
-                        path_entry_clone2.set_text(&path_str);
+            picker.pick(window.as_ref(), move |path| {
+                if let Some(path) = path {
+                    let path_str = path.to_string_lossy().to_string();
+                    path_entry_clone2.set_text(&path_str);
 
-                        let mut cfg = config_clone2.borrow_mut();
-                        if let BackgroundType::Image { ref mut path, .. } = cfg.background {
-                            *path = path_str;
-                            drop(cfg);
-                            preview_clone2.queue_draw();
+                    let mut cfg = config_clone2.borrow_mut();
+                    if let BackgroundType::Image { ref mut path, .. } = cfg.background {
+                        *path = path_str;
+                        drop(cfg);
+                        preview_clone2.queue_draw();
 
-                            if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                                callback();
-                            }
+                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                            callback();
                         }
                     }
                 }
