@@ -39,6 +39,7 @@ struct PanelState {
     frame: Frame,
     panel: Arc<RwLock<Panel>>,
     selected: bool,
+    background_area: DrawingArea,
 }
 
 /// Grid layout manager
@@ -385,16 +386,33 @@ impl GridLayout {
         let height = geometry.height as i32 * self.config.cell_height
             + (geometry.height as i32 - 1) * self.config.spacing;
 
-        // Create widget
+        // Create displayer widget
         let widget = {
             let panel_guard = panel.blocking_read();
             panel_guard.displayer.create_widget()
         };
         widget.set_size_request(width, height);
 
+        // Create background drawing area
+        let background_area = DrawingArea::new();
+        background_area.set_size_request(width, height);
+
+        // Setup background rendering
+        let panel_clone_bg = panel.clone();
+        background_area.set_draw_func(move |_, cr, w, h| {
+            if let Ok(panel_guard) = panel_clone_bg.try_read() {
+                let _ = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64);
+            }
+        });
+
+        // Create overlay to stack background and widget
+        let overlay = Overlay::new();
+        overlay.set_child(Some(&background_area));
+        overlay.add_overlay(&widget);
+
         // Create frame for selection visual feedback
         let frame = Frame::new(None);
-        frame.set_child(Some(&widget));
+        frame.set_child(Some(&overlay));
         frame.set_size_request(width, height);
 
         // Setup drag-and-drop and selection
@@ -420,6 +438,7 @@ impl GridLayout {
                 frame: frame.clone(),
                 panel: panel.clone(),
                 selected: false,
+                background_area: background_area.clone(),
             },
         );
 
@@ -1044,6 +1063,16 @@ fn show_panel_properties_dialog(
     displayer_box.append(&displayer_combo);
     vbox.append(&displayer_box);
 
+    // Background section
+    let background_label = Label::new(Some("Background"));
+    background_label.add_css_class("heading");
+    background_label.set_margin_top(12);
+    vbox.append(&background_label);
+
+    let background_widget = crate::ui::BackgroundConfigWidget::new();
+    background_widget.set_config(panel_guard.background.clone());
+    vbox.append(background_widget.widget());
+
     // Buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
     button_box.set_halign(gtk4::Align::End);
@@ -1062,6 +1091,8 @@ fn show_panel_properties_dialog(
 
     let panel_clone = panel.clone();
     let dialog_clone2 = dialog.clone();
+    let background_widget_clone = background_widget.clone();
+
     apply_button.connect_clicked(move |_| {
         let new_width = width_spin.value() as u32;
         let new_height = height_spin.value() as u32;
@@ -1074,12 +1105,18 @@ fn show_panel_properties_dialog(
             .map(|s| s.to_string())
             .unwrap_or(old_displayer_id.clone());
 
+        // Get new background config
+        let new_background = background_widget_clone.get_config();
+
         // Check if anything changed
         let size_changed = new_width != old_geometry.width || new_height != old_geometry.height;
         let source_changed = new_source_id != old_source_id;
         let displayer_changed = new_displayer_id != old_displayer_id;
 
-        if !size_changed && !source_changed && !displayer_changed {
+        // Check if background changed (we'll always apply for now, can optimize later)
+        let background_changed = true;
+
+        if !size_changed && !source_changed && !displayer_changed && !background_changed {
             info!("No changes made to panel, skipping update");
             dialog_clone2.close();
             return;
@@ -1161,13 +1198,24 @@ fn show_panel_properties_dialog(
             }
         }
 
-        // Update panel geometry, source, and displayer
+        // Update panel geometry, source, displayer, and background
         if let Ok(mut panel_guard) = panel_clone.try_write() {
             // Update size if changed
             if size_changed {
                 panel_guard.geometry.width = new_width;
                 panel_guard.geometry.height = new_height;
                 info!("Updated panel geometry: {:?}", panel_guard.geometry);
+            }
+
+            // Update background if changed
+            if background_changed {
+                panel_guard.background = new_background;
+                info!("Updated panel background");
+
+                // Queue redraw of the background area to show new background
+                if let Some(state) = states.get(&panel_id) {
+                    state.background_area.queue_draw();
+                }
             }
 
             // Update source if changed

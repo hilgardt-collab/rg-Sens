@@ -4,6 +4,7 @@ use super::{BoxedDataSource, BoxedDisplayer};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::ui::BackgroundConfig;
 
 /// Position and size of a panel in the grid
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -26,6 +27,8 @@ pub struct Panel {
     pub displayer: BoxedDisplayer,
     /// Custom configuration
     pub config: HashMap<String, serde_json::Value>,
+    /// Background configuration
+    pub background: BackgroundConfig,
 }
 
 impl Panel {
@@ -42,6 +45,7 @@ impl Panel {
             source,
             displayer,
             config: HashMap::new(),
+            background: BackgroundConfig::default(),
         }
     }
 
