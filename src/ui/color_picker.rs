@@ -1,6 +1,5 @@
 //! Color picker dialog with alpha channel support
 
-use gtk4::prelude::*;
 use gtk4::{ColorDialog, Window};
 use crate::ui::background::Color;
 

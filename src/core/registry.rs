@@ -2,7 +2,9 @@
 
 use super::{BoxedDataSource, BoxedDisplayer};
 use anyhow::{anyhow, Result};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Function that creates a data source
 pub type SourceFactory = fn() -> BoxedDataSource;
@@ -15,33 +17,34 @@ pub type DisplayerFactory = fn() -> BoxedDisplayer;
 /// This allows for compile-time registration of built-in sources/displayers
 /// and runtime registration of plugin-provided ones.
 pub struct Registry {
-    sources: HashMap<String, SourceFactory>,
-    displayers: HashMap<String, DisplayerFactory>,
+    sources: RefCell<HashMap<String, SourceFactory>>,
+    displayers: RefCell<HashMap<String, DisplayerFactory>>,
 }
 
 impl Registry {
     /// Create a new empty registry
     pub fn new() -> Self {
         Self {
-            sources: HashMap::new(),
-            displayers: HashMap::new(),
+            sources: RefCell::new(HashMap::new()),
+            displayers: RefCell::new(HashMap::new()),
         }
     }
 
     /// Register a data source
-    pub fn register_source(&mut self, id: &str, factory: SourceFactory) {
-        self.sources.insert(id.to_string(), factory);
+    pub fn register_source(&self, id: &str, factory: SourceFactory) {
+        self.sources.borrow_mut().insert(id.to_string(), factory);
     }
 
     /// Register a displayer
-    pub fn register_displayer(&mut self, id: &str, factory: DisplayerFactory) {
-        self.displayers.insert(id.to_string(), factory);
+    pub fn register_displayer(&self, id: &str, factory: DisplayerFactory) {
+        self.displayers.borrow_mut().insert(id.to_string(), factory);
     }
 
     /// Create a data source by ID
     pub fn create_source(&self, id: &str) -> Result<BoxedDataSource> {
-        let factory = self
+        let factory = *self
             .sources
+            .borrow()
             .get(id)
             .ok_or_else(|| anyhow!("Unknown source: {}", id))?;
         Ok(factory())
@@ -49,8 +52,9 @@ impl Registry {
 
     /// Create a displayer by ID
     pub fn create_displayer(&self, id: &str) -> Result<BoxedDisplayer> {
-        let factory = self
+        let factory = *self
             .displayers
+            .borrow()
             .get(id)
             .ok_or_else(|| anyhow!("Unknown displayer: {}", id))?;
         Ok(factory())
@@ -77,17 +81,11 @@ impl Default for Registry {
 ///
 /// In the future, this might be replaced with a more sophisticated
 /// plugin system, but for now we use a static registry.
-static mut GLOBAL_REGISTRY: Option<Registry> = None;
+static GLOBAL_REGISTRY: OnceLock<Registry> = OnceLock::new();
 
 /// Get the global registry
-///
-/// # Safety
-/// This is safe as long as it's only called from the main thread
-/// (which is the case for GTK applications).
-pub fn global_registry() -> &'static mut Registry {
-    unsafe {
-        GLOBAL_REGISTRY.get_or_insert_with(Registry::new)
-    }
+pub fn global_registry() -> &'static Registry {
+    GLOBAL_REGISTRY.get_or_init(Registry::new)
 }
 
 /// Macro to register a data source

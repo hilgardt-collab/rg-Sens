@@ -1,9 +1,9 @@
 use gtk4::gdk::Display;
 use gtk4::glib;
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, CssProvider, EventControllerKey, Overlay};
+use gtk4::{Application, ApplicationWindow, CssProvider};
 use log::{info, warn};
-use rg_sens::config::{AppConfig, GridConfig as ConfigGridConfig, PanelConfig, WindowConfig};
+use rg_sens::config::{AppConfig, PanelConfig, WindowConfig};
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig as UiGridConfig, GridLayout};
 use rg_sens::{displayers, sources};

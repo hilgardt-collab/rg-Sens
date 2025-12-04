@@ -53,7 +53,7 @@ pub struct GridLayout {
     panel_states: Rc<RefCell<HashMap<String, PanelState>>>,
     selected_panels: Rc<RefCell<HashSet<String>>>,
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
-    drag_preview_cell: Rc<RefCell<Option<(u32, u32)>>>,
+    drag_preview_cells: Rc<RefCell<Vec<(u32, u32, u32, u32)>>>, // (x, y, width, height) for each panel
     is_dragging: Rc<RefCell<bool>>,
     selection_box: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -94,7 +94,7 @@ impl GridLayout {
             panel_states: Rc::new(RefCell::new(HashMap::new())),
             selected_panels: Rc::new(RefCell::new(HashSet::new())),
             occupied_cells: Rc::new(RefCell::new(HashSet::new())),
-            drag_preview_cell: Rc::new(RefCell::new(None)),
+            drag_preview_cells: Rc::new(RefCell::new(Vec::new())),
             is_dragging: Rc::new(RefCell::new(false)),
             selection_box: Rc::new(RefCell::new(None)),
             on_change: Rc::new(RefCell::new(None)),
@@ -117,7 +117,7 @@ impl GridLayout {
     fn setup_drop_zone_drawing(&self) {
         let config = self.config.clone();
         let occupied_cells = self.occupied_cells.clone();
-        let drag_preview_cell = self.drag_preview_cell.clone();
+        let drag_preview_cells = self.drag_preview_cells.clone();
         let is_dragging = self.is_dragging.clone();
         let selection_box = self.selection_box.clone();
 
@@ -151,7 +151,7 @@ impl GridLayout {
             }
 
             let occupied = occupied_cells.borrow();
-            let preview = drag_preview_cell.borrow();
+            let preview_panels = drag_preview_cells.borrow();
 
             // Calculate available columns and rows based on actual widget size
             let available_cols = (width as f64 / (config.cell_width + config.spacing) as f64).floor() as u32;
@@ -184,26 +184,43 @@ impl GridLayout {
                 cr.fill().ok();
             }
 
-            // Highlight drop preview in green/red
-            if let Some((preview_x, preview_y)) = *preview {
-                let x = preview_x as f64 * (config.cell_width + config.spacing) as f64;
-                let y = preview_y as f64 * (config.cell_height + config.spacing) as f64;
+            // Highlight drop preview for all selected panels
+            for (preview_x, preview_y, panel_width, panel_height) in preview_panels.iter() {
+                let x = *preview_x as f64 * (config.cell_width + config.spacing) as f64;
+                let y = *preview_y as f64 * (config.cell_height + config.spacing) as f64;
+                let rect_width = *panel_width as f64 * config.cell_width as f64
+                    + (*panel_width as f64 - 1.0) * config.spacing as f64;
+                let rect_height = *panel_height as f64 * config.cell_height as f64
+                    + (*panel_height as f64 - 1.0) * config.spacing as f64;
+
+                // Check if any cell in this panel would collide
+                let mut has_collision = false;
+                for dx in 0..*panel_width {
+                    for dy in 0..*panel_height {
+                        if occupied.contains(&(preview_x + dx, preview_y + dy)) {
+                            has_collision = true;
+                            break;
+                        }
+                    }
+                    if has_collision {
+                        break;
+                    }
+                }
 
                 // Green if valid, red if collision
-                let is_collision = occupied.contains(&(preview_x, preview_y));
-                if is_collision {
+                if has_collision {
                     cr.set_source_rgba(1.0, 0.0, 0.0, 0.4);
                 } else {
                     cr.set_source_rgba(0.0, 1.0, 0.0, 0.4);
                 }
 
-                cr.rectangle(x, y, config.cell_width as f64, config.cell_height as f64);
+                cr.rectangle(x, y, rect_width, rect_height);
                 cr.fill().ok();
 
                 // Border
                 cr.set_source_rgba(1.0, 1.0, 1.0, 0.8);
                 cr.set_line_width(2.0);
-                cr.rectangle(x, y, config.cell_width as f64, config.cell_height as f64);
+                cr.rectangle(x, y, rect_width, rect_height);
                 cr.stroke().ok();
             }
         });
@@ -270,7 +287,7 @@ impl GridLayout {
         let drag_start_pos_begin = drag_start_pos.clone();
         let panel_states_begin = panel_states_drag.clone();
 
-        drag_gesture.connect_drag_begin(move |gesture, x, y| {
+        drag_gesture.connect_drag_begin(move |_gesture, x, y| {
             // Check if drag started on empty space
             let states = panel_states_begin.borrow();
             let mut on_panel = false;
@@ -617,16 +634,17 @@ impl GridLayout {
         let selected_panels = self.selected_panels.clone();
         let panel_states = self.panel_states.clone();
         let occupied_cells = self.occupied_cells.clone();
-        let drag_preview_cell = self.drag_preview_cell.clone();
+        let drag_preview_cells = self.drag_preview_cells.clone();
         let is_dragging = self.is_dragging.clone();
         let drop_zone_layer = self.drop_zone_layer.clone();
 
         let panel_id = panel.blocking_read().id.clone();
 
-        // Store initial positions
+        // Store initial positions and the ID of the panel being dragged
         let initial_positions: Rc<RefCell<HashMap<String, (f64, f64)>>> =
             Rc::new(RefCell::new(HashMap::new()));
         let initial_positions_clone = initial_positions.clone();
+        let dragged_panel_id: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
 
         // Clone for drag_begin closure
         let selected_panels_begin = selected_panels.clone();
@@ -634,11 +652,15 @@ impl GridLayout {
         let is_dragging_begin = is_dragging.clone();
         let drop_zone_begin = drop_zone_layer.clone();
         let panel_id_for_drag_begin = panel_id.clone();
+        let dragged_panel_id_begin = dragged_panel_id.clone();
 
         drag_gesture.connect_drag_begin(move |_, _, _| {
             // Enable grid visualization
             *is_dragging_begin.borrow_mut() = true;
             drop_zone_begin.queue_draw();
+
+            // Store which panel is being dragged
+            *dragged_panel_id_begin.borrow_mut() = panel_id_for_drag_begin.clone();
 
             // Ensure the dragged panel is in the selected set
             let mut selected = selected_panels_begin.borrow_mut();
@@ -662,7 +684,6 @@ impl GridLayout {
                     state.selected = true;
                     state.frame.add_css_class("selected");
                 }
-            } else {
             }
 
             // Store initial positions of all selected panels
@@ -682,44 +703,72 @@ impl GridLayout {
         });
 
         let initial_positions_clone2 = initial_positions.clone();
-        let frame_clone = frame.clone();
+        let _frame_clone = frame.clone();
 
         // Clone for drag_update closure
         let config_for_update = config.clone();
         let selected_panels_update = selected_panels.clone();
-        let _panel_states_update = panel_states.clone();
-        let drag_preview_cell_update = drag_preview_cell.clone();
+        let panel_states_update = panel_states.clone();
+        let drag_preview_cells_update = drag_preview_cells.clone();
         let drop_zone_layer_update = drop_zone_layer.clone();
+        let dragged_panel_id_update = dragged_panel_id.clone();
 
         drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
             let config = config_for_update.borrow();
             let positions = initial_positions_clone2.borrow();
+            let selected = selected_panels_update.borrow();
+            let states = panel_states_update.borrow();
+            let dragged_id = dragged_panel_id_update.borrow();
 
-            // Don't move panels during drag - this causes a feedback loop!
-            // Instead, calculate the preview position from the initial position + offset
+            // Calculate preview positions for ALL selected panels
+            let mut preview_rects = Vec::new();
 
-            // Get the initial position of the dragged panel
-            if let Some((orig_x, orig_y)) = positions.values().next() {
-                // Calculate where the panel would be
-                let new_x = orig_x + offset_x;
-                let new_y = orig_y + offset_y;
+            // Get the dragged panel's initial position to use as reference
+            if let Some((dragged_orig_x, dragged_orig_y)) = positions.get(&*dragged_id) {
+                // Calculate where the dragged panel would be
+                let dragged_new_x = dragged_orig_x + offset_x;
+                let dragged_new_y = dragged_orig_y + offset_y;
 
-                // Calculate grid position from the prospective location
-                let grid_x = ((new_x + config.cell_width as f64 / 2.0)
+                // Calculate grid position of dragged panel
+                let dragged_grid_x = ((dragged_new_x + config.cell_width as f64 / 2.0)
                     / (config.cell_width + config.spacing) as f64)
-                    .floor() as u32;
-                let grid_y = ((new_y + config.cell_height as f64 / 2.0)
+                    .floor() as i32;
+                let dragged_grid_y = ((dragged_new_y + config.cell_height as f64 / 2.0)
                     / (config.cell_height + config.spacing) as f64)
-                    .floor() as u32;
+                    .floor() as i32;
 
-                let new_preview = Some((grid_x, grid_y));
-                let mut preview_cell = drag_preview_cell_update.borrow_mut();
+                // Get the dragged panel's original grid position
+                let dragged_panel_orig_grid = if let Some(state) = states.get(&*dragged_id) {
+                    let geom = state.panel.blocking_read().geometry;
+                    (geom.x as i32, geom.y as i32)
+                } else {
+                    (0, 0)
+                };
 
-                // Only update and redraw if the grid cell changed
-                if *preview_cell != new_preview {
-                    *preview_cell = new_preview;
-                    drop_zone_layer_update.queue_draw();
+                // Calculate the grid offset from original position
+                let grid_offset_x = dragged_grid_x - dragged_panel_orig_grid.0;
+                let grid_offset_y = dragged_grid_y - dragged_panel_orig_grid.1;
+
+                // Apply this offset to all selected panels
+                for id in selected.iter() {
+                    if let Some(state) = states.get(id) {
+                        let geom = state.panel.blocking_read().geometry;
+
+                        // Calculate new grid position
+                        let new_grid_x = (geom.x as i32 + grid_offset_x).max(0) as u32;
+                        let new_grid_y = (geom.y as i32 + grid_offset_y).max(0) as u32;
+
+                        preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                    }
                 }
+            }
+
+            // Update preview and redraw
+            let mut preview_cells = drag_preview_cells_update.borrow_mut();
+            if *preview_cells != preview_rects {
+                *preview_cells = preview_rects;
+                drop(preview_cells);
+                drop_zone_layer_update.queue_draw();
             }
         });
 
@@ -730,7 +779,7 @@ impl GridLayout {
         let selected_panels_end = selected_panels.clone();
         let panel_states_end = panel_states.clone();
         let occupied_cells_end = occupied_cells.clone();
-        let drag_preview_cell_end = drag_preview_cell.clone();
+        let drag_preview_cells_end = drag_preview_cells.clone();
         let is_dragging_end = is_dragging.clone();
         let drop_zone_layer_end = drop_zone_layer.clone();
         let on_change_end = self.on_change.clone();
@@ -878,7 +927,7 @@ impl GridLayout {
             *is_dragging_end.borrow_mut() = false;
 
             // Clear drop preview
-            *drag_preview_cell_end.borrow_mut() = None;
+            drag_preview_cells_end.borrow_mut().clear();
             drop_zone_layer_end.queue_draw();
         });
 
