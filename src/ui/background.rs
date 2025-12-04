@@ -1,4 +1,5 @@
 use gtk4::cairo;
+use gtk4::prelude::GdkCairoContextExt;
 use serde::{Deserialize, Serialize};
 
 /// RGBA color with alpha channel

@@ -1073,6 +1073,9 @@ fn show_panel_properties_dialog(
     background_widget.set_config(panel_guard.background.clone());
     vbox.append(background_widget.widget());
 
+    // Wrap background_widget in Rc so we can share it with the closure
+    let background_widget = Rc::new(background_widget);
+
     // Buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
     button_box.set_halign(gtk4::Align::End);

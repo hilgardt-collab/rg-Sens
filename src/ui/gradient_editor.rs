@@ -27,7 +27,7 @@ impl GradientEditor {
 
         let stops = Rc::new(RefCell::new(Vec::new()));
         let angle = Rc::new(RefCell::new(90.0));
-        let on_change = Rc::new(RefCell::new(None));
+        let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         // Angle control
         let angle_box = GtkBox::new(Orientation::Horizontal, 6);
