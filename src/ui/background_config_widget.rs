@@ -14,6 +14,7 @@ pub struct BackgroundConfigWidget {
     config: Rc<RefCell<BackgroundConfig>>,
     preview: DrawingArea,
     config_stack: Stack,
+    type_combo: ComboBoxText,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
 }
 
@@ -123,6 +124,7 @@ impl BackgroundConfigWidget {
             config,
             preview,
             config_stack,
+            type_combo,
             on_change,
         }
     }
@@ -554,7 +556,23 @@ impl BackgroundConfigWidget {
 
     /// Set the background configuration
     pub fn set_config(&self, new_config: BackgroundConfig) {
+        // Determine the type ID from the config
+        let type_id = match &new_config.background {
+            BackgroundType::Solid { .. } => "solid",
+            BackgroundType::LinearGradient(_) => "linear_gradient",
+            BackgroundType::RadialGradient(_) => "radial_gradient",
+            BackgroundType::Image { .. } => "image",
+            BackgroundType::Polygons(_) => "polygons",
+        };
+
         *self.config.borrow_mut() = new_config;
+
+        // Update the combo box selection
+        self.type_combo.set_active_id(Some(type_id));
+
+        // Update the visible stack page to match the background type
+        self.config_stack.set_visible_child_name(type_id);
+
         self.preview.queue_draw();
     }
 
