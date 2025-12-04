@@ -1,9 +1,8 @@
 //! Grid layout manager for panels with advanced features
 
 use crate::core::Panel;
-use gtk4::gdk::{Key, ModifierType};
-use gtk4::glib;
-use gtk4::{prelude::*, DrawingArea, EventControllerKey, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
+use gtk4::gdk::ModifierType;
+use gtk4::{prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
 use log::info;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -1082,6 +1081,7 @@ fn show_panel_properties_dialog(
     // Create a shared closure for applying changes
     let panel_clone = panel.clone();
     let background_widget_clone = background_widget.clone();
+    let dialog_for_apply = dialog.clone();
 
     let apply_changes = Rc::new(move || {
         let new_width = width_spin.value() as u32;
@@ -1108,7 +1108,7 @@ fn show_panel_properties_dialog(
         let background_changed = true;
 
         if !size_changed && !source_changed && !displayer_changed && !background_changed {
-            dialog_clone2.close();
+            // No changes to apply
             return;
         }
 
@@ -1118,7 +1118,6 @@ fn show_panel_properties_dialog(
             Some(s) => s,
             None => {
                 log::warn!("Panel state not found for {}", panel_id);
-                dialog_clone2.close();
                 return;
             }
         };
@@ -1173,8 +1172,8 @@ fn show_panel_properties_dialog(
                     .buttons(vec!["OK"])
                     .build();
 
-                let dialog_ref = dialog_clone2.clone();
-                error_dialog.choose(Some(&dialog_clone2), gtk4::gio::Cancellable::NONE, move |_| {
+                let dialog_ref = dialog_for_apply.clone();
+                error_dialog.choose(Some(&dialog_for_apply), gtk4::gio::Cancellable::NONE, move |_| {
                     dialog_ref.present();
                 });
                 return;

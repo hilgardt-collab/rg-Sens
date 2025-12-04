@@ -1,7 +1,7 @@
 //! Gradient editor widget for configuring linear and radial gradients
 
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, DrawingArea, Grid, Label, Orientation, Scale, SpinButton};
+use gtk4::{Box as GtkBox, Button, DrawingArea, Label, Orientation, Scale, SpinButton};
 use std::cell::RefCell;
 use std::rc::Rc;
 
