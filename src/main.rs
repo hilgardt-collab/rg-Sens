@@ -214,6 +214,9 @@ fn build_ui(app: &Application) {
     let grid_layout_for_settings = Rc::new(RefCell::new(grid_layout));
     let config_dirty_for_settings = config_dirty.clone();
 
+    // Clone for closure
+    let grid_layout_for_key = grid_layout_for_settings.clone();
+
     key_controller.connect_key_pressed(move |_, key, _code, modifiers| {
         if modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK)
             && key == gtk4::gdk::Key::comma {
@@ -221,7 +224,7 @@ fn build_ui(app: &Application) {
                 &window_clone_for_settings,
                 &app_config_for_settings,
                 &window_bg_for_settings,
-                &grid_layout_for_settings,
+                &grid_layout_for_key,
                 &config_dirty_for_settings,
             );
             glib::Propagation::Stop
