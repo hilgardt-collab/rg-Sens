@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::color_picker::ColorPickerDialog;
 
 /// Gradient editor widget
 pub struct GradientEditor {

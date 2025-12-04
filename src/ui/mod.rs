@@ -4,7 +4,7 @@ mod main_window;
 mod grid_layout;
 mod config_dialog;
 mod color_picker;
-mod background;
+pub mod background;
 mod gradient_editor;
 mod background_config_widget;
 

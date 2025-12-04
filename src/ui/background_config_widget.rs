@@ -5,7 +5,7 @@ use gtk4::{Box as GtkBox, Button, ComboBoxText, DrawingArea, Entry, FileChooserA
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig};
+use crate::ui::background::{BackgroundConfig, BackgroundType, Color, LinearGradientConfig, RadialGradientConfig, PolygonConfig};
 use crate::ui::color_picker::ColorPickerDialog;
 
 /// Background configuration widget
