@@ -1185,9 +1185,6 @@ fn show_panel_properties_dialog(
             // Update background if changed
             if background_changed {
                 panel_guard.background = new_background;
-
-                // Queue redraw of the background area to show new background
-                background_area.queue_draw();
             }
 
             // Update source if changed
@@ -1195,7 +1192,6 @@ fn show_panel_properties_dialog(
                 match registry.create_source(&new_source_id) {
                     Ok(new_source) => {
                         panel_guard.source = new_source;
-                        info!("Updated panel source to: {}", new_source_id);
                     }
                     Err(e) => {
                         log::warn!("Failed to create source {}: {}", new_source_id, e);
@@ -1225,14 +1221,20 @@ fn show_panel_properties_dialog(
 
                         // Update panel state widget reference
                         state.widget = new_widget;
-
-                        info!("Updated panel displayer to: {}", new_displayer_id);
                     }
                     Err(e) => {
                         log::warn!("Failed to create displayer {}: {}", new_displayer_id, e);
                     }
                 }
             }
+
+            // Drop the write lock before triggering redraws
+            drop(panel_guard);
+        }
+
+        // Queue redraw of background AFTER releasing the panel write lock
+        if background_changed {
+            background_area.queue_draw();
         }
 
         // Update widget and frame sizes if size changed (and displayer wasn't replaced)
@@ -1244,8 +1246,7 @@ fn show_panel_properties_dialog(
 
             state.widget.set_size_request(pixel_width, pixel_height);
             state.frame.set_size_request(pixel_width, pixel_height);
-
-            info!("Resized panel widget to {}x{} pixels", pixel_width, pixel_height);
+            state.background_area.set_size_request(pixel_width, pixel_height);
         }
 
         // Release panel_states borrow
