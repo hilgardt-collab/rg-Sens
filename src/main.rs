@@ -203,6 +203,9 @@ fn build_ui(app: &Application) {
         }
     });
 
+    // Clone panels for later use (before it gets moved into the update thread)
+    let panels_for_menu = panels.clone();
+
     // Spawn tokio runtime for update loop
     let update_manager_clone = update_manager.clone();
     std::thread::spawn(move || {
@@ -232,7 +235,6 @@ fn build_ui(app: &Application) {
     gesture_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
 
     // Clone variables for context menu
-    let panels_for_menu = panels.clone();
     let window_for_menu = window.clone();
     let app_config_for_menu = app_config.clone();
     let window_bg_for_menu = window_background.clone();
