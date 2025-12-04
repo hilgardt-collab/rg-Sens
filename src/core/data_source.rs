@@ -1,5 +1,6 @@
 //! Data source trait and related types
 
+use super::field_metadata::FieldMetadata;
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -27,6 +28,13 @@ pub struct SourceMetadata {
 pub trait DataSource: Send + Sync {
     /// Get metadata about this source
     fn metadata(&self) -> &SourceMetadata;
+
+    /// Get field metadata describing available data fields
+    ///
+    /// Returns a list of fields that this source can provide, including
+    /// their types, purposes, and descriptions. This allows displayers
+    /// to present appropriate UI for configuring which fields to show.
+    fn fields(&self) -> Vec<FieldMetadata>;
 
     /// Update internal state
     ///

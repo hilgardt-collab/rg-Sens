@@ -1,6 +1,6 @@
 //! CPU data source implementation
 
-use crate::core::{DataSource, SourceMetadata};
+use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ impl CpuSource {
             id: "cpu".to_string(),
             name: "CPU Usage".to_string(),
             description: "Global CPU usage percentage".to_string(),
-            available_keys: vec!["usage".to_string()],
+            available_keys: vec!["caption".to_string(), "usage".to_string(), "unit".to_string()],
             default_interval: Duration::from_millis(1000),
         };
 
@@ -50,6 +50,32 @@ impl DataSource for CpuSource {
         &self.metadata
     }
 
+    fn fields(&self) -> Vec<FieldMetadata> {
+        vec![
+            FieldMetadata::new(
+                "caption",
+                "Caption",
+                "Label identifying this as CPU data",
+                FieldType::Text,
+                FieldPurpose::Caption,
+            ),
+            FieldMetadata::new(
+                "usage",
+                "Usage",
+                "Current CPU usage percentage",
+                FieldType::Percentage,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "unit",
+                "Unit",
+                "Unit of measurement for usage",
+                FieldType::Text,
+                FieldPurpose::Unit,
+            ),
+        ]
+    }
+
     fn update(&mut self) -> Result<()> {
         // Refresh CPU information
         self.system.refresh_cpu_all();
@@ -62,7 +88,9 @@ impl DataSource for CpuSource {
 
     fn get_values(&self) -> HashMap<String, Value> {
         let mut values = HashMap::new();
+        values.insert("caption".to_string(), Value::from("CPU"));
         values.insert("usage".to_string(), Value::from(self.global_usage));
+        values.insert("unit".to_string(), Value::from("%"));
         values
     }
 
