@@ -144,11 +144,6 @@ fn build_ui(app: &Application) {
         let _ = render_background(cr, &window_bg_config, width as f64, height as f64);
     });
 
-    // Add right-click menu for window background
-    let gesture_click = gtk4::GestureClick::new();
-    gesture_click.set_button(gtk4::gdk::BUTTON_SECONDARY); // Right-click only
-    window_background.add_controller(gesture_click.clone());
-
     // Create overlay to show background behind grid
     let window_overlay = gtk4::Overlay::new();
     window_overlay.set_child(Some(&window_background));
@@ -164,7 +159,6 @@ fn build_ui(app: &Application) {
     let config_dirty_clone = config_dirty.clone();
     grid_layout.set_on_change(move || {
         *config_dirty_clone.borrow_mut() = true;
-        info!("Configuration marked as modified");
     });
 
     // Mark config as dirty when window is resized
@@ -219,7 +213,10 @@ fn build_ui(app: &Application) {
     let grid_layout_for_settings = Rc::new(RefCell::new(grid_layout));
     let config_dirty_for_settings = config_dirty.clone();
 
-    // Connect right-click gesture to show settings dialog
+    // Add right-click gesture for window settings
+    let gesture_click = gtk4::GestureClick::new();
+    gesture_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
+
     let window_clone_for_menu = window_clone_for_settings.clone();
     let app_config_for_menu = app_config_for_settings.clone();
     let window_bg_for_menu = window_bg_for_settings.clone();
@@ -235,6 +232,8 @@ fn build_ui(app: &Application) {
             &config_dirty_for_menu,
         );
     });
+
+    window.add_controller(gesture_click);
 
     // Clone for closure
     let grid_layout_for_key = grid_layout_for_settings.clone();
@@ -258,7 +257,6 @@ fn build_ui(app: &Application) {
     window.add_controller(key_controller);
 
     window.present();
-    info!("Window presented with {} panels", grid_layout_for_settings.borrow().panels().len());
 }
 
 /// Show save confirmation dialog on close

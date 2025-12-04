@@ -408,8 +408,6 @@ impl GridLayout {
         background_area.set_draw_func(move |_, cr, w, h| {
             match panel_clone_bg.try_read() {
                 Ok(panel_guard) => {
-                    log::info!("draw_func: Reading panel background: {:?}, size={}x{}",
-                        panel_guard.background, w, h);
                     if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64) {
                         log::warn!("Failed to render background: {}", e);
                     }
@@ -1154,7 +1152,6 @@ fn show_panel_properties_dialog(
 
         // Get new background config
         let new_background = background_widget_clone.get_config();
-        log::info!("Got background config from widget: {:?}", new_background);
 
         // Check if anything changed
         let size_changed = new_width != old_geometry.width || new_height != old_geometry.height;
@@ -1200,7 +1197,6 @@ fn show_panel_properties_dialog(
                     let cell = (old_geometry.x + dx, old_geometry.y + dy);
                     if occupied.contains(&cell) {
                         has_collision = true;
-                        info!("Collision detected at cell {:?}", cell);
                         break;
                     }
                 }
@@ -1254,7 +1250,6 @@ fn show_panel_properties_dialog(
 
             // Update background if changed
             if background_changed {
-                log::info!("Updating panel background to: {:?}", std::mem::discriminant(&new_background.background));
                 panel_guard.background = new_background;
             }
 
@@ -1305,7 +1300,6 @@ fn show_panel_properties_dialog(
 
         // Queue redraw of background AFTER releasing the panel write lock
         if background_changed {
-            log::info!("Queueing background redraw");
             background_area.queue_draw();
         }
 
