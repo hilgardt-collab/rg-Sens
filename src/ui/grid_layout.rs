@@ -1093,6 +1093,7 @@ fn show_panel_properties_dialog(
 
         // Get new background config
         let new_background = background_widget_clone.get_config();
+        log::info!("Got background config from widget: {:?}", new_background);
 
         // Check if anything changed
         let size_changed = new_width != old_geometry.width || new_height != old_geometry.height;

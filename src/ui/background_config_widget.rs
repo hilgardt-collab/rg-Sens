@@ -93,10 +93,12 @@ impl BackgroundConfigWidget {
 
         let type_combo_handler_id = type_combo.connect_changed(move |combo| {
             if let Some(active_id) = combo.active_id() {
+                log::info!("type_combo.connect_changed handler fired with active_id: {}", active_id);
                 stack_clone.set_visible_child_name(&active_id);
 
                 // Update config type
                 let mut cfg = config_clone.borrow_mut();
+                log::info!("Creating new default background for type: {}", active_id);
                 cfg.background = match active_id.as_str() {
                     "solid" => BackgroundType::Solid {
                         color: Color::new(0.15, 0.15, 0.15, 1.0),
@@ -158,9 +160,12 @@ impl BackgroundConfigWidget {
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
+                    log::info!("User selected solid color: r={}, g={}, b={}, a={}",
+                        new_color.r, new_color.g, new_color.b, new_color.a);
                     let mut cfg = config_clone2.borrow_mut();
                     cfg.background = BackgroundType::Solid { color: new_color };
                     drop(cfg);
+                    log::info!("Updated config to solid color, verifying: {:?}", config_clone2.borrow().background);
 
                     preview_clone2.queue_draw();
 
@@ -558,6 +563,8 @@ impl BackgroundConfigWidget {
 
     /// Set the background configuration
     pub fn set_config(&self, new_config: BackgroundConfig) {
+        log::info!("BackgroundConfigWidget::set_config called with: {:?}", new_config);
+
         // Determine the type ID from the config
         let type_id = match &new_config.background {
             BackgroundType::Solid { .. } => "solid",
@@ -568,6 +575,7 @@ impl BackgroundConfigWidget {
         };
 
         *self.config.borrow_mut() = new_config;
+        log::info!("Config stored, verifying: {:?}", self.config.borrow().background);
 
         // Block the signal handler to prevent it from overwriting our config
         self.type_combo.block_signal(&self.type_combo_handler_id);
@@ -586,7 +594,9 @@ impl BackgroundConfigWidget {
 
     /// Get the current configuration
     pub fn get_config(&self) -> BackgroundConfig {
-        self.config.borrow().clone()
+        let config = self.config.borrow().clone();
+        log::info!("BackgroundConfigWidget::get_config returning: {:?}", config);
+        config
     }
 
     /// Set callback for when configuration changes
