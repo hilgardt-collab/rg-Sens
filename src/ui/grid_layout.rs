@@ -1069,7 +1069,8 @@ fn show_panel_properties_dialog(
 
     let cancel_button = Button::with_label("Cancel");
     let apply_button = Button::with_label("Apply");
-    apply_button.add_css_class("suggested-action");
+    let accept_button = Button::with_label("Accept");
+    accept_button.add_css_class("suggested-action");
 
     let dialog_clone = dialog.clone();
     cancel_button.connect_clicked(move |_| {
@@ -1078,11 +1079,11 @@ fn show_panel_properties_dialog(
 
     drop(panel_guard); // Release lock before closure
 
+    // Create a shared closure for applying changes
     let panel_clone = panel.clone();
-    let dialog_clone2 = dialog.clone();
     let background_widget_clone = background_widget.clone();
 
-    apply_button.connect_clicked(move |_| {
+    let apply_changes = Rc::new(move || {
         let new_width = width_spin.value() as u32;
         let new_height = height_spin.value() as u32;
 
@@ -1274,12 +1275,25 @@ fn show_panel_properties_dialog(
         if let Some(callback) = on_change.borrow().as_ref() {
             callback();
         }
+    });
 
+    // Apply button - applies changes but keeps dialog open
+    let apply_changes_clone = apply_changes.clone();
+    apply_button.connect_clicked(move |_| {
+        apply_changes_clone();
+    });
+
+    // Accept button - applies changes and closes dialog
+    let apply_changes_clone2 = apply_changes.clone();
+    let dialog_clone2 = dialog.clone();
+    accept_button.connect_clicked(move |_| {
+        apply_changes_clone2();
         dialog_clone2.close();
     });
 
     button_box.append(&cancel_button);
     button_box.append(&apply_button);
+    button_box.append(&accept_button);
 
     vbox.append(&button_box);
 

@@ -40,9 +40,8 @@ impl TextDisplayer {
     }
 
     fn draw_internal(cr: &Context, width: i32, height: i32, data: &DisplayData) {
-        // Clear background
-        cr.set_source_rgb(0.0, 0.0, 0.0);
-        cr.paint().ok();
+        // Don't clear background - let the custom panel background show through
+        // The background is now rendered by the background_area DrawingArea underneath
 
         // Set text color
         cr.set_source_rgb(data.color.0, data.color.1, data.color.2);
