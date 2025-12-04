@@ -1,7 +1,7 @@
 //! Background configuration widget
 
 use gtk4::prelude::*;
-use gtk4::{Box, Button, ComboBoxText, DrawingArea, Entry, FileChooserAction, FileChooserDialog, Label, Orientation, ResponseType, Scale, SpinButton, Stack, Switch};
+use gtk4::{Box as GtkBox, Button, ComboBoxText, DrawingArea, Entry, FileChooserAction, FileChooserDialog, Label, Orientation, ResponseType, Scale, SpinButton, Stack, Switch};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -10,16 +10,16 @@ use crate::ui::color_picker::ColorPickerDialog;
 
 /// Background configuration widget
 pub struct BackgroundConfigWidget {
-    container: Box,
+    container: GtkBox,
     config: Rc<RefCell<BackgroundConfig>>,
     preview: DrawingArea,
     config_stack: Stack,
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
 }
 
 impl BackgroundConfigWidget {
     pub fn new() -> Self {
-        let container = Box::new(Orientation::Vertical, 12);
+        let container = GtkBox::new(Orientation::Vertical, 12);
         container.set_margin_start(12);
         container.set_margin_end(12);
         container.set_margin_top(12);
@@ -29,7 +29,7 @@ impl BackgroundConfigWidget {
         let on_change = Rc::new(RefCell::new(None));
 
         // Type selector
-        let type_box = Box::new(Orientation::Horizontal, 6);
+        let type_box = GtkBox::new(Orientation::Horizontal, 6);
         type_box.append(&Label::new(Some("Background Type:")));
 
         let type_combo = ComboBoxText::new();
@@ -130,9 +130,9 @@ impl BackgroundConfigWidget {
     fn create_solid_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> Box {
-        let page = Box::new(Orientation::Vertical, 6);
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 6);
 
         let button = Button::with_label("Select Color");
 
@@ -171,12 +171,12 @@ impl BackgroundConfigWidget {
     fn create_linear_gradient_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> Box {
-        let page = Box::new(Orientation::Vertical, 12);
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Angle control
-        let angle_box = Box::new(Orientation::Horizontal, 6);
+        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
         angle_box.append(&Label::new(Some("Angle:")));
 
         let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
@@ -283,12 +283,12 @@ impl BackgroundConfigWidget {
     fn create_radial_gradient_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> Box {
-        let page = Box::new(Orientation::Vertical, 12);
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Radius control
-        let radius_box = Box::new(Orientation::Horizontal, 6);
+        let radius_box = GtkBox::new(Orientation::Horizontal, 6);
         radius_box.append(&Label::new(Some("Radius:")));
 
         let radius_scale = Scale::with_range(Orientation::Horizontal, 0.1, 1.5, 0.05);
@@ -395,9 +395,9 @@ impl BackgroundConfigWidget {
     fn create_image_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> Box {
-        let page = Box::new(Orientation::Vertical, 12);
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 12);
 
         let path_entry = Entry::new();
         path_entry.set_placeholder_text(Some("Image path"));
@@ -405,7 +405,7 @@ impl BackgroundConfigWidget {
 
         let browse_button = Button::with_label("Browse...");
 
-        let stretch_box = Box::new(Orientation::Horizontal, 6);
+        let stretch_box = GtkBox::new(Orientation::Horizontal, 6);
         stretch_box.append(&Label::new(Some("Stretch:")));
         let stretch_switch = Switch::new();
         stretch_box.append(&stretch_switch);
@@ -481,12 +481,12 @@ impl BackgroundConfigWidget {
     fn create_polygon_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> Box {
-        let page = Box::new(Orientation::Vertical, 12);
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Polygon size
-        let size_box = Box::new(Orientation::Horizontal, 6);
+        let size_box = GtkBox::new(Orientation::Horizontal, 6);
         size_box.append(&Label::new(Some("Size:")));
 
         let size_spin = SpinButton::with_range(20.0, 500.0, 10.0);
@@ -514,7 +514,7 @@ impl BackgroundConfigWidget {
         page.append(&size_box);
 
         // Variation
-        let var_box = Box::new(Orientation::Horizontal, 6);
+        let var_box = GtkBox::new(Orientation::Horizontal, 6);
         var_box.append(&Label::new(Some("Variation:")));
 
         let var_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
@@ -545,7 +545,7 @@ impl BackgroundConfigWidget {
     }
 
     /// Get the container widget
-    pub fn widget(&self) -> &Box {
+    pub fn widget(&self) -> &GtkBox {
         &self.container
     }
 
@@ -562,7 +562,7 @@ impl BackgroundConfigWidget {
 
     /// Set callback for when configuration changes
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
+        *self.on_change.borrow_mut() = Some(std::boxed::Box::new(callback));
     }
 }
 

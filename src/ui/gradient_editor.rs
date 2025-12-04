@@ -1,7 +1,7 @@
 //! Gradient editor widget for configuring linear and radial gradients
 
 use gtk4::prelude::*;
-use gtk4::{Box, Button, DrawingArea, Grid, Label, Orientation, Scale, SpinButton};
+use gtk4::{Box as GtkBox, Button, DrawingArea, Grid, Label, Orientation, Scale, SpinButton};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -10,16 +10,16 @@ use crate::ui::color_picker::ColorPickerDialog;
 
 /// Gradient editor widget
 pub struct GradientEditor {
-    container: Box,
+    container: GtkBox,
     stops: Rc<RefCell<Vec<ColorStop>>>,
     angle: Rc<RefCell<f64>>,
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     preview: DrawingArea,
 }
 
 impl GradientEditor {
     pub fn new() -> Self {
-        let container = Box::new(Orientation::Vertical, 12);
+        let container = GtkBox::new(Orientation::Vertical, 12);
         container.set_margin_start(12);
         container.set_margin_end(12);
         container.set_margin_top(12);
@@ -30,7 +30,7 @@ impl GradientEditor {
         let on_change = Rc::new(RefCell::new(None));
 
         // Angle control
-        let angle_box = Box::new(Orientation::Horizontal, 6);
+        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
         angle_box.append(&Label::new(Some("Angle:")));
 
         let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
@@ -101,7 +101,7 @@ impl GradientEditor {
         stops_label.set_halign(gtk4::Align::Start);
         container.append(&stops_label);
 
-        let stops_container = Box::new(Orientation::Vertical, 6);
+        let stops_container = GtkBox::new(Orientation::Vertical, 6);
         container.append(&stops_container);
 
         // Add stop button
@@ -187,11 +187,11 @@ impl GradientEditor {
 
     /// Set callback for when gradient changes
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
+        *self.on_change.borrow_mut() = Some(std::boxed::Box::new(callback));
     }
 
     /// Get the container widget
-    pub fn widget(&self) -> &Box {
+    pub fn widget(&self) -> &GtkBox {
         &self.container
     }
 
