@@ -2,9 +2,8 @@
 
 use super::{BoxedDataSource, BoxedDisplayer};
 use anyhow::{anyhow, Result};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 /// Function that creates a data source
 pub type SourceFactory = fn() -> BoxedDataSource;
@@ -17,34 +16,35 @@ pub type DisplayerFactory = fn() -> BoxedDisplayer;
 /// This allows for compile-time registration of built-in sources/displayers
 /// and runtime registration of plugin-provided ones.
 pub struct Registry {
-    sources: RefCell<HashMap<String, SourceFactory>>,
-    displayers: RefCell<HashMap<String, DisplayerFactory>>,
+    sources: RwLock<HashMap<String, SourceFactory>>,
+    displayers: RwLock<HashMap<String, DisplayerFactory>>,
 }
 
 impl Registry {
     /// Create a new empty registry
     pub fn new() -> Self {
         Self {
-            sources: RefCell::new(HashMap::new()),
-            displayers: RefCell::new(HashMap::new()),
+            sources: RwLock::new(HashMap::new()),
+            displayers: RwLock::new(HashMap::new()),
         }
     }
 
     /// Register a data source
     pub fn register_source(&self, id: &str, factory: SourceFactory) {
-        self.sources.borrow_mut().insert(id.to_string(), factory);
+        self.sources.write().unwrap().insert(id.to_string(), factory);
     }
 
     /// Register a displayer
     pub fn register_displayer(&self, id: &str, factory: DisplayerFactory) {
-        self.displayers.borrow_mut().insert(id.to_string(), factory);
+        self.displayers.write().unwrap().insert(id.to_string(), factory);
     }
 
     /// Create a data source by ID
     pub fn create_source(&self, id: &str) -> Result<BoxedDataSource> {
         let factory = *self
             .sources
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .ok_or_else(|| anyhow!("Unknown source: {}", id))?;
         Ok(factory())
@@ -54,7 +54,8 @@ impl Registry {
     pub fn create_displayer(&self, id: &str) -> Result<BoxedDisplayer> {
         let factory = *self
             .displayers
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .ok_or_else(|| anyhow!("Unknown displayer: {}", id))?;
         Ok(factory())
@@ -62,12 +63,12 @@ impl Registry {
 
     /// List all registered source IDs
     pub fn list_sources(&self) -> Vec<String> {
-        self.sources.keys().cloned().collect()
+        self.sources.read().unwrap().keys().cloned().collect()
     }
 
     /// List all registered displayer IDs
     pub fn list_displayers(&self) -> Vec<String> {
-        self.displayers.keys().cloned().collect()
+        self.displayers.read().unwrap().keys().cloned().collect()
     }
 }
 

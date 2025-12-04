@@ -1041,7 +1041,7 @@ fn show_panel_properties_dialog(
     _container: Fixed,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     drop_zone: DrawingArea,
-    registry: &'static mut crate::core::Registry,
+    registry: &'static crate::core::Registry,
 ) {
     use gtk4::{Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
 
