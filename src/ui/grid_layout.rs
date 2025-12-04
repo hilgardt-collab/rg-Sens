@@ -1137,6 +1137,8 @@ fn show_panel_properties_dialog(
     let panel_clone = panel.clone();
     let background_widget_clone = background_widget.clone();
     let dialog_for_apply = dialog.clone();
+    let width_spin_for_collision = width_spin.clone();
+    let height_spin_for_collision = height_spin.clone();
 
     let apply_changes = Rc::new(move || {
         let new_width = width_spin.value() as u32;
@@ -1217,18 +1219,19 @@ fn show_panel_properties_dialog(
 
                 log::warn!("Cannot resize panel: collision detected");
 
-                // Show error dialog
+                // Show error dialog and revert spinners
                 let error_dialog = gtk4::AlertDialog::builder()
                     .message("Cannot Resize Panel")
-                    .detail("The new size would overlap with another panel.")
+                    .detail("The new size would overlap with another panel. Size has been reverted.")
                     .modal(true)
                     .buttons(vec!["OK"])
                     .build();
 
-                let dialog_ref = dialog_for_apply.clone();
-                error_dialog.choose(Some(&dialog_for_apply), gtk4::gio::Cancellable::NONE, move |_| {
-                    dialog_ref.present();
-                });
+                // Revert spinners to old values
+                width_spin_for_collision.set_value(old_geometry.width as f64);
+                height_spin_for_collision.set_value(old_geometry.height as f64);
+
+                error_dialog.show(Some(&dialog_for_apply));
                 return;
             }
 
