@@ -126,6 +126,9 @@ pub struct PanelConfig {
     pub source: String,
     /// Displayer ID
     pub displayer: String,
+    /// Panel background
+    #[serde(default)]
+    pub background: BackgroundConfig,
     /// Custom settings
     pub settings: HashMap<String, serde_json::Value>,
 }
