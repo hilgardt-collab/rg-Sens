@@ -429,11 +429,33 @@ impl BackgroundConfigWidget {
         let on_change_clone = on_change.clone();
 
         browse_button.connect_clicked(move |btn| {
-            use gtk4::FileDialog;
+            use gtk4::{FileDialog, FileFilter};
+
+            // Create image file filter
+            let filter = FileFilter::new();
+            filter.set_name(Some("Image Files"));
+            filter.add_mime_type("image/png");
+            filter.add_mime_type("image/jpeg");
+            filter.add_mime_type("image/jpg");
+            filter.add_mime_type("image/gif");
+            filter.add_mime_type("image/bmp");
+            filter.add_mime_type("image/webp");
+            filter.add_mime_type("image/svg+xml");
+            filter.add_pattern("*.png");
+            filter.add_pattern("*.jpg");
+            filter.add_pattern("*.jpeg");
+            filter.add_pattern("*.gif");
+            filter.add_pattern("*.bmp");
+            filter.add_pattern("*.webp");
+            filter.add_pattern("*.svg");
+
+            let filters = gtk4::gio::ListStore::new::<FileFilter>();
+            filters.append(&filter);
 
             let dialog = FileDialog::builder()
-                .title("Select Image")
+                .title("Select Background Image")
                 .modal(true)
+                .filters(&filters)
                 .build();
 
             let config_clone2 = config_clone.clone();
