@@ -372,10 +372,10 @@ fn show_window_settings_dialog(
     grid_layout: &Rc<RefCell<GridLayout>>,
     config_dirty: &Rc<RefCell<bool>>,
 ) {
-    use gtk4::{Box as GtkBox, Button, Dialog, Label, Orientation, SpinButton};
+    use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Window};
     use rg_sens::ui::BackgroundConfigWidget;
 
-    let dialog = Dialog::builder()
+    let dialog = Window::builder()
         .title("Window Settings")
         .transient_for(parent_window)
         .modal(true)
