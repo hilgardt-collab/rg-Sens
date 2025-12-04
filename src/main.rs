@@ -54,28 +54,40 @@ fn build_ui(app: &Application) {
         }
     };
 
+    // Wrap app_config in Rc<RefCell<>> for shared mutable access
+    let app_config = Rc::new(RefCell::new(app_config));
+
     // Create grid configuration from loaded config
-    let grid_config = UiGridConfig {
-        rows: app_config.grid.rows,
-        columns: app_config.grid.columns,
-        cell_width: app_config.grid.cell_width,
-        cell_height: app_config.grid.cell_height,
-        spacing: app_config.grid.spacing,
+    let grid_config = {
+        let cfg = app_config.borrow();
+        UiGridConfig {
+            rows: cfg.grid.rows,
+            columns: cfg.grid.columns,
+            cell_width: cfg.grid.cell_width,
+            cell_height: cfg.grid.cell_height,
+            spacing: cfg.grid.spacing,
+        }
     };
 
     // Create the main window with saved dimensions
-    let window = gtk4::ApplicationWindow::builder()
-        .application(app)
-        .title("rg-Sens - System Monitor")
-        .default_width(app_config.window.width)
-        .default_height(app_config.window.height)
-        .build();
+    let window = {
+        let cfg = app_config.borrow();
+        gtk4::ApplicationWindow::builder()
+            .application(app)
+            .title("rg-Sens - System Monitor")
+            .default_width(cfg.window.width)
+            .default_height(cfg.window.height)
+            .build()
+    };
 
     // Restore window position if saved
-    if let (Some(x), Some(y)) = (app_config.window.x, app_config.window.y) {
-        // Note: GTK4 doesn't directly support setting window position
-        // This would need to be handled via window manager hints
-        info!("Window position saved as ({}, {}), but GTK4 doesn't support direct positioning", x, y);
+    {
+        let cfg = app_config.borrow();
+        if let (Some(x), Some(y)) = (cfg.window.x, cfg.window.y) {
+            // Note: GTK4 doesn't directly support setting window position
+            // This would need to be handled via window manager hints
+            info!("Window position saved as ({}, {}), but GTK4 doesn't support direct positioning", x, y);
+        }
     }
 
     // Create grid layout
@@ -90,7 +102,8 @@ fn build_ui(app: &Application) {
     let mut panels = Vec::new();
 
     // Create panels from configuration
-    if app_config.panels.is_empty() {
+    let panel_configs = app_config.borrow().panels.clone();
+    if panel_configs.is_empty() {
         info!("No panels in config, creating default panels");
 
         // Create default panels
@@ -112,9 +125,9 @@ fn build_ui(app: &Application) {
             }
         }
     } else {
-        info!("Loading {} panels from config", app_config.panels.len());
+        info!("Loading {} panels from config", panel_configs.len());
 
-        for panel_config in &app_config.panels {
+        for panel_config in &panel_configs {
             match create_panel_from_config(
                 &panel_config.id,
                 panel_config.x,
@@ -138,7 +151,7 @@ fn build_ui(app: &Application) {
 
     // Create window background
     let window_background = gtk4::DrawingArea::new();
-    let window_bg_config = app_config.window.background.clone();
+    let window_bg_config = app_config.borrow().window.background.clone();
     window_background.set_draw_func(move |_, cr, width, height| {
         use rg_sens::ui::background::render_background;
         let _ = render_background(cr, &window_bg_config, width as f64, height as f64);
@@ -175,14 +188,14 @@ fn build_ui(app: &Application) {
     // Setup save-on-close confirmation
     let panels_clone = panels.clone();
     let config_dirty_clone4 = config_dirty.clone();
-    let grid_config_for_close = grid_config;
+    let app_config_for_close = app_config.clone();
 
     window.connect_close_request(move |window| {
         let is_dirty = *config_dirty_clone4.borrow();
 
         if is_dirty {
             // Show save confirmation dialog
-            show_save_dialog(window, &panels_clone, grid_config_for_close);
+            show_save_dialog(window, &panels_clone, &app_config_for_close);
             glib::Propagation::Stop // Prevent immediate close
         } else {
             glib::Propagation::Proceed // Close without saving
@@ -208,7 +221,7 @@ fn build_ui(app: &Application) {
     // Add keyboard shortcut for settings (Ctrl+Comma)
     let key_controller = gtk4::EventControllerKey::new();
     let window_clone_for_settings = window.clone();
-    let app_config_for_settings = Rc::new(RefCell::new(app_config.clone()));
+    let app_config_for_settings = app_config.clone();
     let window_bg_for_settings = window_background.clone();
     let grid_layout_for_settings = Rc::new(RefCell::new(grid_layout));
     let config_dirty_for_settings = config_dirty.clone();
@@ -260,7 +273,7 @@ fn build_ui(app: &Application) {
 }
 
 /// Show save confirmation dialog on close
-fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: UiGridConfig) {
+fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], app_config: &Rc<RefCell<AppConfig>>) {
     use gtk4::AlertDialog;
 
     let dialog = AlertDialog::builder()
@@ -274,13 +287,14 @@ fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], g
 
     let window_clone = window.clone();
     let panels_clone = panels.to_vec();
+    let app_config_clone = app_config.clone();
 
     dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
         match response {
             Ok(2) => {
                 // Save button (index 2)
                 info!("User chose to save configuration");
-                save_config(&window_clone, &panels_clone, grid_config);
+                save_config_with_app_config(&app_config_clone.borrow(), &window_clone, &panels_clone);
                 window_clone.destroy(); // Use destroy to bypass close handler
             }
             Ok(0) => {
@@ -334,63 +348,6 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
             background: app_config.window.background.clone(),
         },
         grid: app_config.grid.clone(),
-        panels: panel_configs,
-    };
-
-    // Save to disk
-    match config.save() {
-        Ok(()) => {
-            info!("Configuration saved successfully");
-        }
-        Err(e) => {
-            warn!("Failed to save configuration: {}", e);
-        }
-    }
-}
-
-/// Save current configuration to disk (legacy version)
-fn save_config(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], grid_config: UiGridConfig) {
-    // Get window dimensions
-    let (width, height) = (window.default_width(), window.default_height());
-
-    // Convert panels to PanelConfig
-    let panel_configs: Vec<PanelConfig> = panels
-        .iter()
-        .filter_map(|panel| {
-            if let Ok(panel_guard) = panel.try_read() {
-                Some(PanelConfig {
-                    id: panel_guard.id.clone(),
-                    x: panel_guard.geometry.x,
-                    y: panel_guard.geometry.y,
-                    width: panel_guard.geometry.width,
-                    height: panel_guard.geometry.height,
-                    source: panel_guard.source.metadata().id.clone(),
-                    displayer: panel_guard.displayer.id().to_string(),
-                    settings: HashMap::new(), // TODO: Save displayer/source settings
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Create config
-    let config = AppConfig {
-        version: 1,
-        window: WindowConfig {
-            width,
-            height,
-            x: None, // GTK4 doesn't provide window position
-            y: None,
-            background: Default::default(),
-        },
-        grid: ConfigGridConfig {
-            columns: grid_config.columns,
-            rows: grid_config.rows,
-            cell_width: grid_config.cell_width,
-            cell_height: grid_config.cell_height,
-            spacing: grid_config.spacing,
-        },
         panels: panel_configs,
     };
 
