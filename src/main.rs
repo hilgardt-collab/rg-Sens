@@ -227,24 +227,126 @@ fn build_ui(app: &Application) {
     let grid_layout_for_settings = Rc::new(RefCell::new(grid_layout));
     let config_dirty_for_settings = config_dirty.clone();
 
-    // Add right-click gesture for window settings
+    // Add right-click gesture for context menu
     let gesture_click = gtk4::GestureClick::new();
     gesture_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
 
-    let window_clone_for_menu = window_clone_for_settings.clone();
-    let app_config_for_menu = app_config_for_settings.clone();
-    let window_bg_for_menu = window_bg_for_settings.clone();
+    // Clone variables for context menu
+    let panels_for_menu = panels.clone();
+    let window_for_menu = window.clone();
+    let app_config_for_menu = app_config.clone();
+    let window_bg_for_menu = window_background.clone();
     let grid_layout_for_menu = grid_layout_for_settings.clone();
-    let config_dirty_for_menu = config_dirty_for_settings.clone();
+    let config_dirty_for_menu = config_dirty.clone();
 
-    gesture_click.connect_pressed(move |_, _, _, _| {
-        show_window_settings_dialog(
-            &window_clone_for_menu,
-            &app_config_for_menu,
-            &window_bg_for_menu,
-            &grid_layout_for_menu,
-            &config_dirty_for_menu,
-        );
+    gesture_click.connect_pressed(move |gesture, _, x, y| {
+        use gtk4::gio;
+        use gtk4::PopoverMenu;
+
+        let menu = gio::Menu::new();
+
+        // New panel
+        menu.append(Some("New Panel"), Some("window.new-panel"));
+
+        menu.append(Some("---"), None);
+
+        // Save layout
+        menu.append(Some("Save Layout"), Some("window.save-layout"));
+
+        menu.append(Some("---"), None);
+
+        // Save/Load from file
+        menu.append(Some("Save Layout to File..."), Some("window.save-to-file"));
+        menu.append(Some("Load Layout from File..."), Some("window.load-from-file"));
+
+        menu.append(Some("---"), None);
+
+        // Options
+        menu.append(Some("Options"), Some("window.options"));
+
+        // Quit
+        menu.append(Some("Quit"), Some("window.quit"));
+
+        let popover = PopoverMenu::from_model(Some(&menu));
+        popover.set_parent(&window_for_menu);
+        popover.set_has_arrow(false);
+        popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
+            x as i32,
+            y as i32,
+            1,
+            1,
+        )));
+
+        // Setup action group
+        let action_group = gio::SimpleActionGroup::new();
+
+        // New panel action
+        let new_panel_action = gio::SimpleAction::new("new-panel", None);
+        new_panel_action.connect_activate(move |_, _| {
+            info!("New panel requested");
+            // TODO: Implement new panel creation dialog
+        });
+        action_group.add_action(&new_panel_action);
+
+        // Save layout action
+        let panels_for_save = panels_for_menu.clone();
+        let app_config_for_save = app_config_for_menu.clone();
+        let window_for_save = window_for_menu.clone();
+        let config_dirty_for_save = config_dirty_for_menu.clone();
+        let save_layout_action = gio::SimpleAction::new("save-layout", None);
+        save_layout_action.connect_activate(move |_, _| {
+            info!("Save layout requested");
+            save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &panels_for_save);
+            *config_dirty_for_save.borrow_mut() = false;
+        });
+        action_group.add_action(&save_layout_action);
+
+        // Save to file action
+        let save_to_file_action = gio::SimpleAction::new("save-to-file", None);
+        save_to_file_action.connect_activate(move |_, _| {
+            info!("Save to file requested");
+            // TODO: Implement save to file dialog
+        });
+        action_group.add_action(&save_to_file_action);
+
+        // Load from file action
+        let load_from_file_action = gio::SimpleAction::new("load-from-file", None);
+        load_from_file_action.connect_activate(move |_, _| {
+            info!("Load from file requested");
+            // TODO: Implement load from file dialog
+        });
+        action_group.add_action(&load_from_file_action);
+
+        // Options action
+        let window_for_options = window_for_menu.clone();
+        let app_config_for_options = app_config_for_menu.clone();
+        let window_bg_for_options = window_bg_for_menu.clone();
+        let grid_layout_for_options = grid_layout_for_menu.clone();
+        let config_dirty_for_options = config_dirty_for_menu.clone();
+        let options_action = gio::SimpleAction::new("options", None);
+        options_action.connect_activate(move |_, _| {
+            show_window_settings_dialog(
+                &window_for_options,
+                &app_config_for_options,
+                &window_bg_for_options,
+                &grid_layout_for_options,
+                &config_dirty_for_options,
+            );
+        });
+        action_group.add_action(&options_action);
+
+        // Quit action
+        let window_for_quit = window_for_menu.clone();
+        let quit_action = gio::SimpleAction::new("quit", None);
+        quit_action.connect_activate(move |_, _| {
+            window_for_quit.close();
+        });
+        action_group.add_action(&quit_action);
+
+        window_for_menu.insert_action_group("window", Some(&action_group));
+
+        popover.popup();
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
     });
 
     window.add_controller(gesture_click);
