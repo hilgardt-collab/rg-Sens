@@ -205,7 +205,7 @@ fn build_ui(app: &Application) {
     });
 
     // Clone panels for later use (before it gets moved into the update thread)
-    let panels_for_menu = panels.clone();
+    let panels_for_menu = Rc::new(RefCell::new(panels.clone()));
 
     // Spawn tokio runtime for update loop
     let update_manager_clone = update_manager.clone();
@@ -308,7 +308,7 @@ fn build_ui(app: &Application) {
         let save_layout_action = gio::SimpleAction::new("save-layout", None);
         save_layout_action.connect_activate(move |_, _| {
             info!("Save layout requested");
-            save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &panels_for_save);
+            save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &panels_for_save.borrow());
             *config_dirty_for_save.borrow_mut() = false;
         });
         action_group.add_action(&save_layout_action);
@@ -673,23 +673,24 @@ fn show_new_panel_dialog(
     panels: &Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
     config_dirty: &Rc<RefCell<bool>>,
 ) {
-    use gtk4::{Adjustment, Box as GtkBox, Button, Dialog, DropDown, Label, Orientation, SpinButton, StringList};
+    use gtk4::{Adjustment, Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
 
-    let dialog = Dialog::builder()
+    let dialog = Window::builder()
         .title("New Panel")
         .transient_for(window)
         .modal(true)
         .default_width(400)
+        .default_height(350)
+        .resizable(false)
         .build();
 
     // Content area
-    let content = dialog.content_area();
     let vbox = GtkBox::new(Orientation::Vertical, 12);
     vbox.set_margin_start(12);
     vbox.set_margin_end(12);
     vbox.set_margin_top(12);
     vbox.set_margin_bottom(12);
-    content.append(&vbox);
+    dialog.set_child(Some(&vbox));
 
     // Position section
     let pos_label = Label::new(Some("Position:"));
@@ -735,7 +736,7 @@ fn show_new_panel_dialog(
     vbox.append(&source_label);
 
     let registry = rg_sens::core::global_registry();
-    let source_ids: Vec<String> = registry.list_sources().iter().map(|s| s.id.clone()).collect();
+    let source_ids = registry.list_sources();
     let source_strings: Vec<&str> = source_ids.iter().map(|s| s.as_str()).collect();
     let source_list = StringList::new(&source_strings);
     let source_combo = DropDown::new(Some(source_list), Option::<gtk4::Expression>::None);
@@ -747,7 +748,7 @@ fn show_new_panel_dialog(
     displayer_label.set_halign(gtk4::Align::Start);
     vbox.append(&displayer_label);
 
-    let displayer_ids: Vec<String> = registry.list_displayers().iter().map(|d| d.id.clone()).collect();
+    let displayer_ids = registry.list_displayers();
     let displayer_strings: Vec<&str> = displayer_ids.iter().map(|d| d.as_str()).collect();
     let displayer_list = StringList::new(&displayer_strings);
     let displayer_combo = DropDown::new(Some(displayer_list), Option::<gtk4::Expression>::None);
@@ -770,7 +771,7 @@ fn show_new_panel_dialog(
     // Cancel handler
     let dialog_clone = dialog.clone();
     cancel_button.connect_clicked(move |_| {
-        dialog_clone.close();
+        dialog_clone.destroy();
     });
 
     // OK handler
@@ -820,7 +821,7 @@ fn show_new_panel_dialog(
                 *config_dirty.borrow_mut() = true;
 
                 info!("New panel created successfully");
-                dialog_clone.close();
+                dialog_clone.destroy();
             }
             Err(e) => {
                 warn!("Failed to create panel: {}", e);
@@ -829,7 +830,7 @@ fn show_new_panel_dialog(
         }
     });
 
-    dialog.present();
+    dialog.show();
 }
 
 /// Load CSS styling for the application
