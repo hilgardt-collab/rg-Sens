@@ -239,4 +239,36 @@ impl CpuSourceConfigWidget {
     pub fn get_config(&self) -> CpuSourceConfig {
         self.config.borrow().clone()
     }
+
+    /// Populate sensor dropdown with available CPU sensors
+    pub fn set_available_sensors(&self, sensors: &[crate::sources::CpuSensor]) {
+        let sensor_names: Vec<String> = if sensors.is_empty() {
+            vec!["No sensors detected".to_string()]
+        } else {
+            sensors.iter().map(|s| s.label.clone()).collect()
+        };
+
+        let sensor_list = StringList::new(&sensor_names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        self.sensor_combo.set_model(Some(&sensor_list));
+
+        // Set to first sensor by default
+        if !sensors.is_empty() {
+            self.sensor_combo.set_selected(0);
+        }
+
+        // Disable if no sensors
+        self.sensor_combo.set_sensitive(!sensors.is_empty());
+    }
+
+    /// Populate core dropdown with actual number of CPU cores
+    pub fn set_cpu_core_count(&self, num_cores: usize) {
+        let mut core_names = vec!["Overall".to_string()];
+        for i in 0..num_cores {
+            core_names.push(format!("Core {}", i));
+        }
+
+        let core_list = StringList::new(&core_names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        self.core_combo.set_model(Some(&core_list));
+        self.core_combo.set_selected(0);
+    }
 }

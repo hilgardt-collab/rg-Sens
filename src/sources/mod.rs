@@ -10,7 +10,7 @@ mod cpu;
 // mod disk;
 // mod network;
 
-pub use cpu::CpuSource;
+pub use cpu::{CpuSensor, CpuSource};
 // pub use memory::MemorySource;
 // pub use gpu_nvidia::NvidiaGpuSource;
 // pub use temps::TemperatureSource;

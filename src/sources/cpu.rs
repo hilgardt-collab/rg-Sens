@@ -8,6 +8,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 use sysinfo::{Components, CpuRefreshKind, RefreshKind, System};
 
+/// Information about a discovered CPU temperature sensor
+#[derive(Debug, Clone)]
+pub struct CpuSensor {
+    pub index: usize,
+    pub label: String,
+}
+
 /// CPU data source
 ///
 /// Provides comprehensive CPU information including usage, temperature, frequency,
@@ -18,6 +25,7 @@ pub struct CpuSource {
     components: Components,
     global_usage: f32,
     per_core_usage: Vec<f32>,
+    cpu_sensors: Vec<CpuSensor>,
     cpu_temperature: Option<f32>,
     cpu_frequency: f64,
     config: CpuSourceConfig,
@@ -49,16 +57,66 @@ impl CpuSource {
         // Initialize components for temperature monitoring
         let components = Components::new_with_refreshed_list();
 
+        // Discover CPU temperature sensors
+        let cpu_sensors = Self::discover_cpu_sensors(&components);
+
         Self {
             metadata,
             system,
             components,
             global_usage: 0.0,
             per_core_usage: Vec::new(),
+            cpu_sensors,
             cpu_temperature: None,
             cpu_frequency: 0.0,
             config: CpuSourceConfig::default(),
         }
+    }
+
+    /// Discover all CPU temperature sensors
+    fn discover_cpu_sensors(components: &Components) -> Vec<CpuSensor> {
+        let mut sensors = Vec::new();
+        let mut index = 0;
+
+        // First priority: CPU package sensors
+        for component in components {
+            let label = component.label();
+            let label_lower = label.to_lowercase();
+            if label_lower.contains("cpu") || label_lower.contains("package") || label_lower.contains("tctl") {
+                sensors.push(CpuSensor {
+                    index,
+                    label: label.to_string(),
+                });
+                index += 1;
+            }
+        }
+
+        // Second priority: Core sensors (if no package sensors found)
+        if sensors.is_empty() {
+            for component in components {
+                let label = component.label();
+                let label_lower = label.to_lowercase();
+                if label_lower.contains("core") {
+                    sensors.push(CpuSensor {
+                        index,
+                        label: label.to_string(),
+                    });
+                    index += 1;
+                }
+            }
+        }
+
+        sensors
+    }
+
+    /// Get list of available CPU temperature sensors
+    pub fn get_available_sensors(&self) -> &[CpuSensor] {
+        &self.cpu_sensors
+    }
+
+    /// Get number of CPU cores
+    pub fn get_core_count(&self) -> usize {
+        self.system.cpus().len()
     }
 
     /// Set configuration for this CPU source
@@ -92,20 +150,25 @@ impl CpuSource {
         }
     }
 
-    /// Find CPU temperature from components
+    /// Find CPU temperature from components using configured sensor index
     fn find_cpu_temperature(&self) -> Option<f32> {
-        // Look for components with "CPU" or "Core" in the label
-        for component in &self.components {
-            let label = component.label().to_lowercase();
-            if label.contains("cpu") || label.contains("package") || label.contains("tctl") {
-                return Some(component.temperature());
-            }
+        // If no sensors discovered, return None
+        if self.cpu_sensors.is_empty() {
+            return None;
         }
 
-        // If no specific CPU temp found, try to find any core temperature
+        // Get the sensor label for the configured index
+        let sensor_index = self.config.sensor_index;
+        let target_label = if let Some(sensor) = self.cpu_sensors.get(sensor_index) {
+            &sensor.label
+        } else {
+            // If configured index is out of bounds, use first sensor
+            &self.cpu_sensors[0].label
+        };
+
+        // Find the component with matching label
         for component in &self.components {
-            let label = component.label().to_lowercase();
-            if label.contains("core") {
+            if component.label() == target_label {
                 return Some(component.temperature());
             }
         }

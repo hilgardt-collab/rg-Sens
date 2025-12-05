@@ -1164,6 +1164,13 @@ fn show_panel_properties_dialog(
     let cpu_config_widget = crate::ui::CpuSourceConfigWidget::new();
     cpu_config_widget.widget().set_visible(old_source_id == "cpu");
 
+    // Populate sensor and core information from a temporary CPU source
+    {
+        let temp_cpu_source = crate::sources::CpuSource::new();
+        cpu_config_widget.set_available_sensors(temp_cpu_source.get_available_sensors());
+        cpu_config_widget.set_cpu_core_count(temp_cpu_source.get_core_count());
+    }
+
     // Load existing CPU config if source is CPU
     if old_source_id == "cpu" {
         if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
