@@ -1508,8 +1508,11 @@ fn show_panel_properties_dialog(
                 if let Ok(cpu_config_json) = serde_json::to_value(&cpu_config) {
                     panel_guard.config.insert("cpu_config".to_string(), cpu_config_json);
 
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
                     // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(panel_guard.config.clone()) {
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply CPU config to source: {}", e);
                     }
 
