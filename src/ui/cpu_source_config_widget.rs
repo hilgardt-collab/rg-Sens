@@ -63,6 +63,7 @@ pub struct CpuSourceConfigWidget {
     unit_combo: DropDown,
     unit_box: GtkBox,
     sensor_combo: DropDown,
+    sensor_box: GtkBox,
     core_combo: DropDown,
     per_core_check: CheckButton,
 }
@@ -120,6 +121,7 @@ impl CpuSourceConfigWidget {
         sensor_combo.set_selected(0);
 
         sensor_box.append(&sensor_combo);
+        sensor_box.set_visible(false); // Hidden by default (show only for temperature)
         widget.append(&sensor_box);
 
         // Per-core selection
@@ -145,6 +147,7 @@ impl CpuSourceConfigWidget {
         // Wire up handlers
         let config_clone = config.clone();
         let unit_box_clone = unit_box.clone();
+        let sensor_box_clone = sensor_box.clone();
         field_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             let field = match selected {
@@ -156,8 +159,10 @@ impl CpuSourceConfigWidget {
 
             config_clone.borrow_mut().field = field;
 
-            // Show/hide unit selector based on field
-            unit_box_clone.set_visible(field == CpuField::Temperature);
+            // Show/hide unit and sensor selectors based on field
+            let is_temp = field == CpuField::Temperature;
+            unit_box_clone.set_visible(is_temp);
+            sensor_box_clone.set_visible(is_temp);
         });
 
         let config_clone = config.clone();
@@ -219,6 +224,7 @@ impl CpuSourceConfigWidget {
             unit_combo,
             unit_box,
             sensor_combo,
+            sensor_box,
             core_combo,
             per_core_check,
         }
@@ -242,7 +248,9 @@ impl CpuSourceConfigWidget {
             TemperatureUnit::Kelvin => 2,
         });
 
-        self.unit_box.set_visible(config.field == CpuField::Temperature);
+        let is_temp = config.field == CpuField::Temperature;
+        self.unit_box.set_visible(is_temp);
+        self.sensor_box.set_visible(is_temp);
 
         // Set custom caption if provided
         if let Some(ref caption) = config.custom_caption {

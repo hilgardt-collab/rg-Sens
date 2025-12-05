@@ -70,7 +70,7 @@ impl TextLineConfigWidget {
             let index = lines.len(); // Get index before pushing
             lines.push(new_line.clone());
             drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), copied_font_clone.clone(), copied_color_clone.clone(), index);
+            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), copied_font_clone.clone(), copied_color_clone.clone(), index, None);
         });
 
         Self {
@@ -94,6 +94,7 @@ impl TextLineConfigWidget {
         copied_font: Rc<RefCell<Option<(String, f64)>>>,
         copied_color: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
         list_index: usize,
+        rebuild_callback: Option<Rc<dyn Fn()>>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -495,40 +496,84 @@ impl TextLineConfigWidget {
         row_box.append(&delete_button);
 
         // Delete button handler
-        {
-            let lines_clone = lines.clone();
-            let list_box_clone = list_box.clone();
-            let frame_clone = frame.clone();
-            delete_button.connect_clicked(move |_| {
-                let mut lines_ref = lines_clone.borrow_mut();
-                if list_index < lines_ref.len() {
-                    lines_ref.remove(list_index);
-                }
-                drop(lines_ref);
+        delete_button.connect_clicked(move |_| {
+            let mut lines_ref = lines.borrow_mut();
+            if list_index < lines_ref.len() {
+                lines_ref.remove(list_index);
+            }
+            drop(lines_ref);
 
-                // Remove the widget from the list
-                list_box_clone.remove(&frame_clone);
-            });
-        }
+            // Call rebuild callback to refresh the entire list with correct indices
+            if let Some(ref rebuild) = rebuild_callback {
+                rebuild();
+            }
+        });
 
         list_box.append(&frame);
     }
 
-    /// Set the configuration
-    pub fn set_config(&self, config: TextDisplayerConfig) {
-        // Clear list box first
+    /// Rebuild the entire list UI from the current lines data
+    fn rebuild_list(&self) {
+        // Clear list box
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
 
-        // Clear and rebuild lines vector
-        self.lines.borrow_mut().clear();
+        // Create rebuild callback for delete buttons
+        let list_box_clone = self.list_box.clone();
+        let lines_clone = self.lines.clone();
+        let fields_clone = self.available_fields.clone();
+        let font_dialog_clone = self.font_dialog.clone();
+        let copied_font_clone = self.copied_font.clone();
+        let copied_color_clone = self.copied_color.clone();
 
-        // Add each line with correct index
-        for (index, line) in config.lines.into_iter().enumerate() {
-            self.lines.borrow_mut().push(line.clone());
-            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone(), self.font_dialog.clone(), self.copied_font.clone(), self.copied_color.clone(), index);
+        let rebuild_fn: Rc<dyn Fn()> = Rc::new(move || {
+            // Clear list box
+            while let Some(child) = list_box_clone.first_child() {
+                list_box_clone.remove(&child);
+            }
+
+            // Rebuild all rows
+            let lines = lines_clone.borrow().clone();
+            for (index, line) in lines.into_iter().enumerate() {
+                Self::add_line_row(
+                    &list_box_clone,
+                    line,
+                    &fields_clone,
+                    lines_clone.clone(),
+                    font_dialog_clone.clone(),
+                    copied_font_clone.clone(),
+                    copied_color_clone.clone(),
+                    index,
+                    None, // No rebuild callback in recursive call
+                );
+            }
+        });
+
+        // Rebuild all rows with correct indices
+        let lines = self.lines.borrow().clone();
+        for (index, line) in lines.into_iter().enumerate() {
+            Self::add_line_row(
+                &self.list_box,
+                line,
+                &self.available_fields,
+                self.lines.clone(),
+                self.font_dialog.clone(),
+                self.copied_font.clone(),
+                self.copied_color.clone(),
+                index,
+                Some(rebuild_fn.clone()),
+            );
         }
+    }
+
+    /// Set the configuration
+    pub fn set_config(&self, config: TextDisplayerConfig) {
+        // Update lines vector
+        *self.lines.borrow_mut() = config.lines;
+
+        // Rebuild UI
+        self.rebuild_list();
     }
 
     /// Get the current configuration
