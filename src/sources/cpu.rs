@@ -1,6 +1,7 @@
 //! CPU data source implementation
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::ui::{CpuField, CpuSourceConfig, CoreSelection, TemperatureUnit};
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -19,6 +20,7 @@ pub struct CpuSource {
     per_core_usage: Vec<f32>,
     cpu_temperature: Option<f32>,
     cpu_frequency: f64,
+    config: CpuSourceConfig,
 }
 
 impl CpuSource {
@@ -55,6 +57,38 @@ impl CpuSource {
             per_core_usage: Vec::new(),
             cpu_temperature: None,
             cpu_frequency: 0.0,
+            config: CpuSourceConfig::default(),
+        }
+    }
+
+    /// Set configuration for this CPU source
+    ///
+    /// This determines which data field to expose (temperature/usage/frequency),
+    /// temperature units, and which core to monitor.
+    pub fn set_config(&mut self, config: CpuSourceConfig) {
+        self.config = config;
+    }
+
+    /// Get current configuration
+    pub fn get_config(&self) -> &CpuSourceConfig {
+        &self.config
+    }
+
+    /// Convert temperature from Celsius to the configured unit
+    fn convert_temperature(&self, celsius: f32) -> f32 {
+        match self.config.temp_unit {
+            TemperatureUnit::Celsius => celsius,
+            TemperatureUnit::Fahrenheit => celsius * 9.0 / 5.0 + 32.0,
+            TemperatureUnit::Kelvin => celsius + 273.15,
+        }
+    }
+
+    /// Get temperature unit string
+    fn get_temperature_unit_string(&self) -> &str {
+        match self.config.temp_unit {
+            TemperatureUnit::Celsius => "°C",
+            TemperatureUnit::Fahrenheit => "°F",
+            TemperatureUnit::Kelvin => "K",
         }
     }
 
@@ -186,25 +220,54 @@ impl DataSource for CpuSource {
     fn get_values(&self) -> HashMap<String, Value> {
         let mut values = HashMap::new();
 
-        // Basic fields
-        values.insert("caption".to_string(), Value::from("CPU"));
-        values.insert("usage".to_string(), Value::from(self.global_usage));
-        values.insert("unit".to_string(), Value::from("%"));
+        // Determine which data to use based on core selection
+        let usage_value = match &self.config.core_selection {
+            CoreSelection::Overall => self.global_usage,
+            CoreSelection::Core(core_idx) => {
+                self.per_core_usage.get(*core_idx).copied().unwrap_or(0.0)
+            }
+        };
 
-        // Temperature (if available)
-        if let Some(temp) = self.cpu_temperature {
-            values.insert("temperature".to_string(), Value::from(temp));
-            values.insert("temp_unit".to_string(), Value::from("°C"));
-        } else {
-            values.insert("temperature".to_string(), Value::from("N/A"));
-            values.insert("temp_unit".to_string(), Value::from(""));
+        // Get frequency (could be per-core in future, for now just overall)
+        let frequency_value = self.cpu_frequency;
+
+        // Get temperature (apply conversion)
+        let temperature_value = self.cpu_temperature.map(|t| self.convert_temperature(t));
+
+        // Apply field configuration to determine what goes in the main value/unit fields
+        match self.config.field {
+            CpuField::Usage => {
+                values.insert("caption".to_string(), Value::from("CPU"));
+                values.insert("usage".to_string(), Value::from(usage_value));
+                values.insert("unit".to_string(), Value::from("%"));
+            }
+            CpuField::Temperature => {
+                values.insert("caption".to_string(), Value::from("CPU Temp"));
+                if let Some(temp) = temperature_value {
+                    values.insert("temperature".to_string(), Value::from(temp));
+                    values.insert("unit".to_string(), Value::from(self.get_temperature_unit_string()));
+                } else {
+                    values.insert("temperature".to_string(), Value::from("N/A"));
+                    values.insert("unit".to_string(), Value::from(""));
+                }
+            }
+            CpuField::Frequency => {
+                values.insert("caption".to_string(), Value::from("CPU Freq"));
+                values.insert("frequency".to_string(), Value::from(frequency_value));
+                values.insert("unit".to_string(), Value::from("MHz"));
+            }
         }
 
-        // Frequency
-        values.insert("frequency".to_string(), Value::from(self.cpu_frequency));
-        values.insert("freq_unit".to_string(), Value::from("MHz"));
+        // Also provide all raw data for advanced use cases
+        values.insert("raw_usage".to_string(), Value::from(self.global_usage));
 
-        // Per-core usage
+        if let Some(temp) = self.cpu_temperature {
+            values.insert("raw_temperature_celsius".to_string(), Value::from(temp));
+        }
+
+        values.insert("raw_frequency".to_string(), Value::from(self.cpu_frequency));
+
+        // Per-core data (always available)
         for (i, usage) in self.per_core_usage.iter().enumerate() {
             values.insert(format!("core{}_usage", i), Value::from(*usage));
         }
@@ -215,5 +278,16 @@ impl DataSource for CpuSource {
     fn is_available(&self) -> bool {
         // CPU info is always available
         true
+    }
+
+    fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+        // Look for cpu_config in the configuration
+        if let Some(cpu_config_value) = config.get("cpu_config") {
+            // Try to deserialize it into CpuSourceConfig
+            if let Ok(cpu_config) = serde_json::from_value::<CpuSourceConfig>(cpu_config_value.clone()) {
+                self.set_config(cpu_config);
+            }
+        }
+        Ok(())
     }
 }

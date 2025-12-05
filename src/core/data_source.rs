@@ -59,6 +59,16 @@ pub trait DataSource: Send + Sync {
     fn is_available(&self) -> bool {
         true
     }
+
+    /// Configure the data source with source-specific settings
+    ///
+    /// This allows sources to receive configuration that affects what data
+    /// they collect or how they present it. The configuration is passed as
+    /// a JSON value to allow flexibility. Sources that don't need configuration
+    /// can use the default implementation which does nothing.
+    fn configure(&mut self, _config: &HashMap<String, Value>) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Type-erased data source for dynamic dispatch

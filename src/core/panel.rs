@@ -61,9 +61,14 @@ impl Panel {
         Ok(())
     }
 
-    /// Apply configuration to the displayer
+    /// Apply configuration to the source and displayer
     pub fn apply_config(&mut self, config: HashMap<String, serde_json::Value>) -> Result<()> {
         self.config = config.clone();
+
+        // Configure the data source (e.g., CPU source configuration)
+        self.source.configure(&config)?;
+
+        // Configure the displayer
         self.displayer.apply_config(&config)
     }
 }
