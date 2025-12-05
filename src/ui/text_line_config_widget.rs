@@ -59,9 +59,10 @@ impl TextLineConfigWidget {
         add_button.connect_clicked(move |_| {
             let mut lines = lines_clone.borrow_mut();
             let new_line = TextLineConfig::default();
+            let index = lines.len(); // Get index before pushing
             lines.push(new_line.clone());
             drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone());
+            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), index);
         });
 
         Self {
@@ -80,6 +81,7 @@ impl TextLineConfigWidget {
         fields: &[FieldMetadata],
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
         font_dialog: Rc<gtk4::FontDialog>,
+        list_index: usize,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -185,11 +187,6 @@ impl TextLineConfigWidget {
 
         // Connect color button to ColorPickerDialog
         let lines_clone = lines.clone();
-        let list_index = {
-            let lines_ref = lines.borrow();
-            lines_ref.len().saturating_sub(1)
-        };
-
         color_button.connect_clicked(move |btn| {
             let current_color = {
                 let lines_ref = lines_clone.borrow();
@@ -421,15 +418,18 @@ impl TextLineConfigWidget {
 
     /// Set the configuration
     pub fn set_config(&self, config: TextDisplayerConfig) {
-        *self.lines.borrow_mut() = config.lines.clone();
-
-        // Clear and rebuild list
+        // Clear list box first
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
 
-        for line in config.lines {
-            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone(), self.font_dialog.clone());
+        // Clear and rebuild lines vector
+        self.lines.borrow_mut().clear();
+
+        // Add each line with correct index
+        for (index, line) in config.lines.into_iter().enumerate() {
+            self.lines.borrow_mut().push(line.clone());
+            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone(), self.font_dialog.clone(), index);
         }
     }
 
