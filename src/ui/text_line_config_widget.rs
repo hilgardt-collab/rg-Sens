@@ -263,48 +263,41 @@ impl TextLineConfigWidget {
             font_button.connect_clicked(move |btn| {
                 let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
 
-                // Create font chooser dialog
-                let dialog = gtk4::FontChooserDialog::new(Some("Select Font"), window.as_ref());
+                // Create font dialog (GTK 4.10+)
+                let dialog = gtk4::FontDialog::new();
 
-                // Set current font
-                {
+                // Get current font description
+                let current_font = {
                     let lines_ref = lines_clone.borrow();
                     if let Some(line) = lines_ref.get(list_index) {
-                        let font_desc = format!("{} {}", line.font_family, line.font_size as i32);
-                        dialog.set_font(&font_desc);
+                        let font_str = format!("{} {}", line.font_family, line.font_size as i32);
+                        gtk4::pango::FontDescription::from_string(&font_str)
+                    } else {
+                        gtk4::pango::FontDescription::from_string("Sans 12")
                     }
-                }
+                };
 
                 let lines_clone2 = lines_clone.clone();
                 let font_button_clone2 = font_button_clone.clone();
 
-                dialog.connect_response(move |dlg, response| {
-                    if response == gtk4::ResponseType::Ok {
-                        if let Some(font_desc_str) = dlg.font() {
-                            // Parse font description: "Font Family Size"
-                            let parts: Vec<&str> = font_desc_str.rsplitn(2, ' ').collect();
-                            if parts.len() == 2 {
-                                let size_str = parts[0];
-                                let family = parts[1];
+                // Use async API for font selection
+                gtk4::glib::MainContext::default().spawn_local(async move {
+                    if let Ok(font_desc) = dialog.choose_font(window.as_ref(), Some(&current_font)).await {
+                        // Extract family and size from font description
+                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
+                        let size = font_desc.size() as f64 / gtk4::pango::SCALE as f64;
 
-                                if let Ok(size) = size_str.parse::<f64>() {
-                                    let mut lines_ref = lines_clone2.borrow_mut();
-                                    if let Some(line) = lines_ref.get_mut(list_index) {
-                                        line.font_family = family.to_string();
-                                        line.font_size = size;
-                                    }
-                                    drop(lines_ref);
-
-                                    // Update button label
-                                    font_button_clone2.set_label(&format!("{} {:.0}", family, size));
-                                }
-                            }
+                        let mut lines_ref = lines_clone2.borrow_mut();
+                        if let Some(line) = lines_ref.get_mut(list_index) {
+                            line.font_family = family.clone();
+                            line.font_size = size;
                         }
-                    }
-                    dlg.close();
-                });
+                        drop(lines_ref);
 
-                dialog.show();
+                        // Update button label
+                        font_button_clone2.set_label(&format!("{} {:.0}", family, size));
+                    }
+                });
             });
         }
 

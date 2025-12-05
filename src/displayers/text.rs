@@ -120,7 +120,9 @@ impl TextDisplayer {
         cr.set_source_rgba(config.color.0, config.color.1, config.color.2, config.color.3);
 
         // Get text dimensions
-        let extents = cr.text_extents(text).unwrap_or_default();
+        let extents = cr.text_extents(text).unwrap_or_else(|_| {
+            cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        });
 
         // Calculate position based on vertical and horizontal alignment
         let (base_x, base_y) = Self::calculate_position(
