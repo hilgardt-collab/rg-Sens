@@ -1507,8 +1507,21 @@ fn show_panel_properties_dialog(
                 let cpu_config = cpu_config_widget_clone.get_config();
                 if let Ok(cpu_config_json) = serde_json::to_value(&cpu_config) {
                     panel_guard.config.insert("cpu_config".to_string(), cpu_config_json);
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(panel_guard.config.clone()) {
+                        log::warn!("Failed to apply CPU config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
                 }
             }
+
+            // Queue widget redraw to show updated data
+            state.widget.queue_draw();
 
             // Drop the write lock before triggering redraws
             drop(panel_guard);
