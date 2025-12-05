@@ -78,34 +78,41 @@ impl CpuSource {
         let mut sensors = Vec::new();
         let mut index = 0;
 
-        // First priority: CPU package sensors
+        // Log all available components for debugging
+        log::info!("Discovering CPU temperature sensors...");
+        log::info!("Total components found: {}", components.len());
+
+        for component in components {
+            let label = component.label();
+            log::info!("  Component: {} = {}°C", label, component.temperature());
+        }
+
+        // Collect all CPU-related sensors (don't exclude based on priority)
         for component in components {
             let label = component.label();
             let label_lower = label.to_lowercase();
-            if label_lower.contains("cpu") || label_lower.contains("package") || label_lower.contains("tctl") {
+
+            // Match AMD Ryzen sensors: Tctl, Tccd1, Tccd2, etc.
+            // Match Intel sensors: Package, Core
+            // Match generic: CPU
+            if label_lower.contains("cpu")
+                || label_lower.contains("package")
+                || label_lower.contains("tctl")
+                || label_lower.contains("tccd")
+                || label_lower.contains("tdie")
+                || label_lower.contains("core")
+                || label_lower.starts_with("k10temp") {
+
                 sensors.push(CpuSensor {
                     index,
                     label: label.to_string(),
                 });
+                log::info!("  Added sensor {}: {}", index, label);
                 index += 1;
             }
         }
 
-        // Second priority: Core sensors (if no package sensors found)
-        if sensors.is_empty() {
-            for component in components {
-                let label = component.label();
-                let label_lower = label.to_lowercase();
-                if label_lower.contains("core") {
-                    sensors.push(CpuSensor {
-                        index,
-                        label: label.to_string(),
-                    });
-                    index += 1;
-                }
-            }
-        }
-
+        log::info!("Total CPU sensors discovered: {}", sensors.len());
         sensors
     }
 
@@ -116,7 +123,9 @@ impl CpuSource {
 
     /// Get number of CPU cores
     pub fn get_core_count(&self) -> usize {
-        self.system.cpus().len()
+        let count = self.system.cpus().len();
+        log::info!("CPU core count: {}", count);
+        count
     }
 
     /// Set configuration for this CPU source
@@ -154,6 +163,7 @@ impl CpuSource {
     fn find_cpu_temperature(&self) -> Option<f32> {
         // If no sensors discovered, return None
         if self.cpu_sensors.is_empty() {
+            log::warn!("No CPU sensors discovered, cannot read temperature");
             return None;
         }
 
@@ -163,16 +173,22 @@ impl CpuSource {
             &sensor.label
         } else {
             // If configured index is out of bounds, use first sensor
+            log::warn!("Sensor index {} out of bounds, using first sensor", sensor_index);
             &self.cpu_sensors[0].label
         };
+
+        log::debug!("Looking for temperature sensor: {}", target_label);
 
         // Find the component with matching label
         for component in &self.components {
             if component.label() == target_label {
-                return Some(component.temperature());
+                let temp = component.temperature();
+                log::debug!("Found temperature for {}: {}°C", target_label, temp);
+                return Some(temp);
             }
         }
 
+        log::warn!("Could not find component for sensor: {}", target_label);
         None
     }
 }
@@ -276,6 +292,9 @@ impl DataSource for CpuSource {
         // Refresh and get temperature
         self.components.refresh();
         self.cpu_temperature = self.find_cpu_temperature();
+
+        log::debug!("CPU update complete - cores: {}, temp: {:?}, freq: {}",
+                   self.per_core_usage.len(), self.cpu_temperature, self.cpu_frequency);
 
         Ok(())
     }
