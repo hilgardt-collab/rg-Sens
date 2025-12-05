@@ -154,9 +154,6 @@ impl TextLineConfigWidget {
         let font_button = Button::with_label(&format!("{} {:.0}", line_config.font_family, line_config.font_size));
         font_button.set_hexpand(true);
 
-        // Store font info for the button click handler
-        let current_font = format!("{} {}", line_config.font_family, line_config.font_size as i32);
-
         font_box.append(&font_button);
 
         // Copy font button
@@ -234,6 +231,7 @@ impl TextLineConfigWidget {
         // Connect color button to ColorPickerDialog
         let lines_clone = lines.clone();
         let color_class_clone = color_class.clone();
+        let color_box_clone_for_picker = color_box.clone(); // Clone before moving into closure
         color_button.connect_clicked(move |btn| {
             let current_color = {
                 let lines_ref = lines_clone.borrow();
@@ -246,7 +244,7 @@ impl TextLineConfigWidget {
 
             let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
             let lines_clone2 = lines_clone.clone();
-            let color_box_clone = color_box.clone();
+            let color_box_clone = color_box_clone_for_picker.clone();
             let color_class_clone2 = color_class_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
