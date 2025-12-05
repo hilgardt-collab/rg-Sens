@@ -2,6 +2,8 @@
 
 use crate::core::FieldMetadata;
 use crate::displayers::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
+use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::background::Color;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, ListBox,
@@ -170,8 +172,55 @@ impl TextLineConfigWidget {
 
         color_button.set_child(Some(&color_box));
 
-        // TODO: Connect color button to ColorDialog
-        // For now, button shows current color but doesn't open dialog
+        // Connect color button to ColorPickerDialog
+        let lines_clone = lines.clone();
+        let list_index = {
+            let lines_ref = lines.borrow();
+            lines_ref.len().saturating_sub(1)
+        };
+
+        color_button.connect_clicked(move |btn| {
+            let current_color = {
+                let lines_ref = lines_clone.borrow();
+                if let Some(line) = lines_ref.get(list_index) {
+                    Color::new(line.color.0, line.color.1, line.color.2, line.color.3)
+                } else {
+                    Color::default()
+                }
+            };
+
+            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
+            let lines_clone2 = lines_clone.clone();
+            let color_box_clone = color_box.clone();
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
+                    let mut lines_ref = lines_clone2.borrow_mut();
+                    if let Some(line) = lines_ref.get_mut(list_index) {
+                        line.color = (new_color.r, new_color.g, new_color.b, new_color.a);
+                    }
+                    drop(lines_ref);
+
+                    // Update color preview
+                    let rgba = gtk4::gdk::RGBA::new(
+                        new_color.r as f32,
+                        new_color.g as f32,
+                        new_color.b as f32,
+                        new_color.a as f32,
+                    );
+                    let css = format!(
+                        "background-color: rgba({}, {}, {}, {});",
+                        (rgba.red() * 255.0) as u8,
+                        (rgba.green() * 255.0) as u8,
+                        (rgba.blue() * 255.0) as u8,
+                        rgba.alpha()
+                    );
+                    let provider = gtk4::CssProvider::new();
+                    provider.load_from_data(&format!(".color-preview {{ {} }}", css));
+                    color_box_clone.style_context().add_provider(&provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+                }
+            });
+        });
 
         extras_box.append(&color_button);
 
@@ -196,14 +245,137 @@ impl TextLineConfigWidget {
         combine_box.append(&group_entry);
         row_box.append(&combine_box);
 
+        // Wire up change handlers to update the TextLineConfig in the lines Vec
+
+        // Field selector handler
+        {
+            let lines_clone = lines.clone();
+            let fields_clone = fields.to_vec();
+            field_combo.connect_selected_notify(move |combo| {
+                let selected = combo.selected() as usize;
+                if let Some(field) = fields_clone.get(selected) {
+                    let mut lines_ref = lines_clone.borrow_mut();
+                    if let Some(line) = lines_ref.get_mut(list_index) {
+                        line.field_id = field.id.clone();
+                    }
+                }
+            });
+        }
+
+        // Vertical position handler
+        {
+            let lines_clone = lines.clone();
+            v_pos_combo.connect_selected_notify(move |combo| {
+                let vpos = match combo.selected() {
+                    0 => VerticalPosition::Top,
+                    1 => VerticalPosition::Center,
+                    2 => VerticalPosition::Bottom,
+                    _ => VerticalPosition::Center,
+                };
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.vertical_position = vpos;
+                }
+            });
+        }
+
+        // Horizontal position handler
+        {
+            let lines_clone = lines.clone();
+            h_pos_combo.connect_selected_notify(move |combo| {
+                let hpos = match combo.selected() {
+                    0 => HorizontalPosition::Left,
+                    1 => HorizontalPosition::Center,
+                    2 => HorizontalPosition::Right,
+                    _ => HorizontalPosition::Center,
+                };
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.horizontal_position = hpos;
+                }
+            });
+        }
+
+        // Font family handler
+        {
+            let lines_clone = lines.clone();
+            font_entry.connect_changed(move |entry| {
+                let text = entry.text().to_string();
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.font_family = text;
+                }
+            });
+        }
+
+        // Font size handler
+        {
+            let lines_clone = lines.clone();
+            size_spin.connect_value_changed(move |spin| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.font_size = spin.value();
+                }
+            });
+        }
+
+        // Rotation angle handler
+        {
+            let lines_clone = lines.clone();
+            angle_spin.connect_value_changed(move |spin| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.rotation_angle = spin.value();
+                }
+            });
+        }
+
+        // Combine checkbox handler
+        {
+            let lines_clone = lines.clone();
+            combine_check.connect_toggled(move |check| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.is_combined = check.is_active();
+                }
+            });
+        }
+
+        // Group ID handler
+        {
+            let lines_clone = lines.clone();
+            group_entry.connect_changed(move |entry| {
+                let text = entry.text().to_string();
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.group_id = if text.is_empty() { None } else { Some(text) };
+                }
+            });
+        }
+
         // Delete button
         let delete_button = Button::with_label("Remove Line");
         delete_button.add_css_class("destructive-action");
         row_box.append(&delete_button);
 
-        list_box.append(&frame);
+        // Delete button handler
+        {
+            let lines_clone = lines.clone();
+            let list_box_clone = list_box.clone();
+            let frame_clone = frame.clone();
+            delete_button.connect_clicked(move |_| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if list_index < lines_ref.len() {
+                    lines_ref.remove(list_index);
+                }
+                drop(lines_ref);
 
-        // TODO: Wire up change handlers to update the TextLineConfig in the lines Vec
+                // Remove the widget from the list
+                list_box_clone.remove(&frame_clone);
+            });
+        }
+
+        list_box.append(&frame);
     }
 
     /// Set the configuration
