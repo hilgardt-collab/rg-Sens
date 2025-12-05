@@ -280,24 +280,29 @@ impl TextLineConfigWidget {
                 let lines_clone2 = lines_clone.clone();
                 let font_button_clone2 = font_button_clone.clone();
 
-                // Use async API for font selection
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    if let Ok(font_desc) = dialog.choose_font(window.as_ref(), Some(&current_font)).await {
-                        // Extract family and size from font description
-                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
-                        let size = font_desc.size() as f64 / gtk4::pango::SCALE as f64;
+                // Use callback-based API for font selection
+                dialog.choose_font(
+                    window.as_ref(),
+                    Some(&current_font),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            // Extract family and size from font description
+                            let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
+                            let size = font_desc.size() as f64 / gtk4::pango::SCALE as f64;
 
-                        let mut lines_ref = lines_clone2.borrow_mut();
-                        if let Some(line) = lines_ref.get_mut(list_index) {
-                            line.font_family = family.clone();
-                            line.font_size = size;
+                            let mut lines_ref = lines_clone2.borrow_mut();
+                            if let Some(line) = lines_ref.get_mut(list_index) {
+                                line.font_family = family.clone();
+                                line.font_size = size;
+                            }
+                            drop(lines_ref);
+
+                            // Update button label
+                            font_button_clone2.set_label(&format!("{} {:.0}", family, size));
                         }
-                        drop(lines_ref);
-
-                        // Update button label
-                        font_button_clone2.set_label(&format!("{} {:.0}", family, size));
-                    }
-                });
+                    },
+                );
             });
         }
 
