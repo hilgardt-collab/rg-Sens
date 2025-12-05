@@ -3,6 +3,7 @@
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use crate::ui::{CpuField, CpuSourceConfig, CoreSelection, TemperatureUnit};
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -13,6 +14,77 @@ use sysinfo::{Components, CpuRefreshKind, RefreshKind, System};
 pub struct CpuSensor {
     pub index: usize,
     pub label: String,
+}
+
+/// Cached CPU hardware information (discovered once on first access)
+struct CpuHardwareInfo {
+    sensors: Vec<CpuSensor>,
+    core_count: usize,
+}
+
+/// Global cache for CPU hardware info (discovered once at startup)
+static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
+    log::info!("=== Discovering CPU hardware (one-time initialization) ===");
+
+    // Create temporary components to discover sensors
+    let components = Components::new_with_refreshed_list();
+    let sensors = discover_cpu_sensors(&components);
+
+    // Create temporary system to get core count
+    let system = System::new_with_specifics(
+        RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+    );
+    let core_count = system.cpus().len();
+
+    log::info!("CPU hardware discovery complete: {} sensors, {} cores", sensors.len(), core_count);
+
+    CpuHardwareInfo {
+        sensors,
+        core_count,
+    }
+});
+
+/// Discover all CPU temperature sensors (internal function)
+fn discover_cpu_sensors(components: &Components) -> Vec<CpuSensor> {
+    let mut sensors = Vec::new();
+    let mut index = 0;
+
+    // Log all available components for debugging
+    log::info!("Discovering CPU temperature sensors...");
+    log::info!("Total components found: {}", components.len());
+
+    for component in components {
+        let label = component.label();
+        log::info!("  Component: {} = {}°C", label, component.temperature());
+    }
+
+    // Collect all CPU-related sensors (don't exclude based on priority)
+    for component in components {
+        let label = component.label();
+        let label_lower = label.to_lowercase();
+
+        // Match AMD Ryzen sensors: Tctl, Tccd1, Tccd2, etc.
+        // Match Intel sensors: Package, Core
+        // Match generic: CPU
+        if label_lower.contains("cpu")
+            || label_lower.contains("package")
+            || label_lower.contains("tctl")
+            || label_lower.contains("tccd")
+            || label_lower.contains("tdie")
+            || label_lower.contains("core")
+            || label_lower.starts_with("k10temp") {
+
+            sensors.push(CpuSensor {
+                index,
+                label: label.to_string(),
+            });
+            log::info!("  Added sensor {}: {}", index, label);
+            index += 1;
+        }
+    }
+
+    log::info!("Total CPU sensors discovered: {}", sensors.len());
+    sensors
 }
 
 /// CPU data source
@@ -57,8 +129,8 @@ impl CpuSource {
         // Initialize components for temperature monitoring
         let components = Components::new_with_refreshed_list();
 
-        // Discover CPU temperature sensors
-        let cpu_sensors = Self::discover_cpu_sensors(&components);
+        // Use cached sensor list from global hardware info
+        let cpu_sensors = CPU_HARDWARE_INFO.sensors.clone();
 
         Self {
             metadata,
@@ -73,47 +145,14 @@ impl CpuSource {
         }
     }
 
-    /// Discover all CPU temperature sensors
-    fn discover_cpu_sensors(components: &Components) -> Vec<CpuSensor> {
-        let mut sensors = Vec::new();
-        let mut index = 0;
+    /// Get list of available CPU temperature sensors from cache (no instance needed)
+    pub fn get_cached_sensors() -> &'static [CpuSensor] {
+        &CPU_HARDWARE_INFO.sensors
+    }
 
-        // Log all available components for debugging
-        log::info!("Discovering CPU temperature sensors...");
-        log::info!("Total components found: {}", components.len());
-
-        for component in components {
-            let label = component.label();
-            log::info!("  Component: {} = {}°C", label, component.temperature());
-        }
-
-        // Collect all CPU-related sensors (don't exclude based on priority)
-        for component in components {
-            let label = component.label();
-            let label_lower = label.to_lowercase();
-
-            // Match AMD Ryzen sensors: Tctl, Tccd1, Tccd2, etc.
-            // Match Intel sensors: Package, Core
-            // Match generic: CPU
-            if label_lower.contains("cpu")
-                || label_lower.contains("package")
-                || label_lower.contains("tctl")
-                || label_lower.contains("tccd")
-                || label_lower.contains("tdie")
-                || label_lower.contains("core")
-                || label_lower.starts_with("k10temp") {
-
-                sensors.push(CpuSensor {
-                    index,
-                    label: label.to_string(),
-                });
-                log::info!("  Added sensor {}: {}", index, label);
-                index += 1;
-            }
-        }
-
-        log::info!("Total CPU sensors discovered: {}", sensors.len());
-        sensors
+    /// Get CPU core count from cache (no instance needed)
+    pub fn get_cached_core_count() -> usize {
+        CPU_HARDWARE_INFO.core_count
     }
 
     /// Get list of available CPU temperature sensors
@@ -123,9 +162,7 @@ impl CpuSource {
 
     /// Get number of CPU cores
     pub fn get_core_count(&self) -> usize {
-        let count = self.system.cpus().len();
-        log::info!("CPU core count: {}", count);
-        count
+        self.system.cpus().len()
     }
 
     /// Set configuration for this CPU source
