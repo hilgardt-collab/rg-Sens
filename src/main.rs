@@ -284,10 +284,19 @@ fn build_ui(app: &Application) {
         let action_group = gio::SimpleActionGroup::new();
 
         // New panel action
+        let window_for_new = window_for_menu.clone();
+        let grid_layout_for_new = grid_layout_for_menu.clone();
+        let panels_for_new = panels_for_menu.clone();
+        let config_dirty_for_new = config_dirty_for_menu.clone();
         let new_panel_action = gio::SimpleAction::new("new-panel", None);
         new_panel_action.connect_activate(move |_, _| {
             info!("New panel requested");
-            // TODO: Implement new panel creation dialog
+            show_new_panel_dialog(
+                &window_for_new,
+                &grid_layout_for_new,
+                &panels_for_new,
+                &config_dirty_for_new,
+            );
         });
         action_group.add_action(&new_panel_action);
 
@@ -655,6 +664,172 @@ fn create_panel_from_config(
     }
 
     Ok(Arc::new(RwLock::new(panel)))
+}
+
+/// Show dialog to create a new panel
+fn show_new_panel_dialog(
+    window: &ApplicationWindow,
+    grid_layout: &Rc<RefCell<GridLayout>>,
+    panels: &Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
+    config_dirty: &Rc<RefCell<bool>>,
+) {
+    use gtk4::{Adjustment, Box as GtkBox, Button, Dialog, DropDown, Label, Orientation, SpinButton, StringList};
+
+    let dialog = Dialog::builder()
+        .title("New Panel")
+        .transient_for(window)
+        .modal(true)
+        .default_width(400)
+        .build();
+
+    // Content area
+    let content = dialog.content_area();
+    let vbox = GtkBox::new(Orientation::Vertical, 12);
+    vbox.set_margin_start(12);
+    vbox.set_margin_end(12);
+    vbox.set_margin_top(12);
+    vbox.set_margin_bottom(12);
+    content.append(&vbox);
+
+    // Position section
+    let pos_label = Label::new(Some("Position:"));
+    pos_label.set_halign(gtk4::Align::Start);
+    vbox.append(&pos_label);
+
+    let pos_box = GtkBox::new(Orientation::Horizontal, 6);
+    pos_box.append(&Label::new(Some("X:")));
+    let x_adj = Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
+    let x_spin = SpinButton::new(Some(&x_adj), 1.0, 0);
+    x_spin.set_hexpand(true);
+    pos_box.append(&x_spin);
+
+    pos_box.append(&Label::new(Some("Y:")));
+    let y_adj = Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
+    let y_spin = SpinButton::new(Some(&y_adj), 1.0, 0);
+    y_spin.set_hexpand(true);
+    pos_box.append(&y_spin);
+    vbox.append(&pos_box);
+
+    // Size section
+    let size_label = Label::new(Some("Size:"));
+    size_label.set_halign(gtk4::Align::Start);
+    vbox.append(&size_label);
+
+    let size_box = GtkBox::new(Orientation::Horizontal, 6);
+    size_box.append(&Label::new(Some("Width:")));
+    let width_adj = Adjustment::new(4.0, 1.0, 50.0, 1.0, 5.0, 0.0);
+    let width_spin = SpinButton::new(Some(&width_adj), 1.0, 0);
+    width_spin.set_hexpand(true);
+    size_box.append(&width_spin);
+
+    size_box.append(&Label::new(Some("Height:")));
+    let height_adj = Adjustment::new(2.0, 1.0, 50.0, 1.0, 5.0, 0.0);
+    let height_spin = SpinButton::new(Some(&height_adj), 1.0, 0);
+    height_spin.set_hexpand(true);
+    size_box.append(&height_spin);
+    vbox.append(&size_box);
+
+    // Data Source
+    let source_label = Label::new(Some("Data Source:"));
+    source_label.set_halign(gtk4::Align::Start);
+    vbox.append(&source_label);
+
+    let registry = rg_sens::core::global_registry();
+    let source_ids: Vec<String> = registry.list_sources().iter().map(|s| s.id.clone()).collect();
+    let source_strings: Vec<&str> = source_ids.iter().map(|s| s.as_str()).collect();
+    let source_list = StringList::new(&source_strings);
+    let source_combo = DropDown::new(Some(source_list), Option::<gtk4::Expression>::None);
+    source_combo.set_selected(0);
+    vbox.append(&source_combo);
+
+    // Displayer
+    let displayer_label = Label::new(Some("Displayer:"));
+    displayer_label.set_halign(gtk4::Align::Start);
+    vbox.append(&displayer_label);
+
+    let displayer_ids: Vec<String> = registry.list_displayers().iter().map(|d| d.id.clone()).collect();
+    let displayer_strings: Vec<&str> = displayer_ids.iter().map(|d| d.as_str()).collect();
+    let displayer_list = StringList::new(&displayer_strings);
+    let displayer_combo = DropDown::new(Some(displayer_list), Option::<gtk4::Expression>::None);
+    displayer_combo.set_selected(0);
+    vbox.append(&displayer_combo);
+
+    // Buttons
+    let button_box = GtkBox::new(Orientation::Horizontal, 6);
+    button_box.set_halign(gtk4::Align::End);
+    button_box.set_margin_top(12);
+
+    let cancel_button = Button::with_label("Cancel");
+    let ok_button = Button::with_label("Create");
+    ok_button.add_css_class("suggested-action");
+
+    button_box.append(&cancel_button);
+    button_box.append(&ok_button);
+    vbox.append(&button_box);
+
+    // Cancel handler
+    let dialog_clone = dialog.clone();
+    cancel_button.connect_clicked(move |_| {
+        dialog_clone.close();
+    });
+
+    // OK handler
+    let dialog_clone = dialog.clone();
+    let grid_layout = grid_layout.clone();
+    let panels = panels.clone();
+    let config_dirty = config_dirty.clone();
+    ok_button.connect_clicked(move |_| {
+        let x = x_spin.value() as u32;
+        let y = y_spin.value() as u32;
+        let width = width_spin.value() as u32;
+        let height = height_spin.value() as u32;
+
+        let source_id = &source_ids[source_combo.selected() as usize];
+        let displayer_id = &displayer_ids[displayer_combo.selected() as usize];
+
+        // Generate unique ID
+        let id = format!("panel_{}", uuid::Uuid::new_v4());
+
+        info!("Creating new panel: id={}, pos=({},{}), size={}x{}, source={}, displayer={}",
+              id, x, y, width, height, source_id, displayer_id);
+
+        // Create panel with default background
+        let background = rg_sens::ui::background::BackgroundConfig::default();
+        let settings = HashMap::new();
+
+        match create_panel_from_config(
+            &id,
+            x,
+            y,
+            width,
+            height,
+            source_id,
+            displayer_id,
+            background,
+            settings,
+            &registry,
+        ) {
+            Ok(panel) => {
+                // Add to grid
+                grid_layout.borrow_mut().add_panel(panel.clone());
+
+                // Add to panels list
+                panels.borrow_mut().push(panel);
+
+                // Mark config as dirty
+                *config_dirty.borrow_mut() = true;
+
+                info!("New panel created successfully");
+                dialog_clone.close();
+            }
+            Err(e) => {
+                warn!("Failed to create panel: {}", e);
+                // Could show error dialog here
+            }
+        }
+    });
+
+    dialog.present();
 }
 
 /// Load CSS styling for the application
