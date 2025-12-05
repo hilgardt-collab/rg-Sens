@@ -114,7 +114,7 @@ fn build_ui(app: &Application) {
         ];
 
         for (id, x, y, width, height, source_id, displayer_id) in default_panels {
-            match create_panel_from_config(id, x, y, width, height, source_id, displayer_id, Default::default(), &registry) {
+            match create_panel_from_config(id, x, y, width, height, source_id, displayer_id, Default::default(), HashMap::new(), &registry) {
                 Ok(panel) => {
                     grid_layout.add_panel(panel.clone());
                     panels.push(panel);
@@ -137,6 +137,7 @@ fn build_ui(app: &Application) {
                 &panel_config.source,
                 &panel_config.displayer,
                 panel_config.background.clone(),
+                panel_config.settings.clone(),
                 &registry,
             ) {
                 Ok(panel) => {
@@ -435,7 +436,7 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
                     source: panel_guard.source.metadata().id.clone(),
                     displayer: panel_guard.displayer.id().to_string(),
                     background: panel_guard.background.clone(),
-                    settings: HashMap::new(), // TODO: Save displayer/source settings
+                    settings: panel_guard.config.clone(),
                 })
             } else {
                 None
@@ -625,6 +626,7 @@ fn create_panel_from_config(
     source_id: &str,
     displayer_id: &str,
     background: rg_sens::ui::background::BackgroundConfig,
+    settings: HashMap<String, serde_json::Value>,
     registry: &rg_sens::core::Registry,
 ) -> anyhow::Result<Arc<RwLock<Panel>>> {
     // Create source and displayer
@@ -646,6 +648,11 @@ fn create_panel_from_config(
 
     // Set background
     panel.background = background;
+
+    // Apply settings if provided
+    if !settings.is_empty() {
+        panel.apply_config(settings)?;
+    }
 
     Ok(Arc::new(RwLock::new(panel)))
 }

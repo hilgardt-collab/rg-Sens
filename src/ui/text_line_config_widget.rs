@@ -18,6 +18,7 @@ pub struct TextLineConfigWidget {
     lines: Rc<RefCell<Vec<TextLineConfig>>>,
     list_box: ListBox,
     available_fields: Vec<FieldMetadata>,
+    font_dialog: Rc<gtk4::FontDialog>,
 }
 
 impl TextLineConfigWidget {
@@ -48,15 +49,19 @@ impl TextLineConfigWidget {
 
         let lines = Rc::new(RefCell::new(Vec::new()));
 
+        // Create shared font dialog (created once, reused for all lines)
+        let font_dialog = Rc::new(gtk4::FontDialog::new());
+
         let lines_clone = lines.clone();
         let list_box_clone = list_box.clone();
         let fields_clone = available_fields.clone();
+        let font_dialog_clone = font_dialog.clone();
         add_button.connect_clicked(move |_| {
             let mut lines = lines_clone.borrow_mut();
             let new_line = TextLineConfig::default();
             lines.push(new_line.clone());
             drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone());
+            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone());
         });
 
         Self {
@@ -64,6 +69,7 @@ impl TextLineConfigWidget {
             lines,
             list_box,
             available_fields,
+            font_dialog,
         }
     }
 
@@ -73,6 +79,7 @@ impl TextLineConfigWidget {
         line_config: TextLineConfig,
         fields: &[FieldMetadata],
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
+        font_dialog: Rc<gtk4::FontDialog>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -260,11 +267,9 @@ impl TextLineConfigWidget {
         {
             let lines_clone = lines.clone();
             let font_button_clone = font_button.clone();
+            let font_dialog_clone = font_dialog.clone();
             font_button.connect_clicked(move |btn| {
                 let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-
-                // Create font dialog (GTK 4.10+)
-                let dialog = gtk4::FontDialog::new();
 
                 // Get current font description
                 let current_font = {
@@ -280,8 +285,8 @@ impl TextLineConfigWidget {
                 let lines_clone2 = lines_clone.clone();
                 let font_button_clone2 = font_button_clone.clone();
 
-                // Use callback-based API for font selection
-                dialog.choose_font(
+                // Use callback-based API for font selection with shared dialog
+                font_dialog_clone.choose_font(
                     window.as_ref(),
                     Some(&current_font),
                     gtk4::gio::Cancellable::NONE,
@@ -424,7 +429,7 @@ impl TextLineConfigWidget {
         }
 
         for line in config.lines {
-            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone());
+            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone(), self.font_dialog.clone());
         }
     }
 

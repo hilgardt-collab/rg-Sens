@@ -1211,13 +1211,16 @@ fn show_panel_properties_dialog(
     // Load existing text config if displayer is text
     if old_displayer_id == "text" {
         // Try to load config from panel
-        if let Some(lines_value) = panel_guard.config.get("lines") {
-            if let Ok(text_displayer_config) = serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
+        let text_config = if let Some(lines_value) = panel_guard.config.get("lines") {
+            // Load from saved config
+            serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
                 serde_json::json!({ "lines": lines_value })
-            ) {
-                text_config_widget.set_config(text_displayer_config);
-            }
-        }
+            ).unwrap_or_default()
+        } else {
+            // Use default config if no saved config exists
+            crate::displayers::TextDisplayerConfig::default()
+        };
+        text_config_widget.set_config(text_config);
     }
 
     displayer_tab_box.append(&text_config_label);
