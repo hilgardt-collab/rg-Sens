@@ -19,6 +19,8 @@ pub struct TextLineConfigWidget {
     list_box: ListBox,
     available_fields: Vec<FieldMetadata>,
     font_dialog: Rc<gtk4::FontDialog>,
+    copied_font: Rc<RefCell<Option<(String, f64)>>>, // (family, size)
+    copied_color: Rc<RefCell<Option<(f64, f64, f64, f64)>>>, // (r, g, b, a)
 }
 
 impl TextLineConfigWidget {
@@ -52,17 +54,23 @@ impl TextLineConfigWidget {
         // Create shared font dialog (created once, reused for all lines)
         let font_dialog = Rc::new(gtk4::FontDialog::new());
 
+        // Create shared clipboard for font and color
+        let copied_font = Rc::new(RefCell::new(None));
+        let copied_color = Rc::new(RefCell::new(None));
+
         let lines_clone = lines.clone();
         let list_box_clone = list_box.clone();
         let fields_clone = available_fields.clone();
         let font_dialog_clone = font_dialog.clone();
+        let copied_font_clone = copied_font.clone();
+        let copied_color_clone = copied_color.clone();
         add_button.connect_clicked(move |_| {
             let mut lines = lines_clone.borrow_mut();
             let new_line = TextLineConfig::default();
             let index = lines.len(); // Get index before pushing
             lines.push(new_line.clone());
             drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), index);
+            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), copied_font_clone.clone(), copied_color_clone.clone(), index);
         });
 
         Self {
@@ -71,6 +79,8 @@ impl TextLineConfigWidget {
             list_box,
             available_fields,
             font_dialog,
+            copied_font,
+            copied_color,
         }
     }
 
@@ -81,6 +91,8 @@ impl TextLineConfigWidget {
         fields: &[FieldMetadata],
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
         font_dialog: Rc<gtk4::FontDialog>,
+        copied_font: Rc<RefCell<Option<(String, f64)>>>,
+        copied_color: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
         list_index: usize,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
@@ -146,6 +158,39 @@ impl TextLineConfigWidget {
         let current_font = format!("{} {}", line_config.font_family, line_config.font_size as i32);
 
         font_box.append(&font_button);
+
+        // Copy font button
+        let copy_font_btn = Button::with_label("Copy");
+        let lines_clone_copy_font = lines.clone();
+        let copied_font_clone = copied_font.clone();
+        copy_font_btn.connect_clicked(move |_| {
+            let lines_ref = lines_clone_copy_font.borrow();
+            if let Some(line) = lines_ref.get(list_index) {
+                *copied_font_clone.borrow_mut() = Some((line.font_family.clone(), line.font_size));
+            }
+        });
+        font_box.append(&copy_font_btn);
+
+        // Paste font button
+        let paste_font_btn = Button::with_label("Paste");
+        let lines_clone_paste_font = lines.clone();
+        let copied_font_clone2 = copied_font.clone();
+        let font_button_clone = font_button.clone();
+        paste_font_btn.connect_clicked(move |_| {
+            if let Some((family, size)) = copied_font_clone2.borrow().as_ref() {
+                let mut lines_ref = lines_clone_paste_font.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.font_family = family.clone();
+                    line.font_size = *size;
+                }
+                drop(lines_ref);
+
+                // Update button label
+                font_button_clone.set_label(&format!("{} {:.0}", family, size));
+            }
+        });
+        font_box.append(&paste_font_btn);
+
         row_box.append(&font_box);
 
         // Color and rotation
@@ -161,10 +206,11 @@ impl TextLineConfigWidget {
             line_config.color.3 as f32,
         );
 
-        // Create a colored box to show current color
+        // Create a colored box to show current color with unique CSS class
         let color_box = GtkBox::new(Orientation::Horizontal, 0);
         color_box.set_size_request(40, 20);
-        color_box.add_css_class("color-preview");
+        let color_class = format!("color-preview-{}", list_index);
+        color_box.add_css_class(&color_class);
 
         // Set background color using CSS (GTK 4.10+ compatible)
         let css = format!(
@@ -175,7 +221,7 @@ impl TextLineConfigWidget {
             rgba.alpha()
         );
         let provider = gtk4::CssProvider::new();
-        provider.load_from_data(&format!(".color-preview {{ {} }}", css));
+        provider.load_from_data(&format!(".{} {{ {} }}", color_class, css));
         let display = color_box.display();
         gtk4::style_context_add_provider_for_display(
             &display,
@@ -187,6 +233,7 @@ impl TextLineConfigWidget {
 
         // Connect color button to ColorPickerDialog
         let lines_clone = lines.clone();
+        let color_class_clone = color_class.clone();
         color_button.connect_clicked(move |btn| {
             let current_color = {
                 let lines_ref = lines_clone.borrow();
@@ -200,6 +247,7 @@ impl TextLineConfigWidget {
             let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
             let lines_clone2 = lines_clone.clone();
             let color_box_clone = color_box.clone();
+            let color_class_clone2 = color_class_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
@@ -209,7 +257,7 @@ impl TextLineConfigWidget {
                     }
                     drop(lines_ref);
 
-                    // Update color preview (GTK 4.10+ compatible)
+                    // Update color preview with unique CSS class (GTK 4.10+ compatible)
                     let rgba = gtk4::gdk::RGBA::new(
                         new_color.r as f32,
                         new_color.g as f32,
@@ -224,7 +272,7 @@ impl TextLineConfigWidget {
                         rgba.alpha()
                     );
                     let provider = gtk4::CssProvider::new();
-                    provider.load_from_data(&format!(".color-preview {{ {} }}", css));
+                    provider.load_from_data(&format!(".{} {{ {} }}", color_class_clone2, css));
                     let display = color_box_clone.display();
                     gtk4::style_context_add_provider_for_display(
                         &display,
@@ -236,6 +284,58 @@ impl TextLineConfigWidget {
         });
 
         extras_box.append(&color_button);
+
+        // Copy color button
+        let copy_color_btn = Button::with_label("Copy");
+        let lines_clone_copy_color = lines.clone();
+        let copied_color_clone = copied_color.clone();
+        copy_color_btn.connect_clicked(move |_| {
+            let lines_ref = lines_clone_copy_color.borrow();
+            if let Some(line) = lines_ref.get(list_index) {
+                *copied_color_clone.borrow_mut() = Some(line.color);
+            }
+        });
+        extras_box.append(&copy_color_btn);
+
+        // Paste color button
+        let paste_color_btn = Button::with_label("Paste");
+        let lines_clone_paste_color = lines.clone();
+        let copied_color_clone2 = copied_color.clone();
+        let color_box_clone_paste = color_box.clone();
+        let color_class_clone_paste = color_class.clone();
+        paste_color_btn.connect_clicked(move |_| {
+            if let Some(color) = copied_color_clone2.borrow().as_ref() {
+                let mut lines_ref = lines_clone_paste_color.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.color = *color;
+                }
+                drop(lines_ref);
+
+                // Update color preview
+                let rgba = gtk4::gdk::RGBA::new(
+                    color.0 as f32,
+                    color.1 as f32,
+                    color.2 as f32,
+                    color.3 as f32,
+                );
+                let css = format!(
+                    "background-color: rgba({}, {}, {}, {});",
+                    (rgba.red() * 255.0) as u8,
+                    (rgba.green() * 255.0) as u8,
+                    (rgba.blue() * 255.0) as u8,
+                    rgba.alpha()
+                );
+                let provider = gtk4::CssProvider::new();
+                provider.load_from_data(&format!(".{} {{ {} }}", color_class_clone_paste, css));
+                let display = color_box_clone_paste.display();
+                gtk4::style_context_add_provider_for_display(
+                    &display,
+                    &provider,
+                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+            }
+        });
+        extras_box.append(&paste_color_btn);
 
         extras_box.append(&Label::new(Some("Angle:")));
         let angle_spin = SpinButton::with_range(0.0, 360.0, 5.0);
@@ -429,7 +529,7 @@ impl TextLineConfigWidget {
         // Add each line with correct index
         for (index, line) in config.lines.into_iter().enumerate() {
             self.lines.borrow_mut().push(line.clone());
-            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone(), self.font_dialog.clone(), index);
+            Self::add_line_row(&self.list_box, line, &self.available_fields, self.lines.clone(), self.font_dialog.clone(), self.copied_font.clone(), self.copied_color.clone(), index);
         }
     }
 
