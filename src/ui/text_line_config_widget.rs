@@ -129,15 +129,14 @@ impl TextLineConfigWidget {
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
         font_box.append(&Label::new(Some("Font:")));
 
-        let font_entry = Entry::new();
-        font_entry.set_text(&line_config.font_family);
-        font_entry.set_width_chars(12);
-        font_box.append(&font_entry);
+        // Font selection button
+        let font_button = Button::with_label(&format!("{} {:.0}", line_config.font_family, line_config.font_size));
+        font_button.set_hexpand(true);
 
-        font_box.append(&Label::new(Some("Size:")));
-        let size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        size_spin.set_value(line_config.font_size);
-        font_box.append(&size_spin);
+        // Store font info for the button click handler
+        let current_font = format!("{} {}", line_config.font_family, line_config.font_size as i32);
+
+        font_box.append(&font_button);
         row_box.append(&font_box);
 
         // Color and rotation
@@ -257,6 +256,58 @@ impl TextLineConfigWidget {
 
         // Wire up change handlers to update the TextLineConfig in the lines Vec
 
+        // Font selection button handler
+        {
+            let lines_clone = lines.clone();
+            let font_button_clone = font_button.clone();
+            font_button.connect_clicked(move |btn| {
+                let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
+
+                // Create font chooser dialog
+                let dialog = gtk4::FontChooserDialog::new(Some("Select Font"), window.as_ref());
+
+                // Set current font
+                {
+                    let lines_ref = lines_clone.borrow();
+                    if let Some(line) = lines_ref.get(list_index) {
+                        let font_desc = format!("{} {}", line.font_family, line.font_size as i32);
+                        dialog.set_font(&font_desc);
+                    }
+                }
+
+                let lines_clone2 = lines_clone.clone();
+                let font_button_clone2 = font_button_clone.clone();
+
+                dialog.connect_response(move |dlg, response| {
+                    if response == gtk4::ResponseType::Ok {
+                        if let Some(font_desc_str) = dlg.font() {
+                            // Parse font description: "Font Family Size"
+                            let parts: Vec<&str> = font_desc_str.rsplitn(2, ' ').collect();
+                            if parts.len() == 2 {
+                                let size_str = parts[0];
+                                let family = parts[1];
+
+                                if let Ok(size) = size_str.parse::<f64>() {
+                                    let mut lines_ref = lines_clone2.borrow_mut();
+                                    if let Some(line) = lines_ref.get_mut(list_index) {
+                                        line.font_family = family.to_string();
+                                        line.font_size = size;
+                                    }
+                                    drop(lines_ref);
+
+                                    // Update button label
+                                    font_button_clone2.set_label(&format!("{} {:.0}", family, size));
+                                }
+                            }
+                        }
+                    }
+                    dlg.close();
+                });
+
+                dialog.show();
+            });
+        }
+
         // Field selector handler
         {
             let lines_clone = lines.clone();
@@ -302,29 +353,6 @@ impl TextLineConfigWidget {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.horizontal_position = hpos;
-                }
-            });
-        }
-
-        // Font family handler
-        {
-            let lines_clone = lines.clone();
-            font_entry.connect_changed(move |entry| {
-                let text = entry.text().to_string();
-                let mut lines_ref = lines_clone.borrow_mut();
-                if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.font_family = text;
-                }
-            });
-        }
-
-        // Font size handler
-        {
-            let lines_clone = lines.clone();
-            size_spin.connect_value_changed(move |spin| {
-                let mut lines_ref = lines_clone.borrow_mut();
-                if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.font_size = spin.value();
                 }
             });
         }
