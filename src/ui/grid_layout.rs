@@ -1196,6 +1196,68 @@ fn show_panel_properties_dialog(
     displayer_box.append(&displayer_combo);
     displayer_tab_box.append(&displayer_box);
 
+    // Text displayer configuration (shown only when text displayer is selected)
+    let text_config_label = Label::new(Some("Text Configuration"));
+    text_config_label.add_css_class("heading");
+    text_config_label.set_margin_top(12);
+
+    // Get available fields from the current data source
+    let available_fields = panel_guard.source.metadata().fields.clone();
+
+    let text_config_widget = crate::ui::TextLineConfigWidget::new(available_fields);
+    text_config_widget.widget().set_visible(old_displayer_id == "text");
+    text_config_label.set_visible(old_displayer_id == "text");
+
+    // Load existing text config if displayer is text
+    if old_displayer_id == "text" {
+        // Try to load config from panel
+        if let Some(lines_value) = panel_guard.config.get("lines") {
+            if let Ok(text_displayer_config) = serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
+                serde_json::json!({ "lines": lines_value })
+            ) {
+                text_config_widget.set_config(text_displayer_config);
+            }
+        }
+    }
+
+    displayer_tab_box.append(&text_config_label);
+    displayer_tab_box.append(text_config_widget.widget());
+
+    // Wrap text_config_widget in Rc for sharing
+    let text_config_widget = Rc::new(text_config_widget);
+
+    // Show/hide text config based on displayer selection
+    {
+        let text_widget_clone = text_config_widget.clone();
+        let text_label_clone = text_config_label.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers.get(selected_idx) {
+                let is_text = displayer_id == "text";
+                text_widget_clone.widget().set_visible(is_text);
+                text_label_clone.set_visible(is_text);
+            }
+        });
+    }
+
+    // Update text config fields when data source changes
+    {
+        let text_widget_clone = text_config_widget.clone();
+        source_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(source_id) = sources.get(selected_idx) {
+                // Create temporary source to get its metadata
+                if let Ok(temp_source) = registry.create_source(source_id) {
+                    let new_fields = temp_source.metadata().fields.clone();
+                    // Note: TextLineConfigWidget doesn't have a method to update fields yet
+                    // For now, this will need to be handled on next open or we need to add that method
+                    // TODO: Add update_fields() method to TextLineConfigWidget
+                    let _ = new_fields; // Suppress unused warning for now
+                }
+            }
+        });
+    }
+
     notebook.append_page(&displayer_tab_box, Some(&Label::new(Some("Display Type"))));
 
     // Add notebook to main vbox
@@ -1221,6 +1283,7 @@ fn show_panel_properties_dialog(
     // Create a shared closure for applying changes
     let panel_clone = panel.clone();
     let background_widget_clone = background_widget.clone();
+    let text_config_widget_clone = text_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -1378,6 +1441,23 @@ fn show_panel_properties_dialog(
                     }
                     Err(e) => {
                         log::warn!("Failed to create displayer {}: {}", new_displayer_id, e);
+                    }
+                }
+            }
+
+            // Apply text configuration if text displayer is active
+            if new_displayer_id == "text" {
+                let text_config = text_config_widget_clone.get_config();
+                // Convert TextDisplayerConfig to HashMap for apply_config
+                if let Ok(config_json) = serde_json::to_value(&text_config) {
+                    if let Some(config_map) = config_json.as_object() {
+                        let mut config_hash = std::collections::HashMap::new();
+                        for (key, value) in config_map {
+                            config_hash.insert(key.clone(), value.clone());
+                        }
+                        if let Err(e) = panel_guard.apply_config(config_hash) {
+                            log::warn!("Failed to apply text config: {}", e);
+                        }
                     }
                 }
             }
