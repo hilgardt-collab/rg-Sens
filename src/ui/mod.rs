@@ -20,4 +20,4 @@ pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
 pub use image_picker::ImagePicker;
 pub use text_line_config_widget::TextLineConfigWidget;
-pub use cpu_source_config_widget::{CpuSourceConfigWidget, CpuSourceConfig, CpuField, TemperatureUnit, CoreSelection};
+pub use cpu_source_config_widget::{CpuSourceConfigWidget, CpuSourceConfig, CpuField, TemperatureUnit, FrequencyUnit, CoreSelection};
