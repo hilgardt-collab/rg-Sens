@@ -168,13 +168,12 @@ impl TextLineConfigWidget {
         );
         let provider = gtk4::CssProvider::new();
         provider.load_from_data(&format!(".color-preview {{ {} }}", css));
-        if let Some(display) = color_box.display() {
-            gtk4::style_context_add_provider_for_display(
-                &display,
-                &provider,
-                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-            );
-        }
+        let display = color_box.display();
+        gtk4::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
 
         color_button.set_child(Some(&color_box));
 
@@ -223,13 +222,12 @@ impl TextLineConfigWidget {
                     );
                     let provider = gtk4::CssProvider::new();
                     provider.load_from_data(&format!(".color-preview {{ {} }}", css));
-                    if let Some(display) = color_box_clone.display() {
-                        gtk4::style_context_add_provider_for_display(
-                            &display,
-                            &provider,
-                            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-                        );
-                    }
+                    let display = color_box_clone.display();
+                    gtk4::style_context_add_provider_for_display(
+                        &display,
+                        &provider,
+                        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                    );
                 }
             });
         });

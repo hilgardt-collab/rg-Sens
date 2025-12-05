@@ -1230,9 +1230,10 @@ fn show_panel_properties_dialog(
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
+        let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 let is_text = displayer_id == "text";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
@@ -1242,10 +1243,11 @@ fn show_panel_properties_dialog(
 
     // Update text config fields when data source changes
     {
-        let text_widget_clone = text_config_widget.clone();
+        let _text_widget_clone = text_config_widget.clone();
+        let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(source_id) = sources.get(selected_idx) {
+            if let Some(source_id) = sources_clone.get(selected_idx) {
                 // Create temporary source to get its fields
                 if let Ok(temp_source) = registry.create_source(source_id) {
                     let new_fields = temp_source.fields();
