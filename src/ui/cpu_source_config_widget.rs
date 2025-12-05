@@ -2,7 +2,7 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DropDown, Label, Orientation, StringList,
+    Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, StringList,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -38,6 +38,8 @@ pub struct CpuSourceConfig {
     pub temp_unit: TemperatureUnit,
     pub sensor_index: usize,
     pub core_selection: CoreSelection,
+    #[serde(default)]
+    pub custom_caption: Option<String>,
 }
 
 impl Default for CpuSourceConfig {
@@ -47,6 +49,7 @@ impl Default for CpuSourceConfig {
             temp_unit: TemperatureUnit::Celsius,
             sensor_index: 0,
             core_selection: CoreSelection::Overall,
+            custom_caption: None,
         }
     }
 }
@@ -55,6 +58,7 @@ impl Default for CpuSourceConfig {
 pub struct CpuSourceConfigWidget {
     widget: GtkBox,
     config: Rc<RefCell<CpuSourceConfig>>,
+    caption_entry: Entry,
     field_combo: DropDown,
     unit_combo: DropDown,
     unit_box: GtkBox,
@@ -83,6 +87,17 @@ impl CpuSourceConfigWidget {
 
         field_box.append(&field_combo);
         widget.append(&field_box);
+
+        // Custom caption
+        let caption_box = GtkBox::new(Orientation::Horizontal, 6);
+        caption_box.append(&Label::new(Some("Custom Caption:")));
+
+        let caption_entry = Entry::new();
+        caption_entry.set_placeholder_text(Some("Auto-generated if empty"));
+        caption_entry.set_hexpand(true);
+
+        caption_box.append(&caption_entry);
+        widget.append(&caption_box);
 
         // Unit selection (only for temperature)
         let unit_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -146,6 +161,16 @@ impl CpuSourceConfigWidget {
         });
 
         let config_clone = config.clone();
+        caption_entry.connect_changed(move |entry| {
+            let text = entry.text().to_string();
+            config_clone.borrow_mut().custom_caption = if text.is_empty() {
+                None
+            } else {
+                Some(text)
+            };
+        });
+
+        let config_clone = config.clone();
         unit_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             let unit = match selected {
@@ -189,6 +214,7 @@ impl CpuSourceConfigWidget {
         Self {
             widget,
             config,
+            caption_entry,
             field_combo,
             unit_combo,
             unit_box,
@@ -217,6 +243,13 @@ impl CpuSourceConfigWidget {
         });
 
         self.unit_box.set_visible(config.field == CpuField::Temperature);
+
+        // Set custom caption if provided
+        if let Some(ref caption) = config.custom_caption {
+            self.caption_entry.set_text(caption);
+        } else {
+            self.caption_entry.set_text("");
+        }
 
         self.sensor_combo.set_selected(config.sensor_index as u32);
 

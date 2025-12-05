@@ -196,6 +196,24 @@ impl CpuSource {
         }
     }
 
+    /// Generate automatic caption based on configuration
+    fn generate_auto_caption(&self) -> String {
+        // Core prefix
+        let core_prefix = match &self.config.core_selection {
+            CoreSelection::Overall => String::new(),
+            CoreSelection::Core(idx) => format!("Core {} ", idx),
+        };
+
+        // Field type
+        let field_type = match self.config.field {
+            CpuField::Usage => "CPU",
+            CpuField::Temperature => "Temp",
+            CpuField::Frequency => "Freq",
+        };
+
+        format!("{}{}", core_prefix, field_type)
+    }
+
     /// Find CPU temperature from components using configured sensor index
     fn find_cpu_temperature(&self) -> Option<f32> {
         // If no sensors discovered, return None
@@ -360,17 +378,23 @@ impl DataSource for CpuSource {
         // Get temperature (apply conversion)
         let temperature_value = self.cpu_temperature.map(|t| self.convert_temperature(t));
 
+        // Generate caption (use custom if provided, otherwise auto-generate)
+        let caption = self.config.custom_caption
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| self.generate_auto_caption());
+
         // Apply field configuration to determine what goes in the main value/unit fields
         // Use consistent field names ("caption", "value", "unit") for easier text displayer config
         match self.config.field {
             CpuField::Usage => {
-                values.insert("caption".to_string(), Value::from("CPU"));
+                values.insert("caption".to_string(), Value::from(caption));
                 values.insert("value".to_string(), Value::from(usage_value));
                 values.insert("usage".to_string(), Value::from(usage_value)); // Keep for compatibility
                 values.insert("unit".to_string(), Value::from("%"));
             }
             CpuField::Temperature => {
-                values.insert("caption".to_string(), Value::from("CPU Temp"));
+                values.insert("caption".to_string(), Value::from(caption));
                 if let Some(temp) = temperature_value {
                     values.insert("value".to_string(), Value::from(temp));
                     values.insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
@@ -382,7 +406,7 @@ impl DataSource for CpuSource {
                 }
             }
             CpuField::Frequency => {
-                values.insert("caption".to_string(), Value::from("CPU Freq"));
+                values.insert("caption".to_string(), Value::from(caption));
                 values.insert("value".to_string(), Value::from(frequency_value));
                 values.insert("frequency".to_string(), Value::from(frequency_value)); // Keep for compatibility
                 values.insert("unit".to_string(), Value::from("MHz"));
