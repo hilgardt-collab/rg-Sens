@@ -158,7 +158,7 @@ impl TextLineConfigWidget {
         color_box.set_size_request(40, 20);
         color_box.add_css_class("color-preview");
 
-        // Set background color using CSS
+        // Set background color using CSS (GTK 4.10+ compatible)
         let css = format!(
             "background-color: rgba({}, {}, {}, {});",
             (rgba.red() * 255.0) as u8,
@@ -168,7 +168,13 @@ impl TextLineConfigWidget {
         );
         let provider = gtk4::CssProvider::new();
         provider.load_from_data(&format!(".color-preview {{ {} }}", css));
-        color_box.style_context().add_provider(&provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        if let Some(display) = color_box.display() {
+            gtk4::style_context_add_provider_for_display(
+                &display,
+                &provider,
+                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
 
         color_button.set_child(Some(&color_box));
 
@@ -201,7 +207,7 @@ impl TextLineConfigWidget {
                     }
                     drop(lines_ref);
 
-                    // Update color preview
+                    // Update color preview (GTK 4.10+ compatible)
                     let rgba = gtk4::gdk::RGBA::new(
                         new_color.r as f32,
                         new_color.g as f32,
@@ -217,7 +223,13 @@ impl TextLineConfigWidget {
                     );
                     let provider = gtk4::CssProvider::new();
                     provider.load_from_data(&format!(".color-preview {{ {} }}", css));
-                    color_box_clone.style_context().add_provider(&provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+                    if let Some(display) = color_box_clone.display() {
+                        gtk4::style_context_add_provider_for_display(
+                            &display,
+                            &provider,
+                            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                        );
+                    }
                 }
             });
         });

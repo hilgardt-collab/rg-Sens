@@ -1202,7 +1202,7 @@ fn show_panel_properties_dialog(
     text_config_label.set_margin_top(12);
 
     // Get available fields from the current data source
-    let available_fields = panel_guard.source.metadata().fields.clone();
+    let available_fields = panel_guard.source.fields();
 
     let text_config_widget = crate::ui::TextLineConfigWidget::new(available_fields);
     text_config_widget.widget().set_visible(old_displayer_id == "text");
@@ -1246,9 +1246,9 @@ fn show_panel_properties_dialog(
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources.get(selected_idx) {
-                // Create temporary source to get its metadata
+                // Create temporary source to get its fields
                 if let Ok(temp_source) = registry.create_source(source_id) {
-                    let new_fields = temp_source.metadata().fields.clone();
+                    let new_fields = temp_source.fields();
                     // Note: TextLineConfigWidget doesn't have a method to update fields yet
                     // For now, this will need to be handled on next open or we need to add that method
                     // TODO: Add update_fields() method to TextLineConfigWidget
