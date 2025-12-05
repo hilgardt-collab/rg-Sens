@@ -1160,6 +1160,36 @@ fn show_panel_properties_dialog(
     source_box.append(&source_combo);
     source_tab_box.append(&source_box);
 
+    // CPU source configuration widget
+    let cpu_config_widget = crate::ui::CpuSourceConfigWidget::new();
+    cpu_config_widget.widget().set_visible(old_source_id == "cpu");
+
+    // Load existing CPU config if source is CPU
+    if old_source_id == "cpu" {
+        if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
+            if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+                cpu_config_widget.set_config(cpu_config);
+            }
+        }
+    }
+
+    source_tab_box.append(cpu_config_widget.widget());
+
+    // Wrap cpu_config_widget in Rc for sharing
+    let cpu_config_widget = Rc::new(cpu_config_widget);
+
+    // Show/hide CPU config based on source selection
+    {
+        let cpu_widget_clone = cpu_config_widget.clone();
+        let sources_clone = sources.clone();
+        source_combo.connect_selected_notify(move |combo| {
+            let selected = combo.selected() as usize;
+            if let Some(source_id) = sources_clone.get(selected) {
+                cpu_widget_clone.widget().set_visible(source_id == "cpu");
+            }
+        });
+    }
+
     notebook.append_page(&source_tab_box, Some(&Label::new(Some("Data Source"))));
 
     // === Tab 3: Display Type ===
@@ -1289,6 +1319,7 @@ fn show_panel_properties_dialog(
     let panel_clone = panel.clone();
     let background_widget_clone = background_widget.clone();
     let text_config_widget_clone = text_config_widget.clone();
+    let cpu_config_widget_clone = cpu_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -1464,6 +1495,14 @@ fn show_panel_properties_dialog(
                             log::warn!("Failed to apply text config: {}", e);
                         }
                     }
+                }
+            }
+
+            // Apply CPU source configuration if CPU source is active
+            if new_source_id == "cpu" {
+                let cpu_config = cpu_config_widget_clone.get_config();
+                if let Ok(cpu_config_json) = serde_json::to_value(&cpu_config) {
+                    panel_guard.config.insert("cpu_config".to_string(), cpu_config_json);
                 }
             }
 
