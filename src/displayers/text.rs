@@ -73,24 +73,106 @@ impl TextDisplayer {
             return;
         }
 
-        // For combined lines, each line is rendered at its own horizontal position
-        // but they all share the same vertical position (from the first line)
+        // All lines in a group share the same vertical position
         let shared_v_pos = &lines[0].vertical_position;
+
+        // Group lines by horizontal position
+        let mut left_parts: Vec<(&TextLineConfig, String)> = Vec::new();
+        let mut center_parts: Vec<(&TextLineConfig, String)> = Vec::new();
+        let mut right_parts: Vec<(&TextLineConfig, String)> = Vec::new();
 
         for line in lines {
             if let Some(text) = Self::get_field_value(&line.field_id, values) {
-                Self::render_text_with_alignment(
-                    cr,
-                    width,
-                    height,
-                    &text,
-                    &line.font_family,
-                    line.font_size,
-                    &line.color,
-                    shared_v_pos,
-                    &line.horizontal_position,
-                    line.rotation_angle,
-                );
+                match line.horizontal_position {
+                    HorizontalPosition::Left => left_parts.push((line, text)),
+                    HorizontalPosition::Center => center_parts.push((line, text)),
+                    HorizontalPosition::Right => right_parts.push((line, text)),
+                }
+            }
+        }
+
+        // Render each group of parts
+        if !left_parts.is_empty() {
+            Self::render_combined_parts(cr, width, height, &left_parts, shared_v_pos, &HorizontalPosition::Left);
+        }
+        if !center_parts.is_empty() {
+            Self::render_combined_parts(cr, width, height, &center_parts, shared_v_pos, &HorizontalPosition::Center);
+        }
+        if !right_parts.is_empty() {
+            Self::render_combined_parts(cr, width, height, &right_parts, shared_v_pos, &HorizontalPosition::Right);
+        }
+    }
+
+    fn render_combined_parts(
+        cr: &Context,
+        width: i32,
+        height: i32,
+        parts: &[(&TextLineConfig, String)],
+        v_pos: &VerticalPosition,
+        h_pos: &HorizontalPosition,
+    ) {
+        if parts.is_empty() {
+            return;
+        }
+
+        // Calculate total width of all parts combined
+        let mut total_width = 0.0;
+        let mut part_widths = Vec::new();
+        let max_font_size = parts.iter().map(|(cfg, _)| cfg.font_size).fold(0.0, f64::max);
+
+        for (config, text) in parts {
+            cr.save().ok();
+            cr.select_font_face(&config.font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            cr.set_font_size(config.font_size);
+
+            let extents = cr.text_extents(text).unwrap_or_else(|_| {
+                cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+            });
+
+            part_widths.push(extents.width());
+            total_width += extents.width();
+            cr.restore().ok();
+        }
+
+        // Add spacing between parts
+        if parts.len() > 1 {
+            total_width += 5.0 * (parts.len() - 1) as f64;
+        }
+
+        // Calculate starting X position based on horizontal alignment
+        let start_x = match h_pos {
+            HorizontalPosition::Left => 10.0,
+            HorizontalPosition::Center => (width as f64 - total_width) / 2.0,
+            HorizontalPosition::Right => width as f64 - total_width - 10.0,
+        };
+
+        // Calculate Y position
+        let y = match v_pos {
+            VerticalPosition::Top => 10.0 + max_font_size,
+            VerticalPosition::Center => (height as f64 + max_font_size) / 2.0,
+            VerticalPosition::Bottom => height as f64 - 10.0,
+        };
+
+        // Render each part sequentially
+        let mut current_x = start_x;
+        for (i, (config, text)) in parts.iter().enumerate() {
+            cr.save().ok();
+
+            // Set font and color for this part
+            cr.select_font_face(&config.font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            cr.set_font_size(config.font_size);
+            cr.set_source_rgba(config.color.0, config.color.1, config.color.2, config.color.3);
+
+            // Position and draw this part
+            cr.move_to(current_x, y);
+            cr.show_text(text).ok();
+
+            cr.restore().ok();
+
+            // Move to next position (add part width + spacing)
+            current_x += part_widths[i];
+            if i < parts.len() - 1 {
+                current_x += 5.0; // spacing between parts
             }
         }
     }
