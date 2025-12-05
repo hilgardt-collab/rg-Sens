@@ -73,101 +73,98 @@ impl TextDisplayer {
             return;
         }
 
-        // Use the position of the first line in the group
-        let primary_line = lines[0];
-
-        // Build combined text with left/center/right positioning
-        let mut left_parts = Vec::new();
-        let mut center_parts = Vec::new();
-        let mut right_parts = Vec::new();
+        // For combined lines, each line is rendered at its own horizontal position
+        // but they all share the same vertical position (from the first line)
+        let shared_v_pos = &lines[0].vertical_position;
 
         for line in lines {
             if let Some(text) = Self::get_field_value(&line.field_id, values) {
-                match line.horizontal_position {
-                    HorizontalPosition::Left => left_parts.push(text),
-                    HorizontalPosition::Center => center_parts.push(text),
-                    HorizontalPosition::Right => right_parts.push(text),
-                }
+                Self::render_text_with_alignment(
+                    cr,
+                    width,
+                    height,
+                    &text,
+                    &line.font_family,
+                    line.font_size,
+                    &line.color,
+                    shared_v_pos,
+                    &line.horizontal_position,
+                    line.rotation_angle,
+                );
             }
         }
-
-        let combined_text = format!(
-            "{}{}{}{}{}",
-            left_parts.join(" "),
-            if !left_parts.is_empty() && !center_parts.is_empty() { " " } else { "" },
-            center_parts.join(" "),
-            if (!left_parts.is_empty() || !center_parts.is_empty()) && !right_parts.is_empty() { " " } else { "" },
-            right_parts.join(" ")
-        );
-
-        Self::render_text_at_position(cr, width, height, &combined_text, primary_line);
     }
 
     fn render_single_line(cr: &Context, width: i32, height: i32, line: &TextLineConfig, values: &HashMap<String, Value>) {
         if let Some(text) = Self::get_field_value(&line.field_id, values) {
-            Self::render_text_at_position(cr, width, height, &text, line);
+            Self::render_text_with_alignment(
+                cr,
+                width,
+                height,
+                &text,
+                &line.font_family,
+                line.font_size,
+                &line.color,
+                &line.vertical_position,
+                &line.horizontal_position,
+                line.rotation_angle,
+            );
         }
     }
 
-    fn render_text_at_position(cr: &Context, width: i32, height: i32, text: &str, config: &TextLineConfig) {
+    fn render_text_with_alignment(
+        cr: &Context,
+        width: i32,
+        height: i32,
+        text: &str,
+        font_family: &str,
+        font_size: f64,
+        color: &(f64, f64, f64, f64),
+        v_pos: &VerticalPosition,
+        h_pos: &HorizontalPosition,
+        rotation_angle: f64,
+    ) {
         cr.save().ok();
 
         // Set font
-        cr.select_font_face(&config.font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        cr.set_font_size(config.font_size);
+        cr.select_font_face(font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        cr.set_font_size(font_size);
 
         // Set color
-        cr.set_source_rgba(config.color.0, config.color.1, config.color.2, config.color.3);
+        cr.set_source_rgba(color.0, color.1, color.2, color.3);
 
         // Get text dimensions
         let extents = cr.text_extents(text).unwrap_or_else(|_| {
             cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         });
 
-        // Calculate position based on vertical and horizontal alignment
-        let (base_x, base_y) = Self::calculate_position(
-            width,
-            height,
-            extents.width(),
-            extents.height(),
-            &config.vertical_position,
-            &config.horizontal_position,
-        );
+        // Calculate text origin position for proper alignment
+        let text_x = match h_pos {
+            HorizontalPosition::Left => 10.0,
+            HorizontalPosition::Center => (width as f64 - extents.width()) / 2.0,
+            HorizontalPosition::Right => width as f64 - extents.width() - 10.0,
+        };
+
+        let text_y = match v_pos {
+            VerticalPosition::Top => 10.0 + font_size,
+            VerticalPosition::Center => (height as f64 + font_size) / 2.0,
+            VerticalPosition::Bottom => height as f64 - 10.0,
+        };
 
         // Apply rotation if needed
-        if config.rotation_angle != 0.0 {
-            cr.translate(base_x, base_y);
-            cr.rotate(config.rotation_angle.to_radians());
-            cr.move_to(-extents.x_bearing(), -extents.y_bearing());
+        if rotation_angle != 0.0 {
+            // For rotation, translate to the desired position, rotate, then draw at origin
+            let center_x = text_x + extents.width() / 2.0;
+            let center_y = text_y - font_size / 2.0;
+            cr.translate(center_x, center_y);
+            cr.rotate(rotation_angle.to_radians());
+            cr.move_to(-extents.width() / 2.0, font_size / 2.0);
         } else {
-            cr.move_to(base_x - extents.x_bearing(), base_y - extents.y_bearing());
+            cr.move_to(text_x, text_y);
         }
 
         cr.show_text(text).ok();
         cr.restore().ok();
-    }
-
-    fn calculate_position(
-        width: i32,
-        height: i32,
-        text_width: f64,
-        text_height: f64,
-        v_pos: &VerticalPosition,
-        h_pos: &HorizontalPosition,
-    ) -> (f64, f64) {
-        let x = match h_pos {
-            HorizontalPosition::Left => text_width / 2.0 + 10.0,
-            HorizontalPosition::Center => width as f64 / 2.0,
-            HorizontalPosition::Right => width as f64 - text_width / 2.0 - 10.0,
-        };
-
-        let y = match v_pos {
-            VerticalPosition::Top => text_height / 2.0 + 10.0,
-            VerticalPosition::Center => height as f64 / 2.0,
-            VerticalPosition::Bottom => height as f64 - text_height / 2.0 - 10.0,
-        };
-
-        (x, y)
     }
 
     fn get_field_value(field_id: &str, values: &HashMap<String, Value>) -> Option<String> {
