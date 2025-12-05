@@ -1,7 +1,7 @@
 //! CPU data source implementation
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
-use crate::ui::{CpuField, CpuSourceConfig, CoreSelection, TemperatureUnit};
+use crate::ui::{CpuField, CpuSourceConfig, CoreSelection, FrequencyUnit, TemperatureUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;
@@ -101,6 +101,9 @@ pub struct CpuSource {
     cpu_temperature: Option<f32>,
     cpu_frequency: f64,
     config: CpuSourceConfig,
+    detected_min: Option<f64>,
+    detected_max: Option<f64>,
+    update_count: usize,
 }
 
 impl CpuSource {
@@ -142,6 +145,9 @@ impl CpuSource {
             cpu_temperature: None,
             cpu_frequency: 0.0,
             config: CpuSourceConfig::default(),
+            detected_min: None,
+            detected_max: None,
+            update_count: 0,
         }
     }
 
@@ -171,6 +177,11 @@ impl CpuSource {
     /// temperature units, and which core to monitor.
     pub fn set_config(&mut self, config: CpuSourceConfig) {
         self.config = config;
+
+        // Reset auto-detection when config changes
+        self.update_count = 0;
+        self.detected_min = None;
+        self.detected_max = None;
     }
 
     /// Get current configuration
@@ -193,6 +204,22 @@ impl CpuSource {
             TemperatureUnit::Celsius => "°C",
             TemperatureUnit::Fahrenheit => "°F",
             TemperatureUnit::Kelvin => "K",
+        }
+    }
+
+    /// Convert frequency from MHz to the configured unit
+    fn convert_frequency(&self, mhz: f64) -> f64 {
+        match self.config.freq_unit {
+            FrequencyUnit::MHz => mhz,
+            FrequencyUnit::GHz => mhz / 1000.0,
+        }
+    }
+
+    /// Get frequency unit string
+    fn get_frequency_unit_string(&self) -> &str {
+        match self.config.freq_unit {
+            FrequencyUnit::MHz => "MHz",
+            FrequencyUnit::GHz => "GHz",
         }
     }
 
@@ -358,6 +385,40 @@ impl DataSource for CpuSource {
         log::debug!("CPU update complete - cores: {}, temp: {:?}, freq: {}",
                    self.per_core_usage.len(), self.cpu_temperature, self.cpu_frequency);
 
+        // Auto-detect limits if enabled (track for first 10 updates)
+        if self.config.auto_detect_limits && self.update_count < 10 {
+            self.update_count += 1;
+
+            // Get the current value based on configuration
+            let current_value: Option<f64> = match self.config.field {
+                CpuField::Usage => {
+                    let usage = match &self.config.core_selection {
+                        CoreSelection::Overall => self.global_usage,
+                        CoreSelection::Core(core_idx) => {
+                            self.per_core_usage.get(*core_idx).copied().unwrap_or(0.0)
+                        }
+                    };
+                    Some(usage as f64)
+                }
+                CpuField::Temperature => {
+                    self.cpu_temperature.map(|t| self.convert_temperature(t) as f64)
+                }
+                CpuField::Frequency => {
+                    Some(self.convert_frequency(self.cpu_frequency))
+                }
+            };
+
+            // Update detected min/max
+            if let Some(value) = current_value {
+                self.detected_min = Some(self.detected_min.map_or(value, |min| min.min(value)));
+                self.detected_max = Some(self.detected_max.map_or(value, |max| max.max(value)));
+
+                log::debug!("Auto-detect limits update {}: value={:.2}, min={:.2}, max={:.2}",
+                           self.update_count, value,
+                           self.detected_min.unwrap(), self.detected_max.unwrap());
+            }
+        }
+
         Ok(())
     }
 
@@ -406,10 +467,11 @@ impl DataSource for CpuSource {
                 }
             }
             CpuField::Frequency => {
+                let converted_freq = self.convert_frequency(frequency_value);
                 values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(frequency_value));
-                values.insert("frequency".to_string(), Value::from(frequency_value)); // Keep for compatibility
-                values.insert("unit".to_string(), Value::from("MHz"));
+                values.insert("value".to_string(), Value::from(converted_freq));
+                values.insert("frequency".to_string(), Value::from(converted_freq)); // Keep for compatibility
+                values.insert("unit".to_string(), Value::from(self.get_frequency_unit_string()));
             }
         }
 
@@ -425,6 +487,27 @@ impl DataSource for CpuSource {
         // Per-core data (always available)
         for (i, usage) in self.per_core_usage.iter().enumerate() {
             values.insert(format!("core{}_usage", i), Value::from(*usage));
+        }
+
+        // Add limits (either manual or auto-detected)
+        let min_limit = if self.config.auto_detect_limits {
+            self.detected_min
+        } else {
+            self.config.min_limit
+        };
+
+        let max_limit = if self.config.auto_detect_limits {
+            self.detected_max
+        } else {
+            self.config.max_limit
+        };
+
+        if let Some(min) = min_limit {
+            values.insert("min_limit".to_string(), Value::from(min));
+        }
+
+        if let Some(max) = max_limit {
+            values.insert("max_limit".to_string(), Value::from(max));
         }
 
         values

@@ -2,7 +2,7 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, StringList,
+    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton, StringList,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -24,6 +24,13 @@ pub enum TemperatureUnit {
     Kelvin,
 }
 
+/// Frequency units
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum FrequencyUnit {
+    MHz,
+    GHz,
+}
+
 /// CPU core selection
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CoreSelection {
@@ -36,10 +43,34 @@ pub enum CoreSelection {
 pub struct CpuSourceConfig {
     pub field: CpuField,
     pub temp_unit: TemperatureUnit,
+    #[serde(default)]
+    pub freq_unit: FrequencyUnit,
     pub sensor_index: usize,
     pub core_selection: CoreSelection,
     #[serde(default)]
     pub custom_caption: Option<String>,
+    #[serde(default = "default_update_interval")]
+    pub update_interval_ms: u64,
+    #[serde(default)]
+    pub min_limit: Option<f64>,
+    #[serde(default)]
+    pub max_limit: Option<f64>,
+    #[serde(default = "default_auto_detect_limits")]
+    pub auto_detect_limits: bool,
+}
+
+fn default_update_interval() -> u64 {
+    1000 // 1 second default
+}
+
+fn default_auto_detect_limits() -> bool {
+    true
+}
+
+impl Default for FrequencyUnit {
+    fn default() -> Self {
+        FrequencyUnit::MHz
+    }
 }
 
 impl Default for CpuSourceConfig {
@@ -47,9 +78,14 @@ impl Default for CpuSourceConfig {
         Self {
             field: CpuField::Usage,
             temp_unit: TemperatureUnit::Celsius,
+            freq_unit: FrequencyUnit::MHz,
             sensor_index: 0,
             core_selection: CoreSelection::Overall,
             custom_caption: None,
+            update_interval_ms: default_update_interval(),
+            min_limit: None,
+            max_limit: None,
+            auto_detect_limits: default_auto_detect_limits(),
         }
     }
 }
@@ -62,10 +98,16 @@ pub struct CpuSourceConfigWidget {
     field_combo: DropDown,
     unit_combo: DropDown,
     unit_box: GtkBox,
+    freq_combo: DropDown,
+    freq_box: GtkBox,
     sensor_combo: DropDown,
     sensor_box: GtkBox,
     core_combo: DropDown,
     per_core_check: CheckButton,
+    update_interval_spin: SpinButton,
+    min_limit_spin: SpinButton,
+    max_limit_spin: SpinButton,
+    auto_detect_check: CheckButton,
 }
 
 impl CpuSourceConfigWidget {
@@ -112,6 +154,18 @@ impl CpuSourceConfigWidget {
         unit_box.set_visible(false); // Hidden by default (show only for temperature)
         widget.append(&unit_box);
 
+        // Frequency unit selection (only for frequency)
+        let freq_box = GtkBox::new(Orientation::Horizontal, 6);
+        freq_box.append(&Label::new(Some("Frequency Unit:")));
+
+        let freq_options = StringList::new(&["MHz", "GHz"]);
+        let freq_combo = DropDown::new(Some(freq_options), Option::<gtk4::Expression>::None);
+        freq_combo.set_selected(0); // Default to MHz
+
+        freq_box.append(&freq_combo);
+        freq_box.set_visible(false); // Hidden by default (show only for frequency)
+        widget.append(&freq_box);
+
         // Sensor selection
         let sensor_box = GtkBox::new(Orientation::Horizontal, 6);
         sensor_box.append(&Label::new(Some("Sensor:")));
@@ -144,9 +198,48 @@ impl CpuSourceConfigWidget {
 
         widget.append(&core_box);
 
+        // Update interval
+        let interval_box = GtkBox::new(Orientation::Horizontal, 6);
+        interval_box.append(&Label::new(Some("Update Interval (ms):")));
+
+        let interval_adjustment = Adjustment::new(1000.0, 100.0, 60000.0, 100.0, 1000.0, 0.0);
+        let update_interval_spin = SpinButton::new(Some(&interval_adjustment), 100.0, 0);
+        update_interval_spin.set_hexpand(true);
+
+        interval_box.append(&update_interval_spin);
+        widget.append(&interval_box);
+
+        // Value limits
+        let limits_label = Label::new(Some("Value Limits (for displayers):"));
+        limits_label.set_halign(gtk4::Align::Start);
+        widget.append(&limits_label);
+
+        let auto_detect_check = CheckButton::with_label("Auto-detect limits");
+        auto_detect_check.set_active(true);
+        widget.append(&auto_detect_check);
+
+        let limits_box = GtkBox::new(Orientation::Horizontal, 6);
+
+        limits_box.append(&Label::new(Some("Min:")));
+        let min_adjustment = Adjustment::new(0.0, -1000.0, 1000.0, 1.0, 10.0, 0.0);
+        let min_limit_spin = SpinButton::new(Some(&min_adjustment), 0.1, 2);
+        min_limit_spin.set_hexpand(true);
+        min_limit_spin.set_sensitive(false); // Disabled when auto-detect is on
+        limits_box.append(&min_limit_spin);
+
+        limits_box.append(&Label::new(Some("Max:")));
+        let max_adjustment = Adjustment::new(100.0, -1000.0, 10000.0, 1.0, 10.0, 0.0);
+        let max_limit_spin = SpinButton::new(Some(&max_adjustment), 0.1, 2);
+        max_limit_spin.set_hexpand(true);
+        max_limit_spin.set_sensitive(false); // Disabled when auto-detect is on
+        limits_box.append(&max_limit_spin);
+
+        widget.append(&limits_box);
+
         // Wire up handlers
         let config_clone = config.clone();
         let unit_box_clone = unit_box.clone();
+        let freq_box_clone = freq_box.clone();
         let sensor_box_clone = sensor_box.clone();
         field_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
@@ -161,7 +254,9 @@ impl CpuSourceConfigWidget {
 
             // Show/hide unit and sensor selectors based on field
             let is_temp = field == CpuField::Temperature;
+            let is_freq = field == CpuField::Frequency;
             unit_box_clone.set_visible(is_temp);
+            freq_box_clone.set_visible(is_freq);
             sensor_box_clone.set_visible(is_temp);
         });
 
@@ -186,6 +281,18 @@ impl CpuSourceConfigWidget {
             };
 
             config_clone.borrow_mut().temp_unit = unit;
+        });
+
+        let config_clone = config.clone();
+        freq_combo.connect_selected_notify(move |combo| {
+            let selected = combo.selected();
+            let unit = match selected {
+                0 => FrequencyUnit::MHz,
+                1 => FrequencyUnit::GHz,
+                _ => FrequencyUnit::MHz,
+            };
+
+            config_clone.borrow_mut().freq_unit = unit;
         });
 
         let config_clone = config.clone();
@@ -216,6 +323,39 @@ impl CpuSourceConfigWidget {
             config_clone.borrow_mut().core_selection = selection;
         });
 
+        let config_clone = config.clone();
+        update_interval_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().update_interval_ms = spin.value() as u64;
+        });
+
+        let config_clone = config.clone();
+        let min_spin_clone = min_limit_spin.clone();
+        let max_spin_clone = max_limit_spin.clone();
+        auto_detect_check.connect_toggled(move |check| {
+            let active = check.is_active();
+            config_clone.borrow_mut().auto_detect_limits = active;
+
+            // Enable/disable manual limit inputs
+            min_spin_clone.set_sensitive(!active);
+            max_spin_clone.set_sensitive(!active);
+
+            // Clear limits if auto-detect is enabled
+            if active {
+                config_clone.borrow_mut().min_limit = None;
+                config_clone.borrow_mut().max_limit = None;
+            }
+        });
+
+        let config_clone = config.clone();
+        min_limit_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().min_limit = Some(spin.value());
+        });
+
+        let config_clone = config.clone();
+        max_limit_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().max_limit = Some(spin.value());
+        });
+
         Self {
             widget,
             config,
@@ -223,10 +363,16 @@ impl CpuSourceConfigWidget {
             field_combo,
             unit_combo,
             unit_box,
+            freq_combo,
+            freq_box,
             sensor_combo,
             sensor_box,
             core_combo,
             per_core_check,
+            update_interval_spin,
+            min_limit_spin,
+            max_limit_spin,
+            auto_detect_check,
         }
     }
 
@@ -248,8 +394,15 @@ impl CpuSourceConfigWidget {
             TemperatureUnit::Kelvin => 2,
         });
 
+        self.freq_combo.set_selected(match config.freq_unit {
+            FrequencyUnit::MHz => 0,
+            FrequencyUnit::GHz => 1,
+        });
+
         let is_temp = config.field == CpuField::Temperature;
+        let is_freq = config.field == CpuField::Frequency;
         self.unit_box.set_visible(is_temp);
+        self.freq_box.set_visible(is_freq);
         self.sensor_box.set_visible(is_temp);
 
         // Set custom caption if provided
@@ -272,6 +425,22 @@ impl CpuSourceConfigWidget {
                 self.core_combo.set_selected((*core_idx + 1) as u32);
                 self.core_combo.set_sensitive(true);
             }
+        }
+
+        // Set update interval
+        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+
+        // Set auto-detect checkbox and limits
+        self.auto_detect_check.set_active(config.auto_detect_limits);
+        self.min_limit_spin.set_sensitive(!config.auto_detect_limits);
+        self.max_limit_spin.set_sensitive(!config.auto_detect_limits);
+
+        if let Some(min) = config.min_limit {
+            self.min_limit_spin.set_value(min);
+        }
+
+        if let Some(max) = config.max_limit {
+            self.max_limit_spin.set_value(max);
         }
 
         *self.config.borrow_mut() = config;
