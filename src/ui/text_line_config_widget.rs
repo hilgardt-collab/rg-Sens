@@ -1,12 +1,12 @@
 //! Widget for configuring text displayer lines
 
+use crate::core::FieldMetadata;
+use crate::displayers::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, ColorButton, DropDown, Entry, Frame, Label, ListBox,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, ListBox,
     Orientation, ScrolledWindow, SpinButton, StringList, Widget,
 };
-use rg_sens::displayers::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
-use rg_sens::core::FieldMetadata;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -142,14 +142,37 @@ impl TextLineConfigWidget {
         let extras_box = GtkBox::new(Orientation::Horizontal, 6);
         extras_box.append(&Label::new(Some("Color:")));
 
-        let color_button = ColorButton::new();
+        // Color button (opens ColorDialog)
+        let color_button = Button::new();
         let rgba = gtk4::gdk::RGBA::new(
             line_config.color.0 as f32,
             line_config.color.1 as f32,
             line_config.color.2 as f32,
             line_config.color.3 as f32,
         );
-        color_button.set_rgba(&rgba);
+
+        // Create a colored box to show current color
+        let color_box = GtkBox::new(Orientation::Horizontal, 0);
+        color_box.set_size_request(40, 20);
+        color_box.add_css_class("color-preview");
+
+        // Set background color using CSS
+        let css = format!(
+            "background-color: rgba({}, {}, {}, {});",
+            (rgba.red() * 255.0) as u8,
+            (rgba.green() * 255.0) as u8,
+            (rgba.blue() * 255.0) as u8,
+            rgba.alpha()
+        );
+        let provider = gtk4::CssProvider::new();
+        provider.load_from_data(&format!(".color-preview {{ {} }}", css));
+        color_box.style_context().add_provider(&provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+        color_button.set_child(Some(&color_box));
+
+        // TODO: Connect color button to ColorDialog
+        // For now, button shows current color but doesn't open dialog
+
         extras_box.append(&color_button);
 
         extras_box.append(&Label::new(Some("Angle:")));
