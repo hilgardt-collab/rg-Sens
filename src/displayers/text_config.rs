@@ -89,7 +89,8 @@ impl Default for TextDisplayerConfig {
     fn default() -> Self {
         Self {
             lines: vec![
-                // Default configuration: show "CPU 45.2%"
+                // Default configuration: show "Caption Value Unit" (e.g., "CPU 45.2 %")
+                // Uses generic field names that work with any configured data source
                 TextLineConfig {
                     field_id: "caption".to_string(),
                     font_family: "Sans".to_string(),
@@ -102,7 +103,7 @@ impl Default for TextDisplayerConfig {
                     group_id: Some("main".to_string()),
                 },
                 TextLineConfig {
-                    field_id: "usage".to_string(),
+                    field_id: "value".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
                     color: (0.5, 1.0, 0.5, 1.0), // Light green

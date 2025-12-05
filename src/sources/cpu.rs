@@ -251,18 +251,25 @@ impl DataSource for CpuSource {
                 FieldPurpose::Caption,
             ),
             FieldMetadata::new(
-                "usage",
-                "Usage",
-                "Overall CPU usage percentage",
-                FieldType::Percentage,
+                "value",
+                "Value (Configured)",
+                "The configured value (temperature/usage/frequency based on Data Source settings)",
+                FieldType::Numerical,
                 FieldPurpose::Value,
             ),
             FieldMetadata::new(
                 "unit",
                 "Unit",
-                "Unit of measurement for usage",
+                "Unit of measurement for the configured value",
                 FieldType::Text,
                 FieldPurpose::Unit,
+            ),
+            FieldMetadata::new(
+                "usage",
+                "Usage (Always)",
+                "Overall CPU usage percentage",
+                FieldType::Percentage,
+                FieldPurpose::Value,
             ),
             FieldMetadata::new(
                 "temperature",
@@ -354,25 +361,30 @@ impl DataSource for CpuSource {
         let temperature_value = self.cpu_temperature.map(|t| self.convert_temperature(t));
 
         // Apply field configuration to determine what goes in the main value/unit fields
+        // Use consistent field names ("caption", "value", "unit") for easier text displayer config
         match self.config.field {
             CpuField::Usage => {
                 values.insert("caption".to_string(), Value::from("CPU"));
-                values.insert("usage".to_string(), Value::from(usage_value));
+                values.insert("value".to_string(), Value::from(usage_value));
+                values.insert("usage".to_string(), Value::from(usage_value)); // Keep for compatibility
                 values.insert("unit".to_string(), Value::from("%"));
             }
             CpuField::Temperature => {
                 values.insert("caption".to_string(), Value::from("CPU Temp"));
                 if let Some(temp) = temperature_value {
-                    values.insert("temperature".to_string(), Value::from(temp));
+                    values.insert("value".to_string(), Value::from(temp));
+                    values.insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
                     values.insert("unit".to_string(), Value::from(self.get_temperature_unit_string()));
                 } else {
-                    values.insert("temperature".to_string(), Value::from("N/A"));
+                    values.insert("value".to_string(), Value::from("N/A"));
+                    values.insert("temperature".to_string(), Value::from("N/A")); // Keep for compatibility
                     values.insert("unit".to_string(), Value::from(""));
                 }
             }
             CpuField::Frequency => {
                 values.insert("caption".to_string(), Value::from("CPU Freq"));
-                values.insert("frequency".to_string(), Value::from(frequency_value));
+                values.insert("value".to_string(), Value::from(frequency_value));
+                values.insert("frequency".to_string(), Value::from(frequency_value)); // Keep for compatibility
                 values.insert("unit".to_string(), Value::from("MHz"));
             }
         }
