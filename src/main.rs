@@ -217,9 +217,9 @@ fn build_ui(app: &Application) {
                 update_manager_clone.add_panel(panel).await;
             }
 
-            // Run update loop
+            // Run update loop (base interval for checking, each panel updates at its own configured interval)
             info!("Starting update loop");
-            update_manager_clone.run(Duration::from_millis(1000)).await;
+            update_manager_clone.run(Duration::from_millis(100)).await;
         });
     });
 

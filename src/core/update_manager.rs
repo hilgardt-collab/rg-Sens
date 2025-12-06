@@ -3,35 +3,53 @@
 use super::Panel;
 use anyhow::Result;
 use log::{error, trace};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 
+/// Tracks update timing for a panel
+struct PanelUpdateState {
+    panel: Arc<RwLock<Panel>>,
+    last_update: Instant,
+}
+
 /// Manages periodic updates for panels
 pub struct UpdateManager {
-    panels: Arc<RwLock<Vec<Arc<RwLock<Panel>>>>>,
+    panels: Arc<RwLock<HashMap<String, PanelUpdateState>>>,
 }
 
 impl UpdateManager {
     /// Create a new update manager
     pub fn new() -> Self {
         Self {
-            panels: Arc::new(RwLock::new(Vec::new())),
+            panels: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     /// Add a panel to be updated
     pub async fn add_panel(&self, panel: Arc<RwLock<Panel>>) {
+        let panel_id = {
+            let panel_guard = panel.read().await;
+            panel_guard.id.clone()
+        };
+
         let mut panels = self.panels.write().await;
-        panels.push(panel);
+        panels.insert(
+            panel_id,
+            PanelUpdateState {
+                panel,
+                last_update: Instant::now(),
+            },
+        );
     }
 
     /// Start the update loop
     ///
-    /// This runs indefinitely, updating all panels at their specified intervals.
-    pub async fn run(&self, update_interval: Duration) {
-        let mut interval = tokio::time::interval(update_interval);
+    /// This runs indefinitely, updating each panel at its configured interval.
+    pub async fn run(&self, base_interval: Duration) {
+        let mut interval = tokio::time::interval(base_interval);
 
         loop {
             interval.tick().await;
@@ -43,39 +61,58 @@ impl UpdateManager {
 
             let elapsed = start.elapsed();
             trace!("Update cycle took {:?}", elapsed);
-
-            // Warn if updates are taking too long
-            if elapsed > update_interval {
-                log::warn!(
-                    "Update cycle took {:?}, which exceeds interval {:?}",
-                    elapsed,
-                    update_interval
-                );
-            }
         }
     }
 
-    /// Update all panels
+    /// Update all panels that are due for an update
     async fn update_all(&self) -> Result<()> {
+        let now = Instant::now();
         let panels = self.panels.read().await;
 
-        // Update panels in parallel
+        // Collect panels that need updating
         let mut tasks = Vec::new();
 
-        for panel in panels.iter() {
-            let panel = panel.clone();
-            let task = tokio::spawn(async move {
-                let mut panel = panel.write().await;
-                if let Err(e) = panel.update() {
-                    error!("Error updating panel {}: {}", panel.id, e);
+        for (panel_id, state) in panels.iter() {
+            // Get the panel's configured update interval
+            let update_interval = {
+                let panel_guard = state.panel.read().await;
+                // Get update interval from CPU config if available
+                if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
+                    if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+                        Duration::from_millis(cpu_config.update_interval_ms)
+                    } else {
+                        Duration::from_millis(1000) // Default 1 second
+                    }
+                } else {
+                    Duration::from_millis(1000) // Default 1 second
                 }
-            });
-            tasks.push(task);
+            };
+
+            // Check if enough time has elapsed
+            let elapsed = now.duration_since(state.last_update);
+            if elapsed >= update_interval {
+                let panel = state.panel.clone();
+                let panel_id = panel_id.clone();
+                let task = tokio::spawn(async move {
+                    let mut panel_guard = panel.write().await;
+                    if let Err(e) = panel_guard.update() {
+                        error!("Error updating panel {}: {}", panel_id, e);
+                    }
+                });
+                tasks.push((panel_id.clone(), task));
+            }
         }
 
-        // Wait for all updates to complete
-        for task in tasks {
-            task.await?;
+        drop(panels); // Release read lock
+
+        // Wait for all updates to complete and update last_update times
+        let mut panels = self.panels.write().await;
+        for (panel_id, task) in tasks {
+            if task.await.is_ok() {
+                if let Some(state) = panels.get_mut(&panel_id) {
+                    state.last_update = Instant::now();
+                }
+            }
         }
 
         Ok(())
