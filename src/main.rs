@@ -188,7 +188,7 @@ fn build_ui(app: &Application) {
     });
 
     // Setup save-on-close confirmation
-    let panels_clone = panels.clone();
+    let grid_layout_for_close = grid_layout_for_settings.clone();
     let config_dirty_clone4 = config_dirty.clone();
     let app_config_for_close = app_config.clone();
 
@@ -197,15 +197,12 @@ fn build_ui(app: &Application) {
 
         if is_dirty {
             // Show save confirmation dialog
-            show_save_dialog(window, &panels_clone, &app_config_for_close);
+            show_save_dialog(window, &grid_layout_for_close, &app_config_for_close);
             glib::Propagation::Stop // Prevent immediate close
         } else {
             glib::Propagation::Proceed // Close without saving
         }
     });
-
-    // Clone panels for later use (before it gets moved into the update thread)
-    let panels_for_menu = Rc::new(RefCell::new(panels.clone()));
 
     // Spawn tokio runtime for update loop
     let update_manager_clone = update_manager.clone();
@@ -286,7 +283,6 @@ fn build_ui(app: &Application) {
         // New panel action
         let window_for_new = window_for_menu.clone();
         let grid_layout_for_new = grid_layout_for_menu.clone();
-        let panels_for_new = panels_for_menu.clone();
         let config_dirty_for_new = config_dirty_for_menu.clone();
         let new_panel_action = gio::SimpleAction::new("new-panel", None);
         new_panel_action.connect_activate(move |_, _| {
@@ -294,21 +290,22 @@ fn build_ui(app: &Application) {
             show_new_panel_dialog(
                 &window_for_new,
                 &grid_layout_for_new,
-                &panels_for_new,
                 &config_dirty_for_new,
             );
         });
         action_group.add_action(&new_panel_action);
 
         // Save layout action
-        let panels_for_save = panels_for_menu.clone();
+        let grid_layout_for_save = grid_layout_for_menu.clone();
         let app_config_for_save = app_config_for_menu.clone();
         let window_for_save = window_for_menu.clone();
         let config_dirty_for_save = config_dirty_for_menu.clone();
         let save_layout_action = gio::SimpleAction::new("save-layout", None);
         save_layout_action.connect_activate(move |_, _| {
             info!("Save layout requested");
-            save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &panels_for_save.borrow());
+            // Get current panels from GridLayout (not the stale clone)
+            let current_panels = grid_layout_for_save.borrow().get_panels();
+            save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &current_panels);
             *config_dirty_for_save.borrow_mut() = false;
         });
         action_group.add_action(&save_layout_action);
@@ -388,7 +385,7 @@ fn build_ui(app: &Application) {
 }
 
 /// Show save confirmation dialog on close
-fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], app_config: &Rc<RefCell<AppConfig>>) {
+fn show_save_dialog(window: &ApplicationWindow, grid_layout: &Rc<RefCell<GridLayout>>, app_config: &Rc<RefCell<AppConfig>>) {
     use gtk4::AlertDialog;
 
     let dialog = AlertDialog::builder()
@@ -401,7 +398,7 @@ fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], a
         .build();
 
     let window_clone = window.clone();
-    let panels_clone = panels.to_vec();
+    let grid_layout_clone = grid_layout.clone();
     let app_config_clone = app_config.clone();
 
     dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
@@ -409,7 +406,9 @@ fn show_save_dialog(window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>], a
             Ok(2) => {
                 // Save button (index 2)
                 info!("User chose to save configuration");
-                save_config_with_app_config(&app_config_clone.borrow(), &window_clone, &panels_clone);
+                // Get current panels from GridLayout (not a stale clone)
+                let current_panels = grid_layout_clone.borrow().get_panels();
+                save_config_with_app_config(&app_config_clone.borrow(), &window_clone, &current_panels);
                 window_clone.destroy(); // Use destroy to bypass close handler
             }
             Ok(0) => {
@@ -670,7 +669,6 @@ fn create_panel_from_config(
 fn show_new_panel_dialog(
     window: &ApplicationWindow,
     grid_layout: &Rc<RefCell<GridLayout>>,
-    panels: &Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
     config_dirty: &Rc<RefCell<bool>>,
 ) {
     use gtk4::{Adjustment, Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
@@ -811,11 +809,8 @@ fn show_new_panel_dialog(
             &registry,
         ) {
             Ok(panel) => {
-                // Add to grid
+                // Add to grid (grid_layout maintains its own panels list)
                 grid_layout.borrow_mut().add_panel(panel.clone());
-
-                // Add to panels list
-                panels.borrow_mut().push(panel);
 
                 // Mark config as dirty
                 *config_dirty.borrow_mut() = true;
