@@ -92,14 +92,15 @@ impl UpdateManager {
             let elapsed = now.duration_since(state.last_update);
             if elapsed >= update_interval {
                 let panel = state.panel.clone();
-                let panel_id = panel_id.clone();
+                let panel_id_owned = panel_id.clone();
+                let panel_id_for_task = panel_id_owned.clone();
                 let task = tokio::spawn(async move {
                     let mut panel_guard = panel.write().await;
                     if let Err(e) = panel_guard.update() {
-                        error!("Error updating panel {}: {}", panel_id, e);
+                        error!("Error updating panel {}: {}", panel_id_for_task, e);
                     }
                 });
-                tasks.push((panel_id.clone(), task));
+                tasks.push((panel_id_owned, task));
             }
         }
 
