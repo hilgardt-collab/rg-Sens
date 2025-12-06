@@ -19,8 +19,6 @@ pub struct TextLineConfigWidget {
     list_box: ListBox,
     available_fields: Vec<FieldMetadata>,
     font_dialog: Rc<gtk4::FontDialog>,
-    copied_font: Rc<RefCell<Option<(String, f64)>>>, // (family, size)
-    copied_color: Rc<RefCell<Option<(f64, f64, f64, f64)>>>, // (r, g, b, a)
 }
 
 impl TextLineConfigWidget {
@@ -54,23 +52,17 @@ impl TextLineConfigWidget {
         // Create shared font dialog (created once, reused for all lines)
         let font_dialog = Rc::new(gtk4::FontDialog::new());
 
-        // Create shared clipboard for font and color
-        let copied_font = Rc::new(RefCell::new(None));
-        let copied_color = Rc::new(RefCell::new(None));
-
         let lines_clone = lines.clone();
         let list_box_clone = list_box.clone();
         let fields_clone = available_fields.clone();
         let font_dialog_clone = font_dialog.clone();
-        let copied_font_clone = copied_font.clone();
-        let copied_color_clone = copied_color.clone();
         add_button.connect_clicked(move |_| {
             let mut lines = lines_clone.borrow_mut();
             let new_line = TextLineConfig::default();
             let index = lines.len(); // Get index before pushing
             lines.push(new_line.clone());
             drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), copied_font_clone.clone(), copied_color_clone.clone(), index, None);
+            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), index, None);
         });
 
         Self {
@@ -79,8 +71,6 @@ impl TextLineConfigWidget {
             list_box,
             available_fields,
             font_dialog,
-            copied_font,
-            copied_color,
         }
     }
 
@@ -91,8 +81,6 @@ impl TextLineConfigWidget {
         fields: &[FieldMetadata],
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
         font_dialog: Rc<gtk4::FontDialog>,
-        copied_font: Rc<RefCell<Option<(String, f64)>>>,
-        copied_color: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
         list_index: usize,
         rebuild_callback: Option<Rc<dyn Fn()>>,
     ) {
@@ -160,11 +148,12 @@ impl TextLineConfigWidget {
         // Copy font button
         let copy_font_btn = Button::with_label("Copy");
         let lines_clone_copy_font = lines.clone();
-        let copied_font_clone = copied_font.clone();
         copy_font_btn.connect_clicked(move |_| {
             let lines_ref = lines_clone_copy_font.borrow();
             if let Some(line) = lines_ref.get(list_index) {
-                *copied_font_clone.borrow_mut() = Some((line.font_family.clone(), line.font_size));
+                if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                    clipboard.copy_font(line.font_family.clone(), line.font_size);
+                }
             }
         });
         font_box.append(&copy_font_btn);
@@ -172,19 +161,20 @@ impl TextLineConfigWidget {
         // Paste font button
         let paste_font_btn = Button::with_label("Paste");
         let lines_clone_paste_font = lines.clone();
-        let copied_font_clone2 = copied_font.clone();
         let font_button_clone = font_button.clone();
         paste_font_btn.connect_clicked(move |_| {
-            if let Some((family, size)) = copied_font_clone2.borrow().as_ref() {
-                let mut lines_ref = lines_clone_paste_font.borrow_mut();
-                if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.font_family = family.clone();
-                    line.font_size = *size;
-                }
-                drop(lines_ref);
+            if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                if let Some((family, size)) = clipboard.paste_font() {
+                    let mut lines_ref = lines_clone_paste_font.borrow_mut();
+                    if let Some(line) = lines_ref.get_mut(list_index) {
+                        line.font_family = family.clone();
+                        line.font_size = size;
+                    }
+                    drop(lines_ref);
 
-                // Update button label
-                font_button_clone.set_label(&format!("{} {:.0}", family, size));
+                    // Update button label
+                    font_button_clone.set_label(&format!("{} {:.0}", family, size));
+                }
             }
         });
         font_box.append(&paste_font_btn);
@@ -287,11 +277,12 @@ impl TextLineConfigWidget {
         // Copy color button
         let copy_color_btn = Button::with_label("Copy");
         let lines_clone_copy_color = lines.clone();
-        let copied_color_clone = copied_color.clone();
         copy_color_btn.connect_clicked(move |_| {
             let lines_ref = lines_clone_copy_color.borrow();
             if let Some(line) = lines_ref.get(list_index) {
-                *copied_color_clone.borrow_mut() = Some(line.color);
+                if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                    clipboard.copy_color(line.color.0, line.color.1, line.color.2, line.color.3);
+                }
             }
         });
         extras_box.append(&copy_color_btn);
@@ -299,39 +290,40 @@ impl TextLineConfigWidget {
         // Paste color button
         let paste_color_btn = Button::with_label("Paste");
         let lines_clone_paste_color = lines.clone();
-        let copied_color_clone2 = copied_color.clone();
         let color_box_clone_paste = color_box.clone();
         let color_class_clone_paste = color_class.clone();
         paste_color_btn.connect_clicked(move |_| {
-            if let Some(color) = copied_color_clone2.borrow().as_ref() {
-                let mut lines_ref = lines_clone_paste_color.borrow_mut();
-                if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.color = *color;
-                }
-                drop(lines_ref);
+            if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                if let Some(color) = clipboard.paste_color() {
+                    let mut lines_ref = lines_clone_paste_color.borrow_mut();
+                    if let Some(line) = lines_ref.get_mut(list_index) {
+                        line.color = color;
+                    }
+                    drop(lines_ref);
 
-                // Update color preview
-                let rgba = gtk4::gdk::RGBA::new(
-                    color.0 as f32,
-                    color.1 as f32,
-                    color.2 as f32,
-                    color.3 as f32,
-                );
-                let css = format!(
-                    "background-color: rgba({}, {}, {}, {});",
-                    (rgba.red() * 255.0) as u8,
-                    (rgba.green() * 255.0) as u8,
-                    (rgba.blue() * 255.0) as u8,
-                    rgba.alpha()
-                );
-                let provider = gtk4::CssProvider::new();
-                provider.load_from_data(&format!(".{} {{ {} }}", color_class_clone_paste, css));
-                let display = color_box_clone_paste.display();
-                gtk4::style_context_add_provider_for_display(
-                    &display,
-                    &provider,
-                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-                );
+                    // Update color preview
+                    let rgba = gtk4::gdk::RGBA::new(
+                        color.0 as f32,
+                        color.1 as f32,
+                        color.2 as f32,
+                        color.3 as f32,
+                    );
+                    let css = format!(
+                        "background-color: rgba({}, {}, {}, {});",
+                        (rgba.red() * 255.0) as u8,
+                        (rgba.green() * 255.0) as u8,
+                        (rgba.blue() * 255.0) as u8,
+                        rgba.alpha()
+                    );
+                    let provider = gtk4::CssProvider::new();
+                    provider.load_from_data(&format!(".{} {{ {} }}", color_class_clone_paste, css));
+                    let display = color_box_clone_paste.display();
+                    gtk4::style_context_add_provider_for_display(
+                        &display,
+                        &provider,
+                        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                    );
+                }
             }
         });
         extras_box.append(&paste_color_btn);
@@ -524,8 +516,6 @@ impl TextLineConfigWidget {
         let lines_clone = self.lines.clone();
         let fields_clone = self.available_fields.clone();
         let font_dialog_clone = self.font_dialog.clone();
-        let copied_font_clone = self.copied_font.clone();
-        let copied_color_clone = self.copied_color.clone();
 
         let rebuild_fn: Rc<dyn Fn()> = Rc::new(move || {
             // Clear list box
@@ -542,8 +532,6 @@ impl TextLineConfigWidget {
                     &fields_clone,
                     lines_clone.clone(),
                     font_dialog_clone.clone(),
-                    copied_font_clone.clone(),
-                    copied_color_clone.clone(),
                     index,
                     None, // No rebuild callback in recursive call
                 );
@@ -559,8 +547,6 @@ impl TextLineConfigWidget {
                 &self.available_fields,
                 self.lines.clone(),
                 self.font_dialog.clone(),
-                self.copied_font.clone(),
-                self.copied_color.clone(),
                 index,
                 Some(rebuild_fn.clone()),
             );

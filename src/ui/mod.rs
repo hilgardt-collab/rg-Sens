@@ -11,6 +11,7 @@ mod image_picker;
 mod text_line_config_widget;
 mod cpu_source_config_widget;
 mod gpu_source_config_widget;
+pub mod clipboard;
 
 pub use main_window::MainWindow;
 pub use grid_layout::{GridConfig, GridLayout};
