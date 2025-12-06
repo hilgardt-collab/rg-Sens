@@ -19,6 +19,19 @@ pub enum GpuField {
     FanSpeed,
 }
 
+/// Memory unit types
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum MemoryUnit {
+    MB,
+    GB,
+}
+
+impl Default for MemoryUnit {
+    fn default() -> Self {
+        Self::GB
+    }
+}
+
 use crate::ui::TemperatureUnit;
 
 /// GPU source configuration
@@ -26,6 +39,8 @@ use crate::ui::TemperatureUnit;
 pub struct GpuSourceConfig {
     pub field: GpuField,
     pub temp_unit: TemperatureUnit,
+    #[serde(default)]
+    pub memory_unit: MemoryUnit,
     pub gpu_index: u32,
     #[serde(default)]
     pub custom_caption: Option<String>,
@@ -52,6 +67,7 @@ impl Default for GpuSourceConfig {
         Self {
             field: GpuField::Temperature,
             temp_unit: TemperatureUnit::Celsius,
+            memory_unit: MemoryUnit::GB,
             gpu_index: 0,
             custom_caption: None,
             update_interval_ms: default_update_interval(),
@@ -70,6 +86,7 @@ pub struct GpuSourceConfigWidget {
     field_combo: DropDown,
     unit_combo: DropDown,
     unit_box: GtkBox,
+    unit_label: Label,
     gpu_combo: DropDown,
     update_interval_spin: SpinButton,
     min_limit_spin: SpinButton,
@@ -111,9 +128,10 @@ impl GpuSourceConfigWidget {
         field_box.append(&field_combo);
         widget.append(&field_box);
 
-        // Temperature unit (visible only for temperature field)
+        // Unit selection (temperature or memory unit, depending on field)
         let unit_box = GtkBox::new(Orientation::Horizontal, 6);
-        unit_box.append(&Label::new(Some("Temperature Unit:")));
+        let unit_label = Label::new(Some("Temperature Unit:"));
+        unit_box.append(&unit_label);
 
         let unit_options = StringList::new(&["Celsius", "Fahrenheit", "Kelvin"]);
         let unit_combo = DropDown::new(Some(unit_options), Option::<gtk4::Expression>::None);
@@ -183,6 +201,8 @@ impl GpuSourceConfigWidget {
 
         let config_clone = config.clone();
         let unit_box_clone = unit_box.clone();
+        let unit_label_clone = unit_label.clone();
+        let unit_combo_clone = unit_combo.clone();
         field_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             let field = match selected {
@@ -196,19 +216,62 @@ impl GpuSourceConfigWidget {
             };
             config_clone.borrow_mut().field = field;
 
-            // Show/hide temperature unit box
-            unit_box_clone.set_visible(field == GpuField::Temperature);
+            // Update unit box based on field
+            match field {
+                GpuField::Temperature => {
+                    unit_label_clone.set_text("Temperature Unit:");
+                    let temp_options = StringList::new(&["Celsius", "Fahrenheit", "Kelvin"]);
+                    unit_combo_clone.set_model(Some(&temp_options));
+                    let temp_unit = config_clone.borrow().temp_unit;
+                    unit_combo_clone.set_selected(match temp_unit {
+                        TemperatureUnit::Celsius => 0,
+                        TemperatureUnit::Fahrenheit => 1,
+                        TemperatureUnit::Kelvin => 2,
+                    });
+                    unit_box_clone.set_visible(true);
+                }
+                GpuField::MemoryUsed => {
+                    unit_label_clone.set_text("Memory Unit:");
+                    let mem_options = StringList::new(&["MB", "GB"]);
+                    unit_combo_clone.set_model(Some(&mem_options));
+                    let mem_unit = config_clone.borrow().memory_unit;
+                    unit_combo_clone.set_selected(match mem_unit {
+                        MemoryUnit::MB => 0,
+                        MemoryUnit::GB => 1,
+                    });
+                    unit_box_clone.set_visible(true);
+                }
+                _ => {
+                    unit_box_clone.set_visible(false);
+                }
+            }
         });
 
         let config_clone = config.clone();
         unit_combo.connect_selected_notify(move |combo| {
-            let unit = match combo.selected() {
-                0 => TemperatureUnit::Celsius,
-                1 => TemperatureUnit::Fahrenheit,
-                2 => TemperatureUnit::Kelvin,
-                _ => TemperatureUnit::Celsius,
-            };
-            config_clone.borrow_mut().temp_unit = unit;
+            let selected = combo.selected();
+            let field = config_clone.borrow().field;
+
+            match field {
+                GpuField::Temperature => {
+                    let unit = match selected {
+                        0 => TemperatureUnit::Celsius,
+                        1 => TemperatureUnit::Fahrenheit,
+                        2 => TemperatureUnit::Kelvin,
+                        _ => TemperatureUnit::Celsius,
+                    };
+                    config_clone.borrow_mut().temp_unit = unit;
+                }
+                GpuField::MemoryUsed => {
+                    let unit = match selected {
+                        0 => MemoryUnit::MB,
+                        1 => MemoryUnit::GB,
+                        _ => MemoryUnit::GB,
+                    };
+                    config_clone.borrow_mut().memory_unit = unit;
+                }
+                _ => {}
+            }
         });
 
         let config_clone = config.clone();
@@ -254,6 +317,7 @@ impl GpuSourceConfigWidget {
             field_combo,
             unit_combo,
             unit_box,
+            unit_label,
             gpu_combo,
             update_interval_spin,
             min_limit_spin,
@@ -277,13 +341,33 @@ impl GpuSourceConfigWidget {
             GpuField::FanSpeed => 5,
         });
 
-        self.unit_combo.set_selected(match config.temp_unit {
-            TemperatureUnit::Celsius => 0,
-            TemperatureUnit::Fahrenheit => 1,
-            TemperatureUnit::Kelvin => 2,
-        });
-
-        self.unit_box.set_visible(config.field == GpuField::Temperature);
+        // Update unit box based on field
+        match config.field {
+            GpuField::Temperature => {
+                self.unit_label.set_text("Temperature Unit:");
+                let temp_options = StringList::new(&["Celsius", "Fahrenheit", "Kelvin"]);
+                self.unit_combo.set_model(Some(&temp_options));
+                self.unit_combo.set_selected(match config.temp_unit {
+                    TemperatureUnit::Celsius => 0,
+                    TemperatureUnit::Fahrenheit => 1,
+                    TemperatureUnit::Kelvin => 2,
+                });
+                self.unit_box.set_visible(true);
+            }
+            GpuField::MemoryUsed => {
+                self.unit_label.set_text("Memory Unit:");
+                let mem_options = StringList::new(&["MB", "GB"]);
+                self.unit_combo.set_model(Some(&mem_options));
+                self.unit_combo.set_selected(match config.memory_unit {
+                    MemoryUnit::MB => 0,
+                    MemoryUnit::GB => 1,
+                });
+                self.unit_box.set_visible(true);
+            }
+            _ => {
+                self.unit_box.set_visible(false);
+            }
+        }
 
         if let Some(ref caption) = config.custom_caption {
             self.caption_entry.set_text(caption);

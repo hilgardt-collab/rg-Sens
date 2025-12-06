@@ -1,7 +1,7 @@
 //! GPU data source implementation using NVML
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
-use crate::ui::{GpuField, GpuSourceConfig, TemperatureUnit};
+use crate::ui::{GpuField, GpuSourceConfig, MemoryUnit, TemperatureUnit};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use serde_json::Value;
@@ -169,6 +169,22 @@ impl GpuSource {
         }
     }
 
+    /// Convert memory from bytes to configured unit
+    fn convert_memory(&self, bytes: u64) -> f64 {
+        match self.config.memory_unit {
+            MemoryUnit::MB => bytes as f64 / (1024.0 * 1024.0),
+            MemoryUnit::GB => bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        }
+    }
+
+    /// Get memory unit string
+    fn get_memory_unit_string(&self) -> &str {
+        match self.config.memory_unit {
+            MemoryUnit::MB => "MB",
+            MemoryUnit::GB => "GB",
+        }
+    }
+
     /// Generate automatic caption
     fn generate_auto_caption(&self) -> String {
         let gpu_prefix = if self.config.gpu_index > 0 {
@@ -303,11 +319,11 @@ impl DataSource for GpuSource {
             }
             GpuField::MemoryUsed => {
                 if let Some(mem) = self.memory_used {
-                    let mem_gb = mem as f64 / (1024.0 * 1024.0 * 1024.0);
+                    let converted = self.convert_memory(mem);
                     values.insert("caption".to_string(), Value::from(caption));
-                    values.insert("value".to_string(), Value::from(mem_gb));
-                    values.insert("memory_used".to_string(), Value::from(mem_gb));
-                    values.insert("unit".to_string(), Value::from("GB"));
+                    values.insert("value".to_string(), Value::from(converted));
+                    values.insert("memory_used".to_string(), Value::from(converted));
+                    values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
                 } else {
                     values.insert("caption".to_string(), Value::from(caption));
                     values.insert("value".to_string(), Value::from("N/A"));
