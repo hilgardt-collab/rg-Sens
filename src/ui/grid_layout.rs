@@ -1423,9 +1423,145 @@ impl GridLayout {
                                     }
                                 });
 
-                                // The drag_end handler is the existing one that handles all panels
-                                // We don't need a new drag_end handler because the copied panel is now in
-                                // panel_states and will be handled by the main drag_end logic
+                                // Clone for drag_end
+                                let initial_positions_drag_end = initial_positions_copy.clone();
+                                let config_drag_end = config_for_end.clone();
+                                let selected_panels_drag_end = selected_panels_end.clone();
+                                let panel_states_drag_end = panel_states_end.clone();
+                                let occupied_cells_drag_end = occupied_cells_end.clone();
+                                let drag_preview_cells_drag_end = drag_preview_cells_end.clone();
+                                let is_dragging_drag_end = is_dragging_end.clone();
+                                let drop_zone_drag_end = drop_zone_layer_end.clone();
+                                let on_change_drag_end = on_change_end.clone();
+                                let panels_drag_end = panels_for_copy.clone();
+
+                                drag_gesture_copy.connect_drag_end(move |gesture, offset_x, offset_y| {
+                                    let config = config_drag_end.borrow();
+                                    let selected = selected_panels_drag_end.borrow();
+                                    let states = panel_states_drag_end.borrow();
+                                    let mut occupied = occupied_cells_drag_end.borrow_mut();
+                                    let positions = initial_positions_drag_end.borrow();
+
+                                    // Check if Ctrl key is held (copy mode)
+                                    let modifiers = gesture.current_event_state();
+                                    let is_copy_mode = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+
+                                    // Phase 1: Clear occupied cells (only if moving, not copying)
+                                    if !is_copy_mode {
+                                        for id in selected.iter() {
+                                            if let Some(state) = states.get(id) {
+                                                let geom = state.panel.blocking_read().geometry;
+                                                for dx in 0..geom.width {
+                                                    for dy in 0..geom.height {
+                                                        occupied.remove(&(geom.x + dx, geom.y + dy));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Phase 2: Calculate new positions
+                                    let mut new_positions: Vec<(String, u32, u32, f64, f64)> = Vec::new();
+                                    let mut group_has_collision = false;
+
+                                    for id in selected.iter() {
+                                        if let Some(state) = states.get(id) {
+                                            if let Some((orig_x, orig_y)) = positions.get(id) {
+                                                let new_x = orig_x + offset_x;
+                                                let new_y = orig_y + offset_y;
+
+                                                let grid_x = ((new_x + config.cell_width as f64 / 2.0)
+                                                    / (config.cell_width + config.spacing) as f64)
+                                                    .floor()
+                                                    .max(0.0) as u32;
+                                                let grid_y = ((new_y + config.cell_height as f64 / 2.0)
+                                                    / (config.cell_height + config.spacing) as f64)
+                                                    .floor()
+                                                    .max(0.0) as u32;
+
+                                                let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
+                                                let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
+
+                                                let geom = state.panel.blocking_read().geometry;
+                                                for dx in 0..geom.width {
+                                                    for dy in 0..geom.height {
+                                                        let cell = (grid_x + dx, grid_y + dy);
+                                                        if occupied.contains(&cell) {
+                                                            group_has_collision = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                    if group_has_collision {
+                                                        break;
+                                                    }
+                                                }
+
+                                                new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
+                                            }
+                                        }
+                                    }
+
+                                    // Phase 3: Apply changes
+                                    if group_has_collision && !is_copy_mode {
+                                        // Restore original positions
+                                        for id in selected.iter() {
+                                            if let Some(state) = states.get(id) {
+                                                let geom = state.panel.blocking_read().geometry;
+                                                for dx in 0..geom.width {
+                                                    for dy in 0..geom.height {
+                                                        occupied.insert((geom.x + dx, geom.y + dy));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else if !group_has_collision {
+                                        drop(states);
+                                        drop(selected);
+                                        drop(occupied);
+
+                                        if is_copy_mode {
+                                            // Copy mode - would create new panels
+                                            // For simplicity, we skip nested copying in copied panels
+                                            log::info!("Nested copy operation not implemented");
+                                        } else {
+                                            // Move mode
+                                            let selected = selected_panels_drag_end.borrow();
+                                            let states = panel_states_drag_end.borrow();
+                                            let mut occupied = occupied_cells_drag_end.borrow_mut();
+
+                                            for (id, grid_x, grid_y, snapped_x, snapped_y) in new_positions {
+                                                if let Some(state) = states.get(&id) {
+                                                    if let Some(parent) = state.frame.parent() {
+                                                        if let Ok(fixed) = parent.downcast::<Fixed>() {
+                                                            fixed.move_(&state.frame, snapped_x, snapped_y);
+                                                        }
+                                                    }
+
+                                                    if let Ok(mut panel_guard) = state.panel.try_write() {
+                                                        panel_guard.geometry.x = grid_x;
+                                                        panel_guard.geometry.y = grid_y;
+                                                    }
+
+                                                    let geom = state.panel.blocking_read().geometry;
+                                                    for dx in 0..geom.width {
+                                                        for dy in 0..geom.height {
+                                                            occupied.insert((grid_x + dx, grid_y + dy));
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if let Some(ref callback) = *on_change_drag_end.borrow() {
+                                                callback();
+                                            }
+                                        }
+                                    }
+
+                                    // Clear preview and disable grid
+                                    *drag_preview_cells_drag_end.borrow_mut() = Vec::new();
+                                    *is_dragging_drag_end.borrow_mut() = false;
+                                    drop_zone_drag_end.queue_draw();
+                                });
 
                                 frame.add_controller(drag_gesture_copy);
 
