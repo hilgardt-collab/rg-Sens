@@ -1129,7 +1129,7 @@ fn show_panel_properties_dialog(
     };
 
     let panel_id = panel_guard.id.clone();
-    let old_geometry = panel_guard.geometry;
+    let old_geometry = Rc::new(RefCell::new(panel_guard.geometry));
     let old_source_id = panel_guard.source.metadata().id.clone();
     let old_displayer_id = panel_guard.displayer.id().to_string();
 
@@ -1170,12 +1170,12 @@ fn show_panel_properties_dialog(
     // Width control
     let width_label = Label::new(Some("Width:"));
     let width_spin = SpinButton::with_range(1.0, 10.0, 1.0);
-    width_spin.set_value(old_geometry.width as f64);
+    width_spin.set_value(old_geometry.borrow().width as f64);
 
     // Height control
     let height_label = Label::new(Some("Height:"));
     let height_spin = SpinButton::with_range(1.0, 10.0, 1.0);
-    height_spin.set_value(old_geometry.height as f64);
+    height_spin.set_value(old_geometry.borrow().height as f64);
 
     size_box.append(&width_label);
     size_box.append(&width_spin);
@@ -1416,8 +1416,11 @@ fn show_panel_properties_dialog(
         // Get new background config
         let new_background = background_widget_clone.get_config();
 
+        // Get current geometry (it may have changed from previous Apply)
+        let current_geometry = *old_geometry.borrow();
+
         // Check if anything changed
-        let size_changed = new_width != old_geometry.width || new_height != old_geometry.height;
+        let size_changed = new_width != current_geometry.width || new_height != current_geometry.height;
         let source_changed = new_source_id != old_source_id;
         let displayer_changed = new_displayer_id != old_displayer_id;
 
@@ -1447,9 +1450,9 @@ fn show_panel_properties_dialog(
             let mut occupied = occupied_cells.borrow_mut();
 
             // Clear old occupied cells
-            for dx in 0..old_geometry.width {
-                for dy in 0..old_geometry.height {
-                    occupied.remove(&(old_geometry.x + dx, old_geometry.y + dy));
+            for dx in 0..current_geometry.width {
+                for dy in 0..current_geometry.height {
+                    occupied.remove(&(current_geometry.x + dx, current_geometry.y + dy));
                 }
             }
 
@@ -1457,7 +1460,7 @@ fn show_panel_properties_dialog(
             let mut has_collision = false;
             for dx in 0..new_width {
                 for dy in 0..new_height {
-                    let cell = (old_geometry.x + dx, old_geometry.y + dy);
+                    let cell = (current_geometry.x + dx, current_geometry.y + dy);
                     if occupied.contains(&cell) {
                         has_collision = true;
                         break;
@@ -1470,9 +1473,9 @@ fn show_panel_properties_dialog(
 
             if has_collision {
                 // Restore old occupied cells
-                for dx in 0..old_geometry.width {
-                    for dy in 0..old_geometry.height {
-                        occupied.insert((old_geometry.x + dx, old_geometry.y + dy));
+                for dx in 0..current_geometry.width {
+                    for dy in 0..current_geometry.height {
+                        occupied.insert((current_geometry.x + dx, current_geometry.y + dy));
                     }
                 }
                 drop(occupied);
@@ -1488,9 +1491,9 @@ fn show_panel_properties_dialog(
                     .buttons(vec!["OK"])
                     .build();
 
-                // Revert spinners to old values
-                width_spin_for_collision.set_value(old_geometry.width as f64);
-                height_spin_for_collision.set_value(old_geometry.height as f64);
+                // Revert spinners to current values
+                width_spin_for_collision.set_value(current_geometry.width as f64);
+                height_spin_for_collision.set_value(current_geometry.height as f64);
 
                 error_dialog.show(Some(&dialog_for_apply));
                 return;
@@ -1499,7 +1502,7 @@ fn show_panel_properties_dialog(
             // Mark new cells as occupied
             for dx in 0..new_width {
                 for dy in 0..new_height {
-                    occupied.insert((old_geometry.x + dx, old_geometry.y + dy));
+                    occupied.insert((current_geometry.x + dx, current_geometry.y + dy));
                 }
             }
         }
@@ -1629,6 +1632,12 @@ fn show_panel_properties_dialog(
         // Mark configuration as dirty
         if let Some(callback) = on_change.borrow().as_ref() {
             callback();
+        }
+
+        // Update old_geometry to reflect the new geometry for next Apply
+        if size_changed {
+            old_geometry.borrow_mut().width = new_width;
+            old_geometry.borrow_mut().height = new_height;
         }
     });
 
