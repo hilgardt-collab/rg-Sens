@@ -303,11 +303,11 @@ impl DataSource for GpuSource {
             }
             GpuField::MemoryUsed => {
                 if let Some(mem) = self.memory_used {
-                    let mem_mb = mem / (1024 * 1024);
+                    let mem_gb = mem as f64 / (1024.0 * 1024.0 * 1024.0);
                     values.insert("caption".to_string(), Value::from(caption));
-                    values.insert("value".to_string(), Value::from(mem_mb));
-                    values.insert("memory_used".to_string(), Value::from(mem_mb));
-                    values.insert("unit".to_string(), Value::from("MB"));
+                    values.insert("value".to_string(), Value::from(mem_gb));
+                    values.insert("memory_used".to_string(), Value::from(mem_gb));
+                    values.insert("unit".to_string(), Value::from("GB"));
                 } else {
                     values.insert("caption".to_string(), Value::from(caption));
                     values.insert("value".to_string(), Value::from("N/A"));
