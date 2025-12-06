@@ -25,19 +25,30 @@ impl ImagePicker {
     /// # Arguments
     /// * `parent` - Optional parent window
     /// * `callback` - Callback to invoke with the selected path (or None if cancelled)
+    #[allow(deprecated)]
     pub fn pick<F>(&self, parent: Option<&gtk4::Window>, callback: F)
     where
         F: Fn(Option<PathBuf>) + 'static,
     {
-        // Modern GTK4 FileDialog implementation
-        use gtk4::FileDialog;
+        // PLACEHOLDER: Using deprecated FileChooserDialog until custom implementation is ready
+        // TODO: Replace with custom image picker implementation that includes:
+        //   - Image thumbnails/previews
+        //   - Grid view of images
+        //   - Filter by image type
+        //   - Recent files
+        //   - Favorites
+        //   - Resizable window
 
-        let dialog = FileDialog::builder()
-            .title(&self.title)
-            .modal(true)
-            .build();
+        use gtk4::{FileChooserAction, FileChooserDialog, ResponseType};
 
-        // Add image file filter
+        let dialog = FileChooserDialog::new(
+            Some(&self.title),
+            parent,
+            FileChooserAction::Open,
+            &[("Cancel", ResponseType::Cancel), ("Open", ResponseType::Accept)],
+        );
+
+        // Add image file filters
         let filter = gtk4::FileFilter::new();
         filter.set_name(Some("Image Files"));
         filter.add_mime_type("image/png");
@@ -54,23 +65,24 @@ impl ImagePicker {
         filter.add_pattern("*.bmp");
         filter.add_pattern("*.webp");
         filter.add_pattern("*.svg");
-
-        // Create filter list
-        let filters = gtk4::gio::ListStore::new::<gtk4::FileFilter>();
-        filters.append(&filter);
+        dialog.add_filter(&filter);
 
         // All files filter
         let all_filter = gtk4::FileFilter::new();
         all_filter.set_name(Some("All Files"));
         all_filter.add_pattern("*");
-        filters.append(&all_filter);
+        dialog.add_filter(&all_filter);
 
-        dialog.set_filters(Some(&filters));
-        dialog.set_default_filter(Some(&filter));
-
-        dialog.open(parent, gtk4::gio::Cancellable::NONE, move |result| {
-            let path = result.ok().and_then(|file| file.path());
-            callback(path);
+        dialog.connect_response(move |dialog, response| {
+            let result = if response == ResponseType::Accept {
+                dialog.file().and_then(|f| f.path())
+            } else {
+                None
+            };
+            callback(result);
+            dialog.close();
         });
+
+        dialog.show();
     }
 }
