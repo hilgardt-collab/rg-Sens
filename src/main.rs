@@ -176,6 +176,9 @@ fn build_ui(app: &Application) {
         *config_dirty_clone.borrow_mut() = true;
     });
 
+    // Wrap grid_layout in Rc<RefCell<>> for sharing across closures
+    let grid_layout = Rc::new(RefCell::new(grid_layout));
+
     // Mark config as dirty when window is resized
     let config_dirty_clone2 = config_dirty.clone();
     window.connect_default_width_notify(move |_| {
@@ -188,7 +191,7 @@ fn build_ui(app: &Application) {
     });
 
     // Setup save-on-close confirmation
-    let grid_layout_for_close = grid_layout_for_settings.clone();
+    let grid_layout_for_close = grid_layout.clone();
     let config_dirty_clone4 = config_dirty.clone();
     let app_config_for_close = app_config.clone();
 
@@ -225,7 +228,7 @@ fn build_ui(app: &Application) {
     let window_clone_for_settings = window.clone();
     let app_config_for_settings = app_config.clone();
     let window_bg_for_settings = window_background.clone();
-    let grid_layout_for_settings = Rc::new(RefCell::new(grid_layout));
+    let grid_layout_for_settings = grid_layout.clone();
     let config_dirty_for_settings = config_dirty.clone();
 
     // Add right-click gesture for context menu
@@ -775,7 +778,6 @@ fn show_new_panel_dialog(
     // OK handler
     let dialog_clone = dialog.clone();
     let grid_layout = grid_layout.clone();
-    let panels = panels.clone();
     let config_dirty = config_dirty.clone();
     ok_button.connect_clicked(move |_| {
         let x = x_spin.value() as u32;
@@ -825,7 +827,7 @@ fn show_new_panel_dialog(
         }
     });
 
-    dialog.show();
+    dialog.present();
 }
 
 /// Load CSS styling for the application
