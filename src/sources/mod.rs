@@ -4,15 +4,15 @@
 //! Each source collects specific system information (CPU, memory, GPU, etc.)
 
 mod cpu;
+mod gpu;
 // mod memory;
-// mod gpu_nvidia;
 // mod temps;
 // mod disk;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
+pub use gpu::GpuSource;
 // pub use memory::MemorySource;
-// pub use gpu_nvidia::NvidiaGpuSource;
 // pub use temps::TemperatureSource;
 // pub use disk::DiskSource;
 // pub use network::NetworkSource;
@@ -24,9 +24,11 @@ pub fn register_all() {
     // Register CPU source
     global_registry().register_source("cpu", || Box::new(CpuSource::new()));
 
+    // Register GPU source
+    global_registry().register_source("gpu", || Box::new(GpuSource::new()));
+
     // TODO: Register more sources
     // register_source!("memory", MemorySource);
-    // register_source!("gpu.nvidia", NvidiaGpuSource);
     // register_source!("temps", TemperatureSource);
     // register_source!("disk", DiskSource);
     // register_source!("network", NetworkSource);

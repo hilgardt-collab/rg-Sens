@@ -83,6 +83,13 @@ impl UpdateManager {
                     } else {
                         Duration::from_millis(1000) // Default 1 second
                     }
+                // Get update interval from GPU config if available
+                } else if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
+                    if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+                        Duration::from_millis(gpu_config.update_interval_ms)
+                    } else {
+                        Duration::from_millis(1000) // Default 1 second
+                    }
                 } else {
                     Duration::from_millis(1000) // Default 1 second
                 }

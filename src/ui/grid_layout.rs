@@ -1257,14 +1257,41 @@ fn show_panel_properties_dialog(
     // Wrap cpu_config_widget in Rc for sharing
     let cpu_config_widget = Rc::new(cpu_config_widget);
 
-    // Show/hide CPU config based on source selection
+    // GPU source configuration widget
+    let gpu_config_widget = crate::ui::GpuSourceConfigWidget::new();
+    gpu_config_widget.widget().set_visible(old_source_id == "gpu");
+
+    // Populate GPU information from cached GPU hardware info
+    let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names()
+        .iter()
+        .map(|s| s.clone())
+        .collect();
+    gpu_config_widget.set_available_gpus(&gpu_names);
+
+    // Load existing GPU config if source is GPU
+    if old_source_id == "gpu" {
+        if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
+            if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+                gpu_config_widget.set_config(gpu_config);
+            }
+        }
+    }
+
+    source_tab_box.append(gpu_config_widget.widget());
+
+    // Wrap gpu_config_widget in Rc for sharing
+    let gpu_config_widget = Rc::new(gpu_config_widget);
+
+    // Show/hide CPU and GPU config based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
+        let gpu_widget_clone = gpu_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected) {
                 cpu_widget_clone.widget().set_visible(source_id == "cpu");
+                gpu_widget_clone.widget().set_visible(source_id == "gpu");
             }
         });
     }
@@ -1399,6 +1426,7 @@ fn show_panel_properties_dialog(
     let background_widget_clone = background_widget.clone();
     let text_config_widget_clone = text_config_widget.clone();
     let cpu_config_widget_clone = cpu_config_widget.clone();
+    let gpu_config_widget_clone = gpu_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -1597,6 +1625,27 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the source
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply CPU config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply GPU source configuration if GPU source is active
+            if new_source_id == "gpu" {
+                let gpu_config = gpu_config_widget_clone.get_config();
+                if let Ok(gpu_config_json) = serde_json::to_value(&gpu_config) {
+                    panel_guard.config.insert("gpu_config".to_string(), gpu_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply GPU config to source: {}", e);
                     }
 
                     // Update the source with new configuration
