@@ -831,6 +831,8 @@ impl GridLayout {
                 for id in selected.iter() {
                     if let Some(state) = states.get(id) {
                         let geom = state.panel.blocking_read().geometry;
+                        log::debug!("[DRAG] Panel {} drag preview using geometry {}x{} at ({},{})",
+                                   id, geom.width, geom.height, geom.x, geom.y);
 
                         // Calculate new grid position
                         let new_grid_x = (geom.x as i32 + grid_offset_x).max(0) as u32;
@@ -1511,8 +1513,13 @@ fn show_panel_properties_dialog(
         if let Ok(mut panel_guard) = panel_clone.try_write() {
             // Update size if changed
             if size_changed {
+                log::info!("[RESIZE] Panel {} geometry changing from {}x{} to {}x{}",
+                          panel_id, current_geometry.width, current_geometry.height,
+                          new_width, new_height);
                 panel_guard.geometry.width = new_width;
                 panel_guard.geometry.height = new_height;
+                log::info!("[RESIZE] Panel {} geometry updated to {}x{}",
+                          panel_id, panel_guard.geometry.width, panel_guard.geometry.height);
             }
 
             // Update background if changed
