@@ -6,6 +6,7 @@ use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[cfg(feature = "nvidia")]
 use nvml_wrapper::Nvml;
@@ -96,6 +97,18 @@ impl GpuSource {
             id: "gpu".to_string(),
             name: "GPU".to_string(),
             description: "NVIDIA GPU monitoring (temperature, utilization, memory, power)".to_string(),
+            available_keys: vec![
+                "caption".to_string(),
+                "value".to_string(),
+                "unit".to_string(),
+                "temperature".to_string(),
+                "utilization".to_string(),
+                "memory_used".to_string(),
+                "memory_percent".to_string(),
+                "power".to_string(),
+                "fan_speed".to_string(),
+            ],
+            default_interval: Duration::from_millis(1000),
         };
 
         #[cfg(feature = "nvidia")]
@@ -191,22 +204,25 @@ impl DataSource for GpuSource {
     fn fields(&self) -> Vec<FieldMetadata> {
         vec![
             FieldMetadata::new(
-                "value".to_string(),
-                "Current Value".to_string(),
-                FieldType::Number,
+                "caption",
+                "Caption",
+                "Label identifying the GPU metric",
+                FieldType::Text,
+                FieldPurpose::Caption,
+            ),
+            FieldMetadata::new(
+                "value",
+                "Value (Configured)",
+                "The configured value (temperature/utilization/memory/power/fan based on GPU settings)",
+                FieldType::Numerical,
                 FieldPurpose::Value,
             ),
             FieldMetadata::new(
-                "caption".to_string(),
-                "Caption".to_string(),
+                "unit",
+                "Unit",
+                "Unit of measurement for the configured value",
                 FieldType::Text,
-                FieldPurpose::Label,
-            ),
-            FieldMetadata::new(
-                "unit".to_string(),
-                "Unit".to_string(),
-                FieldType::Text,
-                FieldPurpose::Label,
+                FieldPurpose::Unit,
             ),
         ]
     }
