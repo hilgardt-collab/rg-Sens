@@ -1307,8 +1307,127 @@ impl GridLayout {
 
                                 widget_for_menu.add_controller(gesture_secondary);
 
-                                // Note: We skip drag gesture setup for copied panels to avoid complexity
-                                // Dragging will work after save/reload
+                                // Setup drag gesture for copied panel
+                                use gtk4::GestureDrag;
+                                let drag_gesture_copy = GestureDrag::new();
+                                drag_gesture_copy.set_button(1);
+
+                                // Store initial positions and the ID of the panel being dragged
+                                let initial_positions_copy: Rc<RefCell<HashMap<String, (f64, f64)>>> =
+                                    Rc::new(RefCell::new(HashMap::new()));
+                                let dragged_panel_id_copy: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
+
+                                // Clone for drag_begin
+                                let initial_positions_begin = initial_positions_copy.clone();
+                                let dragged_panel_id_begin = dragged_panel_id_copy.clone();
+                                let selected_panels_drag_begin = selected_panels_end.clone();
+                                let panel_states_drag_begin = panel_states_end.clone();
+                                let is_dragging_drag_begin = is_dragging_end.clone();
+                                let drop_zone_drag_begin = drop_zone_layer_end.clone();
+                                let panel_id_drag_begin = new_id.clone();
+
+                                drag_gesture_copy.connect_drag_begin(move |_, _, _| {
+                                    *is_dragging_drag_begin.borrow_mut() = true;
+                                    drop_zone_drag_begin.queue_draw();
+
+                                    *dragged_panel_id_begin.borrow_mut() = panel_id_drag_begin.clone();
+
+                                    let mut selected = selected_panels_drag_begin.borrow_mut();
+                                    let mut states = panel_states_drag_begin.borrow_mut();
+
+                                    if !selected.contains(&panel_id_drag_begin) {
+                                        for (id, state) in states.iter_mut() {
+                                            if selected.contains(id) {
+                                                state.selected = false;
+                                                state.frame.remove_css_class("selected");
+                                            }
+                                        }
+                                        selected.clear();
+
+                                        selected.insert(panel_id_drag_begin.clone());
+                                        if let Some(state) = states.get_mut(&panel_id_drag_begin) {
+                                            state.selected = true;
+                                            state.frame.add_css_class("selected");
+                                        }
+                                    }
+
+                                    let mut positions = initial_positions_begin.borrow_mut();
+                                    positions.clear();
+
+                                    for id in selected.iter() {
+                                        if let Some(state) = states.get(id) {
+                                            if let Some(parent) = state.frame.parent() {
+                                                if let Ok(fixed) = parent.downcast::<Fixed>() {
+                                                    let pos = fixed.child_position(&state.frame);
+                                                    positions.insert(id.clone(), pos);
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                // Clone for drag_update
+                                let initial_positions_update = initial_positions_copy.clone();
+                                let dragged_panel_id_update = dragged_panel_id_copy.clone();
+                                let config_drag_update = config_for_end.clone();
+                                let selected_panels_drag_update = selected_panels_end.clone();
+                                let panel_states_drag_update = panel_states_end.clone();
+                                let drag_preview_cells_drag_update = drag_preview_cells_end.clone();
+                                let drop_zone_drag_update = drop_zone_layer_end.clone();
+
+                                drag_gesture_copy.connect_drag_update(move |_, offset_x, offset_y| {
+                                    let config = config_drag_update.borrow();
+                                    let positions = initial_positions_update.borrow();
+                                    let selected = selected_panels_drag_update.borrow();
+                                    let states = panel_states_drag_update.borrow();
+                                    let dragged_id = dragged_panel_id_update.borrow();
+
+                                    let mut preview_rects = Vec::new();
+
+                                    if let Some((dragged_orig_x, dragged_orig_y)) = positions.get(&*dragged_id) {
+                                        let dragged_new_x = dragged_orig_x + offset_x;
+                                        let dragged_new_y = dragged_orig_y + offset_y;
+
+                                        let dragged_grid_x = ((dragged_new_x + config.cell_width as f64 / 2.0)
+                                            / (config.cell_width + config.spacing) as f64)
+                                            .floor() as i32;
+                                        let dragged_grid_y = ((dragged_new_y + config.cell_height as f64 / 2.0)
+                                            / (config.cell_height + config.spacing) as f64)
+                                            .floor() as i32;
+
+                                        let dragged_panel_orig_grid = if let Some(state) = states.get(&*dragged_id) {
+                                            let geom = state.panel.blocking_read().geometry;
+                                            (geom.x as i32, geom.y as i32)
+                                        } else {
+                                            (0, 0)
+                                        };
+
+                                        let grid_offset_x = dragged_grid_x - dragged_panel_orig_grid.0;
+                                        let grid_offset_y = dragged_grid_y - dragged_panel_orig_grid.1;
+
+                                        for id in selected.iter() {
+                                            if let Some(state) = states.get(id) {
+                                                let geom = state.panel.blocking_read().geometry;
+                                                let new_grid_x = (geom.x as i32 + grid_offset_x).max(0) as u32;
+                                                let new_grid_y = (geom.y as i32 + grid_offset_y).max(0) as u32;
+                                                preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                                            }
+                                        }
+                                    }
+
+                                    let mut preview_cells = drag_preview_cells_drag_update.borrow_mut();
+                                    if *preview_cells != preview_rects {
+                                        *preview_cells = preview_rects;
+                                        drop(preview_cells);
+                                        drop_zone_drag_update.queue_draw();
+                                    }
+                                });
+
+                                // The drag_end handler is the existing one that handles all panels
+                                // We don't need a new drag_end handler because the copied panel is now in
+                                // panel_states and will be handled by the main drag_end logic
+
+                                frame.add_controller(drag_gesture_copy);
 
                                 // Add to container
                                 container_for_copy.put(&frame, x as f64, y as f64);
