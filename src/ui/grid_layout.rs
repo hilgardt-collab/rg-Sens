@@ -49,7 +49,7 @@ pub struct GridLayout {
     overlay: Overlay,
     container: Fixed,
     drop_zone_layer: DrawingArea,
-    panels: Vec<Arc<RwLock<Panel>>>,
+    panels: Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
     panel_states: Rc<RefCell<HashMap<String, PanelState>>>,
     selected_panels: Rc<RefCell<HashSet<String>>>,
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
@@ -90,7 +90,7 @@ impl GridLayout {
             overlay,
             container,
             drop_zone_layer,
-            panels: Vec::new(),
+            panels: Rc::new(RefCell::new(Vec::new())),
             panel_states: Rc::new(RefCell::new(HashMap::new())),
             selected_panels: Rc::new(RefCell::new(HashSet::new())),
             occupied_cells: Rc::new(RefCell::new(HashSet::new())),
@@ -111,6 +111,11 @@ impl GridLayout {
         F: Fn() + 'static,
     {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Get the list of panels
+    pub fn get_panels(&self) -> Vec<Arc<RwLock<Panel>>> {
+        self.panels.borrow().clone()
     }
 
     /// Setup drop zone visualization
@@ -475,7 +480,7 @@ impl GridLayout {
             },
         );
 
-        self.panels.push(panel);
+        self.panels.borrow_mut().push(panel);
     }
 
     /// Setup panel interaction (selection and drag)
@@ -600,10 +605,81 @@ impl GridLayout {
 
         // Delete action
         let panel_id_clone2 = panel_id.clone();
+        let panel_clone2 = panel.clone();
+        let panel_states_clone = self.panel_states.clone();
+        let occupied_cells_clone = self.occupied_cells.clone();
+        let container_clone = self.container.clone();
+        let on_change_clone = self.on_change.clone();
+        let panels_clone = self.panels.clone();
         let delete_action = gio::SimpleAction::new("delete", None);
         delete_action.connect_activate(move |_, _| {
             info!("Delete requested for panel: {}", panel_id_clone2);
-            // TODO: Implement delete with confirmation
+
+            // Get panel geometry before deletion
+            let geometry = {
+                let panel_guard = panel_clone2.blocking_read();
+                panel_guard.geometry
+            };
+
+            // Show confirmation dialog
+            use gtk4::AlertDialog;
+            let dialog = AlertDialog::builder()
+                .message("Delete Panel?")
+                .detail("This action cannot be undone.")
+                .modal(true)
+                .buttons(vec!["Cancel", "Delete"])
+                .default_button(0) // "Cancel" button
+                .cancel_button(0) // "Cancel" button
+                .build();
+
+            let panel_id_for_delete = panel_id_clone2.clone();
+            let panel_states_for_delete = panel_states_clone.clone();
+            let occupied_cells_for_delete = occupied_cells_clone.clone();
+            let container_for_delete = container_clone.clone();
+            let on_change_for_delete = on_change_clone.clone();
+            let panels_for_delete = panels_clone.clone();
+
+            // We need a parent window for the dialog - get it from the container
+            if let Some(root) = container_clone.root() {
+                if let Some(window) = root.downcast_ref::<gtk4::Window>() {
+                    dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
+                        if let Ok(1) = response {
+                            // Delete button clicked (index 1)
+                            info!("Deleting panel: {}", panel_id_for_delete);
+
+                            // Remove from panel_states and get the frame widget
+                            if let Some(state) = panel_states_for_delete.borrow_mut().remove(&panel_id_for_delete) {
+                                // Remove widget from container
+                                container_for_delete.remove(&state.frame);
+
+                                // Free occupied cells
+                                for dx in 0..geometry.width {
+                                    for dy in 0..geometry.height {
+                                        occupied_cells_for_delete
+                                            .borrow_mut()
+                                            .remove(&(geometry.x + dx, geometry.y + dy));
+                                    }
+                                }
+
+                                // Remove from panels list
+                                panels_for_delete.borrow_mut().retain(|p| {
+                                    let p_guard = p.blocking_read();
+                                    p_guard.id != panel_id_for_delete
+                                });
+
+                                // Trigger on_change callback to mark config as dirty
+                                if let Some(ref callback) = *on_change_for_delete.borrow() {
+                                    callback();
+                                }
+
+                                info!("Panel deleted successfully: {}", panel_id_for_delete);
+                            } else {
+                                log::warn!("Panel not found in states: {}", panel_id_for_delete);
+                            }
+                        }
+                    });
+                }
+            }
         });
         action_group.add_action(&delete_action);
 
