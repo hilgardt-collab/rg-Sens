@@ -1005,19 +1005,26 @@ impl GridLayout {
                         let new_id = format!("panel_{}", uuid::Uuid::new_v4());
 
                         // Create new panel with copied configuration
+                        use crate::core::PanelGeometry;
                         let registry = crate::core::global_registry();
-                        if let Some(source_factory) = registry.get_source(&source_meta.id) {
-                            if let Some(displayer_factory) = registry.get_displayer(&displayer_id) {
-                                let new_panel = Panel::new(
+                        if let Some(new_source) = registry.create_source(&source_meta.id) {
+                            if let Some(new_displayer) = registry.create_displayer(&displayer_id) {
+                                let geometry = PanelGeometry {
+                                    x: grid_x,
+                                    y: grid_y,
+                                    width: geometry_size.0,
+                                    height: geometry_size.1,
+                                };
+
+                                let mut new_panel = Panel::new(
                                     new_id.clone(),
-                                    grid_x,
-                                    grid_y,
-                                    geometry_size.0,
-                                    geometry_size.1,
-                                    source_factory(),
-                                    displayer_factory(),
-                                    background,
+                                    geometry,
+                                    new_source,
+                                    new_displayer,
                                 );
+
+                                // Set the background
+                                new_panel.background = background;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
 
