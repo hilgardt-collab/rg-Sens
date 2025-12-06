@@ -863,22 +863,29 @@ impl GridLayout {
         let is_dragging_end = is_dragging.clone();
         let drop_zone_layer_end = drop_zone_layer.clone();
         let on_change_end = self.on_change.clone();
+        let container_for_copy = self.container.clone();
+        let panels_for_copy = self.panels.clone();
 
-        drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
+        drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
             let config = config_for_end.borrow();
             let selected = selected_panels_end.borrow();
             let states = panel_states_end.borrow();
             let mut occupied = occupied_cells_end.borrow_mut();
             let positions = initial_positions.borrow();
 
+            // Check if Ctrl key is held (copy mode)
+            let modifiers = gesture.current_event_state();
+            let is_copy_mode = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
 
-            // Phase 1: Clear current occupied cells for ALL selected panels
-            for id in selected.iter() {
-                if let Some(state) = states.get(id) {
-                    let geom = state.panel.blocking_read().geometry;
-                    for dx in 0..geom.width {
-                        for dy in 0..geom.height {
-                            occupied.remove(&(geom.x + dx, geom.y + dy));
+            // Phase 1: Clear current occupied cells for ALL selected panels (only if moving, not copying)
+            if !is_copy_mode {
+                for id in selected.iter() {
+                    if let Some(state) = states.get(id) {
+                        let geom = state.panel.blocking_read().geometry;
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.remove(&(geom.x + dx, geom.y + dy));
+                            }
                         }
                     }
                 }
@@ -950,35 +957,174 @@ impl GridLayout {
                 }
             }
 
-            // Phase 3: Apply movement based on collision check
-            for (_id, _gx, _gy, _px, _py) in &new_positions {
-            }
-
+            // Phase 3: Apply movement/copy based on collision check
             if group_has_collision {
-                // Restore ALL panels to original positions
-                for id in selected.iter() {
-                    if let Some(state) = states.get(id) {
-                        let geom = state.panel.blocking_read().geometry;
+                // Restore ALL panels to original positions (only needed in move mode)
+                if !is_copy_mode {
+                    for id in selected.iter() {
+                        if let Some(state) = states.get(id) {
+                            let geom = state.panel.blocking_read().geometry;
 
-                        // Restore occupied cells
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.insert((geom.x + dx, geom.y + dy));
+                            // Restore occupied cells
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.insert((geom.x + dx, geom.y + dy));
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if is_copy_mode {
+                // COPY MODE: Create duplicates of panels at new positions
+                drop(states); // Release borrow before creating new panels
+                drop(selected);
+                drop(occupied);
+
+                use crate::core::Panel;
+
+                for (old_id, grid_x, grid_y, _snapped_x, _snapped_y) in new_positions {
+                    // Get the original panel to copy from
+                    let panel_states_read = panel_states_end.borrow();
+                    if let Some(state) = panel_states_read.get(&old_id) {
+                        let original_panel = state.panel.clone();
+                        drop(panel_states_read);
+
+                        // Read original panel data
+                        let (source_meta, displayer_id, config, background, geometry_size) = {
+                            let panel_guard = original_panel.blocking_read();
+                            (
+                                panel_guard.source.metadata().clone(),
+                                panel_guard.displayer.id().to_string(),
+                                panel_guard.config.clone(),
+                                panel_guard.background.clone(),
+                                (panel_guard.geometry.width, panel_guard.geometry.height),
+                            )
+                        };
+
+                        // Generate unique ID for the copy
+                        let new_id = format!("panel_{}", uuid::Uuid::new_v4());
+
+                        // Create new panel with copied configuration
+                        let registry = crate::core::global_registry();
+                        if let Some(source_factory) = registry.get_source(&source_meta.id) {
+                            if let Some(displayer_factory) = registry.get_displayer(&displayer_id) {
+                                let new_panel = Panel::new(
+                                    new_id.clone(),
+                                    grid_x,
+                                    grid_y,
+                                    geometry_size.0,
+                                    geometry_size.1,
+                                    source_factory(),
+                                    displayer_factory(),
+                                    background,
+                                );
+
+                                let new_panel = Arc::new(RwLock::new(new_panel));
+
+                                // Apply the copied configuration
+                                if let Ok(mut new_panel_guard) = new_panel.try_write() {
+                                    let _ = new_panel_guard.apply_config(config);
+                                }
+
+                                // Add the copied panel to the grid
+                                // Add to panels list
+                                panels_for_copy.borrow_mut().push(new_panel.clone());
+
+                                // Mark new cells as occupied
+                                let mut occupied_write = occupied_cells_end.borrow_mut();
+                                for dx in 0..geometry_size.0 {
+                                    for dy in 0..geometry_size.1 {
+                                        occupied_write.insert((grid_x + dx, grid_y + dy));
+                                    }
+                                }
+                                drop(occupied_write);
+
+                                // Create UI for the copied panel
+                                let config_read = config_for_end.borrow();
+                                let x = grid_x as i32 * (config_read.cell_width + config_read.spacing);
+                                let y = grid_y as i32 * (config_read.cell_height + config_read.spacing);
+                                let width = geometry_size.0 as i32 * config_read.cell_width
+                                    + (geometry_size.0 as i32 - 1) * config_read.spacing;
+                                let height = geometry_size.1 as i32 * config_read.cell_height
+                                    + (geometry_size.1 as i32 - 1) * config_read.spacing;
+                                drop(config_read);
+
+                                // Create displayer widget
+                                let widget = {
+                                    let panel_guard = new_panel.blocking_read();
+                                    panel_guard.displayer.create_widget()
+                                };
+                                widget.set_size_request(width, height);
+
+                                // Create background drawing area
+                                use gtk4::DrawingArea;
+                                let background_area = DrawingArea::new();
+                                background_area.set_size_request(width, height);
+
+                                // Setup background rendering
+                                let panel_clone_bg = new_panel.clone();
+                                background_area.set_draw_func(move |_, cr, w, h| {
+                                    match panel_clone_bg.try_read() {
+                                        Ok(panel_guard) => {
+                                            if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64) {
+                                                log::warn!("Failed to render background: {}", e);
+                                            }
+                                        }
+                                        Err(_) => {
+                                            log::warn!("Failed to acquire panel read lock for background rendering");
+                                        }
+                                    }
+                                });
+
+                                // Create overlay to stack background and widget
+                                use gtk4::Overlay;
+                                let overlay = Overlay::new();
+                                overlay.set_child(Some(&background_area));
+
+                                // Make the widget transparent so the background shows through
+                                widget.add_css_class("transparent-background");
+                                overlay.add_overlay(&widget);
+
+                                // Create frame for selection visual feedback
+                                use gtk4::Frame;
+                                let frame = Frame::new(None);
+                                frame.set_child(Some(&overlay));
+                                frame.set_size_request(width, height);
+
+                                // Note: We cannot call setup_panel_interaction here as it requires &self
+                                // The copied panel will not have interaction until the next app restart
+                                // or until we implement a proper deferred setup mechanism
+                                // For now, this is acceptable as a first implementation
+
+                                // Add to container
+                                container_for_copy.put(&frame, x as f64, y as f64);
+
+                                // Store panel state
+                                panel_states_end.borrow_mut().insert(
+                                    new_id.clone(),
+                                    PanelState {
+                                        widget: widget.clone(),
+                                        frame: frame.clone(),
+                                        panel: new_panel.clone(),
+                                        selected: false,
+                                        background_area: background_area.clone(),
+                                    },
+                                );
+
+                                log::info!("Created panel copy: {} at ({}, {})", new_id, grid_x, grid_y);
                             }
                         }
                     }
                 }
             } else {
-                // Move ALL panels to new positions
+                // MOVE MODE: Move ALL panels to new positions
                 for (id, grid_x, grid_y, snapped_x, snapped_y) in new_positions {
                     if let Some(state) = states.get(&id) {
                         // Move widget
                         if let Some(parent) = state.frame.parent() {
                             if let Ok(fixed) = parent.downcast::<Fixed>() {
                                 fixed.move_(&state.frame, snapped_x, snapped_y);
-                            } else {
                             }
-                        } else {
                         }
 
                         // Update geometry
