@@ -1136,6 +1136,7 @@ impl GridLayout {
                                 let on_change_props = on_change_for_menu.clone();
                                 let drop_zone_props = drop_zone_for_menu.clone();
                                 let panel_id_props = panel_id_for_menu.clone();
+                                let container_props = container_for_copy.clone();
 
                                 properties_action.connect_activate(move |_, _| {
                                     log::info!("Opening properties dialog for copied panel: {}", panel_id_props);
@@ -1146,7 +1147,7 @@ impl GridLayout {
                                         *config_clone_props.borrow(),
                                         panel_states_props.clone(),
                                         occupied_cells_props.clone(),
-                                        container_for_copy.clone(),
+                                        container_props.clone(),
                                         on_change_props.clone(),
                                         drop_zone_props.clone(),
                                         registry,
@@ -1162,6 +1163,7 @@ impl GridLayout {
                                 let occupied_cells_del = occupied_cells_for_menu.clone();
                                 let panels_del = panels_for_copy.clone();
                                 let on_change_del = on_change_for_menu.clone();
+                                let container_del = container_for_copy.clone();
 
                                 delete_action.connect_activate(move |_, _| {
                                     log::info!("Delete requested for copied panel: {}", panel_id_del);
@@ -1185,15 +1187,16 @@ impl GridLayout {
                                     let occupied_cells_confirm = occupied_cells_del.clone();
                                     let panels_confirm = panels_del.clone();
                                     let on_change_confirm = on_change_del.clone();
+                                    let container_confirm = container_del.clone();
 
                                     // We need a window for the dialog - try to get it from the container
-                                    if let Some(root) = container_for_copy.root() {
+                                    if let Some(root) = container_del.root() {
                                         if let Some(window) = root.downcast_ref::<gtk4::Window>() {
                                             dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
                                                 if let Ok(1) = response {
                                                     log::info!("Deleting copied panel: {}", panel_id_confirm);
                                                     if let Some(state) = panel_states_confirm.borrow_mut().remove(&panel_id_confirm) {
-                                                        container_for_copy.remove(&state.frame);
+                                                        container_confirm.remove(&state.frame);
 
                                                         let mut occupied = occupied_cells_confirm.borrow_mut();
                                                         for dx in 0..geometry.width {
