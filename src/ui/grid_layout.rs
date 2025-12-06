@@ -1007,8 +1007,8 @@ impl GridLayout {
                         // Create new panel with copied configuration
                         use crate::core::PanelGeometry;
                         let registry = crate::core::global_registry();
-                        if let Some(new_source) = registry.create_source(&source_meta.id) {
-                            if let Some(new_displayer) = registry.create_displayer(&displayer_id) {
+                        if let Ok(new_source) = registry.create_source(&source_meta.id) {
+                            if let Ok(new_displayer) = registry.create_displayer(&displayer_id) {
                                 let geometry = PanelGeometry {
                                     x: grid_x,
                                     y: grid_y,
