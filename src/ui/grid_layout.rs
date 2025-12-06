@@ -1017,10 +1017,11 @@ impl GridLayout {
         // Remove from panels list
         if let Some(pos) = self
             .panels
+            .borrow()
             .iter()
             .position(|p| p.blocking_read().id == panel_id)
         {
-            let panel = self.panels.remove(pos);
+            let panel = self.panels.borrow_mut().remove(pos);
 
             // Remove from states and container
             if let Some(state) = self.panel_states.borrow_mut().remove(panel_id) {
@@ -1043,10 +1044,6 @@ impl GridLayout {
         } else {
             None
         }
-    }
-
-    pub fn panels(&self) -> &[Arc<RwLock<Panel>>] {
-        &self.panels
     }
 
     pub fn widget(&self) -> Widget {
