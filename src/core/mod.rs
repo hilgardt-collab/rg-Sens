@@ -10,6 +10,6 @@ mod update_manager;
 pub use data_source::{BoxedDataSource, DataSource, SourceMetadata};
 pub use displayer::{BoxedDisplayer, ConfigOption, ConfigSchema, Displayer};
 pub use field_metadata::{FieldMetadata, FieldPurpose, FieldType};
-pub use panel::{Panel, PanelGeometry};
+pub use panel::{Panel, PanelGeometry, PanelBorderConfig};
 pub use registry::{global_registry, Registry};
 pub use update_manager::UpdateManager;

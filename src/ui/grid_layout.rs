@@ -430,8 +430,44 @@ impl GridLayout {
         background_area.set_draw_func(move |_, cr, w, h| {
             match panel_clone_bg.try_read() {
                 Ok(panel_guard) => {
-                    if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64) {
+                    let width = w as f64;
+                    let height = h as f64;
+                    let radius = panel_guard.corner_radius.min(width / 2.0).min(height / 2.0);
+
+                    // Create rounded rectangle path
+                    cr.new_path();
+                    if radius > 0.0 {
+                        cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+                        cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
+                        cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
+                        cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                        cr.close_path();
+                    } else {
+                        cr.rectangle(0.0, 0.0, width, height);
+                    }
+
+                    // Render background with clipping
+                    cr.save().ok();
+                    cr.clip();
+                    if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, width, height) {
                         log::warn!("Failed to render background: {}", e);
+                    }
+                    cr.restore().ok();
+
+                    // Render border if enabled
+                    if panel_guard.border.enabled {
+                        if radius > 0.0 {
+                            cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+                            cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
+                            cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
+                            cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                            cr.close_path();
+                        } else {
+                            cr.rectangle(0.0, 0.0, width, height);
+                        }
+                        panel_guard.border.color.apply_to_cairo(cr);
+                        cr.set_line_width(panel_guard.border.width);
+                        cr.stroke().ok();
                     }
                 }
                 Err(_) => {
@@ -449,6 +485,7 @@ impl GridLayout {
         overlay.add_overlay(&widget);
 
         // Create frame for selection visual feedback
+        // Note: Corner radius is handled by Cairo rendering in background_area.set_draw_func
         let frame = Frame::new(None);
         frame.set_child(Some(&overlay));
         frame.set_size_request(width, height);
@@ -990,13 +1027,15 @@ impl GridLayout {
                         drop(panel_states_read);
 
                         // Read original panel data
-                        let (source_meta, displayer_id, config, background, geometry_size) = {
+                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size) = {
                             let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
                                 panel_guard.displayer.id().to_string(),
                                 panel_guard.config.clone(),
                                 panel_guard.background.clone(),
+                                panel_guard.corner_radius,
+                                panel_guard.border.clone(),
                                 (panel_guard.geometry.width, panel_guard.geometry.height),
                             )
                         };
@@ -1023,8 +1062,10 @@ impl GridLayout {
                                     new_displayer,
                                 );
 
-                                // Set the background
+                                // Set the background, corner radius, and border
                                 new_panel.background = background;
+                                new_panel.corner_radius = corner_radius;
+                                new_panel.border = border;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
 
@@ -1073,8 +1114,44 @@ impl GridLayout {
                                 background_area.set_draw_func(move |_, cr, w, h| {
                                     match panel_clone_bg.try_read() {
                                         Ok(panel_guard) => {
-                                            if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, w as f64, h as f64) {
+                                            let width = w as f64;
+                                            let height = h as f64;
+                                            let radius = panel_guard.corner_radius.min(width / 2.0).min(height / 2.0);
+
+                                            // Create rounded rectangle path
+                                            cr.new_path();
+                                            if radius > 0.0 {
+                                                cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+                                                cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
+                                                cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
+                                                cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                                                cr.close_path();
+                                            } else {
+                                                cr.rectangle(0.0, 0.0, width, height);
+                                            }
+
+                                            // Render background with clipping
+                                            cr.save().ok();
+                                            cr.clip();
+                                            if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, width, height) {
                                                 log::warn!("Failed to render background: {}", e);
+                                            }
+                                            cr.restore().ok();
+
+                                            // Render border if enabled
+                                            if panel_guard.border.enabled {
+                                                if radius > 0.0 {
+                                                    cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+                                                    cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
+                                                    cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
+                                                    cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                                                    cr.close_path();
+                                                } else {
+                                                    cr.rectangle(0.0, 0.0, width, height);
+                                                }
+                                                panel_guard.border.color.apply_to_cairo(cr);
+                                                cr.set_line_width(panel_guard.border.width);
+                                                cr.stroke().ok();
                                             }
                                         }
                                         Err(_) => {
@@ -1093,6 +1170,7 @@ impl GridLayout {
                                 overlay.add_overlay(&widget);
 
                                 // Create frame for selection visual feedback
+                                // Note: Corner radius is handled by Cairo rendering in background_area.set_draw_func
                                 use gtk4::Frame;
                                 let frame = Frame::new(None);
                                 frame.set_child(Some(&overlay));
@@ -1747,8 +1825,8 @@ fn show_panel_properties_dialog(
     let dialog = Window::builder()
         .title(format!("Panel Properties - {}", panel_id))
         .modal(true)
-        .default_width(500)
-        .default_height(450)
+        .default_width(550)
+        .default_height(650)
         .build();
 
     // Main container
@@ -1779,12 +1857,12 @@ fn show_panel_properties_dialog(
 
     // Width control
     let width_label = Label::new(Some("Width:"));
-    let width_spin = SpinButton::with_range(1.0, 10.0, 1.0);
+    let width_spin = SpinButton::with_range(1.0, 20.0, 1.0);
     width_spin.set_value(old_geometry.borrow().width as f64);
 
     // Height control
     let height_label = Label::new(Some("Height:"));
-    let height_spin = SpinButton::with_range(1.0, 10.0, 1.0);
+    let height_spin = SpinButton::with_range(1.0, 20.0, 1.0);
     height_spin.set_value(old_geometry.borrow().height as f64);
 
     size_box.append(&width_label);
@@ -1794,20 +1872,7 @@ fn show_panel_properties_dialog(
 
     panel_props_box.append(&size_box);
 
-    // Background section
-    let background_label = Label::new(Some("Background"));
-    background_label.add_css_class("heading");
-    background_label.set_margin_top(12);
-    panel_props_box.append(&background_label);
-
-    let background_widget = crate::ui::BackgroundConfigWidget::new();
-    background_widget.set_config(panel_guard.background.clone());
-    panel_props_box.append(background_widget.widget());
-
-    // Wrap background_widget in Rc so we can share it with the closure
-    let background_widget = Rc::new(background_widget);
-
-    notebook.append_page(&panel_props_box, Some(&Label::new(Some("Panel Properties"))));
+    notebook.append_page(&panel_props_box, Some(&Label::new(Some("Size"))));
 
     // === Tab 2: Data Source ===
     let source_tab_box = GtkBox::new(Orientation::Vertical, 12);
@@ -1948,7 +2013,7 @@ fn show_panel_properties_dialog(
     // Get available fields from the current data source
     let available_fields = panel_guard.source.fields();
 
-    let text_config_widget = crate::ui::TextLineConfigWidget::new(available_fields);
+    let text_config_widget = crate::ui::TextLineConfigWidget::new(available_fields.clone());
     text_config_widget.widget().set_visible(old_displayer_id == "text");
     text_config_label.set_visible(old_displayer_id == "text");
 
@@ -1973,17 +2038,51 @@ fn show_panel_properties_dialog(
     // Wrap text_config_widget in Rc for sharing
     let text_config_widget = Rc::new(text_config_widget);
 
-    // Show/hide text config based on displayer selection
+    // Bar displayer configuration (shown only when bar displayer is selected)
+    let bar_config_label = Label::new(Some("Bar Configuration"));
+    bar_config_label.add_css_class("heading");
+    bar_config_label.set_margin_top(12);
+
+    // Get available fields from the current data source (same as text displayer)
+    let bar_config_widget = crate::ui::BarConfigWidget::new(available_fields.clone());
+    bar_config_widget.widget().set_visible(old_displayer_id == "bar");
+    bar_config_label.set_visible(old_displayer_id == "bar");
+
+    // Load existing bar config if displayer is bar, or use default
+    if old_displayer_id == "bar" {
+        let bar_config = if let Some(bar_config_value) = panel_guard.config.get("bar_config") {
+            // Use saved config if available
+            serde_json::from_value::<crate::ui::BarDisplayConfig>(bar_config_value.clone())
+                .unwrap_or_else(|_| crate::ui::BarDisplayConfig::default())
+        } else {
+            // Use default config (includes caption, value, unit text lines)
+            crate::ui::BarDisplayConfig::default()
+        };
+        bar_config_widget.set_config(bar_config);
+    }
+
+    displayer_tab_box.append(&bar_config_label);
+    displayer_tab_box.append(bar_config_widget.widget());
+
+    // Wrap bar_config_widget in Rc for sharing
+    let bar_config_widget = Rc::new(bar_config_widget);
+
+    // Show/hide text and bar config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
+        let bar_widget_clone = bar_config_widget.clone();
+        let bar_label_clone = bar_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 let is_text = displayer_id == "text";
+                let is_bar = displayer_id == "bar";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
+                bar_widget_clone.widget().set_visible(is_bar);
+                bar_label_clone.set_visible(is_bar);
             }
         });
     }
@@ -2009,6 +2108,91 @@ fn show_panel_properties_dialog(
 
     notebook.append_page(&displayer_tab_box, Some(&Label::new(Some("Display Type"))));
 
+    // === Tab: Background ===
+    let background_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    background_tab_box.set_margin_top(12);
+    background_tab_box.set_margin_bottom(12);
+    background_tab_box.set_margin_start(12);
+    background_tab_box.set_margin_end(12);
+
+    let background_widget = crate::ui::BackgroundConfigWidget::new();
+    background_widget.set_config(panel_guard.background.clone());
+    background_tab_box.append(background_widget.widget());
+
+    // Wrap background_widget in Rc so we can share it with the closure
+    let background_widget = Rc::new(background_widget);
+
+    notebook.append_page(&background_tab_box, Some(&Label::new(Some("Background"))));
+
+    // === Tab: Appearance ===
+    let appearance_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    appearance_tab_box.set_margin_top(12);
+    appearance_tab_box.set_margin_bottom(12);
+    appearance_tab_box.set_margin_start(12);
+    appearance_tab_box.set_margin_end(12);
+
+    // Corner radius
+    let corner_radius_label = Label::new(Some("Corner Radius"));
+    corner_radius_label.add_css_class("heading");
+    appearance_tab_box.append(&corner_radius_label);
+
+    let corner_radius_box = GtkBox::new(Orientation::Horizontal, 6);
+    corner_radius_box.set_margin_start(12);
+    corner_radius_box.append(&Label::new(Some("Radius:")));
+    let corner_radius_spin = SpinButton::with_range(0.0, 50.0, 1.0);
+    corner_radius_spin.set_value(panel_guard.corner_radius);
+    corner_radius_spin.set_hexpand(true);
+    corner_radius_box.append(&corner_radius_spin);
+    appearance_tab_box.append(&corner_radius_box);
+
+    // Border section
+    let border_label = Label::new(Some("Border"));
+    border_label.add_css_class("heading");
+    border_label.set_margin_top(12);
+    appearance_tab_box.append(&border_label);
+
+    let border_enabled_check = gtk4::CheckButton::with_label("Show Border");
+    border_enabled_check.set_active(panel_guard.border.enabled);
+    border_enabled_check.set_margin_start(12);
+    appearance_tab_box.append(&border_enabled_check);
+
+    let border_width_box = GtkBox::new(Orientation::Horizontal, 6);
+    border_width_box.set_margin_start(12);
+    border_width_box.append(&Label::new(Some("Width:")));
+    let border_width_spin = SpinButton::with_range(0.5, 10.0, 0.5);
+    border_width_spin.set_value(panel_guard.border.width);
+    border_width_spin.set_hexpand(true);
+    border_width_box.append(&border_width_spin);
+    appearance_tab_box.append(&border_width_box);
+
+    let border_color_btn = Button::with_label("Border Color");
+    border_color_btn.set_margin_start(12);
+    appearance_tab_box.append(&border_color_btn);
+
+    // Store border color in a shared Rc<RefCell>
+    let border_color = Rc::new(RefCell::new(panel_guard.border.color));
+
+    // Border color button handler
+    {
+        let border_color_clone = border_color.clone();
+        let dialog_clone = dialog.clone();
+        border_color_btn.connect_clicked(move |_| {
+            let current_color = *border_color_clone.borrow();
+            let window_opt = dialog_clone.clone().upcast::<gtk4::Window>();
+            let border_color_clone2 = border_color_clone.clone();
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Some(new_color) = crate::ui::ColorPickerDialog::pick_color(Some(&window_opt), current_color).await {
+                    *border_color_clone2.borrow_mut() = new_color;
+                }
+            });
+        });
+    }
+
+    notebook.append_page(&appearance_tab_box, Some(&Label::new(Some("Appearance"))));
+
+    drop(panel_guard); // Release the panel guard before closures
+
     // Add notebook to main vbox
     vbox.append(&notebook);
 
@@ -2027,17 +2211,22 @@ fn show_panel_properties_dialog(
         dialog_clone.close();
     });
 
-    drop(panel_guard); // Release lock before closure
-
     // Create a shared closure for applying changes
     let panel_clone = panel.clone();
     let background_widget_clone = background_widget.clone();
     let text_config_widget_clone = text_config_widget.clone();
+    let bar_config_widget_clone = bar_config_widget.clone();
     let cpu_config_widget_clone = cpu_config_widget.clone();
     let gpu_config_widget_clone = gpu_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
+    let corner_radius_spin_clone = corner_radius_spin.clone();
+    let border_enabled_check_clone = border_enabled_check.clone();
+    let border_width_spin_clone = border_width_spin.clone();
+    let border_color_clone = border_color.clone();
+    let panel_states_for_apply = panel_states.clone();
+    let panel_id_for_apply = panel_id.clone();
 
     let apply_changes = Rc::new(move || {
         let new_width = width_spin.value() as u32;
@@ -2163,6 +2352,35 @@ fn show_panel_properties_dialog(
                 panel_guard.background = new_background;
             }
 
+            // Update corner radius and border (always apply)
+            let new_corner_radius = corner_radius_spin_clone.value();
+            panel_guard.corner_radius = new_corner_radius;
+            panel_guard.border.enabled = border_enabled_check_clone.is_active();
+            panel_guard.border.width = border_width_spin_clone.value();
+            panel_guard.border.color = *border_color_clone.borrow();
+
+            // Drop panel guard before accessing panel_states
+            drop(panel_guard);
+
+            // Update the visual appearance (background drawing and CSS)
+            let (background_area_opt, frame_opt) = {
+                let states = panel_states_for_apply.borrow();
+                if let Some(state) = states.get(&panel_id_for_apply) {
+                    (Some(state.background_area.clone()), Some(state.frame.clone()))
+                } else {
+                    (None, None)
+                }
+            };
+
+            if let Some(background_area) = background_area_opt {
+                // Queue a redraw of the background area to update corner radius and border
+                // The Cairo rendering in set_draw_func already handles corner_radius from panel data
+                background_area.queue_draw();
+            }
+
+            // Re-acquire panel guard for further updates
+            let mut panel_guard = panel_clone.try_write().unwrap();
+
             // Update source if changed
             if source_changed {
                 match registry.create_source(&new_source_id) {
@@ -2217,6 +2435,22 @@ fn show_panel_properties_dialog(
                         if let Err(e) = panel_guard.apply_config(config_hash) {
                             log::warn!("Failed to apply text config: {}", e);
                         }
+                    }
+                }
+            }
+
+            // Apply bar configuration if bar displayer is active
+            if new_displayer_id == "bar" {
+                let bar_config = bar_config_widget_clone.get_config();
+                if let Ok(bar_config_json) = serde_json::to_value(&bar_config) {
+                    panel_guard.config.insert("bar_config".to_string(), bar_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply bar config: {}", e);
                     }
                 }
             }

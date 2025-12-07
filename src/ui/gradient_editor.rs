@@ -1,11 +1,12 @@
 //! Gradient editor widget for configuring linear and radial gradients
 
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, DrawingArea, Label, Orientation, Scale, SpinButton};
+use gtk4::{Box as GtkBox, Button, DrawingArea, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
+use crate::ui::color_picker::ColorPickerDialog;
 
 /// Gradient editor widget
 pub struct GradientEditor {
@@ -14,6 +15,7 @@ pub struct GradientEditor {
     angle: Rc<RefCell<f64>>,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     preview: DrawingArea,
+    stops_listbox: ListBox,
 }
 
 impl GradientEditor {
@@ -95,68 +97,81 @@ impl GradientEditor {
 
         container.append(&preview);
 
-        // Color stops list
+        // Color stops header with Add button
+        let header_box = GtkBox::new(Orientation::Horizontal, 6);
         let stops_label = Label::new(Some("Color Stops:"));
         stops_label.set_halign(gtk4::Align::Start);
-        container.append(&stops_label);
+        stops_label.set_hexpand(true);
+        header_box.append(&stops_label);
 
-        let stops_container = GtkBox::new(Orientation::Vertical, 6);
-        container.append(&stops_container);
+        let add_button = Button::with_label("Add Stop");
+        header_box.append(&add_button);
+        container.append(&header_box);
 
-        // Add stop button
-        let add_button = Button::with_label("Add Color Stop");
+        // Stops list
+        let stops_listbox = ListBox::new();
+        stops_listbox.set_selection_mode(gtk4::SelectionMode::None);
+        stops_listbox.add_css_class("boxed-list");
+
+        let scroll = gtk4::ScrolledWindow::new();
+        scroll.set_child(Some(&stops_listbox));
+        scroll.set_max_content_height(200);
+        scroll.set_propagate_natural_height(true);
+        container.append(&scroll);
+
+        // Add stop button handler
         let stops_clone = stops.clone();
-        let _stops_container_clone = stops_container.clone();
+        let stops_listbox_clone = stops_listbox.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
         add_button.connect_clicked(move |_| {
             let mut stops_list = stops_clone.borrow_mut();
 
-            // Find a good position for the new stop (middle of largest gap)
+            // Find a good position for the new stop
             let position = if stops_list.is_empty() {
                 0.5
-            } else if stops_list.len() == 1 {
-                if stops_list[0].position < 0.5 {
-                    1.0
-                } else {
-                    0.0
-                }
             } else {
-                // Find largest gap
-                let mut sorted_stops: Vec<_> = stops_list.iter().map(|s| s.position).collect();
-                sorted_stops.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let mut positions: Vec<f64> = stops_list.iter().map(|s| s.position).collect();
+                positions.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-                let mut max_gap = 0.0;
-                let mut best_pos = 0.5;
+                let mut max_gap = positions[0];
+                let mut max_gap_pos = positions[0] / 2.0;
 
-                for i in 0..sorted_stops.len() - 1 {
-                    let gap = sorted_stops[i + 1] - sorted_stops[i];
+                for i in 0..positions.len() - 1 {
+                    let gap = positions[i + 1] - positions[i];
                     if gap > max_gap {
                         max_gap = gap;
-                        best_pos = (sorted_stops[i] + sorted_stops[i + 1]) / 2.0;
+                        max_gap_pos = (positions[i] + positions[i + 1]) / 2.0;
                     }
                 }
 
-                best_pos
+                if 1.0 - positions.last().unwrap() > max_gap {
+                    (1.0 + positions.last().unwrap()) / 2.0
+                } else {
+                    max_gap_pos
+                }
             };
 
             let new_stop = ColorStop::new(position, Color::new(0.5, 0.5, 0.5, 1.0));
             stops_list.push(new_stop);
+            stops_list.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
 
             drop(stops_list);
+
+            Self::rebuild_stops_list(
+                &stops_listbox_clone,
+                &stops_clone,
+                &preview_clone,
+                &on_change_clone,
+            );
 
             preview_clone.queue_draw();
 
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
-
-            // Refresh stops list UI would go here
-            // For now, we'll need to rebuild the stops container
         });
-
-        container.append(&add_button);
 
         let editor = Self {
             container,
@@ -164,15 +179,219 @@ impl GradientEditor {
             angle,
             on_change,
             preview,
+            stops_listbox,
         };
 
         editor
+    }
+
+    /// Rebuild the stops list UI
+    fn rebuild_stops_list(
+        listbox: &ListBox,
+        stops: &Rc<RefCell<Vec<ColorStop>>>,
+        preview: &DrawingArea,
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) {
+        // Clear existing rows
+        while let Some(child) = listbox.first_child() {
+            listbox.remove(&child);
+        }
+
+        let stops_ref = stops.borrow();
+        let stop_count = stops_ref.len();
+
+        for (index, stop) in stops_ref.iter().enumerate() {
+            let row = Self::create_stop_row(
+                index,
+                stop,
+                stop_count,
+                stops,
+                listbox,
+                preview,
+                on_change,
+            );
+            listbox.append(&row);
+        }
+    }
+
+    /// Create a row for a color stop
+    fn create_stop_row(
+        index: usize,
+        stop: &ColorStop,
+        stop_count: usize,
+        stops: &Rc<RefCell<Vec<ColorStop>>>,
+        listbox: &ListBox,
+        preview: &DrawingArea,
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> ListBoxRow {
+        let row = ListBoxRow::new();
+        let hbox = GtkBox::new(Orientation::Horizontal, 12);
+        hbox.set_margin_start(12);
+        hbox.set_margin_end(12);
+        hbox.set_margin_top(6);
+        hbox.set_margin_bottom(6);
+
+        // Position slider
+        let position_box = GtkBox::new(Orientation::Vertical, 3);
+        let position_label = Label::new(Some(&format!("Position: {:.2}", stop.position)));
+        position_label.set_halign(gtk4::Align::Start);
+        position_label.add_css_class("caption");
+
+        let position_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
+        position_scale.set_value(stop.position);
+        position_scale.set_hexpand(true);
+        position_scale.set_width_request(150);
+        position_scale.set_draw_value(false);
+
+        position_box.append(&position_label);
+        position_box.append(&position_scale);
+        hbox.append(&position_box);
+
+        // Color button with swatch
+        let color_button = Button::new();
+        let swatch_box = GtkBox::new(Orientation::Horizontal, 6);
+
+        let swatch = DrawingArea::new();
+        swatch.set_size_request(32, 32);
+
+        let color = stop.color;
+        swatch.set_draw_func(move |_, cr, width, height| {
+            color.apply_to_cairo(cr);
+            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            let _ = cr.fill();
+
+            // Border
+            cr.set_source_rgb(0.5, 0.5, 0.5);
+            cr.set_line_width(1.0);
+            let _ = cr.rectangle(0.5, 0.5, width as f64 - 1.0, height as f64 - 1.0);
+            let _ = cr.stroke();
+        });
+
+        swatch_box.append(&swatch);
+        swatch_box.append(&Label::new(Some("Color")));
+        color_button.set_child(Some(&swatch_box));
+
+        hbox.append(&color_button);
+
+        // Remove button (only if more than 2 stops)
+        if stop_count > 2 {
+            let remove_button = Button::from_icon_name("user-trash-symbolic");
+            remove_button.set_tooltip_text(Some("Remove stop"));
+
+            let stops_clone = stops.clone();
+            let listbox_clone = listbox.clone();
+            let preview_clone = preview.clone();
+            let on_change_clone = on_change.clone();
+
+            remove_button.connect_clicked(move |_| {
+                let mut stops = stops_clone.borrow_mut();
+                if stops.len() > 2 {
+                    stops.remove(index);
+                    drop(stops);
+
+                    Self::rebuild_stops_list(
+                        &listbox_clone,
+                        &stops_clone,
+                        &preview_clone,
+                        &on_change_clone,
+                    );
+
+                    preview_clone.queue_draw();
+
+                    if let Some(callback) = on_change_clone.borrow().as_ref() {
+                        callback();
+                    }
+                }
+            });
+
+            hbox.append(&remove_button);
+        }
+
+        row.set_child(Some(&hbox));
+
+        // Position change handler
+        let stops_clone = stops.clone();
+        let listbox_clone = listbox.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        let position_label_clone = position_label.clone();
+
+        position_scale.connect_value_changed(move |scale| {
+            let new_position = scale.value();
+            position_label_clone.set_text(&format!("Position: {:.2}", new_position));
+
+            let mut stops = stops_clone.borrow_mut();
+            if let Some(stop) = stops.get_mut(index) {
+                stop.position = new_position;
+            }
+            stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+            drop(stops);
+
+            Self::rebuild_stops_list(
+                &listbox_clone,
+                &stops_clone,
+                &preview_clone,
+                &on_change_clone,
+            );
+
+            preview_clone.queue_draw();
+
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        // Color button handler
+        let stops_clone = stops.clone();
+        let listbox_clone = listbox.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        let current_color = stop.color;
+
+        color_button.connect_clicked(move |btn| {
+            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
+            let stops_clone2 = stops_clone.clone();
+            let listbox_clone2 = listbox_clone.clone();
+            let preview_clone2 = preview_clone.clone();
+            let on_change_clone2 = on_change_clone.clone();
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
+                    let mut stops = stops_clone2.borrow_mut();
+                    if let Some(stop) = stops.get_mut(index) {
+                        stop.color = new_color;
+                    }
+                    drop(stops);
+
+                    Self::rebuild_stops_list(
+                        &listbox_clone2,
+                        &stops_clone2,
+                        &preview_clone2,
+                        &on_change_clone2,
+                    );
+
+                    preview_clone2.queue_draw();
+
+                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                        callback();
+                    }
+                }
+            });
+        });
+
+        row
     }
 
     /// Set the gradient configuration
     pub fn set_gradient(&self, config: &LinearGradientConfig) {
         *self.stops.borrow_mut() = config.stops.clone();
         *self.angle.borrow_mut() = config.angle;
+        Self::rebuild_stops_list(
+            &self.stops_listbox,
+            &self.stops,
+            &self.preview,
+            &self.on_change,
+        );
         self.preview.queue_draw();
     }
 

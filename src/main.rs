@@ -3,7 +3,7 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider};
 use log::{info, warn};
-use rg_sens::config::{AppConfig, PanelConfig, WindowConfig};
+use rg_sens::config::{AppConfig, PanelConfig};
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig as UiGridConfig, GridLayout};
 use rg_sens::{displayers, sources};
@@ -113,8 +113,25 @@ fn build_ui(app: &Application) {
             ("panel-3", 0, 1, 2, 1, "cpu", "text"),
         ];
 
+        // Get window defaults for panels
+        let default_corner_radius = app_config.borrow().window.panel_corner_radius;
+        let default_border = app_config.borrow().window.panel_border.clone();
+
         for (id, x, y, width, height, source_id, displayer_id) in default_panels {
-            match create_panel_from_config(id, x, y, width, height, source_id, displayer_id, Default::default(), HashMap::new(), &registry) {
+            match create_panel_from_config(
+                id,
+                x,
+                y,
+                width,
+                height,
+                source_id,
+                displayer_id,
+                Default::default(),
+                default_corner_radius,
+                default_border.clone(),
+                HashMap::new(),
+                &registry,
+            ) {
                 Ok(panel) => {
                     grid_layout.add_panel(panel.clone());
                     panels.push(panel);
@@ -137,6 +154,8 @@ fn build_ui(app: &Application) {
                 &panel_config.source,
                 &panel_config.displayer,
                 panel_config.background.clone(),
+                panel_config.corner_radius,
+                panel_config.border.clone(),
                 panel_config.settings.clone(),
                 &registry,
             ) {
@@ -287,6 +306,7 @@ fn build_ui(app: &Application) {
         let window_for_new = window_for_menu.clone();
         let grid_layout_for_new = grid_layout_for_menu.clone();
         let config_dirty_for_new = config_dirty_for_menu.clone();
+        let app_config_for_new = app_config_for_menu.clone();
         let new_panel_action = gio::SimpleAction::new("new-panel", None);
         new_panel_action.connect_activate(move |_, _| {
             info!("New panel requested");
@@ -294,6 +314,7 @@ fn build_ui(app: &Application) {
                 &window_for_new,
                 &grid_layout_for_new,
                 &config_dirty_for_new,
+                &app_config_for_new,
             );
         });
         action_group.add_action(&new_panel_action);
@@ -447,6 +468,8 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
                     source: panel_guard.source.metadata().id.clone(),
                     displayer: panel_guard.displayer.id().to_string(),
                     background: panel_guard.background.clone(),
+                    corner_radius: panel_guard.corner_radius,
+                    border: panel_guard.border.clone(),
                     settings: panel_guard.config.clone(),
                 })
             } else {
@@ -456,18 +479,12 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
         .collect();
 
     // Create config with all settings
-    let config = AppConfig {
-        version: 1,
-        window: WindowConfig {
-            width,
-            height,
-            x: None, // GTK4 doesn't provide window position
-            y: None,
-            background: app_config.window.background.clone(),
-        },
-        grid: app_config.grid.clone(),
-        panels: panel_configs,
-    };
+    let mut config = app_config.clone();
+    config.window.width = width;
+    config.window.height = height;
+    config.window.x = None; // GTK4 doesn't provide window position
+    config.window.y = None;
+    config.panels = panel_configs;
 
     // Save to disk
     match config.save() {
@@ -488,15 +505,15 @@ fn show_window_settings_dialog(
     grid_layout: &Rc<RefCell<GridLayout>>,
     config_dirty: &Rc<RefCell<bool>>,
 ) {
-    use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Window};
+    use gtk4::{Box as GtkBox, Button, CheckButton, Label, Notebook, Orientation, SpinButton, Window};
     use rg_sens::ui::BackgroundConfigWidget;
 
     let dialog = Window::builder()
         .title("Window Settings")
         .transient_for(parent_window)
         .modal(true)
-        .default_width(500)
-        .default_height(600)
+        .default_width(550)
+        .default_height(650)
         .build();
 
     let vbox = GtkBox::new(Orientation::Vertical, 12);
@@ -505,41 +522,34 @@ fn show_window_settings_dialog(
     vbox.set_margin_top(12);
     vbox.set_margin_bottom(12);
 
-    // Window Background Section
-    let bg_label = Label::new(Some("Window Background"));
-    bg_label.add_css_class("heading");
-    bg_label.set_margin_top(12);
-    vbox.append(&bg_label);
+    // Create notebook for tabs
+    let notebook = Notebook::new();
+    notebook.set_vexpand(true);
 
-    let background_widget = BackgroundConfigWidget::new();
-    background_widget.set_config(app_config.borrow().window.background.clone());
-    vbox.append(background_widget.widget());
-
-    let background_widget = Rc::new(background_widget);
-
-    // Grid Settings Section
-    let grid_label = Label::new(Some("Grid Settings"));
-    grid_label.add_css_class("heading");
-    grid_label.set_margin_top(12);
-    vbox.append(&grid_label);
+    // === Tab 1: Grid Settings ===
+    let grid_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    grid_tab_box.set_margin_start(12);
+    grid_tab_box.set_margin_end(12);
+    grid_tab_box.set_margin_top(12);
+    grid_tab_box.set_margin_bottom(12);
 
     // Cell Width
     let cell_width_box = GtkBox::new(Orientation::Horizontal, 6);
     cell_width_box.append(&Label::new(Some("Cell Width:")));
-    let cell_width_spin = SpinButton::with_range(50.0, 1000.0, 10.0);
+    let cell_width_spin = SpinButton::with_range(10.0, 1000.0, 10.0);
     cell_width_spin.set_value(app_config.borrow().grid.cell_width as f64);
     cell_width_spin.set_hexpand(true);
     cell_width_box.append(&cell_width_spin);
-    vbox.append(&cell_width_box);
+    grid_tab_box.append(&cell_width_box);
 
     // Cell Height
     let cell_height_box = GtkBox::new(Orientation::Horizontal, 6);
     cell_height_box.append(&Label::new(Some("Cell Height:")));
-    let cell_height_spin = SpinButton::with_range(50.0, 1000.0, 10.0);
+    let cell_height_spin = SpinButton::with_range(10.0, 1000.0, 10.0);
     cell_height_spin.set_value(app_config.borrow().grid.cell_height as f64);
     cell_height_spin.set_hexpand(true);
     cell_height_box.append(&cell_height_spin);
-    vbox.append(&cell_height_box);
+    grid_tab_box.append(&cell_height_box);
 
     // Spacing
     let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -548,7 +558,93 @@ fn show_window_settings_dialog(
     spacing_spin.set_value(app_config.borrow().grid.spacing as f64);
     spacing_spin.set_hexpand(true);
     spacing_box.append(&spacing_spin);
-    vbox.append(&spacing_box);
+    grid_tab_box.append(&spacing_box);
+
+    notebook.append_page(&grid_tab_box, Some(&Label::new(Some("Grid"))));
+
+    // === Tab 2: Background ===
+    let bg_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    bg_tab_box.set_margin_start(12);
+    bg_tab_box.set_margin_end(12);
+    bg_tab_box.set_margin_top(12);
+    bg_tab_box.set_margin_bottom(12);
+
+    let background_widget = BackgroundConfigWidget::new();
+    background_widget.set_config(app_config.borrow().window.background.clone());
+    bg_tab_box.append(background_widget.widget());
+
+    let background_widget = Rc::new(background_widget);
+
+    notebook.append_page(&bg_tab_box, Some(&Label::new(Some("Background"))));
+
+    // === Tab 3: Panel Defaults ===
+    let panel_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    panel_tab_box.set_margin_start(12);
+    panel_tab_box.set_margin_end(12);
+    panel_tab_box.set_margin_top(12);
+    panel_tab_box.set_margin_bottom(12);
+
+    // Corner radius
+    let corner_radius_label = Label::new(Some("Panel Corner Radius"));
+    corner_radius_label.add_css_class("heading");
+    panel_tab_box.append(&corner_radius_label);
+
+    let corner_radius_box = GtkBox::new(Orientation::Horizontal, 6);
+    corner_radius_box.set_margin_start(12);
+    corner_radius_box.append(&Label::new(Some("Radius:")));
+    let corner_radius_spin = SpinButton::with_range(0.0, 50.0, 1.0);
+    corner_radius_spin.set_value(app_config.borrow().window.panel_corner_radius);
+    corner_radius_spin.set_hexpand(true);
+    corner_radius_box.append(&corner_radius_spin);
+    panel_tab_box.append(&corner_radius_box);
+
+    // Border section
+    let border_label = Label::new(Some("Panel Border"));
+    border_label.add_css_class("heading");
+    border_label.set_margin_top(12);
+    panel_tab_box.append(&border_label);
+
+    let border_enabled_check = CheckButton::with_label("Show Border on New Panels");
+    border_enabled_check.set_active(app_config.borrow().window.panel_border.enabled);
+    border_enabled_check.set_margin_start(12);
+    panel_tab_box.append(&border_enabled_check);
+
+    let border_width_box = GtkBox::new(Orientation::Horizontal, 6);
+    border_width_box.set_margin_start(12);
+    border_width_box.append(&Label::new(Some("Width:")));
+    let border_width_spin = SpinButton::with_range(0.5, 10.0, 0.5);
+    border_width_spin.set_value(app_config.borrow().window.panel_border.width);
+    border_width_spin.set_hexpand(true);
+    border_width_box.append(&border_width_spin);
+    panel_tab_box.append(&border_width_box);
+
+    let border_color_btn = Button::with_label("Border Color");
+    border_color_btn.set_margin_start(12);
+    panel_tab_box.append(&border_color_btn);
+
+    // Store border color in a shared Rc<RefCell>
+    let border_color = Rc::new(RefCell::new(app_config.borrow().window.panel_border.color));
+
+    // Border color button handler
+    {
+        let border_color_clone = border_color.clone();
+        let dialog_clone = dialog.clone();
+        border_color_btn.connect_clicked(move |_| {
+            let current_color = *border_color_clone.borrow();
+            let window_opt = dialog_clone.clone().upcast::<Window>();
+            let border_color_clone2 = border_color_clone.clone();
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Some(new_color) = rg_sens::ui::ColorPickerDialog::pick_color(Some(&window_opt), current_color).await {
+                    *border_color_clone2.borrow_mut() = new_color;
+                }
+            });
+        });
+    }
+
+    notebook.append_page(&panel_tab_box, Some(&Label::new(Some("Panel Defaults"))));
+
+    vbox.append(&notebook);
 
     // Buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -571,6 +667,10 @@ fn show_window_settings_dialog(
     let window_background_clone = window_background.clone();
     let grid_layout_clone = grid_layout.clone();
     let config_dirty_clone = config_dirty.clone();
+    let corner_radius_spin_clone = corner_radius_spin.clone();
+    let border_enabled_check_clone = border_enabled_check.clone();
+    let border_width_spin_clone = border_width_spin.clone();
+    let border_color_clone = border_color.clone();
 
     let apply_changes = Rc::new(move || {
         let new_background = background_widget_clone.get_config();
@@ -584,6 +684,10 @@ fn show_window_settings_dialog(
         cfg.grid.cell_width = new_cell_width;
         cfg.grid.cell_height = new_cell_height;
         cfg.grid.spacing = new_spacing;
+        cfg.window.panel_corner_radius = corner_radius_spin_clone.value();
+        cfg.window.panel_border.enabled = border_enabled_check_clone.is_active();
+        cfg.window.panel_border.width = border_width_spin_clone.value();
+        cfg.window.panel_border.color = *border_color_clone.borrow();
         drop(cfg);
 
         // Update window background rendering
@@ -637,6 +741,8 @@ fn create_panel_from_config(
     source_id: &str,
     displayer_id: &str,
     background: rg_sens::ui::background::BackgroundConfig,
+    corner_radius: f64,
+    border: rg_sens::core::PanelBorderConfig,
     settings: HashMap<String, serde_json::Value>,
     registry: &rg_sens::core::Registry,
 ) -> anyhow::Result<Arc<RwLock<Panel>>> {
@@ -657,8 +763,10 @@ fn create_panel_from_config(
         displayer,
     );
 
-    // Set background
+    // Set background, corner radius, and border
     panel.background = background;
+    panel.corner_radius = corner_radius;
+    panel.border = border;
 
     // Apply settings if provided
     if !settings.is_empty() {
@@ -673,6 +781,7 @@ fn show_new_panel_dialog(
     window: &ApplicationWindow,
     grid_layout: &Rc<RefCell<GridLayout>>,
     config_dirty: &Rc<RefCell<bool>>,
+    app_config: &Rc<RefCell<AppConfig>>,
 ) {
     use gtk4::{Adjustment, Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
 
@@ -779,6 +888,7 @@ fn show_new_panel_dialog(
     let dialog_clone = dialog.clone();
     let grid_layout = grid_layout.clone();
     let config_dirty = config_dirty.clone();
+    let app_config = app_config.clone();
     ok_button.connect_clicked(move |_| {
         let x = x_spin.value() as u32;
         let y = y_spin.value() as u32;
@@ -794,8 +904,10 @@ fn show_new_panel_dialog(
         info!("Creating new panel: id={}, pos=({},{}), size={}x{}, source={}, displayer={}",
               id, x, y, width, height, source_id, displayer_id);
 
-        // Create panel with default background
+        // Create panel with default background and window defaults for corner_radius and border
         let background = rg_sens::ui::background::BackgroundConfig::default();
+        let corner_radius = app_config.borrow().window.panel_corner_radius;
+        let border = app_config.borrow().window.panel_border.clone();
         let settings = HashMap::new();
 
         match create_panel_from_config(
@@ -807,6 +919,8 @@ fn show_new_panel_dialog(
             source_id,
             displayer_id,
             background,
+            corner_radius,
+            border,
             settings,
             &registry,
         ) {
@@ -835,9 +949,23 @@ fn load_css() {
     let provider = CssProvider::new();
     provider.load_from_data(
         "
+        frame {
+            border: none;
+            padding: 0;
+            margin: 0;
+            border-radius: 0;
+        }
+
+        overlay {
+            border-radius: 0;
+        }
+
+        drawingarea {
+            border-radius: 0;
+        }
+
         .selected {
             border: 3px solid #00ff00;
-            border-radius: 4px;
         }
 
         .transparent-background {

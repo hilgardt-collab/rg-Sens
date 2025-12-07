@@ -31,7 +31,7 @@ impl Default for HorizontalPosition {
 }
 
 /// Configuration for a single line of text
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TextLineConfig {
     /// ID of the field to display (e.g., "caption", "usage", "unit")
     pub field_id: String,
@@ -79,7 +79,7 @@ impl Default for TextLineConfig {
 }
 
 /// Configuration for the text displayer
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TextDisplayerConfig {
     /// List of text lines to display
     pub lines: Vec<TextLineConfig>,

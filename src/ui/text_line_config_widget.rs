@@ -4,6 +4,7 @@ use crate::core::FieldMetadata;
 use crate::displayers::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
 use crate::ui::color_picker::ColorPickerDialog;
 use crate::ui::background::Color;
+use crate::ui::shared_font_dialog::shared_font_dialog;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, ListBox,
@@ -18,7 +19,6 @@ pub struct TextLineConfigWidget {
     lines: Rc<RefCell<Vec<TextLineConfig>>>,
     list_box: ListBox,
     available_fields: Vec<FieldMetadata>,
-    font_dialog: Rc<gtk4::FontDialog>,
 }
 
 impl TextLineConfigWidget {
@@ -49,20 +49,16 @@ impl TextLineConfigWidget {
 
         let lines = Rc::new(RefCell::new(Vec::new()));
 
-        // Create shared font dialog (created once, reused for all lines)
-        let font_dialog = Rc::new(gtk4::FontDialog::new());
-
         let lines_clone = lines.clone();
         let list_box_clone = list_box.clone();
         let fields_clone = available_fields.clone();
-        let font_dialog_clone = font_dialog.clone();
         add_button.connect_clicked(move |_| {
             let mut lines = lines_clone.borrow_mut();
             let new_line = TextLineConfig::default();
             let index = lines.len(); // Get index before pushing
             lines.push(new_line.clone());
             drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), font_dialog_clone.clone(), index, None);
+            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), index, None);
         });
 
         Self {
@@ -70,7 +66,6 @@ impl TextLineConfigWidget {
             lines,
             list_box,
             available_fields,
-            font_dialog,
         }
     }
 
@@ -80,7 +75,6 @@ impl TextLineConfigWidget {
         line_config: TextLineConfig,
         fields: &[FieldMetadata],
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
-        font_dialog: Rc<gtk4::FontDialog>,
         list_index: usize,
         rebuild_callback: Option<Rc<dyn Fn()>>,
     ) {
@@ -355,7 +349,6 @@ impl TextLineConfigWidget {
         {
             let lines_clone = lines.clone();
             let font_button_clone = font_button.clone();
-            let font_dialog_clone = font_dialog.clone();
             font_button.connect_clicked(move |btn| {
                 let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
 
@@ -374,7 +367,7 @@ impl TextLineConfigWidget {
                 let font_button_clone2 = font_button_clone.clone();
 
                 // Use callback-based API for font selection with shared dialog
-                font_dialog_clone.choose_font(
+                shared_font_dialog().choose_font(
                     window.as_ref(),
                     Some(&current_font),
                     gtk4::gio::Cancellable::NONE,
@@ -515,7 +508,6 @@ impl TextLineConfigWidget {
         let list_box_clone = self.list_box.clone();
         let lines_clone = self.lines.clone();
         let fields_clone = self.available_fields.clone();
-        let font_dialog_clone = self.font_dialog.clone();
 
         let rebuild_fn: Rc<dyn Fn()> = Rc::new(move || {
             // Clear list box
@@ -531,7 +523,6 @@ impl TextLineConfigWidget {
                     line,
                     &fields_clone,
                     lines_clone.clone(),
-                    font_dialog_clone.clone(),
                     index,
                     None, // No rebuild callback in recursive call
                 );
@@ -546,7 +537,6 @@ impl TextLineConfigWidget {
                 line,
                 &self.available_fields,
                 self.lines.clone(),
-                self.font_dialog.clone(),
                 index,
                 Some(rebuild_fn.clone()),
             );

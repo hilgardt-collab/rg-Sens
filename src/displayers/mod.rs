@@ -5,6 +5,7 @@
 
 mod text;
 mod text_config;
+mod bar;
 // mod level_bar;
 // mod arc_gauge;
 // mod line_graph;
@@ -12,6 +13,7 @@ mod text_config;
 
 pub use text::TextDisplayer;
 pub use text_config::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
+pub use bar::BarDisplayer;
 // pub use level_bar::LevelBarDisplayer;
 // pub use arc_gauge::ArcGaugeDisplayer;
 // pub use line_graph::LineGraphDisplayer;
@@ -23,6 +25,9 @@ pub fn register_all() {
 
     // Register text displayer
     global_registry().register_displayer("text", || Box::new(TextDisplayer::new()));
+
+    // Register bar displayer
+    global_registry().register_displayer("bar", || Box::new(BarDisplayer::new()));
 
     // TODO: Register more displayers
     // register_displayer!("level_bar", LevelBarDisplayer);

@@ -1,12 +1,13 @@
 //! Background configuration widget
 
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, DropDown, DrawingArea, Entry, Label, Orientation, Scale, SpinButton, Stack, StringList, Switch};
+use gtk4::{Box as GtkBox, Button, DropDown, DrawingArea, Entry, Label, Orientation, Scale, SpinButton, Stack, StringList};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::background::{BackgroundConfig, BackgroundType, Color, LinearGradientConfig, RadialGradientConfig, PolygonConfig};
+use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig};
 use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::GradientEditor;
 
 /// Background configuration widget
 pub struct BackgroundConfigWidget {
@@ -17,6 +18,7 @@ pub struct BackgroundConfigWidget {
     type_dropdown: DropDown,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     type_dropdown_handler_id: gtk4::glib::SignalHandlerId,
+    linear_gradient_editor: Rc<GradientEditor>,
 }
 
 impl BackgroundConfigWidget {
@@ -70,7 +72,7 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&solid_page, Some("solid"));
 
         // Linear gradient configuration
-        let linear_page = Self::create_linear_gradient_config(&config, &preview, &on_change);
+        let (linear_page, linear_gradient_editor) = Self::create_linear_gradient_config(&config, &preview, &on_change);
         config_stack.add_named(&linear_page, Some("linear_gradient"));
 
         // Radial gradient configuration
@@ -103,7 +105,8 @@ impl BackgroundConfigWidget {
                 2 => ("radial_gradient", BackgroundType::RadialGradient(RadialGradientConfig::default())),
                 3 => ("image", BackgroundType::Image {
                     path: String::new(),
-                    stretch: false,
+                    display_mode: ImageDisplayMode::Fit,
+                    alpha: 1.0,
                 }),
                 4 => ("polygons", BackgroundType::Polygons(PolygonConfig::default())),
                 _ => ("solid", BackgroundType::default()),
@@ -131,6 +134,7 @@ impl BackgroundConfigWidget {
             type_dropdown,
             on_change,
             type_dropdown_handler_id,
+            linear_gradient_editor,
         }
     }
 
@@ -182,112 +186,37 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> GtkBox {
+    ) -> (GtkBox, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
-        // Angle control
-        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
-        angle_box.append(&Label::new(Some("Angle:")));
+        let gradient_editor = GradientEditor::new();
 
-        let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
-        angle_scale.set_hexpand(true);
-        angle_scale.set_value(90.0);
+        // Initialize with current config
+        if let BackgroundType::LinearGradient(ref grad) = config.borrow().background {
+            gradient_editor.set_gradient(grad);
+        }
 
+        // Set up change handler
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
+        let gradient_editor_ref = std::rc::Rc::new(gradient_editor);
+        let gradient_editor_clone = gradient_editor_ref.clone();
 
-        angle_scale.connect_value_changed(move |scale| {
+        gradient_editor_ref.set_on_change(move || {
+            let grad_config = gradient_editor_clone.get_gradient();
             let mut cfg = config_clone.borrow_mut();
-            if let BackgroundType::LinearGradient(ref mut grad) = cfg.background {
-                grad.angle = scale.value();
-                drop(cfg);
-                preview_clone.queue_draw();
+            cfg.background = BackgroundType::LinearGradient(grad_config);
+            drop(cfg);
+            preview_clone.queue_draw();
 
-                if let Some(callback) = on_change_clone.borrow().as_ref() {
-                    callback();
-                }
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
             }
         });
 
-        angle_box.append(&angle_scale);
-        page.append(&angle_box);
-
-        // Color stops (simplified - just 2 colors for now)
-        let start_button = Button::with_label("Start Color");
-        let end_button = Button::with_label("End Color");
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-
-        start_button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::LinearGradient(ref grad) = config_clone.borrow().background {
-                grad.stops.first().map(|s| s.color).unwrap_or_default()
-            } else {
-                Color::default()
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::LinearGradient(ref mut grad) = cfg.background {
-                        if let Some(stop) = grad.stops.first_mut() {
-                            stop.color = new_color;
-                        }
-                        drop(cfg);
-                        preview_clone2.queue_draw();
-
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
-                        }
-                    }
-                }
-            });
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-
-        end_button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::LinearGradient(ref grad) = config_clone.borrow().background {
-                grad.stops.last().map(|s| s.color).unwrap_or_default()
-            } else {
-                Color::default()
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::LinearGradient(ref mut grad) = cfg.background {
-                        if let Some(stop) = grad.stops.last_mut() {
-                            stop.color = new_color;
-                        }
-                        drop(cfg);
-                        preview_clone2.queue_draw();
-
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
-                        }
-                    }
-                }
-            });
-        });
-
-        page.append(&start_button);
-        page.append(&end_button);
-        page
+        page.append(gradient_editor_ref.widget());
+        (page, gradient_editor_ref.clone())
     }
 
     fn create_radial_gradient_config(
@@ -415,10 +344,26 @@ impl BackgroundConfigWidget {
 
         let browse_button = Button::with_label("Browse...");
 
-        let stretch_box = GtkBox::new(Orientation::Horizontal, 6);
-        stretch_box.append(&Label::new(Some("Stretch:")));
-        let stretch_switch = Switch::new();
-        stretch_box.append(&stretch_switch);
+        // Display mode selector
+        let mode_box = GtkBox::new(Orientation::Horizontal, 6);
+        mode_box.append(&Label::new(Some("Display mode:")));
+
+        let mode_options = StringList::new(&["Fit", "Stretch", "Zoom", "Tile"]);
+        let mode_dropdown = DropDown::new(Some(mode_options), Option::<gtk4::Expression>::None);
+        mode_dropdown.set_selected(0); // Default to Fit
+        mode_dropdown.set_hexpand(true);
+        mode_box.append(&mode_dropdown);
+
+        // Transparency slider
+        let alpha_box = GtkBox::new(Orientation::Horizontal, 6);
+        alpha_box.append(&Label::new(Some("Opacity:")));
+
+        let alpha_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
+        alpha_scale.set_value(1.0);
+        alpha_scale.set_hexpand(true);
+        alpha_scale.set_draw_value(true);
+        alpha_scale.set_value_pos(gtk4::PositionType::Right);
+        alpha_box.append(&alpha_scale);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
@@ -453,14 +398,24 @@ impl BackgroundConfigWidget {
             });
         });
 
+        // Display mode change handler
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
-        stretch_switch.connect_state_set(move |_, state| {
+        mode_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            let display_mode = match selected {
+                0 => ImageDisplayMode::Fit,
+                1 => ImageDisplayMode::Stretch,
+                2 => ImageDisplayMode::Zoom,
+                3 => ImageDisplayMode::Tile,
+                _ => ImageDisplayMode::Fit,
+            };
+
             let mut cfg = config_clone.borrow_mut();
-            if let BackgroundType::Image { ref mut stretch, .. } = cfg.background {
-                *stretch = state;
+            if let BackgroundType::Image { display_mode: ref mut dm, .. } = cfg.background {
+                *dm = display_mode;
                 drop(cfg);
                 preview_clone.queue_draw();
 
@@ -468,12 +423,30 @@ impl BackgroundConfigWidget {
                     callback();
                 }
             }
-            gtk4::glib::Propagation::Proceed
+        });
+
+        // Alpha slider handler
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+
+        alpha_scale.connect_value_changed(move |scale| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Image { ref mut alpha, .. } = cfg.background {
+                *alpha = scale.value();
+                drop(cfg);
+                preview_clone.queue_draw();
+
+                if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    callback();
+                }
+            }
         });
 
         page.append(&path_entry);
         page.append(&browse_button);
-        page.append(&stretch_box);
+        page.append(&mode_box);
+        page.append(&alpha_box);
         page
     }
 
@@ -667,6 +640,11 @@ impl BackgroundConfigWidget {
             BackgroundType::Image { .. } => 3,
             BackgroundType::Polygons(_) => 4,
         };
+
+        // Load gradient data into editor if applicable
+        if let BackgroundType::LinearGradient(ref grad) = new_config.background {
+            self.linear_gradient_editor.set_gradient(grad);
+        }
 
         *self.config.borrow_mut() = new_config;
 

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ui::background::BackgroundConfig;
+use crate::core::PanelBorderConfig;
 
 /// Application-wide configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +77,16 @@ pub struct WindowConfig {
     pub x: Option<i32>,
     pub y: Option<i32>,
     pub background: BackgroundConfig,
+    /// Default corner radius for new panels
+    #[serde(default = "default_panel_corner_radius")]
+    pub panel_corner_radius: f64,
+    /// Default border config for new panels
+    #[serde(default)]
+    pub panel_border: PanelBorderConfig,
+}
+
+fn default_panel_corner_radius() -> f64 {
+    8.0
 }
 
 impl Default for WindowConfig {
@@ -86,6 +97,8 @@ impl Default for WindowConfig {
             x: None,
             y: None,
             background: BackgroundConfig::default(),
+            panel_corner_radius: 8.0,
+            panel_border: PanelBorderConfig::default(),
         }
     }
 }
@@ -129,6 +142,12 @@ pub struct PanelConfig {
     /// Panel background
     #[serde(default)]
     pub background: BackgroundConfig,
+    /// Corner radius for panel edges
+    #[serde(default = "default_panel_corner_radius")]
+    pub corner_radius: f64,
+    /// Border configuration
+    #[serde(default)]
+    pub border: PanelBorderConfig,
     /// Custom settings
     pub settings: HashMap<String, serde_json::Value>,
 }

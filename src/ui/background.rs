@@ -139,6 +139,25 @@ impl Default for PolygonConfig {
     }
 }
 
+/// Image display mode
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum ImageDisplayMode {
+    #[serde(rename = "fit")]
+    Fit,       // Scale to fit (maintain aspect ratio, may have empty space)
+    #[serde(rename = "stretch")]
+    Stretch,   // Stretch to fill (may distort image)
+    #[serde(rename = "zoom")]
+    Zoom,      // Scale to fill (maintain aspect ratio, may crop)
+    #[serde(rename = "tile")]
+    Tile,      // Tile/repeat the image
+}
+
+impl Default for ImageDisplayMode {
+    fn default() -> Self {
+        Self::Fit
+    }
+}
+
 /// Background type configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
@@ -150,9 +169,19 @@ pub enum BackgroundType {
     #[serde(rename = "radial_gradient")]
     RadialGradient(RadialGradientConfig),
     #[serde(rename = "image")]
-    Image { path: String, stretch: bool },
+    Image {
+        path: String,
+        #[serde(default)]
+        display_mode: ImageDisplayMode,
+        #[serde(default = "default_alpha")]
+        alpha: f64, // 0.0 to 1.0
+    },
     #[serde(rename = "polygons")]
     Polygons(PolygonConfig),
+}
+
+fn default_alpha() -> f64 {
+    1.0
 }
 
 impl Default for BackgroundType {
@@ -196,8 +225,8 @@ pub fn render_background(
         BackgroundType::RadialGradient(grad) => {
             render_radial_gradient(cr, grad, width, height)?;
         }
-        BackgroundType::Image { path, stretch } => {
-            render_image_background(cr, path, *stretch, width, height)?;
+        BackgroundType::Image { path, display_mode, alpha } => {
+            render_image_background(cr, path, *display_mode, *alpha, width, height)?;
         }
         BackgroundType::Polygons(poly) => {
             render_polygon_background(cr, poly, width, height)?;
@@ -277,7 +306,8 @@ fn render_radial_gradient(
 fn render_image_background(
     cr: &cairo::Context,
     path: &str,
-    stretch: bool,
+    display_mode: ImageDisplayMode,
+    alpha: f64,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
@@ -289,21 +319,53 @@ fn render_image_background(
 
         cr.save()?;
 
-        if stretch {
-            // Stretch to fill
-            cr.scale(width / img_width, height / img_height);
-        } else {
-            // Scale to fit (maintain aspect ratio)
-            let scale = (width / img_width).min(height / img_height);
-            cr.scale(scale, scale);
-            cr.translate(
-                (width / scale - img_width) / 2.0,
-                (height / scale - img_height) / 2.0,
-            );
+        match display_mode {
+            ImageDisplayMode::Fit => {
+                // Scale to fit (maintain aspect ratio, may have empty space)
+                let scale = (width / img_width).min(height / img_height);
+                cr.scale(scale, scale);
+                cr.translate(
+                    (width / scale - img_width) / 2.0,
+                    (height / scale - img_height) / 2.0,
+                );
+                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                cr.paint_with_alpha(alpha)?;
+            }
+            ImageDisplayMode::Stretch => {
+                // Stretch to fill (may distort)
+                cr.scale(width / img_width, height / img_height);
+                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                cr.paint_with_alpha(alpha)?;
+            }
+            ImageDisplayMode::Zoom => {
+                // Scale to fill (maintain aspect ratio, may crop)
+                let scale = (width / img_width).max(height / img_height);
+                cr.scale(scale, scale);
+                cr.translate(
+                    (width / scale - img_width) / 2.0,
+                    (height / scale - img_height) / 2.0,
+                );
+                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                cr.paint_with_alpha(alpha)?;
+            }
+            ImageDisplayMode::Tile => {
+                // Tile the image - create a surface from the pixbuf and tile it
+                let surface = cairo::ImageSurface::create(
+                    cairo::Format::ARgb32,
+                    img_width as i32,
+                    img_height as i32,
+                )?;
+                let tmp_cr = cairo::Context::new(&surface)?;
+                tmp_cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                tmp_cr.paint()?;
+
+                let pattern = cairo::SurfacePattern::create(&surface);
+                pattern.set_extend(cairo::Extend::Repeat);
+                cr.set_source(&pattern)?;
+                cr.paint_with_alpha(alpha)?;
+            }
         }
 
-        cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
-        cr.paint()?;
         cr.restore()?;
     } else {
         // Fallback to solid color if image can't be loaded

@@ -4,7 +4,7 @@ use super::{BoxedDataSource, BoxedDisplayer};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::ui::BackgroundConfig;
+use crate::ui::{BackgroundConfig, Color};
 
 /// Position and size of a panel in the grid
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -13,6 +13,24 @@ pub struct PanelGeometry {
     pub y: u32,
     pub width: u32,
     pub height: u32,
+}
+
+/// Panel border configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PanelBorderConfig {
+    pub enabled: bool,
+    pub width: f64,
+    pub color: Color,
+}
+
+impl Default for PanelBorderConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            width: 1.0,
+            color: Color::new(1.0, 1.0, 1.0, 1.0), // White
+        }
+    }
 }
 
 /// A panel combines a data source and a displayer
@@ -29,6 +47,10 @@ pub struct Panel {
     pub config: HashMap<String, serde_json::Value>,
     /// Background configuration
     pub background: BackgroundConfig,
+    /// Corner radius for panel edges
+    pub corner_radius: f64,
+    /// Border configuration
+    pub border: PanelBorderConfig,
 }
 
 impl Panel {
@@ -46,6 +68,8 @@ impl Panel {
             displayer,
             config: HashMap::new(),
             background: BackgroundConfig::default(),
+            corner_radius: 8.0, // Default corner radius
+            border: PanelBorderConfig::default(),
         }
     }
 
