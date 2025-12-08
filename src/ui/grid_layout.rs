@@ -624,6 +624,8 @@ impl GridLayout {
         let drop_zone = self.drop_zone_layer.clone();
 
         let properties_action = gio::SimpleAction::new("properties", None);
+        let selected_panels_props = self.selected_panels.clone();
+        let panels_props = self.panels.clone();
         properties_action.connect_activate(move |_, _| {
             info!("Opening properties dialog for panel: {}", panel_id_clone);
             let registry = crate::core::global_registry();
@@ -636,6 +638,8 @@ impl GridLayout {
                 on_change.clone(),
                 drop_zone.clone(),
                 registry,
+                selected_panels_props.clone(),
+                panels_props.clone(),
             );
         });
         action_group.add_action(&properties_action);
@@ -1215,6 +1219,8 @@ impl GridLayout {
                                 let drop_zone_props = drop_zone_for_menu.clone();
                                 let panel_id_props = panel_id_for_menu.clone();
                                 let container_props = container_for_copy.clone();
+                                let selected_panels_props = selected_panels_end.clone();
+                                let panels_props = panels_for_copy.clone();
 
                                 properties_action.connect_activate(move |_, _| {
                                     log::info!("Opening properties dialog for copied panel: {}", panel_id_props);
@@ -1229,6 +1235,8 @@ impl GridLayout {
                                         on_change_props.clone(),
                                         drop_zone_props.clone(),
                                         registry,
+                                        selected_panels_props.clone(),
+                                        panels_props.clone(),
                                     );
                                 });
                                 action_group.add_action(&properties_action);
@@ -1805,6 +1813,8 @@ fn show_panel_properties_dialog(
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     drop_zone: DrawingArea,
     registry: &'static crate::core::Registry,
+    selected_panels: Rc<RefCell<HashSet<String>>>,
+    panels: Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
 ) {
     use gtk4::{Box as GtkBox, Button, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
 
@@ -2227,6 +2237,11 @@ fn show_panel_properties_dialog(
     let border_color_clone = border_color.clone();
     let panel_states_for_apply = panel_states.clone();
     let panel_id_for_apply = panel_id.clone();
+    let selected_panels_for_apply = selected_panels.clone();
+    let config_for_apply = Rc::new(RefCell::new(config));
+    let occupied_cells_for_apply = occupied_cells.clone();
+    let container_for_apply = _container.clone();
+    let panels_for_apply = panels.clone();
 
     let apply_changes = Rc::new(move || {
         let new_width = width_spin.value() as u32;
@@ -2259,18 +2274,20 @@ fn show_panel_properties_dialog(
             return;
         }
 
-        // Get panel state
-        let mut states = panel_states.borrow_mut();
-        let state = match states.get_mut(&panel_id) {
-            Some(s) => s,
-            None => {
-                log::warn!("Panel state not found for {}", panel_id);
-                return;
-            }
-        };
+        // Get panel state and clone all widget references upfront to avoid borrow conflicts
+        let (background_area, frame, widget) = {
+            let mut states = panel_states.borrow_mut();
+            let state = match states.get_mut(&panel_id) {
+                Some(s) => s,
+                None => {
+                    log::warn!("Panel state not found for {}", panel_id);
+                    return;
+                }
+            };
 
-        // Clone background_area for later use (to avoid borrow conflicts)
-        let background_area = state.background_area.clone();
+            // Clone all widget references we'll need
+            (state.background_area.clone(), state.frame.clone(), state.widget.clone())
+        }; // states borrow is dropped here
 
         // Handle size change (collision check)
         if size_changed {
@@ -2306,7 +2323,6 @@ fn show_panel_properties_dialog(
                     }
                 }
                 drop(occupied);
-                drop(states);
 
                 log::warn!("Cannot resize panel: collision detected");
 
@@ -2334,7 +2350,8 @@ fn show_panel_properties_dialog(
             }
         }
 
-        // Update panel geometry, source, displayer, and background
+        // Update panel geometry, source, displayer, and background - single lock acquisition
+        // IMPORTANT: All panel updates must be done in one lock to avoid deadlock with draw callbacks
         if let Ok(mut panel_guard) = panel_clone.try_write() {
             // Update size if changed
             if size_changed {
@@ -2358,28 +2375,6 @@ fn show_panel_properties_dialog(
             panel_guard.border.enabled = border_enabled_check_clone.is_active();
             panel_guard.border.width = border_width_spin_clone.value();
             panel_guard.border.color = *border_color_clone.borrow();
-
-            // Drop panel guard before accessing panel_states
-            drop(panel_guard);
-
-            // Update the visual appearance (background drawing and CSS)
-            let (background_area_opt, frame_opt) = {
-                let states = panel_states_for_apply.borrow();
-                if let Some(state) = states.get(&panel_id_for_apply) {
-                    (Some(state.background_area.clone()), Some(state.frame.clone()))
-                } else {
-                    (None, None)
-                }
-            };
-
-            if let Some(background_area) = background_area_opt {
-                // Queue a redraw of the background area to update corner radius and border
-                // The Cairo rendering in set_draw_func already handles corner_radius from panel data
-                background_area.queue_draw();
-            }
-
-            // Re-acquire panel guard for further updates
-            let mut panel_guard = panel_clone.try_write().unwrap();
 
             // Update source if changed
             if source_changed {
@@ -2408,13 +2403,228 @@ fn show_panel_properties_dialog(
                         new_widget.set_size_request(pixel_width, pixel_height);
 
                         // Replace widget in frame
-                        state.frame.set_child(Some(&new_widget));
+                        frame.set_child(Some(&new_widget));
 
                         // Update panel displayer
                         panel_guard.displayer = new_displayer;
 
-                        // Update panel state widget reference
-                        state.widget = new_widget;
+                        // Update panel state widget reference (need to re-borrow panel_states)
+                        if let Ok(mut states) = panel_states_for_apply.try_borrow_mut() {
+                            if let Some(state) = states.get_mut(&panel_id_for_apply) {
+                                state.widget = new_widget.clone();
+                            }
+                        }
+
+                        // Re-attach gesture controllers to the new widget
+                        // This is necessary because the old widget with its gesture controllers was replaced
+
+                        // 1. Click gesture for selection
+                        let gesture_click = gtk4::GestureClick::new();
+                        let panel_states_click = panel_states_for_apply.clone();
+                        let selected_panels_click = selected_panels_for_apply.clone();
+                        let panel_id_click = panel_id_for_apply.clone();
+                        let frame_click = frame.clone();
+
+                        gesture_click.connect_pressed(move |gesture, _, _, _| {
+                            let modifiers = gesture.current_event_state();
+                            let ctrl_pressed = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+
+                            if let Ok(mut states) = panel_states_click.try_borrow_mut() {
+                                let mut selected = selected_panels_click.borrow_mut();
+
+                                if ctrl_pressed {
+                                    // Toggle selection
+                                    if selected.contains(&panel_id_click) {
+                                        selected.remove(&panel_id_click);
+                                        if let Some(state) = states.get_mut(&panel_id_click) {
+                                            state.selected = false;
+                                            frame_click.remove_css_class("selected");
+                                        }
+                                    } else {
+                                        selected.insert(panel_id_click.clone());
+                                        if let Some(state) = states.get_mut(&panel_id_click) {
+                                            state.selected = true;
+                                            frame_click.add_css_class("selected");
+                                        }
+                                    }
+                                } else {
+                                    // If clicking on an already-selected panel that's part of a multi-selection,
+                                    // keep the current selection. Otherwise, clear and select only this panel
+                                    if !selected.contains(&panel_id_click) || selected.len() == 1 {
+                                        // Clear other selections
+                                        for (id, state) in states.iter_mut() {
+                                            if state.selected && id != &panel_id_click {
+                                                state.selected = false;
+                                                state.frame.remove_css_class("selected");
+                                            }
+                                        }
+                                        selected.clear();
+
+                                        // Select this panel
+                                        selected.insert(panel_id_click.clone());
+                                        if let Some(state) = states.get_mut(&panel_id_click) {
+                                            state.selected = true;
+                                            frame_click.add_css_class("selected");
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        new_widget.add_controller(gesture_click);
+
+                        // 2. Right-click context menu with actions
+                        use gtk4::gio;
+                        let menu = gio::Menu::new();
+
+                        // Section 1: Properties
+                        let section1 = gio::Menu::new();
+                        section1.append(Some("Properties..."), Some("panel.properties"));
+                        menu.append_section(None, &section1);
+
+                        // Section 2: Delete
+                        let section2 = gio::Menu::new();
+                        section2.append(Some("Delete"), Some("panel.delete"));
+                        menu.append_section(None, &section2);
+
+                        let popover_menu = gtk4::PopoverMenu::from_model(Some(&menu));
+                        popover_menu.set_parent(&new_widget);
+                        popover_menu.set_has_arrow(false);
+
+                        // Setup action group for this panel
+                        let action_group = gio::SimpleActionGroup::new();
+
+                        // Properties action
+                        let panel_props = panel_clone.clone();
+                        let panel_id_props = panel_id_for_apply.clone();
+                        let config_props = config_for_apply.clone();
+                        let panel_states_props = panel_states_for_apply.clone();
+                        let occupied_cells_props = occupied_cells_for_apply.clone();
+                        let container_props = container_for_apply.clone();
+                        let on_change_props = on_change.clone();
+                        let drop_zone_props = drop_zone.clone();
+                        let selected_panels_props = selected_panels_for_apply.clone();
+                        let panels_props = panels_for_apply.clone();
+
+                        let properties_action = gio::SimpleAction::new("properties", None);
+                        properties_action.connect_activate(move |_, _| {
+                            log::info!("Opening properties dialog for panel: {}", panel_id_props);
+                            let registry = crate::core::global_registry();
+                            show_panel_properties_dialog(
+                                &panel_props,
+                                *config_props.borrow(),
+                                panel_states_props.clone(),
+                                occupied_cells_props.clone(),
+                                container_props.clone(),
+                                on_change_props.clone(),
+                                drop_zone_props.clone(),
+                                registry,
+                                selected_panels_props.clone(),
+                                panels_props.clone(),
+                            );
+                        });
+                        action_group.add_action(&properties_action);
+
+                        // Delete action
+                        let panel_del = panel_clone.clone();
+                        let panel_id_del = panel_id_for_apply.clone();
+                        let panel_states_del = panel_states_for_apply.clone();
+                        let occupied_cells_del = occupied_cells_for_apply.clone();
+                        let container_del = container_for_apply.clone();
+                        let on_change_del = on_change.clone();
+                        let panels_del = panels_for_apply.clone();
+
+                        let delete_action = gio::SimpleAction::new("delete", None);
+                        delete_action.connect_activate(move |_, _| {
+                            log::info!("Delete requested for panel: {}", panel_id_del);
+
+                            // Get panel geometry before deletion
+                            let geometry = {
+                                let panel_guard = panel_del.blocking_read();
+                                panel_guard.geometry
+                            };
+
+                            // Show confirmation dialog
+                            let dialog = gtk4::AlertDialog::builder()
+                                .message("Delete Panel?")
+                                .detail("This action cannot be undone.")
+                                .modal(true)
+                                .buttons(vec!["Cancel", "Delete"])
+                                .default_button(0)
+                                .cancel_button(0)
+                                .build();
+
+                            let panel_id_for_delete = panel_id_del.clone();
+                            let panel_states_for_delete = panel_states_del.clone();
+                            let occupied_cells_for_delete = occupied_cells_del.clone();
+                            let container_for_delete = container_del.clone();
+                            let on_change_for_delete = on_change_del.clone();
+                            let panels_for_delete = panels_del.clone();
+
+                            // Get parent window for dialog
+                            if let Some(root) = container_del.root() {
+                                if let Some(window) = root.downcast_ref::<gtk4::Window>() {
+                                    dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
+                                        if let Ok(1) = response {
+                                            log::info!("Deleting panel: {}", panel_id_for_delete);
+
+                                            // Remove from panel_states
+                                            if let Some(state) = panel_states_for_delete.borrow_mut().remove(&panel_id_for_delete) {
+                                                // Remove widget from container
+                                                container_for_delete.remove(&state.frame);
+
+                                                // Free occupied cells
+                                                for dx in 0..geometry.width {
+                                                    for dy in 0..geometry.height {
+                                                        occupied_cells_for_delete
+                                                            .borrow_mut()
+                                                            .remove(&(geometry.x + dx, geometry.y + dy));
+                                                    }
+                                                }
+
+                                                // Remove from panels list
+                                                panels_for_delete.borrow_mut().retain(|p| {
+                                                    let p_guard = p.blocking_read();
+                                                    p_guard.id != panel_id_for_delete
+                                                });
+
+                                                // Trigger on_change callback
+                                                if let Some(ref callback) = *on_change_for_delete.borrow() {
+                                                    callback();
+                                                }
+
+                                                log::info!("Panel deleted successfully: {}", panel_id_for_delete);
+                                            } else {
+                                                log::warn!("Panel not found in states: {}", panel_id_for_delete);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                        action_group.add_action(&delete_action);
+
+                        new_widget.insert_action_group("panel", Some(&action_group));
+
+                        // Right-click gesture
+                        let gesture_secondary = gtk4::GestureClick::new();
+                        gesture_secondary.set_button(3); // Right mouse button
+
+                        let popover_clone = popover_menu.clone();
+                        gesture_secondary.connect_pressed(move |gesture, _, x, y| {
+                            popover_clone.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
+                                x as i32,
+                                y as i32,
+                                1,
+                                1,
+                            )));
+                            popover_clone.popup();
+                            gesture.set_state(gtk4::EventSequenceState::Claimed);
+                        });
+
+                        new_widget.add_controller(gesture_secondary);
+
+                        // Note: Drag gesture is attached to the frame, not the widget, so it doesn't need to be re-attached
                     }
                     Err(e) => {
                         log::warn!("Failed to create displayer {}: {}", new_displayer_id, e);
@@ -2497,17 +2707,13 @@ fn show_panel_properties_dialog(
                 }
             }
 
-            // Queue widget redraw to show updated data
-            state.widget.queue_draw();
-
-            // Drop the write lock before triggering redraws
+            // Drop the write lock BEFORE triggering any redraws to avoid deadlock
             drop(panel_guard);
         }
 
-        // Queue redraw of background AFTER releasing the panel write lock
-        if background_changed {
-            background_area.queue_draw();
-        }
+        // Queue redraws AFTER releasing the panel write lock to avoid deadlock with draw callbacks
+        background_area.queue_draw();
+        widget.queue_draw();
 
         // Update widget and frame sizes if size changed (and displayer wasn't replaced)
         if size_changed && !displayer_changed {
@@ -2516,13 +2722,10 @@ fn show_panel_properties_dialog(
             let pixel_height = new_height as i32 * config.cell_height
                 + (new_height as i32 - 1) * config.spacing;
 
-            state.widget.set_size_request(pixel_width, pixel_height);
-            state.frame.set_size_request(pixel_width, pixel_height);
-            state.background_area.set_size_request(pixel_width, pixel_height);
+            widget.set_size_request(pixel_width, pixel_height);
+            frame.set_size_request(pixel_width, pixel_height);
+            background_area.set_size_request(pixel_width, pixel_height);
         }
-
-        // Release panel_states borrow
-        drop(states);
 
         // Trigger redraw of drop zone layer
         drop_zone.queue_draw();
