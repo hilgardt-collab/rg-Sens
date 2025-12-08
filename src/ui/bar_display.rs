@@ -286,16 +286,17 @@ fn render_full_bar(
         BarFillDirection::TopToBottom => (width, height * value, 0.0, 0.0),
     };
 
-    cr.rectangle(fill_x, fill_y, fill_width, fill_height);
+    // Use rounded rectangle for clipping to apply corner radius
+    rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, config.corner_radius);
     cr.clip();
 
     render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
 
     cr.restore()?;
 
-    // Render border
+    // Render border with corner radius
     if config.border.enabled {
-        render_border(cr, &config.border, 0.0, 0.0, width, height, 0.0)?;
+        render_border(cr, &config.border, 0.0, 0.0, width, height, config.corner_radius)?;
     }
 
     Ok(())
