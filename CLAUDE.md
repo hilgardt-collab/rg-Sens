@@ -29,6 +29,15 @@ cargo run --no-default-features
 
 # Check compilation without building
 cargo check
+
+# Run tests
+cargo test
+
+# Format code
+cargo fmt
+
+# Run linter
+cargo clippy
 ```
 
 ## Code Architecture
@@ -41,13 +50,15 @@ The architecture separates **data collection** from **visualization** through tw
 - Collects system metrics (CPU, GPU, memory, etc.)
 - Must be `Send + Sync` for multi-threaded updates
 - Implements `update()` to refresh data and `get_values()` to expose data as JSON
-- Examples: `CpuSource`, `NvidiaGpuSource` in `src/sources/`
+- Implements `fields()` to describe available data fields with metadata
+- Implements `configure()` to accept source-specific configuration
+- Examples: `CpuSource`, `GpuSource`, `MemorySource` in `src/sources/`
 
 **Displayer trait** (`src/core/displayer.rs`):
 - Visualizes data from any source
 - Must be `Send + Sync` despite GTK widget usage
 - Creates GTK widgets via `create_widget()` and renders via Cairo in `draw()`
-- Examples: `TextDisplayer`, `BarDisplayer` in `src/displayers/`
+- Examples: `TextDisplayer`, `BarDisplayer`, `ArcDisplayer` in `src/displayers/`
 
 ### Critical Threading Pattern
 
@@ -75,7 +86,7 @@ fn create_widget(&self) -> Widget {
 }
 ```
 
-**Why:** Storing GTK widgets directly breaks `Send + Sync`. Instead, store data in `Arc<Mutex<T>>` and create widgets on-demand. See `src/displayers/text.rs` or `src/displayers/bar.rs` for reference implementations.
+**Why:** Storing GTK widgets directly breaks `Send + Sync`. Instead, store data in `Arc<Mutex<T>>` and create widgets on-demand. See `src/displayers/text.rs`, `src/displayers/bar.rs`, or `src/displayers/arc.rs` for reference implementations.
 
 ### Registration Pattern
 
@@ -105,6 +116,8 @@ Registration happens in `src/main.rs` at startup. If a displayer/source doesn't 
 
 **Panel** (`src/core/panel.rs`): Combines one source + one displayer
 - Has geometry (x, y, width, height in grid cells)
+- Has background configuration (solid color, gradient, image, or polygon)
+- Has corner radius and border configuration
 - Managed by `GridLayout` (`src/ui/grid_layout.rs`)
 - Updated by `UpdateManager` (`src/core/update_manager.rs`)
 
@@ -118,10 +131,11 @@ Registration happens in `src/main.rs` at startup. If a displayer/source doesn't 
 
 **Configuration Widgets:** Each complex UI component has a paired config widget:
 - `src/ui/bar_display.rs` (rendering) + `src/ui/bar_config_widget.rs` (UI)
+- `src/ui/arc_display.rs` (rendering) + `src/ui/arc_config_widget.rs` (UI)
 - `src/ui/background.rs` (rendering) + `src/ui/background_config_widget.rs` (UI)
 
 **Pattern:** Rendering code is separate from GTK configuration UI. Rendering modules export:
-- Data structures (e.g., `BarDisplayConfig`)
+- Data structures (e.g., `BarDisplayConfig`, `ArcDisplayConfig`)
 - Render function (e.g., `pub fn render_bar(cr: &Context, config: &BarDisplayConfig, ...)`)
 
 Config widgets create UI controls and call the render function in a preview `DrawingArea`.
@@ -130,6 +144,7 @@ Config widgets create UI controls and call the render function in a preview `Dra
 
 All custom visualizations use Cairo (`cairo-rs`):
 - Bar displays: `src/ui/bar_display.rs`
+- Arc gauges: `src/ui/arc_display.rs`
 - Backgrounds: `src/ui/background.rs` (gradients, images, polygons)
 - Custom displayers: `src/displayers/*/draw()`
 
@@ -147,6 +162,10 @@ let gradient = cairo::LinearGradient::new(x1, y1, x2, y2);
 gradient.add_color_stop_rgba(0.0, r, g, b, a);
 gradient.add_color_stop_rgba(1.0, r, g, b, a);
 cr.set_source(&gradient).ok();
+
+// Arcs (for circular gauges)
+cr.arc(center_x, center_y, radius, start_angle, end_angle);
+cr.stroke().ok();
 ```
 
 ### GTK4 Modernization
@@ -188,10 +207,17 @@ src/
 │   └── update_manager.rs # Periodic update coordination
 ├── sources/        # Data source implementations
 │   ├── cpu.rs           # CPU metrics via sysinfo
-│   └── gpu.rs           # NVIDIA GPU via nvml-wrapper
+│   ├── memory.rs        # Memory metrics via sysinfo
+│   └── gpu/
+│       ├── mod.rs       # GPU source (multi-vendor)
+│       ├── backend.rs   # GPU backend trait
+│       ├── nvidia.rs    # NVIDIA GPU via nvml-wrapper
+│       ├── amd.rs       # AMD GPU via sysfs
+│       └── detector.rs  # GPU detection logic
 ├── displayers/     # Visualization implementations
 │   ├── text.rs          # Text display with Pango
 │   ├── bar.rs           # Bar/gauge displays
+│   ├── arc.rs           # Arc gauge displays
 │   └── text_config.rs   # Text display configuration types
 ├── ui/             # GTK UI components
 │   ├── main_window.rs   # Application window
@@ -199,7 +225,10 @@ src/
 │   ├── config_dialog.rs # Settings dialog
 │   ├── bar_display.rs   # Bar rendering logic
 │   ├── bar_config_widget.rs  # Bar configuration UI
+│   ├── arc_display.rs   # Arc rendering logic
+│   ├── arc_config_widget.rs  # Arc configuration UI
 │   ├── background.rs    # Background rendering (gradients/images)
+│   ├── background_config_widget.rs  # Background configuration UI
 │   └── [component]_config_widget.rs  # Config UIs for various components
 ├── config/         # Configuration management
 ├── plugin/         # Future: dynamic plugin loading
@@ -250,7 +279,7 @@ impl Displayer for MyDisplayer {
 
 1. Create `src/sources/my_source.rs`:
 ```rust
-use crate::core::{DataSource, SourceMetadata};
+use crate::core::{DataSource, FieldMetadata, SourceMetadata};
 
 pub struct MySource {
     metadata: SourceMetadata,
@@ -259,17 +288,36 @@ pub struct MySource {
 }
 
 impl DataSource for MySource {
+    fn metadata(&self) -> &SourceMetadata {
+        &self.metadata
+    }
+
+    fn fields(&self) -> Vec<FieldMetadata> {
+        vec![
+            FieldMetadata::new("value", "Value", "Description", FieldType::Numerical, FieldPurpose::Value),
+            // ... more fields
+        ]
+    }
+
     fn update(&mut self) -> Result<()> {
         self.system.refresh_all();
         // Update self.values...
         Ok(())
     }
-    // ... other trait methods
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+        // Handle source-specific configuration
+        Ok(())
+    }
 }
 ```
 
 2. Register in `src/sources/mod.rs`
-3. Add config widget in `src/ui/` if needed
+3. Add config widget in `src/ui/` if needed (e.g., `src/ui/my_source_config_widget.rs`)
 
 ### Widget Callbacks with State
 
@@ -295,12 +343,32 @@ gtk4::glib::MainContext::default().spawn_local(async move {
 });
 ```
 
+### Animation in Displayers
+
+For animated visualizations (like the arc gauge), use `glib::timeout_add_local` for periodic updates:
+
+```rust
+glib::timeout_add_local(std::time::Duration::from_millis(16), {
+    let data_clone = self.data.clone();
+    let drawing_area = drawing_area.clone();
+    move || {
+        if let Ok(mut data) = data_clone.lock() {
+            // Update animated values
+            data.animated_value = lerp(data.animated_value, data.target_value, delta);
+        }
+        drawing_area.queue_draw();
+        glib::ControlFlow::Continue
+    }
+});
+```
+
 ## Performance Considerations
 
 - **Update frequency:** Default 1 second, configurable per panel
 - **Parallel updates:** Sources update concurrently via tokio
 - **Smart redraws:** Only redraw when data changes (check `needs_redraw()`)
 - **Profile compilation:** Dev builds use `opt-level = 1` for faster debug iterations
+- **Animation:** Use 60fps cap (16ms) for smooth animations without excessive CPU usage
 
 ## Common Gotchas
 
@@ -311,6 +379,32 @@ gtk4::glib::MainContext::default().spawn_local(async move {
 5. **Panel registration:** Forgetting to register in `mod.rs::register_all()` will make it invisible in UI
 6. **Cairo state:** Always `save()`/`restore()` to avoid polluting other draws
 7. **Temperature sensors:** AMD Ryzen uses `Tctl`/`Tccd` labels, Intel uses `Package`/`Core`
+8. **GPU detection:** GPU backends are initialized once at startup via `once_cell::Lazy` - changes to GPU hardware require app restart
+9. **Multi-GPU systems:** GPU sources use an index to select which GPU to monitor (defaults to 0)
+10. **AMD GPU support:** Uses sysfs files (`/sys/class/drm/card*/device/*`) - may require permissions on some systems
+
+## GPU Support
+
+### Multi-Vendor Architecture
+
+The GPU source (`src/sources/gpu/`) supports multiple GPU vendors through a backend trait system:
+
+- **Backend trait** (`src/sources/gpu/backend.rs`): Defines common GPU operations
+- **NVIDIA backend** (`src/sources/gpu/nvidia.rs`): Uses `nvml-wrapper` (optional feature)
+- **AMD backend** (`src/sources/gpu/amd.rs`): Uses sysfs files
+- **Detection** (`src/sources/gpu/detector.rs`): Auto-detects available GPUs at startup
+
+**Key features:**
+- Automatic GPU detection at startup (cached for lifetime of app)
+- Multi-GPU support (select GPU by index)
+- Field selection (temperature, utilization, memory, power, fan speed)
+- Unit conversion (Celsius/Fahrenheit/Kelvin for temps, MB/GB for memory)
+- Auto-detect limits or manual configuration
+
+**Disabling NVIDIA support:**
+```bash
+cargo build --no-default-features
+```
 
 ## Dependencies
 
@@ -324,3 +418,20 @@ gtk4::glib::MainContext::default().spawn_local(async move {
 - `nvml-wrapper`: NVIDIA GPU support (feature: `nvidia`, enabled by default)
 
 **Build time:** Requires GTK4 dev libraries (`libgtk-4-dev` on Debian/Ubuntu)
+
+## Testing
+
+Run tests with:
+```bash
+cargo test
+```
+
+For verbose output:
+```bash
+cargo test -- --nocapture
+```
+
+Run with logging:
+```bash
+RUST_LOG=debug cargo test
+```
