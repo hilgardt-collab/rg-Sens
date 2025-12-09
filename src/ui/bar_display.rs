@@ -89,9 +89,7 @@ pub enum BarBackgroundType {
 
 impl Default for BarBackgroundType {
     fn default() -> Self {
-        Self::Solid {
-            color: Color::new(0.15, 0.15, 0.15, 0.8),
-        }
+        Self::Transparent
     }
 }
 

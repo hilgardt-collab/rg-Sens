@@ -509,25 +509,33 @@ impl TextLineConfigWidget {
         let lines_clone = self.lines.clone();
         let fields_clone = self.available_fields.clone();
 
-        let rebuild_fn: Rc<dyn Fn()> = Rc::new(move || {
+        // Create rebuild function as Rc<RefCell> to allow self-reference
+        let rebuild_fn: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let rebuild_fn_clone = rebuild_fn.clone();
+
+        let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
             // Clear list box
             while let Some(child) = list_box_clone.first_child() {
                 list_box_clone.remove(&child);
             }
 
-            // Rebuild all rows
-            let lines = lines_clone.borrow().clone();
-            for (index, line) in lines.into_iter().enumerate() {
+            // Rebuild all rows with the same rebuild callback
+            let lines_data = lines_clone.borrow().clone();
+            let callback_to_pass = rebuild_fn_clone.borrow().clone();
+            for (index, line) in lines_data.into_iter().enumerate() {
                 Self::add_line_row(
                     &list_box_clone,
                     line,
                     &fields_clone,
                     lines_clone.clone(),
                     index,
-                    None, // No rebuild callback in recursive call
+                    callback_to_pass.clone(),
                 );
             }
         });
+
+        // Store the callback in the RefCell
+        *rebuild_fn.borrow_mut() = Some(rebuild_closure.clone());
 
         // Rebuild all rows with correct indices
         let lines = self.lines.borrow().clone();
@@ -538,7 +546,7 @@ impl TextLineConfigWidget {
                 &self.available_fields,
                 self.lines.clone(),
                 index,
-                Some(rebuild_fn.clone()),
+                Some(rebuild_closure.clone()),
             );
         }
     }

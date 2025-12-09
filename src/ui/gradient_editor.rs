@@ -25,6 +25,7 @@ impl GradientEditor {
         container.set_margin_end(12);
         container.set_margin_top(12);
         container.set_margin_bottom(12);
+        container.set_vexpand(true);
 
         let stops = Rc::new(RefCell::new(Vec::new()));
         let angle = Rc::new(RefCell::new(90.0));
@@ -82,6 +83,9 @@ impl GradientEditor {
             use crate::ui::background::render_background;
             use crate::ui::background::{BackgroundConfig, BackgroundType, LinearGradientConfig};
 
+            // Render checkerboard pattern to show transparency
+            Self::render_checkerboard(cr, width as f64, height as f64);
+
             let stops = stops_clone.borrow();
             let angle = *angle_clone.borrow();
 
@@ -115,8 +119,8 @@ impl GradientEditor {
 
         let scroll = gtk4::ScrolledWindow::new();
         scroll.set_child(Some(&stops_listbox));
-        scroll.set_max_content_height(200);
-        scroll.set_propagate_natural_height(true);
+        scroll.set_vexpand(true);
+        scroll.set_propagate_natural_height(false);
         container.append(&scroll);
 
         // Add stop button handler
@@ -185,6 +189,29 @@ impl GradientEditor {
         editor
     }
 
+    /// Render a checkerboard pattern to show transparency
+    fn render_checkerboard(cr: &gtk4::cairo::Context, width: f64, height: f64) {
+        let square_size = 10.0;
+        let light_gray = 0.8;
+        let dark_gray = 0.6;
+
+        for y in 0..((height / square_size).ceil() as i32) {
+            for x in 0..((width / square_size).ceil() as i32) {
+                let is_light = (x + y) % 2 == 0;
+                let gray = if is_light { light_gray } else { dark_gray };
+
+                cr.set_source_rgb(gray, gray, gray);
+                cr.rectangle(
+                    x as f64 * square_size,
+                    y as f64 * square_size,
+                    square_size,
+                    square_size,
+                );
+                let _ = cr.fill();
+            }
+        }
+    }
+
     /// Rebuild the stops list UI
     fn rebuild_stops_list(
         listbox: &ListBox,
@@ -231,20 +258,21 @@ impl GradientEditor {
         hbox.set_margin_top(6);
         hbox.set_margin_bottom(6);
 
-        // Position slider
-        let position_box = GtkBox::new(Orientation::Vertical, 3);
-        let position_label = Label::new(Some(&format!("Position: {:.2}", stop.position)));
+        // Position spinner
+        let position_box = GtkBox::new(Orientation::Horizontal, 6);
+        let position_label = Label::new(Some("Position:"));
         position_label.set_halign(gtk4::Align::Start);
-        position_label.add_css_class("caption");
 
-        let position_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
-        position_scale.set_value(stop.position);
-        position_scale.set_hexpand(true);
-        position_scale.set_width_request(150);
-        position_scale.set_draw_value(false);
+        let position_spin = SpinButton::with_range(0.0, 100.0, 1.0);
+        position_spin.set_value(stop.position * 100.0); // Convert to percentage
+        position_spin.set_digits(0);
+        position_spin.set_width_request(80);
+
+        let percent_label = Label::new(Some("%"));
 
         position_box.append(&position_label);
-        position_box.append(&position_scale);
+        position_box.append(&position_spin);
+        position_box.append(&percent_label);
         hbox.append(&position_box);
 
         // Color button with swatch
@@ -314,11 +342,30 @@ impl GradientEditor {
         let listbox_clone = listbox.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        let position_label_clone = position_label.clone();
 
-        position_scale.connect_value_changed(move |scale| {
-            let new_position = scale.value();
-            position_label_clone.set_text(&format!("Position: {:.2}", new_position));
+        position_spin.connect_value_changed(move |spin| {
+            let mut new_position = spin.value() / 100.0; // Convert from percentage to 0.0-1.0
+
+            // Validate: ensure minimum spacing of 0.01 (1%) between adjacent stops
+            const MIN_SPACING: f64 = 0.01;
+
+            {
+                let stops = stops_clone.borrow();
+                // Check if this position would be too close to another stop
+                for (i, other_stop) in stops.iter().enumerate() {
+                    if i != index {
+                        let distance = (new_position - other_stop.position).abs();
+                        if distance < MIN_SPACING && distance > 0.0 {
+                            // Adjust position to maintain minimum spacing
+                            if new_position < other_stop.position {
+                                new_position = (other_stop.position - MIN_SPACING).max(0.0);
+                            } else {
+                                new_position = (other_stop.position + MIN_SPACING).min(1.0);
+                            }
+                        }
+                    }
+                }
+            }
 
             let mut stops = stops_clone.borrow_mut();
             if let Some(stop) = stops.get_mut(index) {

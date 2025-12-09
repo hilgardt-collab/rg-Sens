@@ -1965,16 +1965,36 @@ fn show_panel_properties_dialog(
     // Wrap gpu_config_widget in Rc for sharing
     let gpu_config_widget = Rc::new(gpu_config_widget);
 
-    // Show/hide CPU and GPU config based on source selection
+    // Memory source configuration widget
+    let memory_config_widget = crate::ui::MemorySourceConfigWidget::new();
+    memory_config_widget.widget().set_visible(old_source_id == "memory");
+
+    // Load existing Memory config if source is Memory
+    if old_source_id == "memory" {
+        if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
+            if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
+                memory_config_widget.set_config(memory_config);
+            }
+        }
+    }
+
+    source_tab_box.append(memory_config_widget.widget());
+
+    // Wrap memory_config_widget in Rc for sharing
+    let memory_config_widget = Rc::new(memory_config_widget);
+
+    // Show/hide source config widgets based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
         let gpu_widget_clone = gpu_config_widget.clone();
+        let memory_widget_clone = memory_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected) {
                 cpu_widget_clone.widget().set_visible(source_id == "cpu");
                 gpu_widget_clone.widget().set_visible(source_id == "gpu");
+                memory_widget_clone.widget().set_visible(source_id == "memory");
             }
         });
     }
@@ -2077,22 +2097,55 @@ fn show_panel_properties_dialog(
     // Wrap bar_config_widget in Rc for sharing
     let bar_config_widget = Rc::new(bar_config_widget);
 
-    // Show/hide text and bar config based on displayer selection
+    // Arc displayer configuration (shown only when arc displayer is selected)
+    let arc_config_label = Label::new(Some("Arc Gauge Configuration"));
+    arc_config_label.add_css_class("heading");
+    arc_config_label.set_margin_top(12);
+
+    let arc_config_widget = crate::ui::ArcConfigWidget::new(available_fields.clone());
+    arc_config_widget.widget().set_visible(old_displayer_id == "arc");
+    arc_config_label.set_visible(old_displayer_id == "arc");
+
+    // Load existing arc config if displayer is arc, or use default
+    if old_displayer_id == "arc" {
+        let arc_config = if let Some(arc_config_value) = panel_guard.config.get("arc_config") {
+            // Use saved config if available
+            serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone())
+                .unwrap_or_else(|_| crate::ui::ArcDisplayConfig::default())
+        } else {
+            // Use default config
+            crate::ui::ArcDisplayConfig::default()
+        };
+        arc_config_widget.set_config(arc_config);
+    }
+
+    displayer_tab_box.append(&arc_config_label);
+    displayer_tab_box.append(arc_config_widget.widget());
+
+    // Wrap arc_config_widget in Rc for sharing
+    let arc_config_widget = Rc::new(arc_config_widget);
+
+    // Show/hide text, bar, and arc config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
         let bar_widget_clone = bar_config_widget.clone();
         let bar_label_clone = bar_config_label.clone();
+        let arc_widget_clone = arc_config_widget.clone();
+        let arc_label_clone = arc_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 let is_text = displayer_id == "text";
                 let is_bar = displayer_id == "bar";
+                let is_arc = displayer_id == "arc";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
                 bar_label_clone.set_visible(is_bar);
+                arc_widget_clone.widget().set_visible(is_arc);
+                arc_label_clone.set_visible(is_arc);
             }
         });
     }
@@ -2226,8 +2279,10 @@ fn show_panel_properties_dialog(
     let background_widget_clone = background_widget.clone();
     let text_config_widget_clone = text_config_widget.clone();
     let bar_config_widget_clone = bar_config_widget.clone();
+    let arc_config_widget_clone = arc_config_widget.clone();
     let cpu_config_widget_clone = cpu_config_widget.clone();
     let gpu_config_widget_clone = gpu_config_widget.clone();
+    let memory_config_widget_clone = memory_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -2665,6 +2720,22 @@ fn show_panel_properties_dialog(
                 }
             }
 
+            // Apply arc configuration if arc displayer is active
+            if new_displayer_id == "arc" {
+                let arc_config = arc_config_widget_clone.get_config();
+                if let Ok(arc_config_json) = serde_json::to_value(&arc_config) {
+                    panel_guard.config.insert("arc_config".to_string(), arc_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply arc config: {}", e);
+                    }
+                }
+            }
+
             // Apply CPU source configuration if CPU source is active
             if new_source_id == "cpu" {
                 let cpu_config = cpu_config_widget_clone.get_config();
@@ -2698,6 +2769,27 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the source
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply GPU config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply Memory source configuration if Memory source is active
+            if new_source_id == "memory" {
+                let memory_config = memory_config_widget_clone.get_config();
+                if let Ok(memory_config_json) = serde_json::to_value(&memory_config) {
+                    panel_guard.config.insert("memory_config".to_string(), memory_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply memory config to source: {}", e);
                     }
 
                     // Update the source with new configuration

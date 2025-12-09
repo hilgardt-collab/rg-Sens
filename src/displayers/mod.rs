@@ -6,16 +6,19 @@
 mod text;
 mod text_config;
 mod bar;
+mod arc;
 // mod level_bar;
-// mod arc_gauge;
 // mod line_graph;
 // mod analog_clock;
 
 pub use text::TextDisplayer;
 pub use text_config::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
 pub use bar::BarDisplayer;
+pub use arc::ArcDisplayer;
+
+// Re-export FieldMetadata from core for convenience
+pub use crate::core::FieldMetadata;
 // pub use level_bar::LevelBarDisplayer;
-// pub use arc_gauge::ArcGaugeDisplayer;
 // pub use line_graph::LineGraphDisplayer;
 // pub use analog_clock::AnalogClockDisplayer;
 
@@ -29,9 +32,11 @@ pub fn register_all() {
     // Register bar displayer
     global_registry().register_displayer("bar", || Box::new(BarDisplayer::new()));
 
+    // Register arc gauge displayer
+    global_registry().register_displayer("arc", || Box::new(ArcDisplayer::new()));
+
     // TODO: Register more displayers
     // register_displayer!("level_bar", LevelBarDisplayer);
-    // register_displayer!("arc_gauge", ArcGaugeDisplayer);
     // register_displayer!("line_graph", LineGraphDisplayer);
     // register_displayer!("analog_clock", AnalogClockDisplayer);
 }

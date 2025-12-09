@@ -92,13 +92,33 @@ impl Displayer for BarDisplayer {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
 
+        // Get min/max limits from data source if available
+        let min_limit = data
+            .get("min_limit")
+            .and_then(|v| v.as_f64());
+
+        let max_limit = data
+            .get("max_limit")
+            .and_then(|v| v.as_f64());
+
         // Normalize to 0.0-1.0 range
-        // If value is already in 0-1 range, use it directly
-        // If value is in 0-100 range (like percentage), divide by 100
-        let normalized = if new_value <= 1.0 {
+        let normalized = if let (Some(min), Some(max)) = (min_limit, max_limit) {
+            // Use min/max range if available
+            if max > min {
+                (new_value - min) / (max - min)
+            } else {
+                0.0
+            }
+        } else if new_value <= 1.0 {
+            // Value already in 0-1 range
             new_value
-        } else {
+        } else if new_value <= 100.0 {
+            // Assume percentage (0-100)
             new_value / 100.0
+        } else {
+            // For values > 100 without explicit range, normalize to 0-1
+            // This might not be ideal, but it's better than nothing
+            0.0
         };
 
         if let Ok(mut display_data) = self.data.lock() {
