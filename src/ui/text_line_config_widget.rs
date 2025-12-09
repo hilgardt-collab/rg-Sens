@@ -139,6 +139,28 @@ impl TextLineConfigWidget {
 
         font_box.append(&font_button);
 
+        // Font size spinner
+        let size_label = Label::new(Some("Size:"));
+        font_box.append(&size_label);
+
+        let size_spin = SpinButton::with_range(6.0, 200.0, 1.0);
+        size_spin.set_value(line_config.font_size);
+        size_spin.set_width_chars(4);
+        font_box.append(&size_spin);
+
+        // Update font size when spinner changes
+        let lines_clone_size = lines.clone();
+        let font_button_clone_size = font_button.clone();
+        size_spin.connect_value_changed(move |spin| {
+            let new_size = spin.value();
+            let mut lines_ref = lines_clone_size.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.font_size = new_size;
+                // Update button label
+                font_button_clone_size.set_label(&format!("{} {:.0}", line.font_family, new_size));
+            }
+        });
+
         // Copy font button
         let copy_font_btn = Button::with_label("Copy");
         let lines_clone_copy_font = lines.clone();
@@ -156,6 +178,7 @@ impl TextLineConfigWidget {
         let paste_font_btn = Button::with_label("Paste");
         let lines_clone_paste_font = lines.clone();
         let font_button_clone = font_button.clone();
+        let size_spin_clone = size_spin.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 if let Some((family, size)) = clipboard.paste_font() {
@@ -166,8 +189,9 @@ impl TextLineConfigWidget {
                     }
                     drop(lines_ref);
 
-                    // Update button label
+                    // Update button label and size spinner
                     font_button_clone.set_label(&format!("{} {:.0}", family, size));
+                    size_spin_clone.set_value(size);
                 }
             }
         });
@@ -328,19 +352,70 @@ impl TextLineConfigWidget {
         extras_box.append(&angle_spin);
         row_box.append(&extras_box);
 
-        // Combine checkbox
+        // Position offset controls
+        let offset_box = GtkBox::new(Orientation::Horizontal, 6);
+        offset_box.append(&Label::new(Some("Offset X:")));
+        let offset_x_spin = SpinButton::with_range(-500.0, 500.0, 1.0);
+        offset_x_spin.set_value(line_config.offset_x);
+        offset_x_spin.set_width_chars(5);
+        offset_box.append(&offset_x_spin);
+
+        offset_box.append(&Label::new(Some("Y:")));
+        let offset_y_spin = SpinButton::with_range(-500.0, 500.0, 1.0);
+        offset_y_spin.set_value(line_config.offset_y);
+        offset_y_spin.set_width_chars(5);
+        offset_box.append(&offset_y_spin);
+        row_box.append(&offset_box);
+
+        // Combine checkbox and group selector
         let combine_box = GtkBox::new(Orientation::Horizontal, 6);
         let combine_check = CheckButton::with_label("Combine with others");
         combine_check.set_active(line_config.is_combined);
         combine_box.append(&combine_check);
 
         combine_box.append(&Label::new(Some("Group:")));
+
+        // Group dropdown with 8 presets + Custom
+        let group_options = vec![
+            "Group 1", "Group 2", "Group 3", "Group 4",
+            "Group 5", "Group 6", "Group 7", "Group 8",
+            "Custom"
+        ];
+        let group_strings: Vec<&str> = group_options.iter().map(|s| *s).collect();
+        let group_list = StringList::new(&group_strings);
+        let group_combo = DropDown::new(Some(group_list), Option::<gtk4::Expression>::None);
+
+        // Determine initial selection
+        let (initial_group_index, is_custom) = if let Some(ref group) = line_config.group_id {
+            match group.as_str() {
+                "Group 1" => (0, false),
+                "Group 2" => (1, false),
+                "Group 3" => (2, false),
+                "Group 4" => (3, false),
+                "Group 5" => (4, false),
+                "Group 6" => (5, false),
+                "Group 7" => (6, false),
+                "Group 8" => (7, false),
+                _ => (8, true), // Custom
+            }
+        } else {
+            (0, false)
+        };
+
+        group_combo.set_selected(initial_group_index as u32);
+        combine_box.append(&group_combo);
+
+        // Custom group text entry (shown when "Custom" is selected)
         let group_entry = Entry::new();
         if let Some(group) = &line_config.group_id {
-            group_entry.set_text(group);
+            if is_custom {
+                group_entry.set_text(group);
+            }
         }
         group_entry.set_width_chars(10);
+        group_entry.set_visible(is_custom);
         combine_box.append(&group_entry);
+
         row_box.append(&combine_box);
 
         // Wire up change handlers to update the TextLineConfig in the lines Vec
@@ -349,6 +424,7 @@ impl TextLineConfigWidget {
         {
             let lines_clone = lines.clone();
             let font_button_clone = font_button.clone();
+            let size_spin_clone = size_spin.clone();
             font_button.connect_clicked(move |btn| {
                 let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
 
@@ -365,6 +441,7 @@ impl TextLineConfigWidget {
 
                 let lines_clone2 = lines_clone.clone();
                 let font_button_clone2 = font_button_clone.clone();
+                let size_spin_clone2 = size_spin_clone.clone();
 
                 // Use callback-based API for font selection with shared dialog
                 shared_font_dialog().choose_font(
@@ -384,8 +461,9 @@ impl TextLineConfigWidget {
                             }
                             drop(lines_ref);
 
-                            // Update button label
+                            // Update button label and size spinner
                             font_button_clone2.set_label(&format!("{} {:.0}", family, size));
+                            size_spin_clone2.set_value(size);
                         }
                     },
                 );
@@ -452,26 +530,134 @@ impl TextLineConfigWidget {
             });
         }
 
+        // Offset X handler
+        {
+            let lines_clone = lines.clone();
+            offset_x_spin.connect_value_changed(move |spin| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.offset_x = spin.value();
+                }
+            });
+        }
+
+        // Offset Y handler
+        {
+            let lines_clone = lines.clone();
+            offset_y_spin.connect_value_changed(move |spin| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.offset_y = spin.value();
+                }
+            });
+        }
+
+        // Helper function to check if this is the first line in a group
+        let is_first_in_group = |lines: &[TextLineConfig], index: usize| -> bool {
+            if index >= lines.len() {
+                return true;
+            }
+            let current_line = &lines[index];
+            if !current_line.is_combined {
+                return true; // Not in a group, can set angle
+            }
+            if current_line.group_id.is_none() {
+                return true; // No group set, can set angle
+            }
+
+            // Check if there's any earlier line with the same group_id
+            let group_id = current_line.group_id.as_ref().unwrap();
+            for (i, line) in lines.iter().enumerate() {
+                if i >= index {
+                    break;
+                }
+                if line.is_combined && line.group_id.as_ref() == Some(group_id) {
+                    return false; // Found an earlier line in the same group
+                }
+            }
+            true // This is the first line in the group
+        };
+
+        // Update angle spinner sensitivity based on group position
+        let update_angle_sensitivity = {
+            let lines_clone = lines.clone();
+            let angle_spin_clone = angle_spin.clone();
+            move || {
+                let lines_ref = lines_clone.borrow();
+                let is_first = is_first_in_group(&lines_ref, list_index);
+                angle_spin_clone.set_sensitive(is_first);
+            }
+        };
+
+        // Initial update of angle sensitivity
+        update_angle_sensitivity();
+
         // Combine checkbox handler
         {
             let lines_clone = lines.clone();
+            let update_angle = update_angle_sensitivity.clone();
             combine_check.connect_toggled(move |check| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.is_combined = check.is_active();
                 }
+                drop(lines_ref);
+                update_angle();
             });
         }
 
-        // Group ID handler
+        // Group dropdown handler
         {
             let lines_clone = lines.clone();
+            let group_entry_clone = group_entry.clone();
+            let update_angle = update_angle_sensitivity.clone();
+            group_combo.connect_selected_notify(move |combo| {
+                let selected = combo.selected();
+                let is_custom = selected == 8; // Last option is "Custom"
+
+                // Show/hide custom entry
+                group_entry_clone.set_visible(is_custom);
+
+                // Update group_id
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    if is_custom {
+                        // Use custom text from entry
+                        let custom_text = group_entry_clone.text().to_string();
+                        line.group_id = if custom_text.is_empty() {
+                            Some("Custom".to_string())
+                        } else {
+                            Some(custom_text)
+                        };
+                    } else {
+                        // Use preset group name
+                        line.group_id = Some(format!("Group {}", selected + 1));
+                    }
+                }
+                drop(lines_ref);
+                update_angle();
+            });
+        }
+
+        // Custom group entry handler
+        {
+            let lines_clone = lines.clone();
+            let update_angle = update_angle_sensitivity.clone();
             group_entry.connect_changed(move |entry| {
                 let text = entry.text().to_string();
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.group_id = if text.is_empty() { None } else { Some(text) };
+                    // Only update if custom entry is visible
+                    if gtk4::prelude::WidgetExt::is_visible(entry) {
+                        line.group_id = if text.is_empty() {
+                            Some("Custom".to_string())
+                        } else {
+                            Some(text)
+                        };
+                    }
                 }
+                drop(lines_ref);
+                update_angle();
             });
         }
 

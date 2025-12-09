@@ -6,14 +6,14 @@
 mod cpu;
 mod gpu;
 mod memory;
-// mod temps;
+mod system_temp;
 // mod disk;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
 pub use gpu::GpuSource;
 pub use memory::MemorySource;
-// pub use temps::TemperatureSource;
+pub use system_temp::{SystemTempSource, SensorInfo, SensorCategory, SystemTempConfig, TemperatureUnit as SystemTempUnit};
 // pub use disk::DiskSource;
 // pub use network::NetworkSource;
 
@@ -30,8 +30,10 @@ pub fn register_all() {
     // Register Memory source
     global_registry().register_source("memory", || Box::new(MemorySource::new()));
 
+    // Register System Temperature source
+    global_registry().register_source("system_temp", || Box::new(SystemTempSource::new()));
+
     // TODO: Register more sources
-    // register_source!("temps", TemperatureSource);
     // register_source!("disk", DiskSource);
     // register_source!("network", NetworkSource);
 }

@@ -60,6 +60,14 @@ pub struct TextLineConfig {
 
     /// Group ID for combined lines (lines with same group_id are combined)
     pub group_id: Option<String>,
+
+    /// Horizontal offset in pixels for fine-tuning position
+    #[serde(default)]
+    pub offset_x: f64,
+
+    /// Vertical offset in pixels for fine-tuning position
+    #[serde(default)]
+    pub offset_y: f64,
 }
 
 impl Default for TextLineConfig {
@@ -74,6 +82,8 @@ impl Default for TextLineConfig {
             rotation_angle: 0.0,
             is_combined: false,
             group_id: None,
+            offset_x: 0.0,
+            offset_y: 0.0,
         }
     }
 }
@@ -101,6 +111,8 @@ impl Default for TextDisplayerConfig {
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    offset_x: 0.0,
+                    offset_y: 0.0,
                 },
                 TextLineConfig {
                     field_id: "value".to_string(),
@@ -112,6 +124,8 @@ impl Default for TextDisplayerConfig {
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    offset_x: 0.0,
+                    offset_y: 0.0,
                 },
                 TextLineConfig {
                     field_id: "unit".to_string(),
@@ -123,6 +137,8 @@ impl Default for TextDisplayerConfig {
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    offset_x: 0.0,
+                    offset_y: 0.0,
                 },
             ],
         }

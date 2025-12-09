@@ -56,6 +56,25 @@ impl AppConfig {
 
         Ok(dirs.config_dir().join("config.json"))
     }
+
+    /// Load configuration from a specific file path
+    pub fn load_from_path(path: &PathBuf) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config = serde_json::from_str(&content)?;
+        Ok(config)
+    }
+
+    /// Save configuration to a specific file path
+    pub fn save_to_path(&self, path: &PathBuf) -> Result<()> {
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let content = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 impl Default for AppConfig {

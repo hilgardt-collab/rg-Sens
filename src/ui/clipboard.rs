@@ -4,12 +4,24 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 use crate::displayers::TextLineConfig;
-use crate::ui::{BackgroundConfig, CpuSourceConfig, GpuSourceConfig};
+use crate::ui::{BackgroundConfig, ColorStop, CpuSourceConfig, GpuSourceConfig};
+use crate::core::PanelBorderConfig;
+use serde_json::Value;
+use std::collections::HashMap;
 
 /// Global clipboard that persists across config dialogs
 pub static CLIPBOARD: Lazy<Mutex<Clipboard>> = Lazy::new(|| {
     Mutex::new(Clipboard::default())
 });
+
+/// Panel style (all visual settings except source config)
+#[derive(Debug, Clone)]
+pub struct PanelStyle {
+    pub background: BackgroundConfig,
+    pub corner_radius: f64,
+    pub border: PanelBorderConfig,
+    pub displayer_config: HashMap<String, Value>,
+}
 
 /// Clipboard data structure
 #[derive(Debug, Default, Clone)]
@@ -26,6 +38,10 @@ pub struct Clipboard {
     pub cpu_source: Option<CpuSourceConfig>,
     /// Copied GPU source configuration
     pub gpu_source: Option<GpuSourceConfig>,
+    /// Copied panel style (background, border, corner radius, displayer config)
+    pub panel_style: Option<PanelStyle>,
+    /// Copied gradient color stops (universal for all gradient types - backgrounds and arc displayers)
+    pub gradient_stops: Option<Vec<ColorStop>>,
 }
 
 impl Clipboard {
@@ -89,6 +105,26 @@ impl Clipboard {
         self.gpu_source.clone()
     }
 
+    /// Copy panel style to clipboard (background, border, corner radius, displayer config)
+    pub fn copy_panel_style(&mut self, style: PanelStyle) {
+        self.panel_style = Some(style);
+    }
+
+    /// Paste panel style from clipboard
+    pub fn paste_panel_style(&self) -> Option<PanelStyle> {
+        self.panel_style.clone()
+    }
+
+    /// Copy gradient color stops to clipboard (universal for all gradient types)
+    pub fn copy_gradient_stops(&mut self, stops: Vec<ColorStop>) {
+        self.gradient_stops = Some(stops);
+    }
+
+    /// Paste gradient color stops from clipboard
+    pub fn paste_gradient_stops(&self) -> Option<Vec<ColorStop>> {
+        self.gradient_stops.clone()
+    }
+
     /// Clear all clipboard data
     pub fn clear(&mut self) {
         self.font = None;
@@ -97,5 +133,7 @@ impl Clipboard {
         self.background = None;
         self.cpu_source = None;
         self.gpu_source = None;
+        self.panel_style = None;
+        self.gradient_stops = None;
     }
 }

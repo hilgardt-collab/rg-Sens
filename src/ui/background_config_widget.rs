@@ -216,6 +216,54 @@ impl BackgroundConfigWidget {
     ) -> (GtkBox, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
+        // Copy/Paste gradient buttons
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_gradient_btn = Button::with_label("Copy Gradient");
+        let paste_gradient_btn = Button::with_label("Paste Gradient");
+
+        let config_for_copy = config.clone();
+        copy_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            let cfg = config_for_copy.borrow();
+            if let BackgroundType::LinearGradient(ref grad) = cfg.background {
+                if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                    clipboard.copy_gradient_stops(grad.stops.clone());
+                    log::info!("Gradient color stops copied to clipboard");
+                }
+            }
+        });
+
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        paste_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(stops) = clipboard.paste_gradient_stops() {
+                    let mut cfg = config_for_paste.borrow_mut();
+                    if let BackgroundType::LinearGradient(ref mut grad) = cfg.background {
+                        grad.stops = stops;
+                        drop(cfg);
+                        preview_for_paste.queue_draw();
+
+                        if let Some(callback) = on_change_for_paste.borrow().as_ref() {
+                            callback();
+                        }
+
+                        log::info!("Gradient color stops pasted from clipboard");
+                    }
+                } else {
+                    log::info!("No gradient color stops in clipboard");
+                }
+            }
+        });
+
+        copy_paste_box.append(&copy_gradient_btn);
+        copy_paste_box.append(&paste_gradient_btn);
+        page.append(&copy_paste_box);
+
         let gradient_editor = GradientEditor::new();
 
         // Initialize with current config
@@ -252,6 +300,54 @@ impl BackgroundConfigWidget {
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 12);
+
+        // Copy/Paste gradient buttons
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_gradient_btn = Button::with_label("Copy Gradient");
+        let paste_gradient_btn = Button::with_label("Paste Gradient");
+
+        let config_for_copy = config.clone();
+        copy_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            let cfg = config_for_copy.borrow();
+            if let BackgroundType::RadialGradient(ref grad) = cfg.background {
+                if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                    clipboard.copy_gradient_stops(grad.stops.clone());
+                    log::info!("Gradient color stops copied to clipboard");
+                }
+            }
+        });
+
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        paste_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(stops) = clipboard.paste_gradient_stops() {
+                    let mut cfg = config_for_paste.borrow_mut();
+                    if let BackgroundType::RadialGradient(ref mut grad) = cfg.background {
+                        grad.stops = stops;
+                        drop(cfg);
+                        preview_for_paste.queue_draw();
+
+                        if let Some(callback) = on_change_for_paste.borrow().as_ref() {
+                            callback();
+                        }
+
+                        log::info!("Gradient color stops pasted from clipboard");
+                    }
+                } else {
+                    log::info!("No gradient color stops in clipboard");
+                }
+            }
+        });
+
+        copy_paste_box.append(&copy_gradient_btn);
+        copy_paste_box.append(&paste_gradient_btn);
+        page.append(&copy_paste_box);
 
         // Radius control
         let radius_box = GtkBox::new(Orientation::Horizontal, 6);

@@ -1,14 +1,22 @@
 //! Color picker dialog with alpha channel support
 
-use gtk4::{ColorDialog, Window};
+use gtk4::Window;
 use crate::ui::background::Color;
+use crate::ui::custom_color_picker::CustomColorPicker;
 
 /// Color picker dialog
 pub struct ColorPickerDialog;
 
 impl ColorPickerDialog {
-    /// Show color picker and return selected color
+    /// Show color picker and return selected color (uses custom color picker)
     pub async fn pick_color(parent: Option<&Window>, initial_color: Color) -> Option<Color> {
+        CustomColorPicker::pick_color(parent, initial_color).await
+    }
+
+    /// Show stock GTK color picker (fallback option)
+    pub async fn pick_color_stock(parent: Option<&Window>, initial_color: Color) -> Option<Color> {
+        use gtk4::ColorDialog;
+
         let dialog = ColorDialog::builder()
             .title("Select Color")
             .modal(true)

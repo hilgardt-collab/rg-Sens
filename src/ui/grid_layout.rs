@@ -601,10 +601,16 @@ impl GridLayout {
         section1.append(Some("Properties..."), Some("panel.properties"));
         menu.append_section(None, &section1);
 
-        // Section 2: Delete
+        // Section 2: Copy/Paste Style
         let section2 = gio::Menu::new();
-        section2.append(Some("Delete"), Some("panel.delete"));
+        section2.append(Some("Copy Style"), Some("panel.copy_style"));
+        section2.append(Some("Paste Style"), Some("panel.paste_style"));
         menu.append_section(None, &section2);
+
+        // Section 3: Delete
+        let section3 = gio::Menu::new();
+        section3.append(Some("Delete"), Some("panel.delete"));
+        menu.append_section(None, &section3);
 
         let popover = PopoverMenu::from_model(Some(&menu));
         popover.set_parent(widget);
@@ -643,6 +649,84 @@ impl GridLayout {
             );
         });
         action_group.add_action(&properties_action);
+
+        // Copy Style action
+        let panel_copy_style = panel.clone();
+        let copy_style_action = gio::SimpleAction::new("copy_style", None);
+        copy_style_action.connect_activate(move |_, _| {
+            info!("Copying panel style");
+            if let Ok(panel_guard) = panel_copy_style.try_read() {
+                use crate::ui::{PanelStyle, CLIPBOARD};
+
+                // Filter out source-specific config keys
+                let mut displayer_config = panel_guard.config.clone();
+                displayer_config.remove("cpu_config");
+                displayer_config.remove("gpu_config");
+                displayer_config.remove("memory_config");
+
+                let style = PanelStyle {
+                    background: panel_guard.background.clone(),
+                    corner_radius: panel_guard.corner_radius,
+                    border: panel_guard.border.clone(),
+                    displayer_config,
+                };
+
+                if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                    clipboard.copy_panel_style(style);
+                    info!("Panel style copied to clipboard");
+                }
+            }
+        });
+        action_group.add_action(&copy_style_action);
+
+        // Paste Style action
+        let panel_paste_style = panel.clone();
+        let panel_states_paste = self.panel_states.clone();
+        let on_change_paste = self.on_change.clone();
+        let drop_zone_paste = self.drop_zone_layer.clone();
+        let paste_style_action = gio::SimpleAction::new("paste_style", None);
+        paste_style_action.connect_activate(move |_, _| {
+            use crate::ui::CLIPBOARD;
+
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(style) = clipboard.paste_panel_style() {
+                    info!("Pasting panel style");
+
+                    if let Ok(mut panel_guard) = panel_paste_style.try_write() {
+                        // Apply the style
+                        panel_guard.background = style.background;
+                        panel_guard.corner_radius = style.corner_radius;
+                        panel_guard.border = style.border;
+
+                        // Merge displayer config (keep source-specific configs)
+                        for (key, value) in style.displayer_config {
+                            panel_guard.config.insert(key, value);
+                        }
+
+                        // Apply config to displayer (clone config to avoid borrow conflict)
+                        let config_clone = panel_guard.config.clone();
+                        let _ = panel_guard.displayer.apply_config(&config_clone);
+
+                        // Trigger redraw
+                        if let Some(state) = panel_states_paste.borrow().get(&panel_guard.id) {
+                            state.background_area.queue_draw();
+                            state.widget.queue_draw();
+                        }
+
+                        // Trigger on_change callback
+                        if let Some(ref callback) = *on_change_paste.borrow() {
+                            callback();
+                        }
+
+                        drop_zone_paste.queue_draw();
+                        info!("Panel style pasted successfully");
+                    }
+                } else {
+                    info!("No panel style in clipboard");
+                }
+            }
+        });
+        action_group.add_action(&paste_style_action);
 
         // Delete action
         let panel_id_clone2 = panel_id.clone();
@@ -1398,6 +1482,10 @@ impl GridLayout {
                                 let drag_gesture_copy = GestureDrag::new();
                                 drag_gesture_copy.set_button(1);
 
+                                // Clone variables for nested closure
+                                let config_for_nested = config_for_end.clone();
+                                let container_for_nested = container_for_copy.clone();
+
                                 // Store initial positions and the ID of the panel being dragged
                                 let initial_positions_copy: Rc<RefCell<HashMap<String, (f64, f64)>>> =
                                     Rc::new(RefCell::new(HashMap::new()));
@@ -1606,12 +1694,198 @@ impl GridLayout {
                                         drop(occupied);
 
                                         if is_copy_mode {
-                                            // Copy mode - would create new panels
-                                            // For simplicity, we skip nested copying in copied panels
-                                            log::info!("Nested copy operation not implemented");
+                                            // Copy mode - create new panels at target positions
+                                            log::info!("Creating nested copies of {} panels", new_positions.len());
+
+                                            use crate::core::Panel;
+
+                                            for (old_id, grid_x, grid_y, _snapped_x, _snapped_y) in new_positions {
+                                                // Get the source panel to copy
+                                                let panel_states_read = panel_states_drag_end.borrow();
+                                                if let Some(state) = panel_states_read.get(&old_id) {
+                                                    let original_panel = state.panel.clone();
+                                                    drop(panel_states_read);
+
+                                                    // Read original panel configuration
+                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size) = {
+                                                        let panel_guard = original_panel.blocking_read();
+                                                        (
+                                                            panel_guard.source.metadata().clone(),
+                                                            panel_guard.displayer.id().to_string(),
+                                                            panel_guard.config.clone(),
+                                                            panel_guard.background.clone(),
+                                                            panel_guard.corner_radius,
+                                                            panel_guard.border.clone(),
+                                                            (panel_guard.geometry.width, panel_guard.geometry.height),
+                                                        )
+                                                    };
+
+                                                    // Generate unique ID for the new copy
+                                                    let new_id = format!("panel_{}", uuid::Uuid::new_v4());
+
+                                                    // Create new panel instance
+                                                    use crate::core::PanelGeometry;
+                                                    let registry = crate::core::global_registry();
+                                                    if let Ok(new_source) = registry.create_source(&source_meta.id) {
+                                                        if let Ok(new_displayer) = registry.create_displayer(&displayer_id) {
+                                                            let geometry = PanelGeometry {
+                                                                x: grid_x,
+                                                                y: grid_y,
+                                                                width: geometry_size.0,
+                                                                height: geometry_size.1,
+                                                            };
+
+                                                            let mut new_panel = Panel::new(
+                                                                new_id.clone(),
+                                                                geometry,
+                                                                new_source,
+                                                                new_displayer,
+                                                            );
+
+                                                            // Copy all settings
+                                                            new_panel.background = background;
+                                                            new_panel.corner_radius = corner_radius;
+                                                            new_panel.border = border;
+
+                                                            let new_panel = Arc::new(RwLock::new(new_panel));
+
+                                                            // Apply configuration
+                                                            if let Ok(mut panel_guard) = new_panel.try_write() {
+                                                                let _ = panel_guard.apply_config(config);
+                                                            }
+
+                                                            // Add to panels list
+                                                            panels_drag_end.borrow_mut().push(new_panel.clone());
+
+                                                            // Mark cells as occupied
+                                                            let mut occupied_write = occupied_cells_drag_end.borrow_mut();
+                                                            for dx in 0..geometry_size.0 {
+                                                                for dy in 0..geometry_size.1 {
+                                                                    occupied_write.insert((grid_x + dx, grid_y + dy));
+                                                                }
+                                                            }
+                                                            drop(occupied_write);
+
+                                                            // Create UI for the nested copy (similar to add_panel)
+                                                            let config_read = config_for_nested.borrow();
+                                                            let x = grid_x as i32 * (config_read.cell_width + config_read.spacing);
+                                                            let y = grid_y as i32 * (config_read.cell_height + config_read.spacing);
+                                                            let width = geometry_size.0 as i32 * config_read.cell_width
+                                                                + (geometry_size.0 as i32 - 1) * config_read.spacing;
+                                                            let height = geometry_size.1 as i32 * config_read.cell_height
+                                                                + (geometry_size.1 as i32 - 1) * config_read.spacing;
+                                                            drop(config_read);
+
+                                                            // Create displayer widget
+                                                            let widget = {
+                                                                let panel_guard = new_panel.blocking_read();
+                                                                panel_guard.displayer.create_widget()
+                                                            };
+                                                            widget.set_size_request(width, height);
+
+                                                            // Create background drawing area
+                                                            use gtk4::DrawingArea;
+                                                            let background_area = DrawingArea::new();
+                                                            background_area.set_size_request(width, height);
+
+                                                            // Setup background rendering
+                                                            let panel_clone_bg = new_panel.clone();
+                                                            background_area.set_draw_func(move |_, cr, w, h| {
+                                                                match panel_clone_bg.try_read() {
+                                                                    Ok(panel_guard) => {
+                                                                        let width = w as f64;
+                                                                        let height = h as f64;
+                                                                        let radius = panel_guard.corner_radius.min(width / 2.0).min(height / 2.0);
+
+                                                                        cr.new_path();
+                                                                        if radius > 0.0 {
+                                                                            cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+                                                                            cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
+                                                                            cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
+                                                                            cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                                                                            cr.close_path();
+                                                                        } else {
+                                                                            cr.rectangle(0.0, 0.0, width, height);
+                                                                        }
+
+                                                                        cr.save().ok();
+                                                                        cr.clip();
+                                                                        if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, width, height) {
+                                                                            log::warn!("Failed to render background: {}", e);
+                                                                        }
+                                                                        cr.restore().ok();
+
+                                                                        if panel_guard.border.enabled {
+                                                                            if radius > 0.0 {
+                                                                                cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+                                                                                cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
+                                                                                cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
+                                                                                cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                                                                                cr.close_path();
+                                                                            } else {
+                                                                                cr.rectangle(0.0, 0.0, width, height);
+                                                                            }
+                                                                            panel_guard.border.color.apply_to_cairo(cr);
+                                                                            cr.set_line_width(panel_guard.border.width);
+                                                                            cr.stroke().ok();
+                                                                        }
+                                                                    }
+                                                                    Err(_) => {
+                                                                        log::warn!("Failed to acquire panel read lock for background rendering");
+                                                                    }
+                                                                }
+                                                            });
+
+                                                            // Create overlay
+                                                            use gtk4::Overlay;
+                                                            let overlay = Overlay::new();
+                                                            overlay.set_child(Some(&background_area));
+                                                            widget.add_css_class("transparent-background");
+                                                            overlay.add_overlay(&widget);
+
+                                                            // Create frame
+                                                            use gtk4::Frame;
+                                                            let frame = Frame::new(None);
+                                                            frame.set_child(Some(&overlay));
+                                                            frame.set_size_request(width, height);
+
+                                                            // Store panel state
+                                                            panel_states_drag_end.borrow_mut().insert(
+                                                                new_id.clone(),
+                                                                PanelState {
+                                                                    widget: widget.clone(),
+                                                                    frame: frame.clone(),
+                                                                    panel: new_panel.clone(),
+                                                                    selected: false,
+                                                                    background_area: background_area.clone(),
+                                                                },
+                                                            );
+
+                                                            // Note: We don't set up full interaction (drag gesture) for nested copies
+                                                            // to avoid infinite recursion. They can still be moved and configured.
+                                                            // TODO: Consider refactoring to allow proper nested copy interaction
+
+                                                            // Add to container
+                                                            container_for_nested.put(&frame, x as f64, y as f64);
+
+                                                            // Update the panel with initial data
+                                                            if let Ok(mut panel_guard) = new_panel.try_write() {
+                                                                let _ = panel_guard.update();
+                                                            }
+
+                                                            log::info!("Created and displayed nested copy panel: {} at ({}, {})", new_id, grid_x, grid_y);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Trigger change callback
+                                            if let Some(ref callback) = *on_change_drag_end.borrow() {
+                                                callback();
+                                            }
                                         } else {
                                             // Move mode
-                                            let selected = selected_panels_drag_end.borrow();
+                                            let _selected = selected_panels_drag_end.borrow();
                                             let states = panel_states_drag_end.borrow();
                                             let mut occupied = occupied_cells_drag_end.borrow_mut();
 
@@ -1739,6 +2013,22 @@ impl GridLayout {
             Some(panel)
         } else {
             None
+        }
+    }
+
+    /// Remove all panels from the grid
+    pub fn clear_all_panels(&mut self) {
+        // Get all panel IDs
+        let panel_ids: Vec<String> = self
+            .panels
+            .borrow()
+            .iter()
+            .map(|p| p.blocking_read().id.clone())
+            .collect();
+
+        // Remove each panel
+        for panel_id in panel_ids {
+            self.remove_panel(&panel_id);
         }
     }
 
@@ -1983,18 +2273,75 @@ fn show_panel_properties_dialog(
     // Wrap memory_config_widget in Rc for sharing
     let memory_config_widget = Rc::new(memory_config_widget);
 
+    // System Temperature source configuration widget
+    let system_temp_config_widget = crate::ui::SystemTempConfigWidget::new();
+    system_temp_config_widget.widget().set_visible(old_source_id == "system_temp");
+
+    // Load existing System Temp config if source is system_temp
+    if old_source_id == "system_temp" {
+        if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
+            if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
+                system_temp_config_widget.set_config(system_temp_config);
+            }
+        }
+    }
+
+    source_tab_box.append(system_temp_config_widget.widget());
+
+    // Wrap system_temp_config_widget in Rc for sharing
+    let system_temp_config_widget = Rc::new(system_temp_config_widget);
+
     // Show/hide source config widgets based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
         let gpu_widget_clone = gpu_config_widget.clone();
         let memory_widget_clone = memory_config_widget.clone();
+        let system_temp_widget_clone = system_temp_config_widget.clone();
         let sources_clone = sources.clone();
+        let panel_clone = panel.clone();
+
         source_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected) {
                 cpu_widget_clone.widget().set_visible(source_id == "cpu");
                 gpu_widget_clone.widget().set_visible(source_id == "gpu");
                 memory_widget_clone.widget().set_visible(source_id == "memory");
+                system_temp_widget_clone.widget().set_visible(source_id == "system_temp");
+
+                // Reload config for the selected source
+                if let Ok(panel_guard) = panel_clone.try_read() {
+                    match source_id.as_str() {
+                        "cpu" => {
+                            if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
+                                if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+                                    cpu_widget_clone.set_config(cpu_config);
+                                }
+                            }
+                        }
+                        "gpu" => {
+                            if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
+                                if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+                                    gpu_widget_clone.set_config(gpu_config);
+                                }
+                            }
+                        }
+                        "memory" => {
+                            if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
+                                if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
+                                    memory_widget_clone.set_config(memory_config);
+                                }
+                            }
+                        }
+                        "system_temp" => {
+                            if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
+                                if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
+                                    system_temp_widget_clone.set_config(system_temp_config);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
         });
     }
@@ -2194,6 +2541,76 @@ fn show_panel_properties_dialog(
     appearance_tab_box.set_margin_start(12);
     appearance_tab_box.set_margin_end(12);
 
+    // Copy/Paste Style buttons
+    let copy_paste_label = Label::new(Some("Panel Style"));
+    copy_paste_label.add_css_class("heading");
+    appearance_tab_box.append(&copy_paste_label);
+
+    let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+    copy_paste_box.set_margin_start(12);
+
+    let copy_style_btn = Button::with_label("Copy Style");
+    let paste_style_btn = Button::with_label("Paste Style");
+
+    let panel_for_copy_btn = panel.clone();
+    copy_style_btn.connect_clicked(move |_| {
+        if let Ok(panel_guard) = panel_for_copy_btn.try_read() {
+            use crate::ui::{PanelStyle, CLIPBOARD};
+
+            // Filter out source-specific config keys
+            let mut displayer_config = panel_guard.config.clone();
+            displayer_config.remove("cpu_config");
+            displayer_config.remove("gpu_config");
+            displayer_config.remove("memory_config");
+
+            let style = PanelStyle {
+                background: panel_guard.background.clone(),
+                corner_radius: panel_guard.corner_radius,
+                border: panel_guard.border.clone(),
+                displayer_config,
+            };
+
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_panel_style(style);
+                log::info!("Panel style copied to clipboard via button");
+            }
+        }
+    });
+
+    let panel_for_paste_btn = panel.clone();
+    let background_widget_paste = background_widget.clone();
+
+    paste_style_btn.connect_clicked(move |_| {
+        use crate::ui::CLIPBOARD;
+
+        if let Ok(clipboard) = CLIPBOARD.lock() {
+            if let Some(style) = clipboard.paste_panel_style() {
+                if let Ok(mut panel_guard) = panel_for_paste_btn.try_write() {
+                    // Apply the style to panel data
+                    panel_guard.background = style.background.clone();
+                    panel_guard.corner_radius = style.corner_radius;
+                    panel_guard.border = style.border.clone();
+
+                    // Merge displayer config (keep source-specific configs)
+                    for (key, value) in style.displayer_config {
+                        panel_guard.config.insert(key, value);
+                    }
+
+                    // Update background widget UI
+                    background_widget_paste.set_config(style.background);
+
+                    log::info!("Panel style pasted from clipboard via button (close and reopen dialog to see all changes)");
+                }
+            } else {
+                log::info!("No panel style in clipboard");
+            }
+        }
+    });
+
+    copy_paste_box.append(&copy_style_btn);
+    copy_paste_box.append(&paste_style_btn);
+    appearance_tab_box.append(&copy_paste_box);
+
     // Corner radius
     let corner_radius_label = Label::new(Some("Corner Radius"));
     corner_radius_label.add_css_class("heading");
@@ -2283,6 +2700,7 @@ fn show_panel_properties_dialog(
     let cpu_config_widget_clone = cpu_config_widget.clone();
     let gpu_config_widget_clone = gpu_config_widget.clone();
     let memory_config_widget_clone = memory_config_widget.clone();
+    let system_temp_config_widget_clone = system_temp_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -2790,6 +3208,27 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the source
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply memory config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply System Temperature source configuration if system_temp source is active
+            if new_source_id == "system_temp" {
+                let system_temp_config = system_temp_config_widget_clone.get_config();
+                if let Ok(system_temp_config_json) = serde_json::to_value(&system_temp_config) {
+                    panel_guard.config.insert("system_temp_config".to_string(), system_temp_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply system temp config to source: {}", e);
                     }
 
                     // Update the source with new configuration

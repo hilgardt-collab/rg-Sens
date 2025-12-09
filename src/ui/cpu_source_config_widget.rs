@@ -108,6 +108,8 @@ pub struct CpuSourceConfigWidget {
     min_limit_spin: SpinButton,
     max_limit_spin: SpinButton,
     auto_detect_check: CheckButton,
+    min_unit_label: Label,
+    max_unit_label: Label,
 }
 
 impl CpuSourceConfigWidget {
@@ -221,11 +223,15 @@ impl CpuSourceConfigWidget {
         let limits_box = GtkBox::new(Orientation::Horizontal, 6);
 
         limits_box.append(&Label::new(Some("Min:")));
-        let min_adjustment = Adjustment::new(0.0, -1000.0, 1000.0, 1.0, 10.0, 0.0);
+        let min_adjustment = Adjustment::new(0.0, -1000.0, 10000.0, 1.0, 10.0, 0.0);
         let min_limit_spin = SpinButton::new(Some(&min_adjustment), 0.1, 2);
         min_limit_spin.set_hexpand(true);
         min_limit_spin.set_sensitive(false); // Disabled when auto-detect is on
         limits_box.append(&min_limit_spin);
+
+        // Unit label (shows current unit for limits)
+        let min_unit_label = Label::new(Some("%"));
+        limits_box.append(&min_unit_label);
 
         limits_box.append(&Label::new(Some("Max:")));
         let max_adjustment = Adjustment::new(100.0, -1000.0, 10000.0, 1.0, 10.0, 0.0);
@@ -234,6 +240,10 @@ impl CpuSourceConfigWidget {
         max_limit_spin.set_sensitive(false); // Disabled when auto-detect is on
         limits_box.append(&max_limit_spin);
 
+        // Unit label (shows current unit for limits)
+        let max_unit_label = Label::new(Some("%"));
+        limits_box.append(&max_unit_label);
+
         widget.append(&limits_box);
 
         // Wire up handlers
@@ -241,6 +251,10 @@ impl CpuSourceConfigWidget {
         let unit_box_clone = unit_box.clone();
         let freq_box_clone = freq_box.clone();
         let sensor_box_clone = sensor_box.clone();
+        let min_unit_label_clone = min_unit_label.clone();
+        let max_unit_label_clone = max_unit_label.clone();
+        let freq_combo_clone = freq_combo.clone();
+        let unit_combo_clone = unit_combo.clone();
         field_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             let field = match selected {
@@ -258,6 +272,30 @@ impl CpuSourceConfigWidget {
             unit_box_clone.set_visible(is_temp);
             freq_box_clone.set_visible(is_freq);
             sensor_box_clone.set_visible(is_temp);
+
+            // Update limit unit labels
+            let unit_text = match field {
+                CpuField::Temperature => {
+                    let temp_unit = unit_combo_clone.selected();
+                    match temp_unit {
+                        0 => "°C",
+                        1 => "°F",
+                        2 => "K",
+                        _ => "°C",
+                    }
+                },
+                CpuField::Usage => "%",
+                CpuField::Frequency => {
+                    let freq_unit = freq_combo_clone.selected();
+                    match freq_unit {
+                        0 => "MHz",
+                        1 => "GHz",
+                        _ => "MHz",
+                    }
+                },
+            };
+            min_unit_label_clone.set_text(unit_text);
+            max_unit_label_clone.set_text(unit_text);
         });
 
         let config_clone = config.clone();
@@ -271,6 +309,8 @@ impl CpuSourceConfigWidget {
         });
 
         let config_clone = config.clone();
+        let min_unit_label_clone2 = min_unit_label.clone();
+        let max_unit_label_clone2 = max_unit_label.clone();
         unit_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             let unit = match selected {
@@ -281,9 +321,21 @@ impl CpuSourceConfigWidget {
             };
 
             config_clone.borrow_mut().temp_unit = unit;
+
+            // Update limit unit labels
+            let unit_text = match selected {
+                0 => "°C",
+                1 => "°F",
+                2 => "K",
+                _ => "°C",
+            };
+            min_unit_label_clone2.set_text(unit_text);
+            max_unit_label_clone2.set_text(unit_text);
         });
 
         let config_clone = config.clone();
+        let min_unit_label_clone3 = min_unit_label.clone();
+        let max_unit_label_clone3 = max_unit_label.clone();
         freq_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             let unit = match selected {
@@ -293,6 +345,15 @@ impl CpuSourceConfigWidget {
             };
 
             config_clone.borrow_mut().freq_unit = unit;
+
+            // Update limit unit labels
+            let unit_text = match selected {
+                0 => "MHz",
+                1 => "GHz",
+                _ => "MHz",
+            };
+            min_unit_label_clone3.set_text(unit_text);
+            max_unit_label_clone3.set_text(unit_text);
         });
 
         let config_clone = config.clone();
@@ -373,6 +434,8 @@ impl CpuSourceConfigWidget {
             min_limit_spin,
             max_limit_spin,
             auto_detect_check,
+            min_unit_label,
+            max_unit_label,
         }
     }
 
@@ -404,6 +467,22 @@ impl CpuSourceConfigWidget {
         self.unit_box.set_visible(is_temp);
         self.freq_box.set_visible(is_freq);
         self.sensor_box.set_visible(is_temp);
+
+        // Update limit unit labels
+        let unit_text = match config.field {
+            CpuField::Temperature => match config.temp_unit {
+                TemperatureUnit::Celsius => "°C",
+                TemperatureUnit::Fahrenheit => "°F",
+                TemperatureUnit::Kelvin => "K",
+            },
+            CpuField::Usage => "%",
+            CpuField::Frequency => match config.freq_unit {
+                FrequencyUnit::MHz => "MHz",
+                FrequencyUnit::GHz => "GHz",
+            },
+        };
+        self.min_unit_label.set_text(unit_text);
+        self.max_unit_label.set_text(unit_text);
 
         // Set custom caption if provided
         if let Some(ref caption) = config.custom_caption {

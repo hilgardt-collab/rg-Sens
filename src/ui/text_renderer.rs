@@ -50,8 +50,12 @@ fn render_line_group(
         return;
     }
 
-    // All lines in a group share the same vertical position
-    let shared_v_pos = &lines[0].vertical_position;
+    // All lines in a group share the same vertical position and rotation from the first line
+    let first_line = lines[0];
+    let shared_v_pos = &first_line.vertical_position;
+    let shared_rotation = first_line.rotation_angle;
+    let shared_offset_x = first_line.offset_x;
+    let shared_offset_y = first_line.offset_y;
 
     // Group lines by horizontal position
     let mut left_parts: Vec<(&TextLineConfig, String)> = Vec::new();
@@ -68,15 +72,15 @@ fn render_line_group(
         }
     }
 
-    // Render each group of parts
+    // Render each group of parts with shared rotation and offset
     if !left_parts.is_empty() {
-        render_combined_parts(cr, width, height, &left_parts, shared_v_pos, &HorizontalPosition::Left);
+        render_combined_parts(cr, width, height, &left_parts, shared_v_pos, &HorizontalPosition::Left, shared_rotation, shared_offset_x, shared_offset_y);
     }
     if !center_parts.is_empty() {
-        render_combined_parts(cr, width, height, &center_parts, shared_v_pos, &HorizontalPosition::Center);
+        render_combined_parts(cr, width, height, &center_parts, shared_v_pos, &HorizontalPosition::Center, shared_rotation, shared_offset_x, shared_offset_y);
     }
     if !right_parts.is_empty() {
-        render_combined_parts(cr, width, height, &right_parts, shared_v_pos, &HorizontalPosition::Right);
+        render_combined_parts(cr, width, height, &right_parts, shared_v_pos, &HorizontalPosition::Right, shared_rotation, shared_offset_x, shared_offset_y);
     }
 }
 
@@ -87,6 +91,9 @@ fn render_combined_parts(
     parts: &[(&TextLineConfig, String)],
     v_pos: &VerticalPosition,
     h_pos: &HorizontalPosition,
+    rotation_angle: f64,
+    offset_x: f64,
+    offset_y: f64,
 ) {
     if parts.is_empty() {
         return;
@@ -117,21 +124,35 @@ fn render_combined_parts(
     }
 
     // Calculate starting X position based on horizontal alignment
-    let start_x = match h_pos {
+    let base_x = match h_pos {
         HorizontalPosition::Left => 10.0,
         HorizontalPosition::Center => (width - total_width) / 2.0,
         HorizontalPosition::Right => width - total_width - 10.0,
     };
 
     // Calculate Y position
-    let y = match v_pos {
+    let base_y = match v_pos {
         VerticalPosition::Top => 10.0 + max_font_size,
         VerticalPosition::Center => (height + max_font_size) / 2.0,
         VerticalPosition::Bottom => height - 10.0,
     };
 
+    // Apply rotation if needed
+    cr.save().ok();
+    if rotation_angle != 0.0 {
+        // Calculate center point for rotation
+        let center_x = base_x + total_width / 2.0 + offset_x;
+        let center_y = base_y - max_font_size / 2.0 + offset_y;
+        cr.translate(center_x, center_y);
+        cr.rotate(rotation_angle.to_radians());
+        cr.translate(-total_width / 2.0, max_font_size / 2.0);
+    } else {
+        // Just apply offset without rotation
+        cr.translate(base_x + offset_x, base_y + offset_y);
+    }
+
     // Render each part sequentially
-    let mut current_x = start_x;
+    let mut current_x = if rotation_angle != 0.0 { 0.0 } else { 0.0 };
     for (i, (config, text)) in parts.iter().enumerate() {
         cr.save().ok();
 
@@ -141,7 +162,7 @@ fn render_combined_parts(
         cr.set_source_rgba(config.color.0, config.color.1, config.color.2, config.color.3);
 
         // Position and draw this part
-        cr.move_to(current_x, y);
+        cr.move_to(current_x, 0.0);
         cr.show_text(text).ok();
 
         cr.restore().ok();
@@ -152,6 +173,8 @@ fn render_combined_parts(
             current_x += 5.0; // spacing between parts
         }
     }
+
+    cr.restore().ok();
 }
 
 fn render_single_line(
@@ -173,6 +196,8 @@ fn render_single_line(
             &line.vertical_position,
             &line.horizontal_position,
             line.rotation_angle,
+            line.offset_x,
+            line.offset_y,
         );
     }
 }
@@ -188,6 +213,8 @@ fn render_text_with_alignment(
     v_pos: &VerticalPosition,
     h_pos: &HorizontalPosition,
     rotation_angle: f64,
+    offset_x: f64,
+    offset_y: f64,
 ) {
     cr.save().ok();
 
@@ -203,7 +230,7 @@ fn render_text_with_alignment(
         cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     });
 
-    // Calculate text origin position for proper alignment
+    // Calculate text origin position for proper alignment (before offsets)
     let text_x = match h_pos {
         HorizontalPosition::Left => 10.0,
         HorizontalPosition::Center => (width - extents.width()) / 2.0,
@@ -216,15 +243,15 @@ fn render_text_with_alignment(
         VerticalPosition::Bottom => height - 10.0,
     };
 
-    // Apply rotation if needed
+    // Apply offset and rotation
     if rotation_angle != 0.0 {
-        let center_x = text_x + extents.width() / 2.0;
-        let center_y = text_y - font_size / 2.0;
+        let center_x = text_x + extents.width() / 2.0 + offset_x;
+        let center_y = text_y - font_size / 2.0 + offset_y;
         cr.translate(center_x, center_y);
         cr.rotate(rotation_angle.to_radians());
         cr.move_to(-extents.width() / 2.0, font_size / 2.0);
     } else {
-        cr.move_to(text_x, text_y);
+        cr.move_to(text_x + offset_x, text_y + offset_y);
     }
 
     cr.show_text(text).ok();

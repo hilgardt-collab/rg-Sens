@@ -490,29 +490,25 @@ impl DataSource for CpuSource {
         }
 
         // Add limits (either manual or auto-detected)
-        let mut min_limit = if self.config.auto_detect_limits {
-            // For frequency, always use 0 as min since we want to show frequency
-            // as a percentage of max, not as a range from idle to boost
-            if self.config.field == CpuField::Frequency {
-                Some(0.0)
-            } else {
-                self.detected_min
-            }
+        // Note: Both manual and auto-detected limits are already in the display unit
+        // - Manual limits: User enters values in the displayed unit (e.g., "6" means 6 GHz if unit is GHz)
+        // - Auto-detected limits: Converted during detection (line 407)
+
+        // For frequency, ALWAYS use 0 as min (whether auto-detect or manual)
+        // This ensures frequency is shown as a percentage of max (0 to max)
+        let min_limit = if self.config.field == CpuField::Frequency {
+            Some(0.0)
+        } else if self.config.auto_detect_limits {
+            self.detected_min
         } else {
             self.config.min_limit
         };
 
-        let mut max_limit = if self.config.auto_detect_limits {
+        let max_limit = if self.config.auto_detect_limits {
             self.detected_max
         } else {
             self.config.max_limit
         };
-
-        // Convert limits to match the unit of the value for frequency
-        if self.config.field == CpuField::Frequency {
-            min_limit = min_limit.map(|v| self.convert_frequency(v));
-            max_limit = max_limit.map(|v| self.convert_frequency(v));
-        }
 
         if let Some(min) = min_limit {
             values.insert("min_limit".to_string(), Value::from(min));

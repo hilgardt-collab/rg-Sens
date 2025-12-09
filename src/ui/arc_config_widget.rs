@@ -13,7 +13,7 @@ use crate::ui::arc_display::{
     ColorTransitionStyle,
 };
 use crate::ui::color_picker::ColorPickerDialog;
-use crate::ui::{Color, ColorStop, GradientEditor, LinearGradientConfig};
+use crate::ui::{GradientEditor, LinearGradientConfig};
 use crate::displayers::FieldMetadata;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 
@@ -48,7 +48,6 @@ pub struct ArcConfigWidget {
     // Background arc controls
     show_bg_arc_check: CheckButton,
     overlay_bg_check: CheckButton,
-    bg_color_btn: Button,
 
     // Animation controls
     animate_check: CheckButton,
@@ -93,7 +92,7 @@ impl ArcConfigWidget {
 
         // === Tab 2: Style ===
         let (style_page, cap_style_dropdown, taper_style_dropdown, taper_amount_spin,
-             show_bg_arc_check, overlay_bg_check, bg_color_btn,
+             show_bg_arc_check, overlay_bg_check,
              animate_check, animation_duration_spin) =
             Self::create_style_page(&config, &on_change, &preview);
         notebook.append_page(&style_page, Some(&Label::new(Some("Style"))));
@@ -130,7 +129,6 @@ impl ArcConfigWidget {
             gradient_editor,
             show_bg_arc_check,
             overlay_bg_check,
-            bg_color_btn,
             animate_check,
             animation_duration_spin,
             text_config_widget,
@@ -320,7 +318,7 @@ impl ArcConfigWidget {
         config: &Rc<RefCell<ArcDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-    ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, Button, CheckButton, SpinButton) {
+    ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, CheckButton, SpinButton) {
         let page = GtkBox::new(Orientation::Vertical, 12);
         page.set_margin_start(12);
         page.set_margin_end(12);
@@ -517,7 +515,7 @@ impl ArcConfigWidget {
         duration_box.append(&duration_spin);
         page.append(&duration_box);
 
-        (page, cap_dropdown, taper_dropdown, amount_spin, bg_check, overlay_check, bg_color_btn,
+        (page, cap_dropdown, taper_dropdown, amount_spin, bg_check, overlay_check,
          animate_check, duration_spin)
     }
 
@@ -594,6 +592,48 @@ impl ArcConfigWidget {
 
         // Color stops editor using GradientEditor
         page.append(&Label::new(Some("Color Stops:")));
+
+        // Copy/Paste gradient buttons
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_gradient_btn = Button::with_label("Copy Gradient");
+        let paste_gradient_btn = Button::with_label("Paste Gradient");
+
+        let config_for_copy = config.clone();
+        copy_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            let cfg = config_for_copy.borrow();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_gradient_stops(cfg.color_stops.clone());
+                log::info!("Arc gradient color stops copied to clipboard");
+            }
+        });
+
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        paste_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(stops) = clipboard.paste_gradient_stops() {
+                    config_for_paste.borrow_mut().color_stops = stops;
+                    preview_for_paste.queue_draw();
+
+                    if let Some(callback) = on_change_for_paste.borrow().as_ref() {
+                        callback();
+                    }
+
+                    log::info!("Arc gradient color stops pasted from clipboard");
+                } else {
+                    log::info!("No gradient color stops in clipboard");
+                }
+            }
+        });
+
+        copy_paste_box.append(&copy_gradient_btn);
+        copy_paste_box.append(&paste_gradient_btn);
+        page.append(&copy_paste_box);
 
         let gradient_editor = GradientEditor::new();
 

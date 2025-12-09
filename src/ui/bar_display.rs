@@ -308,7 +308,7 @@ fn render_rectangle_bar(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    let padding = config.padding;
+    let _padding = config.padding;
     let radius = config.corner_radius;
 
     // Calculate bar dimensions based on configured percentages
@@ -523,7 +523,7 @@ fn render_background(
 fn render_foreground(
     cr: &cairo::Context,
     foreground: &BarFillType,
-    direction: BarFillDirection,
+    _direction: BarFillDirection,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
@@ -544,7 +544,7 @@ fn render_gradient(
     cr: &cairo::Context,
     stops: &[ColorStop],
     width: f64,
-    height: f64,
+    _height: f64,
 ) -> Result<(), cairo::Error> {
     if stops.is_empty() {
         return Ok(());
