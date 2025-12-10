@@ -39,6 +39,8 @@ pub struct GpuMetrics {
     pub memory_total: Option<u64>,        // Total memory in bytes
     pub power_usage: Option<f32>,         // Power usage in Watts
     pub fan_speed: Option<u32>,           // Fan speed in %
+    pub clock_core: Option<u32>,          // Core clock in MHz
+    pub clock_memory: Option<u32>,        // Memory clock in MHz
 }
 
 /// Abstract GPU backend trait

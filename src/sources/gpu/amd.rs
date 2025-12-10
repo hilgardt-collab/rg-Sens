@@ -177,6 +177,49 @@ impl AmdBackend {
 
         None
     }
+
+    /// Try to read core (graphics) clock speed in MHz
+    fn read_core_clock(&self) -> Option<u32> {
+        // AMD exposes current clock in pp_dpm_sclk file
+        // Format: "0: 300Mhz *\n1: 1200Mhz\n" where * indicates active level
+        let path = self.device_path.join("pp_dpm_sclk");
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            // Find the line with the asterisk (active clock level)
+            for line in content.lines() {
+                if line.contains('*') {
+                    // Extract the clock value (e.g., "1200Mhz")
+                    if let Some(clock_str) = line.split(':').nth(1) {
+                        let clock_str = clock_str.trim().replace("Mhz", "").replace("*", "").trim().to_string();
+                        if let Ok(clock) = clock_str.parse::<u32>() {
+                            return Some(clock);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Try to read memory clock speed in MHz
+    fn read_memory_clock(&self) -> Option<u32> {
+        // AMD exposes memory clock in pp_dpm_mclk file
+        let path = self.device_path.join("pp_dpm_mclk");
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            // Find the line with the asterisk (active clock level)
+            for line in content.lines() {
+                if line.contains('*') {
+                    // Extract the clock value
+                    if let Some(clock_str) = line.split(':').nth(1) {
+                        let clock_str = clock_str.trim().replace("Mhz", "").replace("*", "").trim().to_string();
+                        if let Ok(clock) = clock_str.parse::<u32>() {
+                            return Some(clock);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 impl GpuBackend for AmdBackend {
@@ -199,6 +242,10 @@ impl GpuBackend for AmdBackend {
 
         // Update fan speed
         self.metrics.fan_speed = self.read_fan_speed();
+
+        // Update clock speeds
+        self.metrics.clock_core = self.read_core_clock();
+        self.metrics.clock_memory = self.read_memory_clock();
 
         Ok(())
     }

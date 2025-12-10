@@ -490,6 +490,26 @@ impl GridLayout {
         frame.set_child(Some(&overlay));
         frame.set_size_request(width, height);
 
+        // Apply corner radius clipping via CSS
+        {
+            let panel_guard = panel.blocking_read();
+            let radius = panel_guard.corner_radius;
+            drop(panel_guard);
+
+            if radius > 0.0 {
+                let css_provider = gtk4::CssProvider::new();
+                let css = format!(
+                    "frame {{ border-radius: {}px; overflow: hidden; }}",
+                    radius
+                );
+                css_provider.load_from_data(&css);
+                frame.style_context().add_provider(
+                    &css_provider,
+                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+            }
+        }
+
         // Setup drag-and-drop and selection
         self.setup_panel_interaction(&frame, &widget, panel.clone());
 
@@ -2291,12 +2311,54 @@ fn show_panel_properties_dialog(
     // Wrap system_temp_config_widget in Rc for sharing
     let system_temp_config_widget = Rc::new(system_temp_config_widget);
 
+    // Fan Speed source configuration widget
+    let fan_speed_config_widget = crate::ui::FanSpeedConfigWidget::new();
+    fan_speed_config_widget.widget().set_visible(old_source_id == "fan_speed");
+
+    // Load existing Fan Speed config if source is fan_speed
+    if old_source_id == "fan_speed" {
+        if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
+            if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
+                fan_speed_config_widget.set_config(&fan_speed_config);
+            }
+        }
+    }
+
+    source_tab_box.append(fan_speed_config_widget.widget());
+
+    // Wrap fan_speed_config_widget in Rc for sharing
+    let fan_speed_config_widget = Rc::new(fan_speed_config_widget);
+
+    // Disk source configuration widget
+    let disk_config_widget = crate::ui::DiskSourceConfigWidget::new();
+    disk_config_widget.widget().set_visible(old_source_id == "disk");
+
+    // Populate disk information
+    let disks = crate::sources::DiskSource::get_available_disks();
+    disk_config_widget.set_available_disks(&disks);
+
+    // Load existing Disk config if source is disk
+    if old_source_id == "disk" {
+        if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
+            if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
+                disk_config_widget.set_config(disk_config);
+            }
+        }
+    }
+
+    source_tab_box.append(disk_config_widget.widget());
+
+    // Wrap disk_config_widget in Rc for sharing
+    let disk_config_widget = Rc::new(disk_config_widget);
+
     // Show/hide source config widgets based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
         let gpu_widget_clone = gpu_config_widget.clone();
         let memory_widget_clone = memory_config_widget.clone();
         let system_temp_widget_clone = system_temp_config_widget.clone();
+        let fan_speed_widget_clone = fan_speed_config_widget.clone();
+        let disk_widget_clone = disk_config_widget.clone();
         let sources_clone = sources.clone();
         let panel_clone = panel.clone();
 
@@ -2307,6 +2369,8 @@ fn show_panel_properties_dialog(
                 gpu_widget_clone.widget().set_visible(source_id == "gpu");
                 memory_widget_clone.widget().set_visible(source_id == "memory");
                 system_temp_widget_clone.widget().set_visible(source_id == "system_temp");
+                fan_speed_widget_clone.widget().set_visible(source_id == "fan_speed");
+                disk_widget_clone.widget().set_visible(source_id == "disk");
 
                 // Reload config for the selected source
                 if let Ok(panel_guard) = panel_clone.try_read() {
@@ -2336,6 +2400,20 @@ fn show_panel_properties_dialog(
                             if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
                                 if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
                                     system_temp_widget_clone.set_config(system_temp_config);
+                                }
+                            }
+                        }
+                        "fan_speed" => {
+                            if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
+                                if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
+                                    fan_speed_widget_clone.set_config(&fan_speed_config);
+                                }
+                            }
+                        }
+                        "disk" => {
+                            if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
+                                if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
+                                    disk_widget_clone.set_config(disk_config);
                                 }
                             }
                         }
@@ -2472,7 +2550,63 @@ fn show_panel_properties_dialog(
     // Wrap arc_config_widget in Rc for sharing
     let arc_config_widget = Rc::new(arc_config_widget);
 
-    // Show/hide text, bar, and arc config based on displayer selection
+    // Speedometer displayer configuration (shown only when speedometer displayer is selected)
+    let speedometer_config_label = Label::new(Some("Speedometer Gauge Configuration"));
+    speedometer_config_label.add_css_class("heading");
+    speedometer_config_label.set_margin_top(12);
+
+    let speedometer_config_widget = crate::ui::SpeedometerConfigWidget::new(available_fields.clone());
+    speedometer_config_widget.widget().set_visible(old_displayer_id == "speedometer");
+    speedometer_config_label.set_visible(old_displayer_id == "speedometer");
+
+    // Load existing speedometer config if displayer is speedometer, or use default
+    if old_displayer_id == "speedometer" {
+        let speedometer_config = if let Some(speedometer_config_value) = panel_guard.config.get("speedometer_config") {
+            // Use saved config if available
+            serde_json::from_value::<crate::ui::SpeedometerConfig>(speedometer_config_value.clone())
+                .unwrap_or_else(|_| crate::ui::SpeedometerConfig::default())
+        } else {
+            // Use default config
+            crate::ui::SpeedometerConfig::default()
+        };
+        speedometer_config_widget.set_config(&speedometer_config);
+    }
+
+    displayer_tab_box.append(&speedometer_config_label);
+    displayer_tab_box.append(speedometer_config_widget.widget());
+
+    // Wrap speedometer_config_widget in Rc for sharing
+    let speedometer_config_widget = Rc::new(speedometer_config_widget);
+
+    // Graph displayer configuration widget
+    let graph_config_label = Label::new(Some("Graph Configuration:"));
+    graph_config_label.set_halign(gtk4::Align::Start);
+    graph_config_label.add_css_class("heading");
+    graph_config_label.set_visible(old_displayer_id == "graph");
+
+    let graph_config_widget = crate::ui::GraphConfigWidget::new(available_fields.clone());
+    graph_config_widget.widget().set_visible(old_displayer_id == "graph");
+
+    // Load existing graph config if displayer is graph, or use default
+    if old_displayer_id == "graph" {
+        let graph_config = if let Some(graph_config_value) = panel_guard.config.get("graph_config") {
+            // Use saved config if available
+            serde_json::from_value::<crate::ui::GraphDisplayConfig>(graph_config_value.clone())
+                .unwrap_or_else(|_| crate::ui::GraphDisplayConfig::default())
+        } else {
+            // Use default config
+            crate::ui::GraphDisplayConfig::default()
+        };
+        graph_config_widget.set_config(graph_config);
+    }
+
+    displayer_tab_box.append(&graph_config_label);
+    displayer_tab_box.append(graph_config_widget.widget());
+
+    // Wrap graph_config_widget in Rc for sharing
+    let graph_config_widget = Rc::new(graph_config_widget);
+
+    // Show/hide text, bar, arc, speedometer, and graph config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -2480,6 +2614,10 @@ fn show_panel_properties_dialog(
         let bar_label_clone = bar_config_label.clone();
         let arc_widget_clone = arc_config_widget.clone();
         let arc_label_clone = arc_config_label.clone();
+        let speedometer_widget_clone = speedometer_config_widget.clone();
+        let speedometer_label_clone = speedometer_config_label.clone();
+        let graph_widget_clone = graph_config_widget.clone();
+        let graph_label_clone = graph_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -2487,12 +2625,18 @@ fn show_panel_properties_dialog(
                 let is_text = displayer_id == "text";
                 let is_bar = displayer_id == "bar";
                 let is_arc = displayer_id == "arc";
+                let is_speedometer = displayer_id == "speedometer";
+                let is_graph = displayer_id == "graph";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
                 bar_label_clone.set_visible(is_bar);
                 arc_widget_clone.widget().set_visible(is_arc);
                 arc_label_clone.set_visible(is_arc);
+                speedometer_widget_clone.widget().set_visible(is_speedometer);
+                speedometer_label_clone.set_visible(is_speedometer);
+                graph_widget_clone.widget().set_visible(is_graph);
+                graph_label_clone.set_visible(is_graph);
             }
         });
     }
@@ -2697,10 +2841,14 @@ fn show_panel_properties_dialog(
     let text_config_widget_clone = text_config_widget.clone();
     let bar_config_widget_clone = bar_config_widget.clone();
     let arc_config_widget_clone = arc_config_widget.clone();
+    let speedometer_config_widget_clone = speedometer_config_widget.clone();
+    let graph_config_widget_clone = graph_config_widget.clone();
     let cpu_config_widget_clone = cpu_config_widget.clone();
     let gpu_config_widget_clone = gpu_config_widget.clone();
     let memory_config_widget_clone = memory_config_widget.clone();
     let system_temp_config_widget_clone = system_temp_config_widget.clone();
+    let fan_speed_config_widget_clone = fan_speed_config_widget.clone();
+    let disk_config_widget_clone = disk_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -3154,6 +3302,38 @@ fn show_panel_properties_dialog(
                 }
             }
 
+            // Apply speedometer configuration if speedometer displayer is active
+            if new_displayer_id == "speedometer" {
+                let speedometer_config = speedometer_config_widget_clone.get_config();
+                if let Ok(speedometer_config_json) = serde_json::to_value(&speedometer_config) {
+                    panel_guard.config.insert("speedometer_config".to_string(), speedometer_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply speedometer config: {}", e);
+                    }
+                }
+            }
+
+            // Apply graph configuration if graph displayer is active
+            if new_displayer_id == "graph" {
+                let graph_config = graph_config_widget_clone.get_config();
+                if let Ok(graph_config_json) = serde_json::to_value(&graph_config) {
+                    panel_guard.config.insert("graph_config".to_string(), graph_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply graph config: {}", e);
+                    }
+                }
+            }
+
             // Apply CPU source configuration if CPU source is active
             if new_source_id == "cpu" {
                 let cpu_config = cpu_config_widget_clone.get_config();
@@ -3229,6 +3409,48 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the source
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply system temp config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply Fan Speed source configuration if fan_speed source is active
+            if new_source_id == "fan_speed" {
+                let fan_speed_config = fan_speed_config_widget_clone.get_config();
+                if let Ok(fan_speed_config_json) = serde_json::to_value(&fan_speed_config) {
+                    panel_guard.config.insert("fan_speed_config".to_string(), fan_speed_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply fan speed config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply Disk source configuration if disk source is active
+            if new_source_id == "disk" {
+                let disk_config = disk_config_widget_clone.get_config();
+                if let Ok(disk_config_json) = serde_json::to_value(&disk_config) {
+                    panel_guard.config.insert("disk_config".to_string(), disk_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply disk config to source: {}", e);
                     }
 
                     // Update the source with new configuration

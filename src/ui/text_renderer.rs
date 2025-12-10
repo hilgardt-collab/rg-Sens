@@ -152,7 +152,7 @@ fn render_combined_parts(
     }
 
     // Render each part sequentially
-    let mut current_x = if rotation_angle != 0.0 { 0.0 } else { 0.0 };
+    let mut current_x = 0.0;
     for (i, (config, text)) in parts.iter().enumerate() {
         cr.save().ok();
 

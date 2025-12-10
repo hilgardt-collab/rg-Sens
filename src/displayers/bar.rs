@@ -70,11 +70,17 @@ impl Displayer for BarDisplayer {
         });
 
         // Set up periodic redraw
+        // The timeout automatically stops when the widget is destroyed (weak reference breaks)
         glib::timeout_add_local(std::time::Duration::from_millis(500), {
-            let drawing_area = drawing_area.clone();
+            let drawing_area_weak = drawing_area.downgrade();
             move || {
-                drawing_area.queue_draw();
-                glib::ControlFlow::Continue
+                // Check if widget still exists - this automatically stops the timeout
+                if let Some(drawing_area) = drawing_area_weak.upgrade() {
+                    drawing_area.queue_draw();
+                    glib::ControlFlow::Continue
+                } else {
+                    glib::ControlFlow::Break
+                }
             }
         });
 

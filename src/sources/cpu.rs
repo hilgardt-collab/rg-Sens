@@ -253,10 +253,15 @@ impl CpuSource {
         let sensor_index = self.config.sensor_index;
         let target_label = if let Some(sensor) = self.cpu_sensors.get(sensor_index) {
             &sensor.label
-        } else {
+        } else if let Some(first_sensor) = self.cpu_sensors.first() {
             // If configured index is out of bounds, use first sensor
-            log::warn!("Sensor index {} out of bounds, using first sensor", sensor_index);
-            &self.cpu_sensors[0].label
+            log::warn!("Sensor index {} out of bounds (max: {}), using first sensor",
+                      sensor_index, self.cpu_sensors.len().saturating_sub(1));
+            &first_sensor.label
+        } else {
+            // No sensors available at all (should be caught by earlier check, but be defensive)
+            log::error!("No CPU temperature sensors available after check - this should not happen");
+            return None;
         };
 
         log::debug!("Looking for temperature sensor: {}", target_label);

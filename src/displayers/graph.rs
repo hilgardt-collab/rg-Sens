@@ -1,0 +1,276 @@
+//! Graph displayer implementation
+
+use anyhow::Result;
+use cairo::Context;
+use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
+use gtk4::prelude::*;
+use gtk4::{DrawingArea, Widget};
+use serde_json::Value;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Graph displayer - displays values over time as a line or bar chart
+pub struct GraphDisplayer {
+    id: String,
+    name: String,
+    data: Arc<Mutex<GraphData>>,
+}
+
+struct GraphData {
+    config: GraphDisplayConfig,
+    data_points: VecDeque<DataPoint>,
+    animated_points: VecDeque<DataPoint>, // Smoothly animated version of data_points
+    source_values: HashMap<String, Value>,
+    start_time: f64,
+    last_update_time: f64,
+}
+
+impl GraphDisplayer {
+    pub fn new() -> Self {
+        let start_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+
+        Self {
+            id: "graph".to_string(),
+            name: "Graph".to_string(),
+            data: Arc::new(Mutex::new(GraphData {
+                config: GraphDisplayConfig::default(),
+                data_points: VecDeque::new(),
+                animated_points: VecDeque::new(),
+                source_values: HashMap::new(),
+                start_time,
+                last_update_time: start_time,
+            })),
+        }
+    }
+
+    pub fn set_config(&self, config: GraphDisplayConfig) {
+        if let Ok(mut data) = self.data.lock() {
+            data.config = config;
+        }
+    }
+
+    pub fn get_config(&self) -> GraphDisplayConfig {
+        self.data
+            .lock()
+            .map(|d| d.config.clone())
+            .unwrap_or_default()
+    }
+}
+
+impl Default for GraphDisplayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Displayer for GraphDisplayer {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn create_widget(&self) -> Widget {
+        let drawing_area = DrawingArea::new();
+        drawing_area.set_size_request(100, 100);
+        let data = self.data.clone();
+
+        drawing_area.set_draw_func(move |_, cr, width, height| {
+            if let Ok(data_guard) = data.lock() {
+                // Use animated points if animation is enabled, otherwise use actual data points
+                let points_to_render = if data_guard.config.animate_new_points {
+                    &data_guard.animated_points
+                } else {
+                    &data_guard.data_points
+                };
+
+                let _ = render_graph(
+                    cr,
+                    &data_guard.config,
+                    points_to_render,
+                    &data_guard.source_values,
+                    width as f64,
+                    height as f64,
+                );
+            }
+        });
+
+        // Set up periodic redraw and animation updates
+        // The timeout automatically stops when the widget is destroyed (weak reference breaks)
+        let data_for_animation = self.data.clone();
+        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(16), {
+            let drawing_area_weak = drawing_area.downgrade();
+            move || {
+                // Check if widget still exists - this automatically stops the timeout
+                if let Some(drawing_area) = drawing_area_weak.upgrade() {
+                    // Update animation if enabled
+                    if let Ok(mut data_guard) = data_for_animation.lock() {
+                        if data_guard.config.animate_new_points {
+                            let current_time = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs_f64();
+
+                            // Smooth interpolation factor (adjust for animation speed)
+                            let lerp_factor = 0.15;
+
+                            // Ensure animated_points has the same length as data_points
+                            let target_len = data_guard.data_points.len();
+                            let animated_len = data_guard.animated_points.len();
+
+                            // Collect timestamps for new points to avoid borrow conflicts
+                            let new_timestamps: Vec<f64> = if animated_len < target_len {
+                                data_guard.data_points
+                                    .iter()
+                                    .skip(animated_len)
+                                    .map(|p| p.timestamp)
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            };
+
+                            // Add new points if needed
+                            for timestamp in new_timestamps {
+                                data_guard.animated_points.push_back(DataPoint {
+                                    value: 0.0, // Start from baseline
+                                    timestamp,
+                                });
+                            }
+
+                            // Remove excess points if needed
+                            while data_guard.animated_points.len() > target_len {
+                                data_guard.animated_points.pop_front();
+                            }
+
+                            // Interpolate all points toward their target values
+                            // Collect target values first to avoid simultaneous borrows
+                            let targets: Vec<(f64, f64)> = data_guard.data_points
+                                .iter()
+                                .map(|p| (p.value, p.timestamp))
+                                .collect();
+
+                            for (i, animated) in data_guard.animated_points.iter_mut().enumerate() {
+                                if let Some(&(target_value, target_timestamp)) = targets.get(i) {
+                                    // Linear interpolation (lerp) toward target value
+                                    animated.value += (target_value - animated.value) * lerp_factor;
+                                    animated.timestamp = target_timestamp;
+                                }
+                            }
+
+                            data_guard.last_update_time = current_time;
+                        } else {
+                            // If animation is disabled, copy data_points to animated_points
+                            data_guard.animated_points = data_guard.data_points.clone();
+                        }
+                    }
+
+                    drawing_area.queue_draw();
+                    gtk4::glib::ControlFlow::Continue
+                } else {
+                    gtk4::glib::ControlFlow::Break
+                }
+            }
+        });
+
+        drawing_area.upcast()
+    }
+
+    fn update_data(&mut self, values: &HashMap<String, Value>) {
+        if let Ok(mut data) = self.data.lock() {
+            // Get the current value
+            if let Some(Value::Number(num)) = values.get("value") {
+                if let Some(value) = num.as_f64() {
+                    let current_time = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64();
+                    let relative_time = current_time - data.start_time;
+
+                    // Add new data point
+                    data.data_points.push_back(DataPoint {
+                        value,
+                        timestamp: relative_time,
+                    });
+
+                    // Remove old data points
+                    while data.data_points.len() > data.config.max_data_points {
+                        data.data_points.pop_front();
+                    }
+                }
+            }
+
+            // Store all source values for text overlay
+            data.source_values = values.clone();
+        }
+    }
+
+    fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
+        if let Ok(data_guard) = self.data.lock() {
+            render_graph(
+                cr,
+                &data_guard.config,
+                &data_guard.data_points,
+                &data_guard.source_values,
+                width,
+                height,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn config_schema(&self) -> ConfigSchema {
+        ConfigSchema {
+            options: vec![
+                ConfigOption {
+                    key: "graph_type".to_string(),
+                    name: "Graph Type".to_string(),
+                    description: "Type of graph to display".to_string(),
+                    value_type: "enum".to_string(),
+                    default: Value::String("Line".to_string()),
+                },
+                ConfigOption {
+                    key: "max_data_points".to_string(),
+                    name: "Max Data Points".to_string(),
+                    description: "Maximum number of data points to display".to_string(),
+                    value_type: "number".to_string(),
+                    default: Value::Number(serde_json::Number::from(60)),
+                },
+                ConfigOption {
+                    key: "line_width".to_string(),
+                    name: "Line Width".to_string(),
+                    description: "Width of the graph line".to_string(),
+                    value_type: "number".to_string(),
+                    default: Value::Number(serde_json::Number::from(2)),
+                },
+                ConfigOption {
+                    key: "auto_scale".to_string(),
+                    name: "Auto Scale".to_string(),
+                    description: "Automatically scale the Y-axis based on data".to_string(),
+                    value_type: "boolean".to_string(),
+                    default: Value::Bool(true),
+                },
+            ],
+        }
+    }
+
+    fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+        if let Some(graph_config_value) = config.get("graph_config") {
+            if let Ok(graph_config) = serde_json::from_value::<GraphDisplayConfig>(graph_config_value.clone()) {
+                self.set_config(graph_config);
+            }
+        }
+        Ok(())
+    }
+
+    fn needs_redraw(&self) -> bool {
+        // Always redraw for graphs since data changes frequently
+        true
+    }
+}

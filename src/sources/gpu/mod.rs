@@ -45,6 +45,8 @@ pub struct GpuSource {
     memory_total: Option<u64>,
     power_usage: Option<f32>,
     fan_speed: Option<u32>,
+    clock_core: Option<u32>,
+    clock_memory: Option<u32>,
 }
 
 impl GpuSource {
@@ -80,6 +82,8 @@ impl GpuSource {
             memory_total: None,
             power_usage: None,
             fan_speed: None,
+            clock_core: None,
+            clock_memory: None,
         }
     }
 
@@ -163,9 +167,12 @@ impl GpuSource {
             GpuField::Temperature => "Temp",
             GpuField::Utilization => "Load",
             GpuField::MemoryUsed => "VRAM",
+            GpuField::MemoryTotal => "VRAM Total",
             GpuField::MemoryPercent => "VRAM %",
             GpuField::PowerUsage => "Power",
             GpuField::FanSpeed => "Fan",
+            GpuField::ClockCore => "Core Clock",
+            GpuField::ClockMemory => "Mem Clock",
         };
 
         format!("{}{}", gpu_prefix, field_type)
@@ -227,6 +234,8 @@ impl DataSource for GpuSource {
         self.memory_total = metrics.memory_total;
         self.power_usage = metrics.power_usage;
         self.fan_speed = metrics.fan_speed;
+        self.clock_core = metrics.clock_core;
+        self.clock_memory = metrics.clock_memory;
 
         Ok(())
     }
@@ -321,6 +330,53 @@ impl DataSource for GpuSource {
                     values.insert("unit".to_string(), Value::from(""));
                 }
             }
+            GpuField::MemoryTotal => {
+                if let Some(mem) = self.memory_total {
+                    let converted = self.convert_memory(mem);
+                    values.insert("caption".to_string(), Value::from(caption));
+                    values.insert("value".to_string(), Value::from(converted));
+                    values.insert("memory_total".to_string(), Value::from(converted));
+                    values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
+                } else {
+                    values.insert("caption".to_string(), Value::from(caption));
+                    values.insert("value".to_string(), Value::from("N/A"));
+                    values.insert("unit".to_string(), Value::from(""));
+                }
+            }
+            GpuField::ClockCore => {
+                if let Some(clock) = self.clock_core {
+                    use crate::ui::GpuFrequencyUnit;
+                    let (value, unit) = match self.config.frequency_unit {
+                        GpuFrequencyUnit::MHz => (clock as f64, "MHz"),
+                        GpuFrequencyUnit::GHz => (clock as f64 / 1000.0, "GHz"),
+                    };
+                    values.insert("caption".to_string(), Value::from(caption));
+                    values.insert("value".to_string(), Value::from(value));
+                    values.insert("clock_core".to_string(), Value::from(value));
+                    values.insert("unit".to_string(), Value::from(unit));
+                } else {
+                    values.insert("caption".to_string(), Value::from(caption));
+                    values.insert("value".to_string(), Value::from("N/A"));
+                    values.insert("unit".to_string(), Value::from(""));
+                }
+            }
+            GpuField::ClockMemory => {
+                if let Some(clock) = self.clock_memory {
+                    use crate::ui::GpuFrequencyUnit;
+                    let (value, unit) = match self.config.frequency_unit {
+                        GpuFrequencyUnit::MHz => (clock as f64, "MHz"),
+                        GpuFrequencyUnit::GHz => (clock as f64 / 1000.0, "GHz"),
+                    };
+                    values.insert("caption".to_string(), Value::from(caption));
+                    values.insert("value".to_string(), Value::from(value));
+                    values.insert("clock_memory".to_string(), Value::from(value));
+                    values.insert("unit".to_string(), Value::from(unit));
+                } else {
+                    values.insert("caption".to_string(), Value::from(caption));
+                    values.insert("value".to_string(), Value::from("N/A"));
+                    values.insert("unit".to_string(), Value::from(""));
+                }
+            }
         }
 
         // Also provide all raw data
@@ -366,6 +422,37 @@ impl DataSource for GpuSource {
                     (0.0, 300.0) // Reasonable default for most GPUs
                 } else {
                     (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(300.0))
+                }
+            }
+            GpuField::MemoryTotal => {
+                if let Some(total) = self.memory_total {
+                    (0.0, self.convert_memory(total))
+                } else {
+                    (0.0, 100.0)
+                }
+            }
+            GpuField::ClockCore => {
+                use crate::ui::GpuFrequencyUnit;
+                let default_max = match self.config.frequency_unit {
+                    GpuFrequencyUnit::MHz => 3000.0,
+                    GpuFrequencyUnit::GHz => 3.0, // 3 GHz = 3000 MHz
+                };
+                if self.config.auto_detect_limits {
+                    (0.0, default_max)
+                } else {
+                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
+                }
+            }
+            GpuField::ClockMemory => {
+                use crate::ui::GpuFrequencyUnit;
+                let default_max = match self.config.frequency_unit {
+                    GpuFrequencyUnit::MHz => 2500.0,
+                    GpuFrequencyUnit::GHz => 2.5, // 2.5 GHz = 2500 MHz
+                };
+                if self.config.auto_detect_limits {
+                    (0.0, default_max)
+                } else {
+                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
                 }
             }
         };

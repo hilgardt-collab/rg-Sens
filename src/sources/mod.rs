@@ -7,14 +7,16 @@ mod cpu;
 mod gpu;
 mod memory;
 mod system_temp;
-// mod disk;
+mod fan_speed;
+mod disk;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
 pub use gpu::GpuSource;
 pub use memory::MemorySource;
 pub use system_temp::{SystemTempSource, SensorInfo, SensorCategory, SystemTempConfig, TemperatureUnit as SystemTempUnit};
-// pub use disk::DiskSource;
+pub use fan_speed::{FanSpeedSource, FanInfo, FanCategory, FanSpeedConfig};
+pub use disk::DiskSource;
 // pub use network::NetworkSource;
 
 /// Register all built-in sources with the global registry
@@ -33,7 +35,12 @@ pub fn register_all() {
     // Register System Temperature source
     global_registry().register_source("system_temp", || Box::new(SystemTempSource::new()));
 
+    // Register Fan Speed source
+    global_registry().register_source("fan_speed", || Box::new(FanSpeedSource::new()));
+
+    // Register Disk source
+    global_registry().register_source("disk", || Box::new(DiskSource::new()));
+
     // TODO: Register more sources
-    // register_source!("disk", DiskSource);
     // register_source!("network", NetworkSource);
 }

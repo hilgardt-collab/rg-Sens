@@ -14,9 +14,12 @@ pub enum GpuField {
     Temperature,
     Utilization,
     MemoryUsed,
+    MemoryTotal,
     MemoryPercent,
     PowerUsage,
     FanSpeed,
+    ClockCore,
+    ClockMemory,
 }
 
 /// Memory unit types
@@ -32,6 +35,19 @@ impl Default for MemoryUnit {
     }
 }
 
+/// Frequency unit types
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum FrequencyUnit {
+    MHz,
+    GHz,
+}
+
+impl Default for FrequencyUnit {
+    fn default() -> Self {
+        Self::MHz
+    }
+}
+
 use crate::ui::TemperatureUnit;
 
 /// GPU source configuration
@@ -41,6 +57,8 @@ pub struct GpuSourceConfig {
     pub temp_unit: TemperatureUnit,
     #[serde(default)]
     pub memory_unit: MemoryUnit,
+    #[serde(default)]
+    pub frequency_unit: FrequencyUnit,
     pub gpu_index: u32,
     #[serde(default)]
     pub custom_caption: Option<String>,
@@ -68,6 +86,7 @@ impl Default for GpuSourceConfig {
             field: GpuField::Temperature,
             temp_unit: TemperatureUnit::Celsius,
             memory_unit: MemoryUnit::GB,
+            frequency_unit: FrequencyUnit::MHz,
             gpu_index: 0,
             custom_caption: None,
             update_interval_ms: default_update_interval(),
@@ -119,9 +138,12 @@ impl GpuSourceConfigWidget {
             "Temperature",
             "Utilization",
             "Memory Used",
+            "Memory Total",
             "Memory Percent",
             "Power Usage",
             "Fan Speed",
+            "Core Clock",
+            "Memory Clock",
         ]);
         let field_combo = DropDown::new(Some(field_options), Option::<gtk4::Expression>::None);
         field_combo.set_selected(0); // Temperature by default
@@ -180,7 +202,7 @@ impl GpuSourceConfigWidget {
         limits_box.append(&min_limit_spin);
 
         limits_box.append(&Label::new(Some("Max:")));
-        let max_adjustment = gtk4::Adjustment::new(100.0, -1000.0, 10000.0, 1.0, 10.0, 0.0);
+        let max_adjustment = gtk4::Adjustment::new(100.0, -1000.0, 50000.0, 1.0, 10.0, 0.0);
         let max_limit_spin = SpinButton::new(Some(&max_adjustment), 0.1, 2);
         max_limit_spin.set_hexpand(true);
         max_limit_spin.set_sensitive(false);
@@ -209,9 +231,12 @@ impl GpuSourceConfigWidget {
                 0 => GpuField::Temperature,
                 1 => GpuField::Utilization,
                 2 => GpuField::MemoryUsed,
-                3 => GpuField::MemoryPercent,
-                4 => GpuField::PowerUsage,
-                5 => GpuField::FanSpeed,
+                3 => GpuField::MemoryTotal,
+                4 => GpuField::MemoryPercent,
+                5 => GpuField::PowerUsage,
+                6 => GpuField::FanSpeed,
+                7 => GpuField::ClockCore,
+                8 => GpuField::ClockMemory,
                 _ => GpuField::Temperature,
             };
             config_clone.borrow_mut().field = field;
@@ -230,7 +255,7 @@ impl GpuSourceConfigWidget {
                     });
                     unit_box_clone.set_visible(true);
                 }
-                GpuField::MemoryUsed => {
+                GpuField::MemoryUsed | GpuField::MemoryTotal => {
                     unit_label_clone.set_text("Memory Unit:");
                     let mem_options = StringList::new(&["MB", "GB"]);
                     unit_combo_clone.set_model(Some(&mem_options));
@@ -238,6 +263,17 @@ impl GpuSourceConfigWidget {
                     unit_combo_clone.set_selected(match mem_unit {
                         MemoryUnit::MB => 0,
                         MemoryUnit::GB => 1,
+                    });
+                    unit_box_clone.set_visible(true);
+                }
+                GpuField::ClockCore | GpuField::ClockMemory => {
+                    unit_label_clone.set_text("Frequency Unit:");
+                    let freq_options = StringList::new(&["MHz", "GHz"]);
+                    unit_combo_clone.set_model(Some(&freq_options));
+                    let freq_unit = config_clone.borrow().frequency_unit;
+                    unit_combo_clone.set_selected(match freq_unit {
+                        FrequencyUnit::MHz => 0,
+                        FrequencyUnit::GHz => 1,
                     });
                     unit_box_clone.set_visible(true);
                 }
@@ -262,13 +298,21 @@ impl GpuSourceConfigWidget {
                     };
                     config_clone.borrow_mut().temp_unit = unit;
                 }
-                GpuField::MemoryUsed => {
+                GpuField::MemoryUsed | GpuField::MemoryTotal => {
                     let unit = match selected {
                         0 => MemoryUnit::MB,
                         1 => MemoryUnit::GB,
                         _ => MemoryUnit::GB,
                     };
                     config_clone.borrow_mut().memory_unit = unit;
+                }
+                GpuField::ClockCore | GpuField::ClockMemory => {
+                    let unit = match selected {
+                        0 => FrequencyUnit::MHz,
+                        1 => FrequencyUnit::GHz,
+                        _ => FrequencyUnit::MHz,
+                    };
+                    config_clone.borrow_mut().frequency_unit = unit;
                 }
                 _ => {}
             }
@@ -336,9 +380,12 @@ impl GpuSourceConfigWidget {
             GpuField::Temperature => 0,
             GpuField::Utilization => 1,
             GpuField::MemoryUsed => 2,
-            GpuField::MemoryPercent => 3,
-            GpuField::PowerUsage => 4,
-            GpuField::FanSpeed => 5,
+            GpuField::MemoryTotal => 3,
+            GpuField::MemoryPercent => 4,
+            GpuField::PowerUsage => 5,
+            GpuField::FanSpeed => 6,
+            GpuField::ClockCore => 7,
+            GpuField::ClockMemory => 8,
         });
 
         // Update unit box based on field
@@ -354,13 +401,23 @@ impl GpuSourceConfigWidget {
                 });
                 self.unit_box.set_visible(true);
             }
-            GpuField::MemoryUsed => {
+            GpuField::MemoryUsed | GpuField::MemoryTotal => {
                 self.unit_label.set_text("Memory Unit:");
                 let mem_options = StringList::new(&["MB", "GB"]);
                 self.unit_combo.set_model(Some(&mem_options));
                 self.unit_combo.set_selected(match config.memory_unit {
                     MemoryUnit::MB => 0,
                     MemoryUnit::GB => 1,
+                });
+                self.unit_box.set_visible(true);
+            }
+            GpuField::ClockCore | GpuField::ClockMemory => {
+                self.unit_label.set_text("Frequency Unit:");
+                let freq_options = StringList::new(&["MHz", "GHz"]);
+                self.unit_combo.set_model(Some(&freq_options));
+                self.unit_combo.set_selected(match config.frequency_unit {
+                    FrequencyUnit::MHz => 0,
+                    FrequencyUnit::GHz => 1,
                 });
                 self.unit_box.set_visible(true);
             }

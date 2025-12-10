@@ -1,4 +1,4 @@
-//! Arc gauge displayer - visualizes numeric values as circular arc gauges
+//! Speedometer gauge displayer - visualizes numeric values as traditional analog gauges
 
 use anyhow::Result;
 use cairo::Context;
@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer};
-use crate::ui::arc_display::{render_arc, ArcDisplayConfig};
+use crate::ui::speedometer_display::{render_speedometer, SpeedometerConfig};
 
-/// Arc gauge displayer
-pub struct ArcDisplayer {
+/// Speedometer gauge displayer
+pub struct SpeedometerDisplayer {
     id: String,
     name: String,
     data: Arc<Mutex<DisplayData>>,
@@ -19,7 +19,7 @@ pub struct ArcDisplayer {
 
 #[derive(Clone)]
 struct DisplayData {
-    config: ArcDisplayConfig,
+    config: SpeedometerConfig,
     value: f64,
     target_value: f64,
     animated_value: f64,
@@ -27,10 +27,10 @@ struct DisplayData {
     values: HashMap<String, Value>, // All source data for text overlay
 }
 
-impl ArcDisplayer {
+impl SpeedometerDisplayer {
     pub fn new() -> Self {
         let data = Arc::new(Mutex::new(DisplayData {
-            config: ArcDisplayConfig::default(),
+            config: SpeedometerConfig::default(),
             value: 0.0,
             target_value: 0.0,
             animated_value: 0.0,
@@ -39,20 +39,20 @@ impl ArcDisplayer {
         }));
 
         Self {
-            id: "arc".to_string(),
-            name: "Arc Gauge".to_string(),
+            id: "speedometer".to_string(),
+            name: "Speedometer Gauge".to_string(),
             data,
         }
     }
 }
 
-impl Default for ArcDisplayer {
+impl Default for SpeedometerDisplayer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Displayer for ArcDisplayer {
+impl Displayer for SpeedometerDisplayer {
     fn id(&self) -> &str {
         &self.id
     }
@@ -64,8 +64,8 @@ impl Displayer for ArcDisplayer {
     fn create_widget(&self) -> Widget {
         let drawing_area = DrawingArea::new();
 
-        // Set minimum size (arc gauges look best in square layouts)
-        drawing_area.set_size_request(150, 150);
+        // Set minimum size (speedometers look best in square layouts)
+        drawing_area.set_size_request(200, 200);
 
         // Set up draw function
         let data_clone = self.data.clone();
@@ -76,12 +76,11 @@ impl Displayer for ArcDisplayer {
                 } else {
                     data.value
                 };
-                let _ = render_arc(cr, &data.config, display_value, &data.values, width as f64, height as f64);
+                let _ = render_speedometer(cr, &data.config, display_value, &data.values, width as f64, height as f64);
             }
         });
 
         // Set up periodic animation/redraw at 60fps
-        // The timeout automatically stops when the widget is destroyed (weak reference breaks)
         glib::timeout_add_local(std::time::Duration::from_millis(16), {
             let data_clone = self.data.clone();
             let drawing_area_weak = drawing_area.downgrade();
@@ -98,12 +97,24 @@ impl Displayer for ArcDisplayer {
                         let elapsed = now.duration_since(data.last_update).as_secs_f64();
                         data.last_update = now;
 
-                        // Calculate animation speed based on duration (prevent division by zero)
+                        // Calculate animation speed based on duration
                         let animation_speed = 1.0 / data.config.animation_duration.max(0.1);
-                        let delta = (data.target_value - data.animated_value) * animation_speed * elapsed;
 
-                        // Apply easing (ease-out)
-                        data.animated_value += delta;
+                        if data.config.bounce_animation {
+                            // Bounce animation: overshoot then settle
+                            let diff = data.target_value - data.animated_value;
+                            let delta = diff * animation_speed * elapsed * 3.0; // Faster for bounce
+                            data.animated_value += delta;
+
+                            // Check if we've overshot and add bounce back
+                            if diff.abs() < 0.05 {
+                                data.animated_value += (data.target_value - data.animated_value) * 0.1;
+                            }
+                        } else {
+                            // Smooth ease-out animation
+                            let delta = (data.target_value - data.animated_value) * animation_speed * elapsed;
+                            data.animated_value += delta;
+                        }
 
                         // Snap to target if very close
                         if (data.animated_value - data.target_value).abs() < 0.001 {
@@ -148,36 +159,33 @@ impl Displayer for ArcDisplayer {
             } else {
                 0.0
             }
-        } else if new_value <= 1.0 {
-            // Value already in 0-1 range
-            new_value
-        } else if new_value <= 100.0 {
-            // Assume percentage (0-100)
-            new_value / 100.0
         } else {
-            // For values > 100 without explicit range, normalize to 0-1
-            // This might not be ideal, but it's better than nothing
-            0.0
+            // Assume value is already 0-100, normalize to 0.0-1.0
+            (new_value / 100.0).clamp(0.0, 1.0)
         };
 
         if let Ok(mut display_data) = self.data.lock() {
-            let new_value = normalized.clamp(0.0, 1.0);
-            display_data.value = new_value;
-            display_data.target_value = new_value;
+            display_data.value = normalized;
+            display_data.target_value = normalized;
 
-            // If animation is disabled or this is the first value, set animated_value immediately
-            if !display_data.config.animate || display_data.animated_value == 0.0 {
-                display_data.animated_value = new_value;
+            // Initialize animated value to current value if this is the first update
+            if display_data.last_update.elapsed().as_secs() > 1 {
+                display_data.animated_value = normalized;
             }
 
-            // Store all values for text overlay
             display_data.values = data.clone();
         }
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
-            render_arc(cr, &data.config, data.value, &data.values, width, height)?;
+            let display_value = if data.config.animate {
+                data.animated_value
+            } else {
+                data.value
+            };
+            render_speedometer(cr, &data.config, display_value, &data.values, width, height)
+                .map_err(|e| anyhow::anyhow!("Failed to render speedometer: {}", e))?;
         }
         Ok(())
     }
@@ -186,59 +194,23 @@ impl Displayer for ArcDisplayer {
         ConfigSchema {
             options: vec![
                 ConfigOption {
-                    key: "start_angle".to_string(),
-                    name: "Start Angle".to_string(),
-                    description: "Starting angle in degrees (0 = right)".to_string(),
-                    value_type: "number".to_string(),
-                    default: serde_json::json!(135.0),
-                },
-                ConfigOption {
-                    key: "end_angle".to_string(),
-                    name: "End Angle".to_string(),
-                    description: "Ending angle in degrees".to_string(),
-                    value_type: "number".to_string(),
-                    default: serde_json::json!(45.0),
-                },
-                ConfigOption {
-                    key: "arc_width".to_string(),
-                    name: "Arc Width".to_string(),
-                    description: "Width of the arc as percentage of radius".to_string(),
-                    value_type: "number".to_string(),
-                    default: serde_json::json!(0.15),
-                },
-                ConfigOption {
-                    key: "segmented".to_string(),
-                    name: "Segmented".to_string(),
-                    description: "Display as segments instead of continuous arc".to_string(),
-                    value_type: "boolean".to_string(),
-                    default: serde_json::json!(false),
+                    key: "speedometer_config".to_string(),
+                    name: "Speedometer Configuration".to_string(),
+                    description: "Configuration for speedometer display".to_string(),
+                    value_type: "speedometer_config".to_string(),
+                    default: serde_json::to_value(&SpeedometerConfig::default()).unwrap_or(Value::Null),
                 },
             ],
         }
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        // Check for full arc_config first
-        if let Some(arc_config_value) = config.get("arc_config") {
-            if let Ok(arc_config) = serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone()) {
-                if let Ok(mut display_data) = self.data.lock() {
-                    display_data.config = arc_config;
-                }
-                return Ok(());
+        if let Some(config_value) = config.get("speedometer_config") {
+            let speedometer_config: SpeedometerConfig = serde_json::from_value(config_value.clone())?;
+            if let Ok(mut data) = self.data.lock() {
+                data.config = speedometer_config;
             }
         }
-
-        // Fallback: Apply individual settings for backward compatibility
-        if let Some(segmented) = config.get("segmented").and_then(|v| v.as_bool()) {
-            if let Ok(mut display_data) = self.data.lock() {
-                display_data.config.segmented = segmented;
-            }
-        }
-
         Ok(())
-    }
-
-    fn needs_redraw(&self) -> bool {
-        true
     }
 }

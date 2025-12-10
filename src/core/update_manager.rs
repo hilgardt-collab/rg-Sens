@@ -78,17 +78,48 @@ impl UpdateManager {
                 let panel_guard = state.panel.read().await;
                 // Get update interval from CPU config if available
                 if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
-                    if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
-                        Duration::from_millis(cpu_config.update_interval_ms)
-                    } else {
-                        Duration::from_millis(1000) // Default 1 second
+                    match serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+                        Ok(cpu_config) => Duration::from_millis(cpu_config.update_interval_ms),
+                        Err(e) => {
+                            log::warn!("Failed to deserialize CPU config for panel {}: {}, using default interval", panel_id, e);
+                            Duration::from_millis(1000)
+                        }
                     }
                 // Get update interval from GPU config if available
                 } else if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
-                    if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
-                        Duration::from_millis(gpu_config.update_interval_ms)
-                    } else {
-                        Duration::from_millis(1000) // Default 1 second
+                    match serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+                        Ok(gpu_config) => Duration::from_millis(gpu_config.update_interval_ms),
+                        Err(e) => {
+                            log::warn!("Failed to deserialize GPU config for panel {}: {}, using default interval", panel_id, e);
+                            Duration::from_millis(1000)
+                        }
+                    }
+                // Get update interval from Memory config if available
+                } else if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
+                    match serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
+                        Ok(memory_config) => Duration::from_millis(memory_config.update_interval_ms),
+                        Err(e) => {
+                            log::warn!("Failed to deserialize Memory config for panel {}: {}, using default interval", panel_id, e);
+                            Duration::from_millis(1000)
+                        }
+                    }
+                // Get update interval from System Temp config if available
+                } else if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
+                    match serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
+                        Ok(system_temp_config) => Duration::from_millis(system_temp_config.update_interval_ms),
+                        Err(e) => {
+                            log::warn!("Failed to deserialize System Temp config for panel {}: {}, using default interval", panel_id, e);
+                            Duration::from_millis(1000)
+                        }
+                    }
+                // Get update interval from Fan Speed config if available
+                } else if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
+                    match serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
+                        Ok(fan_speed_config) => Duration::from_millis(fan_speed_config.update_interval_ms),
+                        Err(e) => {
+                            log::warn!("Failed to deserialize Fan Speed config for panel {}: {}, using default interval", panel_id, e);
+                            Duration::from_millis(1000)
+                        }
                     }
                 } else {
                     Duration::from_millis(1000) // Default 1 second
@@ -113,13 +144,20 @@ impl UpdateManager {
 
         drop(panels); // Release read lock
 
-        // Wait for all updates to complete and update last_update times
+        // Update last_update times BEFORE waiting for tasks to complete
+        // This ensures accurate interval timing regardless of task execution time
         let mut panels = self.panels.write().await;
+        for (panel_id, _) in &tasks {
+            if let Some(state) = panels.get_mut(panel_id) {
+                state.last_update = now;
+            }
+        }
+        drop(panels); // Release write lock before awaiting tasks
+
+        // Wait for all updates to complete
         for (panel_id, task) in tasks {
-            if task.await.is_ok() {
-                if let Some(state) = panels.get_mut(&panel_id) {
-                    state.last_update = Instant::now();
-                }
+            if let Err(e) = task.await {
+                error!("Panel update task failed for {}: {}", panel_id, e);
             }
         }
 

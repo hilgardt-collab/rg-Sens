@@ -5,6 +5,7 @@ use gtk4::{
     Box as GtkBox, Button, DrawingArea, Grid, Label, Orientation, Scale, SpinButton, Window,
 };
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::ui::background::Color;
@@ -101,8 +102,9 @@ const PRESET_COLORS: [[Color; 8]; 8] = [
 ];
 
 // Global saved colors storage (persistent across dialog instances)
+// 16 slots in 2 rows of 8
 thread_local! {
-    static SAVED_COLORS: Rc<RefCell<Vec<Color>>> = Rc::new(RefCell::new(vec![Color::default(); 32]));
+    static SAVED_COLORS: Rc<RefCell<Vec<Color>>> = Rc::new(RefCell::new(vec![Color::default(); 16]));
 }
 
 #[allow(dead_code)]
@@ -152,109 +154,68 @@ impl CustomColorPicker {
         main_box.set_margin_top(12);
         main_box.set_margin_bottom(12);
 
-        // === Color Preview ===
-        let preview_label = Label::new(Some("Preview"));
-        preview_label.add_css_class("heading");
-        preview_label.set_halign(gtk4::Align::Start);
-        main_box.append(&preview_label);
-
+        // === Preview Area (at top) ===
         let preview_area = DrawingArea::new();
-        preview_area.set_size_request(-1, 60);
-        preview_area.set_vexpand(false);
+        preview_area.set_size_request(100, 100);
+        preview_area.set_halign(gtk4::Align::Center);
+        preview_area.set_margin_bottom(12);
 
-        let current_color_for_preview = current_color.clone();
+        let current_color_clone = current_color.clone();
         preview_area.set_draw_func(move |_, cr, width, height| {
-            let color = current_color_for_preview.borrow();
+            let color = *current_color_clone.borrow();
 
-            // Draw checkerboard background when alpha < 1.0
-            if color.a < 1.0 {
-                let checker_size = 8.0;
-                for y in 0..(height / checker_size as i32 + 1) {
-                    for x in 0..(width / checker_size as i32 + 1) {
-                        if (x + y) % 2 == 0 {
-                            cr.set_source_rgb(0.8, 0.8, 0.8);
-                        } else {
-                            cr.set_source_rgb(0.6, 0.6, 0.6);
-                        }
-                        let _ = cr.rectangle(
-                            x as f64 * checker_size,
-                            y as f64 * checker_size,
-                            checker_size,
-                            checker_size,
-                        );
-                        let _ = cr.fill();
+            // Draw checkerboard for transparency
+            let checker_size = 16.0;
+            for y in 0..(height / checker_size as i32 + 1) {
+                for x in 0..(width / checker_size as i32 + 1) {
+                    if (x + y) % 2 == 0 {
+                        cr.set_source_rgb(0.8, 0.8, 0.8);
+                    } else {
+                        cr.set_source_rgb(0.6, 0.6, 0.6);
                     }
+                    let _ = cr.rectangle(
+                        x as f64 * checker_size,
+                        y as f64 * checker_size,
+                        checker_size,
+                        checker_size,
+                    );
+                    let _ = cr.fill();
                 }
             }
 
+            // Draw color with alpha
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
             let _ = cr.fill();
         });
+
         main_box.append(&preview_area);
 
-        // === RGB Controls ===
-        let rgb_label = Label::new(Some("RGB"));
-        rgb_label.add_css_class("heading");
-        rgb_label.set_halign(gtk4::Align::Start);
-        rgb_label.set_margin_top(6);
-        main_box.append(&rgb_label);
+        // === Create RGB sliders first (we need them for color maps) ===
+        let (_red_box, red_scale, red_spin) = Self::create_slider_with_spin("R", 0.0, 1.0, 0.01, initial_color.r);
+        let (_green_box, green_scale, green_spin) = Self::create_slider_with_spin("G", 0.0, 1.0, 0.01, initial_color.g);
+        let (_blue_box, blue_scale, blue_spin) = Self::create_slider_with_spin("B", 0.0, 1.0, 0.01, initial_color.b);
+        let (_alpha_box, alpha_scale, alpha_spin) = Self::create_slider_with_spin("A", 0.0, 1.0, 0.01, initial_color.a);
 
-        let (red_box, red_scale, red_spin) = Self::create_slider_with_spin("R:", 0.0, 1.0, 0.01, initial_color.r);
-        let (green_box, green_scale, green_spin) = Self::create_slider_with_spin("G:", 0.0, 1.0, 0.01, initial_color.g);
-        let (blue_box, blue_scale, blue_spin) = Self::create_slider_with_spin("B:", 0.0, 1.0, 0.01, initial_color.b);
-        let (alpha_box, alpha_scale, alpha_spin) = Self::create_slider_with_spin("A:", 0.0, 1.0, 0.01, initial_color.a);
-
-        // Color maps for RGB sliders
-        let red_map = Self::create_rgb_colormap('r', &red_scale, &green_scale, &blue_scale);
-        let green_map = Self::create_rgb_colormap('g', &red_scale, &green_scale, &blue_scale);
-        let blue_map = Self::create_rgb_colormap('b', &red_scale, &green_scale, &blue_scale);
-        let alpha_map = Self::create_alpha_colormap(&red_scale, &green_scale, &blue_scale, &alpha_scale);
-
-        main_box.append(&red_map);
-        main_box.append(&red_box);
-        main_box.append(&green_map);
-        main_box.append(&green_box);
-        main_box.append(&blue_map);
-        main_box.append(&blue_box);
-        main_box.append(&alpha_map);
-        main_box.append(&alpha_box);
-
-        // === HSV Controls ===
-        let hsv_label = Label::new(Some("HSV"));
-        hsv_label.add_css_class("heading");
-        hsv_label.set_halign(gtk4::Align::Start);
-        hsv_label.set_margin_top(6);
-        main_box.append(&hsv_label);
-
+        // === Create HSV sliders ===
         let (h, s, v) = rgb_to_hsv(initial_color.r, initial_color.g, initial_color.b);
-        let (hue_box, hue_scale, hue_spin) = Self::create_slider_with_spin("H:", 0.0, 360.0, 1.0, h);
-        let (sat_box, saturation_scale, saturation_spin) = Self::create_slider_with_spin("S:", 0.0, 1.0, 0.01, s);
-        let (val_box, value_scale, value_spin) = Self::create_slider_with_spin("V:", 0.0, 1.0, 0.01, v);
+        let (_hue_box, hue_scale, hue_spin) = Self::create_slider_with_spin("H", 0.0, 360.0, 1.0, h);
+        let (_sat_box, saturation_scale, saturation_spin) = Self::create_slider_with_spin("S", 0.0, 1.0, 0.01, s);
+        let (_val_box, value_scale, value_spin) = Self::create_slider_with_spin("V", 0.0, 1.0, 0.01, v);
 
-        // Color maps for HSV sliders
-        let hue_map = Self::create_hue_colormap();
-        let sat_map = Self::create_saturation_colormap(&hue_scale, &value_scale);
-        let val_map = Self::create_value_colormap(&hue_scale, &saturation_scale);
+        // === Main Content: Horizontal box with presets + sliders ===
+        let content_box = GtkBox::new(Orientation::Horizontal, 12);
 
-        main_box.append(&hue_map);
-        main_box.append(&hue_box);
-        main_box.append(&sat_map);
-        main_box.append(&sat_box);
-        main_box.append(&val_map);
-        main_box.append(&val_box);
-
-        // === Preset Colors Grid (8x8) ===
+        // === LEFT SIDE: Preset Colors Grid (8x8) ===
+        let preset_box = GtkBox::new(Orientation::Vertical, 6);
         let preset_label = Label::new(Some("Preset Colors"));
         preset_label.add_css_class("heading");
         preset_label.set_halign(gtk4::Align::Start);
-        preset_label.set_margin_top(6);
-        main_box.append(&preset_label);
+        preset_box.append(&preset_label);
 
         let preset_grid = Grid::new();
         preset_grid.set_row_spacing(2);
         preset_grid.set_column_spacing(2);
-        preset_grid.set_margin_bottom(12);
 
         for row in 0..8 {
             for col in 0..8 {
@@ -274,10 +235,34 @@ impl CustomColorPicker {
                 preset_grid.attach(&button, col as i32, row as i32, 1, 1);
             }
         }
-        main_box.append(&preset_grid);
+        preset_box.append(&preset_grid);
+        content_box.append(&preset_box);
 
-        // === Saved Colors (32 slots in 4x8 grid) ===
-        let saved_label = Label::new(Some("Saved Colors"));
+        // === RIGHT SIDE: Horizontal row of vertical sliders with color maps ===
+        let sliders_box = GtkBox::new(Orientation::Horizontal, 6);
+
+        // RGBA sliders group
+        sliders_box.append(&Self::create_vertical_rgb_slider("R", &red_scale, &green_scale, &blue_scale, 'r'));
+        sliders_box.append(&Self::create_vertical_rgb_slider("G", &red_scale, &green_scale, &blue_scale, 'g'));
+        sliders_box.append(&Self::create_vertical_rgb_slider("B", &red_scale, &green_scale, &blue_scale, 'b'));
+        sliders_box.append(&Self::create_vertical_alpha_slider("A", &red_scale, &green_scale, &blue_scale, &alpha_scale));
+
+        // Separator between RGBA and HSV
+        let separator = gtk4::Separator::new(Orientation::Vertical);
+        separator.set_margin_start(6);
+        separator.set_margin_end(6);
+        sliders_box.append(&separator);
+
+        // HSV sliders group
+        sliders_box.append(&Self::create_vertical_hue_slider(&hue_scale));
+        sliders_box.append(&Self::create_vertical_saturation_slider(&hue_scale, &saturation_scale, &value_scale));
+        sliders_box.append(&Self::create_vertical_value_slider(&hue_scale, &saturation_scale, &value_scale));
+
+        content_box.append(&sliders_box);
+        main_box.append(&content_box);
+
+        // === Saved Colors (16 slots in 2x8 grid) ===
+        let saved_label = Label::new(Some("User Colors"));
         saved_label.add_css_class("heading");
         saved_label.set_halign(gtk4::Align::Start);
         saved_label.set_margin_top(6);
@@ -288,10 +273,10 @@ impl CustomColorPicker {
         saved_colors_grid.set_column_spacing(2);
         saved_colors_grid.set_margin_bottom(6);
 
-        // Initialize saved colors grid
+        // Initialize saved colors grid (2 rows of 8)
         SAVED_COLORS.with(|saved| {
             let colors = saved.borrow();
-            for i in 0..32 {
+            for i in 0..16 {
                 let row = i / 8;
                 let col = i % 8;
                 let color = colors[i];
@@ -327,7 +312,7 @@ impl CustomColorPicker {
                 let mut colors = saved.borrow_mut();
 
                 // Shift all colors to the right by one position
-                for i in (1..32).rev() {
+                for i in (1..16).rev() {
                     colors[i] = colors[i - 1];
                 }
 
@@ -335,8 +320,13 @@ impl CustomColorPicker {
                 colors[0] = color;
             });
 
+            // Save colors to disk
+            if let Err(e) = Self::save_colors() {
+                eprintln!("Failed to save user colors: {}", e);
+            }
+
             // Update all button appearances
-            for i in 0..32 {
+            for i in 0..16 {
                 let row = i / 8;
                 let col = i % 8;
                 if let Some(child) = saved_colors_grid_clone.child_at(col as i32, row as i32) {
@@ -557,16 +547,26 @@ impl CustomColorPicker {
         (hbox, scale, spin)
     }
 
-    fn create_rgb_colormap(
-        channel: char,
+    fn create_vertical_rgb_slider(
+        label: &str,
         red_scale: &Scale,
         green_scale: &Scale,
         blue_scale: &Scale,
-    ) -> DrawingArea {
+        channel: char,
+    ) -> GtkBox {
+        let vbox = GtkBox::new(Orientation::Vertical, 6);
+
+        // Label at top
+        let label_widget = Label::new(Some(label));
+        label_widget.set_halign(gtk4::Align::Center);
+        vbox.append(&label_widget);
+
+        // Horizontal box for color map and slider
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Color map (vertical gradient)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(-1, 20);
-        color_map.set_margin_start(30); // Align with slider
-        color_map.set_margin_end(70); // Align with slider
+        color_map.set_size_request(30, 320);
 
         let red = red_scale.clone();
         let green = green_scale.clone();
@@ -577,8 +577,8 @@ impl CustomColorPicker {
             let g = green.value();
             let b = blue.value();
 
-            // Draw gradient
-            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            // Draw gradient from bottom (0.0) to top (1.0)
+            let gradient = cairo::LinearGradient::new(0.0, height as f64, 0.0, 0.0);
             match channel {
                 'r' => {
                     gradient.add_color_stop_rgb(0.0, 0.0, g, b);
@@ -608,19 +608,81 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         blue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        color_map
+        hbox.append(&color_map);
+
+        // Get the appropriate scale
+        let scale = match channel {
+            'r' => red_scale,
+            'g' => green_scale,
+            'b' => blue_scale,
+            _ => red_scale,
+        };
+
+        // Vertical scale
+        let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
+        vertical_scale.set_value(scale.value());
+        vertical_scale.set_inverted(true); // Top = 1.0, bottom = 0.0
+        vertical_scale.set_vexpand(true);
+        vertical_scale.set_draw_value(false);
+        vertical_scale.set_size_request(40, 320);
+
+        // Sync vertical scale with horizontal scale
+        let scale_clone = scale.clone();
+        vertical_scale.connect_value_changed(move |v_scale| {
+            scale_clone.set_value(v_scale.value());
+        });
+
+        let vertical_scale_clone = vertical_scale.clone();
+        scale.connect_value_changed(move |h_scale| {
+            vertical_scale_clone.set_value(h_scale.value());
+        });
+
+        hbox.append(&vertical_scale);
+        vbox.append(&hbox);
+
+        // Spin button below
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+        spin.set_halign(gtk4::Align::Center);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let scale_clone = scale.clone();
+        spin.connect_value_changed(move |sp| {
+            scale_clone.set_value(sp.value());
+        });
+
+        vbox.append(&spin);
+
+        vbox
     }
 
-    fn create_alpha_colormap(
+    fn create_vertical_alpha_slider(
+        label: &str,
         red_scale: &Scale,
         green_scale: &Scale,
         blue_scale: &Scale,
         alpha_scale: &Scale,
-    ) -> DrawingArea {
+    ) -> GtkBox {
+        let vbox = GtkBox::new(Orientation::Vertical, 6);
+
+        // Label at top
+        let label_widget = Label::new(Some(label));
+        label_widget.set_halign(gtk4::Align::Center);
+        vbox.append(&label_widget);
+
+        // Horizontal box for color map and slider
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Color map with checkerboard (vertical gradient)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(-1, 20);
-        color_map.set_margin_start(30);
-        color_map.set_margin_end(70);
+        color_map.set_size_request(30, 320);
 
         let red = red_scale.clone();
         let green = green_scale.clone();
@@ -650,8 +712,8 @@ impl CustomColorPicker {
                 }
             }
 
-            // Draw alpha gradient
-            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            // Draw alpha gradient from bottom (0.0) to top (1.0)
+            let gradient = cairo::LinearGradient::new(0.0, height as f64, 0.0, 0.0);
             gradient.add_color_stop_rgba(0.0, r, g, b, 0.0);
             gradient.add_color_stop_rgba(1.0, r, g, b, 1.0);
             let _ = cr.set_source(&gradient);
@@ -666,38 +728,146 @@ impl CustomColorPicker {
         green_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
         let color_map_clone = color_map.clone();
         blue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
-        let color_map_clone = color_map.clone();
-        alpha_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        color_map
+        hbox.append(&color_map);
+
+        // Vertical scale
+        let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
+        vertical_scale.set_value(alpha_scale.value());
+        vertical_scale.set_inverted(true);
+        vertical_scale.set_vexpand(true);
+        vertical_scale.set_draw_value(false);
+        vertical_scale.set_size_request(40, 320);
+
+        // Sync vertical scale with horizontal scale
+        let alpha_clone = alpha_scale.clone();
+        vertical_scale.connect_value_changed(move |v_scale| {
+            alpha_clone.set_value(v_scale.value());
+        });
+
+        let vertical_scale_clone = vertical_scale.clone();
+        alpha_scale.connect_value_changed(move |h_scale| {
+            vertical_scale_clone.set_value(h_scale.value());
+        });
+
+        hbox.append(&vertical_scale);
+        vbox.append(&hbox);
+
+        // Spin button below
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(alpha_scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+        spin.set_halign(gtk4::Align::Center);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        alpha_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let alpha_clone = alpha_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            alpha_clone.set_value(sp.value());
+        });
+
+        vbox.append(&spin);
+
+        vbox
     }
 
-    fn create_hue_colormap() -> DrawingArea {
+    fn create_vertical_hue_slider(hue_scale: &Scale) -> GtkBox {
+        let vbox = GtkBox::new(Orientation::Vertical, 6);
+
+        // Label at top
+        let label_widget = Label::new(Some("H"));
+        label_widget.set_halign(gtk4::Align::Center);
+        vbox.append(&label_widget);
+
+        // Horizontal box for color map and slider
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Hue color map (full spectrum vertically)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(-1, 20);
-        color_map.set_margin_start(30);
-        color_map.set_margin_end(70);
+        color_map.set_size_request(30, 320);
 
         color_map.set_draw_func(move |_, cr, width, height| {
-            // Draw full hue spectrum
-            let steps = width as i32;
+            // Draw full hue spectrum vertically
+            let steps = height as i32;
             for i in 0..steps {
-                let hue = (i as f64 / steps as f64) * 360.0;
+                let hue = ((steps - i) as f64 / steps as f64) * 360.0; // Top = 360, bottom = 0
                 let (r, g, b) = hsv_to_rgb(hue, 1.0, 1.0);
                 cr.set_source_rgb(r, g, b);
-                let _ = cr.rectangle(i as f64, 0.0, 1.0, height as f64);
+                let _ = cr.rectangle(0.0, i as f64, width as f64, 1.0);
                 let _ = cr.fill();
             }
         });
 
-        color_map
+        hbox.append(&color_map);
+
+        // Vertical scale
+        let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 360.0, 1.0);
+        vertical_scale.set_value(hue_scale.value());
+        vertical_scale.set_inverted(true);
+        vertical_scale.set_vexpand(true);
+        vertical_scale.set_draw_value(false);
+        vertical_scale.set_size_request(40, 320);
+
+        // Sync vertical scale with horizontal scale
+        let hue_clone = hue_scale.clone();
+        vertical_scale.connect_value_changed(move |v_scale| {
+            hue_clone.set_value(v_scale.value());
+        });
+
+        let vertical_scale_clone = vertical_scale.clone();
+        hue_scale.connect_value_changed(move |h_scale| {
+            vertical_scale_clone.set_value(h_scale.value());
+        });
+
+        hbox.append(&vertical_scale);
+        vbox.append(&hbox);
+
+        // Spin button below
+        let spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        spin.set_value(hue_scale.value());
+        spin.set_digits(0);
+        spin.set_width_chars(5);
+        spin.set_halign(gtk4::Align::Center);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        hue_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let hue_clone = hue_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            hue_clone.set_value(sp.value());
+        });
+
+        vbox.append(&spin);
+
+        vbox
     }
 
-    fn create_saturation_colormap(hue_scale: &Scale, value_scale: &Scale) -> DrawingArea {
+    fn create_vertical_saturation_slider(
+        hue_scale: &Scale,
+        saturation_scale: &Scale,
+        value_scale: &Scale,
+    ) -> GtkBox {
+        let vbox = GtkBox::new(Orientation::Vertical, 6);
+
+        // Label at top
+        let label_widget = Label::new(Some("S"));
+        label_widget.set_halign(gtk4::Align::Center);
+        vbox.append(&label_widget);
+
+        // Horizontal box for color map and slider
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Saturation color map (white to full color vertically)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(-1, 20);
-        color_map.set_margin_start(30);
-        color_map.set_margin_end(70);
+        color_map.set_size_request(30, 320);
 
         let hue = hue_scale.clone();
         let value = value_scale.clone();
@@ -706,8 +876,8 @@ impl CustomColorPicker {
             let h = hue.value();
             let v = value.value();
 
-            // Draw saturation gradient (white to full color)
-            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            // Draw saturation gradient vertically (bottom = 0, top = 1)
+            let gradient = cairo::LinearGradient::new(0.0, height as f64, 0.0, 0.0);
             let (r0, g0, b0) = hsv_to_rgb(h, 0.0, v);
             let (r1, g1, b1) = hsv_to_rgb(h, 1.0, v);
             gradient.add_color_stop_rgb(0.0, r0, g0, b0);
@@ -723,14 +893,71 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         value_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        color_map
+        hbox.append(&color_map);
+
+        // Vertical scale
+        let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
+        vertical_scale.set_value(saturation_scale.value());
+        vertical_scale.set_inverted(true);
+        vertical_scale.set_vexpand(true);
+        vertical_scale.set_draw_value(false);
+        vertical_scale.set_size_request(40, 320);
+
+        // Sync vertical scale with horizontal scale
+        let sat_clone = saturation_scale.clone();
+        vertical_scale.connect_value_changed(move |v_scale| {
+            sat_clone.set_value(v_scale.value());
+        });
+
+        let vertical_scale_clone = vertical_scale.clone();
+        saturation_scale.connect_value_changed(move |h_scale| {
+            vertical_scale_clone.set_value(h_scale.value());
+        });
+
+        hbox.append(&vertical_scale);
+        vbox.append(&hbox);
+
+        // Spin button below
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(saturation_scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+        spin.set_halign(gtk4::Align::Center);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        saturation_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let sat_clone = saturation_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            sat_clone.set_value(sp.value());
+        });
+
+        vbox.append(&spin);
+
+        vbox
     }
 
-    fn create_value_colormap(hue_scale: &Scale, saturation_scale: &Scale) -> DrawingArea {
+    fn create_vertical_value_slider(
+        hue_scale: &Scale,
+        saturation_scale: &Scale,
+        value_scale: &Scale,
+    ) -> GtkBox {
+        let vbox = GtkBox::new(Orientation::Vertical, 6);
+
+        // Label at top
+        let label_widget = Label::new(Some("V"));
+        label_widget.set_halign(gtk4::Align::Center);
+        vbox.append(&label_widget);
+
+        // Horizontal box for color map and slider
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Value color map (black to full color vertically)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(-1, 20);
-        color_map.set_margin_start(30);
-        color_map.set_margin_end(70);
+        color_map.set_size_request(30, 320);
 
         let hue = hue_scale.clone();
         let saturation = saturation_scale.clone();
@@ -739,8 +966,8 @@ impl CustomColorPicker {
             let h = hue.value();
             let s = saturation.value();
 
-            // Draw value gradient (black to full color)
-            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            // Draw value gradient vertically (bottom = 0, top = 1)
+            let gradient = cairo::LinearGradient::new(0.0, height as f64, 0.0, 0.0);
             let (r0, g0, b0) = hsv_to_rgb(h, s, 0.0);
             let (r1, g1, b1) = hsv_to_rgb(h, s, 1.0);
             gradient.add_color_stop_rgb(0.0, r0, g0, b0);
@@ -756,7 +983,51 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         saturation_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        color_map
+        hbox.append(&color_map);
+
+        // Vertical scale
+        let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
+        vertical_scale.set_value(value_scale.value());
+        vertical_scale.set_inverted(true);
+        vertical_scale.set_vexpand(true);
+        vertical_scale.set_draw_value(false);
+        vertical_scale.set_size_request(40, 320);
+
+        // Sync vertical scale with horizontal scale
+        let val_clone = value_scale.clone();
+        vertical_scale.connect_value_changed(move |v_scale| {
+            val_clone.set_value(v_scale.value());
+        });
+
+        let vertical_scale_clone = vertical_scale.clone();
+        value_scale.connect_value_changed(move |h_scale| {
+            vertical_scale_clone.set_value(h_scale.value());
+        });
+
+        hbox.append(&vertical_scale);
+        vbox.append(&hbox);
+
+        // Spin button below
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(value_scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+        spin.set_halign(gtk4::Align::Center);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        value_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let val_clone = value_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            val_clone.set_value(sp.value());
+        });
+
+        vbox.append(&spin);
+
+        vbox
     }
 
     fn setup_rgb_handlers(&mut self) {
@@ -945,6 +1216,59 @@ impl CustomColorPicker {
         }
 
         DialogFuture { result, waker }.await
+    }
+
+    /// Save user colors to disk
+    pub fn save_colors() -> anyhow::Result<()> {
+        let colors = SAVED_COLORS.with(|saved| saved.borrow().clone());
+
+        let config_path = Self::user_colors_path()?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let content = serde_json::to_string_pretty(&colors)?;
+        std::fs::write(config_path, content)?;
+        Ok(())
+    }
+
+    /// Load user colors from disk
+    pub fn load_colors() -> anyhow::Result<()> {
+        let config_path = Self::user_colors_path()?;
+
+        if !config_path.exists() {
+            return Ok(()); // No saved colors yet
+        }
+
+        let content = std::fs::read_to_string(config_path)?;
+        let colors: Vec<Color> = serde_json::from_str(&content)?;
+
+        // Ensure we have exactly 16 colors
+        let colors = if colors.len() < 16 {
+            let mut padded = colors;
+            padded.resize(16, Color::default());
+            padded
+        } else if colors.len() > 16 {
+            colors[..16].to_vec()
+        } else {
+            colors
+        };
+
+        SAVED_COLORS.with(|saved| {
+            *saved.borrow_mut() = colors;
+        });
+
+        Ok(())
+    }
+
+    /// Get the path to the user colors config file
+    fn user_colors_path() -> anyhow::Result<PathBuf> {
+        let dirs = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+
+        Ok(dirs.config_dir().join("user_colors.json"))
     }
 }
 

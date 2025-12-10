@@ -75,6 +75,10 @@ impl GpuBackend for NvidiaBackend {
             // Fan speed
             self.metrics.fan_speed = device.fan_speed(0).ok();
 
+            // Clock speeds
+            self.metrics.clock_core = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics).ok();
+            self.metrics.clock_memory = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Memory).ok();
+
             Ok(())
         }
 

@@ -102,6 +102,12 @@ pub struct WindowConfig {
     /// Default border config for new panels
     #[serde(default)]
     pub panel_border: PanelBorderConfig,
+    /// Start in fullscreen mode
+    #[serde(default)]
+    pub fullscreen_enabled: bool,
+    /// Monitor index for fullscreen (None = current monitor)
+    #[serde(default)]
+    pub fullscreen_monitor: Option<i32>,
 }
 
 fn default_panel_corner_radius() -> f64 {
@@ -118,6 +124,8 @@ impl Default for WindowConfig {
             background: BackgroundConfig::default(),
             panel_corner_radius: 8.0,
             panel_border: PanelBorderConfig::default(),
+            fullscreen_enabled: false,
+            fullscreen_monitor: None,
         }
     }
 }

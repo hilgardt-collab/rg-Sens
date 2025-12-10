@@ -2,7 +2,7 @@ use gtk4::gdk::Display;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider};
-use log::{info, warn};
+use log::{error, info, warn};
 use rg_sens::config::{AppConfig, PanelConfig};
 use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig as UiGridConfig, GridLayout};
@@ -41,6 +41,11 @@ fn build_ui(app: &Application) {
 
     // Load CSS for selection styling
     load_css();
+
+    // Load user colors for color picker
+    if let Err(e) = rg_sens::ui::custom_color_picker::CustomColorPicker::load_colors() {
+        warn!("Failed to load user colors: {}", e);
+    }
 
     // Load configuration from disk (or use defaults)
     let app_config = match AppConfig::load() {
@@ -186,6 +191,11 @@ fn build_ui(app: &Application) {
     // Set overlay as window content
     window.set_child(Some(&window_overlay));
 
+    // Set initial fullscreen state from config
+    if app_config.borrow().window.fullscreen_enabled {
+        window.fullscreen();
+    }
+
     // Track if configuration has changed (dirty flag)
     let config_dirty = Rc::new(RefCell::new(false));
 
@@ -209,6 +219,32 @@ fn build_ui(app: &Application) {
         *config_dirty_clone3.borrow_mut() = true;
     });
 
+    // Add double-click gesture on overlay to toggle fullscreen
+    let double_click_gesture = gtk4::GestureClick::new();
+    double_click_gesture.set_button(gtk4::gdk::BUTTON_PRIMARY);
+
+    let window_for_fullscreen = window.clone();
+    let app_config_for_fullscreen = app_config.clone();
+    let config_dirty_for_fullscreen = config_dirty.clone();
+
+    double_click_gesture.connect_pressed(move |_gesture, n_press, _x, _y| {
+        // Only respond to double-clicks
+        if n_press == 2 {
+            let is_fullscreen = window_for_fullscreen.is_fullscreen();
+            if is_fullscreen {
+                window_for_fullscreen.unfullscreen();
+                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = false;
+            } else {
+                window_for_fullscreen.fullscreen();
+                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
+            }
+            // Mark config as dirty
+            *config_dirty_for_fullscreen.borrow_mut() = true;
+        }
+    });
+
+    window_overlay.add_controller(double_click_gesture);
+
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
     let config_dirty_clone4 = config_dirty.clone();
@@ -229,7 +265,13 @@ fn build_ui(app: &Application) {
     // Spawn tokio runtime for update loop
     let update_manager_clone = update_manager.clone();
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                error!("Failed to create tokio runtime: {}", e);
+                return;
+            }
+        };
         rt.block_on(async {
             // Add all panels to update manager
             for panel in panels {
@@ -685,7 +727,7 @@ fn show_window_settings_dialog(
     grid_layout: &Rc<RefCell<GridLayout>>,
     config_dirty: &Rc<RefCell<bool>>,
 ) {
-    use gtk4::{Box as GtkBox, Button, CheckButton, Label, Notebook, Orientation, SpinButton, Window};
+    use gtk4::{Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
     use rg_sens::ui::BackgroundConfigWidget;
 
     let dialog = Window::builder()
@@ -824,6 +866,77 @@ fn show_window_settings_dialog(
 
     notebook.append_page(&panel_tab_box, Some(&Label::new(Some("Panel Defaults"))));
 
+    // === Tab 4: Fullscreen ===
+    let fullscreen_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    fullscreen_tab_box.set_margin_start(12);
+    fullscreen_tab_box.set_margin_end(12);
+    fullscreen_tab_box.set_margin_top(12);
+    fullscreen_tab_box.set_margin_bottom(12);
+
+    // Fullscreen enabled
+    let fullscreen_enabled_check = CheckButton::with_label("Start in fullscreen mode");
+    fullscreen_enabled_check.set_active(app_config.borrow().window.fullscreen_enabled);
+    fullscreen_tab_box.append(&fullscreen_enabled_check);
+
+    // Fullscreen monitor selection
+    let monitor_label = Label::new(Some("Fullscreen Monitor:"));
+    monitor_label.set_halign(gtk4::Align::Start);
+    monitor_label.set_margin_top(12);
+    fullscreen_tab_box.append(&monitor_label);
+
+    // Get list of available monitors with their names
+    let monitor_names = if let Some(display) = gtk4::gdk::Display::default() {
+        let n_monitors = display.monitors().n_items();
+        (0..n_monitors)
+            .filter_map(|i| {
+                display.monitors().item(i)
+                    .and_then(|obj| obj.downcast::<gtk4::gdk::Monitor>().ok())
+                    .map(|monitor| {
+                        // Try to get connector name (e.g., "HDMI-1", "DP-1")
+                        let connector = monitor.connector()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| format!("Monitor {}", i));
+
+                        // Get model name if available
+                        let model = monitor.model()
+                            .map(|s| s.to_string());
+
+                        // Combine connector and model for a descriptive name
+                        match model {
+                            Some(m) if !m.is_empty() => format!("{} ({})", connector, m),
+                            _ => connector,
+                        }
+                    })
+            })
+            .collect::<Vec<_>>()
+    } else {
+        vec!["Monitor 0".to_string()]
+    };
+
+    let mut monitor_strings: Vec<String> = vec!["Current Monitor".to_string()];
+    monitor_strings.extend(monitor_names);
+
+    let monitor_string_refs: Vec<&str> = monitor_strings.iter().map(|s| s.as_str()).collect();
+    let monitor_list = StringList::new(&monitor_string_refs);
+    let monitor_dropdown = DropDown::new(Some(monitor_list), Option::<gtk4::Expression>::None);
+
+    // Set selected monitor from config
+    let selected_idx = match app_config.borrow().window.fullscreen_monitor {
+        None => 0, // "Current Monitor"
+        Some(idx) => (idx + 1) as u32, // Offset by 1 for "Current Monitor" option
+    };
+    monitor_dropdown.set_selected(selected_idx);
+    fullscreen_tab_box.append(&monitor_dropdown);
+
+    // Help text
+    let help_label = Label::new(Some("Tip: Double-click the window background to toggle fullscreen"));
+    help_label.set_halign(gtk4::Align::Start);
+    help_label.set_margin_top(24);
+    help_label.add_css_class("dim-label");
+    fullscreen_tab_box.append(&help_label);
+
+    notebook.append_page(&fullscreen_tab_box, Some(&Label::new(Some("Fullscreen"))));
+
     vbox.append(&notebook);
 
     // Buttons
@@ -851,12 +964,26 @@ fn show_window_settings_dialog(
     let border_enabled_check_clone = border_enabled_check.clone();
     let border_width_spin_clone = border_width_spin.clone();
     let border_color_clone = border_color.clone();
+    let fullscreen_enabled_check_clone = fullscreen_enabled_check.clone();
+    let monitor_dropdown_clone = monitor_dropdown.clone();
+    let parent_window_clone = parent_window.clone();
 
     let apply_changes = Rc::new(move || {
         let new_background = background_widget_clone.get_config();
         let new_cell_width = cell_width_spin.value() as i32;
         let new_cell_height = cell_height_spin.value() as i32;
         let new_spacing = spacing_spin.value() as i32;
+
+        // Get fullscreen settings
+        let fullscreen_enabled = fullscreen_enabled_check_clone.is_active();
+        let fullscreen_monitor = {
+            let selected = monitor_dropdown_clone.selected();
+            if selected == 0 {
+                None // "Current Monitor"
+            } else {
+                Some((selected - 1) as i32) // Offset by 1 for "Current Monitor" option
+            }
+        };
 
         // Update app config
         let mut cfg = app_config_clone.borrow_mut();
@@ -868,7 +995,28 @@ fn show_window_settings_dialog(
         cfg.window.panel_border.enabled = border_enabled_check_clone.is_active();
         cfg.window.panel_border.width = border_width_spin_clone.value();
         cfg.window.panel_border.color = *border_color_clone.borrow();
+        cfg.window.fullscreen_enabled = fullscreen_enabled;
+        cfg.window.fullscreen_monitor = fullscreen_monitor;
         drop(cfg);
+
+        // Apply fullscreen state to parent window
+        if fullscreen_enabled {
+            if let Some(monitor) = fullscreen_monitor {
+                // Fullscreen on specific monitor
+                if let Some(display) = gtk4::gdk::Display::default() {
+                    if let Some(mon) = display.monitors().item(monitor as u32) {
+                        if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+                            parent_window_clone.fullscreen_on_monitor(&monitor);
+                        }
+                    }
+                }
+            } else {
+                // Fullscreen on current monitor
+                parent_window_clone.fullscreen();
+            }
+        } else {
+            parent_window_clone.unfullscreen();
+        }
 
         // Update window background rendering
         let bg_config = new_background;
