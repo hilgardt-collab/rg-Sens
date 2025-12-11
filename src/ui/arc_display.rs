@@ -571,47 +571,11 @@ fn calculate_tapered_width(base_width: f64, t: f64, style: ArcTaperStyle, amount
 
 /// Get color at a specific value (0.0 to 1.0) using color stops
 fn get_color_at_value(value: f64, stops: &[ColorStop], transition: ColorTransitionStyle) -> Color {
-    if stops.is_empty() {
-        return Color::default();
-    }
-
-    if stops.len() == 1 {
-        return stops[0].color;
-    }
-
-    // Find the two stops we're between
-    let mut prev_stop = &stops[0];
-    let mut next_stop = &stops[0];
-
-    for stop in stops {
-        if stop.position <= value {
-            prev_stop = stop;
-        }
-        if stop.position >= value {
-            next_stop = stop;
-            break;
-        }
-    }
+    use crate::ui::render_cache::{get_abrupt_color, get_cached_color_at};
 
     match transition {
-        ColorTransitionStyle::Abrupt => {
-            // Use the color of the previous stop
-            prev_stop.color
-        }
-        ColorTransitionStyle::Smooth => {
-            // Interpolate between colors
-            if prev_stop.position == next_stop.position {
-                return prev_stop.color;
-            }
-
-            let t = (value - prev_stop.position) / (next_stop.position - prev_stop.position);
-            Color::new(
-                prev_stop.color.r + t * (next_stop.color.r - prev_stop.color.r),
-                prev_stop.color.g + t * (next_stop.color.g - prev_stop.color.g),
-                prev_stop.color.b + t * (next_stop.color.b - prev_stop.color.b),
-                prev_stop.color.a + t * (next_stop.color.a - prev_stop.color.a),
-            )
-        }
+        ColorTransitionStyle::Abrupt => get_abrupt_color(stops, value),
+        ColorTransitionStyle::Smooth => get_cached_color_at(stops, value),
     }
 }
 

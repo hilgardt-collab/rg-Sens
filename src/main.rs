@@ -22,6 +22,9 @@ fn main() {
 
     info!("Starting rg-Sens v{}", env!("CARGO_PKG_VERSION"));
 
+    // Initialize shared sensor caches early (before any source creation)
+    sources::initialize_sensors();
+
     // Register all built-in sources and displayers
     sources::register_all();
     displayers::register_all();
@@ -77,12 +80,13 @@ fn build_ui(app: &Application) {
     // Create the main window with saved dimensions
     let window = {
         let cfg = app_config.borrow();
-        gtk4::ApplicationWindow::builder()
+        let builder = gtk4::ApplicationWindow::builder()
             .application(app)
             .title("rg-Sens - System Monitor")
             .default_width(cfg.window.width)
             .default_height(cfg.window.height)
-            .build()
+            .decorated(!cfg.window.borderless);
+        builder.build()
     };
 
     // Restore window position if saved
@@ -205,6 +209,131 @@ fn build_ui(app: &Application) {
         *config_dirty_clone.borrow_mut() = true;
     });
 
+    // === Borderless window move/resize support ===
+    // Create overlay for resize handles (only visible when shift is pressed and borderless)
+    let resize_overlay = gtk4::DrawingArea::new();
+    resize_overlay.set_can_focus(false);
+    resize_overlay.set_visible(false);
+    // Don't capture pointer events - the drag gesture is on the GridLayout container
+    resize_overlay.set_can_target(false);
+
+    // Track shift state and resize zone
+    let shift_pressed = Rc::new(RefCell::new(false));
+    let resize_zone = Rc::new(RefCell::new(ResizeZone::None));
+
+    // Set up draw function for resize handles
+    let resize_zone_for_draw = resize_zone.clone();
+    resize_overlay.set_draw_func(move |_, cr, width, height| {
+        let zone = *resize_zone_for_draw.borrow();
+        draw_resize_handles(cr, width as f64, height as f64, zone);
+    });
+
+    // Add resize overlay to window overlay
+    window_overlay.add_overlay(&resize_overlay);
+
+    // Set up borderless drag callback on GridLayout
+    // This callback is called from GridLayout's container gesture (on the Fixed widget)
+    // Having the gesture on a child widget (not on an overlay) avoids window snapping
+    let shift_pressed_for_drag = shift_pressed.clone();
+    let resize_zone_for_drag = resize_zone.clone();
+    let app_config_for_drag = app_config.clone();
+    let window_for_drag = window.clone();
+
+    grid_layout.set_on_borderless_drag(move |gesture, x, y| {
+        // Check if shift is pressed and borderless mode is enabled
+        let is_shift = *shift_pressed_for_drag.borrow();
+        let is_borderless = app_config_for_drag.borrow().window.borderless;
+        let is_fullscreen = window_for_drag.is_fullscreen();
+
+        if !is_shift || !is_borderless || is_fullscreen {
+            return false; // Don't handle - let normal selection proceed
+        }
+
+        let zone = *resize_zone_for_drag.borrow();
+        log::info!("Borderless drag on GridLayout container: ({}, {}), zone={:?}", x, y, zone);
+
+        // Get event parameters
+        let event = gesture.current_event();
+        let timestamp = event.as_ref().map(|e| e.time()).unwrap_or(0);
+        let device = gesture.device();
+        let button = gesture.current_button() as i32;
+
+        // Translate coordinates from grid_layout to window
+        // The gesture widget is GridLayout's container (Fixed), which is inside the overlay
+        let gesture_widget = match gesture.widget() {
+            Some(w) => w,
+            None => {
+                log::info!("  -> no gesture widget");
+                return false;
+            }
+        };
+        let coords = gesture_widget.translate_coordinates(&window_for_drag, x, y);
+
+        let (win_x, win_y) = match coords {
+            Some((wx, wy)) => (wx, wy),
+            None => {
+                log::info!("  -> coordinate translation failed");
+                return false;
+            }
+        };
+
+        log::info!("  translated coords: ({}, {})", win_x, win_y);
+
+        // Get surface from window
+        use gtk4::prelude::NativeExt;
+        let surface = match window_for_drag.surface() {
+            Some(s) => s,
+            None => {
+                log::info!("  -> no surface");
+                return false;
+            }
+        };
+
+        let toplevel = match surface.downcast_ref::<gtk4::gdk::Toplevel>() {
+            Some(t) => t,
+            None => {
+                log::info!("  -> not a toplevel");
+                return false;
+            }
+        };
+
+        let dev = match device.as_ref() {
+            Some(d) => d,
+            None => {
+                log::info!("  -> no device");
+                return false;
+            }
+        };
+
+        match zone {
+            ResizeZone::None | ResizeZone::Move => {
+                // Use native window manager move
+                log::info!("  -> Calling begin_move: button={}, x={}, y={}, ts={}", button, win_x, win_y, timestamp);
+                toplevel.begin_move(dev, button, win_x, win_y, timestamp);
+            }
+            _ => {
+                // Use native window manager resize with appropriate edge
+                let edge = match zone {
+                    ResizeZone::Top => gtk4::gdk::SurfaceEdge::North,
+                    ResizeZone::Bottom => gtk4::gdk::SurfaceEdge::South,
+                    ResizeZone::Left => gtk4::gdk::SurfaceEdge::West,
+                    ResizeZone::Right => gtk4::gdk::SurfaceEdge::East,
+                    ResizeZone::TopLeft => gtk4::gdk::SurfaceEdge::NorthWest,
+                    ResizeZone::TopRight => gtk4::gdk::SurfaceEdge::NorthEast,
+                    ResizeZone::BottomLeft => gtk4::gdk::SurfaceEdge::SouthWest,
+                    ResizeZone::BottomRight => gtk4::gdk::SurfaceEdge::SouthEast,
+                    _ => gtk4::gdk::SurfaceEdge::SouthEast,
+                };
+                log::info!("  -> Calling begin_resize: edge={:?}, button={}, x={}, y={}, ts={}", edge, button, win_x, win_y, timestamp);
+                toplevel.begin_resize(edge, device.as_ref(), button, win_x, win_y, timestamp);
+            }
+        }
+
+        // Claim the gesture
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        true // Handled
+    });
+
     // Wrap grid_layout in Rc<RefCell<>> for sharing across closures
     let grid_layout = Rc::new(RefCell::new(grid_layout));
 
@@ -244,6 +373,62 @@ fn build_ui(app: &Application) {
     });
 
     window_overlay.add_controller(double_click_gesture);
+
+    // Key controller for tracking Shift press/release
+    let key_controller_shift = gtk4::EventControllerKey::new();
+    let shift_pressed_for_key = shift_pressed.clone();
+    let resize_overlay_for_key = resize_overlay.clone();
+    let app_config_for_shift = app_config.clone();
+    let window_for_shift = window.clone();
+
+    key_controller_shift.connect_key_pressed(move |_, key, _code, _modifiers| {
+        if key == gtk4::gdk::Key::Shift_L || key == gtk4::gdk::Key::Shift_R {
+            let is_borderless = app_config_for_shift.borrow().window.borderless;
+            let is_fullscreen = window_for_shift.is_fullscreen();
+            if is_borderless && !is_fullscreen {
+                *shift_pressed_for_key.borrow_mut() = true;
+                resize_overlay_for_key.set_visible(true);
+                resize_overlay_for_key.queue_draw();
+            }
+        }
+        glib::Propagation::Proceed
+    });
+
+    let shift_pressed_for_release = shift_pressed.clone();
+    let resize_overlay_for_release = resize_overlay.clone();
+    key_controller_shift.connect_key_released(move |_, key, _code, _modifiers| {
+        if key == gtk4::gdk::Key::Shift_L || key == gtk4::gdk::Key::Shift_R {
+            *shift_pressed_for_release.borrow_mut() = false;
+            resize_overlay_for_release.set_visible(false);
+        }
+    });
+
+    window.add_controller(key_controller_shift);
+
+    // Motion controller for updating resize zone based on cursor position
+    let motion_controller = gtk4::EventControllerMotion::new();
+    let resize_zone_for_motion = resize_zone.clone();
+    let resize_overlay_for_motion = resize_overlay.clone();
+    let shift_pressed_for_motion = shift_pressed.clone();
+    let window_for_motion = window.clone();
+
+    motion_controller.connect_motion(move |_, x, y| {
+        if !*shift_pressed_for_motion.borrow() {
+            return;
+        }
+
+        let width = window_for_motion.width() as f64;
+        let height = window_for_motion.height() as f64;
+        let new_zone = detect_resize_zone(x, y, width, height);
+
+        let mut zone = resize_zone_for_motion.borrow_mut();
+        if *zone != new_zone {
+            *zone = new_zone;
+            resize_overlay_for_motion.queue_draw();
+        }
+    });
+
+    window_overlay.add_controller(motion_controller);
 
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
@@ -866,23 +1051,29 @@ fn show_window_settings_dialog(
 
     notebook.append_page(&panel_tab_box, Some(&Label::new(Some("Panel Defaults"))));
 
-    // === Tab 4: Fullscreen ===
-    let fullscreen_tab_box = GtkBox::new(Orientation::Vertical, 12);
-    fullscreen_tab_box.set_margin_start(12);
-    fullscreen_tab_box.set_margin_end(12);
-    fullscreen_tab_box.set_margin_top(12);
-    fullscreen_tab_box.set_margin_bottom(12);
+    // === Tab 4: Window Mode ===
+    let window_mode_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    window_mode_tab_box.set_margin_start(12);
+    window_mode_tab_box.set_margin_end(12);
+    window_mode_tab_box.set_margin_top(12);
+    window_mode_tab_box.set_margin_bottom(12);
+
+    // Fullscreen section
+    let fullscreen_label = Label::new(Some("Fullscreen"));
+    fullscreen_label.add_css_class("heading");
+    fullscreen_label.set_halign(gtk4::Align::Start);
+    window_mode_tab_box.append(&fullscreen_label);
 
     // Fullscreen enabled
     let fullscreen_enabled_check = CheckButton::with_label("Start in fullscreen mode");
     fullscreen_enabled_check.set_active(app_config.borrow().window.fullscreen_enabled);
-    fullscreen_tab_box.append(&fullscreen_enabled_check);
+    fullscreen_enabled_check.set_margin_start(12);
+    window_mode_tab_box.append(&fullscreen_enabled_check);
 
     // Fullscreen monitor selection
-    let monitor_label = Label::new(Some("Fullscreen Monitor:"));
-    monitor_label.set_halign(gtk4::Align::Start);
-    monitor_label.set_margin_top(12);
-    fullscreen_tab_box.append(&monitor_label);
+    let monitor_box = GtkBox::new(Orientation::Horizontal, 6);
+    monitor_box.set_margin_start(12);
+    monitor_box.append(&Label::new(Some("Monitor:")));
 
     // Get list of available monitors with their names
     let monitor_names = if let Some(display) = gtk4::gdk::Display::default() {
@@ -919,6 +1110,7 @@ fn show_window_settings_dialog(
     let monitor_string_refs: Vec<&str> = monitor_strings.iter().map(|s| s.as_str()).collect();
     let monitor_list = StringList::new(&monitor_string_refs);
     let monitor_dropdown = DropDown::new(Some(monitor_list), Option::<gtk4::Expression>::None);
+    monitor_dropdown.set_hexpand(true);
 
     // Set selected monitor from config
     let selected_idx = match app_config.borrow().window.fullscreen_monitor {
@@ -926,16 +1118,68 @@ fn show_window_settings_dialog(
         Some(idx) => (idx + 1) as u32, // Offset by 1 for "Current Monitor" option
     };
     monitor_dropdown.set_selected(selected_idx);
-    fullscreen_tab_box.append(&monitor_dropdown);
+    monitor_box.append(&monitor_dropdown);
+    window_mode_tab_box.append(&monitor_box);
 
-    // Help text
-    let help_label = Label::new(Some("Tip: Double-click the window background to toggle fullscreen"));
-    help_label.set_halign(gtk4::Align::Start);
-    help_label.set_margin_top(24);
-    help_label.add_css_class("dim-label");
-    fullscreen_tab_box.append(&help_label);
+    // Help text for fullscreen
+    let fullscreen_help_label = Label::new(Some("Tip: Double-click the window background to toggle fullscreen"));
+    fullscreen_help_label.set_halign(gtk4::Align::Start);
+    fullscreen_help_label.set_margin_start(12);
+    fullscreen_help_label.set_margin_top(6);
+    fullscreen_help_label.add_css_class("dim-label");
+    window_mode_tab_box.append(&fullscreen_help_label);
 
-    notebook.append_page(&fullscreen_tab_box, Some(&Label::new(Some("Fullscreen"))));
+    // Borderless section
+    let borderless_label = Label::new(Some("Borderless Mode"));
+    borderless_label.add_css_class("heading");
+    borderless_label.set_halign(gtk4::Align::Start);
+    borderless_label.set_margin_top(18);
+    window_mode_tab_box.append(&borderless_label);
+
+    // Borderless enabled
+    let borderless_check = CheckButton::with_label("Remove window decorations (title bar, borders)");
+    borderless_check.set_active(app_config.borrow().window.borderless);
+    borderless_check.set_margin_start(12);
+    window_mode_tab_box.append(&borderless_check);
+
+    // Info box for borderless mode
+    let borderless_info_frame = gtk4::Frame::new(None);
+    borderless_info_frame.set_margin_start(12);
+    borderless_info_frame.set_margin_top(6);
+    borderless_info_frame.add_css_class("view");
+
+    let borderless_info_box = GtkBox::new(Orientation::Horizontal, 8);
+    borderless_info_box.set_margin_start(8);
+    borderless_info_box.set_margin_end(8);
+    borderless_info_box.set_margin_top(8);
+    borderless_info_box.set_margin_bottom(8);
+
+    let info_icon = Label::new(Some("\u{2139}"));  // ℹ info symbol
+    info_icon.add_css_class("dim-label");
+    borderless_info_box.append(&info_icon);
+
+    let borderless_info_label = Label::new(Some(
+        "When borderless mode is active, hold Shift and drag:\n\
+         \u{2022} Drag window edges to resize\n\
+         \u{2022} Drag center area to move window"
+    ));
+    borderless_info_label.set_halign(gtk4::Align::Start);
+    borderless_info_label.set_wrap(true);
+    borderless_info_label.add_css_class("dim-label");
+    borderless_info_box.append(&borderless_info_label);
+
+    borderless_info_frame.set_child(Some(&borderless_info_box));
+
+    // Show/hide info based on checkbox state
+    borderless_info_frame.set_visible(borderless_check.is_active());
+    let borderless_info_frame_clone = borderless_info_frame.clone();
+    borderless_check.connect_toggled(move |check| {
+        borderless_info_frame_clone.set_visible(check.is_active());
+    });
+
+    window_mode_tab_box.append(&borderless_info_frame);
+
+    notebook.append_page(&window_mode_tab_box, Some(&Label::new(Some("Window Mode"))));
 
     vbox.append(&notebook);
 
@@ -966,6 +1210,7 @@ fn show_window_settings_dialog(
     let border_color_clone = border_color.clone();
     let fullscreen_enabled_check_clone = fullscreen_enabled_check.clone();
     let monitor_dropdown_clone = monitor_dropdown.clone();
+    let borderless_check_clone = borderless_check.clone();
     let parent_window_clone = parent_window.clone();
 
     let apply_changes = Rc::new(move || {
@@ -985,6 +1230,9 @@ fn show_window_settings_dialog(
             }
         };
 
+        // Get borderless setting
+        let borderless = borderless_check_clone.is_active();
+
         // Update app config
         let mut cfg = app_config_clone.borrow_mut();
         cfg.window.background = new_background.clone();
@@ -997,7 +1245,11 @@ fn show_window_settings_dialog(
         cfg.window.panel_border.color = *border_color_clone.borrow();
         cfg.window.fullscreen_enabled = fullscreen_enabled;
         cfg.window.fullscreen_monitor = fullscreen_monitor;
+        cfg.window.borderless = borderless;
         drop(cfg);
+
+        // Apply borderless state to parent window
+        parent_window_clone.set_decorated(!borderless);
 
         // Apply fullscreen state to parent window
         if fullscreen_enabled {
@@ -1325,4 +1577,153 @@ fn load_css() {
         &provider,
         gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+}
+
+// === Borderless window resize support ===
+
+/// Resize zones for borderless window
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResizeZone {
+    None,
+    Move,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// Width of the resize edge detection area
+const RESIZE_EDGE_WIDTH: f64 = 12.0;
+
+/// Detect which resize zone the cursor is in
+fn detect_resize_zone(x: f64, y: f64, width: f64, height: f64) -> ResizeZone {
+    let on_left = x < RESIZE_EDGE_WIDTH;
+    let on_right = x > width - RESIZE_EDGE_WIDTH;
+    let on_top = y < RESIZE_EDGE_WIDTH;
+    let on_bottom = y > height - RESIZE_EDGE_WIDTH;
+
+    match (on_left, on_right, on_top, on_bottom) {
+        (true, false, true, false) => ResizeZone::TopLeft,
+        (false, true, true, false) => ResizeZone::TopRight,
+        (true, false, false, true) => ResizeZone::BottomLeft,
+        (false, true, false, true) => ResizeZone::BottomRight,
+        (true, false, false, false) => ResizeZone::Left,
+        (false, true, false, false) => ResizeZone::Right,
+        (false, false, true, false) => ResizeZone::Top,
+        (false, false, false, true) => ResizeZone::Bottom,
+        _ => ResizeZone::Move,
+    }
+}
+
+/// Draw resize handles overlay
+fn draw_resize_handles(cr: &gtk4::cairo::Context, width: f64, height: f64, active_zone: ResizeZone) {
+    let edge = RESIZE_EDGE_WIDTH;
+
+    // Semi-transparent highlight color
+    let normal_color = (0.5, 0.5, 0.5, 0.3);
+    let active_color = (0.3, 0.6, 1.0, 0.5);
+
+    // Helper to set color based on zone
+    let set_color = |cr: &gtk4::cairo::Context, zone: ResizeZone| {
+        let (r, g, b, a) = if zone == active_zone { active_color } else { normal_color };
+        cr.set_source_rgba(r, g, b, a);
+    };
+
+    // Draw edge rectangles
+    // Top edge
+    set_color(cr, ResizeZone::Top);
+    cr.rectangle(edge, 0.0, width - 2.0 * edge, edge);
+    let _ = cr.fill();
+
+    // Bottom edge
+    set_color(cr, ResizeZone::Bottom);
+    cr.rectangle(edge, height - edge, width - 2.0 * edge, edge);
+    let _ = cr.fill();
+
+    // Left edge
+    set_color(cr, ResizeZone::Left);
+    cr.rectangle(0.0, edge, edge, height - 2.0 * edge);
+    let _ = cr.fill();
+
+    // Right edge
+    set_color(cr, ResizeZone::Right);
+    cr.rectangle(width - edge, edge, edge, height - 2.0 * edge);
+    let _ = cr.fill();
+
+    // Draw corner squares
+    // Top-left
+    set_color(cr, ResizeZone::TopLeft);
+    cr.rectangle(0.0, 0.0, edge, edge);
+    let _ = cr.fill();
+
+    // Top-right
+    set_color(cr, ResizeZone::TopRight);
+    cr.rectangle(width - edge, 0.0, edge, edge);
+    let _ = cr.fill();
+
+    // Bottom-left
+    set_color(cr, ResizeZone::BottomLeft);
+    cr.rectangle(0.0, height - edge, edge, edge);
+    let _ = cr.fill();
+
+    // Bottom-right
+    set_color(cr, ResizeZone::BottomRight);
+    cr.rectangle(width - edge, height - edge, edge, edge);
+    let _ = cr.fill();
+
+    // Draw move indicator in center if in move zone
+    if active_zone == ResizeZone::Move {
+        cr.set_source_rgba(0.3, 0.6, 1.0, 0.2);
+        cr.rectangle(edge, edge, width - 2.0 * edge, height - 2.0 * edge);
+        let _ = cr.fill();
+
+        // Draw move arrows icon in center
+        cr.set_source_rgba(0.3, 0.6, 1.0, 0.6);
+        let center_x = width / 2.0;
+        let center_y = height / 2.0;
+        let arrow_size = 20.0;
+
+        // Draw 4-way arrow
+        cr.set_line_width(3.0);
+
+        // Up arrow
+        cr.move_to(center_x, center_y - arrow_size);
+        cr.line_to(center_x, center_y - 5.0);
+        let _ = cr.stroke();
+        cr.move_to(center_x - 5.0, center_y - arrow_size + 5.0);
+        cr.line_to(center_x, center_y - arrow_size);
+        cr.line_to(center_x + 5.0, center_y - arrow_size + 5.0);
+        let _ = cr.stroke();
+
+        // Down arrow
+        cr.move_to(center_x, center_y + arrow_size);
+        cr.line_to(center_x, center_y + 5.0);
+        let _ = cr.stroke();
+        cr.move_to(center_x - 5.0, center_y + arrow_size - 5.0);
+        cr.line_to(center_x, center_y + arrow_size);
+        cr.line_to(center_x + 5.0, center_y + arrow_size - 5.0);
+        let _ = cr.stroke();
+
+        // Left arrow
+        cr.move_to(center_x - arrow_size, center_y);
+        cr.line_to(center_x - 5.0, center_y);
+        let _ = cr.stroke();
+        cr.move_to(center_x - arrow_size + 5.0, center_y - 5.0);
+        cr.line_to(center_x - arrow_size, center_y);
+        cr.line_to(center_x - arrow_size + 5.0, center_y + 5.0);
+        let _ = cr.stroke();
+
+        // Right arrow
+        cr.move_to(center_x + arrow_size, center_y);
+        cr.line_to(center_x + 5.0, center_y);
+        let _ = cr.stroke();
+        cr.move_to(center_x + arrow_size - 5.0, center_y - 5.0);
+        cr.line_to(center_x + arrow_size, center_y);
+        cr.line_to(center_x + arrow_size - 5.0, center_y + 5.0);
+        let _ = cr.stroke();
+    }
 }

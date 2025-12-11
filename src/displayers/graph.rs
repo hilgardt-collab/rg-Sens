@@ -25,6 +25,7 @@ struct GraphData {
     source_values: HashMap<String, Value>,
     start_time: f64,
     last_update_time: f64,
+    dirty: bool, // Flag to indicate data has changed and needs redraw
 }
 
 impl GraphDisplayer {
@@ -44,6 +45,7 @@ impl GraphDisplayer {
                 source_values: HashMap::new(),
                 start_time,
                 last_update_time: start_time,
+                dirty: true,
             })),
         }
     }
@@ -110,8 +112,16 @@ impl Displayer for GraphDisplayer {
             move || {
                 // Check if widget still exists - this automatically stops the timeout
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    // Update animation if enabled
-                    if let Ok(mut data_guard) = data_for_animation.lock() {
+                    // Update animation if enabled - check dirty flag and animation state
+                    let needs_redraw = if let Ok(mut data_guard) = data_for_animation.lock() {
+                        let mut redraw = false;
+
+                        // Check if data changed (dirty flag)
+                        if data_guard.dirty {
+                            data_guard.dirty = false;
+                            redraw = true;
+                        }
+
                         if data_guard.config.animate_new_points {
                             let current_time = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
@@ -136,6 +146,9 @@ impl Displayer for GraphDisplayer {
                                 Vec::new()
                             };
 
+                            // Check if any animation is needed
+                            let mut any_animation_needed = !new_timestamps.is_empty();
+
                             // Add new points if needed
                             for timestamp in new_timestamps {
                                 data_guard.animated_points.push_back(DataPoint {
@@ -158,6 +171,10 @@ impl Displayer for GraphDisplayer {
 
                             for (i, animated) in data_guard.animated_points.iter_mut().enumerate() {
                                 if let Some(&(target_value, target_timestamp)) = targets.get(i) {
+                                    // Check if this point needs animation
+                                    if (animated.value - target_value).abs() > 0.001 {
+                                        any_animation_needed = true;
+                                    }
                                     // Linear interpolation (lerp) toward target value
                                     animated.value += (target_value - animated.value) * lerp_factor;
                                     animated.timestamp = target_timestamp;
@@ -165,13 +182,20 @@ impl Displayer for GraphDisplayer {
                             }
 
                             data_guard.last_update_time = current_time;
+                            redraw || any_animation_needed
                         } else {
                             // If animation is disabled, copy data_points to animated_points
                             data_guard.animated_points = data_guard.data_points.clone();
+                            redraw // Still redraw if dirty flag was set
                         }
-                    }
+                    } else {
+                        false
+                    };
 
-                    drawing_area.queue_draw();
+                    // Only queue draw if animation actually updated
+                    if needs_redraw {
+                        drawing_area.queue_draw();
+                    }
                     gtk4::glib::ControlFlow::Continue
                 } else {
                     gtk4::glib::ControlFlow::Break
@@ -208,6 +232,9 @@ impl Displayer for GraphDisplayer {
 
             // Store all source values for text overlay
             data.source_values = values.clone();
+
+            // Mark as dirty to trigger redraw
+            data.dirty = true;
         }
     }
 

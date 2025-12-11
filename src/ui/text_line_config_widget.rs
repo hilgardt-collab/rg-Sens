@@ -161,6 +161,33 @@ impl TextLineConfigWidget {
             }
         });
 
+        // Bold/Italic checkboxes
+        let bold_check = CheckButton::with_label("B");
+        bold_check.set_active(line_config.bold);
+        bold_check.set_tooltip_text(Some("Bold"));
+        font_box.append(&bold_check);
+
+        let lines_clone_bold = lines.clone();
+        bold_check.connect_toggled(move |check| {
+            let mut lines_ref = lines_clone_bold.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.bold = check.is_active();
+            }
+        });
+
+        let italic_check = CheckButton::with_label("I");
+        italic_check.set_active(line_config.italic);
+        italic_check.set_tooltip_text(Some("Italic"));
+        font_box.append(&italic_check);
+
+        let lines_clone_italic = lines.clone();
+        italic_check.connect_toggled(move |check| {
+            let mut lines_ref = lines_clone_italic.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.italic = check.is_active();
+            }
+        });
+
         // Copy font button
         let copy_font_btn = Button::with_label("Copy");
         let lines_clone_copy_font = lines.clone();
@@ -168,7 +195,7 @@ impl TextLineConfigWidget {
             let lines_ref = lines_clone_copy_font.borrow();
             if let Some(line) = lines_ref.get(list_index) {
                 if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                    clipboard.copy_font(line.font_family.clone(), line.font_size);
+                    clipboard.copy_font(line.font_family.clone(), line.font_size, line.bold, line.italic);
                 }
             }
         });
@@ -179,19 +206,25 @@ impl TextLineConfigWidget {
         let lines_clone_paste_font = lines.clone();
         let font_button_clone = font_button.clone();
         let size_spin_clone = size_spin.clone();
+        let bold_check_clone = bold_check.clone();
+        let italic_check_clone = italic_check.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                if let Some((family, size)) = clipboard.paste_font() {
+                if let Some((family, size, bold, italic)) = clipboard.paste_font() {
                     let mut lines_ref = lines_clone_paste_font.borrow_mut();
                     if let Some(line) = lines_ref.get_mut(list_index) {
                         line.font_family = family.clone();
                         line.font_size = size;
+                        line.bold = bold;
+                        line.italic = italic;
                     }
                     drop(lines_ref);
 
-                    // Update button label and size spinner
+                    // Update button label, size spinner, and bold/italic checks
                     font_button_clone.set_label(&format!("{} {:.0}", family, size));
                     size_spin_clone.set_value(size);
+                    bold_check_clone.set_active(bold);
+                    italic_check_clone.set_active(italic);
                 }
             }
         });

@@ -64,7 +64,15 @@ pub enum BarFillType {
     #[serde(rename = "solid")]
     Solid { color: Color },
     #[serde(rename = "gradient")]
-    Gradient { stops: Vec<ColorStop> },
+    Gradient {
+        stops: Vec<ColorStop>,
+        #[serde(default = "default_gradient_angle")]
+        angle: f64,
+    },
+}
+
+fn default_gradient_angle() -> f64 {
+    90.0
 }
 
 impl Default for BarFillType {
@@ -82,7 +90,11 @@ pub enum BarBackgroundType {
     #[serde(rename = "solid")]
     Solid { color: Color },
     #[serde(rename = "gradient")]
-    Gradient { stops: Vec<ColorStop> },
+    Gradient {
+        stops: Vec<ColorStop>,
+        #[serde(default = "default_gradient_angle")]
+        angle: f64,
+    },
     #[serde(rename = "transparent")]
     Transparent,
 }
@@ -509,8 +521,8 @@ fn render_background(
             color.apply_to_cairo(cr);
             cr.paint()?;
         }
-        BarBackgroundType::Gradient { stops } => {
-            render_gradient(cr, stops, width, height)?;
+        BarBackgroundType::Gradient { stops, angle } => {
+            render_gradient(cr, stops, *angle, width, height)?;
         }
         BarBackgroundType::Transparent => {
             // Do nothing
@@ -532,26 +544,36 @@ fn render_foreground(
             color.apply_to_cairo(cr);
             cr.paint()?;
         }
-        BarFillType::Gradient { stops } => {
-            render_gradient(cr, stops, width, height)?;
+        BarFillType::Gradient { stops, angle } => {
+            render_gradient(cr, stops, *angle, width, height)?;
         }
     }
     Ok(())
 }
 
-/// Render a gradient
+/// Render a gradient with angle support
 fn render_gradient(
     cr: &cairo::Context,
     stops: &[ColorStop],
+    angle: f64,
     width: f64,
-    _height: f64,
+    height: f64,
 ) -> Result<(), cairo::Error> {
     if stops.is_empty() {
         return Ok(());
     }
 
-    // Horizontal gradient
-    let pattern = cairo::LinearGradient::new(0.0, 0.0, width, 0.0);
+    // Convert angle to radians (same convention as background.rs)
+    let angle_rad = angle.to_radians();
+
+    // Calculate gradient vector - same formula as background.rs
+    let diagonal = (width * width + height * height).sqrt();
+    let x1 = width / 2.0 - diagonal * angle_rad.cos() / 2.0;
+    let y1 = height / 2.0 - diagonal * angle_rad.sin() / 2.0;
+    let x2 = width / 2.0 + diagonal * angle_rad.cos() / 2.0;
+    let y2 = height / 2.0 + diagonal * angle_rad.sin() / 2.0;
+
+    let pattern = cairo::LinearGradient::new(x1, y1, x2, y2);
 
     for stop in stops {
         pattern.add_color_stop_rgba(

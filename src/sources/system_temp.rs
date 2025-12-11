@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
-use sysinfo::Components;
+
+use super::shared_sensors;
 
 /// Temperature unit for display
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -97,31 +98,29 @@ impl Default for SystemTempConfig {
 static SYSTEM_SENSORS: Lazy<Vec<SensorInfo>> = Lazy::new(|| {
     log::info!("=== Discovering system temperature sensors (one-time initialization) ===");
 
-    let components = Components::new_with_refreshed_list();
-    let sensors = discover_all_sensors(&components);
+    // Use shared sensors instead of creating new Components
+    let all_temps = shared_sensors::get_refreshed_temperatures();
+    let sensors = discover_all_sensors_from_list(&all_temps);
 
     log::info!("System temperature discovery complete: {} sensors found", sensors.len());
 
     sensors
 });
 
-/// Discover all temperature sensors on the system
-fn discover_all_sensors(components: &Components) -> Vec<SensorInfo> {
+/// Discover all temperature sensors from a list of (label, temperature) pairs
+fn discover_all_sensors_from_list(temps: &[(String, f32)]) -> Vec<SensorInfo> {
     let mut sensors = Vec::new();
 
     log::info!("Scanning for temperature sensors...");
-    log::info!("Total components found: {}", components.len());
+    log::info!("Total components found: {}", temps.len());
 
-    for (index, component) in components.iter().enumerate() {
-        let label = component.label();
-        let temp = component.temperature();
-
+    for (index, (label, temp)) in temps.iter().enumerate() {
         // Categorize sensor based on label
         let category = categorize_sensor(label);
 
         sensors.push(SensorInfo {
             index,
-            label: label.to_string(),
+            label: label.clone(),
             category,
         });
 
@@ -189,7 +188,6 @@ fn categorize_sensor(label: &str) -> SensorCategory {
 /// System temperature data source
 pub struct SystemTempSource {
     metadata: SourceMetadata,
-    components: Components,
     config: SystemTempConfig,
     current_temp: f64,
     detected_min: Option<f64>,
@@ -216,7 +214,7 @@ impl SystemTempSource {
                 ],
                 default_interval: Duration::from_millis(1000),
             },
-            components: Components::new_with_refreshed_list(),
+            // Temperature readings use shared_sensors module, not a local Components instance
             config: SystemTempConfig::default(),
             current_temp: 0.0,
             detected_min: None,
@@ -301,13 +299,9 @@ impl DataSource for SystemTempSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        // Refresh temperature data
-        self.components.refresh();
-
-        // Get the selected sensor
-        if let Some(component) = self.components.iter().nth(self.config.sensor_index) {
-            let temp_celsius = component.temperature() as f64;
-            self.current_temp = self.convert_temperature(temp_celsius);
+        // Get temperature from shared sensors (handles refresh internally)
+        if let Some(temp_celsius) = shared_sensors::get_temperature_by_index(self.config.sensor_index) {
+            self.current_temp = self.convert_temperature(temp_celsius as f64);
 
             // Update detected limits if auto-detect is enabled
             if self.config.auto_detect_limits {

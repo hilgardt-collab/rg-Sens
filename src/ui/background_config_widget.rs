@@ -101,33 +101,57 @@ impl BackgroundConfigWidget {
 
         let type_dropdown_handler_id = type_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
-            let (page_name, background_type) = match selected {
-                0 => ("solid", BackgroundType::Solid {
-                    color: Color::new(0.15, 0.15, 0.15, 1.0),
-                }),
-                1 => ("linear_gradient", BackgroundType::LinearGradient(LinearGradientConfig::default())),
-                2 => ("radial_gradient", BackgroundType::RadialGradient(RadialGradientConfig::default())),
-                3 => ("image", BackgroundType::Image {
-                    path: String::new(),
-                    display_mode: ImageDisplayMode::Fit,
-                    alpha: 1.0,
-                }),
-                4 => ("polygons", BackgroundType::Polygons(PolygonConfig::default())),
-                _ => ("solid", BackgroundType::default()),
+            let page_name = match selected {
+                0 => "solid",
+                1 => "linear_gradient",
+                2 => "radial_gradient",
+                3 => "image",
+                4 => "polygons",
+                _ => "solid",
             };
 
             stack_clone.set_visible_child_name(page_name);
 
-            // Update config type
-            let mut cfg = config_clone.borrow_mut();
-            cfg.background = background_type;
-            drop(cfg);
+            // Check if the type actually changed before resetting to defaults
+            // This prevents losing customizations when the dropdown is refreshed
+            let current_type_index = {
+                let cfg = config_clone.borrow();
+                match &cfg.background {
+                    BackgroundType::Solid { .. } => 0,
+                    BackgroundType::LinearGradient(_) => 1,
+                    BackgroundType::RadialGradient(_) => 2,
+                    BackgroundType::Image { .. } => 3,
+                    BackgroundType::Polygons(_) => 4,
+                }
+            };
+
+            // Only reset to defaults if the type actually changed
+            if selected != current_type_index {
+                let background_type = match selected {
+                    0 => BackgroundType::Solid {
+                        color: Color::new(0.15, 0.15, 0.15, 1.0),
+                    },
+                    1 => BackgroundType::LinearGradient(LinearGradientConfig::default()),
+                    2 => BackgroundType::RadialGradient(RadialGradientConfig::default()),
+                    3 => BackgroundType::Image {
+                        path: String::new(),
+                        display_mode: ImageDisplayMode::Fit,
+                        alpha: 1.0,
+                    },
+                    4 => BackgroundType::Polygons(PolygonConfig::default()),
+                    _ => BackgroundType::default(),
+                };
+
+                let mut cfg = config_clone.borrow_mut();
+                cfg.background = background_type;
+                drop(cfg);
+
+                if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    callback();
+                }
+            }
 
             preview_clone.queue_draw();
-
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
         });
 
         Self {

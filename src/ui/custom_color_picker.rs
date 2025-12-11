@@ -154,10 +154,10 @@ impl CustomColorPicker {
         main_box.set_margin_top(12);
         main_box.set_margin_bottom(12);
 
-        // === Preview Area (at top) ===
+        // === Preview Area (at top, full width) ===
         let preview_area = DrawingArea::new();
-        preview_area.set_size_request(100, 100);
-        preview_area.set_halign(gtk4::Align::Center);
+        preview_area.set_size_request(-1, 60);  // Full width, 60px height
+        preview_area.set_hexpand(true);
         preview_area.set_margin_bottom(12);
 
         let current_color_clone = current_color.clone();
@@ -555,18 +555,19 @@ impl CustomColorPicker {
         channel: char,
     ) -> GtkBox {
         let vbox = GtkBox::new(Orientation::Vertical, 6);
+        vbox.set_size_request(50, -1);  // Constrain column width to 50px
 
         // Label at top
         let label_widget = Label::new(Some(label));
         label_widget.set_halign(gtk4::Align::Center);
         vbox.append(&label_widget);
 
-        // Horizontal box for color map and slider
-        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
 
-        // Color map (vertical gradient)
+        // Color map (vertical gradient) - background
         let color_map = DrawingArea::new();
-        color_map.set_size_request(30, 320);
+        color_map.set_size_request(20, 320);
 
         let red = red_scale.clone();
         let green = green_scale.clone();
@@ -608,7 +609,7 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         blue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        hbox.append(&color_map);
+        overlay.set_child(Some(&color_map));
 
         // Get the appropriate scale
         let scale = match channel {
@@ -618,13 +619,14 @@ impl CustomColorPicker {
             _ => red_scale,
         };
 
-        // Vertical scale
+        // Vertical scale - overlay on top of color map
         let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
         vertical_scale.set_value(scale.value());
         vertical_scale.set_inverted(true); // Top = 1.0, bottom = 0.0
         vertical_scale.set_vexpand(true);
         vertical_scale.set_draw_value(false);
-        vertical_scale.set_size_request(40, 320);
+        vertical_scale.set_opacity(0.8);  // Semi-transparent slider
+        vertical_scale.set_size_request(20, 320);
 
         // Sync vertical scale with horizontal scale
         let scale_clone = scale.clone();
@@ -637,15 +639,16 @@ impl CustomColorPicker {
             vertical_scale_clone.set_value(h_scale.value());
         });
 
-        hbox.append(&vertical_scale);
-        vbox.append(&hbox);
+        overlay.add_overlay(&vertical_scale);
+        vbox.append(&overlay);
 
-        // Spin button below
+        // Spin button below (narrow to fit ~50px column width)
         let spin = SpinButton::with_range(0.0, 1.0, 0.01);
         spin.set_value(scale.value());
         spin.set_digits(2);
-        spin.set_width_chars(5);
+        spin.set_width_chars(4);
         spin.set_halign(gtk4::Align::Center);
+        spin.set_size_request(50, -1);  // Max 50px width
 
         // Sync spin with scale
         let spin_clone = spin.clone();
@@ -671,18 +674,19 @@ impl CustomColorPicker {
         alpha_scale: &Scale,
     ) -> GtkBox {
         let vbox = GtkBox::new(Orientation::Vertical, 6);
+        vbox.set_size_request(50, -1);  // Constrain column width to 50px
 
         // Label at top
         let label_widget = Label::new(Some(label));
         label_widget.set_halign(gtk4::Align::Center);
         vbox.append(&label_widget);
 
-        // Horizontal box for color map and slider
-        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
 
         // Color map with checkerboard (vertical gradient)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(30, 320);
+        color_map.set_size_request(20, 320);
 
         let red = red_scale.clone();
         let green = green_scale.clone();
@@ -729,15 +733,16 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         blue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        hbox.append(&color_map);
+        overlay.set_child(Some(&color_map));
 
-        // Vertical scale
+        // Vertical scale - overlay on top of color map
         let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
         vertical_scale.set_value(alpha_scale.value());
         vertical_scale.set_inverted(true);
         vertical_scale.set_vexpand(true);
         vertical_scale.set_draw_value(false);
-        vertical_scale.set_size_request(40, 320);
+        vertical_scale.set_opacity(0.8);
+        vertical_scale.set_size_request(20, 320);
 
         // Sync vertical scale with horizontal scale
         let alpha_clone = alpha_scale.clone();
@@ -750,15 +755,16 @@ impl CustomColorPicker {
             vertical_scale_clone.set_value(h_scale.value());
         });
 
-        hbox.append(&vertical_scale);
-        vbox.append(&hbox);
+        overlay.add_overlay(&vertical_scale);
+        vbox.append(&overlay);
 
-        // Spin button below
+        // Spin button below (narrow to fit ~50px column width)
         let spin = SpinButton::with_range(0.0, 1.0, 0.01);
         spin.set_value(alpha_scale.value());
         spin.set_digits(2);
-        spin.set_width_chars(5);
+        spin.set_width_chars(4);
         spin.set_halign(gtk4::Align::Center);
+        spin.set_size_request(50, -1);  // Max 50px width
 
         // Sync spin with scale
         let spin_clone = spin.clone();
@@ -778,18 +784,19 @@ impl CustomColorPicker {
 
     fn create_vertical_hue_slider(hue_scale: &Scale) -> GtkBox {
         let vbox = GtkBox::new(Orientation::Vertical, 6);
+        vbox.set_size_request(50, -1);  // Constrain column width to 50px
 
         // Label at top
         let label_widget = Label::new(Some("H"));
         label_widget.set_halign(gtk4::Align::Center);
         vbox.append(&label_widget);
 
-        // Horizontal box for color map and slider
-        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
 
         // Hue color map (full spectrum vertically)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(30, 320);
+        color_map.set_size_request(20, 320);
 
         color_map.set_draw_func(move |_, cr, width, height| {
             // Draw full hue spectrum vertically
@@ -803,15 +810,16 @@ impl CustomColorPicker {
             }
         });
 
-        hbox.append(&color_map);
+        overlay.set_child(Some(&color_map));
 
-        // Vertical scale
+        // Vertical scale - overlay on top of color map
         let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 360.0, 1.0);
         vertical_scale.set_value(hue_scale.value());
         vertical_scale.set_inverted(true);
         vertical_scale.set_vexpand(true);
         vertical_scale.set_draw_value(false);
-        vertical_scale.set_size_request(40, 320);
+        vertical_scale.set_opacity(0.8);
+        vertical_scale.set_size_request(20, 320);
 
         // Sync vertical scale with horizontal scale
         let hue_clone = hue_scale.clone();
@@ -824,15 +832,16 @@ impl CustomColorPicker {
             vertical_scale_clone.set_value(h_scale.value());
         });
 
-        hbox.append(&vertical_scale);
-        vbox.append(&hbox);
+        overlay.add_overlay(&vertical_scale);
+        vbox.append(&overlay);
 
-        // Spin button below
+        // Spin button below (narrow to fit ~50px column width)
         let spin = SpinButton::with_range(0.0, 360.0, 1.0);
         spin.set_value(hue_scale.value());
         spin.set_digits(0);
-        spin.set_width_chars(5);
+        spin.set_width_chars(4);
         spin.set_halign(gtk4::Align::Center);
+        spin.set_size_request(50, -1);  // Max 50px width
 
         // Sync spin with scale
         let spin_clone = spin.clone();
@@ -856,18 +865,19 @@ impl CustomColorPicker {
         value_scale: &Scale,
     ) -> GtkBox {
         let vbox = GtkBox::new(Orientation::Vertical, 6);
+        vbox.set_size_request(50, -1);  // Constrain column width to 50px
 
         // Label at top
         let label_widget = Label::new(Some("S"));
         label_widget.set_halign(gtk4::Align::Center);
         vbox.append(&label_widget);
 
-        // Horizontal box for color map and slider
-        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
 
         // Saturation color map (white to full color vertically)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(30, 320);
+        color_map.set_size_request(20, 320);
 
         let hue = hue_scale.clone();
         let value = value_scale.clone();
@@ -893,15 +903,16 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         value_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        hbox.append(&color_map);
+        overlay.set_child(Some(&color_map));
 
-        // Vertical scale
+        // Vertical scale - overlay on top of color map
         let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
         vertical_scale.set_value(saturation_scale.value());
         vertical_scale.set_inverted(true);
         vertical_scale.set_vexpand(true);
         vertical_scale.set_draw_value(false);
-        vertical_scale.set_size_request(40, 320);
+        vertical_scale.set_opacity(0.8);
+        vertical_scale.set_size_request(20, 320);
 
         // Sync vertical scale with horizontal scale
         let sat_clone = saturation_scale.clone();
@@ -914,15 +925,16 @@ impl CustomColorPicker {
             vertical_scale_clone.set_value(h_scale.value());
         });
 
-        hbox.append(&vertical_scale);
-        vbox.append(&hbox);
+        overlay.add_overlay(&vertical_scale);
+        vbox.append(&overlay);
 
-        // Spin button below
+        // Spin button below (narrow to fit ~50px column width)
         let spin = SpinButton::with_range(0.0, 1.0, 0.01);
         spin.set_value(saturation_scale.value());
         spin.set_digits(2);
-        spin.set_width_chars(5);
+        spin.set_width_chars(4);
         spin.set_halign(gtk4::Align::Center);
+        spin.set_size_request(50, -1);  // Max 50px width
 
         // Sync spin with scale
         let spin_clone = spin.clone();
@@ -946,18 +958,19 @@ impl CustomColorPicker {
         value_scale: &Scale,
     ) -> GtkBox {
         let vbox = GtkBox::new(Orientation::Vertical, 6);
+        vbox.set_size_request(50, -1);  // Constrain column width to 50px
 
         // Label at top
         let label_widget = Label::new(Some("V"));
         label_widget.set_halign(gtk4::Align::Center);
         vbox.append(&label_widget);
 
-        // Horizontal box for color map and slider
-        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
 
         // Value color map (black to full color vertically)
         let color_map = DrawingArea::new();
-        color_map.set_size_request(30, 320);
+        color_map.set_size_request(20, 320);
 
         let hue = hue_scale.clone();
         let saturation = saturation_scale.clone();
@@ -983,15 +996,16 @@ impl CustomColorPicker {
         let color_map_clone = color_map.clone();
         saturation_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
 
-        hbox.append(&color_map);
+        overlay.set_child(Some(&color_map));
 
-        // Vertical scale
+        // Vertical scale - overlay on top of color map
         let vertical_scale = Scale::with_range(Orientation::Vertical, 0.0, 1.0, 0.01);
         vertical_scale.set_value(value_scale.value());
         vertical_scale.set_inverted(true);
         vertical_scale.set_vexpand(true);
         vertical_scale.set_draw_value(false);
-        vertical_scale.set_size_request(40, 320);
+        vertical_scale.set_opacity(0.8);
+        vertical_scale.set_size_request(20, 320);
 
         // Sync vertical scale with horizontal scale
         let val_clone = value_scale.clone();
@@ -1004,15 +1018,16 @@ impl CustomColorPicker {
             vertical_scale_clone.set_value(h_scale.value());
         });
 
-        hbox.append(&vertical_scale);
-        vbox.append(&hbox);
+        overlay.add_overlay(&vertical_scale);
+        vbox.append(&overlay);
 
-        // Spin button below
+        // Spin button below (narrow to fit ~50px column width)
         let spin = SpinButton::with_range(0.0, 1.0, 0.01);
         spin.set_value(value_scale.value());
         spin.set_digits(2);
-        spin.set_width_chars(5);
+        spin.set_width_chars(4);
         spin.set_halign(gtk4::Align::Center);
+        spin.set_size_request(50, -1);  // Max 50px width
 
         // Sync spin with scale
         let spin_clone = spin.clone();

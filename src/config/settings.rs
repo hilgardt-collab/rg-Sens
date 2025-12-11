@@ -108,6 +108,9 @@ pub struct WindowConfig {
     /// Monitor index for fullscreen (None = current monitor)
     #[serde(default)]
     pub fullscreen_monitor: Option<i32>,
+    /// Borderless window mode (no title bar or window decorations)
+    #[serde(default)]
+    pub borderless: bool,
 }
 
 fn default_panel_corner_radius() -> f64 {
@@ -126,6 +129,7 @@ impl Default for WindowConfig {
             panel_border: PanelBorderConfig::default(),
             fullscreen_enabled: false,
             fullscreen_monitor: None,
+            borderless: false,
         }
     }
 }

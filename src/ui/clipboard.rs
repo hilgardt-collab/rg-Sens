@@ -26,8 +26,8 @@ pub struct PanelStyle {
 /// Clipboard data structure
 #[derive(Debug, Default, Clone)]
 pub struct Clipboard {
-    /// Copied font (family, size)
-    pub font: Option<(String, f64)>,
+    /// Copied font (family, size, bold, italic)
+    pub font: Option<(String, f64, bool, bool)>,
     /// Copied color (r, g, b, a)
     pub color: Option<(f64, f64, f64, f64)>,
     /// Copied text line configuration
@@ -46,12 +46,12 @@ pub struct Clipboard {
 
 impl Clipboard {
     /// Copy font to clipboard
-    pub fn copy_font(&mut self, family: String, size: f64) {
-        self.font = Some((family, size));
+    pub fn copy_font(&mut self, family: String, size: f64, bold: bool, italic: bool) {
+        self.font = Some((family, size, bold, italic));
     }
 
     /// Paste font from clipboard
-    pub fn paste_font(&self) -> Option<(String, f64)> {
+    pub fn paste_font(&self) -> Option<(String, f64, bool, bool)> {
         self.font.clone()
     }
 

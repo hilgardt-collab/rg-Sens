@@ -7,7 +7,9 @@ use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
-use sysinfo::{Components, CpuRefreshKind, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, RefreshKind, System};
+
+use super::shared_sensors;
 
 /// Information about a discovered CPU temperature sensor
 #[derive(Debug, Clone)]
@@ -26,9 +28,9 @@ struct CpuHardwareInfo {
 static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
     log::info!("=== Discovering CPU hardware (one-time initialization) ===");
 
-    // Create temporary components to discover sensors
-    let components = Components::new_with_refreshed_list();
-    let sensors = discover_cpu_sensors(&components);
+    // Get sensor info from shared components (already initialized)
+    let all_temps = shared_sensors::get_refreshed_temperatures();
+    let sensors = discover_cpu_sensors_from_list(&all_temps);
 
     // Create temporary system to get core count
     let system = System::new_with_specifics(
@@ -44,23 +46,21 @@ static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
     }
 });
 
-/// Discover all CPU temperature sensors (internal function)
-fn discover_cpu_sensors(components: &Components) -> Vec<CpuSensor> {
+/// Discover all CPU temperature sensors from a list of (label, temperature) pairs
+fn discover_cpu_sensors_from_list(temps: &[(String, f32)]) -> Vec<CpuSensor> {
     let mut sensors = Vec::new();
     let mut index = 0;
 
     // Log all available components for debugging
     log::info!("Discovering CPU temperature sensors...");
-    log::info!("Total components found: {}", components.len());
+    log::info!("Total components found: {}", temps.len());
 
-    for component in components {
-        let label = component.label();
-        log::info!("  Component: {} = {}°C", label, component.temperature());
+    for (label, temp) in temps {
+        log::info!("  Component: {} = {}°C", label, temp);
     }
 
     // Collect all CPU-related sensors (don't exclude based on priority)
-    for component in components {
-        let label = component.label();
+    for (label, _temp) in temps {
         let label_lower = label.to_lowercase();
 
         // Match AMD Ryzen sensors: Tctl, Tccd1, Tccd2, etc.
@@ -76,7 +76,7 @@ fn discover_cpu_sensors(components: &Components) -> Vec<CpuSensor> {
 
             sensors.push(CpuSensor {
                 index,
-                label: label.to_string(),
+                label: label.clone(),
             });
             log::info!("  Added sensor {}: {}", index, label);
             index += 1;
@@ -94,7 +94,6 @@ fn discover_cpu_sensors(components: &Components) -> Vec<CpuSensor> {
 pub struct CpuSource {
     metadata: SourceMetadata,
     system: System,
-    components: Components,
     global_usage: f32,
     per_core_usage: Vec<f32>,
     cpu_sensors: Vec<CpuSensor>,
@@ -129,16 +128,13 @@ impl CpuSource {
             RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
         );
 
-        // Initialize components for temperature monitoring
-        let components = Components::new_with_refreshed_list();
-
         // Use cached sensor list from global hardware info
+        // Note: Temperature readings use shared_sensors module, not a local Components instance
         let cpu_sensors = CPU_HARDWARE_INFO.sensors.clone();
 
         Self {
             metadata,
             system,
-            components,
             global_usage: 0.0,
             per_core_usage: Vec::new(),
             cpu_sensors,
@@ -241,7 +237,7 @@ impl CpuSource {
         format!("{}{}", core_prefix, field_type)
     }
 
-    /// Find CPU temperature from components using configured sensor index
+    /// Find CPU temperature from shared sensors using configured sensor index
     fn find_cpu_temperature(&self) -> Option<f32> {
         // If no sensors discovered, return None
         if self.cpu_sensors.is_empty() {
@@ -252,12 +248,12 @@ impl CpuSource {
         // Get the sensor label for the configured index
         let sensor_index = self.config.sensor_index;
         let target_label = if let Some(sensor) = self.cpu_sensors.get(sensor_index) {
-            &sensor.label
+            sensor.label.clone()
         } else if let Some(first_sensor) = self.cpu_sensors.first() {
             // If configured index is out of bounds, use first sensor
             log::warn!("Sensor index {} out of bounds (max: {}), using first sensor",
                       sensor_index, self.cpu_sensors.len().saturating_sub(1));
-            &first_sensor.label
+            first_sensor.label.clone()
         } else {
             // No sensors available at all (should be caught by earlier check, but be defensive)
             log::error!("No CPU temperature sensors available after check - this should not happen");
@@ -266,17 +262,8 @@ impl CpuSource {
 
         log::debug!("Looking for temperature sensor: {}", target_label);
 
-        // Find the component with matching label
-        for component in &self.components {
-            if component.label() == target_label {
-                let temp = component.temperature();
-                log::debug!("Found temperature for {}: {}°C", target_label, temp);
-                return Some(temp);
-            }
-        }
-
-        log::warn!("Could not find component for sensor: {}", target_label);
-        None
+        // Use shared sensors to get the temperature
+        shared_sensors::get_temperature_by_label(&target_label)
     }
 }
 
@@ -383,8 +370,7 @@ impl DataSource for CpuSource {
             self.cpu_frequency = cpu.frequency() as f64;
         }
 
-        // Refresh and get temperature
-        self.components.refresh();
+        // Get temperature from shared sensors (they handle refresh internally)
         self.cpu_temperature = self.find_cpu_temperature();
 
         log::debug!("CPU update complete - cores: {}, temp: {:?}, freq: {}",

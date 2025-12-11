@@ -601,9 +601,8 @@ impl BarConfigWidget {
 
         gradient_editor.set_on_change(move || {
             let gradient = gradient_editor_clone.get_gradient();
-            let stops = gradient.stops;
             let mut cfg = config_clone.borrow_mut();
-            cfg.foreground = BarFillType::Gradient { stops };
+            cfg.foreground = BarFillType::Gradient { stops: gradient.stops, angle: gradient.angle };
             drop(cfg);
 
             preview_clone.queue_draw();
@@ -619,7 +618,7 @@ impl BarConfigWidget {
             use crate::ui::CLIPBOARD;
 
             let cfg = config_for_copy.borrow();
-            if let BarFillType::Gradient { stops } = &cfg.foreground {
+            if let BarFillType::Gradient { stops, .. } = &cfg.foreground {
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
                     clipboard.copy_gradient_stops(stops.clone());
                     log::info!("Bar foreground gradient copied to clipboard");
@@ -637,13 +636,20 @@ impl BarConfigWidget {
 
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
+                    // Get current angle from config or use default
+                    let angle = if let BarFillType::Gradient { angle, .. } = config_for_paste.borrow().foreground {
+                        angle
+                    } else {
+                        90.0
+                    };
+
                     let mut cfg = config_for_paste.borrow_mut();
-                    cfg.foreground = BarFillType::Gradient { stops: stops.clone() };
+                    cfg.foreground = BarFillType::Gradient { stops: stops.clone(), angle };
                     drop(cfg);
 
                     // Update gradient editor
                     gradient_editor_for_paste.set_gradient(&LinearGradientConfig {
-                        angle: 0.0,
+                        angle,
                         stops,
                     });
 
@@ -711,6 +717,7 @@ impl BarConfigWidget {
                             ColorStop::new(0.0, Color::new(0.2, 0.2, 0.2, 1.0)),
                             ColorStop::new(1.0, Color::new(0.1, 0.1, 0.1, 1.0)),
                         ],
+                        angle: 90.0,
                     };
                 }
             }
@@ -780,9 +787,8 @@ impl BarConfigWidget {
 
         gradient_editor.set_on_change(move || {
             let gradient = gradient_editor_clone.get_gradient();
-            let stops = gradient.stops;
             let mut cfg = config_clone.borrow_mut();
-            cfg.background = BarBackgroundType::Gradient { stops };
+            cfg.background = BarBackgroundType::Gradient { stops: gradient.stops, angle: gradient.angle };
             drop(cfg);
 
             preview_clone.queue_draw();
@@ -798,7 +804,7 @@ impl BarConfigWidget {
             use crate::ui::CLIPBOARD;
 
             let cfg = config_for_copy.borrow();
-            if let BarBackgroundType::Gradient { stops } = &cfg.background {
+            if let BarBackgroundType::Gradient { stops, .. } = &cfg.background {
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
                     clipboard.copy_gradient_stops(stops.clone());
                     log::info!("Bar background gradient copied to clipboard");
@@ -816,13 +822,20 @@ impl BarConfigWidget {
 
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
+                    // Get current angle from config or use default
+                    let angle = if let BarBackgroundType::Gradient { angle, .. } = config_for_paste.borrow().background {
+                        angle
+                    } else {
+                        90.0
+                    };
+
                     let mut cfg = config_for_paste.borrow_mut();
-                    cfg.background = BarBackgroundType::Gradient { stops: stops.clone() };
+                    cfg.background = BarBackgroundType::Gradient { stops: stops.clone(), angle };
                     drop(cfg);
 
                     // Update gradient editor
                     gradient_editor_for_paste.set_gradient(&LinearGradientConfig {
-                        angle: 0.0,
+                        angle,
                         stops,
                     });
 
@@ -1123,14 +1136,14 @@ impl BarConfigWidget {
                 self.fg_color_btn.set_visible(true);
                 self.fg_gradient_editor.widget().set_visible(false);
             }
-            BarFillType::Gradient { stops } => {
+            BarFillType::Gradient { stops, angle } => {
                 self.fg_gradient_radio.set_active(true);
                 self.fg_color_btn.set_visible(false);
                 self.fg_gradient_editor.widget().set_visible(true);
-                // Load gradient into editor
+                // Load gradient into editor with angle
                 let gradient = LinearGradientConfig {
                     stops: stops.clone(),
-                    ..Default::default()
+                    angle: *angle,
                 };
                 self.fg_gradient_editor.set_gradient(&gradient);
             }
@@ -1143,14 +1156,14 @@ impl BarConfigWidget {
                 self.bg_color_btn.set_visible(true);
                 self.bg_gradient_editor.widget().set_visible(false);
             }
-            BarBackgroundType::Gradient { stops } => {
+            BarBackgroundType::Gradient { stops, angle } => {
                 self.bg_gradient_radio.set_active(true);
                 self.bg_color_btn.set_visible(false);
                 self.bg_gradient_editor.widget().set_visible(true);
-                // Load gradient into editor
+                // Load gradient into editor with angle
                 let gradient = LinearGradientConfig {
                     stops: stops.clone(),
-                    ..Default::default()
+                    angle: *angle,
                 };
                 self.bg_gradient_editor.set_gradient(&gradient);
             }

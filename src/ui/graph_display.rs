@@ -59,11 +59,21 @@ pub struct AxisConfig {
     pub width: f64,
     pub show_labels: bool,
     pub label_color: Color,
+    #[serde(default = "default_label_font_family")]
+    pub label_font_family: String,
     pub label_font_size: f64,
+    #[serde(default)]
+    pub label_bold: bool,
+    #[serde(default)]
+    pub label_italic: bool,
     pub show_grid: bool,
     pub grid_color: Color,
     pub grid_width: f64,
     pub grid_line_style: LineStyle,
+}
+
+fn default_label_font_family() -> String {
+    "Sans".to_string()
 }
 
 impl Default for AxisConfig {
@@ -74,7 +84,10 @@ impl Default for AxisConfig {
             width: 1.0,
             show_labels: true,
             label_color: Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 },
+            label_font_family: "Sans".to_string(),
             label_font_size: 10.0,
+            label_bold: false,
+            label_italic: false,
             show_grid: true,
             grid_color: Color { r: 0.3, g: 0.3, b: 0.3, a: 0.5 },
             grid_width: 0.5,
@@ -315,7 +328,11 @@ pub fn render_graph(
         cr.restore()?;
     }
 
-    // Draw data
+    // Draw data (clip to plot area to prevent drawing outside)
+    cr.save()?;
+    cr.rectangle(plot_x, plot_y, plot_width, plot_height);
+    cr.clip();
+
     if !data.is_empty() {
         let points: Vec<(f64, f64)> = data
             .iter()
@@ -474,6 +491,9 @@ pub fn render_graph(
         }
     }
 
+    // Restore from clip region
+    cr.restore()?;
+
     // Draw axes
     if config.y_axis.show {
         cr.save()?;
@@ -498,17 +518,38 @@ pub fn render_graph(
                 config.y_axis.label_color.b,
                 config.y_axis.label_color.a,
             );
-            cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            let font_slant = if config.y_axis.label_italic {
+                cairo::FontSlant::Italic
+            } else {
+                cairo::FontSlant::Normal
+            };
+            let font_weight = if config.y_axis.label_bold {
+                cairo::FontWeight::Bold
+            } else {
+                cairo::FontWeight::Normal
+            };
+            cr.select_font_face(&config.y_axis.label_font_family, font_slant, font_weight);
             cr.set_font_size(config.y_axis.label_font_size);
 
             let num_labels = 5;
             for i in 0..=num_labels {
                 let value = max_val - (i as f64 / num_labels as f64) * value_range;
-                let label = format!("{:.1}", value);
+                // Use adaptive formatting based on value magnitude
+                let label = if value.abs() >= 1000.0 {
+                    format!("{:.0}", value)
+                } else if value.abs() >= 100.0 {
+                    format!("{:.0}", value)
+                } else if value.abs() >= 10.0 {
+                    format!("{:.1}", value)
+                } else {
+                    format!("{:.1}", value)
+                };
                 let y = plot_y + (i as f64 / num_labels as f64) * plot_height;
 
                 let extents = cr.text_extents(&label)?;
-                cr.move_to(plot_x - extents.width() - 5.0, y + extents.height() / 2.0);
+                // Ensure label stays within panel bounds
+                let label_x = (plot_x - extents.width() - 5.0).max(2.0);
+                cr.move_to(label_x, y + extents.height() / 2.0);
                 cr.show_text(&label)?;
             }
             cr.restore()?;

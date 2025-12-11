@@ -713,7 +713,12 @@ impl SpeedometerConfigWidget {
         copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone_copy.borrow();
             if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                clipboard.copy_font(cfg.tick_label_config.font_family.clone(), cfg.tick_label_config.font_size);
+                clipboard.copy_font(
+                    cfg.tick_label_config.font_family.clone(),
+                    cfg.tick_label_config.font_size,
+                    cfg.tick_label_config.bold,
+                    cfg.tick_label_config.italic,
+                );
             }
         });
         font_box.append(&copy_font_btn);
@@ -727,9 +732,13 @@ impl SpeedometerConfigWidget {
         let size_spin_clone = tick_label_font_size_spin.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                if let Some((family, size)) = clipboard.paste_font() {
-                    config_clone_paste.borrow_mut().tick_label_config.font_family = family.clone();
-                    config_clone_paste.borrow_mut().tick_label_config.font_size = size;
+                if let Some((family, size, bold, italic)) = clipboard.paste_font() {
+                    let mut cfg = config_clone_paste.borrow_mut();
+                    cfg.tick_label_config.font_family = family.clone();
+                    cfg.tick_label_config.font_size = size;
+                    cfg.tick_label_config.bold = bold;
+                    cfg.tick_label_config.italic = italic;
+                    drop(cfg);
                     // Update button label and size spinner
                     font_button_clone_paste.set_label(&format!("{} {:.0}", family, size));
                     size_spin_clone.set_value(size);

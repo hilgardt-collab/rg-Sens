@@ -41,6 +41,10 @@ struct PanelState {
     background_area: DrawingArea,
 }
 
+/// Callback type for borderless window move/resize
+/// Returns true if the event was handled (gesture should be claimed), false otherwise
+pub type BorderlessDragCallback = Box<dyn Fn(&gtk4::GestureDrag, f64, f64) -> bool>;
+
 /// Grid layout manager
 ///
 /// Manages multiple panels with drag-and-drop, collision detection, and multi-select.
@@ -57,6 +61,9 @@ pub struct GridLayout {
     is_dragging: Rc<RefCell<bool>>,
     selection_box: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    /// Callback for borderless window drag (move/resize)
+    /// If set and returns true, the drag gesture is claimed for window operations
+    on_borderless_drag: Rc<RefCell<Option<BorderlessDragCallback>>>,
 }
 
 impl GridLayout {
@@ -98,6 +105,7 @@ impl GridLayout {
             is_dragging: Rc::new(RefCell::new(false)),
             selection_box: Rc::new(RefCell::new(None)),
             on_change: Rc::new(RefCell::new(None)),
+            on_borderless_drag: Rc::new(RefCell::new(None)),
         };
 
         grid_layout.setup_drop_zone_drawing();
@@ -111,6 +119,15 @@ impl GridLayout {
         F: Fn() + 'static,
     {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Set a callback for borderless window drag (move/resize)
+    /// The callback receives the gesture and coordinates, and returns true if it handled the event
+    pub fn set_on_borderless_drag<F>(&mut self, callback: F)
+    where
+        F: Fn(&gtk4::GestureDrag, f64, f64) -> bool + 'static,
+    {
+        *self.on_borderless_drag.borrow_mut() = Some(Box::new(callback));
     }
 
     /// Get the list of panels
@@ -287,12 +304,28 @@ impl GridLayout {
         // Store whether drag started on empty space
         let drag_on_empty_space: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
         let drag_start_pos: Rc<RefCell<Option<(f64, f64)>>> = Rc::new(RefCell::new(None));
+        // Track if borderless drag callback claimed the gesture
+        let borderless_drag_claimed: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
 
         let drag_on_empty_space_begin = drag_on_empty_space.clone();
         let drag_start_pos_begin = drag_start_pos.clone();
         let panel_states_begin = panel_states_drag.clone();
+        let borderless_drag_callback = self.on_borderless_drag.clone();
+        let borderless_drag_claimed_begin = borderless_drag_claimed.clone();
 
-        drag_gesture.connect_drag_begin(move |_gesture, x, y| {
+        drag_gesture.connect_drag_begin(move |gesture, x, y| {
+            // Reset claimed state
+            *borderless_drag_claimed_begin.borrow_mut() = false;
+
+            // First, check if borderless drag callback wants to handle this
+            if let Some(ref callback) = *borderless_drag_callback.borrow() {
+                if callback(gesture, x, y) {
+                    // Callback handled it (e.g., started window move/resize)
+                    *borderless_drag_claimed_begin.borrow_mut() = true;
+                    return;
+                }
+            }
+
             // Check if drag started on empty space
             let states = panel_states_begin.borrow();
             let mut on_panel = false;
@@ -323,8 +356,13 @@ impl GridLayout {
         let drag_start_pos_update = drag_start_pos.clone();
         let selection_box_update = selection_box.clone();
         let drop_zone_update = drop_zone_layer.clone();
+        let borderless_drag_claimed_update = borderless_drag_claimed.clone();
 
         drag_gesture.connect_drag_update(move |_, offset_x, offset_y| {
+            // Skip if borderless callback claimed the gesture
+            if *borderless_drag_claimed_update.borrow() {
+                return;
+            }
             if *drag_on_empty_space_update.borrow() {
                 if let Some((start_x, start_y)) = *drag_start_pos_update.borrow() {
                     let end_x = start_x + offset_x;
@@ -338,8 +376,13 @@ impl GridLayout {
 
         let drag_on_empty_space_end = drag_on_empty_space.clone();
         let drag_start_pos_end = drag_start_pos.clone();
+        let borderless_drag_claimed_end = borderless_drag_claimed.clone();
 
         drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
+            // Skip if borderless callback claimed the gesture
+            if *borderless_drag_claimed_end.borrow() {
+                return;
+            }
             if *drag_on_empty_space_end.borrow() {
                 if let Some((start_x, start_y)) = *drag_start_pos_end.borrow() {
                     let end_x = start_x + offset_x;
@@ -415,11 +458,113 @@ impl GridLayout {
         drop(config);
 
         // Create displayer widget
-        let widget = {
+        let (widget, displayer_id) = {
             let panel_guard = panel.blocking_read();
-            panel_guard.displayer.create_widget()
+            (panel_guard.displayer.create_widget(), panel_guard.displayer.id().to_string())
         };
         widget.set_size_request(width, height);
+
+        // For clock displayers, add click handler for alarm/timer icon
+        if displayer_id == "clock_analog" || displayer_id == "clock_digital" {
+            let gesture = gtk4::GestureClick::new();
+            let panel_for_click = panel.clone();
+            gesture.connect_released(move |gesture, _, x, y| {
+                if let Some(widget) = gesture.widget() {
+                    let width = widget.width() as f64;
+                    let height = widget.height() as f64;
+
+                    // Calculate icon position (same as in displayer draw code)
+                    let icon_size = if width.min(height) > 100.0 {
+                        (width.min(height) * 0.15).max(16.0).min(32.0)
+                    } else {
+                        20.0_f64.min(height * 0.25)
+                    };
+                    let icon_x = width - icon_size - 4.0;
+                    let icon_y = height - icon_size - 4.0;
+
+                    // Check if click is within icon area
+                    let padding = 8.0;
+                    if x >= icon_x - padding && x <= icon_x + icon_size + padding &&
+                       y >= icon_y - padding && y <= icon_y + icon_size + padding {
+                        // Open alarm/timer dialog
+                        if let Ok(panel_guard) = panel_for_click.try_read() {
+                            let alarm_config = panel_guard.config.get("alarm_config")
+                                .and_then(|v| serde_json::from_value::<crate::sources::AlarmConfig>(v.clone()).ok())
+                                .unwrap_or_default();
+                            let timer_config = panel_guard.config.get("timer_config")
+                                .and_then(|v| serde_json::from_value::<crate::sources::TimerConfig>(v.clone()).ok())
+                                .unwrap_or_default();
+                            // Get alarm and timer state from source values
+                            let alarm_triggered = panel_guard.config.get("alarm_triggered")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                            let timer_state = panel_guard.config.get("timer_state")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let alarm_label = alarm_config.label.clone();
+                            drop(panel_guard);
+
+                            // Get the window from widget ancestry
+                            let window = widget.root()
+                                .and_then(|r| r.downcast::<gtk4::Window>().ok());
+
+                            let dialog = crate::ui::AlarmTimerDialog::new(window.as_ref());
+                            dialog.set_alarm_config(&alarm_config);
+                            dialog.set_timer_config(&timer_config);
+
+                            // Update alarm triggered state (shows dismiss button if triggered)
+                            dialog.update_alarm_triggered(alarm_triggered, alarm_label.as_deref());
+
+                            // Update timer state (shows proper button states)
+                            if let Some(state_str) = timer_state {
+                                let state = match state_str.as_str() {
+                                    "running" => crate::sources::TimerState::Running,
+                                    "paused" => crate::sources::TimerState::Paused,
+                                    "finished" => crate::sources::TimerState::Finished,
+                                    _ => crate::sources::TimerState::Stopped,
+                                };
+                                dialog.update_timer_state(state);
+                            }
+
+                            // Set up alarm dismiss callback
+                            let panel_for_dismiss = panel_for_click.clone();
+                            dialog.set_on_alarm_dismiss(move || {
+                                if let Ok(mut panel_guard) = panel_for_dismiss.try_write() {
+                                    let mut config = panel_guard.config.clone();
+                                    config.insert("dismiss_alarm".to_string(), serde_json::json!(true));
+                                    if let Err(e) = panel_guard.apply_config(config) {
+                                        log::error!("Failed to dismiss alarm: {}", e);
+                                    }
+                                }
+                            });
+
+                            // Set up timer action callback
+                            let panel_for_action = panel_for_click.clone();
+                            dialog.set_on_timer_action(move |action| {
+                                let cmd = match action {
+                                    crate::ui::TimerAction::Start => "start",
+                                    crate::ui::TimerAction::Pause => "pause",
+                                    crate::ui::TimerAction::Resume => "resume",
+                                    crate::ui::TimerAction::Stop => "stop",
+                                };
+
+                                // Get write lock and apply the command
+                                if let Ok(mut panel_guard) = panel_for_action.try_write() {
+                                    let mut config = panel_guard.config.clone();
+                                    config.insert("timer_command".to_string(), serde_json::json!(cmd));
+                                    if let Err(e) = panel_guard.apply_config(config) {
+                                        log::error!("Failed to apply timer command: {}", e);
+                                    }
+                                }
+                            });
+
+                            dialog.present();
+                        }
+                    }
+                }
+            });
+            widget.add_controller(gesture);
+        }
 
         // Create background drawing area
         let background_area = DrawingArea::new();
@@ -499,7 +644,7 @@ impl GridLayout {
             if radius > 0.0 {
                 let css_provider = gtk4::CssProvider::new();
                 let css = format!(
-                    "frame {{ border-radius: {}px; overflow: hidden; }}",
+                    "frame {{ border-radius: {}px; }}",
                     radius
                 );
                 css_provider.load_from_data(&css);
@@ -1472,14 +1617,100 @@ impl GridLayout {
 
                                 widget_for_menu.add_controller(gesture_click);
 
+                                // Add Copy Style action
+                                let copy_style_action = gio::SimpleAction::new("copy_style", None);
+                                let panel_copy_style = new_panel.clone();
+                                copy_style_action.connect_activate(move |_, _| {
+                                    log::info!("Copying panel style");
+                                    if let Ok(panel_guard) = panel_copy_style.try_read() {
+                                        use crate::ui::{PanelStyle, CLIPBOARD};
+
+                                        let mut displayer_config = panel_guard.config.clone();
+                                        displayer_config.remove("cpu_config");
+                                        displayer_config.remove("gpu_config");
+                                        displayer_config.remove("memory_config");
+
+                                        let style = PanelStyle {
+                                            background: panel_guard.background.clone(),
+                                            corner_radius: panel_guard.corner_radius,
+                                            border: panel_guard.border.clone(),
+                                            displayer_config,
+                                        };
+
+                                        if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                                            clipboard.copy_panel_style(style);
+                                            log::info!("Panel style copied to clipboard");
+                                        }
+                                    }
+                                });
+                                action_group.add_action(&copy_style_action);
+
+                                // Add Paste Style action
+                                let paste_style_action = gio::SimpleAction::new("paste_style", None);
+                                let panel_paste_style = new_panel.clone();
+                                let panel_states_paste = panel_states_end.clone();
+                                let on_change_paste = on_change_end.clone();
+                                let drop_zone_paste = drop_zone_layer_end.clone();
+                                paste_style_action.connect_activate(move |_, _| {
+                                    use crate::ui::CLIPBOARD;
+
+                                    if let Ok(clipboard) = CLIPBOARD.lock() {
+                                        if let Some(style) = clipboard.paste_panel_style() {
+                                            log::info!("Pasting panel style");
+
+                                            if let Ok(mut panel_guard) = panel_paste_style.try_write() {
+                                                panel_guard.background = style.background;
+                                                panel_guard.corner_radius = style.corner_radius;
+                                                panel_guard.border = style.border;
+
+                                                for (key, value) in style.displayer_config {
+                                                    panel_guard.config.insert(key, value);
+                                                }
+
+                                                let config_clone = panel_guard.config.clone();
+                                                let _ = panel_guard.displayer.apply_config(&config_clone);
+
+                                                if let Some(state) = panel_states_paste.borrow().get(&panel_guard.id) {
+                                                    state.background_area.queue_draw();
+                                                    state.widget.queue_draw();
+                                                }
+
+                                                if let Some(ref callback) = *on_change_paste.borrow() {
+                                                    callback();
+                                                }
+
+                                                drop_zone_paste.queue_draw();
+                                                log::info!("Panel style pasted successfully");
+                                            }
+                                        } else {
+                                            log::info!("No panel style in clipboard");
+                                        }
+                                    }
+                                });
+                                action_group.add_action(&paste_style_action);
+
                                 // Setup right-click context menu
                                 let gesture_secondary = GestureClick::new();
                                 gesture_secondary.set_button(3);
 
                                 use gtk4::{PopoverMenu, gio::Menu};
                                 let menu = Menu::new();
-                                menu.append(Some("Properties"), Some("panel.properties"));
-                                menu.append(Some("Delete"), Some("panel.delete"));
+
+                                // Section 1: Properties
+                                let section1 = gio::Menu::new();
+                                section1.append(Some("Properties..."), Some("panel.properties"));
+                                menu.append_section(None, &section1);
+
+                                // Section 2: Copy/Paste Style
+                                let section2 = gio::Menu::new();
+                                section2.append(Some("Copy Style"), Some("panel.copy_style"));
+                                section2.append(Some("Paste Style"), Some("panel.paste_style"));
+                                menu.append_section(None, &section2);
+
+                                // Section 3: Delete
+                                let section3 = gio::Menu::new();
+                                section3.append(Some("Delete"), Some("panel.delete"));
+                                menu.append_section(None, &section3);
 
                                 let popover = PopoverMenu::from_model(Some(&menu));
                                 popover.set_parent(&widget_for_menu);
@@ -2351,6 +2582,24 @@ fn show_panel_properties_dialog(
     // Wrap disk_config_widget in Rc for sharing
     let disk_config_widget = Rc::new(disk_config_widget);
 
+    // Clock source configuration widget
+    let clock_config_widget = crate::ui::ClockSourceConfigWidget::new();
+    clock_config_widget.widget().set_visible(old_source_id == "clock");
+
+    // Load existing Clock config if source is clock
+    if old_source_id == "clock" {
+        if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
+            if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
+                clock_config_widget.set_config(&clock_config);
+            }
+        }
+    }
+
+    source_tab_box.append(clock_config_widget.widget());
+
+    // Wrap clock_config_widget in Rc for sharing
+    let clock_config_widget = Rc::new(clock_config_widget);
+
     // Show/hide source config widgets based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
@@ -2359,6 +2608,7 @@ fn show_panel_properties_dialog(
         let system_temp_widget_clone = system_temp_config_widget.clone();
         let fan_speed_widget_clone = fan_speed_config_widget.clone();
         let disk_widget_clone = disk_config_widget.clone();
+        let clock_widget_clone = clock_config_widget.clone();
         let sources_clone = sources.clone();
         let panel_clone = panel.clone();
 
@@ -2371,6 +2621,7 @@ fn show_panel_properties_dialog(
                 system_temp_widget_clone.widget().set_visible(source_id == "system_temp");
                 fan_speed_widget_clone.widget().set_visible(source_id == "fan_speed");
                 disk_widget_clone.widget().set_visible(source_id == "disk");
+                clock_widget_clone.widget().set_visible(source_id == "clock");
 
                 // Reload config for the selected source
                 if let Ok(panel_guard) = panel_clone.try_read() {
@@ -2414,6 +2665,13 @@ fn show_panel_properties_dialog(
                             if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
                                 if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
                                     disk_widget_clone.set_config(disk_config);
+                                }
+                            }
+                        }
+                        "clock" => {
+                            if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
+                                if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
+                                    clock_widget_clone.set_config(&clock_config);
                                 }
                             }
                         }
@@ -2606,7 +2864,55 @@ fn show_panel_properties_dialog(
     // Wrap graph_config_widget in Rc for sharing
     let graph_config_widget = Rc::new(graph_config_widget);
 
-    // Show/hide text, bar, arc, speedometer, and graph config based on displayer selection
+    // Analog Clock displayer configuration widget
+    let clock_analog_config_label = Label::new(Some("Analog Clock Configuration:"));
+    clock_analog_config_label.set_halign(gtk4::Align::Start);
+    clock_analog_config_label.add_css_class("heading");
+    clock_analog_config_label.set_visible(old_displayer_id == "clock_analog");
+
+    let clock_analog_config_widget = crate::ui::ClockAnalogConfigWidget::new();
+    clock_analog_config_widget.widget().set_visible(old_displayer_id == "clock_analog");
+
+    // Load existing analog clock config if displayer is clock_analog
+    if old_displayer_id == "clock_analog" {
+        if let Some(config_value) = panel_guard.config.get("analog_clock_config") {
+            if let Ok(config) = serde_json::from_value::<crate::ui::AnalogClockConfig>(config_value.clone()) {
+                clock_analog_config_widget.set_config(config);
+            }
+        }
+    }
+
+    displayer_tab_box.append(&clock_analog_config_label);
+    displayer_tab_box.append(clock_analog_config_widget.widget());
+
+    // Wrap clock_analog_config_widget in Rc for sharing
+    let clock_analog_config_widget = Rc::new(clock_analog_config_widget);
+
+    // Digital Clock displayer configuration widget
+    let clock_digital_config_label = Label::new(Some("Digital Clock Configuration:"));
+    clock_digital_config_label.set_halign(gtk4::Align::Start);
+    clock_digital_config_label.add_css_class("heading");
+    clock_digital_config_label.set_visible(old_displayer_id == "clock_digital");
+
+    let clock_digital_config_widget = crate::ui::ClockDigitalConfigWidget::new();
+    clock_digital_config_widget.widget().set_visible(old_displayer_id == "clock_digital");
+
+    // Load existing digital clock config if displayer is clock_digital
+    if old_displayer_id == "clock_digital" {
+        if let Some(config_value) = panel_guard.config.get("digital_clock_config") {
+            if let Ok(config) = serde_json::from_value::<crate::displayers::DigitalClockConfig>(config_value.clone()) {
+                clock_digital_config_widget.set_config(config);
+            }
+        }
+    }
+
+    displayer_tab_box.append(&clock_digital_config_label);
+    displayer_tab_box.append(clock_digital_config_widget.widget());
+
+    // Wrap clock_digital_config_widget in Rc for sharing
+    let clock_digital_config_widget = Rc::new(clock_digital_config_widget);
+
+    // Show/hide text, bar, arc, speedometer, graph, and clock config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -2618,6 +2924,10 @@ fn show_panel_properties_dialog(
         let speedometer_label_clone = speedometer_config_label.clone();
         let graph_widget_clone = graph_config_widget.clone();
         let graph_label_clone = graph_config_label.clone();
+        let clock_analog_widget_clone = clock_analog_config_widget.clone();
+        let clock_analog_label_clone = clock_analog_config_label.clone();
+        let clock_digital_widget_clone = clock_digital_config_widget.clone();
+        let clock_digital_label_clone = clock_digital_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -2627,6 +2937,8 @@ fn show_panel_properties_dialog(
                 let is_arc = displayer_id == "arc";
                 let is_speedometer = displayer_id == "speedometer";
                 let is_graph = displayer_id == "graph";
+                let is_clock_analog = displayer_id == "clock_analog";
+                let is_clock_digital = displayer_id == "clock_digital";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -2637,6 +2949,10 @@ fn show_panel_properties_dialog(
                 speedometer_label_clone.set_visible(is_speedometer);
                 graph_widget_clone.widget().set_visible(is_graph);
                 graph_label_clone.set_visible(is_graph);
+                clock_analog_widget_clone.widget().set_visible(is_clock_analog);
+                clock_analog_label_clone.set_visible(is_clock_analog);
+                clock_digital_widget_clone.widget().set_visible(is_clock_digital);
+                clock_digital_label_clone.set_visible(is_clock_digital);
             }
         });
     }
@@ -2849,6 +3165,9 @@ fn show_panel_properties_dialog(
     let system_temp_config_widget_clone = system_temp_config_widget.clone();
     let fan_speed_config_widget_clone = fan_speed_config_widget.clone();
     let disk_config_widget_clone = disk_config_widget.clone();
+    let clock_config_widget_clone = clock_config_widget.clone();
+    let clock_analog_config_widget_clone = clock_analog_config_widget.clone();
+    let clock_digital_config_widget_clone = clock_digital_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -2973,7 +3292,22 @@ fn show_panel_properties_dialog(
 
         // Update panel geometry, source, displayer, and background - single lock acquisition
         // IMPORTANT: All panel updates must be done in one lock to avoid deadlock with draw callbacks
-        if let Ok(mut panel_guard) = panel_clone.try_write() {
+        // Try multiple times with small delays to handle cases where draw callback holds the lock
+        let mut panel_guard_result = panel_clone.try_write();
+        for _retry in 0..5 {
+            if panel_guard_result.is_ok() {
+                break;
+            }
+            // Small delay to let draw callback release lock
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            panel_guard_result = panel_clone.try_write();
+        }
+
+        if panel_guard_result.is_err() {
+            log::warn!("Failed to acquire panel write lock after retries for apply_changes");
+        }
+
+        if let Ok(mut panel_guard) = panel_guard_result {
             // Update size if changed
             if size_changed {
                 log::info!("[RESIZE] Panel {} geometry changing from {}x{} to {}x{}",
@@ -3334,6 +3668,38 @@ fn show_panel_properties_dialog(
                 }
             }
 
+            // Apply analog clock configuration if clock_analog displayer is active
+            if new_displayer_id == "clock_analog" {
+                let clock_config = clock_analog_config_widget_clone.get_config();
+                if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
+                    panel_guard.config.insert("analog_clock_config".to_string(), clock_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply analog clock config: {}", e);
+                    }
+                }
+            }
+
+            // Apply digital clock configuration if clock_digital displayer is active
+            if new_displayer_id == "clock_digital" {
+                let clock_config = clock_digital_config_widget_clone.get_config();
+                if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
+                    panel_guard.config.insert("digital_clock_config".to_string(), clock_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply digital clock config: {}", e);
+                    }
+                }
+            }
+
             // Apply CPU source configuration if CPU source is active
             if new_source_id == "cpu" {
                 let cpu_config = cpu_config_widget_clone.get_config();
@@ -3451,6 +3817,27 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the source
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply disk config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply Clock source configuration if clock source is active
+            if new_source_id == "clock" {
+                let clock_config = clock_config_widget_clone.get_config();
+                if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
+                    panel_guard.config.insert("clock_config".to_string(), clock_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply clock config to source: {}", e);
                     }
 
                     // Update the source with new configuration

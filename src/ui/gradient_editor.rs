@@ -16,6 +16,8 @@ pub struct GradientEditor {
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     preview: DrawingArea,
     stops_listbox: ListBox,
+    angle_scale: Scale,
+    angle_spin: SpinButton,
 }
 
 impl GradientEditor {
@@ -31,48 +33,7 @@ impl GradientEditor {
         let angle = Rc::new(RefCell::new(90.0));
         let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
-        // Angle control
-        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
-        angle_box.append(&Label::new(Some("Angle:")));
-
-        let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
-        angle_scale.set_hexpand(true);
-        angle_scale.set_value(90.0);
-
-        let angle_spin = SpinButton::with_range(0.0, 360.0, 1.0);
-        angle_spin.set_value(90.0);
-        angle_spin.set_digits(0);
-
-        // Sync scale and spin button
-        let angle_clone = angle.clone();
-        let angle_spin_clone = angle_spin.clone();
-        let on_change_clone = on_change.clone();
-        angle_scale.connect_value_changed(move |scale| {
-            let value = scale.value();
-            angle_spin_clone.set_value(value);
-            *angle_clone.borrow_mut() = value;
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let angle_scale_clone = angle_scale.clone();
-        let angle_clone2 = angle.clone();
-        let on_change_clone2 = on_change.clone();
-        angle_spin.connect_value_changed(move |spin| {
-            let value = spin.value();
-            angle_scale_clone.set_value(value);
-            *angle_clone2.borrow_mut() = value;
-            if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        angle_box.append(&angle_scale);
-        angle_box.append(&angle_spin);
-        container.append(&angle_box);
-
-        // Preview area
+        // Preview area (created early so angle handlers can reference it)
         let preview = DrawingArea::new();
         preview.set_content_height(100);
         preview.set_vexpand(false);
@@ -98,6 +59,51 @@ impl GradientEditor {
 
             let _ = render_background(cr, &config, width as f64, height as f64);
         });
+
+        // Angle control
+        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
+        angle_box.append(&Label::new(Some("Angle:")));
+
+        let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
+        angle_scale.set_hexpand(true);
+        angle_scale.set_value(90.0);
+
+        let angle_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        angle_spin.set_value(90.0);
+        angle_spin.set_digits(0);
+
+        // Sync scale and spin button
+        let angle_clone = angle.clone();
+        let angle_spin_clone = angle_spin.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        angle_scale.connect_value_changed(move |scale| {
+            let value = scale.value();
+            angle_spin_clone.set_value(value);
+            *angle_clone.borrow_mut() = value;
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        let angle_scale_clone = angle_scale.clone();
+        let angle_clone2 = angle.clone();
+        let on_change_clone2 = on_change.clone();
+        let preview_clone2 = preview.clone();
+        angle_spin.connect_value_changed(move |spin| {
+            let value = spin.value();
+            angle_scale_clone.set_value(value);
+            *angle_clone2.borrow_mut() = value;
+            preview_clone2.queue_draw();
+            if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        angle_box.append(&angle_scale);
+        angle_box.append(&angle_spin);
+        container.append(&angle_box);
 
         container.append(&preview);
 
@@ -184,6 +190,8 @@ impl GradientEditor {
             on_change,
             preview,
             stops_listbox,
+            angle_scale,
+            angle_spin,
         };
 
         editor
@@ -349,6 +357,7 @@ impl GradientEditor {
             // Validate: ensure minimum spacing of 0.01 (1%) between adjacent stops
             const MIN_SPACING: f64 = 0.01;
 
+            let needs_rebuild;
             {
                 let stops = stops_clone.borrow();
                 // Check if this position would be too close to another stop
@@ -365,21 +374,41 @@ impl GradientEditor {
                         }
                     }
                 }
+
+                // Check if order would change (needs rebuild)
+                let old_index = index;
+                let would_be_index = stops.iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != index)
+                    .filter(|(_, s)| s.position < new_position)
+                    .count();
+                needs_rebuild = would_be_index != old_index.min(stops.len().saturating_sub(1));
             }
 
-            let mut stops = stops_clone.borrow_mut();
-            if let Some(stop) = stops.get_mut(index) {
-                stop.position = new_position;
+            {
+                let mut stops = stops_clone.borrow_mut();
+                if let Some(stop) = stops.get_mut(index) {
+                    stop.position = new_position;
+                }
+                stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
             }
-            stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
-            drop(stops);
 
-            Self::rebuild_stops_list(
-                &listbox_clone,
-                &stops_clone,
-                &preview_clone,
-                &on_change_clone,
-            );
+            // Only rebuild the list if the order changed - defer to idle to avoid
+            // GTK adjustment issues when the SpinButton is still being interacted with
+            if needs_rebuild {
+                let listbox_clone2 = listbox_clone.clone();
+                let stops_clone2 = stops_clone.clone();
+                let preview_clone2 = preview_clone.clone();
+                let on_change_clone2 = on_change_clone.clone();
+                gtk4::glib::idle_add_local_once(move || {
+                    Self::rebuild_stops_list(
+                        &listbox_clone2,
+                        &stops_clone2,
+                        &preview_clone2,
+                        &on_change_clone2,
+                    );
+                });
+            }
 
             preview_clone.queue_draw();
 
@@ -433,6 +462,11 @@ impl GradientEditor {
     pub fn set_gradient(&self, config: &LinearGradientConfig) {
         *self.stops.borrow_mut() = config.stops.clone();
         *self.angle.borrow_mut() = config.angle;
+
+        // Update the angle UI widgets
+        self.angle_scale.set_value(config.angle);
+        self.angle_spin.set_value(config.angle);
+
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,

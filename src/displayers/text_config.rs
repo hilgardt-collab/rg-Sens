@@ -42,6 +42,14 @@ pub struct TextLineConfig {
     /// Font size in points
     pub font_size: f64,
 
+    /// Whether the font is bold
+    #[serde(default)]
+    pub bold: bool,
+
+    /// Whether the font is italic
+    #[serde(default)]
+    pub italic: bool,
+
     /// Text color (RGBA, 0.0-1.0)
     pub color: (f64, f64, f64, f64),
 
@@ -76,6 +84,8 @@ impl Default for TextLineConfig {
             field_id: String::new(),
             font_family: "Sans".to_string(),
             font_size: 12.0,
+            bold: false,
+            italic: false,
             color: (1.0, 1.0, 1.0, 1.0), // White
             vertical_position: VerticalPosition::Center,
             horizontal_position: HorizontalPosition::Center,
@@ -105,6 +115,8 @@ impl Default for TextDisplayerConfig {
                     field_id: "caption".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
+                    bold: false,
+                    italic: false,
                     color: (1.0, 1.0, 1.0, 1.0),
                     vertical_position: VerticalPosition::Center,
                     horizontal_position: HorizontalPosition::Left,
@@ -118,6 +130,8 @@ impl Default for TextDisplayerConfig {
                     field_id: "value".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
+                    bold: false,
+                    italic: false,
                     color: (0.5, 1.0, 0.5, 1.0), // Light green
                     vertical_position: VerticalPosition::Center,
                     horizontal_position: HorizontalPosition::Center,
@@ -131,6 +145,8 @@ impl Default for TextDisplayerConfig {
                     field_id: "unit".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
+                    bold: false,
+                    italic: false,
                     color: (1.0, 1.0, 1.0, 1.0),
                     vertical_position: VerticalPosition::Center,
                     horizontal_position: HorizontalPosition::Right,

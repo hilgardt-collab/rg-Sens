@@ -9,6 +9,8 @@ mod memory;
 mod system_temp;
 mod fan_speed;
 mod disk;
+mod clock;
+mod shared_sensors;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
@@ -17,7 +19,13 @@ pub use memory::MemorySource;
 pub use system_temp::{SystemTempSource, SensorInfo, SensorCategory, SystemTempConfig, TemperatureUnit as SystemTempUnit};
 pub use fan_speed::{FanSpeedSource, FanInfo, FanCategory, FanSpeedConfig};
 pub use disk::DiskSource;
+pub use clock::{ClockSource, ClockSourceConfig, TimeFormat, DateFormat, AlarmConfig, AlarmSoundConfig, TimerConfig, TimerMode, TimerState};
 // pub use network::NetworkSource;
+
+/// Initialize shared sensor caches (call once at startup)
+pub fn initialize_sensors() {
+    shared_sensors::initialize();
+}
 
 /// Register all built-in sources with the global registry
 pub fn register_all() {
@@ -40,6 +48,9 @@ pub fn register_all() {
 
     // Register Disk source
     global_registry().register_source("disk", || Box::new(DiskSource::new()));
+
+    // Register Clock source
+    global_registry().register_source("clock", || Box::new(ClockSource::new()));
 
     // TODO: Register more sources
     // register_source!("network", NetworkSource);

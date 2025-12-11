@@ -106,7 +106,9 @@ fn render_combined_parts(
 
     for (config, text) in parts {
         cr.save().ok();
-        cr.select_font_face(&config.font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
+        let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+        cr.select_font_face(&config.font_family, font_slant, font_weight);
         cr.set_font_size(config.font_size);
 
         let extents = cr.text_extents(text).unwrap_or_else(|_| {
@@ -157,7 +159,9 @@ fn render_combined_parts(
         cr.save().ok();
 
         // Set font and color for this part
-        cr.select_font_face(&config.font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
+        let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+        cr.select_font_face(&config.font_family, font_slant, font_weight);
         cr.set_font_size(config.font_size);
         cr.set_source_rgba(config.color.0, config.color.1, config.color.2, config.color.3);
 
@@ -192,6 +196,8 @@ fn render_single_line(
             &text,
             &line.font_family,
             line.font_size,
+            line.bold,
+            line.italic,
             &line.color,
             &line.vertical_position,
             &line.horizontal_position,
@@ -209,6 +215,8 @@ fn render_text_with_alignment(
     text: &str,
     font_family: &str,
     font_size: f64,
+    bold: bool,
+    italic: bool,
     color: &(f64, f64, f64, f64),
     v_pos: &VerticalPosition,
     h_pos: &HorizontalPosition,
@@ -218,8 +226,10 @@ fn render_text_with_alignment(
 ) {
     cr.save().ok();
 
-    // Set font
-    cr.select_font_face(font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    // Set font with bold/italic support
+    let font_slant = if italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
+    let font_weight = if bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+    cr.select_font_face(font_family, font_slant, font_weight);
     cr.set_font_size(font_size);
 
     // Set color

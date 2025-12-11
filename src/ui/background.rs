@@ -311,9 +311,10 @@ fn render_image_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    use gtk4::gdk_pixbuf::Pixbuf;
+    use crate::ui::render_cache::{get_cached_pixbuf, get_cached_tile_surface};
 
-    if let Ok(pixbuf) = Pixbuf::from_file(path) {
+    // Use cached image loading
+    if let Some(pixbuf) = get_cached_pixbuf(path) {
         let img_width = pixbuf.width() as f64;
         let img_height = pixbuf.height() as f64;
 
@@ -349,20 +350,28 @@ fn render_image_background(
                 cr.paint_with_alpha(alpha)?;
             }
             ImageDisplayMode::Tile => {
-                // Tile the image - create a surface from the pixbuf and tile it
-                let surface = cairo::ImageSurface::create(
-                    cairo::Format::ARgb32,
-                    img_width as i32,
-                    img_height as i32,
-                )?;
-                let tmp_cr = cairo::Context::new(&surface)?;
-                tmp_cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
-                tmp_cr.paint()?;
+                // Tile the image - use cached tile surface
+                if let Some(surface) = get_cached_tile_surface(path) {
+                    let pattern = cairo::SurfacePattern::create(&surface);
+                    pattern.set_extend(cairo::Extend::Repeat);
+                    cr.set_source(&pattern)?;
+                    cr.paint_with_alpha(alpha)?;
+                } else {
+                    // Fallback: create surface on the fly
+                    let surface = cairo::ImageSurface::create(
+                        cairo::Format::ARgb32,
+                        img_width as i32,
+                        img_height as i32,
+                    )?;
+                    let tmp_cr = cairo::Context::new(&surface)?;
+                    tmp_cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                    tmp_cr.paint()?;
 
-                let pattern = cairo::SurfacePattern::create(&surface);
-                pattern.set_extend(cairo::Extend::Repeat);
-                cr.set_source(&pattern)?;
-                cr.paint_with_alpha(alpha)?;
+                    let pattern = cairo::SurfacePattern::create(&surface);
+                    pattern.set_extend(cairo::Extend::Repeat);
+                    cr.set_source(&pattern)?;
+                    cr.paint_with_alpha(alpha)?;
+                }
             }
         }
 

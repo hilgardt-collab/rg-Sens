@@ -869,37 +869,11 @@ fn draw_center_hub(
 }
 
 fn interpolate_color_stops(stops: &[ColorStop], t: f64) -> Color {
+    use crate::ui::render_cache::get_cached_color_at;
+
     if stops.is_empty() {
         return Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
     }
 
-    if stops.len() == 1 {
-        return stops[0].color;
-    }
-
-    // Find the two stops to interpolate between
-    let mut before = &stops[0];
-    let mut after = &stops[stops.len() - 1];
-
-    for i in 0..stops.len() - 1 {
-        if t >= stops[i].position && t <= stops[i + 1].position {
-            before = &stops[i];
-            after = &stops[i + 1];
-            break;
-        }
-    }
-
-    // Interpolate
-    let range = after.position - before.position;
-    if range < 0.0001 {
-        return before.color;
-    }
-
-    let local_t = (t - before.position) / range;
-    Color {
-        r: before.color.r + (after.color.r - before.color.r) * local_t,
-        g: before.color.g + (after.color.g - before.color.g) * local_t,
-        b: before.color.b + (after.color.b - before.color.b) * local_t,
-        a: before.color.a + (after.color.a - before.color.a) * local_t,
-    }
+    get_cached_color_at(stops, t)
 }

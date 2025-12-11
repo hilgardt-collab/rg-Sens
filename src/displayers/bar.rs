@@ -22,6 +22,7 @@ struct DisplayData {
     config: BarDisplayConfig,
     value: f64,
     values: HashMap<String, Value>, // All source data for text overlay
+    dirty: bool, // Flag to indicate data has changed and needs redraw
 }
 
 impl BarDisplayer {
@@ -30,6 +31,7 @@ impl BarDisplayer {
             config: BarDisplayConfig::default(),
             value: 0.0,
             values: HashMap::new(),
+            dirty: true,
         }));
 
         Self {
@@ -69,14 +71,27 @@ impl Displayer for BarDisplayer {
             }
         });
 
-        // Set up periodic redraw
-        // The timeout automatically stops when the widget is destroyed (weak reference breaks)
-        glib::timeout_add_local(std::time::Duration::from_millis(500), {
+        // Set up periodic redraw - only redraw when data has changed
+        glib::timeout_add_local(std::time::Duration::from_millis(100), {
             let drawing_area_weak = drawing_area.downgrade();
+            let data_for_timer = self.data.clone();
             move || {
-                // Check if widget still exists - this automatically stops the timeout
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    drawing_area.queue_draw();
+                    // Only redraw if data changed
+                    let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                        if data.dirty {
+                            data.dirty = false;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if needs_redraw {
+                        drawing_area.queue_draw();
+                    }
                     glib::ControlFlow::Continue
                 } else {
                     glib::ControlFlow::Break
@@ -131,6 +146,8 @@ impl Displayer for BarDisplayer {
             display_data.value = normalized.clamp(0.0, 1.0);
             // Store all values for text overlay
             display_data.values = data.clone();
+            // Mark as dirty to trigger redraw
+            display_data.dirty = true;
         }
     }
 

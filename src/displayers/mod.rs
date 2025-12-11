@@ -9,8 +9,9 @@ mod bar;
 mod arc;
 mod speedometer;
 mod graph;
+mod clock_analog;
+mod clock_digital;
 // mod level_bar;
-// mod analog_clock;
 
 pub use text::TextDisplayer;
 pub use text_config::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
@@ -18,12 +19,12 @@ pub use bar::BarDisplayer;
 pub use arc::ArcDisplayer;
 pub use speedometer::SpeedometerDisplayer;
 pub use graph::GraphDisplayer;
+pub use clock_analog::ClockAnalogDisplayer;
+pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
 // pub use level_bar::LevelBarDisplayer;
-// pub use line_graph::LineGraphDisplayer;
-// pub use analog_clock::AnalogClockDisplayer;
 
 /// Register all built-in displayers with the global registry
 pub fn register_all() {
@@ -44,7 +45,12 @@ pub fn register_all() {
     // Register graph displayer
     global_registry().register_displayer("graph", || Box::new(GraphDisplayer::new()));
 
+    // Register analog clock displayer
+    global_registry().register_displayer("clock_analog", || Box::new(ClockAnalogDisplayer::new()));
+
+    // Register digital clock displayer
+    global_registry().register_displayer("clock_digital", || Box::new(ClockDigitalDisplayer::new()));
+
     // TODO: Register more displayers
     // register_displayer!("level_bar", LevelBarDisplayer);
-    // register_displayer!("analog_clock", AnalogClockDisplayer);
 }

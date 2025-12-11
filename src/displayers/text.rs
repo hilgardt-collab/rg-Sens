@@ -24,6 +24,8 @@ struct DisplayData {
     values: HashMap<String, Value>,
     /// Text display configuration
     config: TextDisplayerConfig,
+    /// Flag to indicate data has changed and needs redraw
+    dirty: bool,
 }
 
 impl TextDisplayer {
@@ -31,6 +33,7 @@ impl TextDisplayer {
         let data = Arc::new(Mutex::new(DisplayData {
             values: HashMap::new(),
             config: TextDisplayerConfig::default(),
+            dirty: true,
         }));
 
         Self {
@@ -83,15 +86,28 @@ impl Displayer for TextDisplayer {
             }
         });
 
-        // Set up periodic redraw using timeout
-        // This requests a redraw every 500ms to update the display without creating an infinite loop
-        // The timeout automatically stops when the widget is destroyed (weak reference breaks)
-        glib::timeout_add_local(std::time::Duration::from_millis(500), {
+        // Set up periodic redraw using timeout - only redraw when data has changed
+        glib::timeout_add_local(std::time::Duration::from_millis(100), {
             let drawing_area_weak = drawing_area.downgrade();
+            let data_for_timer = self.data.clone();
             move || {
                 // Check if widget still exists - this automatically stops the timeout
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    drawing_area.queue_draw();
+                    // Only redraw if data changed
+                    let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                        if data.dirty {
+                            data.dirty = false;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if needs_redraw {
+                        drawing_area.queue_draw();
+                    }
                     glib::ControlFlow::Continue
                 } else {
                     glib::ControlFlow::Break
@@ -106,6 +122,7 @@ impl Displayer for TextDisplayer {
         // Store the data values
         if let Ok(mut display_data) = self.data.lock() {
             display_data.values = data.clone();
+            display_data.dirty = true;
         }
     }
 

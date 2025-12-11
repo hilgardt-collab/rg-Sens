@@ -25,6 +25,7 @@ struct DisplayData {
     animated_value: f64,
     last_update: std::time::Instant,
     values: HashMap<String, Value>, // All source data for text overlay
+    dirty: bool, // Flag to indicate data has changed and needs redraw
 }
 
 impl ArcDisplayer {
@@ -36,6 +37,7 @@ impl ArcDisplayer {
             animated_value: 0.0,
             last_update: std::time::Instant::now(),
             values: HashMap::new(),
+            dirty: true,
         }));
 
         Self {
@@ -91,8 +93,17 @@ impl Displayer for ArcDisplayer {
                     return glib::ControlFlow::Break;
                 };
 
-                // Update animation state
-                if let Ok(mut data) = data_clone.lock() {
+                // Update animation state and check if redraw needed
+                let needs_redraw = if let Ok(mut data) = data_clone.lock() {
+                    let mut redraw = false;
+
+                    // Check if data changed (dirty flag)
+                    if data.dirty {
+                        data.dirty = false;
+                        redraw = true;
+                    }
+
+                    // Check if animation is active
                     if data.config.animate && (data.animated_value - data.target_value).abs() > 0.001 {
                         let now = std::time::Instant::now();
                         let elapsed = now.duration_since(data.last_update).as_secs_f64();
@@ -109,11 +120,18 @@ impl Displayer for ArcDisplayer {
                         if (data.animated_value - data.target_value).abs() < 0.001 {
                             data.animated_value = data.target_value;
                         }
+                        redraw = true;
                     }
-                }
 
-                // Always queue draw to ensure display updates
-                drawing_area.queue_draw();
+                    redraw
+                } else {
+                    false
+                };
+
+                // Only queue draw if needed
+                if needs_redraw {
+                    drawing_area.queue_draw();
+                }
                 glib::ControlFlow::Continue
             }
         });
@@ -172,6 +190,9 @@ impl Displayer for ArcDisplayer {
 
             // Store all values for text overlay
             display_data.values = data.clone();
+
+            // Mark as dirty to trigger redraw
+            display_data.dirty = true;
         }
     }
 

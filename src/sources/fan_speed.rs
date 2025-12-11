@@ -17,6 +17,9 @@ pub struct FanInfo {
     pub index: usize,
     pub label: String,
     pub category: FanCategory,
+    /// Path to the fan input file (e.g., /sys/class/hwmon/hwmon0/fan1_input)
+    #[serde(skip)]
+    pub path: Option<std::path::PathBuf>,
 }
 
 /// Category of fan sensor
@@ -119,9 +122,10 @@ fn discover_all_fans() -> Vec<FanInfo> {
                                             index,
                                             label: label.clone(),
                                             category,
+                                            path: Some(fan_path.clone()),
                                         });
 
-                                        log::info!("  [{}] {:?}: {} = {} RPM", index, category, label, speed);
+                                        log::info!("  [{}] {:?}: {} = {} RPM ({})", index, category, label, speed, fan_path.display());
                                     }
                                 }
                             }
@@ -219,16 +223,12 @@ pub struct FanSpeedSource {
     current_rpm: f64,
     detected_min: Option<f64>,
     detected_max: Option<f64>,
-    fan_paths: Vec<std::path::PathBuf>,
 }
 
 impl FanSpeedSource {
     pub fn new() -> Self {
         // Force initialization of sensor discovery
         let _ = &*FAN_SENSORS;
-
-        // Build fan paths for reading
-        let fan_paths = build_fan_paths();
 
         Self {
             metadata: SourceMetadata {
@@ -249,7 +249,6 @@ impl FanSpeedSource {
             current_rpm: 0.0,
             detected_min: None,
             detected_max: None,
-            fan_paths,
         }
     }
 
@@ -259,32 +258,6 @@ impl FanSpeedSource {
     }
 }
 
-/// Build paths to all fan input files
-fn build_fan_paths() -> Vec<std::path::PathBuf> {
-    let mut paths = Vec::new();
-
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(entries) = std::fs::read_dir("/sys/class/hwmon") {
-            for entry in entries.flatten() {
-                let path = entry.path();
-
-                if let Ok(files) = std::fs::read_dir(&path) {
-                    for file in files.flatten() {
-                        let filename = file.file_name();
-                        let filename_str = filename.to_string_lossy();
-
-                        if filename_str.starts_with("fan") && filename_str.ends_with("_input") {
-                            paths.push(file.path());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    paths
-}
 
 impl DataSource for FanSpeedSource {
     fn metadata(&self) -> &SourceMetadata {
@@ -339,38 +312,44 @@ impl DataSource for FanSpeedSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        // Read the selected fan sensor
-        if let Some(fan_path) = self.fan_paths.get(self.config.sensor_index) {
-            if let Ok(speed_str) = std::fs::read_to_string(fan_path) {
-                if let Ok(speed) = speed_str.trim().parse::<i32>() {
-                    self.current_rpm = speed as f64;
+        // Read the selected fan sensor using the path stored in FAN_SENSORS
+        // This ensures we always read from the correct fan file
+        if let Some(fan_info) = FAN_SENSORS.get(self.config.sensor_index) {
+            if let Some(ref fan_path) = fan_info.path {
+                if let Ok(speed_str) = std::fs::read_to_string(fan_path) {
+                    if let Ok(speed) = speed_str.trim().parse::<i32>() {
+                        self.current_rpm = speed as f64;
 
-                    // Update detected limits if auto-detect is enabled
-                    if self.config.auto_detect_limits {
-                        // Update min
-                        self.detected_min = Some(
-                            self.detected_min
-                                .map(|min| min.min(self.current_rpm))
-                                .unwrap_or(self.current_rpm)
-                        );
+                        // Update detected limits if auto-detect is enabled
+                        if self.config.auto_detect_limits {
+                            // Update min
+                            self.detected_min = Some(
+                                self.detected_min
+                                    .map(|min| min.min(self.current_rpm))
+                                    .unwrap_or(self.current_rpm)
+                            );
 
-                        // Update max
-                        self.detected_max = Some(
-                            self.detected_max
-                                .map(|max| max.max(self.current_rpm))
-                                .unwrap_or(self.current_rpm)
-                        );
+                            // Update max
+                            self.detected_max = Some(
+                                self.detected_max
+                                    .map(|max| max.max(self.current_rpm))
+                                    .unwrap_or(self.current_rpm)
+                            );
+                        }
+                    } else {
+                        log::warn!("Failed to parse fan speed from {:?}", fan_path);
+                        self.current_rpm = 0.0;
                     }
                 } else {
-                    log::warn!("Failed to parse fan speed from {:?}", fan_path);
+                    log::warn!("Failed to read fan speed from {:?}", fan_path);
                     self.current_rpm = 0.0;
                 }
             } else {
-                log::warn!("Failed to read fan speed from {:?}", fan_path);
+                log::warn!("Fan sensor {} has no path stored", self.config.sensor_index);
                 self.current_rpm = 0.0;
             }
         } else {
-            log::warn!("Selected fan sensor index {} not found", self.config.sensor_index);
+            log::warn!("Selected fan sensor index {} not found in FAN_SENSORS", self.config.sensor_index);
             self.current_rpm = 0.0;
         }
 

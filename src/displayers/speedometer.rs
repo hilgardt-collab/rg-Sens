@@ -25,6 +25,7 @@ struct DisplayData {
     animated_value: f64,
     last_update: std::time::Instant,
     values: HashMap<String, Value>, // All source data for text overlay
+    dirty: bool, // Flag to indicate data has changed and needs redraw
 }
 
 impl SpeedometerDisplayer {
@@ -36,6 +37,7 @@ impl SpeedometerDisplayer {
             animated_value: 0.0,
             last_update: std::time::Instant::now(),
             values: HashMap::new(),
+            dirty: true,
         }));
 
         Self {
@@ -90,41 +92,62 @@ impl Displayer for SpeedometerDisplayer {
                     return glib::ControlFlow::Break;
                 };
 
-                // Update animation state
-                if let Ok(mut data) = data_clone.lock() {
+                // Update animation state and check if redraw needed
+                let needs_redraw = if let Ok(mut data) = data_clone.lock() {
+                    let mut redraw = false;
+
+                    // Check if data changed (dirty flag)
+                    if data.dirty {
+                        data.dirty = false;
+                        redraw = true;
+                    }
+
+                    // Check if animation is active
                     if data.config.animate && (data.animated_value - data.target_value).abs() > 0.001 {
                         let now = std::time::Instant::now();
                         let elapsed = now.duration_since(data.last_update).as_secs_f64();
                         data.last_update = now;
 
-                        // Calculate animation speed based on duration
-                        let animation_speed = 1.0 / data.config.animation_duration.max(0.1);
+                        // Use exponential decay formula for smooth animation
+                        // This ensures the needle reaches ~95% of target in animation_duration seconds
+                        let duration = data.config.animation_duration.max(0.05);
+                        // decay_rate of ~3/duration gives 95% completion in duration seconds
+                        let decay_rate = 3.0 / duration;
+                        let lerp_factor = 1.0 - (-decay_rate * elapsed).exp();
 
                         if data.config.bounce_animation {
                             // Bounce animation: overshoot then settle
                             let diff = data.target_value - data.animated_value;
-                            let delta = diff * animation_speed * elapsed * 3.0; // Faster for bounce
-                            data.animated_value += delta;
+                            // Use faster lerp for bounce, with slight overshoot
+                            let fast_lerp = 1.0 - (-decay_rate * 2.0 * elapsed).exp();
+                            data.animated_value += diff * fast_lerp;
 
                             // Check if we've overshot and add bounce back
                             if diff.abs() < 0.05 {
-                                data.animated_value += (data.target_value - data.animated_value) * 0.1;
+                                data.animated_value += (data.target_value - data.animated_value) * 0.15;
                             }
                         } else {
-                            // Smooth ease-out animation
-                            let delta = (data.target_value - data.animated_value) * animation_speed * elapsed;
-                            data.animated_value += delta;
+                            // Smooth ease-out animation using exponential interpolation
+                            let diff = data.target_value - data.animated_value;
+                            data.animated_value += diff * lerp_factor;
                         }
 
                         // Snap to target if very close
                         if (data.animated_value - data.target_value).abs() < 0.001 {
                             data.animated_value = data.target_value;
                         }
+                        redraw = true;
                     }
-                }
 
-                // Always queue draw to ensure display updates
-                drawing_area.queue_draw();
+                    redraw
+                } else {
+                    false
+                };
+
+                // Only queue draw if needed
+                if needs_redraw {
+                    drawing_area.queue_draw();
+                }
                 glib::ControlFlow::Continue
             }
         });
@@ -174,6 +197,9 @@ impl Displayer for SpeedometerDisplayer {
             }
 
             display_data.values = data.clone();
+
+            // Mark as dirty to trigger redraw
+            display_data.dirty = true;
         }
     }
 
