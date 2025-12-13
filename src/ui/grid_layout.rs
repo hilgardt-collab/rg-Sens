@@ -3156,6 +3156,30 @@ fn show_panel_properties_dialog(
     // Wrap lcars_config_widget in Rc for sharing
     let lcars_config_widget = Rc::new(lcars_config_widget);
 
+    // === CPU Cores Configuration ===
+    let cpu_cores_config_label = Label::new(Some("CPU Cores Configuration:"));
+    cpu_cores_config_label.set_halign(gtk4::Align::Start);
+    cpu_cores_config_label.add_css_class("heading");
+    cpu_cores_config_label.set_visible(old_displayer_id == "cpu_cores");
+
+    let cpu_cores_config_widget = crate::ui::CoreBarsConfigWidget::new();
+    cpu_cores_config_widget.widget().set_visible(old_displayer_id == "cpu_cores");
+
+    // Load existing CPU cores config if displayer is cpu_cores
+    if old_displayer_id == "cpu_cores" {
+        if let Some(config_value) = panel_guard.config.get("core_bars_config") {
+            if let Ok(config) = serde_json::from_value::<crate::ui::CoreBarsConfig>(config_value.clone()) {
+                cpu_cores_config_widget.set_config(config);
+            }
+        }
+    }
+
+    displayer_tab_box.append(&cpu_cores_config_label);
+    displayer_tab_box.append(cpu_cores_config_widget.widget());
+
+    // Wrap cpu_cores_config_widget in Rc for sharing
+    let cpu_cores_config_widget = Rc::new(cpu_cores_config_widget);
+
     // Connect combo_config_widget to update lcars_config_widget when sources change
     {
         let lcars_widget_clone = lcars_config_widget.clone();
@@ -3181,7 +3205,7 @@ fn show_panel_properties_dialog(
         }
     }
 
-    // Show/hide text, bar, arc, speedometer, graph, clock, and lcars config based on displayer selection
+    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, and cpu_cores config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -3199,6 +3223,8 @@ fn show_panel_properties_dialog(
         let clock_digital_label_clone = clock_digital_config_label.clone();
         let lcars_widget_clone = lcars_config_widget.clone();
         let lcars_label_clone = lcars_config_label.clone();
+        let cpu_cores_widget_clone = cpu_cores_config_widget.clone();
+        let cpu_cores_label_clone = cpu_cores_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -3211,6 +3237,7 @@ fn show_panel_properties_dialog(
                 let is_clock_analog = displayer_id == "clock_analog";
                 let is_clock_digital = displayer_id == "clock_digital";
                 let is_lcars = displayer_id == "lcars";
+                let is_cpu_cores = displayer_id == "cpu_cores";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -3227,6 +3254,8 @@ fn show_panel_properties_dialog(
                 clock_digital_label_clone.set_visible(is_clock_digital);
                 lcars_widget_clone.widget().set_visible(is_lcars);
                 lcars_label_clone.set_visible(is_lcars);
+                cpu_cores_widget_clone.widget().set_visible(is_cpu_cores);
+                cpu_cores_label_clone.set_visible(is_cpu_cores);
             }
         });
     }
@@ -3442,6 +3471,7 @@ fn show_panel_properties_dialog(
     let clock_analog_config_widget_clone = clock_analog_config_widget.clone();
     let clock_digital_config_widget_clone = clock_digital_config_widget.clone();
     let lcars_config_widget_clone = lcars_config_widget.clone();
+    let cpu_cores_config_widget_clone = cpu_cores_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -3978,6 +4008,22 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the displayer
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply LCARS config: {}", e);
+                    }
+                }
+            }
+
+            // Apply CPU Cores configuration if cpu_cores displayer is active
+            if new_displayer_id == "cpu_cores" {
+                let core_bars_config = cpu_cores_config_widget_clone.get_config();
+                if let Ok(core_bars_config_json) = serde_json::to_value(&core_bars_config) {
+                    panel_guard.config.insert("core_bars_config".to_string(), core_bars_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply CPU Cores config: {}", e);
                     }
                 }
             }
