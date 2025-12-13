@@ -43,6 +43,9 @@ chrono-tz = "0.10"
 # Configuration
 directories = "5"
 
+# Command line parsing
+clap = { version = "4", features = ["derive"] }
+
 # Future: Dynamic plugin loading (commented for now)
 # libloading = "0.8"
 
