@@ -497,6 +497,75 @@ impl GridLayout {
         });
 
         self.container.add_controller(drag_gesture);
+
+        // Keyboard handling for Delete key
+        let key_controller = gtk4::EventControllerKey::new();
+        let selected_panels_key = self.selected_panels.clone();
+        let panel_states_key = self.panel_states.clone();
+        let occupied_cells_key = self.occupied_cells.clone();
+        let container_key = self.container.clone();
+        let panels_key = self.panels.clone();
+        let on_change_key = self.on_change.clone();
+
+        key_controller.connect_key_pressed(move |_, keyval, _keycode, _state| {
+            use gtk4::gdk::Key;
+
+            if keyval == Key::Delete || keyval == Key::BackSpace {
+                let selected = selected_panels_key.borrow();
+                if selected.is_empty() {
+                    return gtk4::glib::Propagation::Proceed;
+                }
+
+                let selected_ids: Vec<String> = selected.iter().cloned().collect();
+                let count = selected_ids.len();
+                drop(selected);
+
+                log::info!("Delete key pressed, deleting {} selected panels", count);
+
+                // Show confirmation dialog
+                let dialog = gtk4::AlertDialog::builder()
+                    .modal(true)
+                    .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
+                    .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
+                    .buttons(vec!["Cancel", "Delete"])
+                    .default_button(0)
+                    .cancel_button(0)
+                    .build();
+
+                let selected_panels_del = selected_panels_key.clone();
+                let panel_states_del = panel_states_key.clone();
+                let occupied_cells_del = occupied_cells_key.clone();
+                let container_del = container_key.clone();
+                let panels_del = panels_key.clone();
+                let on_change_del = on_change_key.clone();
+
+                dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |result| {
+                    if let Ok(response) = result {
+                        if response == 1 {
+                            // Delete button clicked
+                            delete_selected_panels(
+                                &selected_ids,
+                                &selected_panels_del,
+                                &panel_states_del,
+                                &occupied_cells_del,
+                                &container_del,
+                                &panels_del,
+                                &on_change_del,
+                            );
+                        }
+                    }
+                });
+
+                return gtk4::glib::Propagation::Stop;
+            }
+
+            gtk4::glib::Propagation::Proceed
+        });
+
+        // Make the overlay focusable to receive key events
+        self.overlay.set_focusable(true);
+        self.overlay.set_can_focus(true);
+        self.overlay.add_controller(key_controller);
     }
 
     /// Add a panel to the grid
@@ -1059,9 +1128,9 @@ impl GridLayout {
         });
         action_group.add_action(&save_to_file_action);
 
-        // Delete action
+        // Delete action - deletes all selected panels
         let panel_id_clone2 = panel_id.clone();
-        let panel_clone2 = panel.clone();
+        let selected_panels_delete = self.selected_panels.clone();
         let panel_states_clone = self.panel_states.clone();
         let occupied_cells_clone = self.occupied_cells.clone();
         let container_clone = self.container.clone();
@@ -1069,26 +1138,30 @@ impl GridLayout {
         let panels_clone = self.panels.clone();
         let delete_action = gio::SimpleAction::new("delete", None);
         delete_action.connect_activate(move |_, _| {
-            info!("Delete requested for panel: {}", panel_id_clone2);
-
-            // Get panel geometry before deletion
-            let geometry = {
-                let panel_guard = panel_clone2.blocking_read();
-                panel_guard.geometry
+            // Get all selected panels, or just the clicked panel if none selected
+            let selected = selected_panels_delete.borrow();
+            let panel_ids: Vec<String> = if selected.is_empty() || !selected.contains(&panel_id_clone2) {
+                vec![panel_id_clone2.clone()]
+            } else {
+                selected.iter().cloned().collect()
             };
+            let count = panel_ids.len();
+            drop(selected);
+
+            info!("Delete requested for {} panel(s)", count);
 
             // Show confirmation dialog
             use gtk4::AlertDialog;
             let dialog = AlertDialog::builder()
-                .message("Delete Panel?")
-                .detail("This action cannot be undone.")
+                .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
+                .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
                 .modal(true)
                 .buttons(vec!["Cancel", "Delete"])
-                .default_button(0) // "Cancel" button
-                .cancel_button(0) // "Cancel" button
+                .default_button(0)
+                .cancel_button(0)
                 .build();
 
-            let panel_id_for_delete = panel_id_clone2.clone();
+            let selected_panels_for_delete = selected_panels_delete.clone();
             let panel_states_for_delete = panel_states_clone.clone();
             let occupied_cells_for_delete = occupied_cells_clone.clone();
             let container_for_delete = container_clone.clone();
@@ -1100,43 +1173,16 @@ impl GridLayout {
                 if let Some(window) = root.downcast_ref::<gtk4::Window>() {
                     dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
                         if let Ok(1) = response {
-                            // Delete button clicked (index 1)
-                            info!("Deleting panel: {}", panel_id_for_delete);
-
-                            // Unregister from update manager to stop updates
-                            if let Some(update_manager) = crate::core::global_update_manager() {
-                                update_manager.queue_remove_panel(panel_id_for_delete.clone());
-                            }
-
-                            // Remove from panel_states and get the frame widget
-                            if let Some(state) = panel_states_for_delete.borrow_mut().remove(&panel_id_for_delete) {
-                                // Remove widget from container
-                                container_for_delete.remove(&state.frame);
-
-                                // Free occupied cells
-                                for dx in 0..geometry.width {
-                                    for dy in 0..geometry.height {
-                                        occupied_cells_for_delete
-                                            .borrow_mut()
-                                            .remove(&(geometry.x + dx, geometry.y + dy));
-                                    }
-                                }
-
-                                // Remove from panels list
-                                panels_for_delete.borrow_mut().retain(|p| {
-                                    let p_guard = p.blocking_read();
-                                    p_guard.id != panel_id_for_delete
-                                });
-
-                                // Trigger on_change callback to mark config as dirty
-                                if let Some(ref callback) = *on_change_for_delete.borrow() {
-                                    callback();
-                                }
-
-                                info!("Panel deleted successfully: {}", panel_id_for_delete);
-                            } else {
-                                log::warn!("Panel not found in states: {}", panel_id_for_delete);
-                            }
+                            // Delete button clicked
+                            delete_selected_panels(
+                                &panel_ids,
+                                &selected_panels_for_delete,
+                                &panel_states_for_delete,
+                                &occupied_cells_for_delete,
+                                &container_for_delete,
+                                &panels_for_delete,
+                                &on_change_for_delete,
+                            );
                         }
                     });
                 }
@@ -1197,7 +1243,7 @@ impl GridLayout {
         let dragged_panel_id_begin = dragged_panel_id.clone();
         let cached_geometries_begin = cached_geometries.clone();
 
-        drag_gesture.connect_drag_begin(move |_, _, _| {
+        drag_gesture.connect_drag_begin(move |gesture, _, _| {
             // Enable grid visualization
             *is_dragging_begin.borrow_mut() = true;
             drop_zone_begin.queue_draw();
@@ -1205,27 +1251,40 @@ impl GridLayout {
             // Store which panel is being dragged
             *dragged_panel_id_begin.borrow_mut() = panel_id_for_drag_begin.clone();
 
+            // Check if Ctrl is held (for multi-select drag)
+            let modifiers = gesture.current_event_state();
+            let ctrl_pressed = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+
             // Ensure the dragged panel is in the selected set
             let mut selected = selected_panels_begin.borrow_mut();
             let mut states = panel_states_begin.borrow_mut();
 
             if !selected.contains(&panel_id_for_drag_begin) {
-                // If dragging a non-selected panel, clear selection and select only this panel
-
-                // Deselect all other panels
-                for (id, state) in states.iter_mut() {
-                    if selected.contains(id) {
-                        state.selected = false;
-                        state.frame.remove_css_class("selected");
+                if ctrl_pressed && !selected.is_empty() {
+                    // Ctrl is held and there are already selected panels - ADD this panel to selection
+                    selected.insert(panel_id_for_drag_begin.clone());
+                    if let Some(state) = states.get_mut(&panel_id_for_drag_begin) {
+                        state.selected = true;
+                        state.frame.add_css_class("selected");
                     }
-                }
-                selected.clear();
+                } else {
+                    // No Ctrl or no existing selection - clear and select only this panel
 
-                // Select the dragged panel
-                selected.insert(panel_id_for_drag_begin.clone());
-                if let Some(state) = states.get_mut(&panel_id_for_drag_begin) {
-                    state.selected = true;
-                    state.frame.add_css_class("selected");
+                    // Deselect all other panels
+                    for (id, state) in states.iter_mut() {
+                        if selected.contains(id) {
+                            state.selected = false;
+                            state.frame.remove_css_class("selected");
+                        }
+                    }
+                    selected.clear();
+
+                    // Select the dragged panel
+                    selected.insert(panel_id_for_drag_begin.clone());
+                    if let Some(state) = states.get_mut(&panel_id_for_drag_begin) {
+                        state.selected = true;
+                        state.frame.add_css_class("selected");
+                    }
                 }
             }
 
@@ -1677,10 +1736,10 @@ impl GridLayout {
                                 });
                                 action_group.add_action(&properties_action);
 
-                                // Delete action
+                                // Delete action - deletes all selected panels
                                 let delete_action = gio::SimpleAction::new("delete", None);
                                 let panel_id_del = panel_id_for_menu.clone();
-                                let panel_del = panel_for_menu.clone();
+                                let selected_panels_del = selected_panels_end.clone();
                                 let panel_states_del = panel_states_for_menu.clone();
                                 let occupied_cells_del = occupied_cells_for_menu.clone();
                                 let panels_del = panels_for_copy.clone();
@@ -1688,23 +1747,30 @@ impl GridLayout {
                                 let container_del = container_for_copy.clone();
 
                                 delete_action.connect_activate(move |_, _| {
-                                    log::info!("Delete requested for copied panel: {}", panel_id_del);
                                     use gtk4::AlertDialog;
-                                    let geometry = {
-                                        let panel_guard = panel_del.blocking_read();
-                                        panel_guard.geometry
+
+                                    // Get all selected panels, or just the clicked panel if none selected
+                                    let selected = selected_panels_del.borrow();
+                                    let panel_ids: Vec<String> = if selected.is_empty() || !selected.contains(&panel_id_del) {
+                                        vec![panel_id_del.clone()]
+                                    } else {
+                                        selected.iter().cloned().collect()
                                     };
+                                    let count = panel_ids.len();
+                                    drop(selected);
+
+                                    log::info!("Delete requested for {} panel(s)", count);
 
                                     let dialog = AlertDialog::builder()
-                                        .message("Delete Panel?")
-                                        .detail("This action cannot be undone.")
+                                        .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
+                                        .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
                                         .modal(true)
                                         .buttons(vec!["Cancel", "Delete"])
                                         .default_button(0)
                                         .cancel_button(0)
                                         .build();
 
-                                    let panel_id_confirm = panel_id_del.clone();
+                                    let selected_panels_confirm = selected_panels_del.clone();
                                     let panel_states_confirm = panel_states_del.clone();
                                     let occupied_cells_confirm = occupied_cells_del.clone();
                                     let panels_confirm = panels_del.clone();
@@ -1716,33 +1782,15 @@ impl GridLayout {
                                         if let Some(window) = root.downcast_ref::<gtk4::Window>() {
                                             dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
                                                 if let Ok(1) = response {
-                                                    log::info!("Deleting copied panel: {}", panel_id_confirm);
-
-                                                    // Unregister from update manager to stop updates
-                                                    if let Some(update_manager) = crate::core::global_update_manager() {
-                                                        update_manager.queue_remove_panel(panel_id_confirm.clone());
-                                                    }
-
-                                                    if let Some(state) = panel_states_confirm.borrow_mut().remove(&panel_id_confirm) {
-                                                        container_confirm.remove(&state.frame);
-
-                                                        let mut occupied = occupied_cells_confirm.borrow_mut();
-                                                        for dx in 0..geometry.width {
-                                                            for dy in 0..geometry.height {
-                                                                occupied.remove(&(geometry.x + dx, geometry.y + dy));
-                                                            }
-                                                        }
-                                                        drop(occupied);
-
-                                                        panels_confirm.borrow_mut().retain(|p| {
-                                                            let p_guard = p.blocking_read();
-                                                            p_guard.id != panel_id_confirm
-                                                        });
-
-                                                        if let Some(ref callback) = *on_change_confirm.borrow() {
-                                                            callback();
-                                                        }
-                                                    }
+                                                    delete_selected_panels(
+                                                        &panel_ids,
+                                                        &selected_panels_confirm,
+                                                        &panel_states_confirm,
+                                                        &occupied_cells_confirm,
+                                                        &container_confirm,
+                                                        &panels_confirm,
+                                                        &on_change_confirm,
+                                                    );
                                                 }
                                             });
                                         }
@@ -2026,28 +2074,42 @@ impl GridLayout {
                                 let drop_zone_drag_begin = drop_zone_layer_end.clone();
                                 let panel_id_drag_begin = new_id.clone();
 
-                                drag_gesture_copy.connect_drag_begin(move |_, _, _| {
+                                drag_gesture_copy.connect_drag_begin(move |gesture, _, _| {
                                     *is_dragging_drag_begin.borrow_mut() = true;
                                     drop_zone_drag_begin.queue_draw();
 
                                     *dragged_panel_id_begin.borrow_mut() = panel_id_drag_begin.clone();
 
+                                    // Check if Ctrl is held (for multi-select drag)
+                                    let modifiers = gesture.current_event_state();
+                                    let ctrl_pressed = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+
                                     let mut selected = selected_panels_drag_begin.borrow_mut();
                                     let mut states = panel_states_drag_begin.borrow_mut();
 
                                     if !selected.contains(&panel_id_drag_begin) {
-                                        for (id, state) in states.iter_mut() {
-                                            if selected.contains(id) {
-                                                state.selected = false;
-                                                state.frame.remove_css_class("selected");
+                                        if ctrl_pressed && !selected.is_empty() {
+                                            // Ctrl is held - ADD this panel to selection
+                                            selected.insert(panel_id_drag_begin.clone());
+                                            if let Some(state) = states.get_mut(&panel_id_drag_begin) {
+                                                state.selected = true;
+                                                state.frame.add_css_class("selected");
                                             }
-                                        }
-                                        selected.clear();
+                                        } else {
+                                            // No Ctrl - clear and select only this panel
+                                            for (id, state) in states.iter_mut() {
+                                                if selected.contains(id) {
+                                                    state.selected = false;
+                                                    state.frame.remove_css_class("selected");
+                                                }
+                                            }
+                                            selected.clear();
 
-                                        selected.insert(panel_id_drag_begin.clone());
-                                        if let Some(state) = states.get_mut(&panel_id_drag_begin) {
-                                            state.selected = true;
-                                            state.frame.add_css_class("selected");
+                                            selected.insert(panel_id_drag_begin.clone());
+                                            if let Some(state) = states.get_mut(&panel_id_drag_begin) {
+                                                state.selected = true;
+                                                state.frame.add_css_class("selected");
+                                            }
                                         }
                                     }
 
@@ -2633,6 +2695,60 @@ impl GridLayout {
 
     pub fn config(&self) -> GridConfig {
         *self.config.borrow()
+    }
+}
+
+/// Helper function to delete multiple selected panels
+fn delete_selected_panels(
+    panel_ids: &[String],
+    selected_panels: &Rc<RefCell<HashSet<String>>>,
+    panel_states: &Rc<RefCell<HashMap<String, PanelState>>>,
+    occupied_cells: &Rc<RefCell<HashSet<(u32, u32)>>>,
+    container: &Fixed,
+    panels: &Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+) {
+    log::info!("Deleting {} panels", panel_ids.len());
+
+    for panel_id in panel_ids {
+        // Remove from update manager
+        if let Some(update_manager) = crate::core::global_update_manager() {
+            update_manager.queue_remove_panel(panel_id.clone());
+        }
+
+        // Remove from panel states and UI
+        if let Some(state) = panel_states.borrow_mut().remove(panel_id) {
+            container.remove(&state.frame);
+
+            // Clear occupied cells
+            if let Ok(panel_guard) = state.panel.try_read() {
+                let geom = panel_guard.geometry;
+                let mut occupied = occupied_cells.borrow_mut();
+                for dx in 0..geom.width {
+                    for dy in 0..geom.height {
+                        occupied.remove(&(geom.x + dx, geom.y + dy));
+                    }
+                }
+            }
+
+            // Remove from panels list
+            panels.borrow_mut().retain(|p| {
+                let p_guard = p.blocking_read();
+                p_guard.id != *panel_id
+            });
+
+            log::info!("Panel deleted: {}", panel_id);
+        } else {
+            log::warn!("Panel not found in states: {}", panel_id);
+        }
+
+        // Remove from selected set
+        selected_panels.borrow_mut().remove(panel_id);
+    }
+
+    // Trigger on_change callback
+    if let Some(ref callback) = *on_change.borrow() {
+        callback();
     }
 }
 
@@ -4076,9 +4192,9 @@ fn show_panel_properties_dialog(
                         });
                         action_group.add_action(&save_to_file_action);
 
-                        // Delete action
-                        let panel_del = panel_clone.clone();
+                        // Delete action - deletes all selected panels
                         let panel_id_del = panel_id_for_apply.clone();
+                        let selected_panels_del = selected_panels_for_apply.clone();
                         let panel_states_del = panel_states_for_apply.clone();
                         let occupied_cells_del = occupied_cells_for_apply.clone();
                         let container_del = container_for_apply.clone();
@@ -4087,25 +4203,29 @@ fn show_panel_properties_dialog(
 
                         let delete_action = gio::SimpleAction::new("delete", None);
                         delete_action.connect_activate(move |_, _| {
-                            log::info!("Delete requested for panel: {}", panel_id_del);
-
-                            // Get panel geometry before deletion
-                            let geometry = {
-                                let panel_guard = panel_del.blocking_read();
-                                panel_guard.geometry
+                            // Get all selected panels, or just the clicked panel if none selected
+                            let selected = selected_panels_del.borrow();
+                            let panel_ids: Vec<String> = if selected.is_empty() || !selected.contains(&panel_id_del) {
+                                vec![panel_id_del.clone()]
+                            } else {
+                                selected.iter().cloned().collect()
                             };
+                            let count = panel_ids.len();
+                            drop(selected);
+
+                            log::info!("Delete requested for {} panel(s)", count);
 
                             // Show confirmation dialog
                             let dialog = gtk4::AlertDialog::builder()
-                                .message("Delete Panel?")
-                                .detail("This action cannot be undone.")
+                                .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
+                                .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
                                 .modal(true)
                                 .buttons(vec!["Cancel", "Delete"])
                                 .default_button(0)
                                 .cancel_button(0)
                                 .build();
 
-                            let panel_id_for_delete = panel_id_del.clone();
+                            let selected_panels_for_delete = selected_panels_del.clone();
                             let panel_states_for_delete = panel_states_del.clone();
                             let occupied_cells_for_delete = occupied_cells_del.clone();
                             let container_for_delete = container_del.clone();
@@ -4117,42 +4237,15 @@ fn show_panel_properties_dialog(
                                 if let Some(window) = root.downcast_ref::<gtk4::Window>() {
                                     dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
                                         if let Ok(1) = response {
-                                            log::info!("Deleting panel: {}", panel_id_for_delete);
-
-                                            // Unregister from update manager to stop updates
-                                            if let Some(update_manager) = crate::core::global_update_manager() {
-                                                update_manager.queue_remove_panel(panel_id_for_delete.clone());
-                                            }
-
-                                            // Remove from panel_states
-                                            if let Some(state) = panel_states_for_delete.borrow_mut().remove(&panel_id_for_delete) {
-                                                // Remove widget from container
-                                                container_for_delete.remove(&state.frame);
-
-                                                // Free occupied cells
-                                                for dx in 0..geometry.width {
-                                                    for dy in 0..geometry.height {
-                                                        occupied_cells_for_delete
-                                                            .borrow_mut()
-                                                            .remove(&(geometry.x + dx, geometry.y + dy));
-                                                    }
-                                                }
-
-                                                // Remove from panels list
-                                                panels_for_delete.borrow_mut().retain(|p| {
-                                                    let p_guard = p.blocking_read();
-                                                    p_guard.id != panel_id_for_delete
-                                                });
-
-                                                // Trigger on_change callback
-                                                if let Some(ref callback) = *on_change_for_delete.borrow() {
-                                                    callback();
-                                                }
-
-                                                log::info!("Panel deleted successfully: {}", panel_id_for_delete);
-                                            } else {
-                                                log::warn!("Panel not found in states: {}", panel_id_for_delete);
-                                            }
+                                            delete_selected_panels(
+                                                &panel_ids,
+                                                &selected_panels_for_delete,
+                                                &panel_states_for_delete,
+                                                &occupied_cells_for_delete,
+                                                &container_for_delete,
+                                                &panels_for_delete,
+                                                &on_change_for_delete,
+                                            );
                                         }
                                     });
                                 }
