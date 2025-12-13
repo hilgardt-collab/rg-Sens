@@ -10,46 +10,37 @@ use crate::displayers::TextLineConfig;
 
 /// Graph type
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum GraphType {
+    #[default]
     Line,
     Bar,
     Area,
     SteppedLine,
 }
 
-impl Default for GraphType {
-    fn default() -> Self {
-        Self::Line
-    }
-}
 
 /// Graph line style
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum LineStyle {
+    #[default]
     Solid,
     Dashed,
     Dotted,
 }
 
-impl Default for LineStyle {
-    fn default() -> Self {
-        Self::Solid
-    }
-}
 
 /// Graph fill mode
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum FillMode {
+    #[default]
     None,
     Solid,
     Gradient,
 }
 
-impl Default for FillMode {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 /// Axis configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

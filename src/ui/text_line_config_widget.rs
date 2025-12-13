@@ -2,7 +2,7 @@
 
 use crate::core::FieldMetadata;
 use crate::displayers::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
-use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::background::Color;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use gtk4::prelude::*;
@@ -19,6 +19,7 @@ pub struct TextLineConfigWidget {
     lines: Rc<RefCell<Vec<TextLineConfig>>>,
     list_box: ListBox,
     available_fields: Vec<FieldMetadata>,
+    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
 }
 
 impl TextLineConfigWidget {
@@ -26,14 +27,18 @@ impl TextLineConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
         let widget = GtkBox::new(Orientation::Vertical, 6);
 
-        // Header with add button
+        // Header with add button and copy/paste
         let header_box = GtkBox::new(Orientation::Horizontal, 6);
         let header_label = Label::new(Some("Text Lines"));
         header_label.set_hexpand(true);
         header_label.set_halign(gtk4::Align::Start);
 
+        let copy_btn = Button::with_label("Copy");
+        let paste_btn = Button::with_label("Paste");
         let add_button = Button::with_label("+ Add Line");
         header_box.append(&header_label);
+        header_box.append(&copy_btn);
+        header_box.append(&paste_btn);
         header_box.append(&add_button);
         widget.append(&header_box);
 
@@ -48,17 +53,117 @@ impl TextLineConfigWidget {
         widget.append(&scrolled);
 
         let lines = Rc::new(RefCell::new(Vec::new()));
+        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
-        let lines_clone = lines.clone();
-        let list_box_clone = list_box.clone();
-        let fields_clone = available_fields.clone();
+        // Set up add button - uses a self-contained rebuild callback like delete
+        let lines_for_add = lines.clone();
+        let list_box_for_add = list_box.clone();
+        let fields_for_add = available_fields.clone();
+        let on_change_for_rebuild = on_change.clone();
+
+        // Create self-referential rebuild callback for add
+        let rebuild_fn: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+
+        let rebuild_closure: Rc<dyn Fn()> = Rc::new({
+            let lines_inner = lines_for_add.clone();
+            let list_box_inner = list_box_for_add.clone();
+            let fields_inner = fields_for_add.clone();
+            let rebuild_fn_inner = rebuild_fn.clone();
+            let on_change_inner = on_change_for_rebuild.clone();
+
+            move || {
+                // Clear list box
+                while let Some(child) = list_box_inner.first_child() {
+                    list_box_inner.remove(&child);
+                }
+
+                // Rebuild all rows with the same rebuild callback
+                let lines_data = lines_inner.borrow().clone();
+                let callback_to_pass = rebuild_fn_inner.borrow().clone();
+                for (index, line) in lines_data.into_iter().enumerate() {
+                    Self::add_line_row(
+                        &list_box_inner,
+                        line,
+                        &fields_inner,
+                        lines_inner.clone(),
+                        index,
+                        callback_to_pass.clone(),
+                        on_change_inner.clone(),
+                    );
+                }
+            }
+        });
+
+        // Store the callback so it can reference itself
+        *rebuild_fn.borrow_mut() = Some(rebuild_closure.clone());
+
+        let on_change_for_add = on_change.clone();
         add_button.connect_clicked(move |_| {
-            let mut lines = lines_clone.borrow_mut();
-            let new_line = TextLineConfig::default();
-            let index = lines.len(); // Get index before pushing
-            lines.push(new_line.clone());
-            drop(lines);
-            Self::add_line_row(&list_box_clone, new_line, &fields_clone, lines_clone.clone(), index, None);
+            // Add new line to data
+            {
+                let mut lines = lines_for_add.borrow_mut();
+                let new_line = TextLineConfig::default();
+                lines.push(new_line);
+            }
+            // Trigger full rebuild so the new line has the rebuild callback
+            rebuild_closure();
+            // Trigger on_change callback
+            if let Some(ref callback) = *on_change_for_add.borrow() {
+                callback();
+            }
+        });
+
+        // Copy button handler
+        let lines_for_copy = lines.clone();
+        copy_btn.connect_clicked(move |_| {
+            let config = crate::displayers::TextDisplayerConfig {
+                lines: lines_for_copy.borrow().clone(),
+            };
+            if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                clipboard.copy_text_display(config);
+            }
+        });
+
+        // Paste button handler - needs to rebuild list
+        let lines_for_paste = lines.clone();
+        let list_box_for_paste = list_box.clone();
+        let fields_for_paste = available_fields.clone();
+        let on_change_for_paste = on_change.clone();
+        let rebuild_fn_for_paste = rebuild_fn.clone();
+        paste_btn.connect_clicked(move |_| {
+            let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                clipboard.paste_text_display()
+            } else {
+                None
+            };
+
+            if let Some(config) = pasted {
+                // Update lines
+                *lines_for_paste.borrow_mut() = config.lines;
+
+                // Rebuild list
+                while let Some(child) = list_box_for_paste.first_child() {
+                    list_box_for_paste.remove(&child);
+                }
+                let lines_data = lines_for_paste.borrow().clone();
+                let callback_to_pass = rebuild_fn_for_paste.borrow().clone();
+                for (index, line) in lines_data.into_iter().enumerate() {
+                    Self::add_line_row(
+                        &list_box_for_paste,
+                        line,
+                        &fields_for_paste,
+                        lines_for_paste.clone(),
+                        index,
+                        callback_to_pass.clone(),
+                        on_change_for_paste.clone(),
+                    );
+                }
+
+                // Trigger on_change
+                if let Some(ref callback) = *on_change_for_paste.borrow() {
+                    callback();
+                }
+            }
         });
 
         Self {
@@ -66,6 +171,7 @@ impl TextLineConfigWidget {
             lines,
             list_box,
             available_fields,
+            on_change,
         }
     }
 
@@ -77,6 +183,7 @@ impl TextLineConfigWidget {
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
         list_index: usize,
         rebuild_callback: Option<Rc<dyn Fn()>>,
+        on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -151,6 +258,7 @@ impl TextLineConfigWidget {
         // Update font size when spinner changes
         let lines_clone_size = lines.clone();
         let font_button_clone_size = font_button.clone();
+        let on_change_size = on_change.clone();
         size_spin.connect_value_changed(move |spin| {
             let new_size = spin.value();
             let mut lines_ref = lines_clone_size.borrow_mut();
@@ -158,6 +266,10 @@ impl TextLineConfigWidget {
                 line.font_size = new_size;
                 // Update button label
                 font_button_clone_size.set_label(&format!("{} {:.0}", line.font_family, new_size));
+            }
+            drop(lines_ref);
+            if let Some(ref callback) = *on_change_size.borrow() {
+                callback();
             }
         });
 
@@ -168,10 +280,15 @@ impl TextLineConfigWidget {
         font_box.append(&bold_check);
 
         let lines_clone_bold = lines.clone();
+        let on_change_bold = on_change.clone();
         bold_check.connect_toggled(move |check| {
             let mut lines_ref = lines_clone_bold.borrow_mut();
             if let Some(line) = lines_ref.get_mut(list_index) {
                 line.bold = check.is_active();
+            }
+            drop(lines_ref);
+            if let Some(ref callback) = *on_change_bold.borrow() {
+                callback();
             }
         });
 
@@ -181,10 +298,15 @@ impl TextLineConfigWidget {
         font_box.append(&italic_check);
 
         let lines_clone_italic = lines.clone();
+        let on_change_italic = on_change.clone();
         italic_check.connect_toggled(move |check| {
             let mut lines_ref = lines_clone_italic.borrow_mut();
             if let Some(line) = lines_ref.get_mut(list_index) {
                 line.italic = check.is_active();
+            }
+            drop(lines_ref);
+            if let Some(ref callback) = *on_change_italic.borrow() {
+                callback();
             }
         });
 
@@ -208,6 +330,7 @@ impl TextLineConfigWidget {
         let size_spin_clone = size_spin.clone();
         let bold_check_clone = bold_check.clone();
         let italic_check_clone = italic_check.clone();
+        let on_change_paste = on_change.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 if let Some((family, size, bold, italic)) = clipboard.paste_font() {
@@ -225,6 +348,10 @@ impl TextLineConfigWidget {
                     size_spin_clone.set_value(size);
                     bold_check_clone.set_active(bold);
                     italic_check_clone.set_active(italic);
+
+                    if let Some(ref callback) = *on_change_paste.borrow() {
+                        callback();
+                    }
                 }
             }
         });
@@ -236,148 +363,29 @@ impl TextLineConfigWidget {
         let extras_box = GtkBox::new(Orientation::Horizontal, 6);
         extras_box.append(&Label::new(Some("Color:")));
 
-        // Color button (opens ColorDialog)
-        let color_button = Button::new();
-        let rgba = gtk4::gdk::RGBA::new(
-            line_config.color.0 as f32,
-            line_config.color.1 as f32,
-            line_config.color.2 as f32,
-            line_config.color.3 as f32,
+        // Color widget using ColorButtonWidget
+        let initial_color = Color::new(
+            line_config.color.0,
+            line_config.color.1,
+            line_config.color.2,
+            line_config.color.3,
         );
+        let color_widget = ColorButtonWidget::new(initial_color);
+        extras_box.append(color_widget.widget());
 
-        // Create a colored box to show current color with unique CSS class
-        let color_box = GtkBox::new(Orientation::Horizontal, 0);
-        color_box.set_size_request(40, 20);
-        let color_class = format!("color-preview-{}", list_index);
-        color_box.add_css_class(&color_class);
-
-        // Set background color using CSS (GTK 4.10+ compatible)
-        let css = format!(
-            "background-color: rgba({}, {}, {}, {});",
-            (rgba.red() * 255.0) as u8,
-            (rgba.green() * 255.0) as u8,
-            (rgba.blue() * 255.0) as u8,
-            rgba.alpha()
-        );
-        let provider = gtk4::CssProvider::new();
-        provider.load_from_data(&format!(".{} {{ {} }}", color_class, css));
-        let display = color_box.display();
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-
-        color_button.set_child(Some(&color_box));
-
-        // Connect color button to ColorPickerDialog
+        // Connect color widget change handler
         let lines_clone = lines.clone();
-        let color_class_clone = color_class.clone();
-        let color_box_clone_for_picker = color_box.clone(); // Clone before moving into closure
-        color_button.connect_clicked(move |btn| {
-            let current_color = {
-                let lines_ref = lines_clone.borrow();
-                if let Some(line) = lines_ref.get(list_index) {
-                    Color::new(line.color.0, line.color.1, line.color.2, line.color.3)
-                } else {
-                    Color::default()
-                }
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let lines_clone2 = lines_clone.clone();
-            let color_box_clone = color_box_clone_for_picker.clone();
-            let color_class_clone2 = color_class_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut lines_ref = lines_clone2.borrow_mut();
-                    if let Some(line) = lines_ref.get_mut(list_index) {
-                        line.color = (new_color.r, new_color.g, new_color.b, new_color.a);
-                    }
-                    drop(lines_ref);
-
-                    // Update color preview with unique CSS class (GTK 4.10+ compatible)
-                    let rgba = gtk4::gdk::RGBA::new(
-                        new_color.r as f32,
-                        new_color.g as f32,
-                        new_color.b as f32,
-                        new_color.a as f32,
-                    );
-                    let css = format!(
-                        "background-color: rgba({}, {}, {}, {});",
-                        (rgba.red() * 255.0) as u8,
-                        (rgba.green() * 255.0) as u8,
-                        (rgba.blue() * 255.0) as u8,
-                        rgba.alpha()
-                    );
-                    let provider = gtk4::CssProvider::new();
-                    provider.load_from_data(&format!(".{} {{ {} }}", color_class_clone2, css));
-                    let display = color_box_clone.display();
-                    gtk4::style_context_add_provider_for_display(
-                        &display,
-                        &provider,
-                        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-                    );
-                }
-            });
-        });
-
-        extras_box.append(&color_button);
-
-        // Copy color button
-        let copy_color_btn = Button::with_label("Copy");
-        let lines_clone_copy_color = lines.clone();
-        copy_color_btn.connect_clicked(move |_| {
-            let lines_ref = lines_clone_copy_color.borrow();
-            if let Some(line) = lines_ref.get(list_index) {
-                if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                    clipboard.copy_color(line.color.0, line.color.1, line.color.2, line.color.3);
-                }
+        let on_change_color = on_change.clone();
+        color_widget.set_on_change(move |new_color| {
+            let mut lines_ref = lines_clone.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.color = (new_color.r, new_color.g, new_color.b, new_color.a);
+            }
+            drop(lines_ref);
+            if let Some(ref callback) = *on_change_color.borrow() {
+                callback();
             }
         });
-        extras_box.append(&copy_color_btn);
-
-        // Paste color button
-        let paste_color_btn = Button::with_label("Paste");
-        let lines_clone_paste_color = lines.clone();
-        let color_box_clone_paste = color_box.clone();
-        let color_class_clone_paste = color_class.clone();
-        paste_color_btn.connect_clicked(move |_| {
-            if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                if let Some(color) = clipboard.paste_color() {
-                    let mut lines_ref = lines_clone_paste_color.borrow_mut();
-                    if let Some(line) = lines_ref.get_mut(list_index) {
-                        line.color = color;
-                    }
-                    drop(lines_ref);
-
-                    // Update color preview
-                    let rgba = gtk4::gdk::RGBA::new(
-                        color.0 as f32,
-                        color.1 as f32,
-                        color.2 as f32,
-                        color.3 as f32,
-                    );
-                    let css = format!(
-                        "background-color: rgba({}, {}, {}, {});",
-                        (rgba.red() * 255.0) as u8,
-                        (rgba.green() * 255.0) as u8,
-                        (rgba.blue() * 255.0) as u8,
-                        rgba.alpha()
-                    );
-                    let provider = gtk4::CssProvider::new();
-                    provider.load_from_data(&format!(".{} {{ {} }}", color_class_clone_paste, css));
-                    let display = color_box_clone_paste.display();
-                    gtk4::style_context_add_provider_for_display(
-                        &display,
-                        &provider,
-                        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-                    );
-                }
-            }
-        });
-        extras_box.append(&paste_color_btn);
 
         extras_box.append(&Label::new(Some("Angle:")));
         let angle_spin = SpinButton::with_range(0.0, 360.0, 5.0);
@@ -414,8 +422,7 @@ impl TextLineConfigWidget {
             "Group 5", "Group 6", "Group 7", "Group 8",
             "Custom"
         ];
-        let group_strings: Vec<&str> = group_options.iter().map(|s| *s).collect();
-        let group_list = StringList::new(&group_strings);
+        let group_list = StringList::new(&group_options);
         let group_combo = DropDown::new(Some(group_list), Option::<gtk4::Expression>::None);
 
         // Determine initial selection
@@ -458,6 +465,7 @@ impl TextLineConfigWidget {
             let lines_clone = lines.clone();
             let font_button_clone = font_button.clone();
             let size_spin_clone = size_spin.clone();
+            let on_change_font = on_change.clone();
             font_button.connect_clicked(move |btn| {
                 let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
 
@@ -475,6 +483,7 @@ impl TextLineConfigWidget {
                 let lines_clone2 = lines_clone.clone();
                 let font_button_clone2 = font_button_clone.clone();
                 let size_spin_clone2 = size_spin_clone.clone();
+                let on_change_font2 = on_change_font.clone();
 
                 // Use callback-based API for font selection with shared dialog
                 shared_font_dialog().choose_font(
@@ -497,6 +506,10 @@ impl TextLineConfigWidget {
                             // Update button label and size spinner
                             font_button_clone2.set_label(&format!("{} {:.0}", family, size));
                             size_spin_clone2.set_value(size);
+
+                            if let Some(ref callback) = *on_change_font2.borrow() {
+                                callback();
+                            }
                         }
                     },
                 );
@@ -507,12 +520,17 @@ impl TextLineConfigWidget {
         {
             let lines_clone = lines.clone();
             let fields_clone = fields.to_vec();
+            let on_change_field = on_change.clone();
             field_combo.connect_selected_notify(move |combo| {
                 let selected = combo.selected() as usize;
                 if let Some(field) = fields_clone.get(selected) {
                     let mut lines_ref = lines_clone.borrow_mut();
                     if let Some(line) = lines_ref.get_mut(list_index) {
                         line.field_id = field.id.clone();
+                    }
+                    drop(lines_ref);
+                    if let Some(ref callback) = *on_change_field.borrow() {
+                        callback();
                     }
                 }
             });
@@ -521,6 +539,7 @@ impl TextLineConfigWidget {
         // Vertical position handler
         {
             let lines_clone = lines.clone();
+            let on_change_vpos = on_change.clone();
             v_pos_combo.connect_selected_notify(move |combo| {
                 let vpos = match combo.selected() {
                     0 => VerticalPosition::Top,
@@ -532,12 +551,17 @@ impl TextLineConfigWidget {
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.vertical_position = vpos;
                 }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_vpos.borrow() {
+                    callback();
+                }
             });
         }
 
         // Horizontal position handler
         {
             let lines_clone = lines.clone();
+            let on_change_hpos = on_change.clone();
             h_pos_combo.connect_selected_notify(move |combo| {
                 let hpos = match combo.selected() {
                     0 => HorizontalPosition::Left,
@@ -549,16 +573,25 @@ impl TextLineConfigWidget {
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.horizontal_position = hpos;
                 }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_hpos.borrow() {
+                    callback();
+                }
             });
         }
 
         // Rotation angle handler
         {
             let lines_clone = lines.clone();
+            let on_change_angle = on_change.clone();
             angle_spin.connect_value_changed(move |spin| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.rotation_angle = spin.value();
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_angle.borrow() {
+                    callback();
                 }
             });
         }
@@ -566,10 +599,15 @@ impl TextLineConfigWidget {
         // Offset X handler
         {
             let lines_clone = lines.clone();
+            let on_change_x = on_change.clone();
             offset_x_spin.connect_value_changed(move |spin| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.offset_x = spin.value();
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_x.borrow() {
+                    callback();
                 }
             });
         }
@@ -577,10 +615,15 @@ impl TextLineConfigWidget {
         // Offset Y handler
         {
             let lines_clone = lines.clone();
+            let on_change_y = on_change.clone();
             offset_y_spin.connect_value_changed(move |spin| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.offset_y = spin.value();
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_y.borrow() {
+                    callback();
                 }
             });
         }
@@ -628,14 +671,21 @@ impl TextLineConfigWidget {
         // Combine checkbox handler
         {
             let lines_clone = lines.clone();
-            let update_angle = update_angle_sensitivity.clone();
+            let rebuild = rebuild_callback.clone();
+            let on_change_combine = on_change.clone();
             combine_check.connect_toggled(move |check| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.is_combined = check.is_active();
                 }
                 drop(lines_ref);
-                update_angle();
+                // Rebuild all widgets so all lines can re-evaluate angle sensitivity
+                if let Some(ref rebuild_fn) = rebuild {
+                    rebuild_fn();
+                }
+                if let Some(ref callback) = *on_change_combine.borrow() {
+                    callback();
+                }
             });
         }
 
@@ -643,7 +693,8 @@ impl TextLineConfigWidget {
         {
             let lines_clone = lines.clone();
             let group_entry_clone = group_entry.clone();
-            let update_angle = update_angle_sensitivity.clone();
+            let rebuild = rebuild_callback.clone();
+            let on_change_group = on_change.clone();
             group_combo.connect_selected_notify(move |combo| {
                 let selected = combo.selected();
                 let is_custom = selected == 8; // Last option is "Custom"
@@ -668,7 +719,13 @@ impl TextLineConfigWidget {
                     }
                 }
                 drop(lines_ref);
-                update_angle();
+                // Rebuild all widgets so all lines can re-evaluate angle sensitivity
+                if let Some(ref rebuild_fn) = rebuild {
+                    rebuild_fn();
+                }
+                if let Some(ref callback) = *on_change_group.borrow() {
+                    callback();
+                }
             });
         }
 
@@ -676,6 +733,7 @@ impl TextLineConfigWidget {
         {
             let lines_clone = lines.clone();
             let update_angle = update_angle_sensitivity.clone();
+            let on_change_entry = on_change.clone();
             group_entry.connect_changed(move |entry| {
                 let text = entry.text().to_string();
                 let mut lines_ref = lines_clone.borrow_mut();
@@ -691,6 +749,9 @@ impl TextLineConfigWidget {
                 }
                 drop(lines_ref);
                 update_angle();
+                if let Some(ref callback) = *on_change_entry.borrow() {
+                    callback();
+                }
             });
         }
 
@@ -700,6 +761,7 @@ impl TextLineConfigWidget {
         row_box.append(&delete_button);
 
         // Delete button handler
+        let on_change_delete = on_change.clone();
         delete_button.connect_clicked(move |_| {
             let mut lines_ref = lines.borrow_mut();
             if list_index < lines_ref.len() {
@@ -710,6 +772,9 @@ impl TextLineConfigWidget {
             // Call rebuild callback to refresh the entire list with correct indices
             if let Some(ref rebuild) = rebuild_callback {
                 rebuild();
+            }
+            if let Some(ref callback) = *on_change_delete.borrow() {
+                callback();
             }
         });
 
@@ -727,10 +792,12 @@ impl TextLineConfigWidget {
         let list_box_clone = self.list_box.clone();
         let lines_clone = self.lines.clone();
         let fields_clone = self.available_fields.clone();
+        let on_change_clone = self.on_change.clone();
 
         // Create rebuild function as Rc<RefCell> to allow self-reference
         let rebuild_fn: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let rebuild_fn_clone = rebuild_fn.clone();
+        let on_change_for_rebuild = on_change_clone.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
             // Clear list box
@@ -749,6 +816,7 @@ impl TextLineConfigWidget {
                     lines_clone.clone(),
                     index,
                     callback_to_pass.clone(),
+                    on_change_for_rebuild.clone(),
                 );
             }
         });
@@ -766,6 +834,7 @@ impl TextLineConfigWidget {
                 self.lines.clone(),
                 index,
                 Some(rebuild_closure.clone()),
+                on_change_clone.clone(),
             );
         }
     }
@@ -789,5 +858,10 @@ impl TextLineConfigWidget {
     /// Get the widget
     pub fn widget(&self) -> &Widget {
         self.widget.upcast_ref()
+    }
+
+    /// Set the on_change callback
+    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 }

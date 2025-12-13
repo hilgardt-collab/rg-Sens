@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig};
-use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::GradientEditor;
 
 /// Background configuration widget
@@ -19,6 +19,7 @@ pub struct BackgroundConfigWidget {
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     type_dropdown_handler_id: gtk4::glib::SignalHandlerId,
     linear_gradient_editor: Rc<GradientEditor>,
+    radial_gradient_editor: Rc<GradientEditor>,
 }
 
 impl BackgroundConfigWidget {
@@ -80,7 +81,7 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&linear_page, Some("linear_gradient"));
 
         // Radial gradient configuration
-        let radial_page = Self::create_radial_gradient_config(&config, &preview, &on_change);
+        let (radial_page, radial_gradient_editor) = Self::create_radial_gradient_config(&config, &preview, &on_change);
         config_stack.add_named(&radial_page, Some("radial_gradient"));
 
         // Image configuration
@@ -163,6 +164,7 @@ impl BackgroundConfigWidget {
             on_change,
             type_dropdown_handler_id,
             linear_gradient_editor,
+            radial_gradient_editor,
         }
     }
 
@@ -196,40 +198,30 @@ impl BackgroundConfigWidget {
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 6);
 
-        let button = Button::with_label("Select Color");
+        // Solid color - using ColorButtonWidget
+        let color_box = GtkBox::new(Orientation::Horizontal, 6);
+        color_box.append(&Label::new(Some("Color:")));
+
+        let initial_color = if let BackgroundType::Solid { color } = config.borrow().background {
+            color
+        } else {
+            Color::default()
+        };
+        let color_widget = ColorButtonWidget::new(initial_color);
+        color_box.append(color_widget.widget());
+        page.append(&color_box);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-
-        button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::Solid { color } = config_clone.borrow().background {
-                color
-            } else {
-                Color::default()
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    cfg.background = BackgroundType::Solid { color: new_color };
-                    drop(cfg);
-
-                    preview_clone2.queue_draw();
-
-                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                        callback();
-                    }
-                }
-            });
+        color_widget.set_on_change(move |new_color| {
+            config_clone.borrow_mut().background = BackgroundType::Solid { color: new_color };
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
         });
 
-        page.append(&button);
         page
     }
 
@@ -322,7 +314,7 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> GtkBox {
+    ) -> (GtkBox, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Copy/Paste gradient buttons
@@ -401,81 +393,37 @@ impl BackgroundConfigWidget {
         radius_box.append(&radius_scale);
         page.append(&radius_box);
 
-        // Color stops (simplified)
-        let center_button = Button::with_label("Center Color");
-        let edge_button = Button::with_label("Edge Color");
+        // Use GradientEditor without angle for color stops
+        let gradient_editor = GradientEditor::new_without_angle();
 
+        // Initialize with current config
+        if let BackgroundType::RadialGradient(ref grad) = config.borrow().background {
+            gradient_editor.set_stops(grad.stops.clone());
+        }
+
+        // Set up change handler
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
+        let gradient_editor_ref = Rc::new(gradient_editor);
+        let gradient_editor_clone = gradient_editor_ref.clone();
 
-        center_button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::RadialGradient(ref grad) = config_clone.borrow().background {
-                grad.stops.first().map(|s| s.color).unwrap_or_default()
-            } else {
-                Color::default()
-            };
+        gradient_editor_ref.set_on_change(move || {
+            let stops = gradient_editor_clone.get_stops();
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::RadialGradient(ref mut grad) = cfg.background {
+                grad.stops = stops;
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
 
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::RadialGradient(ref mut grad) = cfg.background {
-                        if let Some(stop) = grad.stops.first_mut() {
-                            stop.color = new_color;
-                        }
-                        drop(cfg);
-                        preview_clone2.queue_draw();
-
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
-                        }
-                    }
-                }
-            });
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
         });
 
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-
-        edge_button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::RadialGradient(ref grad) = config_clone.borrow().background {
-                grad.stops.last().map(|s| s.color).unwrap_or_default()
-            } else {
-                Color::default()
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::RadialGradient(ref mut grad) = cfg.background {
-                        if let Some(stop) = grad.stops.last_mut() {
-                            stop.color = new_color;
-                        }
-                        drop(cfg);
-                        preview_clone2.queue_draw();
-
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
-                        }
-                    }
-                }
-            });
-        });
-
-        page.append(&center_button);
-        page.append(&edge_button);
-        page
+        page.append(gradient_editor_ref.widget());
+        (page, gradient_editor_ref.clone())
     }
 
     fn create_image_config(
@@ -688,86 +636,69 @@ impl BackgroundConfigWidget {
         angle_box.append(&angle_scale);
         page.append(&angle_box);
 
-        // Color buttons
-        page.append(&Label::new(Some("Colors:")));
+        // Color 1 - using ColorButtonWidget
+        let color1_box = GtkBox::new(Orientation::Horizontal, 6);
+        color1_box.append(&Label::new(Some("Color 1:")));
 
-        let color1_button = Button::with_label("Color 1");
-        let color2_button = Button::with_label("Color 2");
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-
-        color1_button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::Polygons(ref poly) = config_clone.borrow().background {
-                poly.colors.first().copied().unwrap_or_default()
-            } else {
-                Color::default()
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::Polygons(ref mut poly) = cfg.background {
-                        if poly.colors.is_empty() {
-                            poly.colors.push(new_color);
-                        } else {
-                            poly.colors[0] = new_color;
-                        }
-                        drop(cfg);
-                        preview_clone2.queue_draw();
-
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
-                        }
-                    }
-                }
-            });
-        });
+        let color1 = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
+            poly.colors.first().copied().unwrap_or_default()
+        } else {
+            Color::default()
+        };
+        let color1_widget = ColorButtonWidget::new(color1);
+        color1_box.append(color1_widget.widget());
+        page.append(&color1_box);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-
-        color2_button.connect_clicked(move |btn| {
-            let current_color = if let BackgroundType::Polygons(ref poly) = config_clone.borrow().background {
-                poly.colors.get(1).copied().unwrap_or_default()
-            } else {
-                Color::default()
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::Polygons(ref mut poly) = cfg.background {
-                        if poly.colors.len() < 2 {
-                            poly.colors.push(new_color);
-                        } else {
-                            poly.colors[1] = new_color;
-                        }
-                        drop(cfg);
-                        preview_clone2.queue_draw();
-
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
-                        }
-                    }
+        color1_widget.set_on_change(move |new_color| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                if poly.colors.is_empty() {
+                    poly.colors.push(new_color);
+                } else {
+                    poly.colors[0] = new_color;
                 }
-            });
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
         });
 
-        page.append(&color1_button);
-        page.append(&color2_button);
+        // Color 2 - using ColorButtonWidget
+        let color2_box = GtkBox::new(Orientation::Horizontal, 6);
+        color2_box.append(&Label::new(Some("Color 2:")));
+
+        let color2 = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
+            poly.colors.get(1).copied().unwrap_or_default()
+        } else {
+            Color::default()
+        };
+        let color2_widget = ColorButtonWidget::new(color2);
+        color2_box.append(color2_widget.widget());
+        page.append(&color2_box);
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        color2_widget.set_on_change(move |new_color| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                if poly.colors.len() < 2 {
+                    poly.colors.push(new_color);
+                } else {
+                    poly.colors[1] = new_color;
+                }
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
 
         page
     }
@@ -788,9 +719,12 @@ impl BackgroundConfigWidget {
             BackgroundType::Polygons(_) => 4,
         };
 
-        // Load gradient data into editor if applicable
+        // Load gradient data into editors if applicable
         if let BackgroundType::LinearGradient(ref grad) = new_config.background {
             self.linear_gradient_editor.set_gradient(grad);
+        }
+        if let BackgroundType::RadialGradient(ref grad) = new_config.background {
+            self.radial_gradient_editor.set_stops(grad.stops.clone());
         }
 
         *self.config.borrow_mut() = new_config;

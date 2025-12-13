@@ -14,20 +14,15 @@ use std::time::Duration;
 use super::shared_sensors;
 
 /// Temperature unit for display
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum TemperatureUnit {
     #[serde(rename = "celsius")]
+    #[default]
     Celsius,
     #[serde(rename = "fahrenheit")]
     Fahrenheit,
     #[serde(rename = "kelvin")]
     Kelvin,
-}
-
-impl Default for TemperatureUnit {
-    fn default() -> Self {
-        Self::Celsius
-    }
 }
 
 /// Information about a discovered temperature sensor
@@ -77,7 +72,7 @@ fn default_update_interval() -> u64 {
 }
 
 fn default_auto_detect_limits() -> bool {
-    true
+    false
 }
 
 impl Default for SystemTempConfig {
@@ -194,6 +189,12 @@ pub struct SystemTempSource {
     detected_max: Option<f64>,
 }
 
+impl Default for SystemTempSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemTempSource {
     pub fn new() -> Self {
         // Force initialization of sensor discovery
@@ -256,7 +257,7 @@ impl DataSource for SystemTempSource {
             FieldMetadata::new(
                 "value",
                 "Value",
-                &format!("Current temperature value in {}", self.unit_suffix()),
+                format!("Current temperature value in {}", self.unit_suffix()),
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),

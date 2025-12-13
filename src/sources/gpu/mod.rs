@@ -70,7 +70,7 @@ impl GpuSource {
         };
 
         // Get backend for default GPU (index 0)
-        let backend = GPU_MANAGER.backends.get(0).cloned();
+        let backend = GPU_MANAGER.backends.first().cloned();
 
         Self {
             metadata,

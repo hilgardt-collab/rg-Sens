@@ -59,7 +59,7 @@ fn default_update_interval() -> u64 {
 }
 
 fn default_auto_detect_limits() -> bool {
-    true
+    false
 }
 
 impl Default for FanSpeedConfig {
@@ -375,7 +375,7 @@ impl DataSource for FanSpeedSource {
 
         // Caption (custom or auto-generated)
         let caption = self.config.custom_caption.clone().unwrap_or_else(|| {
-            format!("{}", sensor_label)
+            sensor_label.to_string()
         });
         values.insert("caption".to_string(), Value::from(caption));
 

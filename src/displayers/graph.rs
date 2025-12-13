@@ -32,7 +32,7 @@ impl GraphDisplayer {
     pub fn new() -> Self {
         let start_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs_f64();
 
         Self {
@@ -125,7 +125,7 @@ impl Displayer for GraphDisplayer {
                         if data_guard.config.animate_new_points {
                             let current_time = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or_default()
                                 .as_secs_f64();
 
                             // Smooth interpolation factor (adjust for animation speed)
@@ -213,7 +213,7 @@ impl Displayer for GraphDisplayer {
                 if let Some(value) = num.as_f64() {
                     let current_time = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_default()
                         .as_secs_f64();
                     let relative_time = current_time - data.start_time;
 

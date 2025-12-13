@@ -3,8 +3,8 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider};
 use log::{error, info, warn};
-use rg_sens::config::{AppConfig, PanelConfig};
-use rg_sens::core::{Panel, PanelGeometry, UpdateManager};
+use rg_sens::config::AppConfig;
+use rg_sens::core::{Panel, PanelData, PanelGeometry, UpdateManager};
 use rg_sens::ui::{GridConfig as UiGridConfig, GridLayout};
 use rg_sens::{displayers, sources};
 use std::cell::RefCell;
@@ -108,72 +108,46 @@ fn build_ui(app: &Application) {
     // Create update manager
     let update_manager = Arc::new(UpdateManager::new());
 
+    // Initialize global update manager so new panels can register themselves
+    rg_sens::core::init_global_update_manager(update_manager.clone());
+
     let mut panels = Vec::new();
 
-    // Create panels from configuration
-    let panel_configs = app_config.borrow().panels.clone();
-    if panel_configs.is_empty() {
+    // Create panels from configuration (uses new PanelData format with auto-migration)
+    let panel_data_list = app_config.borrow().get_panels();
+    if panel_data_list.is_empty() {
         info!("No panels in config, creating default panels");
 
-        // Create default panels
+        // Create default panels using PanelData
         let default_panels = vec![
-            ("panel-1", 0, 0, 1, 1, "cpu", "text"),
-            ("panel-2", 1, 0, 1, 1, "cpu", "text"),
-            ("panel-3", 0, 1, 2, 1, "cpu", "text"),
+            PanelData::with_types("panel-1".to_string(), PanelGeometry { x: 0, y: 0, width: 1, height: 1 }, "cpu", "text"),
+            PanelData::with_types("panel-2".to_string(), PanelGeometry { x: 1, y: 0, width: 1, height: 1 }, "cpu", "text"),
+            PanelData::with_types("panel-3".to_string(), PanelGeometry { x: 0, y: 1, width: 2, height: 1 }, "cpu", "text"),
         ];
 
-        // Get window defaults for panels
-        let default_corner_radius = app_config.borrow().window.panel_corner_radius;
-        let default_border = app_config.borrow().window.panel_border.clone();
-
-        for (id, x, y, width, height, source_id, displayer_id) in default_panels {
-            match create_panel_from_config(
-                id,
-                x,
-                y,
-                width,
-                height,
-                source_id,
-                displayer_id,
-                Default::default(),
-                default_corner_radius,
-                default_border.clone(),
-                HashMap::new(),
-                &registry,
-            ) {
+        for panel_data in default_panels {
+            match create_panel_from_data(panel_data, registry) {
                 Ok(panel) => {
                     grid_layout.add_panel(panel.clone());
                     panels.push(panel);
                 }
                 Err(e) => {
-                    warn!("Failed to create default panel {}: {}", id, e);
+                    warn!("Failed to create default panel: {}", e);
                 }
             }
         }
     } else {
-        info!("Loading {} panels from config", panel_configs.len());
+        info!("Loading {} panels from config", panel_data_list.len());
 
-        for panel_config in &panel_configs {
-            match create_panel_from_config(
-                &panel_config.id,
-                panel_config.x,
-                panel_config.y,
-                panel_config.width,
-                panel_config.height,
-                &panel_config.source,
-                &panel_config.displayer,
-                panel_config.background.clone(),
-                panel_config.corner_radius,
-                panel_config.border.clone(),
-                panel_config.settings.clone(),
-                &registry,
-            ) {
+        for panel_data in panel_data_list {
+            let panel_id = panel_data.id.clone();
+            match create_panel_from_data(panel_data, registry) {
                 Ok(panel) => {
                     grid_layout.add_panel(panel.clone());
                     panels.push(panel);
                 }
                 Err(e) => {
-                    warn!("Failed to create panel {}: {}", panel_config.id, e);
+                    warn!("Failed to create panel {}: {}", panel_id, e);
                 }
             }
         }
@@ -209,57 +183,35 @@ fn build_ui(app: &Application) {
         *config_dirty_clone.borrow_mut() = true;
     });
 
-    // === Borderless window move/resize support ===
-    // Create overlay for resize handles (only visible when shift is pressed and borderless)
-    let resize_overlay = gtk4::DrawingArea::new();
-    resize_overlay.set_can_focus(false);
-    resize_overlay.set_visible(false);
-    // Don't capture pointer events - the drag gesture is on the GridLayout container
-    resize_overlay.set_can_target(false);
-
-    // Track shift state and resize zone
-    let shift_pressed = Rc::new(RefCell::new(false));
-    let resize_zone = Rc::new(RefCell::new(ResizeZone::None));
-
-    // Set up draw function for resize handles
-    let resize_zone_for_draw = resize_zone.clone();
-    resize_overlay.set_draw_func(move |_, cr, width, height| {
-        let zone = *resize_zone_for_draw.borrow();
-        draw_resize_handles(cr, width as f64, height as f64, zone);
-    });
-
-    // Add resize overlay to window overlay
-    window_overlay.add_overlay(&resize_overlay);
-
+    // === Borderless window move support ===
     // Set up borderless drag callback on GridLayout
     // This callback is called from GridLayout's container gesture (on the Fixed widget)
-    // Having the gesture on a child widget (not on an overlay) avoids window snapping
-    let shift_pressed_for_drag = shift_pressed.clone();
-    let resize_zone_for_drag = resize_zone.clone();
+    // Using Ctrl+drag for window move (Shift causes GNOME edge snapping)
     let app_config_for_drag = app_config.clone();
     let window_for_drag = window.clone();
 
     grid_layout.set_on_borderless_drag(move |gesture, x, y| {
-        // Check if shift is pressed and borderless mode is enabled
-        let is_shift = *shift_pressed_for_drag.borrow();
+        // Check if Ctrl is pressed (via event modifiers) and borderless mode is enabled
+        // Note: Using Ctrl instead of Shift because Shift triggers GNOME's edge snapping
+        let event = gesture.current_event();
+        let is_ctrl = event.as_ref()
+            .map(|e| e.modifier_state().contains(gtk4::gdk::ModifierType::CONTROL_MASK))
+            .unwrap_or(false);
         let is_borderless = app_config_for_drag.borrow().window.borderless;
         let is_fullscreen = window_for_drag.is_fullscreen();
 
-        if !is_shift || !is_borderless || is_fullscreen {
+        if !is_ctrl || !is_borderless || is_fullscreen {
             return false; // Don't handle - let normal selection proceed
         }
 
-        let zone = *resize_zone_for_drag.borrow();
-        log::info!("Borderless drag on GridLayout container: ({}, {}), zone={:?}", x, y, zone);
+        log::info!("Borderless window move: Ctrl+drag at ({}, {})", x, y);
 
         // Get event parameters
-        let event = gesture.current_event();
         let timestamp = event.as_ref().map(|e| e.time()).unwrap_or(0);
         let device = gesture.device();
         let button = gesture.current_button() as i32;
 
         // Translate coordinates from grid_layout to window
-        // The gesture widget is GridLayout's container (Fixed), which is inside the overlay
         let gesture_widget = match gesture.widget() {
             Some(w) => w,
             None => {
@@ -276,8 +228,6 @@ fn build_ui(app: &Application) {
                 return false;
             }
         };
-
-        log::info!("  translated coords: ({}, {})", win_x, win_y);
 
         // Get surface from window
         use gtk4::prelude::NativeExt;
@@ -305,29 +255,8 @@ fn build_ui(app: &Application) {
             }
         };
 
-        match zone {
-            ResizeZone::None | ResizeZone::Move => {
-                // Use native window manager move
-                log::info!("  -> Calling begin_move: button={}, x={}, y={}, ts={}", button, win_x, win_y, timestamp);
-                toplevel.begin_move(dev, button, win_x, win_y, timestamp);
-            }
-            _ => {
-                // Use native window manager resize with appropriate edge
-                let edge = match zone {
-                    ResizeZone::Top => gtk4::gdk::SurfaceEdge::North,
-                    ResizeZone::Bottom => gtk4::gdk::SurfaceEdge::South,
-                    ResizeZone::Left => gtk4::gdk::SurfaceEdge::West,
-                    ResizeZone::Right => gtk4::gdk::SurfaceEdge::East,
-                    ResizeZone::TopLeft => gtk4::gdk::SurfaceEdge::NorthWest,
-                    ResizeZone::TopRight => gtk4::gdk::SurfaceEdge::NorthEast,
-                    ResizeZone::BottomLeft => gtk4::gdk::SurfaceEdge::SouthWest,
-                    ResizeZone::BottomRight => gtk4::gdk::SurfaceEdge::SouthEast,
-                    _ => gtk4::gdk::SurfaceEdge::SouthEast,
-                };
-                log::info!("  -> Calling begin_resize: edge={:?}, button={}, x={}, y={}, ts={}", edge, button, win_x, win_y, timestamp);
-                toplevel.begin_resize(edge, device.as_ref(), button, win_x, win_y, timestamp);
-            }
-        }
+        // Begin window move
+        toplevel.begin_move(dev, button, win_x, win_y, timestamp);
 
         // Claim the gesture
         gesture.set_state(gtk4::EventSequenceState::Claimed);
@@ -373,62 +302,6 @@ fn build_ui(app: &Application) {
     });
 
     window_overlay.add_controller(double_click_gesture);
-
-    // Key controller for tracking Shift press/release
-    let key_controller_shift = gtk4::EventControllerKey::new();
-    let shift_pressed_for_key = shift_pressed.clone();
-    let resize_overlay_for_key = resize_overlay.clone();
-    let app_config_for_shift = app_config.clone();
-    let window_for_shift = window.clone();
-
-    key_controller_shift.connect_key_pressed(move |_, key, _code, _modifiers| {
-        if key == gtk4::gdk::Key::Shift_L || key == gtk4::gdk::Key::Shift_R {
-            let is_borderless = app_config_for_shift.borrow().window.borderless;
-            let is_fullscreen = window_for_shift.is_fullscreen();
-            if is_borderless && !is_fullscreen {
-                *shift_pressed_for_key.borrow_mut() = true;
-                resize_overlay_for_key.set_visible(true);
-                resize_overlay_for_key.queue_draw();
-            }
-        }
-        glib::Propagation::Proceed
-    });
-
-    let shift_pressed_for_release = shift_pressed.clone();
-    let resize_overlay_for_release = resize_overlay.clone();
-    key_controller_shift.connect_key_released(move |_, key, _code, _modifiers| {
-        if key == gtk4::gdk::Key::Shift_L || key == gtk4::gdk::Key::Shift_R {
-            *shift_pressed_for_release.borrow_mut() = false;
-            resize_overlay_for_release.set_visible(false);
-        }
-    });
-
-    window.add_controller(key_controller_shift);
-
-    // Motion controller for updating resize zone based on cursor position
-    let motion_controller = gtk4::EventControllerMotion::new();
-    let resize_zone_for_motion = resize_zone.clone();
-    let resize_overlay_for_motion = resize_overlay.clone();
-    let shift_pressed_for_motion = shift_pressed.clone();
-    let window_for_motion = window.clone();
-
-    motion_controller.connect_motion(move |_, x, y| {
-        if !*shift_pressed_for_motion.borrow() {
-            return;
-        }
-
-        let width = window_for_motion.width() as f64;
-        let height = window_for_motion.height() as f64;
-        let new_zone = detect_resize_zone(x, y, width, height);
-
-        let mut zone = resize_zone_for_motion.borrow_mut();
-        if *zone != new_zone {
-            *zone = new_zone;
-            resize_overlay_for_motion.queue_draw();
-        }
-    });
-
-    window_overlay.add_controller(motion_controller);
 
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
@@ -489,94 +362,86 @@ fn build_ui(app: &Application) {
     let config_dirty_for_menu = config_dirty.clone();
 
     gesture_click.connect_pressed(move |gesture, _, x, y| {
-        use gtk4::gio;
-        use gtk4::PopoverMenu;
+        use gtk4::{Popover, Box as GtkBox, Button, Separator, Orientation};
 
-        let menu = gio::Menu::new();
-
-        // Section 1: New panel
-        let section1 = gio::Menu::new();
-        section1.append(Some("New Panel"), Some("window.new-panel"));
-        menu.append_section(None, &section1);
-
-        // Section 2: Save layout
-        let section2 = gio::Menu::new();
-        section2.append(Some("Save Layout"), Some("window.save-layout"));
-        menu.append_section(None, &section2);
-
-        // Section 3: Save/Load from file
-        let section3 = gio::Menu::new();
-        section3.append(Some("Save Layout to File..."), Some("window.save-to-file"));
-        section3.append(Some("Load Layout from File..."), Some("window.load-from-file"));
-        menu.append_section(None, &section3);
-
-        // Section 4: Options and Quit
-        let section4 = gio::Menu::new();
-        section4.append(Some("Options"), Some("window.options"));
-        section4.append(Some("Quit"), Some("window.quit"));
-        menu.append_section(None, &section4);
-
-        let popover = PopoverMenu::from_model(Some(&menu));
+        // Create a custom popover with buttons (no ScrolledWindow, no scrolling)
+        let popover = Popover::new();
         popover.set_parent(&window_for_menu);
         popover.set_has_arrow(false);
+        popover.set_autohide(true);
 
-        // Position the popover while being aware of window and screen bounds
-        // Calculate preferred position
-        let mut menu_x = x as i32;
-        let mut menu_y = y as i32;
+        // Create menu content box
+        let menu_box = GtkBox::new(Orientation::Vertical, 0);
+        menu_box.set_margin_top(6);
+        menu_box.set_margin_bottom(6);
+        menu_box.set_margin_start(6);
+        menu_box.set_margin_end(6);
 
-        // Get window and screen dimensions for boundary checking
-        if let Some(surface) = window_for_menu.surface() {
-            let display = surface.display();
-            // Get monitor geometry
-            if let Some(monitor) = display.monitor_at_surface(&surface) {
-                let monitor_geom = monitor.geometry();
-                let window_width = window_for_menu.default_width();
-                let window_height = window_for_menu.default_height();
+        // Helper to create menu buttons with consistent styling
+        let create_menu_button = |label: &str| -> Button {
+            let btn = Button::with_label(label);
+            btn.add_css_class("flat");
+            btn.set_halign(gtk4::Align::Fill);
+            btn
+        };
 
-                // Estimate menu size (PopoverMenu doesn't expose size before showing)
-                let estimated_menu_width = 250;
-                let estimated_menu_height = 300;
+        // New Panel button
+        let new_panel_btn = create_menu_button("New Panel");
+        menu_box.append(&new_panel_btn);
 
-                // Check if menu would go off the right edge of window
-                if menu_x + estimated_menu_width > window_width {
-                    menu_x = (window_width - estimated_menu_width).max(0);
-                }
+        // Load Panel from File button
+        let load_panel_btn = create_menu_button("Load Panel from File...");
+        menu_box.append(&load_panel_btn);
 
-                // Check if menu would go off the bottom edge of window
-                if menu_y + estimated_menu_height > window_height {
-                    menu_y = (window_height - estimated_menu_height).max(0);
-                }
+        menu_box.append(&Separator::new(Orientation::Horizontal));
 
-                // Ensure menu stays within screen bounds too
-                if menu_x + estimated_menu_width > monitor_geom.width() {
-                    menu_x = (monitor_geom.width() - estimated_menu_width).max(0);
-                }
-                if menu_y + estimated_menu_height > monitor_geom.height() {
-                    menu_y = (monitor_geom.height() - estimated_menu_height).max(0);
-                }
-            }
-        }
+        // Save Layout button
+        let save_layout_btn = create_menu_button("Save Layout");
+        menu_box.append(&save_layout_btn);
 
+        menu_box.append(&Separator::new(Orientation::Horizontal));
+
+        // Save to File button
+        let save_file_btn = create_menu_button("Save Layout to File...");
+        menu_box.append(&save_file_btn);
+
+        // Load from File button
+        let load_file_btn = create_menu_button("Load Layout from File...");
+        menu_box.append(&load_file_btn);
+
+        menu_box.append(&Separator::new(Orientation::Horizontal));
+
+        // Options button
+        let options_btn = create_menu_button("Options");
+        menu_box.append(&options_btn);
+
+        // Quit button
+        let quit_btn = create_menu_button("Quit");
+        menu_box.append(&quit_btn);
+
+        popover.set_child(Some(&menu_box));
+
+        // Position at click location
         popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-            menu_x,
-            menu_y,
+            x as i32,
+            y as i32,
             1,
             1,
         )));
 
-        // Setup action group
-        let action_group = gio::SimpleActionGroup::new();
+        // Store references for button handlers
+        let popover_ref = popover.clone();
 
-        // New panel action (with mouse coordinates)
+        // New Panel button handler
         let window_for_new = window_for_menu.clone();
         let grid_layout_for_new = grid_layout_for_menu.clone();
         let config_dirty_for_new = config_dirty_for_menu.clone();
         let app_config_for_new = app_config_for_menu.clone();
         let mouse_x = x;
         let mouse_y = y;
-        let new_panel_action = gio::SimpleAction::new("new-panel", None);
-        new_panel_action.connect_activate(move |_, _| {
+        let popover_for_new = popover_ref.clone();
+        new_panel_btn.connect_clicked(move |_| {
+            popover_for_new.popdown();
             info!("New panel requested at ({}, {})", mouse_x, mouse_y);
             show_new_panel_dialog(
                 &window_for_new,
@@ -586,30 +451,163 @@ fn build_ui(app: &Application) {
                 Some((mouse_x, mouse_y)),
             );
         });
-        action_group.add_action(&new_panel_action);
 
-        // Save layout action
+        // Load Panel from File button handler
+        let window_for_load_panel = window_for_menu.clone();
+        let grid_layout_for_load_panel = grid_layout_for_menu.clone();
+        let config_dirty_for_load_panel = config_dirty_for_menu.clone();
+        let app_config_for_load_panel = app_config_for_menu.clone();
+        let popover_for_load_panel = popover_ref.clone();
+        let load_mouse_x = x;
+        let load_mouse_y = y;
+        load_panel_btn.connect_clicked(move |_| {
+            popover_for_load_panel.popdown();
+            info!("Load panel from file requested");
+            let window = window_for_load_panel.clone();
+            let grid_layout = grid_layout_for_load_panel.clone();
+            let config_dirty = config_dirty_for_load_panel.clone();
+            let app_config = app_config_for_load_panel.clone();
+            let mouse_x = load_mouse_x;
+            let mouse_y = load_mouse_y;
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                use gtk4::FileDialog;
+                use gtk4::gio;
+
+                // Get initial directory (config dir)
+                let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+                // Create file filter for JSON files
+                let json_filter = gtk4::FileFilter::new();
+                json_filter.set_name(Some("JSON files"));
+                json_filter.add_pattern("*.json");
+
+                let all_filter = gtk4::FileFilter::new();
+                all_filter.set_name(Some("All files"));
+                all_filter.add_pattern("*");
+
+                let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                filters.append(&json_filter);
+                filters.append(&all_filter);
+
+                let file_dialog = FileDialog::builder()
+                    .title("Load Panel from File")
+                    .modal(true)
+                    .initial_folder(&gio::File::for_path(&initial_dir))
+                    .filters(&filters)
+                    .default_filter(&json_filter)
+                    .build();
+
+                match file_dialog.open_future(Some(&window)).await {
+                    Ok(file) => {
+                        if let Some(path) = file.path() {
+                            info!("Loading panel from {:?}", path);
+
+                            // Read and parse the JSON file
+                            match std::fs::read_to_string(&path) {
+                                Ok(json) => {
+                                    match serde_json::from_str::<PanelData>(&json) {
+                                        Ok(mut panel_data) => {
+                                            // Generate a new unique ID for the loaded panel
+                                            panel_data.id = uuid::Uuid::new_v4().to_string();
+
+                                            // Calculate grid position from mouse coordinates
+                                            let cfg = app_config.borrow();
+                                            let cell_width = cfg.grid.cell_width as f64;
+                                            let cell_height = cfg.grid.cell_height as f64;
+                                            let spacing = cfg.grid.spacing as f64;
+                                            drop(cfg);
+
+                                            let grid_x = (mouse_x / (cell_width + spacing)).floor() as u32;
+                                            let grid_y = (mouse_y / (cell_height + spacing)).floor() as u32;
+
+                                            // Check for collision at this position
+                                            let has_collision = grid_layout.borrow().check_collision(
+                                                grid_x,
+                                                grid_y,
+                                                panel_data.geometry.width,
+                                                panel_data.geometry.height,
+                                            );
+
+                                            if has_collision {
+                                                // Show error dialog
+                                                let dialog = gtk4::AlertDialog::builder()
+                                                    .message("Cannot Load Panel")
+                                                    .detail("The panel cannot be placed at this position because it would overlap with existing panels.")
+                                                    .modal(true)
+                                                    .build();
+                                                dialog.show(Some(&window));
+                                                return;
+                                            }
+
+                                            panel_data.geometry.x = grid_x;
+                                            panel_data.geometry.y = grid_y;
+
+                                            info!("Placing panel at grid position ({}, {})", grid_x, grid_y);
+
+                                            // Create the panel from data
+                                            let registry = rg_sens::core::global_registry();
+                                            match create_panel_from_data(panel_data, registry) {
+                                                Ok(panel) => {
+                                                    // Add to grid layout
+                                                    grid_layout.borrow_mut().add_panel(panel.clone());
+
+                                                    // Register with update manager
+                                                    if let Some(update_manager) = rg_sens::core::global_update_manager() {
+                                                        update_manager.queue_add_panel(panel);
+                                                    }
+
+                                                    // Mark config as dirty
+                                                    *config_dirty.borrow_mut() = true;
+                                                    info!("Panel loaded successfully from {:?}", path);
+                                                }
+                                                Err(e) => {
+                                                    warn!("Failed to create panel from data: {}", e);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to parse panel JSON: {}", e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("Failed to read panel file: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        info!("Load panel dialog cancelled or failed: {}", e);
+                    }
+                }
+            });
+        });
+
+        // Save Layout button handler
         let grid_layout_for_save = grid_layout_for_menu.clone();
         let app_config_for_save = app_config_for_menu.clone();
         let window_for_save = window_for_menu.clone();
         let config_dirty_for_save = config_dirty_for_menu.clone();
-        let save_layout_action = gio::SimpleAction::new("save-layout", None);
-        save_layout_action.connect_activate(move |_, _| {
+        let popover_for_save = popover_ref.clone();
+        save_layout_btn.connect_clicked(move |_| {
+            popover_for_save.popdown();
             info!("Save layout requested");
-            // Get current panels from GridLayout (not the stale clone)
             let current_panels = grid_layout_for_save.borrow().get_panels();
             save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &current_panels);
             *config_dirty_for_save.borrow_mut() = false;
         });
-        action_group.add_action(&save_layout_action);
 
-        // Save to file action
+        // Save to File button handler
         let window_for_save_file = window_for_menu.clone();
         let grid_layout_for_save_file = grid_layout_for_menu.clone();
         let app_config_for_save_file = app_config_for_menu.clone();
         let config_dirty_for_save_file = config_dirty_for_menu.clone();
-        let save_to_file_action = gio::SimpleAction::new("save-to-file", None);
-        save_to_file_action.connect_activate(move |_, _| {
+        let popover_for_save_file = popover_ref.clone();
+        save_file_btn.connect_clicked(move |_| {
+            popover_for_save_file.popdown();
             info!("Save to file requested");
             let window = window_for_save_file.clone();
             let grid_layout = grid_layout_for_save_file.clone();
@@ -618,71 +616,88 @@ fn build_ui(app: &Application) {
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 use gtk4::FileDialog;
+                use gtk4::gio;
+
+                info!("Creating save file dialog");
+
+                // Get initial directory (config dir)
+                let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+                // Create file filter for JSON files
+                let json_filter = gtk4::FileFilter::new();
+                json_filter.set_name(Some("JSON files"));
+                json_filter.add_pattern("*.json");
+
+                let all_filter = gtk4::FileFilter::new();
+                all_filter.set_name(Some("All files"));
+                all_filter.add_pattern("*");
+
+                let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                filters.append(&json_filter);
+                filters.append(&all_filter);
 
                 let file_dialog = FileDialog::builder()
                     .title("Save Layout to File")
                     .modal(true)
+                    .initial_folder(&gio::File::for_path(&initial_dir))
+                    .initial_name("layout.json")
+                    .filters(&filters)
+                    .default_filter(&json_filter)
                     .build();
 
-                if let Ok(file) = file_dialog.save_future(Some(&window)).await {
-                    if let Some(path) = file.path() {
-                        info!("Saving layout to {:?}", path);
+                info!("Showing save file dialog");
+                match file_dialog.save_future(Some(&window)).await {
+                    Ok(file) => {
+                        if let Some(path) = file.path() {
+                            info!("Saving layout to {:?}", path);
 
-                        // Get current panels
-                        let current_panels = grid_layout.borrow().get_panels();
+                            let current_panels = grid_layout.borrow().get_panels();
+                            let (width, height) = (window.default_width(), window.default_height());
+                            // Use blocking_read to ensure all panels are saved
+                            let panel_data_list: Vec<PanelData> = current_panels
+                                .iter()
+                                .map(|panel| {
+                                    let panel_guard = panel.blocking_read();
+                                    panel_guard.to_data()
+                                })
+                                .collect();
 
-                        // Create config
-                        let (width, height) = (window.default_width(), window.default_height());
-                        let panel_configs: Vec<PanelConfig> = current_panels
-                            .iter()
-                            .filter_map(|panel| {
-                                if let Ok(panel_guard) = panel.try_read() {
-                                    Some(PanelConfig {
-                                        id: panel_guard.id.clone(),
-                                        x: panel_guard.geometry.x,
-                                        y: panel_guard.geometry.y,
-                                        width: panel_guard.geometry.width,
-                                        height: panel_guard.geometry.height,
-                                        source: panel_guard.source.metadata().id.clone(),
-                                        displayer: panel_guard.displayer.id().to_string(),
-                                        background: panel_guard.background.clone(),
-                                        corner_radius: panel_guard.corner_radius,
-                                        border: panel_guard.border.clone(),
-                                        settings: panel_guard.config.clone(),
-                                    })
-                                } else {
-                                    None
+                            let mut config = app_config.borrow().clone();
+                            config.window.width = width;
+                            config.window.height = height;
+                            config.set_panels(panel_data_list);
+
+                            match config.save_to_path(&path) {
+                                Ok(()) => {
+                                    info!("Layout saved successfully to {:?}", path);
+                                    *config_dirty.borrow_mut() = false;
                                 }
-                            })
-                            .collect();
-
-                        let mut config = app_config.borrow().clone();
-                        config.window.width = width;
-                        config.window.height = height;
-                        config.panels = panel_configs;
-
-                        match config.save_to_path(&path) {
-                            Ok(()) => {
-                                info!("Layout saved successfully to {:?}", path);
-                                *config_dirty.borrow_mut() = false;
+                                Err(e) => {
+                                    warn!("Failed to save layout: {}", e);
+                                }
                             }
-                            Err(e) => {
-                                warn!("Failed to save layout: {}", e);
-                            }
+                        } else {
+                            warn!("File dialog returned no path");
                         }
+                    }
+                    Err(e) => {
+                        // User cancelled or error occurred
+                        info!("Save file dialog cancelled or failed: {}", e);
                     }
                 }
             });
         });
-        action_group.add_action(&save_to_file_action);
 
-        // Load from file action
+        // Load from File button handler
         let window_for_load_file = window_for_menu.clone();
         let grid_layout_for_load_file = grid_layout_for_menu.clone();
         let app_config_for_load_file = app_config_for_menu.clone();
         let config_dirty_for_load_file = config_dirty_for_menu.clone();
-        let load_from_file_action = gio::SimpleAction::new("load-from-file", None);
-        load_from_file_action.connect_activate(move |_, _| {
+        let popover_for_load_file = popover_ref.clone();
+        load_file_btn.connect_clicked(move |_| {
+            popover_for_load_file.popdown();
             info!("Load from file requested");
             let window = window_for_load_file.clone();
             let grid_layout = grid_layout_for_load_file.clone();
@@ -691,80 +706,98 @@ fn build_ui(app: &Application) {
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 use gtk4::FileDialog;
+                use gtk4::gio;
+
+                info!("Creating load file dialog");
+
+                // Get initial directory (config dir)
+                let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+                // Create file filter for JSON files
+                let json_filter = gtk4::FileFilter::new();
+                json_filter.set_name(Some("JSON files"));
+                json_filter.add_pattern("*.json");
+
+                let all_filter = gtk4::FileFilter::new();
+                all_filter.set_name(Some("All files"));
+                all_filter.add_pattern("*");
+
+                let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                filters.append(&json_filter);
+                filters.append(&all_filter);
 
                 let file_dialog = FileDialog::builder()
                     .title("Load Layout from File")
                     .modal(true)
+                    .initial_folder(&gio::File::for_path(&initial_dir))
+                    .filters(&filters)
+                    .default_filter(&json_filter)
                     .build();
 
-                if let Ok(file) = file_dialog.open_future(Some(&window)).await {
-                    if let Some(path) = file.path() {
-                        info!("Loading layout from {:?}", path);
+                info!("Showing load file dialog");
+                match file_dialog.open_future(Some(&window)).await {
+                    Ok(file) => {
+                        if let Some(path) = file.path() {
+                            info!("Loading layout from {:?}", path);
 
-                        match AppConfig::load_from_path(&path) {
-                            Ok(loaded_config) => {
-                                info!("Layout loaded successfully from {:?}", path);
+                            match AppConfig::load_from_path(&path) {
+                                Ok(loaded_config) => {
+                                    info!("Layout loaded successfully from {:?}", path);
+                                    *app_config.borrow_mut() = loaded_config.clone();
+                                    grid_layout.borrow_mut().clear_all_panels();
 
-                                // Update app config
-                                *app_config.borrow_mut() = loaded_config.clone();
+                                    let registry = rg_sens::core::global_registry();
+                                    for panel_data in loaded_config.get_panels() {
+                                        let panel_id = panel_data.id.clone();
+                                        match create_panel_from_data(panel_data, registry) {
+                                            Ok(panel) => {
+                                                grid_layout.borrow_mut().add_panel(panel.clone());
 
-                                // Clear current panels
-                                grid_layout.borrow_mut().clear_all_panels();
-
-                                // Create panels from loaded config
-                                let registry = rg_sens::core::global_registry();
-                                for panel_config in &loaded_config.panels {
-                                    match create_panel_from_config(
-                                        &panel_config.id,
-                                        panel_config.x,
-                                        panel_config.y,
-                                        panel_config.width,
-                                        panel_config.height,
-                                        &panel_config.source,
-                                        &panel_config.displayer,
-                                        panel_config.background.clone(),
-                                        panel_config.corner_radius,
-                                        panel_config.border.clone(),
-                                        panel_config.settings.clone(),
-                                        &registry,
-                                    ) {
-                                        Ok(panel) => {
-                                            grid_layout.borrow_mut().add_panel(panel);
-                                        }
-                                        Err(e) => {
-                                            warn!("Failed to create panel {}: {}", panel_config.id, e);
+                                                // Register with update manager so panels get periodic updates
+                                                if let Some(update_manager) = rg_sens::core::global_update_manager() {
+                                                    update_manager.queue_add_panel(panel.clone());
+                                                }
+                                            }
+                                            Err(e) => {
+                                                warn!("Failed to create panel {}: {}", panel_id, e);
+                                            }
                                         }
                                     }
+
+                                    grid_layout.borrow_mut().update_grid_size(
+                                        loaded_config.grid.cell_width,
+                                        loaded_config.grid.cell_height,
+                                        loaded_config.grid.spacing,
+                                    );
+                                    *config_dirty.borrow_mut() = false;
                                 }
-
-                                // Update grid configuration
-                                grid_layout.borrow_mut().update_grid_size(
-                                    loaded_config.grid.cell_width,
-                                    loaded_config.grid.cell_height,
-                                    loaded_config.grid.spacing,
-                                );
-
-                                // Mark config as clean since we just loaded
-                                *config_dirty.borrow_mut() = false;
+                                Err(e) => {
+                                    warn!("Failed to load layout: {}", e);
+                                }
                             }
-                            Err(e) => {
-                                warn!("Failed to load layout: {}", e);
-                            }
+                        } else {
+                            warn!("File dialog returned no path");
                         }
+                    }
+                    Err(e) => {
+                        // User cancelled or error occurred
+                        info!("Load file dialog cancelled or failed: {}", e);
                     }
                 }
             });
         });
-        action_group.add_action(&load_from_file_action);
 
-        // Options action
+        // Options button handler
         let window_for_options = window_for_menu.clone();
         let app_config_for_options = app_config_for_menu.clone();
         let window_bg_for_options = window_bg_for_menu.clone();
         let grid_layout_for_options = grid_layout_for_menu.clone();
         let config_dirty_for_options = config_dirty_for_menu.clone();
-        let options_action = gio::SimpleAction::new("options", None);
-        options_action.connect_activate(move |_, _| {
+        let popover_for_options = popover_ref.clone();
+        options_btn.connect_clicked(move |_| {
+            popover_for_options.popdown();
             show_window_settings_dialog(
                 &window_for_options,
                 &app_config_for_options,
@@ -773,17 +806,14 @@ fn build_ui(app: &Application) {
                 &config_dirty_for_options,
             );
         });
-        action_group.add_action(&options_action);
 
-        // Quit action
+        // Quit button handler
         let window_for_quit = window_for_menu.clone();
-        let quit_action = gio::SimpleAction::new("quit", None);
-        quit_action.connect_activate(move |_, _| {
+        let popover_for_quit = popover_ref.clone();
+        quit_btn.connect_clicked(move |_| {
+            popover_for_quit.popdown();
             window_for_quit.close();
         });
-        action_group.add_action(&quit_action);
-
-        window_for_menu.insert_action_group("window", Some(&action_group));
 
         popover.popup();
         gesture.set_state(gtk4::EventSequenceState::Claimed);
@@ -861,37 +891,23 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
     // Get window dimensions
     let (width, height) = (window.default_width(), window.default_height());
 
-    // Convert panels to PanelConfig
-    let panel_configs: Vec<PanelConfig> = panels
+    // Convert panels to PanelData (new unified format)
+    // Use blocking_read to ensure all panels are saved
+    let panel_data_list: Vec<PanelData> = panels
         .iter()
-        .filter_map(|panel| {
-            if let Ok(panel_guard) = panel.try_read() {
-                Some(PanelConfig {
-                    id: panel_guard.id.clone(),
-                    x: panel_guard.geometry.x,
-                    y: panel_guard.geometry.y,
-                    width: panel_guard.geometry.width,
-                    height: panel_guard.geometry.height,
-                    source: panel_guard.source.metadata().id.clone(),
-                    displayer: panel_guard.displayer.id().to_string(),
-                    background: panel_guard.background.clone(),
-                    corner_radius: panel_guard.corner_radius,
-                    border: panel_guard.border.clone(),
-                    settings: panel_guard.config.clone(),
-                })
-            } else {
-                None
-            }
+        .map(|panel| {
+            let panel_guard = panel.blocking_read();
+            panel_guard.to_data()
         })
         .collect();
 
-    // Create config with all settings
+    // Create config with all settings using new PanelData format
     let mut config = app_config.clone();
     config.window.width = width;
     config.window.height = height;
     config.window.x = None; // GTK4 doesn't provide window position
     config.window.y = None;
-    config.panels = panel_configs;
+    config.set_panels(panel_data_list);
 
     // Save to disk
     match config.save() {
@@ -1159,9 +1175,8 @@ fn show_window_settings_dialog(
     borderless_info_box.append(&info_icon);
 
     let borderless_info_label = Label::new(Some(
-        "When borderless mode is active, hold Shift and drag:\n\
-         \u{2022} Drag window edges to resize\n\
-         \u{2022} Drag center area to move window"
+        "When borderless mode is active, hold Ctrl and drag\n\
+         on the window background to move the window."
     ));
     borderless_info_label.set_halign(gtk4::Align::Start);
     borderless_info_label.set_wrap(true);
@@ -1249,7 +1264,10 @@ fn show_window_settings_dialog(
         drop(cfg);
 
         // Apply borderless state to parent window
+        log::info!("Setting window decorated: {} (borderless: {})", !borderless, borderless);
         parent_window_clone.set_decorated(!borderless);
+        // Force layout update after decoration change
+        parent_window_clone.queue_resize();
 
         // Apply fullscreen state to parent window
         if fullscreen_enabled {
@@ -1312,6 +1330,7 @@ fn show_window_settings_dialog(
 }
 
 /// Create a panel from configuration parameters
+#[allow(clippy::too_many_arguments)]
 fn create_panel_from_config(
     id: &str,
     x: u32,
@@ -1326,33 +1345,39 @@ fn create_panel_from_config(
     settings: HashMap<String, serde_json::Value>,
     registry: &rg_sens::core::Registry,
 ) -> anyhow::Result<Arc<RwLock<Panel>>> {
-    // Create source and displayer
-    let source = registry.create_source(source_id)?;
-    let displayer = registry.create_displayer(displayer_id)?;
+    use rg_sens::core::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
 
-    // Create panel
-    let mut panel = Panel::new(
-        id.to_string(),
-        PanelGeometry {
-            x,
-            y,
-            width,
-            height,
+    // Create PanelData with proper defaults for the source and displayer types
+    let panel_data = PanelData {
+        id: id.to_string(),
+        geometry: PanelGeometry { x, y, width, height },
+        source_config: SourceConfig::default_for_type(source_id).unwrap_or_default(),
+        displayer_config: DisplayerConfig::default_for_type(displayer_id).unwrap_or_default(),
+        appearance: PanelAppearance {
+            background,
+            corner_radius,
+            border,
         },
-        source,
-        displayer,
-    );
+    };
 
-    // Set background, corner radius, and border
-    panel.background = background;
-    panel.corner_radius = corner_radius;
-    panel.border = border;
+    // Create panel from PanelData (this properly initializes panel.data)
+    let mut panel = Panel::from_data_with_registry(panel_data, registry)?;
 
-    // Apply settings if provided
+    // Apply additional settings if provided (for backward compatibility)
     if !settings.is_empty() {
         panel.apply_config(settings)?;
     }
 
+    Ok(Arc::new(RwLock::new(panel)))
+}
+
+/// Create a panel from PanelData (new unified format)
+fn create_panel_from_data(
+    data: PanelData,
+    registry: &rg_sens::core::Registry,
+) -> anyhow::Result<Arc<RwLock<Panel>>> {
+    // Use Panel::from_data_with_registry which handles everything
+    let panel = Panel::from_data_with_registry(data, registry)?;
     Ok(Arc::new(RwLock::new(panel)))
 }
 
@@ -1425,13 +1450,13 @@ fn show_new_panel_dialog(
 
     let size_box = GtkBox::new(Orientation::Horizontal, 6);
     size_box.append(&Label::new(Some("Width:")));
-    let width_adj = Adjustment::new(4.0, 1.0, 50.0, 1.0, 5.0, 0.0);
+    let width_adj = Adjustment::new(4.0, 1.0, 512.0, 1.0, 5.0, 0.0);
     let width_spin = SpinButton::new(Some(&width_adj), 1.0, 0);
     width_spin.set_hexpand(true);
     size_box.append(&width_spin);
 
     size_box.append(&Label::new(Some("Height:")));
-    let height_adj = Adjustment::new(2.0, 1.0, 50.0, 1.0, 5.0, 0.0);
+    let height_adj = Adjustment::new(2.0, 1.0, 512.0, 1.0, 5.0, 0.0);
     let height_spin = SpinButton::new(Some(&height_adj), 1.0, 0);
     height_spin.set_hexpand(true);
     size_box.append(&height_spin);
@@ -1443,24 +1468,54 @@ fn show_new_panel_dialog(
     vbox.append(&source_label);
 
     let registry = rg_sens::core::global_registry();
-    let source_ids = registry.list_sources();
-    let source_strings: Vec<&str> = source_ids.iter().map(|s| s.as_str()).collect();
+    let source_infos = registry.list_sources_with_info();
+    let source_ids: Vec<String> = source_infos.iter().map(|s| s.id.clone()).collect();
+    let source_display_names: Vec<String> = source_infos.iter().map(|s| s.display_name.clone()).collect();
+    let source_strings: Vec<&str> = source_display_names.iter().map(|s| s.as_str()).collect();
     let source_list = StringList::new(&source_strings);
     let source_combo = DropDown::new(Some(source_list), Option::<gtk4::Expression>::None);
     source_combo.set_selected(0);
     vbox.append(&source_combo);
 
-    // Displayer
-    let displayer_label = Label::new(Some("Displayer:"));
+    // Displayer - filtered based on selected source
+    let displayer_label = Label::new(Some("Display Type:"));
     displayer_label.set_halign(gtk4::Align::Start);
     vbox.append(&displayer_label);
 
-    let displayer_ids = registry.list_displayers();
-    let displayer_strings: Vec<&str> = displayer_ids.iter().map(|d| d.as_str()).collect();
+    // Get compatible displayers for the first source
+    let first_source_id = source_ids.first().map(|s| s.as_str()).unwrap_or("cpu");
+    let displayer_infos = registry.get_compatible_displayers(first_source_id);
+    let displayer_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
+        displayer_infos.iter().map(|d| d.id.clone()).collect()
+    ));
+    let displayer_display_names: Vec<String> = displayer_infos.iter().map(|d| d.display_name.clone()).collect();
+    let displayer_strings: Vec<&str> = displayer_display_names.iter().map(|s| s.as_str()).collect();
     let displayer_list = StringList::new(&displayer_strings);
     let displayer_combo = DropDown::new(Some(displayer_list), Option::<gtk4::Expression>::None);
     displayer_combo.set_selected(0);
     vbox.append(&displayer_combo);
+
+    // Update displayer dropdown when source changes
+    let source_ids_for_change = source_ids.clone();
+    let displayer_ids_for_change = displayer_ids.clone();
+    let displayer_combo_clone = displayer_combo.clone();
+    source_combo.connect_selected_notify(move |combo| {
+        let selected_idx = combo.selected() as usize;
+        if let Some(source_id) = source_ids_for_change.get(selected_idx) {
+            let new_displayer_infos = registry.get_compatible_displayers(source_id);
+            let new_displayer_ids: Vec<String> = new_displayer_infos.iter().map(|d| d.id.clone()).collect();
+            let new_display_names: Vec<String> = new_displayer_infos.iter().map(|d| d.display_name.clone()).collect();
+
+            // Update stored displayer IDs
+            *displayer_ids_for_change.borrow_mut() = new_displayer_ids;
+
+            // Update dropdown model
+            let display_strs: Vec<&str> = new_display_names.iter().map(|s| s.as_str()).collect();
+            let new_list = StringList::new(&display_strs);
+            displayer_combo_clone.set_model(Some(&new_list));
+            displayer_combo_clone.set_selected(0);
+        }
+    });
 
     // Buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1486,6 +1541,7 @@ fn show_new_panel_dialog(
     let grid_layout = grid_layout.clone();
     let config_dirty = config_dirty.clone();
     let app_config = app_config.clone();
+    let displayer_ids_for_ok = displayer_ids.clone();
     ok_button.connect_clicked(move |_| {
         let x = x_spin.value() as u32;
         let y = y_spin.value() as u32;
@@ -1493,7 +1549,8 @@ fn show_new_panel_dialog(
         let height = height_spin.value() as u32;
 
         let source_id = &source_ids[source_combo.selected() as usize];
-        let displayer_id = &displayer_ids[displayer_combo.selected() as usize];
+        let displayer_ids_borrowed = displayer_ids_for_ok.borrow();
+        let displayer_id = &displayer_ids_borrowed[displayer_combo.selected() as usize];
 
         // Generate unique ID
         let id = format!("panel_{}", uuid::Uuid::new_v4());
@@ -1519,11 +1576,16 @@ fn show_new_panel_dialog(
             corner_radius,
             border,
             settings,
-            &registry,
+            registry,
         ) {
             Ok(panel) => {
                 // Add to grid (grid_layout maintains its own panels list)
                 grid_layout.borrow_mut().add_panel(panel.clone());
+
+                // Register with update manager so it gets periodic updates
+                if let Some(update_manager) = rg_sens::core::global_update_manager() {
+                    update_manager.queue_add_panel(panel.clone());
+                }
 
                 // Mark config as dirty
                 *config_dirty.borrow_mut() = true;
@@ -1579,151 +1641,3 @@ fn load_css() {
     );
 }
 
-// === Borderless window resize support ===
-
-/// Resize zones for borderless window
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResizeZone {
-    None,
-    Move,
-    Top,
-    Bottom,
-    Left,
-    Right,
-    TopLeft,
-    TopRight,
-    BottomLeft,
-    BottomRight,
-}
-
-/// Width of the resize edge detection area
-const RESIZE_EDGE_WIDTH: f64 = 12.0;
-
-/// Detect which resize zone the cursor is in
-fn detect_resize_zone(x: f64, y: f64, width: f64, height: f64) -> ResizeZone {
-    let on_left = x < RESIZE_EDGE_WIDTH;
-    let on_right = x > width - RESIZE_EDGE_WIDTH;
-    let on_top = y < RESIZE_EDGE_WIDTH;
-    let on_bottom = y > height - RESIZE_EDGE_WIDTH;
-
-    match (on_left, on_right, on_top, on_bottom) {
-        (true, false, true, false) => ResizeZone::TopLeft,
-        (false, true, true, false) => ResizeZone::TopRight,
-        (true, false, false, true) => ResizeZone::BottomLeft,
-        (false, true, false, true) => ResizeZone::BottomRight,
-        (true, false, false, false) => ResizeZone::Left,
-        (false, true, false, false) => ResizeZone::Right,
-        (false, false, true, false) => ResizeZone::Top,
-        (false, false, false, true) => ResizeZone::Bottom,
-        _ => ResizeZone::Move,
-    }
-}
-
-/// Draw resize handles overlay
-fn draw_resize_handles(cr: &gtk4::cairo::Context, width: f64, height: f64, active_zone: ResizeZone) {
-    let edge = RESIZE_EDGE_WIDTH;
-
-    // Semi-transparent highlight color
-    let normal_color = (0.5, 0.5, 0.5, 0.3);
-    let active_color = (0.3, 0.6, 1.0, 0.5);
-
-    // Helper to set color based on zone
-    let set_color = |cr: &gtk4::cairo::Context, zone: ResizeZone| {
-        let (r, g, b, a) = if zone == active_zone { active_color } else { normal_color };
-        cr.set_source_rgba(r, g, b, a);
-    };
-
-    // Draw edge rectangles
-    // Top edge
-    set_color(cr, ResizeZone::Top);
-    cr.rectangle(edge, 0.0, width - 2.0 * edge, edge);
-    let _ = cr.fill();
-
-    // Bottom edge
-    set_color(cr, ResizeZone::Bottom);
-    cr.rectangle(edge, height - edge, width - 2.0 * edge, edge);
-    let _ = cr.fill();
-
-    // Left edge
-    set_color(cr, ResizeZone::Left);
-    cr.rectangle(0.0, edge, edge, height - 2.0 * edge);
-    let _ = cr.fill();
-
-    // Right edge
-    set_color(cr, ResizeZone::Right);
-    cr.rectangle(width - edge, edge, edge, height - 2.0 * edge);
-    let _ = cr.fill();
-
-    // Draw corner squares
-    // Top-left
-    set_color(cr, ResizeZone::TopLeft);
-    cr.rectangle(0.0, 0.0, edge, edge);
-    let _ = cr.fill();
-
-    // Top-right
-    set_color(cr, ResizeZone::TopRight);
-    cr.rectangle(width - edge, 0.0, edge, edge);
-    let _ = cr.fill();
-
-    // Bottom-left
-    set_color(cr, ResizeZone::BottomLeft);
-    cr.rectangle(0.0, height - edge, edge, edge);
-    let _ = cr.fill();
-
-    // Bottom-right
-    set_color(cr, ResizeZone::BottomRight);
-    cr.rectangle(width - edge, height - edge, edge, edge);
-    let _ = cr.fill();
-
-    // Draw move indicator in center if in move zone
-    if active_zone == ResizeZone::Move {
-        cr.set_source_rgba(0.3, 0.6, 1.0, 0.2);
-        cr.rectangle(edge, edge, width - 2.0 * edge, height - 2.0 * edge);
-        let _ = cr.fill();
-
-        // Draw move arrows icon in center
-        cr.set_source_rgba(0.3, 0.6, 1.0, 0.6);
-        let center_x = width / 2.0;
-        let center_y = height / 2.0;
-        let arrow_size = 20.0;
-
-        // Draw 4-way arrow
-        cr.set_line_width(3.0);
-
-        // Up arrow
-        cr.move_to(center_x, center_y - arrow_size);
-        cr.line_to(center_x, center_y - 5.0);
-        let _ = cr.stroke();
-        cr.move_to(center_x - 5.0, center_y - arrow_size + 5.0);
-        cr.line_to(center_x, center_y - arrow_size);
-        cr.line_to(center_x + 5.0, center_y - arrow_size + 5.0);
-        let _ = cr.stroke();
-
-        // Down arrow
-        cr.move_to(center_x, center_y + arrow_size);
-        cr.line_to(center_x, center_y + 5.0);
-        let _ = cr.stroke();
-        cr.move_to(center_x - 5.0, center_y + arrow_size - 5.0);
-        cr.line_to(center_x, center_y + arrow_size);
-        cr.line_to(center_x + 5.0, center_y + arrow_size - 5.0);
-        let _ = cr.stroke();
-
-        // Left arrow
-        cr.move_to(center_x - arrow_size, center_y);
-        cr.line_to(center_x - 5.0, center_y);
-        let _ = cr.stroke();
-        cr.move_to(center_x - arrow_size + 5.0, center_y - 5.0);
-        cr.line_to(center_x - arrow_size, center_y);
-        cr.line_to(center_x - arrow_size + 5.0, center_y + 5.0);
-        let _ = cr.stroke();
-
-        // Right arrow
-        cr.move_to(center_x + arrow_size, center_y);
-        cr.line_to(center_x + 5.0, center_y);
-        let _ = cr.stroke();
-        cr.move_to(center_x + arrow_size - 5.0, center_y - 5.0);
-        cr.line_to(center_x + arrow_size, center_y);
-        cr.line_to(center_x + arrow_size - 5.0, center_y + 5.0);
-        let _ = cr.stroke();
-    }
-}

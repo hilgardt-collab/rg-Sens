@@ -10,8 +10,10 @@ use crate::displayers::TextDisplayerConfig;
 
 /// Needle style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum NeedleStyle {
     #[serde(rename = "arrow")]
+    #[default]
     Arrow,        // Traditional pointed arrow
     #[serde(rename = "line")]
     Line,         // Simple line
@@ -21,33 +23,27 @@ pub enum NeedleStyle {
     Triangle,     // Solid triangle
 }
 
-impl Default for NeedleStyle {
-    fn default() -> Self {
-        Self::Arrow
-    }
-}
 
 /// Needle tail style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum NeedleTailStyle {
     #[serde(rename = "none")]
     None,         // No tail
     #[serde(rename = "short")]
+    #[default]
     Short,        // Short tail opposite direction
     #[serde(rename = "balanced")]
     Balanced,     // Balanced tail for counterweight
 }
 
-impl Default for NeedleTailStyle {
-    fn default() -> Self {
-        Self::Short
-    }
-}
 
 /// Tick mark style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum TickStyle {
     #[serde(rename = "line")]
+    #[default]
     Line,         // Simple lines
     #[serde(rename = "wedge")]
     Wedge,        // Wedge-shaped ticks
@@ -55,18 +51,15 @@ pub enum TickStyle {
     Dot,          // Dots at tick positions
 }
 
-impl Default for TickStyle {
-    fn default() -> Self {
-        Self::Line
-    }
-}
 
 /// Bezel style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum BezelStyle {
     #[serde(rename = "none")]
     None,         // No bezel
     #[serde(rename = "simple")]
+    #[default]
     Simple,       // Simple ring
     #[serde(rename = "3d")]
     ThreeD,       // 3D effect with gradient
@@ -74,11 +67,6 @@ pub enum BezelStyle {
     Chrome,       // Metallic chrome effect
 }
 
-impl Default for BezelStyle {
-    fn default() -> Self {
-        Self::Simple
-    }
-}
 
 /// Tick label configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

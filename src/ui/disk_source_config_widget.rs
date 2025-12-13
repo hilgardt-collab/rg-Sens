@@ -19,17 +19,14 @@ pub enum DiskField {
 
 /// Disk capacity unit types
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum DiskUnit {
     MB,
+    #[default]
     GB,
     TB,
 }
 
-impl Default for DiskUnit {
-    fn default() -> Self {
-        Self::GB
-    }
-}
 
 /// Disk source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +52,7 @@ fn default_update_interval() -> u64 {
 }
 
 fn default_auto_detect_limits() -> bool {
-    true
+    false
 }
 
 impl Default for DiskSourceConfig {
@@ -74,6 +71,7 @@ impl Default for DiskSourceConfig {
 }
 
 /// Widget for configuring disk source
+#[allow(dead_code)]
 pub struct DiskSourceConfigWidget {
     widget: GtkBox,
     config: Rc<RefCell<DiskSourceConfig>>,
@@ -327,7 +325,17 @@ impl DiskSourceConfigWidget {
     }
 
     pub fn get_config(&self) -> DiskSourceConfig {
-        self.config.borrow().clone()
+        let mut config = self.config.borrow().clone();
+
+        // When auto_detect is disabled, ensure we use the spinbutton values
+        // This handles the case where set_config was called with None limits
+        // but the spinbuttons have values the user may have entered
+        if !config.auto_detect_limits {
+            config.min_limit = Some(self.min_limit_spin.value());
+            config.max_limit = Some(self.max_limit_spin.value());
+        }
+
+        config
     }
 
     /// Set available disks

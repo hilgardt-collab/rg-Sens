@@ -3,8 +3,10 @@
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-use crate::displayers::TextLineConfig;
+use crate::displayers::{TextLineConfig, TextDisplayerConfig};
 use crate::ui::{BackgroundConfig, ColorStop, CpuSourceConfig, GpuSourceConfig};
+use crate::ui::bar_display::BarDisplayConfig;
+use crate::ui::graph_display::GraphDisplayConfig;
 use crate::core::PanelBorderConfig;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -26,6 +28,8 @@ pub struct PanelStyle {
 /// Clipboard data structure
 #[derive(Debug, Default, Clone)]
 pub struct Clipboard {
+    /// Copied plain text
+    pub text: Option<String>,
     /// Copied font (family, size, bold, italic)
     pub font: Option<(String, f64, bool, bool)>,
     /// Copied color (r, g, b, a)
@@ -42,9 +46,27 @@ pub struct Clipboard {
     pub panel_style: Option<PanelStyle>,
     /// Copied gradient color stops (universal for all gradient types - backgrounds and arc displayers)
     pub gradient_stops: Option<Vec<ColorStop>>,
+    /// Copied bar display configuration
+    pub bar_display: Option<BarDisplayConfig>,
+    /// Copied graph display configuration
+    pub graph_display: Option<GraphDisplayConfig>,
+    /// Copied text displayer configuration (all lines)
+    pub text_display: Option<TextDisplayerConfig>,
+    /// Copied generic source configuration as JSON (for combo slots)
+    pub source_config: Option<(String, Value)>, // (source_type, config_json)
 }
 
 impl Clipboard {
+    /// Copy plain text to clipboard
+    pub fn copy_text(&mut self, text: String) {
+        self.text = Some(text);
+    }
+
+    /// Paste plain text from clipboard
+    pub fn paste_text(&self) -> Option<String> {
+        self.text.clone()
+    }
+
     /// Copy font to clipboard
     pub fn copy_font(&mut self, family: String, size: f64, bold: bool, italic: bool) {
         self.font = Some((family, size, bold, italic));
@@ -125,8 +147,50 @@ impl Clipboard {
         self.gradient_stops.clone()
     }
 
+    /// Copy bar display configuration to clipboard
+    pub fn copy_bar_display(&mut self, config: BarDisplayConfig) {
+        self.bar_display = Some(config);
+    }
+
+    /// Paste bar display configuration from clipboard
+    pub fn paste_bar_display(&self) -> Option<BarDisplayConfig> {
+        self.bar_display.clone()
+    }
+
+    /// Copy graph display configuration to clipboard
+    pub fn copy_graph_display(&mut self, config: GraphDisplayConfig) {
+        self.graph_display = Some(config);
+    }
+
+    /// Paste graph display configuration from clipboard
+    pub fn paste_graph_display(&self) -> Option<GraphDisplayConfig> {
+        self.graph_display.clone()
+    }
+
+    /// Copy text displayer configuration to clipboard
+    pub fn copy_text_display(&mut self, config: TextDisplayerConfig) {
+        self.text_display = Some(config);
+    }
+
+    /// Paste text displayer configuration from clipboard
+    pub fn paste_text_display(&self) -> Option<TextDisplayerConfig> {
+        self.text_display.clone()
+    }
+
+    /// Copy generic source configuration to clipboard (for combo slots)
+    pub fn copy_source_config(&mut self, source_type: String, config: Value) {
+        self.source_config = Some((source_type, config));
+    }
+
+    /// Paste generic source configuration from clipboard
+    /// Returns (source_type, config_json) if available
+    pub fn paste_source_config(&self) -> Option<(String, Value)> {
+        self.source_config.clone()
+    }
+
     /// Clear all clipboard data
     pub fn clear(&mut self) {
+        self.text = None;
         self.font = None;
         self.color = None;
         self.text_line = None;
@@ -135,5 +199,9 @@ impl Clipboard {
         self.gpu_source = None;
         self.panel_style = None;
         self.gradient_stops = None;
+        self.bar_display = None;
+        self.graph_display = None;
+        self.text_display = None;
+        self.source_config = None;
     }
 }

@@ -12,20 +12,17 @@ use super::MemoryUnit;
 
 /// Memory field selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum MemoryField {
     Used,
     Free,
     Available,
+    #[default]
     Percent,
     SwapUsed,
     SwapPercent,
 }
 
-impl Default for MemoryField {
-    fn default() -> Self {
-        MemoryField::Percent
-    }
-}
 
 impl MemoryField {
     pub fn as_str(&self) -> &'static str {

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 thread_local! {
-    static FONT_DIALOG: RefCell<Option<Rc<FontDialog>>> = RefCell::new(None);
+    static FONT_DIALOG: RefCell<Option<Rc<FontDialog>>> = const { RefCell::new(None) };
 }
 
 /// Get the shared font dialog instance (thread-local for GTK thread safety)

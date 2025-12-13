@@ -1,6 +1,7 @@
 //! Data source trait and related types
 
 use super::field_metadata::FieldMetadata;
+use super::panel_data::SourceConfig;
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -68,6 +69,28 @@ pub trait DataSource: Send + Sync {
     /// can use the default implementation which does nothing.
     fn configure(&mut self, _config: &HashMap<String, Value>) -> Result<()> {
         Ok(())
+    }
+
+    /// Configure the data source with typed configuration (preferred)
+    ///
+    /// This is the type-safe alternative to `configure()`. Sources can implement
+    /// this method to receive their specific config struct directly. The default
+    /// implementation converts to HashMap and calls `configure()`.
+    ///
+    /// Sources should override this method if they want to use typed configs
+    /// for better type safety and cleaner code.
+    fn configure_typed(&mut self, config: &SourceConfig) -> Result<()> {
+        let map = config.to_hashmap();
+        self.configure(&map)
+    }
+
+    /// Get the current typed configuration (if available)
+    ///
+    /// Sources can implement this to return their current configuration
+    /// as a typed SourceConfig enum variant. The default implementation
+    /// returns None, indicating that the source doesn't support typed configs.
+    fn get_typed_config(&self) -> Option<SourceConfig> {
+        None
     }
 }
 

@@ -3,31 +3,21 @@
 use serde::{Deserialize, Serialize};
 
 /// Vertical position of text
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum VerticalPosition {
     Top,
+    #[default]
     Center,
     Bottom,
 }
 
-impl Default for VerticalPosition {
-    fn default() -> Self {
-        Self::Center
-    }
-}
-
 /// Horizontal position of text
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum HorizontalPosition {
     Left,
+    #[default]
     Center,
     Right,
-}
-
-impl Default for HorizontalPosition {
-    fn default() -> Self {
-        Self::Center
-    }
 }
 
 /// Configuration for a single line of text

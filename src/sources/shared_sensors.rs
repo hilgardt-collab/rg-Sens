@@ -53,7 +53,7 @@ pub fn get_temperature_by_label(label: &str) -> Option<f32> {
 pub fn get_temperature_by_index(index: usize) -> Option<f32> {
     if let Ok(mut components) = SHARED_COMPONENTS.lock() {
         components.refresh();
-        components.iter().nth(index).map(|c| c.temperature())
+        components.get(index).map(|c| c.temperature())
     } else {
         None
     }
@@ -69,6 +69,7 @@ pub fn initialize() {
 }
 
 /// Get the total number of temperature components
+#[allow(dead_code)]
 pub fn component_count() -> usize {
     if let Ok(components) = SHARED_COMPONENTS.lock() {
         components.len()

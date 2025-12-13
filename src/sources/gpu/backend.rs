@@ -12,6 +12,7 @@ pub struct GpuInfo {
 
 /// GPU vendor enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum GpuVendor {
     Nvidia,
     Amd,
@@ -58,10 +59,12 @@ pub trait GpuBackend: Send + Sync {
     fn metrics(&self) -> &GpuMetrics;
 
     /// Get GPU vendor
+    #[allow(dead_code)]
     fn vendor(&self) -> GpuVendor {
         self.info().vendor
     }
 
     /// Check if this backend is available/functional
+    #[allow(dead_code)]
     fn is_available(&self) -> bool;
 }

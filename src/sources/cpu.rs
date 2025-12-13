@@ -341,9 +341,9 @@ impl DataSource for CpuSource {
         // Add per-core usage fields
         for i in 0..self.per_core_usage.len() {
             fields.push(FieldMetadata::new(
-                &format!("core{}_usage", i),
-                &format!("Core {} Usage", i),
-                &format!("CPU core {} usage percentage", i),
+                format!("core{}_usage", i),
+                format!("Core {} Usage", i),
+                format!("CPU core {} usage percentage", i),
                 FieldType::Percentage,
                 FieldPurpose::Value,
             ));

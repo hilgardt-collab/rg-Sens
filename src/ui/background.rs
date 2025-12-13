@@ -141,8 +141,10 @@ impl Default for PolygonConfig {
 
 /// Image display mode
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ImageDisplayMode {
     #[serde(rename = "fit")]
+    #[default]
     Fit,       // Scale to fit (maintain aspect ratio, may have empty space)
     #[serde(rename = "stretch")]
     Stretch,   // Stretch to fill (may distort image)
@@ -152,11 +154,6 @@ pub enum ImageDisplayMode {
     Tile,      // Tile/repeat the image
 }
 
-impl Default for ImageDisplayMode {
-    fn default() -> Self {
-        Self::Fit
-    }
-}
 
 /// Background type configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -194,17 +191,11 @@ impl Default for BackgroundType {
 
 /// Background configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub struct BackgroundConfig {
     pub background: BackgroundType,
 }
 
-impl Default for BackgroundConfig {
-    fn default() -> Self {
-        Self {
-            background: BackgroundType::default(),
-        }
-    }
-}
 
 /// Render a background to a Cairo context
 pub fn render_background(

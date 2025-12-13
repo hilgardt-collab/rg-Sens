@@ -2,21 +2,20 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Frame, Label, Orientation,
-    ScrolledWindow, SpinButton, StringList,
+    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Frame, Label, Notebook, Orientation,
+    SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::background::Color;
 use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyle};
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::BackgroundConfigWidget;
-use crate::ui::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 
 /// Widget for configuring Analog Clock displayer
 pub struct ClockAnalogConfigWidget {
-    widget: ScrolledWindow,
+    widget: Notebook,
     config: Rc<RefCell<AnalogClockConfig>>,
     background_widget: BackgroundConfigWidget,
     // Font button and controls for updating UI on set_config
@@ -38,13 +37,13 @@ pub struct ClockAnalogConfigWidget {
     hour_width_spin: SpinButton,
     minute_width_spin: SpinButton,
     second_width_spin: SpinButton,
-    // Color buttons for updating labels on set_config
-    tick_color_btn: Button,
-    border_color_btn: Button,
-    number_color_btn: Button,
-    hour_color_btn: Button,
-    minute_color_btn: Button,
-    second_color_btn: Button,
+    // Color buttons for updating on set_config
+    tick_color_widget: Rc<ColorButtonWidget>,
+    border_color_widget: Rc<ColorButtonWidget>,
+    number_color_widget: Rc<ColorButtonWidget>,
+    hour_color_widget: Rc<ColorButtonWidget>,
+    minute_color_widget: Rc<ColorButtonWidget>,
+    second_color_widget: Rc<ColorButtonWidget>,
     // Icon config
     icon_text_entry: gtk4::Entry,
     icon_font_button: Button,
@@ -56,21 +55,24 @@ impl ClockAnalogConfigWidget {
     pub fn new() -> Self {
         let config = Rc::new(RefCell::new(AnalogClockConfig::default()));
 
-        let main_box = GtkBox::new(Orientation::Vertical, 8);
-        main_box.set_margin_start(8);
-        main_box.set_margin_end(8);
-        main_box.set_margin_top(8);
-        main_box.set_margin_bottom(8);
+        // Create notebook for tabbed interface
+        let notebook = Notebook::new();
+        notebook.set_vexpand(true);
 
-        // ============ Face Background Section ============
+        // ============ TAB 1: Appearance ============
+        let appearance_box = GtkBox::new(Orientation::Vertical, 8);
+        appearance_box.set_margin_start(8);
+        appearance_box.set_margin_end(8);
+        appearance_box.set_margin_top(8);
+        appearance_box.set_margin_bottom(8);
+
+        // Face Background Section
         let face_frame = Frame::new(Some("Clock Face Background"));
         let background_widget = BackgroundConfigWidget::new();
         face_frame.set_child(Some(background_widget.widget()));
-        main_box.append(&face_frame);
+        appearance_box.append(&face_frame);
 
-        // Connect background changes to config (no-op, retrieved via get_config)
-
-        // ============ Style Section ============
+        // Style Section
         let style_frame = Frame::new(Some("Styles"));
         let style_box = GtkBox::new(Orientation::Vertical, 6);
         style_box.set_margin_start(8);
@@ -109,9 +111,19 @@ impl ClockAnalogConfigWidget {
         style_box.append(&hand_box);
 
         style_frame.set_child(Some(&style_box));
-        main_box.append(&style_frame);
+        appearance_box.append(&style_frame);
 
-        // ============ Number Font Section ============
+        // Add Appearance tab to notebook
+        notebook.append_page(&appearance_box, Some(&Label::new(Some("Appearance"))));
+
+        // ============ TAB 2: Numbers ============
+        let numbers_box = GtkBox::new(Orientation::Vertical, 8);
+        numbers_box.set_margin_start(8);
+        numbers_box.set_margin_end(8);
+        numbers_box.set_margin_top(8);
+        numbers_box.set_margin_bottom(8);
+
+        // Number Font Section
         let number_frame = Frame::new(Some("Clock Numbers"));
         let number_box = GtkBox::new(Orientation::Vertical, 6);
         number_box.set_margin_start(8);
@@ -169,15 +181,29 @@ impl ClockAnalogConfigWidget {
         // Number color
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Color:")));
-        let number_color_btn = Button::with_label("■");
-        number_color_btn.set_hexpand(true);
-        color_box.append(&number_color_btn);
+        let number_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().number_color));
+        color_box.append(number_color_widget.widget());
         number_box.append(&color_box);
 
-        number_frame.set_child(Some(&number_box));
-        main_box.append(&number_frame);
+        let config_for_num_color = config.clone();
+        number_color_widget.set_on_change(move |color| {
+            config_for_num_color.borrow_mut().number_color = color;
+        });
 
-        // ============ Hands Section ============
+        number_frame.set_child(Some(&number_box));
+        numbers_box.append(&number_frame);
+
+        // Add Numbers tab to notebook
+        notebook.append_page(&numbers_box, Some(&Label::new(Some("Numbers"))));
+
+        // ============ TAB 3: Hands ============
+        let hands_tab_box = GtkBox::new(Orientation::Vertical, 8);
+        hands_tab_box.set_margin_start(8);
+        hands_tab_box.set_margin_end(8);
+        hands_tab_box.set_margin_top(8);
+        hands_tab_box.set_margin_bottom(8);
+
+        // Hands Section
         let hands_frame = Frame::new(Some("Clock Hands"));
         let hands_box = GtkBox::new(Orientation::Vertical, 6);
         hands_box.set_margin_start(8);
@@ -201,16 +227,20 @@ impl ClockAnalogConfigWidget {
         // Tick color
         let tick_row = GtkBox::new(Orientation::Horizontal, 6);
         tick_row.append(&Label::new(Some("Tick Marks:")));
-        let tick_color_btn = Button::with_label("■");
-        tick_color_btn.set_hexpand(true);
-        tick_row.append(&tick_color_btn);
+        let tick_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().tick_color));
+        tick_row.append(tick_color_widget.widget());
         hands_box.append(&tick_row);
+
+        let config_for_tick_c = config.clone();
+        tick_color_widget.set_on_change(move |color| {
+            config_for_tick_c.borrow_mut().tick_color = color;
+        });
 
         // Border color and width
         let border_row = GtkBox::new(Orientation::Horizontal, 6);
         border_row.append(&Label::new(Some("Border:")));
-        let border_color_btn = Button::with_label("■");
-        border_row.append(&border_color_btn);
+        let border_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().border_color));
+        border_row.append(border_color_widget.widget());
         border_row.append(&Label::new(Some("Width:")));
         let border_width_adj = Adjustment::new(3.0, 0.0, 20.0, 0.5, 1.0, 0.0);
         let border_width_spin = SpinButton::new(Some(&border_width_adj), 0.5, 1);
@@ -218,11 +248,16 @@ impl ClockAnalogConfigWidget {
         border_row.append(&border_width_spin);
         hands_box.append(&border_row);
 
+        let config_for_border_c = config.clone();
+        border_color_widget.set_on_change(move |color| {
+            config_for_border_c.borrow_mut().border_color = color;
+        });
+
         // Hour hand
         let hour_row = GtkBox::new(Orientation::Horizontal, 6);
         hour_row.append(&Label::new(Some("Hour Hand:")));
-        let hour_color_btn = Button::with_label("■");
-        hour_row.append(&hour_color_btn);
+        let hour_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().hour_hand_color));
+        hour_row.append(hour_color_widget.widget());
         hour_row.append(&Label::new(Some("Width:")));
         let hour_width_adj = Adjustment::new(6.0, 1.0, 20.0, 0.5, 1.0, 0.0);
         let hour_width_spin = SpinButton::new(Some(&hour_width_adj), 0.5, 1);
@@ -230,11 +265,16 @@ impl ClockAnalogConfigWidget {
         hour_row.append(&hour_width_spin);
         hands_box.append(&hour_row);
 
+        let config_for_hour_c = config.clone();
+        hour_color_widget.set_on_change(move |color| {
+            config_for_hour_c.borrow_mut().hour_hand_color = color;
+        });
+
         // Minute hand
         let minute_row = GtkBox::new(Orientation::Horizontal, 6);
         minute_row.append(&Label::new(Some("Minute Hand:")));
-        let minute_color_btn = Button::with_label("■");
-        minute_row.append(&minute_color_btn);
+        let minute_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().minute_hand_color));
+        minute_row.append(minute_color_widget.widget());
         minute_row.append(&Label::new(Some("Width:")));
         let minute_width_adj = Adjustment::new(4.0, 1.0, 20.0, 0.5, 1.0, 0.0);
         let minute_width_spin = SpinButton::new(Some(&minute_width_adj), 0.5, 1);
@@ -242,11 +282,16 @@ impl ClockAnalogConfigWidget {
         minute_row.append(&minute_width_spin);
         hands_box.append(&minute_row);
 
+        let config_for_minute_c = config.clone();
+        minute_color_widget.set_on_change(move |color| {
+            config_for_minute_c.borrow_mut().minute_hand_color = color;
+        });
+
         // Second hand
         let second_row = GtkBox::new(Orientation::Horizontal, 6);
         second_row.append(&Label::new(Some("Second Hand:")));
-        let second_color_btn = Button::with_label("■");
-        second_row.append(&second_color_btn);
+        let second_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().second_hand_color));
+        second_row.append(second_color_widget.widget());
         second_row.append(&Label::new(Some("Width:")));
         let second_width_adj = Adjustment::new(2.0, 0.5, 10.0, 0.5, 1.0, 0.0);
         let second_width_spin = SpinButton::new(Some(&second_width_adj), 0.5, 1);
@@ -254,10 +299,25 @@ impl ClockAnalogConfigWidget {
         second_row.append(&second_width_spin);
         hands_box.append(&second_row);
 
-        hands_frame.set_child(Some(&hands_box));
-        main_box.append(&hands_frame);
+        let config_for_second_c = config.clone();
+        second_color_widget.set_on_change(move |color| {
+            config_for_second_c.borrow_mut().second_hand_color = color;
+        });
 
-        // ============ Icon Section ============
+        hands_frame.set_child(Some(&hands_box));
+        hands_tab_box.append(&hands_frame);
+
+        // Add Hands tab to notebook
+        notebook.append_page(&hands_tab_box, Some(&Label::new(Some("Hands"))));
+
+        // ============ TAB 4: Icon ============
+        let icon_tab_box = GtkBox::new(Orientation::Vertical, 8);
+        icon_tab_box.set_margin_start(8);
+        icon_tab_box.set_margin_end(8);
+        icon_tab_box.set_margin_top(8);
+        icon_tab_box.set_margin_bottom(8);
+
+        // Icon Section
         let icon_frame = Frame::new(Some("Alarm/Timer Icon"));
         let icon_box = GtkBox::new(Orientation::Vertical, 6);
         icon_box.set_margin_start(8);
@@ -298,7 +358,10 @@ impl ClockAnalogConfigWidget {
         icon_box.append(&icon_bold_check);
 
         icon_frame.set_child(Some(&icon_box));
-        main_box.append(&icon_frame);
+        icon_tab_box.append(&icon_frame);
+
+        // Add Icon tab to notebook
+        notebook.append_page(&icon_tab_box, Some(&Label::new(Some("Icon"))));
 
         // ============ Connect Signals ============
 
@@ -391,22 +454,6 @@ impl ClockAnalogConfigWidget {
             }
         });
 
-        // Number color button
-        let config_for_num_color = config.clone();
-        let number_color_btn_clone = number_color_btn.clone();
-        number_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_num_color.borrow().number_color;
-            let config_clone = config_for_num_color.clone();
-            let btn_clone = number_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().number_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
-        });
-
         // Style dropdowns
         let config_for_face = config.clone();
         face_dropdown.connect_selected_notify(move |dropdown| {
@@ -487,82 +534,6 @@ impl ClockAnalogConfigWidget {
             config_for_second_w.borrow_mut().second_hand_width = spin.value();
         });
 
-        // Color buttons
-        let config_for_tick_c = config.clone();
-        let tick_color_btn_clone = tick_color_btn.clone();
-        tick_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_tick_c.borrow().tick_color;
-            let config_clone = config_for_tick_c.clone();
-            let btn_clone = tick_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().tick_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
-        });
-
-        let config_for_border_c = config.clone();
-        let border_color_btn_clone = border_color_btn.clone();
-        border_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_border_c.borrow().border_color;
-            let config_clone = config_for_border_c.clone();
-            let btn_clone = border_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().border_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
-        });
-
-        let config_for_hour_c = config.clone();
-        let hour_color_btn_clone = hour_color_btn.clone();
-        hour_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_hour_c.borrow().hour_hand_color;
-            let config_clone = config_for_hour_c.clone();
-            let btn_clone = hour_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().hour_hand_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
-        });
-
-        let config_for_minute_c = config.clone();
-        let minute_color_btn_clone = minute_color_btn.clone();
-        minute_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_minute_c.borrow().minute_hand_color;
-            let config_clone = config_for_minute_c.clone();
-            let btn_clone = minute_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().minute_hand_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
-        });
-
-        let config_for_second_c = config.clone();
-        let second_color_btn_clone = second_color_btn.clone();
-        second_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_second_c.borrow().second_hand_color;
-            let config_clone = config_for_second_c.clone();
-            let btn_clone = second_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().second_hand_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
-        });
-
         // Icon text entry
         let config_for_icon_text = config.clone();
         icon_text_entry.connect_changed(move |entry| {
@@ -613,14 +584,8 @@ impl ClockAnalogConfigWidget {
             config_for_icon_bold.borrow_mut().icon_bold = check.is_active();
         });
 
-        // Wrap in scrolled window
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
-        scrolled.set_child(Some(&main_box));
-        scrolled.set_vexpand(true);
-
         Self {
-            widget: scrolled,
+            widget: notebook,
             config,
             background_widget,
             number_font_button,
@@ -638,12 +603,12 @@ impl ClockAnalogConfigWidget {
             hour_width_spin,
             minute_width_spin,
             second_width_spin,
-            tick_color_btn,
-            border_color_btn,
-            number_color_btn,
-            hour_color_btn,
-            minute_color_btn,
-            second_color_btn,
+            tick_color_widget,
+            border_color_widget,
+            number_color_widget,
+            hour_color_widget,
+            minute_color_widget,
+            second_color_widget,
             icon_text_entry,
             icon_font_button,
             icon_size_spin,
@@ -651,7 +616,7 @@ impl ClockAnalogConfigWidget {
         }
     }
 
-    pub fn widget(&self) -> &ScrolledWindow {
+    pub fn widget(&self) -> &Notebook {
         &self.widget
     }
 
@@ -708,13 +673,13 @@ impl ClockAnalogConfigWidget {
         self.minute_width_spin.set_value(config.minute_hand_width);
         self.second_width_spin.set_value(config.second_hand_width);
 
-        // Color buttons
-        Self::update_color_button(&self.tick_color_btn, &config.tick_color);
-        Self::update_color_button(&self.border_color_btn, &config.border_color);
-        Self::update_color_button(&self.number_color_btn, &config.number_color);
-        Self::update_color_button(&self.hour_color_btn, &config.hour_hand_color);
-        Self::update_color_button(&self.minute_color_btn, &config.minute_hand_color);
-        Self::update_color_button(&self.second_color_btn, &config.second_hand_color);
+        // Color widgets
+        self.tick_color_widget.set_color(config.tick_color);
+        self.border_color_widget.set_color(config.border_color);
+        self.number_color_widget.set_color(config.number_color);
+        self.hour_color_widget.set_color(config.hour_hand_color);
+        self.minute_color_widget.set_color(config.minute_hand_color);
+        self.second_color_widget.set_color(config.second_hand_color);
 
         // Icon config
         self.icon_text_entry.set_text(&config.icon_text);
@@ -724,10 +689,6 @@ impl ClockAnalogConfigWidget {
 
         // Store config
         *self.config.borrow_mut() = config;
-    }
-
-    fn update_color_button(btn: &Button, color: &Color) {
-        btn.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
     }
 }
 

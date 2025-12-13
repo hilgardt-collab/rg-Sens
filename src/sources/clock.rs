@@ -74,24 +74,20 @@ impl Default for AlarmConfig {
 }
 
 /// Timer mode
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum TimerMode {
     #[serde(rename = "countdown")]
+    #[default]
     Countdown,
     #[serde(rename = "stopwatch")]
     Stopwatch,
 }
 
-impl Default for TimerMode {
-    fn default() -> Self {
-        Self::Countdown
-    }
-}
-
 /// Timer state
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum TimerState {
     #[serde(rename = "stopped")]
+    #[default]
     Stopped,
     #[serde(rename = "running")]
     Running,
@@ -99,12 +95,6 @@ pub enum TimerState {
     Paused,
     #[serde(rename = "finished")]
     Finished,
-}
-
-impl Default for TimerState {
-    fn default() -> Self {
-        Self::Stopped
-    }
 }
 
 /// Timer configuration
@@ -144,24 +134,20 @@ impl Default for TimerConfig {
 }
 
 /// Time format
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum TimeFormat {
     #[serde(rename = "24h")]
+    #[default]
     Hour24,
     #[serde(rename = "12h")]
     Hour12,
 }
 
-impl Default for TimeFormat {
-    fn default() -> Self {
-        Self::Hour24
-    }
-}
-
 /// Date format
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum DateFormat {
     #[serde(rename = "yyyy-mm-dd")]
+    #[default]
     YearMonthDay,
     #[serde(rename = "dd/mm/yyyy")]
     DayMonthYear,
@@ -169,12 +155,6 @@ pub enum DateFormat {
     MonthDayYear,
     #[serde(rename = "day, month dd, yyyy")]
     LongFormat,
-}
-
-impl Default for DateFormat {
-    fn default() -> Self {
-        Self::YearMonthDay
-    }
 }
 
 /// Clock source configuration
@@ -272,6 +252,7 @@ impl ClockSource {
                     "timer_display".to_string(),
                     "timer_state".to_string(),
                     "timer_progress".to_string(),
+                    "timezone".to_string(),
                 ],
                 default_interval: Duration::from_millis(100),
             },
@@ -332,16 +313,22 @@ impl ClockSource {
                 #[cfg(target_os = "linux")]
                 {
                     // Try paplay first (PulseAudio), then fall back to other methods
-                    let result = std::process::Command::new("paplay")
+                    let paplay_success = std::process::Command::new("paplay")
                         .arg("/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga")
-                        .status();
-                    if result.is_err() || !result.unwrap().success() {
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+
+                    if !paplay_success {
                         // Try canberra-gtk-play (GNOME)
-                        let result = std::process::Command::new("canberra-gtk-play")
+                        let canberra_success = std::process::Command::new("canberra-gtk-play")
                             .arg("-i")
                             .arg("alarm-clock-elapsed")
-                            .status();
-                        if result.is_err() || !result.unwrap().success() {
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false);
+
+                        if !canberra_success {
                             // Fall back to terminal bell
                             print!("\x07");
                             let _ = std::io::Write::flush(&mut std::io::stdout());
@@ -676,6 +663,13 @@ impl DataSource for ClockSource {
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
+            FieldMetadata::new(
+                "timezone",
+                "Time Zone",
+                "Configured timezone (e.g., 'Local', 'America/New_York')",
+                FieldType::Text,
+                FieldPurpose::Caption,
+            ),
         ]
     }
 
@@ -808,6 +802,9 @@ impl DataSource for ClockSource {
         // Caption for text displays
         values.insert("caption".to_string(), Value::from(self.time_string.clone()));
         values.insert("unit".to_string(), Value::from(""));
+
+        // Timezone
+        values.insert("timezone".to_string(), Value::from(self.config.timezone.clone()));
 
         values
     }

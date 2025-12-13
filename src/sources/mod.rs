@@ -11,6 +11,7 @@ mod fan_speed;
 mod disk;
 mod clock;
 mod shared_sensors;
+mod combo;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
@@ -20,6 +21,7 @@ pub use system_temp::{SystemTempSource, SensorInfo, SensorCategory, SystemTempCo
 pub use fan_speed::{FanSpeedSource, FanInfo, FanCategory, FanSpeedConfig};
 pub use disk::DiskSource;
 pub use clock::{ClockSource, ClockSourceConfig, TimeFormat, DateFormat, AlarmConfig, AlarmSoundConfig, TimerConfig, TimerMode, TimerState};
+pub use combo::{ComboSource, ComboSourceConfig, SlotConfig, GroupConfig};
 // pub use network::NetworkSource;
 
 /// Initialize shared sensor caches (call once at startup)
@@ -31,26 +33,72 @@ pub fn initialize_sensors() {
 pub fn register_all() {
     use crate::core::global_registry;
 
+    // General metric displayers available to most sources
+    let general_displayers = &["text", "bar", "arc", "speedometer", "graph"];
+
     // Register CPU source
-    global_registry().register_source("cpu", || Box::new(CpuSource::new()));
+    global_registry().register_source_with_info(
+        "cpu",
+        "Cpu",
+        general_displayers,
+        || Box::new(CpuSource::new()),
+    );
 
     // Register GPU source
-    global_registry().register_source("gpu", || Box::new(GpuSource::new()));
+    global_registry().register_source_with_info(
+        "gpu",
+        "Gpu",
+        general_displayers,
+        || Box::new(GpuSource::new()),
+    );
 
     // Register Memory source
-    global_registry().register_source("memory", || Box::new(MemorySource::new()));
+    global_registry().register_source_with_info(
+        "memory",
+        "Memory",
+        general_displayers,
+        || Box::new(MemorySource::new()),
+    );
 
     // Register System Temperature source
-    global_registry().register_source("system_temp", || Box::new(SystemTempSource::new()));
+    global_registry().register_source_with_info(
+        "system_temp",
+        "System Temperature",
+        general_displayers,
+        || Box::new(SystemTempSource::new()),
+    );
 
     // Register Fan Speed source
-    global_registry().register_source("fan_speed", || Box::new(FanSpeedSource::new()));
+    global_registry().register_source_with_info(
+        "fan_speed",
+        "Fan Speed",
+        general_displayers,
+        || Box::new(FanSpeedSource::new()),
+    );
 
     // Register Disk source
-    global_registry().register_source("disk", || Box::new(DiskSource::new()));
+    global_registry().register_source_with_info(
+        "disk",
+        "Disk",
+        general_displayers,
+        || Box::new(DiskSource::new()),
+    );
 
-    // Register Clock source
-    global_registry().register_source("clock", || Box::new(ClockSource::new()));
+    // Register Clock source - only compatible with clock displayers
+    global_registry().register_source_with_info(
+        "clock",
+        "Clock",
+        &["clock_analog", "clock_digital"],
+        || Box::new(ClockSource::new()),
+    );
+
+    // Register Combination source - only compatible with LCARS displayer
+    global_registry().register_source_with_info(
+        "combination",
+        "Combination",
+        &["lcars"],
+        || Box::new(ComboSource::new()),
+    );
 
     // TODO: Register more sources
     // register_source!("network", NetworkSource);

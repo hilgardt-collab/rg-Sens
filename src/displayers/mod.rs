@@ -11,6 +11,7 @@ mod speedometer;
 mod graph;
 mod clock_analog;
 mod clock_digital;
+mod lcars_combo;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -21,6 +22,7 @@ pub use speedometer::SpeedometerDisplayer;
 pub use graph::GraphDisplayer;
 pub use clock_analog::ClockAnalogDisplayer;
 pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
+pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -31,25 +33,60 @@ pub fn register_all() {
     use crate::core::global_registry;
 
     // Register text displayer
-    global_registry().register_displayer("text", || Box::new(TextDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "text",
+        "Text",
+        || Box::new(TextDisplayer::new()),
+    );
 
     // Register bar displayer
-    global_registry().register_displayer("bar", || Box::new(BarDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "bar",
+        "Bar",
+        || Box::new(BarDisplayer::new()),
+    );
 
     // Register arc gauge displayer
-    global_registry().register_displayer("arc", || Box::new(ArcDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "arc",
+        "Arc Gauge",
+        || Box::new(ArcDisplayer::new()),
+    );
 
     // Register speedometer gauge displayer
-    global_registry().register_displayer("speedometer", || Box::new(SpeedometerDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "speedometer",
+        "Speedometer",
+        || Box::new(SpeedometerDisplayer::new()),
+    );
 
     // Register graph displayer
-    global_registry().register_displayer("graph", || Box::new(GraphDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "graph",
+        "Graph",
+        || Box::new(GraphDisplayer::new()),
+    );
 
     // Register analog clock displayer
-    global_registry().register_displayer("clock_analog", || Box::new(ClockAnalogDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "clock_analog",
+        "Analog Clock",
+        || Box::new(ClockAnalogDisplayer::new()),
+    );
 
     // Register digital clock displayer
-    global_registry().register_displayer("clock_digital", || Box::new(ClockDigitalDisplayer::new()));
+    global_registry().register_displayer_with_info(
+        "clock_digital",
+        "Digital Clock",
+        || Box::new(ClockDigitalDisplayer::new()),
+    );
+
+    // Register LCARS displayer (for Combination source)
+    global_registry().register_displayer_with_info(
+        "lcars",
+        "LCARS",
+        || Box::new(LcarsComboDisplayer::new()),
+    );
 
     // TODO: Register more displayers
     // register_displayer!("level_bar", LevelBarDisplayer);

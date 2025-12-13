@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use crate::ui::bar_display::*;
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::GradientEditor;
 use crate::ui::TextLineConfigWidget;
 use crate::core::FieldMetadata;
@@ -31,14 +31,14 @@ pub struct BarConfigWidget {
     // Foreground UI elements
     fg_solid_radio: CheckButton,
     fg_gradient_radio: CheckButton,
-    fg_color_btn: Button,
+    fg_color_widget: Rc<ColorButtonWidget>,
     fg_gradient_editor: Rc<GradientEditor>,
 
     // Background UI elements
     bg_solid_radio: CheckButton,
     bg_gradient_radio: CheckButton,
     bg_transparent_radio: CheckButton,
-    bg_color_btn: Button,
+    bg_color_widget: Rc<ColorButtonWidget>,
     bg_gradient_editor: Rc<GradientEditor>,
 
     // Rectangle options UI elements
@@ -152,8 +152,17 @@ impl BarConfigWidget {
         fg_type_box.append(&fg_gradient_radio);
         fg_page.append(&fg_type_box);
 
-        let fg_color_btn = Button::with_label("Choose Color");
-        fg_page.append(&fg_color_btn);
+        // Foreground solid color - using ColorButtonWidget
+        let fg_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        fg_color_box.append(&Label::new(Some("Solid Color:")));
+        let initial_fg_color = if let BarFillType::Solid { color } = config.borrow().foreground {
+            color
+        } else {
+            Color::new(0.2, 0.6, 1.0, 1.0)
+        };
+        let fg_color_widget = Rc::new(ColorButtonWidget::new(initial_fg_color));
+        fg_color_box.append(fg_color_widget.widget());
+        fg_page.append(&fg_color_box);
 
         // Copy/Paste gradient buttons for foreground
         let fg_copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -193,8 +202,17 @@ impl BarConfigWidget {
         bg_type_box.append(&bg_transparent_radio);
         bg_page.append(&bg_type_box);
 
-        let bg_color_btn = Button::with_label("Choose Color");
-        bg_page.append(&bg_color_btn);
+        // Background solid color - using ColorButtonWidget
+        let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        bg_color_box.append(&Label::new(Some("Solid Color:")));
+        let initial_bg_color = if let BarBackgroundType::Solid { color } = config.borrow().background {
+            color
+        } else {
+            Color::new(0.15, 0.15, 0.15, 0.8)
+        };
+        let bg_color_widget = Rc::new(ColorButtonWidget::new(initial_bg_color));
+        bg_color_box.append(bg_color_widget.widget());
+        bg_page.append(&bg_color_box);
 
         // Copy/Paste gradient buttons for background
         let bg_copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -254,6 +272,20 @@ impl BarConfigWidget {
         text_page.append(text_config_widget.widget());
         let text_config_widget = Rc::new(text_config_widget);
 
+        // Connect text config widget changes to trigger on_change callback
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let config_clone = config.clone();
+        let text_widget_for_change = text_config_widget.clone();
+        text_config_widget.set_on_change(move || {
+            // Update the stored text config when text widget changes
+            config_clone.borrow_mut().text_overlay.text_config = text_widget_for_change.get_config();
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
         notebook.append_page(&text_page, Some(&Label::new(Some("Text Overlay"))));
 
         // === Tab 6: Border ===
@@ -274,11 +306,27 @@ impl BarConfigWidget {
         border_width_box.append(&border_width_spin);
         border_page.append(&border_width_box);
 
-        let border_color_btn = Button::with_label("Border Color");
-        border_page.append(&border_color_btn);
+        // Border color - using ColorButtonWidget
+        let border_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        border_color_box.append(&Label::new(Some("Color:")));
+        let border_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().border.color));
+        border_color_box.append(border_color_widget.widget());
+        border_page.append(&border_color_box);
 
         notebook.append_page(&border_page, Some(&Label::new(Some("Border"))));
 
+        // === Copy/Paste buttons for entire bar config ===
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        copy_paste_box.set_halign(gtk4::Align::End);
+        copy_paste_box.set_margin_bottom(6);
+
+        let copy_btn = Button::with_label("Copy Bar Config");
+        let paste_btn = Button::with_label("Paste Bar Config");
+
+        copy_paste_box.append(&copy_btn);
+        copy_paste_box.append(&paste_btn);
+
+        container.append(&copy_paste_box);
         container.append(&notebook);
 
         // === Event Handlers ===
@@ -366,7 +414,7 @@ impl BarConfigWidget {
             &on_change,
             fg_solid_radio.clone(),
             fg_gradient_radio.clone(),
-            fg_color_btn.clone(),
+            fg_color_widget.clone(),
             fg_gradient_editor.clone(),
             fg_copy_paste_box.clone(),
             fg_copy_gradient_btn.clone(),
@@ -381,7 +429,7 @@ impl BarConfigWidget {
             bg_solid_radio.clone(),
             bg_gradient_radio.clone(),
             bg_transparent_radio.clone(),
-            bg_color_btn.clone(),
+            bg_color_widget.clone(),
             bg_gradient_editor.clone(),
             bg_copy_paste_box.clone(),
             bg_copy_gradient_btn.clone(),
@@ -442,30 +490,136 @@ impl BarConfigWidget {
             }
         });
 
+        // Border color handler - using ColorButtonWidget
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
+        border_color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().border.color = color;
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
 
-        border_color_btn.connect_clicked(move |btn| {
-            let current_color = config_clone.borrow().border.color;
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
+        // Copy button handler
+        let config_for_copy = config.clone();
+        copy_btn.connect_clicked(move |_| {
+            let cfg = config_for_copy.borrow().clone();
+            if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                clipboard.copy_bar_display(cfg);
+            }
+        });
 
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    cfg.border.color = new_color;
-                    drop(cfg);
+        // Paste button handler
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        let style_dropdown_paste = style_dropdown.clone();
+        let orientation_dropdown_paste = orientation_dropdown.clone();
+        let direction_dropdown_paste = direction_dropdown.clone();
+        let fg_solid_radio_paste = fg_solid_radio.clone();
+        let fg_gradient_radio_paste = fg_gradient_radio.clone();
+        let fg_color_widget_paste = fg_color_widget.clone();
+        let fg_gradient_editor_paste = fg_gradient_editor.clone();
+        let bg_solid_radio_paste = bg_solid_radio.clone();
+        let bg_gradient_radio_paste = bg_gradient_radio.clone();
+        let bg_transparent_radio_paste = bg_transparent_radio.clone();
+        let bg_color_widget_paste = bg_color_widget.clone();
+        let bg_gradient_editor_paste = bg_gradient_editor.clone();
+        let rect_width_spin_paste = rect_width_spin.clone();
+        let rect_height_spin_paste = rect_height_spin.clone();
+        let corner_radius_spin_paste = corner_radius_spin.clone();
+        let padding_spin_paste = padding_spin.clone();
+        let segment_count_spin_paste = segment_count_spin.clone();
+        let segment_spacing_spin_paste = segment_spacing_spin.clone();
+        let segment_width_spin_paste = segment_width_spin.clone();
+        let segment_height_spin_paste = segment_height_spin.clone();
+        let border_check_paste = border_check.clone();
+        let border_width_spin_paste = border_width_spin.clone();
+        let border_color_widget_paste = border_color_widget.clone();
+        let text_widget_paste = text_config_widget.clone();
 
-                    preview_clone2.queue_draw();
+        paste_btn.connect_clicked(move |_| {
+            let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                clipboard.paste_bar_display()
+            } else {
+                None
+            };
 
-                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                        callback();
+            if let Some(cfg) = pasted {
+                // Update stored config
+                *config_for_paste.borrow_mut() = cfg.clone();
+
+                // Update UI elements
+                style_dropdown_paste.set_selected(match cfg.style {
+                    BarStyle::Full => 0,
+                    BarStyle::Rectangle => 1,
+                    BarStyle::Segmented => 2,
+                });
+                orientation_dropdown_paste.set_selected(match cfg.orientation {
+                    BarOrientation::Horizontal => 0,
+                    BarOrientation::Vertical => 1,
+                });
+                direction_dropdown_paste.set_selected(match cfg.fill_direction {
+                    BarFillDirection::LeftToRight => 0,
+                    BarFillDirection::RightToLeft => 1,
+                    BarFillDirection::TopToBottom => 2,
+                    BarFillDirection::BottomToTop => 3,
+                });
+
+                // Foreground
+                match &cfg.foreground {
+                    BarFillType::Solid { color } => {
+                        fg_solid_radio_paste.set_active(true);
+                        fg_color_widget_paste.set_color(*color);
+                    }
+                    BarFillType::Gradient { stops, .. } => {
+                        fg_gradient_radio_paste.set_active(true);
+                        fg_gradient_editor_paste.set_stops(stops.clone());
                     }
                 }
-            });
+
+                // Background
+                match &cfg.background {
+                    BarBackgroundType::Solid { color } => {
+                        bg_solid_radio_paste.set_active(true);
+                        bg_color_widget_paste.set_color(*color);
+                    }
+                    BarBackgroundType::Gradient { stops, .. } => {
+                        bg_gradient_radio_paste.set_active(true);
+                        bg_gradient_editor_paste.set_stops(stops.clone());
+                    }
+                    BarBackgroundType::Transparent => {
+                        bg_transparent_radio_paste.set_active(true);
+                    }
+                }
+
+                // Rectangle options
+                rect_width_spin_paste.set_value(cfg.rectangle_width);
+                rect_height_spin_paste.set_value(cfg.rectangle_height);
+                corner_radius_spin_paste.set_value(cfg.corner_radius);
+                padding_spin_paste.set_value(cfg.padding);
+
+                // Segmented options
+                segment_count_spin_paste.set_value(cfg.segment_count as f64);
+                segment_spacing_spin_paste.set_value(cfg.segment_spacing);
+                segment_width_spin_paste.set_value(cfg.segment_width);
+                segment_height_spin_paste.set_value(cfg.segment_height);
+
+                // Border
+                border_check_paste.set_active(cfg.border.enabled);
+                border_width_spin_paste.set_value(cfg.border.width);
+                border_color_widget_paste.set_color(cfg.border.color);
+
+                // Text overlay
+                text_widget_paste.set_config(cfg.text_overlay.text_config.clone());
+
+                preview_for_paste.queue_draw();
+                if let Some(callback) = on_change_for_paste.borrow().as_ref() {
+                    callback();
+                }
+            }
         });
 
         Self {
@@ -479,12 +633,12 @@ impl BarConfigWidget {
             style_stack,
             fg_solid_radio,
             fg_gradient_radio,
-            fg_color_btn,
+            fg_color_widget,
             fg_gradient_editor,
             bg_solid_radio,
             bg_gradient_radio,
             bg_transparent_radio,
-            bg_color_btn,
+            bg_color_widget,
             bg_gradient_editor,
             rect_width_spin,
             rect_height_spin,
@@ -530,67 +684,47 @@ impl BarConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         solid_radio: CheckButton,
         gradient_radio: CheckButton,
-        color_btn: Button,
+        color_widget: Rc<ColorButtonWidget>,
         gradient_editor: Rc<GradientEditor>,
         copy_paste_box: GtkBox,
         copy_btn: Button,
         paste_btn: Button,
     ) {
         // Toggle visibility
-        let color_btn_clone = color_btn.clone();
+        let color_widget_clone = color_widget.widget().clone();
         let gradient_widget_clone = gradient_editor.widget().clone();
         let copy_paste_box_clone = copy_paste_box.clone();
 
         solid_radio.connect_toggled(move |check| {
             if check.is_active() {
-                color_btn_clone.set_visible(true);
+                color_widget_clone.set_visible(true);
                 gradient_widget_clone.set_visible(false);
                 copy_paste_box_clone.set_visible(false);
             }
         });
 
-        let color_btn_clone2 = color_btn.clone();
+        let color_widget_clone2 = color_widget.widget().clone();
         let gradient_widget_clone2 = gradient_editor.widget().clone();
         let copy_paste_box_clone2 = copy_paste_box.clone();
 
         gradient_radio.connect_toggled(move |check| {
             if check.is_active() {
-                color_btn_clone2.set_visible(false);
+                color_widget_clone2.set_visible(false);
                 gradient_widget_clone2.set_visible(true);
                 copy_paste_box_clone2.set_visible(true);
             }
         });
 
-        // Color button handler
+        // Color widget handler - using ColorButtonWidget
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-
-        color_btn.connect_clicked(move |btn| {
-            let current_color = if let BarFillType::Solid { color } = config_clone.borrow().foreground {
-                color
-            } else {
-                Color::new(0.2, 0.6, 1.0, 1.0)
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    cfg.foreground = BarFillType::Solid { color: new_color };
-                    drop(cfg);
-
-                    preview_clone2.queue_draw();
-
-                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                        callback();
-                    }
-                }
-            });
+        color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().foreground = BarFillType::Solid { color };
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
         });
 
         // Gradient editor handler
@@ -674,21 +808,21 @@ impl BarConfigWidget {
         solid_radio: CheckButton,
         gradient_radio: CheckButton,
         transparent_radio: CheckButton,
-        color_btn: Button,
+        color_widget: Rc<ColorButtonWidget>,
         gradient_editor: Rc<GradientEditor>,
         copy_paste_box: GtkBox,
         copy_btn: Button,
         paste_btn: Button,
     ) {
         // Toggle visibility
-        let color_btn_clone = color_btn.clone();
+        let color_widget_clone = color_widget.widget().clone();
         let gradient_widget_clone = gradient_editor.widget().clone();
         let config_clone = config.clone();
         let copy_paste_box_clone = copy_paste_box.clone();
 
         solid_radio.connect_toggled(move |check| {
             if check.is_active() {
-                color_btn_clone.set_visible(true);
+                color_widget_clone.set_visible(true);
                 gradient_widget_clone.set_visible(false);
                 copy_paste_box_clone.set_visible(false);
                 let mut cfg = config_clone.borrow_mut();
@@ -700,14 +834,14 @@ impl BarConfigWidget {
             }
         });
 
-        let color_btn_clone2 = color_btn.clone();
+        let color_widget_clone2 = color_widget.widget().clone();
         let gradient_widget_clone2 = gradient_editor.widget().clone();
         let config_clone2 = config.clone();
         let copy_paste_box_clone2 = copy_paste_box.clone();
 
         gradient_radio.connect_toggled(move |check| {
             if check.is_active() {
-                color_btn_clone2.set_visible(false);
+                color_widget_clone2.set_visible(false);
                 gradient_widget_clone2.set_visible(true);
                 copy_paste_box_clone2.set_visible(true);
                 let mut cfg = config_clone2.borrow_mut();
@@ -723,7 +857,7 @@ impl BarConfigWidget {
             }
         });
 
-        let color_btn_clone3 = color_btn.clone();
+        let color_widget_clone3 = color_widget.widget().clone();
         let gradient_widget_clone3 = gradient_editor.widget().clone();
         let config_clone3 = config.clone();
         let preview_clone = preview.clone();
@@ -732,7 +866,7 @@ impl BarConfigWidget {
 
         transparent_radio.connect_toggled(move |check| {
             if check.is_active() {
-                color_btn_clone3.set_visible(false);
+                color_widget_clone3.set_visible(false);
                 gradient_widget_clone3.set_visible(false);
                 copy_paste_box_clone3.set_visible(false);
                 let mut cfg = config_clone3.borrow_mut();
@@ -747,36 +881,16 @@ impl BarConfigWidget {
             }
         });
 
-        // Color button handler
+        // Color widget handler - using ColorButtonWidget
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-
-        color_btn.connect_clicked(move |btn| {
-            let current_color = if let BarBackgroundType::Solid { color } = config_clone.borrow().background {
-                color
-            } else {
-                Color::new(0.15, 0.15, 0.15, 0.8)
-            };
-
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut cfg = config_clone2.borrow_mut();
-                    cfg.background = BarBackgroundType::Solid { color: new_color };
-                    drop(cfg);
-
-                    preview_clone2.queue_draw();
-
-                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                        callback();
-                    }
-                }
-            });
+        color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().background = BarBackgroundType::Solid { color };
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
         });
 
         // Gradient editor handler
@@ -1131,14 +1245,15 @@ impl BarConfigWidget {
 
         // Update foreground UI
         match &new_config.foreground {
-            BarFillType::Solid { .. } => {
+            BarFillType::Solid { color } => {
                 self.fg_solid_radio.set_active(true);
-                self.fg_color_btn.set_visible(true);
+                self.fg_color_widget.widget().set_visible(true);
+                self.fg_color_widget.set_color(*color);
                 self.fg_gradient_editor.widget().set_visible(false);
             }
             BarFillType::Gradient { stops, angle } => {
                 self.fg_gradient_radio.set_active(true);
-                self.fg_color_btn.set_visible(false);
+                self.fg_color_widget.widget().set_visible(false);
                 self.fg_gradient_editor.widget().set_visible(true);
                 // Load gradient into editor with angle
                 let gradient = LinearGradientConfig {
@@ -1151,14 +1266,15 @@ impl BarConfigWidget {
 
         // Update background UI
         match &new_config.background {
-            BarBackgroundType::Solid { .. } => {
+            BarBackgroundType::Solid { color } => {
                 self.bg_solid_radio.set_active(true);
-                self.bg_color_btn.set_visible(true);
+                self.bg_color_widget.widget().set_visible(true);
+                self.bg_color_widget.set_color(*color);
                 self.bg_gradient_editor.widget().set_visible(false);
             }
             BarBackgroundType::Gradient { stops, angle } => {
                 self.bg_gradient_radio.set_active(true);
-                self.bg_color_btn.set_visible(false);
+                self.bg_color_widget.widget().set_visible(false);
                 self.bg_gradient_editor.widget().set_visible(true);
                 // Load gradient into editor with angle
                 let gradient = LinearGradientConfig {
@@ -1169,7 +1285,7 @@ impl BarConfigWidget {
             }
             BarBackgroundType::Transparent => {
                 self.bg_transparent_radio.set_active(true);
-                self.bg_color_btn.set_visible(false);
+                self.bg_color_widget.widget().set_visible(false);
                 self.bg_gradient_editor.widget().set_visible(false);
             }
         }

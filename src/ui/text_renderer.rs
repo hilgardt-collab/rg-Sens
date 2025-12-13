@@ -21,7 +21,7 @@ pub fn render_text_lines(
     for line in &config.lines {
         if line.is_combined {
             grouped_lines.entry(line.group_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(line);
         } else {
             standalone_lines.push(line);

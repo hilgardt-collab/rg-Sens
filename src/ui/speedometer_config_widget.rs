@@ -11,12 +11,13 @@ use std::rc::Rc;
 use crate::ui::speedometer_display::{
     render_speedometer, NeedleStyle, NeedleTailStyle, SpeedometerConfig, TickStyle,
 };
-use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::GradientEditor;
 use crate::displayers::FieldMetadata;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 
 /// Speedometer gauge configuration widget
+#[allow(dead_code)]
 pub struct SpeedometerConfigWidget {
     container: GtkBox,
     config: Rc<RefCell<SpeedometerConfig>>,
@@ -31,7 +32,7 @@ pub struct SpeedometerConfigWidget {
 
     // Track controls
     show_track_check: CheckButton,
-    track_color_button: Button,
+    track_color_widget: Rc<ColorButtonWidget>,
     gradient_editor: Rc<GradientEditor>,
 
     // Major ticks controls
@@ -39,7 +40,7 @@ pub struct SpeedometerConfigWidget {
     major_tick_count_spin: SpinButton,
     major_tick_length_scale: Scale,
     major_tick_width_spin: SpinButton,
-    major_tick_color_button: Button,
+    major_tick_color_widget: Rc<ColorButtonWidget>,
     major_tick_style_dropdown: DropDown,
 
     // Minor ticks controls
@@ -47,14 +48,14 @@ pub struct SpeedometerConfigWidget {
     minor_ticks_per_major_spin: SpinButton,
     minor_tick_length_scale: Scale,
     minor_tick_width_spin: SpinButton,
-    minor_tick_color_button: Button,
+    minor_tick_color_widget: Rc<ColorButtonWidget>,
     minor_tick_style_dropdown: DropDown,
 
     // Tick labels controls (using TickLabelConfig)
     show_tick_labels_check: CheckButton,
     tick_label_font_button: Button,
     tick_label_font_size_spin: SpinButton,
-    tick_label_color_button: Button,
+    tick_label_color_widget: Rc<ColorButtonWidget>,
     tick_label_bold_check: CheckButton,
     tick_label_italic_check: CheckButton,
     tick_label_use_percentage_check: CheckButton,
@@ -65,13 +66,13 @@ pub struct SpeedometerConfigWidget {
     needle_tail_style_dropdown: DropDown,
     needle_length_scale: Scale,
     needle_width_spin: SpinButton,
-    needle_color_button: Button,
+    needle_color_widget: Rc<ColorButtonWidget>,
     needle_shadow_check: CheckButton,
 
     // Center hub controls
     show_center_hub_check: CheckButton,
     center_hub_radius_scale: Scale,
-    center_hub_color_button: Button,
+    center_hub_color_widget: Rc<ColorButtonWidget>,
     center_hub_3d_check: CheckButton,
 
     // Bezel controls (using BackgroundConfig)
@@ -121,7 +122,7 @@ impl SpeedometerConfigWidget {
         notebook.append_page(&geom_page, Some(&Label::new(Some("Geometry"))));
 
         // === Tab 2: Track ===
-        let (track_page, show_track_check, track_color_button, gradient_editor) =
+        let (track_page, show_track_check, track_color_widget, gradient_editor) =
             Self::create_track_page(&config, &on_change, &preview);
         notebook.append_page(&track_page, Some(&Label::new(Some("Track"))));
 
@@ -171,24 +172,24 @@ impl SpeedometerConfigWidget {
             arc_width_scale,
             radius_scale,
             show_track_check,
-            track_color_button,
+            track_color_widget,
             gradient_editor,
             show_major_ticks_check,
             major_tick_count_spin,
             major_tick_length_scale,
             major_tick_width_spin,
-            major_tick_color_button,
+            major_tick_color_widget: major_tick_color_button,
             major_tick_style_dropdown,
             show_minor_ticks_check,
             minor_ticks_per_major_spin,
             minor_tick_length_scale,
             minor_tick_width_spin,
-            minor_tick_color_button,
+            minor_tick_color_widget: minor_tick_color_button,
             minor_tick_style_dropdown,
             show_tick_labels_check,
             tick_label_font_button,
             tick_label_font_size_spin,
-            tick_label_color_button,
+            tick_label_color_widget: tick_label_color_button,
             tick_label_bold_check,
             tick_label_italic_check,
             tick_label_use_percentage_check,
@@ -197,11 +198,11 @@ impl SpeedometerConfigWidget {
             needle_tail_style_dropdown,
             needle_length_scale,
             needle_width_spin,
-            needle_color_button,
+            needle_color_widget: needle_color_button,
             needle_shadow_check,
             show_center_hub_check,
             center_hub_radius_scale,
-            center_hub_color_button,
+            center_hub_color_widget: center_hub_color_button,
             center_hub_3d_check,
             show_bezel_check,
             bezel_width_scale,
@@ -336,7 +337,7 @@ impl SpeedometerConfigWidget {
         config: &Rc<RefCell<SpeedometerConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-    ) -> (GtkBox, CheckButton, Button, Rc<GradientEditor>) {
+    ) -> (GtkBox, CheckButton, Rc<ColorButtonWidget>, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
         page.set_margin_start(12);
         page.set_margin_end(12);
@@ -356,27 +357,19 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Track color
-        let track_color_button = Button::with_label("Track Base Color");
-        page.append(&track_color_button);
+        // Track color - using ColorButtonWidget
+        let track_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        track_color_box.append(&Label::new(Some("Track Base Color:")));
+        let track_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().track_color));
+        track_color_box.append(track_color_widget.widget());
+        page.append(&track_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        track_color_button.connect_clicked(move |button| {
-            let config_clone = config_clone.clone();
-            let on_change_clone = on_change_clone.clone();
-            let preview_clone = preview_clone.clone();
-
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let current_color = config_clone.borrow().track_color;
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone.borrow_mut().track_color = color;
-                    Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-                }
-            });
+        track_color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().track_color = color;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Gradient editor for track color zones
@@ -393,7 +386,7 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        (page, show_track_check, track_color_button, gradient_editor)
+        (page, show_track_check, track_color_widget, gradient_editor)
     }
 
     fn create_ticks_page(
@@ -406,18 +399,18 @@ impl SpeedometerConfigWidget {
         SpinButton,
         Scale,
         SpinButton,
-        Button,
+        Rc<ColorButtonWidget>,
         DropDown,
         CheckButton,
         SpinButton,
         Scale,
         SpinButton,
-        Button,
+        Rc<ColorButtonWidget>,
         DropDown,
         CheckButton,
         Button,
         SpinButton,
-        Button,
+        Rc<ColorButtonWidget>,
         CheckButton,
         CheckButton,
         CheckButton,
@@ -496,27 +489,19 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Major tick color
-        let major_tick_color_button = Button::with_label("Major Tick Color");
-        page.append(&major_tick_color_button);
+        // Major tick color - using ColorButtonWidget
+        let major_tick_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        major_tick_color_box.append(&Label::new(Some("Color:")));
+        let major_tick_color_button = Rc::new(ColorButtonWidget::new(config.borrow().major_tick_color));
+        major_tick_color_box.append(major_tick_color_button.widget());
+        page.append(&major_tick_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        major_tick_color_button.connect_clicked(move |button| {
-            let config_clone = config_clone.clone();
-            let on_change_clone = on_change_clone.clone();
-            let preview_clone = preview_clone.clone();
-
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let current_color = config_clone.borrow().major_tick_color;
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone.borrow_mut().major_tick_color = color;
-                    Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-                }
-            });
+        major_tick_color_button.set_on_change(move |color| {
+            config_clone.borrow_mut().major_tick_color = color;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Major tick style
@@ -610,27 +595,19 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Minor tick color
-        let minor_tick_color_button = Button::with_label("Minor Tick Color");
-        page.append(&minor_tick_color_button);
+        // Minor tick color - using ColorButtonWidget
+        let minor_tick_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        minor_tick_color_box.append(&Label::new(Some("Color:")));
+        let minor_tick_color_button = Rc::new(ColorButtonWidget::new(config.borrow().minor_tick_color));
+        minor_tick_color_box.append(minor_tick_color_button.widget());
+        page.append(&minor_tick_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        minor_tick_color_button.connect_clicked(move |button| {
-            let config_clone = config_clone.clone();
-            let on_change_clone = on_change_clone.clone();
-            let preview_clone = preview_clone.clone();
-
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let current_color = config_clone.borrow().minor_tick_color;
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone.borrow_mut().minor_tick_color = color;
-                    Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-                }
-            });
+        minor_tick_color_button.set_on_change(move |color| {
+            config_clone.borrow_mut().minor_tick_color = color;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Minor tick style
@@ -795,27 +772,19 @@ impl SpeedometerConfigWidget {
             );
         });
 
-        // Label color
-        let tick_label_color_button = Button::with_label("Label Color");
-        page.append(&tick_label_color_button);
+        // Label color - using ColorButtonWidget
+        let tick_label_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        tick_label_color_box.append(&Label::new(Some("Color:")));
+        let tick_label_color_button = Rc::new(ColorButtonWidget::new(config.borrow().tick_label_config.color));
+        tick_label_color_box.append(tick_label_color_button.widget());
+        page.append(&tick_label_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        tick_label_color_button.connect_clicked(move |button| {
-            let config_clone = config_clone.clone();
-            let on_change_clone = on_change_clone.clone();
-            let preview_clone = preview_clone.clone();
-
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let current_color = config_clone.borrow().tick_label_config.color;
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone.borrow_mut().tick_label_config.color = color;
-                    Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-                }
-            });
+        tick_label_color_button.set_on_change(move |color| {
+            config_clone.borrow_mut().tick_label_config.color = color;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Bold checkbox
@@ -892,7 +861,7 @@ impl SpeedometerConfigWidget {
         DropDown,
         Scale,
         SpinButton,
-        Button,
+        Rc<ColorButtonWidget>,
         CheckButton,
     ) {
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -995,27 +964,19 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Needle color
-        let needle_color_button = Button::with_label("Needle Color");
-        page.append(&needle_color_button);
+        // Needle color - using ColorButtonWidget
+        let needle_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        needle_color_box.append(&Label::new(Some("Needle Color:")));
+        let needle_color_button = Rc::new(ColorButtonWidget::new(config.borrow().needle_color));
+        needle_color_box.append(needle_color_button.widget());
+        page.append(&needle_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        needle_color_button.connect_clicked(move |button| {
-            let config_clone = config_clone.clone();
-            let on_change_clone = on_change_clone.clone();
-            let preview_clone = preview_clone.clone();
-
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let current_color = config_clone.borrow().needle_color;
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone.borrow_mut().needle_color = color;
-                    Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-                }
-            });
+        needle_color_button.set_on_change(move |color| {
+            config_clone.borrow_mut().needle_color = color;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Needle shadow
@@ -1051,7 +1012,7 @@ impl SpeedometerConfigWidget {
         GtkBox,
         CheckButton,
         Scale,
-        Button,
+        Rc<ColorButtonWidget>,
         CheckButton,
         CheckButton,
         Scale,
@@ -1097,27 +1058,19 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Hub color
-        let center_hub_color_button = Button::with_label("Hub Color");
-        page.append(&center_hub_color_button);
+        // Hub color - using ColorButtonWidget
+        let center_hub_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        center_hub_color_box.append(&Label::new(Some("Hub Color:")));
+        let center_hub_color_button = Rc::new(ColorButtonWidget::new(config.borrow().center_hub_color));
+        center_hub_color_box.append(center_hub_color_button.widget());
+        page.append(&center_hub_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        center_hub_color_button.connect_clicked(move |button| {
-            let config_clone = config_clone.clone();
-            let on_change_clone = on_change_clone.clone();
-            let preview_clone = preview_clone.clone();
-
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let current_color = config_clone.borrow().center_hub_color;
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone.borrow_mut().center_hub_color = color;
-                    Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-                }
-            });
+        center_hub_color_button.set_on_change(move |color| {
+            config_clone.borrow_mut().center_hub_color = color;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Hub 3D effect

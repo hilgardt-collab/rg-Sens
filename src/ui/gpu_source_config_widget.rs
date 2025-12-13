@@ -24,29 +24,23 @@ pub enum GpuField {
 
 /// Memory unit types
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum MemoryUnit {
     MB,
+    #[default]
     GB,
 }
 
-impl Default for MemoryUnit {
-    fn default() -> Self {
-        Self::GB
-    }
-}
 
 /// Frequency unit types
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum FrequencyUnit {
+    #[default]
     MHz,
     GHz,
 }
 
-impl Default for FrequencyUnit {
-    fn default() -> Self {
-        Self::MHz
-    }
-}
 
 use crate::ui::TemperatureUnit;
 
@@ -77,7 +71,7 @@ fn default_update_interval() -> u64 {
 }
 
 fn default_auto_detect_limits() -> bool {
-    true
+    false
 }
 
 impl Default for GpuSourceConfig {
@@ -451,7 +445,17 @@ impl GpuSourceConfigWidget {
     }
 
     pub fn get_config(&self) -> GpuSourceConfig {
-        self.config.borrow().clone()
+        let mut config = self.config.borrow().clone();
+
+        // When auto_detect is disabled, ensure we use the spinbutton values
+        // This handles the case where set_config was called with None limits
+        // but the spinbuttons have values the user may have entered
+        if !config.auto_detect_limits {
+            config.min_limit = Some(self.min_limit_spin.value());
+            config.max_limit = Some(self.max_limit_spin.value());
+        }
+
+        config
     }
 
     /// Set available GPUs

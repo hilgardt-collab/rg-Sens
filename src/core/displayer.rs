@@ -1,5 +1,6 @@
 //! Displayer trait and related types
 
+use super::panel_data::DisplayerConfig;
 use anyhow::Result;
 use cairo::Context;
 use gtk4::Widget;
@@ -69,6 +70,28 @@ pub trait Displayer: Send + Sync {
     /// Can be used to optimize rendering.
     fn needs_redraw(&self) -> bool {
         true
+    }
+
+    /// Apply typed configuration (preferred)
+    ///
+    /// This is the type-safe alternative to `apply_config()`. Displayers can
+    /// implement this method to receive their specific config struct directly.
+    /// The default implementation converts to HashMap and calls `apply_config()`.
+    ///
+    /// Displayers should override this method if they want to use typed configs
+    /// for better type safety and cleaner code.
+    fn apply_config_typed(&mut self, config: &DisplayerConfig) -> Result<()> {
+        let map = config.to_hashmap();
+        self.apply_config(&map)
+    }
+
+    /// Get the current typed configuration (if available)
+    ///
+    /// Displayers can implement this to return their current configuration
+    /// as a typed DisplayerConfig enum variant. The default implementation
+    /// returns None, indicating that the displayer doesn't support typed configs.
+    fn get_typed_config(&self) -> Option<DisplayerConfig> {
+        None
     }
 }
 

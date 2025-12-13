@@ -11,6 +11,23 @@ pub type SourceFactory = fn() -> BoxedDataSource;
 /// Function that creates a displayer
 pub type DisplayerFactory = fn() -> BoxedDisplayer;
 
+/// Information about a registered source
+#[derive(Clone)]
+pub struct SourceInfo {
+    pub id: String,
+    pub display_name: String,
+    pub compatible_displayers: Vec<String>,
+    pub factory: SourceFactory,
+}
+
+/// Information about a registered displayer
+#[derive(Clone)]
+pub struct DisplayerInfo {
+    pub id: String,
+    pub display_name: String,
+    pub factory: DisplayerFactory,
+}
+
 /// Registry for data sources and displayers
 ///
 /// This allows for compile-time registration of built-in sources/displayers
@@ -18,6 +35,8 @@ pub type DisplayerFactory = fn() -> BoxedDisplayer;
 pub struct Registry {
     sources: RwLock<HashMap<String, SourceFactory>>,
     displayers: RwLock<HashMap<String, DisplayerFactory>>,
+    source_info: RwLock<HashMap<String, SourceInfo>>,
+    displayer_info: RwLock<HashMap<String, DisplayerInfo>>,
 }
 
 impl Registry {
@@ -26,29 +45,83 @@ impl Registry {
         Self {
             sources: RwLock::new(HashMap::new()),
             displayers: RwLock::new(HashMap::new()),
+            source_info: RwLock::new(HashMap::new()),
+            displayer_info: RwLock::new(HashMap::new()),
         }
     }
 
-    /// Register a data source
+    /// Register a data source (legacy API, kept for compatibility)
     pub fn register_source(&self, id: &str, factory: SourceFactory) {
+        // Use capitalized ID as default display name
+        let display_name = capitalize_id(id);
+        self.register_source_with_info(id, &display_name, &[], factory);
+    }
+
+    /// Register a data source with full info
+    pub fn register_source_with_info(
+        &self,
+        id: &str,
+        display_name: &str,
+        compatible_displayers: &[&str],
+        factory: SourceFactory,
+    ) {
         match self.sources.write() {
             Ok(mut sources) => {
                 sources.insert(id.to_string(), factory);
             }
             Err(e) => {
                 log::error!("Failed to register source '{}': lock poisoned: {}", id, e);
+                return;
+            }
+        }
+        match self.source_info.write() {
+            Ok(mut info) => {
+                info.insert(id.to_string(), SourceInfo {
+                    id: id.to_string(),
+                    display_name: display_name.to_string(),
+                    compatible_displayers: compatible_displayers.iter().map(|s| s.to_string()).collect(),
+                    factory,
+                });
+            }
+            Err(e) => {
+                log::error!("Failed to store source info '{}': lock poisoned: {}", id, e);
             }
         }
     }
 
-    /// Register a displayer
+    /// Register a displayer (legacy API, kept for compatibility)
     pub fn register_displayer(&self, id: &str, factory: DisplayerFactory) {
+        // Use capitalized ID as default display name
+        let display_name = capitalize_id(id);
+        self.register_displayer_with_info(id, &display_name, factory);
+    }
+
+    /// Register a displayer with full info
+    pub fn register_displayer_with_info(
+        &self,
+        id: &str,
+        display_name: &str,
+        factory: DisplayerFactory,
+    ) {
         match self.displayers.write() {
             Ok(mut displayers) => {
                 displayers.insert(id.to_string(), factory);
             }
             Err(e) => {
                 log::error!("Failed to register displayer '{}': lock poisoned: {}", id, e);
+                return;
+            }
+        }
+        match self.displayer_info.write() {
+            Ok(mut info) => {
+                info.insert(id.to_string(), DisplayerInfo {
+                    id: id.to_string(),
+                    display_name: display_name.to_string(),
+                    factory,
+                });
+            }
+            Err(e) => {
+                log::error!("Failed to store displayer info '{}': lock poisoned: {}", id, e);
             }
         }
     }
@@ -94,6 +167,95 @@ impl Registry {
             }
         }
     }
+
+    /// Get source info by ID
+    pub fn get_source_info(&self, id: &str) -> Option<SourceInfo> {
+        match self.source_info.read() {
+            Ok(info) => info.get(id).cloned(),
+            Err(e) => {
+                log::error!("Failed to get source info: lock poisoned: {}", e);
+                None
+            }
+        }
+    }
+
+    /// Get displayer info by ID
+    pub fn get_displayer_info(&self, id: &str) -> Option<DisplayerInfo> {
+        match self.displayer_info.read() {
+            Ok(info) => info.get(id).cloned(),
+            Err(e) => {
+                log::error!("Failed to get displayer info: lock poisoned: {}", e);
+                None
+            }
+        }
+    }
+
+    /// List all sources with their info, sorted by display name
+    pub fn list_sources_with_info(&self) -> Vec<SourceInfo> {
+        match self.source_info.read() {
+            Ok(info) => {
+                let mut sources: Vec<_> = info.values().cloned().collect();
+                sources.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+                sources
+            }
+            Err(e) => {
+                log::error!("Failed to list sources with info: lock poisoned: {}", e);
+                Vec::new()
+            }
+        }
+    }
+
+    /// List all displayers with their info, sorted by display name
+    pub fn list_displayers_with_info(&self) -> Vec<DisplayerInfo> {
+        match self.displayer_info.read() {
+            Ok(info) => {
+                let mut displayers: Vec<_> = info.values().cloned().collect();
+                displayers.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+                displayers
+            }
+            Err(e) => {
+                log::error!("Failed to list displayers with info: lock poisoned: {}", e);
+                Vec::new()
+            }
+        }
+    }
+
+    /// Get compatible displayers for a source
+    pub fn get_compatible_displayers(&self, source_id: &str) -> Vec<DisplayerInfo> {
+        let source_info = match self.get_source_info(source_id) {
+            Some(info) => info,
+            None => return self.list_displayers_with_info(), // fallback to all
+        };
+
+        // If no compatible displayers specified, return all (except special ones)
+        if source_info.compatible_displayers.is_empty() {
+            return self.list_displayers_with_info()
+                .into_iter()
+                .filter(|d| !["clock_analog", "clock_digital", "lcars"].contains(&d.id.as_str()))
+                .collect();
+        }
+
+        // Return only compatible displayers
+        source_info.compatible_displayers
+            .iter()
+            .filter_map(|id| self.get_displayer_info(id))
+            .collect()
+    }
+}
+
+/// Helper to capitalize an ID like "cpu" -> "Cpu", "clock_analog" -> "Clock Analog"
+fn capitalize_id(id: &str) -> String {
+    // Convert snake_case to Title Case (first letter of each word capitalized)
+    id.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().chain(chars).collect(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 impl Default for Registry {

@@ -10,8 +10,10 @@ use crate::ui::background::Color;
 
 /// Clock hand style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum HandStyle {
     #[serde(rename = "line")]
+    #[default]
     Line,
     #[serde(rename = "arrow")]
     Arrow,
@@ -21,18 +23,15 @@ pub enum HandStyle {
     Fancy,
 }
 
-impl Default for HandStyle {
-    fn default() -> Self {
-        Self::Line
-    }
-}
 
 /// Clock face style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum FaceStyle {
     #[serde(rename = "minimal")]
     Minimal,
     #[serde(rename = "classic")]
+    #[default]
     Classic,
     #[serde(rename = "modern")]
     Modern,
@@ -42,30 +41,22 @@ pub enum FaceStyle {
     Numbers,
 }
 
-impl Default for FaceStyle {
-    fn default() -> Self {
-        Self::Classic
-    }
-}
 
 /// Tick mark style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum TickStyle {
     #[serde(rename = "none")]
     None,
     #[serde(rename = "dots")]
     Dots,
     #[serde(rename = "lines")]
+    #[default]
     Lines,
     #[serde(rename = "mixed")]
     Mixed, // Lines for hours, dots for minutes
 }
 
-impl Default for TickStyle {
-    fn default() -> Self {
-        Self::Lines
-    }
-}
 
 /// Analog clock display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

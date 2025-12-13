@@ -2,7 +2,7 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, ScrolledWindow,
+    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation,
     SpinButton, StringList,
 };
 use std::cell::RefCell;
@@ -25,6 +25,12 @@ pub struct SystemTempConfigWidget {
     max_unit_label: Label,
 }
 
+impl Default for SystemTempConfigWidget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemTempConfigWidget {
     pub fn new() -> Self {
         let widget = GtkBox::new(Orientation::Vertical, 12);
@@ -36,15 +42,8 @@ impl SystemTempConfigWidget {
         let config = Rc::new(RefCell::new(SystemTempConfig::default()));
 
         // Sensor selection
-        let sensor_label = Label::new(Some("Temperature Sensor:"));
-        sensor_label.set_halign(gtk4::Align::Start);
-        widget.append(&sensor_label);
-
-        // Create scrolled window for sensor list
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_min_content_height(200);
-        scrolled.set_max_content_height(300);
-        scrolled.set_vexpand(false);
+        let sensor_box = GtkBox::new(Orientation::Horizontal, 6);
+        sensor_box.append(&Label::new(Some("Temperature Sensor:")));
 
         // Get available sensors
         let sensors = SystemTempSource::available_sensors();
@@ -56,13 +55,14 @@ impl SystemTempConfigWidget {
         let sensor_options = StringList::new(&sensor_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         let sensor_combo = DropDown::new(Some(sensor_options), Option::<gtk4::Expression>::None);
         sensor_combo.set_selected(0);
+        sensor_combo.set_hexpand(true);
 
-        scrolled.set_child(Some(&sensor_combo));
-        widget.append(&scrolled);
+        sensor_box.append(&sensor_combo);
+        widget.append(&sensor_box);
 
         // Add info label showing sensor count
         let info_label = Label::new(Some(&format!(
-            "Found {} temperature sensors ({} CPU, {} GPU, {} Motherboard, {} Storage, {} Other)",
+            "Found {} temperature sensors ({} CPU, {} GPU, {} MB, {} Storage, {} Other)",
             sensors.len(),
             sensors.iter().filter(|s| matches!(s.category, SensorCategory::CPU)).count(),
             sensors.iter().filter(|s| matches!(s.category, SensorCategory::GPU)).count(),
@@ -270,6 +270,16 @@ impl SystemTempConfigWidget {
     }
 
     pub fn get_config(&self) -> SystemTempConfig {
-        self.config.borrow().clone()
+        let mut config = self.config.borrow().clone();
+
+        // When auto_detect is disabled, ensure we use the spinbutton values
+        // This handles the case where set_config was called with None limits
+        // but the spinbuttons have values the user may have entered
+        if !config.auto_detect_limits {
+            config.min_limit = Some(self.min_limit_spin.value());
+            config.max_limit = Some(self.max_limit_spin.value());
+        }
+
+        config
     }
 }

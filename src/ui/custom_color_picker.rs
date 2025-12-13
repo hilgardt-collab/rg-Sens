@@ -137,8 +137,8 @@ impl CustomColorPicker {
         let dialog = Window::builder()
             .title("Select Color")
             .modal(false)
-            .default_width(600)
-            .default_height(700)
+            .default_width(850)
+            .default_height(550)
             .resizable(true)
             .build();
 
@@ -173,20 +173,20 @@ impl CustomColorPicker {
                     } else {
                         cr.set_source_rgb(0.6, 0.6, 0.6);
                     }
-                    let _ = cr.rectangle(
+                    cr.rectangle(
                         x as f64 * checker_size,
                         y as f64 * checker_size,
                         checker_size,
                         checker_size,
                     );
-                    let _ = cr.fill();
+                    cr.fill().ok();
                 }
             }
 
             // Draw color with alpha
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
-            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
-            let _ = cr.fill();
+            cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            cr.fill().ok();
         });
 
         main_box.append(&preview_area);
@@ -217,6 +217,7 @@ impl CustomColorPicker {
         preset_grid.set_row_spacing(2);
         preset_grid.set_column_spacing(2);
 
+        #[allow(clippy::needless_range_loop)]
         for row in 0..8 {
             for col in 0..8 {
                 let color = PRESET_COLORS[row][col];
@@ -238,25 +239,40 @@ impl CustomColorPicker {
         preset_box.append(&preset_grid);
         content_box.append(&preset_box);
 
-        // === RIGHT SIDE: Horizontal row of vertical sliders with color maps ===
-        let sliders_box = GtkBox::new(Orientation::Horizontal, 6);
+        // === RIGHT SIDE: Horizontal sliders stacked vertically ===
+        let sliders_box = GtkBox::new(Orientation::Vertical, 4);
+        sliders_box.set_hexpand(true);
 
-        // RGBA sliders group
-        sliders_box.append(&Self::create_vertical_rgb_slider("R", &red_scale, &green_scale, &blue_scale, 'r'));
-        sliders_box.append(&Self::create_vertical_rgb_slider("G", &red_scale, &green_scale, &blue_scale, 'g'));
-        sliders_box.append(&Self::create_vertical_rgb_slider("B", &red_scale, &green_scale, &blue_scale, 'b'));
-        sliders_box.append(&Self::create_vertical_alpha_slider("A", &red_scale, &green_scale, &blue_scale, &alpha_scale));
+        // Alpha slider (at top)
+        let alpha_label = Label::new(Some("Alpha"));
+        alpha_label.set_halign(gtk4::Align::Start);
+        alpha_label.add_css_class("heading");
+        sliders_box.append(&alpha_label);
+        sliders_box.append(&Self::create_horizontal_alpha_slider(&red_scale, &green_scale, &blue_scale, &alpha_scale));
 
-        // Separator between RGBA and HSV
-        let separator = gtk4::Separator::new(Orientation::Vertical);
-        separator.set_margin_start(6);
-        separator.set_margin_end(6);
-        sliders_box.append(&separator);
+        // Separator
+        sliders_box.append(&gtk4::Separator::new(Orientation::Horizontal));
 
-        // HSV sliders group
-        sliders_box.append(&Self::create_vertical_hue_slider(&hue_scale));
-        sliders_box.append(&Self::create_vertical_saturation_slider(&hue_scale, &saturation_scale, &value_scale));
-        sliders_box.append(&Self::create_vertical_value_slider(&hue_scale, &saturation_scale, &value_scale));
+        // RGB section
+        let rgb_label = Label::new(Some("RGB"));
+        rgb_label.set_halign(gtk4::Align::Start);
+        rgb_label.add_css_class("heading");
+        sliders_box.append(&rgb_label);
+        sliders_box.append(&Self::create_horizontal_rgb_slider("R", &red_scale, &green_scale, &blue_scale, 'r'));
+        sliders_box.append(&Self::create_horizontal_rgb_slider("G", &red_scale, &green_scale, &blue_scale, 'g'));
+        sliders_box.append(&Self::create_horizontal_rgb_slider("B", &red_scale, &green_scale, &blue_scale, 'b'));
+
+        // Separator
+        sliders_box.append(&gtk4::Separator::new(Orientation::Horizontal));
+
+        // HSV section
+        let hsv_label = Label::new(Some("HSV"));
+        hsv_label.set_halign(gtk4::Align::Start);
+        hsv_label.add_css_class("heading");
+        sliders_box.append(&hsv_label);
+        sliders_box.append(&Self::create_horizontal_hue_slider(&hue_scale));
+        sliders_box.append(&Self::create_horizontal_saturation_slider(&hue_scale, &saturation_scale, &value_scale));
+        sliders_box.append(&Self::create_horizontal_value_slider(&hue_scale, &saturation_scale, &value_scale));
 
         content_box.append(&sliders_box);
         main_box.append(&content_box);
@@ -392,6 +408,7 @@ impl CustomColorPicker {
         picker
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_color_button(
         color: Color,
         current_color: Rc<RefCell<Color>>,
@@ -431,6 +448,7 @@ impl CustomColorPicker {
         button
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_saved_color_button(
         slot: usize,
         color: Color,
@@ -490,20 +508,20 @@ impl CustomColorPicker {
                     } else {
                         cr.set_source_rgb(0.6, 0.6, 0.6);
                     }
-                    let _ = cr.rectangle(
+                    cr.rectangle(
                         x as f64 * checker_size,
                         y as f64 * checker_size,
                         checker_size,
                         checker_size,
                     );
-                    let _ = cr.fill();
+                    cr.fill().ok();
                 }
             }
 
             // Draw color with alpha
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
-            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
-            let _ = cr.fill();
+            cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            cr.fill().ok();
         });
 
         button.set_child(Some(&color_box));
@@ -547,6 +565,7 @@ impl CustomColorPicker {
         (hbox, scale, spin)
     }
 
+    #[allow(dead_code)]
     fn create_vertical_rgb_slider(
         label: &str,
         red_scale: &Scale,
@@ -596,9 +615,9 @@ impl CustomColorPicker {
                 _ => {}
             }
 
-            let _ = cr.set_source(&gradient);
-            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
-            let _ = cr.fill();
+            cr.set_source(&gradient).ok();
+            cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            cr.fill().ok();
         });
 
         // Redraw when sliders change
@@ -666,6 +685,7 @@ impl CustomColorPicker {
         vbox
     }
 
+    #[allow(dead_code)]
     fn create_vertical_alpha_slider(
         label: &str,
         red_scale: &Scale,
@@ -782,6 +802,7 @@ impl CustomColorPicker {
         vbox
     }
 
+    #[allow(dead_code)]
     fn create_vertical_hue_slider(hue_scale: &Scale) -> GtkBox {
         let vbox = GtkBox::new(Orientation::Vertical, 6);
         vbox.set_size_request(50, -1);  // Constrain column width to 50px
@@ -800,7 +821,7 @@ impl CustomColorPicker {
 
         color_map.set_draw_func(move |_, cr, width, height| {
             // Draw full hue spectrum vertically
-            let steps = height as i32;
+            let steps = height;
             for i in 0..steps {
                 let hue = ((steps - i) as f64 / steps as f64) * 360.0; // Top = 360, bottom = 0
                 let (r, g, b) = hsv_to_rgb(hue, 1.0, 1.0);
@@ -859,6 +880,7 @@ impl CustomColorPicker {
         vbox
     }
 
+    #[allow(dead_code)]
     fn create_vertical_saturation_slider(
         hue_scale: &Scale,
         saturation_scale: &Scale,
@@ -952,6 +974,7 @@ impl CustomColorPicker {
         vbox
     }
 
+    #[allow(dead_code)]
     fn create_vertical_value_slider(
         hue_scale: &Scale,
         saturation_scale: &Scale,
@@ -1043,6 +1066,493 @@ impl CustomColorPicker {
         vbox.append(&spin);
 
         vbox
+    }
+
+    /// Create a horizontal RGB slider with gradient background
+    fn create_horizontal_rgb_slider(
+        label: &str,
+        red_scale: &Scale,
+        green_scale: &Scale,
+        blue_scale: &Scale,
+        channel: char,
+    ) -> GtkBox {
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Label
+        let label_widget = Label::new(Some(label));
+        label_widget.set_width_chars(2);
+        hbox.append(&label_widget);
+
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
+        overlay.set_hexpand(true);
+
+        // Color map (horizontal gradient) - background
+        let color_map = DrawingArea::new();
+        color_map.set_size_request(-1, 32);
+        color_map.set_hexpand(true);
+
+        let red = red_scale.clone();
+        let green = green_scale.clone();
+        let blue = blue_scale.clone();
+
+        color_map.set_draw_func(move |_, cr, width, height| {
+            let r = red.value();
+            let g = green.value();
+            let b = blue.value();
+
+            // Draw horizontal gradient from left (0.0) to right (1.0)
+            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            match channel {
+                'r' => {
+                    gradient.add_color_stop_rgb(0.0, 0.0, g, b);
+                    gradient.add_color_stop_rgb(1.0, 1.0, g, b);
+                }
+                'g' => {
+                    gradient.add_color_stop_rgb(0.0, r, 0.0, b);
+                    gradient.add_color_stop_rgb(1.0, r, 1.0, b);
+                }
+                'b' => {
+                    gradient.add_color_stop_rgb(0.0, r, g, 0.0);
+                    gradient.add_color_stop_rgb(1.0, r, g, 1.0);
+                }
+                _ => {}
+            }
+
+            let _ = cr.set_source(&gradient);
+            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            let _ = cr.fill();
+        });
+
+        // Redraw when sliders change
+        let color_map_clone = color_map.clone();
+        red_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+        let color_map_clone = color_map.clone();
+        green_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+        let color_map_clone = color_map.clone();
+        blue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+
+        overlay.set_child(Some(&color_map));
+
+        // Get the appropriate scale
+        let scale = match channel {
+            'r' => red_scale,
+            'g' => green_scale,
+            'b' => blue_scale,
+            _ => red_scale,
+        };
+
+        // Horizontal scale - overlay on top of color map
+        let horizontal_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
+        horizontal_scale.set_value(scale.value());
+        horizontal_scale.set_hexpand(true);
+        horizontal_scale.set_draw_value(false);
+        horizontal_scale.set_opacity(0.8);
+
+        // Sync horizontal scale with main scale
+        let scale_clone = scale.clone();
+        horizontal_scale.connect_value_changed(move |h_scale| {
+            scale_clone.set_value(h_scale.value());
+        });
+
+        let horizontal_scale_clone = horizontal_scale.clone();
+        scale.connect_value_changed(move |s| {
+            horizontal_scale_clone.set_value(s.value());
+        });
+
+        overlay.add_overlay(&horizontal_scale);
+        hbox.append(&overlay);
+
+        // Spin button
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let scale_clone = scale.clone();
+        spin.connect_value_changed(move |sp| {
+            scale_clone.set_value(sp.value());
+        });
+
+        hbox.append(&spin);
+
+        hbox
+    }
+
+    /// Create a horizontal alpha slider with gradient background
+    fn create_horizontal_alpha_slider(
+        red_scale: &Scale,
+        green_scale: &Scale,
+        blue_scale: &Scale,
+        alpha_scale: &Scale,
+    ) -> GtkBox {
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Label
+        let label_widget = Label::new(Some("A"));
+        label_widget.set_width_chars(2);
+        hbox.append(&label_widget);
+
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
+        overlay.set_hexpand(true);
+
+        // Color map with checkerboard (horizontal gradient)
+        let color_map = DrawingArea::new();
+        color_map.set_size_request(-1, 32);
+        color_map.set_hexpand(true);
+
+        let red = red_scale.clone();
+        let green = green_scale.clone();
+        let blue = blue_scale.clone();
+
+        color_map.set_draw_func(move |_, cr, width, height| {
+            let r = red.value();
+            let g = green.value();
+            let b = blue.value();
+
+            // Draw checkerboard
+            let checker_size = 8.0;
+            for y in 0..(height / checker_size as i32 + 1) {
+                for x in 0..(width / checker_size as i32 + 1) {
+                    if (x + y) % 2 == 0 {
+                        cr.set_source_rgb(0.8, 0.8, 0.8);
+                    } else {
+                        cr.set_source_rgb(0.6, 0.6, 0.6);
+                    }
+                    let _ = cr.rectangle(
+                        x as f64 * checker_size,
+                        y as f64 * checker_size,
+                        checker_size,
+                        checker_size,
+                    );
+                    let _ = cr.fill();
+                }
+            }
+
+            // Draw alpha gradient horizontally
+            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            gradient.add_color_stop_rgba(0.0, r, g, b, 0.0);
+            gradient.add_color_stop_rgba(1.0, r, g, b, 1.0);
+            let _ = cr.set_source(&gradient);
+            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            let _ = cr.fill();
+        });
+
+        // Redraw when RGB sliders change
+        let color_map_clone = color_map.clone();
+        red_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+        let color_map_clone = color_map.clone();
+        green_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+        let color_map_clone = color_map.clone();
+        blue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+
+        overlay.set_child(Some(&color_map));
+
+        // Horizontal scale - overlay on top of color map
+        let horizontal_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
+        horizontal_scale.set_value(alpha_scale.value());
+        horizontal_scale.set_hexpand(true);
+        horizontal_scale.set_draw_value(false);
+        horizontal_scale.set_opacity(0.8);
+
+        // Sync horizontal scale with alpha scale
+        let alpha_clone = alpha_scale.clone();
+        horizontal_scale.connect_value_changed(move |h_scale| {
+            alpha_clone.set_value(h_scale.value());
+        });
+
+        let horizontal_scale_clone = horizontal_scale.clone();
+        alpha_scale.connect_value_changed(move |s| {
+            horizontal_scale_clone.set_value(s.value());
+        });
+
+        overlay.add_overlay(&horizontal_scale);
+        hbox.append(&overlay);
+
+        // Spin button
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(alpha_scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        alpha_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let alpha_clone = alpha_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            alpha_clone.set_value(sp.value());
+        });
+
+        hbox.append(&spin);
+
+        hbox
+    }
+
+    /// Create a horizontal hue slider
+    fn create_horizontal_hue_slider(hue_scale: &Scale) -> GtkBox {
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Label
+        let label_widget = Label::new(Some("H"));
+        label_widget.set_width_chars(2);
+        hbox.append(&label_widget);
+
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
+        overlay.set_hexpand(true);
+
+        // Hue color map (full spectrum horizontally)
+        let color_map = DrawingArea::new();
+        color_map.set_size_request(-1, 32);
+        color_map.set_hexpand(true);
+
+        color_map.set_draw_func(move |_, cr, width, height| {
+            // Draw full hue spectrum horizontally
+            let steps = width;
+            for i in 0..steps {
+                let hue = (i as f64 / steps as f64) * 360.0;
+                let (r, g, b) = hsv_to_rgb(hue, 1.0, 1.0);
+                cr.set_source_rgb(r, g, b);
+                let _ = cr.rectangle(i as f64, 0.0, 1.0, height as f64);
+                let _ = cr.fill();
+            }
+        });
+
+        overlay.set_child(Some(&color_map));
+
+        // Horizontal scale - overlay on top of color map
+        let horizontal_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
+        horizontal_scale.set_value(hue_scale.value());
+        horizontal_scale.set_hexpand(true);
+        horizontal_scale.set_draw_value(false);
+        horizontal_scale.set_opacity(0.8);
+
+        // Sync horizontal scale with hue scale
+        let hue_clone = hue_scale.clone();
+        horizontal_scale.connect_value_changed(move |h_scale| {
+            hue_clone.set_value(h_scale.value());
+        });
+
+        let horizontal_scale_clone = horizontal_scale.clone();
+        hue_scale.connect_value_changed(move |s| {
+            horizontal_scale_clone.set_value(s.value());
+        });
+
+        overlay.add_overlay(&horizontal_scale);
+        hbox.append(&overlay);
+
+        // Spin button
+        let spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        spin.set_value(hue_scale.value());
+        spin.set_digits(0);
+        spin.set_width_chars(5);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        hue_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let hue_clone = hue_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            hue_clone.set_value(sp.value());
+        });
+
+        hbox.append(&spin);
+
+        hbox
+    }
+
+    /// Create a horizontal saturation slider
+    fn create_horizontal_saturation_slider(
+        hue_scale: &Scale,
+        saturation_scale: &Scale,
+        value_scale: &Scale,
+    ) -> GtkBox {
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Label
+        let label_widget = Label::new(Some("S"));
+        label_widget.set_width_chars(2);
+        hbox.append(&label_widget);
+
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
+        overlay.set_hexpand(true);
+
+        // Saturation color map
+        let color_map = DrawingArea::new();
+        color_map.set_size_request(-1, 32);
+        color_map.set_hexpand(true);
+
+        let hue = hue_scale.clone();
+        let value = value_scale.clone();
+
+        color_map.set_draw_func(move |_, cr, width, height| {
+            let h = hue.value();
+            let v = value.value();
+
+            // Draw saturation gradient horizontally
+            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            let (r0, g0, b0) = hsv_to_rgb(h, 0.0, v);
+            let (r1, g1, b1) = hsv_to_rgb(h, 1.0, v);
+            gradient.add_color_stop_rgb(0.0, r0, g0, b0);
+            gradient.add_color_stop_rgb(1.0, r1, g1, b1);
+            let _ = cr.set_source(&gradient);
+            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            let _ = cr.fill();
+        });
+
+        // Redraw when hue or value changes
+        let color_map_clone = color_map.clone();
+        hue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+        let color_map_clone = color_map.clone();
+        value_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+
+        overlay.set_child(Some(&color_map));
+
+        // Horizontal scale - overlay on top of color map
+        let horizontal_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
+        horizontal_scale.set_value(saturation_scale.value());
+        horizontal_scale.set_hexpand(true);
+        horizontal_scale.set_draw_value(false);
+        horizontal_scale.set_opacity(0.8);
+
+        // Sync horizontal scale with saturation scale
+        let sat_clone = saturation_scale.clone();
+        horizontal_scale.connect_value_changed(move |h_scale| {
+            sat_clone.set_value(h_scale.value());
+        });
+
+        let horizontal_scale_clone = horizontal_scale.clone();
+        saturation_scale.connect_value_changed(move |s| {
+            horizontal_scale_clone.set_value(s.value());
+        });
+
+        overlay.add_overlay(&horizontal_scale);
+        hbox.append(&overlay);
+
+        // Spin button
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(saturation_scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        saturation_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let sat_clone = saturation_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            sat_clone.set_value(sp.value());
+        });
+
+        hbox.append(&spin);
+
+        hbox
+    }
+
+    /// Create a horizontal value slider
+    fn create_horizontal_value_slider(
+        hue_scale: &Scale,
+        saturation_scale: &Scale,
+        value_scale: &Scale,
+    ) -> GtkBox {
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Label
+        let label_widget = Label::new(Some("V"));
+        label_widget.set_width_chars(2);
+        hbox.append(&label_widget);
+
+        // Overlay container for color map with slider on top
+        let overlay = gtk4::Overlay::new();
+        overlay.set_hexpand(true);
+
+        // Value color map
+        let color_map = DrawingArea::new();
+        color_map.set_size_request(-1, 32);
+        color_map.set_hexpand(true);
+
+        let hue = hue_scale.clone();
+        let saturation = saturation_scale.clone();
+
+        color_map.set_draw_func(move |_, cr, width, height| {
+            let h = hue.value();
+            let s = saturation.value();
+
+            // Draw value gradient horizontally
+            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+            let (r0, g0, b0) = hsv_to_rgb(h, s, 0.0);
+            let (r1, g1, b1) = hsv_to_rgb(h, s, 1.0);
+            gradient.add_color_stop_rgb(0.0, r0, g0, b0);
+            gradient.add_color_stop_rgb(1.0, r1, g1, b1);
+            let _ = cr.set_source(&gradient);
+            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
+            let _ = cr.fill();
+        });
+
+        // Redraw when hue or saturation changes
+        let color_map_clone = color_map.clone();
+        hue_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+        let color_map_clone = color_map.clone();
+        saturation_scale.connect_value_changed(move |_| color_map_clone.queue_draw());
+
+        overlay.set_child(Some(&color_map));
+
+        // Horizontal scale - overlay on top of color map
+        let horizontal_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.01);
+        horizontal_scale.set_value(value_scale.value());
+        horizontal_scale.set_hexpand(true);
+        horizontal_scale.set_draw_value(false);
+        horizontal_scale.set_opacity(0.8);
+
+        // Sync horizontal scale with value scale
+        let val_clone = value_scale.clone();
+        horizontal_scale.connect_value_changed(move |h_scale| {
+            val_clone.set_value(h_scale.value());
+        });
+
+        let horizontal_scale_clone = horizontal_scale.clone();
+        value_scale.connect_value_changed(move |s| {
+            horizontal_scale_clone.set_value(s.value());
+        });
+
+        overlay.add_overlay(&horizontal_scale);
+        hbox.append(&overlay);
+
+        // Spin button
+        let spin = SpinButton::with_range(0.0, 1.0, 0.01);
+        spin.set_value(value_scale.value());
+        spin.set_digits(2);
+        spin.set_width_chars(5);
+
+        // Sync spin with scale
+        let spin_clone = spin.clone();
+        value_scale.connect_value_changed(move |s| {
+            spin_clone.set_value(s.value());
+        });
+
+        let val_clone = value_scale.clone();
+        spin.connect_value_changed(move |sp| {
+            val_clone.set_value(sp.value());
+        });
+
+        hbox.append(&spin);
+
+        hbox
     }
 
     fn setup_rgb_handlers(&mut self) {
@@ -1221,7 +1731,7 @@ impl CustomColorPicker {
             type Output = Option<Color>;
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                if let Some(color) = self.result.borrow().clone() {
+                if let Some(color) = *self.result.borrow() {
                     Poll::Ready(Some(color))
                 } else {
                     *self.waker.borrow_mut() = Some(cx.waker().clone());

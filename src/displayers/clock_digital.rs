@@ -12,20 +12,15 @@ use crate::core::{ConfigOption, ConfigSchema, Displayer};
 use crate::ui::background::Color;
 
 /// Digital clock display style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum DigitalStyle {
     #[serde(rename = "simple")]
+    #[default]
     Simple,
     #[serde(rename = "segment")]
     Segment, // 7-segment LED style
     #[serde(rename = "lcd")]
     LCD,
-}
-
-impl Default for DigitalStyle {
-    fn default() -> Self {
-        Self::Simple
-    }
 }
 
 /// Digital clock configuration
@@ -485,6 +480,14 @@ impl Displayer for ClockDigitalDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Ok(mut data) = self.data.lock() {
+            // Check for clock_digital_config (new format from PanelData)
+            if let Some(cfg) = config.get("clock_digital_config") {
+                if let Ok(new_config) = serde_json::from_value(cfg.clone()) {
+                    data.config = new_config;
+                    return Ok(());
+                }
+            }
+            // Fallback: legacy key name
             if let Some(cfg) = config.get("digital_clock_config") {
                 if let Ok(new_config) = serde_json::from_value(cfg.clone()) {
                     data.config = new_config;

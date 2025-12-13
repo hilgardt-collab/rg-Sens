@@ -126,7 +126,7 @@ impl AlarmTimerDialog {
             .enumerate()
             .map(|(i, name)| {
                 let check = CheckButton::with_label(name);
-                check.set_active(i >= 1 && i <= 5); // Weekdays by default
+                check.set_active((1..=5).contains(&i)); // Weekdays by default
                 days_box.append(&check);
                 check
             })

@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 
 /// Gradient editor widget
 pub struct GradientEditor {
@@ -16,12 +16,21 @@ pub struct GradientEditor {
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     preview: DrawingArea,
     stops_listbox: ListBox,
-    angle_scale: Scale,
-    angle_spin: SpinButton,
+    angle_scale: Option<Scale>,
+    angle_spin: Option<SpinButton>,
 }
 
 impl GradientEditor {
     pub fn new() -> Self {
+        Self::new_with_options(true)
+    }
+
+    /// Create a gradient editor without the angle control (for radial gradients)
+    pub fn new_without_angle() -> Self {
+        Self::new_with_options(false)
+    }
+
+    fn new_with_options(show_angle: bool) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         container.set_margin_start(12);
         container.set_margin_end(12);
@@ -40,9 +49,10 @@ impl GradientEditor {
 
         let stops_clone = stops.clone();
         let angle_clone = angle.clone();
+        let show_angle_for_preview = show_angle;
         preview.set_draw_func(move |_, cr, width, height| {
             use crate::ui::background::render_background;
-            use crate::ui::background::{BackgroundConfig, BackgroundType, LinearGradientConfig};
+            use crate::ui::background::{BackgroundConfig, BackgroundType, LinearGradientConfig, RadialGradientConfig};
 
             // Render checkerboard pattern to show transparency
             Self::render_checkerboard(cr, width as f64, height as f64);
@@ -50,60 +60,77 @@ impl GradientEditor {
             let stops = stops_clone.borrow();
             let angle = *angle_clone.borrow();
 
-            let config = BackgroundConfig {
-                background: BackgroundType::LinearGradient(LinearGradientConfig {
-                    angle,
-                    stops: stops.clone(),
-                }),
+            let config = if show_angle_for_preview {
+                BackgroundConfig {
+                    background: BackgroundType::LinearGradient(LinearGradientConfig {
+                        angle,
+                        stops: stops.clone(),
+                    }),
+                }
+            } else {
+                BackgroundConfig {
+                    background: BackgroundType::RadialGradient(RadialGradientConfig {
+                        center_x: 0.5,
+                        center_y: 0.5,
+                        radius: 0.7,
+                        stops: stops.clone(),
+                    }),
+                }
             };
 
             let _ = render_background(cr, &config, width as f64, height as f64);
         });
 
-        // Angle control
-        let angle_box = GtkBox::new(Orientation::Horizontal, 6);
-        angle_box.append(&Label::new(Some("Angle:")));
+        // Angle control (only if show_angle is true)
+        let (angle_scale, angle_spin) = if show_angle {
+            let angle_box = GtkBox::new(Orientation::Horizontal, 6);
+            angle_box.append(&Label::new(Some("Angle:")));
 
-        let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
-        angle_scale.set_hexpand(true);
-        angle_scale.set_value(90.0);
+            let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
+            angle_scale.set_hexpand(true);
+            angle_scale.set_value(90.0);
 
-        let angle_spin = SpinButton::with_range(0.0, 360.0, 1.0);
-        angle_spin.set_value(90.0);
-        angle_spin.set_digits(0);
+            let angle_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+            angle_spin.set_value(90.0);
+            angle_spin.set_digits(0);
 
-        // Sync scale and spin button
-        let angle_clone = angle.clone();
-        let angle_spin_clone = angle_spin.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        angle_scale.connect_value_changed(move |scale| {
-            let value = scale.value();
-            angle_spin_clone.set_value(value);
-            *angle_clone.borrow_mut() = value;
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
+            // Sync scale and spin button
+            let angle_clone = angle.clone();
+            let angle_spin_clone = angle_spin.clone();
+            let on_change_clone = on_change.clone();
+            let preview_clone = preview.clone();
+            angle_scale.connect_value_changed(move |scale| {
+                let value = scale.value();
+                angle_spin_clone.set_value(value);
+                *angle_clone.borrow_mut() = value;
+                preview_clone.queue_draw();
+                if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    callback();
+                }
+            });
 
-        let angle_scale_clone = angle_scale.clone();
-        let angle_clone2 = angle.clone();
-        let on_change_clone2 = on_change.clone();
-        let preview_clone2 = preview.clone();
-        angle_spin.connect_value_changed(move |spin| {
-            let value = spin.value();
-            angle_scale_clone.set_value(value);
-            *angle_clone2.borrow_mut() = value;
-            preview_clone2.queue_draw();
-            if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                callback();
-            }
-        });
+            let angle_scale_clone = angle_scale.clone();
+            let angle_clone2 = angle.clone();
+            let on_change_clone2 = on_change.clone();
+            let preview_clone2 = preview.clone();
+            angle_spin.connect_value_changed(move |spin| {
+                let value = spin.value();
+                angle_scale_clone.set_value(value);
+                *angle_clone2.borrow_mut() = value;
+                preview_clone2.queue_draw();
+                if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                    callback();
+                }
+            });
 
-        angle_box.append(&angle_scale);
-        angle_box.append(&angle_spin);
-        container.append(&angle_box);
+            angle_box.append(&angle_scale);
+            angle_box.append(&angle_spin);
+            container.append(&angle_box);
+
+            (Some(angle_scale), Some(angle_spin))
+        } else {
+            (None, None)
+        };
 
         container.append(&preview);
 
@@ -183,7 +210,9 @@ impl GradientEditor {
             }
         });
 
-        let editor = Self {
+        
+
+        Self {
             container,
             stops,
             angle,
@@ -192,9 +221,7 @@ impl GradientEditor {
             stops_listbox,
             angle_scale,
             angle_spin,
-        };
-
-        editor
+        }
     }
 
     /// Render a checkerboard pattern to show transparency
@@ -283,31 +310,36 @@ impl GradientEditor {
         position_box.append(&percent_label);
         hbox.append(&position_box);
 
-        // Color button with swatch
-        let color_button = Button::new();
-        let swatch_box = GtkBox::new(Orientation::Horizontal, 6);
+        // Color button using ColorButtonWidget
+        let color_widget = ColorButtonWidget::new(stop.color);
+        hbox.append(color_widget.widget());
 
-        let swatch = DrawingArea::new();
-        swatch.set_size_request(32, 32);
+        // Set up color change handler
+        let stops_clone = stops.clone();
+        let listbox_clone = listbox.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        color_widget.set_on_change(move |new_color| {
+            {
+                let mut stops = stops_clone.borrow_mut();
+                if let Some(stop) = stops.get_mut(index) {
+                    stop.color = new_color;
+                }
+            }
 
-        let color = stop.color;
-        swatch.set_draw_func(move |_, cr, width, height| {
-            color.apply_to_cairo(cr);
-            let _ = cr.rectangle(0.0, 0.0, width as f64, height as f64);
-            let _ = cr.fill();
+            Self::rebuild_stops_list(
+                &listbox_clone,
+                &stops_clone,
+                &preview_clone,
+                &on_change_clone,
+            );
 
-            // Border
-            cr.set_source_rgb(0.5, 0.5, 0.5);
-            cr.set_line_width(1.0);
-            let _ = cr.rectangle(0.5, 0.5, width as f64 - 1.0, height as f64 - 1.0);
-            let _ = cr.stroke();
+            preview_clone.queue_draw();
+
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
         });
-
-        swatch_box.append(&swatch);
-        swatch_box.append(&Label::new(Some("Color")));
-        color_button.set_child(Some(&swatch_box));
-
-        hbox.append(&color_button);
 
         // Remove button (only if more than 2 stops)
         if stop_count > 2 {
@@ -417,44 +449,6 @@ impl GradientEditor {
             }
         });
 
-        // Color button handler
-        let stops_clone = stops.clone();
-        let listbox_clone = listbox.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        let current_color = stop.color;
-
-        color_button.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let stops_clone2 = stops_clone.clone();
-            let listbox_clone2 = listbox_clone.clone();
-            let preview_clone2 = preview_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    let mut stops = stops_clone2.borrow_mut();
-                    if let Some(stop) = stops.get_mut(index) {
-                        stop.color = new_color;
-                    }
-                    drop(stops);
-
-                    Self::rebuild_stops_list(
-                        &listbox_clone2,
-                        &stops_clone2,
-                        &preview_clone2,
-                        &on_change_clone2,
-                    );
-
-                    preview_clone2.queue_draw();
-
-                    if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                        callback();
-                    }
-                }
-            });
-        });
-
         row
     }
 
@@ -463,9 +457,13 @@ impl GradientEditor {
         *self.stops.borrow_mut() = config.stops.clone();
         *self.angle.borrow_mut() = config.angle;
 
-        // Update the angle UI widgets
-        self.angle_scale.set_value(config.angle);
-        self.angle_spin.set_value(config.angle);
+        // Update the angle UI widgets (if they exist)
+        if let Some(ref angle_scale) = self.angle_scale {
+            angle_scale.set_value(config.angle);
+        }
+        if let Some(ref angle_spin) = self.angle_spin {
+            angle_spin.set_value(config.angle);
+        }
 
         Self::rebuild_stops_list(
             &self.stops_listbox,
@@ -474,6 +472,24 @@ impl GradientEditor {
             &self.on_change,
         );
         self.preview.queue_draw();
+    }
+
+    /// Set just the color stops (useful for radial gradients)
+    pub fn set_stops(&self, stops: Vec<ColorStop>) {
+        *self.stops.borrow_mut() = stops;
+
+        Self::rebuild_stops_list(
+            &self.stops_listbox,
+            &self.stops,
+            &self.preview,
+            &self.on_change,
+        );
+        self.preview.queue_draw();
+    }
+
+    /// Get just the color stops
+    pub fn get_stops(&self) -> Vec<ColorStop> {
+        self.stops.borrow().clone()
     }
 
     /// Get the current gradient configuration

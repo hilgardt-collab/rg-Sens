@@ -1,28 +1,43 @@
 //! Application and panel configuration
 
 use anyhow::Result;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ui::background::BackgroundConfig;
-use crate::core::PanelBorderConfig;
+use crate::core::{PanelBorderConfig, PanelGeometry, PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
+
+/// Current config format version
+pub const CONFIG_VERSION: u32 = 2;
 
 /// Application-wide configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    /// Version of the config format
+    /// Version of the config format (1 = legacy, 2 = PanelData-based)
+    #[serde(default = "default_version")]
     pub version: u32,
     /// Window dimensions
     pub window: WindowConfig,
     /// Grid settings
     pub grid: GridConfig,
-    /// Panels configuration
-    pub panels: Vec<PanelConfig>,
+    /// Panels configuration (v2 format with typed configs)
+    /// Note: This is NOT serialized directly - see load_from_string and as_v2
+    #[serde(skip)]
+    pub panels_v2: Vec<PanelConfigV2>,
+    /// Legacy panels configuration (v1 format, for migration)
+    /// Note: This is only used during v1 deserialization
+    #[serde(skip)]
+    pub panels_v1: Vec<PanelConfig>,
+}
+
+fn default_version() -> u32 {
+    1 // Default to v1 for backward compatibility when loading old configs
 }
 
 impl AppConfig {
-    /// Load configuration from disk
+    /// Load configuration from disk with auto-migration
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
 
@@ -30,12 +45,37 @@ impl AppConfig {
             return Ok(Self::default());
         }
 
-        let content = std::fs::read_to_string(config_path)?;
-        let config = serde_json::from_str(&content)?;
-        Ok(config)
+        let content = std::fs::read_to_string(&config_path)?;
+        Self::load_from_string(&content)
     }
 
-    /// Save configuration to disk
+    /// Load configuration from a JSON string with auto-migration
+    pub fn load_from_string(content: &str) -> Result<Self> {
+        // First, try to parse as raw JSON to check version
+        let raw: serde_json::Value = serde_json::from_str(content)?;
+        let version = raw.get("version")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1) as u32;
+
+        if version >= 2 {
+            // V2 format - use AppConfigLoad which has the correct "panels" field
+            let loaded: AppConfigLoad = serde_json::from_str(content)?;
+            Ok(AppConfig {
+                version: loaded.version,
+                window: loaded.window,
+                grid: loaded.grid,
+                panels_v2: loaded.panels,
+                panels_v1: Vec::new(),
+            })
+        } else {
+            // V1 format - load and migrate
+            info!("Migrating config from v1 to v2 format");
+            let v1_config: AppConfigV1 = serde_json::from_str(content)?;
+            Ok(v1_config.migrate_to_v2())
+        }
+    }
+
+    /// Save configuration to disk (always saves in v2 format)
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
 
@@ -44,7 +84,9 @@ impl AppConfig {
             std::fs::create_dir_all(parent)?;
         }
 
-        let content = serde_json::to_string_pretty(self)?;
+        // Always save as v2
+        let save_config = self.as_v2();
+        let content = serde_json::to_string_pretty(&save_config)?;
         std::fs::write(config_path, content)?;
         Ok(())
     }
@@ -60,8 +102,7 @@ impl AppConfig {
     /// Load configuration from a specific file path
     pub fn load_from_path(path: &PathBuf) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config = serde_json::from_str(&content)?;
-        Ok(config)
+        Self::load_from_string(&content)
     }
 
     /// Save configuration to a specific file path
@@ -71,21 +112,100 @@ impl AppConfig {
             std::fs::create_dir_all(parent)?;
         }
 
-        let content = serde_json::to_string_pretty(self)?;
+        let save_config = self.as_v2();
+        let content = serde_json::to_string_pretty(&save_config)?;
         std::fs::write(path, content)?;
         Ok(())
+    }
+
+    /// Get panels as PanelData (prefers v2, falls back to migrated v1)
+    pub fn get_panels(&self) -> Vec<PanelData> {
+        if !self.panels_v2.is_empty() {
+            self.panels_v2.iter().map(|p| p.to_panel_data()).collect()
+        } else {
+            // Migrate v1 panels on-the-fly
+            self.panels_v1.iter().map(|p| p.to_panel_data()).collect()
+        }
+    }
+
+    /// Set panels from PanelData (stores in v2 format)
+    pub fn set_panels(&mut self, panels: Vec<PanelData>) {
+        self.panels_v2 = panels.into_iter().map(PanelConfigV2::from_panel_data).collect();
+        self.panels_v1.clear(); // Clear legacy panels
+        self.version = CONFIG_VERSION;
+    }
+
+    /// Convert to v2 format for saving
+    fn as_v2(&self) -> AppConfigSave {
+        let panels = if !self.panels_v2.is_empty() {
+            self.panels_v2.clone()
+        } else {
+            // Convert v1 to v2
+            self.panels_v1.iter().map(|p| PanelConfigV2::from_panel_data(p.to_panel_data())).collect()
+        };
+
+        AppConfigSave {
+            version: CONFIG_VERSION,
+            window: self.window.clone(),
+            grid: self.grid.clone(),
+            panels,
+        }
     }
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: CONFIG_VERSION,
             window: WindowConfig::default(),
             grid: GridConfig::default(),
-            panels: Vec::new(),
+            panels_v2: Vec::new(),
+            panels_v1: Vec::new(),
         }
     }
+}
+
+/// V1 config format (for loading legacy configs)
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+struct AppConfigV1 {
+    #[serde(default = "default_version")]
+    pub version: u32,
+    pub window: WindowConfig,
+    pub grid: GridConfig,
+    pub panels: Vec<PanelConfig>,
+}
+
+impl AppConfigV1 {
+    fn migrate_to_v2(self) -> AppConfig {
+        AppConfig {
+            version: CONFIG_VERSION,
+            window: self.window,
+            grid: self.grid,
+            panels_v2: self.panels.iter().map(|p| PanelConfigV2::from_panel_data(p.to_panel_data())).collect(),
+            panels_v1: Vec::new(), // Don't keep v1 after migration
+        }
+    }
+}
+
+/// Config format for saving (always v2)
+#[derive(Debug, Clone, Serialize)]
+struct AppConfigSave {
+    pub version: u32,
+    pub window: WindowConfig,
+    pub grid: GridConfig,
+    pub panels: Vec<PanelConfigV2>,
+}
+
+/// Config format for loading v2 configs
+#[derive(Debug, Clone, Deserialize)]
+struct AppConfigLoad {
+    #[serde(default = "default_version")]
+    pub version: u32,
+    pub window: WindowConfig,
+    pub grid: GridConfig,
+    #[serde(default)]
+    pub panels: Vec<PanelConfigV2>,
 }
 
 /// Window configuration
@@ -156,7 +276,46 @@ impl Default for GridConfig {
     }
 }
 
-/// Panel configuration
+/// Panel configuration (V2 format - uses typed configs)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PanelConfigV2 {
+    /// Unique ID for this panel
+    pub id: String,
+    /// Position and size
+    pub geometry: PanelGeometry,
+    /// Type-safe source configuration
+    pub source_config: SourceConfig,
+    /// Type-safe displayer configuration
+    pub displayer_config: DisplayerConfig,
+    /// Visual appearance
+    pub appearance: PanelAppearance,
+}
+
+impl PanelConfigV2 {
+    /// Convert to PanelData
+    pub fn to_panel_data(&self) -> PanelData {
+        PanelData {
+            id: self.id.clone(),
+            geometry: self.geometry,
+            source_config: self.source_config.clone(),
+            displayer_config: self.displayer_config.clone(),
+            appearance: self.appearance.clone(),
+        }
+    }
+
+    /// Create from PanelData
+    pub fn from_panel_data(data: PanelData) -> Self {
+        Self {
+            id: data.id,
+            geometry: data.geometry,
+            source_config: data.source_config,
+            displayer_config: data.displayer_config,
+            appearance: data.appearance,
+        }
+    }
+}
+
+/// Legacy panel configuration (V1 format - for migration)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanelConfig {
     /// Unique ID for this panel
@@ -180,5 +339,191 @@ pub struct PanelConfig {
     #[serde(default)]
     pub border: PanelBorderConfig,
     /// Custom settings
+    #[serde(default)]
     pub settings: HashMap<String, serde_json::Value>,
+}
+
+impl PanelConfig {
+    /// Convert legacy V1 config to PanelData
+    ///
+    /// This attempts to migrate the old HashMap-based settings to typed configs.
+    /// If migration fails for source/displayer config, defaults are used.
+    pub fn to_panel_data(&self) -> PanelData {
+        let geometry = PanelGeometry {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: self.height,
+        };
+
+        // Try to reconstruct source config from settings
+        let source_config = self.migrate_source_config();
+
+        // Try to reconstruct displayer config from settings
+        let displayer_config = self.migrate_displayer_config();
+
+        let appearance = PanelAppearance {
+            background: self.background.clone(),
+            corner_radius: self.corner_radius,
+            border: self.border.clone(),
+        };
+
+        PanelData {
+            id: self.id.clone(),
+            geometry,
+            source_config,
+            displayer_config,
+            appearance,
+        }
+    }
+
+    /// Migrate source settings to typed SourceConfig
+    fn migrate_source_config(&self) -> SourceConfig {
+        // Try to extract typed config from settings based on source type
+        match self.source.as_str() {
+            "cpu" => {
+                if let Some(val) = self.settings.get("cpu_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Cpu(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("cpu").unwrap_or_default()
+            }
+            "gpu" => {
+                if let Some(val) = self.settings.get("gpu_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Gpu(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("gpu").unwrap_or_default()
+            }
+            "memory" => {
+                if let Some(val) = self.settings.get("memory_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Memory(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("memory").unwrap_or_default()
+            }
+            "disk" => {
+                if let Some(val) = self.settings.get("disk_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Disk(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("disk").unwrap_or_default()
+            }
+            "clock" => {
+                if let Some(val) = self.settings.get("clock_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Clock(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("clock").unwrap_or_default()
+            }
+            "combination" => {
+                if let Some(val) = self.settings.get("combo_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Combo(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("combination").unwrap_or_default()
+            }
+            "system_temp" => {
+                if let Some(val) = self.settings.get("system_temp_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::SystemTemp(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("system_temp").unwrap_or_default()
+            }
+            "fan_speed" => {
+                if let Some(val) = self.settings.get("fan_speed_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::FanSpeed(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("fan_speed").unwrap_or_default()
+            }
+            _ => {
+                warn!("Unknown source type '{}', using default CPU config", self.source);
+                SourceConfig::default()
+            }
+        }
+    }
+
+    /// Migrate displayer settings to typed DisplayerConfig
+    fn migrate_displayer_config(&self) -> DisplayerConfig {
+        // Try to extract typed config from settings based on displayer type
+        match self.displayer.as_str() {
+            "text" => {
+                if let Some(val) = self.settings.get("text_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Text(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("text").unwrap_or_default()
+            }
+            "bar" => {
+                if let Some(val) = self.settings.get("bar_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Bar(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("bar").unwrap_or_default()
+            }
+            "arc" => {
+                if let Some(val) = self.settings.get("arc_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Arc(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("arc").unwrap_or_default()
+            }
+            "speedometer" => {
+                if let Some(val) = self.settings.get("speedometer_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Speedometer(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("speedometer").unwrap_or_default()
+            }
+            "graph" => {
+                if let Some(val) = self.settings.get("graph_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Graph(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("graph").unwrap_or_default()
+            }
+            "clock_analog" => {
+                if let Some(val) = self.settings.get("clock_analog_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::ClockAnalog(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("clock_analog").unwrap_or_default()
+            }
+            "clock_digital" => {
+                if let Some(val) = self.settings.get("clock_digital_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::ClockDigital(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("clock_digital").unwrap_or_default()
+            }
+            "lcars" => {
+                if let Some(val) = self.settings.get("lcars_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Lcars(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("lcars").unwrap_or_default()
+            }
+            _ => {
+                warn!("Unknown displayer type '{}', using default Text config", self.displayer);
+                DisplayerConfig::default()
+            }
+        }
+    }
 }

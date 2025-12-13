@@ -224,7 +224,7 @@ impl Displayer for SpeedometerDisplayer {
                     name: "Speedometer Configuration".to_string(),
                     description: "Configuration for speedometer display".to_string(),
                     value_type: "speedometer_config".to_string(),
-                    default: serde_json::to_value(&SpeedometerConfig::default()).unwrap_or(Value::Null),
+                    default: serde_json::to_value(SpeedometerConfig::default()).unwrap_or(Value::Null),
                 },
             ],
         }

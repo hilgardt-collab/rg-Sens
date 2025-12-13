@@ -119,7 +119,7 @@ impl Displayer for ClockAnalogDisplayer {
                     // Show countdown timer text
                     cr.save().ok();
 
-                    let font_size = (width.min(height) as f64 * icon_size_pct / 100.0).max(12.0).min(24.0);
+                    let font_size = (width.min(height) as f64 * icon_size_pct / 100.0).clamp(12.0, 24.0);
                     cr.select_font_face(icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
                     cr.set_font_size(font_size);
 
@@ -161,7 +161,7 @@ impl Displayer for ClockAnalogDisplayer {
                     // Show custom icon when no timer is active
                     cr.save().ok();
 
-                    let icon_size = (width.min(height) as f64 * icon_size_pct / 100.0).max(14.0).min(28.0);
+                    let icon_size = (width.min(height) as f64 * icon_size_pct / 100.0).clamp(14.0, 28.0);
                     cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
                     cr.set_font_size(icon_size);
 
@@ -365,6 +365,14 @@ impl Displayer for ClockAnalogDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Ok(mut data) = self.data.lock() {
+            // Check for clock_analog_config (new format from PanelData)
+            if let Some(cfg) = config.get("clock_analog_config") {
+                if let Ok(new_config) = serde_json::from_value(cfg.clone()) {
+                    data.config = new_config;
+                    return Ok(());
+                }
+            }
+            // Fallback: legacy key name
             if let Some(cfg) = config.get("analog_clock_config") {
                 if let Ok(new_config) = serde_json::from_value(cfg.clone()) {
                     data.config = new_config;

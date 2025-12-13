@@ -75,7 +75,7 @@ impl AmdBackend {
         for entry in fs::read_dir(&hwmon_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() && path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("hwmon")) {
+            if path.is_dir() && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("hwmon")) {
                 return Ok(Some(path));
             }
         }
@@ -167,12 +167,19 @@ impl AmdBackend {
             return Some((pwm as f32 / 255.0 * 100.0) as u32);
         }
 
-        // Alternative: try fan1_input (RPM)
+        // Alternative: try fan1_input (RPM) with fan1_max for proper percentage
         let fan_path = hwmon.join("fan1_input");
+        let fan_max_path = hwmon.join("fan1_max");
         if let Ok(rpm) = Self::read_int_file(&fan_path) {
-            // Can't convert RPM to percentage without max RPM, but return raw value
-            // This would need calibration per GPU model
-            return Some((rpm / 100).max(0).min(100) as u32);
+            // Try to get max RPM for proper percentage calculation
+            if let Ok(max_rpm) = Self::read_int_file(&fan_max_path) {
+                if max_rpm > 0 {
+                    return Some(((rpm as f64 / max_rpm as f64) * 100.0).clamp(0.0, 100.0) as u32);
+                }
+            }
+            // Without max RPM, we cannot convert to percentage - return None
+            // Raw RPM value would be misleading as a percentage
+            return None;
         }
 
         None

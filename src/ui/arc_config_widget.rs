@@ -12,7 +12,7 @@ use crate::ui::arc_display::{
     render_arc, ArcCapStyle, ArcDisplayConfig, ArcTaperStyle, ColorApplicationMode,
     ColorTransitionStyle,
 };
-use crate::ui::color_picker::ColorPickerDialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::{GradientEditor, LinearGradientConfig};
 use crate::displayers::FieldMetadata;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
@@ -453,28 +453,23 @@ impl ArcConfigWidget {
 
         page.append(&overlay_check);
 
-        // Background color
-        let bg_color_btn = Button::with_label("Background Arc Color");
+        // Background arc color - using ColorButtonWidget
+        let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        bg_color_box.append(&Label::new(Some("Background Arc Color:")));
+        let bg_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().background_color));
+        bg_color_box.append(bg_color_widget.widget());
+        page.append(&bg_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        bg_color_btn.connect_clicked(move |btn| {
-            let current_color = config_clone.borrow().background_color;
-            let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_clone2 = config_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = ColorPickerDialog::pick_color(window.as_ref(), current_color).await {
-                    config_clone2.borrow_mut().background_color = new_color;
-                    if let Some(cb) = on_change_clone2.borrow().as_ref() {
-                        cb();
-                    }
-                }
-            });
+        let preview_clone = preview.clone();
+        bg_color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().background_color = color;
+            preview_clone.queue_draw();
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
-
-        page.append(&bg_color_btn);
 
         // Animation
         let animate_check = CheckButton::with_label("Animate");

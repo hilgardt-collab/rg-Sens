@@ -107,12 +107,14 @@ fn detect_amd_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInfo>)
 }
 
 /// Get cached GPU information for UI display
+#[allow(dead_code)]
 pub fn get_gpu_names() -> Vec<String> {
     let detected = detect_gpus();
     detected.info.iter().map(|info| info.name.clone()).collect()
 }
 
 /// Get number of detected GPUs
+#[allow(dead_code)]
 pub fn get_gpu_count() -> u32 {
     let detected = detect_gpus();
     detected.gpus.len() as u32

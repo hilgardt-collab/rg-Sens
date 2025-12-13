@@ -26,7 +26,9 @@ pub enum TemperatureUnit {
 
 /// Frequency units
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum FrequencyUnit {
+    #[default]
     MHz,
     GHz,
 }
@@ -64,14 +66,9 @@ fn default_update_interval() -> u64 {
 }
 
 fn default_auto_detect_limits() -> bool {
-    true
+    false
 }
 
-impl Default for FrequencyUnit {
-    fn default() -> Self {
-        FrequencyUnit::MHz
-    }
-}
 
 impl Default for CpuSourceConfig {
     fn default() -> Self {
@@ -110,6 +107,12 @@ pub struct CpuSourceConfigWidget {
     auto_detect_check: CheckButton,
     min_unit_label: Label,
     max_unit_label: Label,
+}
+
+impl Default for CpuSourceConfigWidget {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CpuSourceConfigWidget {
@@ -417,7 +420,7 @@ impl CpuSourceConfigWidget {
             config_clone.borrow_mut().max_limit = Some(spin.value());
         });
 
-        Self {
+        let widget_instance = Self {
             widget,
             config,
             caption_entry,
@@ -436,7 +439,13 @@ impl CpuSourceConfigWidget {
             auto_detect_check,
             min_unit_label,
             max_unit_label,
-        }
+        };
+
+        // Initialize sensors and core count from cached data
+        widget_instance.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
+        widget_instance.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
+
+        widget_instance
     }
 
     pub fn widget(&self) -> &GtkBox {
@@ -526,7 +535,17 @@ impl CpuSourceConfigWidget {
     }
 
     pub fn get_config(&self) -> CpuSourceConfig {
-        self.config.borrow().clone()
+        let mut config = self.config.borrow().clone();
+
+        // When auto_detect is disabled, ensure we use the spinbutton values
+        // This handles the case where set_config was called with None limits
+        // but the spinbuttons have values the user may have entered
+        if !config.auto_detect_limits {
+            config.min_limit = Some(self.min_limit_spin.value());
+            config.max_limit = Some(self.max_limit_spin.value());
+        }
+
+        config
     }
 
     /// Populate sensor dropdown with available CPU sensors

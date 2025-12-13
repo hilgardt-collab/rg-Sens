@@ -8,25 +8,24 @@ use crate::displayers::TextDisplayerConfig;
 
 /// Arc end cap style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ArcCapStyle {
     #[serde(rename = "butt")]
     Butt,      // Square/flat end
     #[serde(rename = "round")]
+    #[default]
     Round,     // Rounded end
     #[serde(rename = "pointed")]
     Pointed,   // Pointed/triangular end
 }
 
-impl Default for ArcCapStyle {
-    fn default() -> Self {
-        Self::Round
-    }
-}
 
 /// Arc tapering style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ArcTaperStyle {
     #[serde(rename = "none")]
+    #[default]
     None,           // No tapering, constant width
     #[serde(rename = "start")]
     Start,          // Narrower at start
@@ -36,41 +35,30 @@ pub enum ArcTaperStyle {
     Both,           // Narrower at both ends (elliptical)
 }
 
-impl Default for ArcTaperStyle {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 /// Color transition style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ColorTransitionStyle {
     #[serde(rename = "smooth")]
     Smooth,    // Smooth gradient fade between colors
     #[serde(rename = "abrupt")]
+    #[default]
     Abrupt,    // Abrupt change at threshold
 }
 
-impl Default for ColorTransitionStyle {
-    fn default() -> Self {
-        Self::Abrupt
-    }
-}
 
 /// Color application mode
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ColorApplicationMode {
     #[serde(rename = "progressive")]
+    #[default]
     Progressive,   // Whole arc changes color based on value
     #[serde(rename = "segments")]
     Segments,      // Individual segments have fixed colors
 }
 
-impl Default for ColorApplicationMode {
-    fn default() -> Self {
-        Self::Progressive
-    }
-}
 
 /// Arc gauge configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

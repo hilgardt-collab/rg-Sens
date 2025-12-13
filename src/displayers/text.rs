@@ -155,7 +155,17 @@ impl Displayer for TextDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        // Try to deserialize the config as TextDisplayerConfig
+        // Check for full text_config first (new format from PanelData)
+        if let Some(text_config_value) = config.get("text_config") {
+            if let Ok(text_config) = serde_json::from_value::<TextDisplayerConfig>(text_config_value.clone()) {
+                if let Ok(mut data) = self.data.lock() {
+                    data.config = text_config;
+                }
+                return Ok(());
+            }
+        }
+
+        // Fallback: Try legacy format with "lines" key
         if let Some(lines_value) = config.get("lines") {
             if let Ok(text_config) = serde_json::from_value::<TextDisplayerConfig>(
                 serde_json::json!({ "lines": lines_value })

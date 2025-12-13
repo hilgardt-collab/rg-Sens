@@ -8,8 +8,10 @@ use crate::displayers::TextDisplayerConfig;
 
 /// Bar display style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum BarStyle {
     #[serde(rename = "full")]
+    #[default]
     Full,         // Fill entire panel
     #[serde(rename = "rectangle")]
     Rectangle,    // Rectangular bar with rounded corners
@@ -17,31 +19,25 @@ pub enum BarStyle {
     Segmented,    // Multiple segments with spacing
 }
 
-impl Default for BarStyle {
-    fn default() -> Self {
-        Self::Full
-    }
-}
 
 /// Bar orientation
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum BarOrientation {
     #[serde(rename = "horizontal")]
+    #[default]
     Horizontal,
     #[serde(rename = "vertical")]
     Vertical,
 }
 
-impl Default for BarOrientation {
-    fn default() -> Self {
-        Self::Horizontal
-    }
-}
 
 /// Bar fill direction
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum BarFillDirection {
     #[serde(rename = "left_to_right")]
+    #[default]
     LeftToRight,
     #[serde(rename = "right_to_left")]
     RightToLeft,
@@ -51,11 +47,6 @@ pub enum BarFillDirection {
     TopToBottom,
 }
 
-impl Default for BarFillDirection {
-    fn default() -> Self {
-        Self::LeftToRight
-    }
-}
 
 /// Foreground fill type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -86,6 +77,7 @@ impl Default for BarFillType {
 /// Background fill type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
+#[derive(Default)]
 pub enum BarBackgroundType {
     #[serde(rename = "solid")]
     Solid { color: Color },
@@ -96,14 +88,10 @@ pub enum BarBackgroundType {
         angle: f64,
     },
     #[serde(rename = "transparent")]
+    #[default]
     Transparent,
 }
 
-impl Default for BarBackgroundType {
-    fn default() -> Self {
-        Self::Transparent
-    }
-}
 
 /// Text overlay configuration - uses full TextDisplayer config
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -283,8 +271,12 @@ fn render_full_bar(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    // Render background
+    // Render background with clipping to bar bounds
+    cr.save()?;
+    rounded_rectangle(cr, 0.0, 0.0, width, height, config.corner_radius);
+    cr.clip();
     render_background(cr, &config.background, width, height)?;
+    cr.restore()?;
 
     // Render foreground based on value
     cr.save()?;
