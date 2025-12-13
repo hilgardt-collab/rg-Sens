@@ -195,6 +195,8 @@ pub struct HeaderConfig {
     pub font: String,
     #[serde(default = "default_header_font_size")]
     pub font_size: f64,
+    #[serde(default = "default_header_font_bold")]
+    pub font_bold: bool,
     #[serde(default = "default_header_text_color")]
     pub text_color: Color,
     #[serde(default = "default_header_bg_color")]
@@ -216,11 +218,15 @@ pub struct HeaderConfig {
 }
 
 fn default_header_font() -> String {
-    "Sans Bold".to_string()
+    "Sans".to_string()
 }
 
 fn default_header_font_size() -> f64 {
     14.0
+}
+
+fn default_header_font_bold() -> bool {
+    true
 }
 
 fn default_header_text_color() -> Color {
@@ -250,6 +256,7 @@ impl Default for HeaderConfig {
             text: String::new(),
             font: default_header_font(),
             font_size: default_header_font_size(),
+            font_bold: default_header_font_bold(),
             text_color: default_header_text_color(),
             bg_color: default_header_bg_color(),
             shape: HeaderShape::default(),
@@ -959,7 +966,12 @@ fn render_header_bar(
     cr.save()?;
 
     // Calculate text dimensions
-    cr.select_font_face(&header_config.font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    let font_weight = if header_config.font_bold {
+        cairo::FontWeight::Bold
+    } else {
+        cairo::FontWeight::Normal
+    };
+    cr.select_font_face(&header_config.font, cairo::FontSlant::Normal, font_weight);
     cr.set_font_size(header_config.font_size);
     let text_extents = cr.text_extents(&text)?;
 

@@ -3252,10 +3252,21 @@ fn show_panel_properties_dialog(
     lcars_config_widget.widget().set_visible(old_displayer_id == "lcars");
 
     // Load existing LCARS config if displayer is lcars
+    // Prefer getting config directly from displayer (most up-to-date), fall back to panel config
     if old_displayer_id == "lcars" {
-        if let Some(config_value) = panel_guard.config.get("lcars_config") {
-            if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
-                lcars_config_widget.set_config(config);
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) = panel_guard.displayer.get_typed_config() {
+            lcars_config_widget.set_config(lcars_config);
+            true
+        } else {
+            false
+        };
+
+        // Fall back to panel config hashmap if get_typed_config didn't work
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("lcars_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
+                    lcars_config_widget.set_config(config);
+                }
             }
         }
     }

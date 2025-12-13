@@ -80,6 +80,8 @@ struct DisplayData {
     config: LcarsDisplayConfig,
     values: HashMap<String, Value>,
     bar_values: HashMap<String, AnimatedValue>,
+    /// Animated values for CoreBars content items (keyed by prefix, e.g., "group1_1")
+    core_bar_values: HashMap<String, Vec<AnimatedValue>>,
     graph_history: HashMap<String, VecDeque<DataPoint>>,
     graph_start_time: Instant,
     last_update: Instant,
@@ -92,6 +94,7 @@ impl Default for DisplayData {
             config: LcarsDisplayConfig::default(),
             values: HashMap::new(),
             bar_values: HashMap::new(),
+            core_bar_values: HashMap::new(),
             graph_history: HashMap::new(),
             graph_start_time: Instant::now(),
             last_update: Instant::now(),
@@ -197,6 +200,7 @@ impl LcarsComboDisplayer {
         config: &LcarsDisplayConfig,
         values: &HashMap<String, Value>,
         bar_values: &HashMap<String, AnimatedValue>,
+        core_bar_values: &HashMap<String, Vec<AnimatedValue>>,
         graph_history: &HashMap<String, VecDeque<DataPoint>>,
     ) -> Result<(), cairo::Error> {
         if count == 0 || w <= 0.0 || h <= 0.0 {
@@ -313,32 +317,35 @@ impl LcarsComboDisplayer {
                     )?;
                 }
                 ContentDisplayType::CoreBars => {
-                    // Extract core usage values from the source values
-                    // Values are named like core0_usage, core1_usage, etc. (prefixed with slot name)
+                    // Use animated core values if available, otherwise fall back to raw values
                     let core_bars_config = &item_config.core_bars_config;
-                    let mut core_values: Vec<f64> = Vec::new();
-
-                    // Get core values within the configured range
-                    for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                        let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                        let value = values.get(&core_key)
-                            .and_then(|v| v.as_f64())
-                            .unwrap_or(0.0);
-                        // Normalize to 0.0-1.0 (CPU usage is 0-100%)
-                        core_values.push(value / 100.0);
-                    }
-
-                    // If no specific core values found, try to find any core values
-                    if core_values.is_empty() {
-                        for core_idx in 0..128 {
+                    let core_values: Vec<f64> = if let Some(animated) = core_bar_values.get(&prefix) {
+                        // Use animated current values
+                        animated.iter().map(|av| av.current).collect()
+                    } else {
+                        // Fall back to raw values (for first frame before animation starts)
+                        let mut raw_values: Vec<f64> = Vec::new();
+                        for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            if let Some(v) = values.get(&core_key).and_then(|v| v.as_f64()) {
-                                core_values.push(v / 100.0);
-                            } else {
-                                break;
+                            let value = values.get(&core_key)
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            raw_values.push(value / 100.0);
+                        }
+
+                        // If no specific core values found, try to find any core values
+                        if raw_values.is_empty() {
+                            for core_idx in 0..128 {
+                                let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                                if let Some(v) = values.get(&core_key).and_then(|v| v.as_f64()) {
+                                    raw_values.push(v / 100.0);
+                                } else {
+                                    break;
+                                }
                             }
                         }
-                    }
+                        raw_values
+                    };
 
                     // Render core bars
                     render_content_core_bars(
@@ -423,6 +430,7 @@ impl Displayer for LcarsComboDisplayer {
                         &data.config,
                         &data.values,
                         &data.bar_values,
+                        &data.core_bar_values,
                         &data.graph_history,
                     );
                 } else {
@@ -461,6 +469,7 @@ impl Displayer for LcarsComboDisplayer {
                                     &data.config,
                                     &data.values,
                                     &data.bar_values,
+                                    &data.core_bar_values,
                                     &data.graph_history,
                                 );
 
@@ -504,6 +513,7 @@ impl Displayer for LcarsComboDisplayer {
                                     &data.config,
                                     &data.values,
                                     &data.bar_values,
+                                    &data.core_bar_values,
                                     &data.graph_history,
                                 );
 
@@ -555,6 +565,7 @@ impl Displayer for LcarsComboDisplayer {
 
                         let speed = data.config.animation_speed;
 
+                        // Animate bar values
                         for (_key, anim) in data.bar_values.iter_mut() {
                             if (anim.current - anim.target).abs() > 0.001 {
                                 // Lerp toward target
@@ -566,6 +577,23 @@ impl Displayer for LcarsComboDisplayer {
                                     anim.current = anim.target;
                                 }
                                 redraw = true;
+                            }
+                        }
+
+                        // Animate core bar values
+                        for (_key, core_anims) in data.core_bar_values.iter_mut() {
+                            for anim in core_anims.iter_mut() {
+                                if (anim.current - anim.target).abs() > 0.001 {
+                                    // Lerp toward target
+                                    let delta = (anim.target - anim.current) * speed * elapsed;
+                                    anim.current += delta;
+
+                                    // Snap if very close
+                                    if (anim.current - anim.target).abs() < 0.001 {
+                                        anim.current = anim.target;
+                                    }
+                                    redraw = true;
+                                }
                             }
                         }
                     }
@@ -622,7 +650,7 @@ impl Displayer for LcarsComboDisplayer {
                     anim.first_update = false;
                 }
 
-                // Check if this item is configured as a graph
+                // Check if this item is configured as a graph or core bars
                 if let Some(item_config) = content_items.get(&prefix) {
                     if matches!(item_config.display_as, ContentDisplayType::Graph) {
                         let graph_key = format!("{}_graph", prefix);
@@ -638,6 +666,52 @@ impl Displayer for LcarsComboDisplayer {
                         let max_points = item_config.graph_config.max_data_points;
                         while history.len() > max_points {
                             history.pop_front();
+                        }
+                    } else if matches!(item_config.display_as, ContentDisplayType::CoreBars) {
+                        // Update core bar animated values
+                        let core_bars_config = &item_config.core_bars_config;
+
+                        // Collect core values from source data
+                        let mut core_targets: Vec<f64> = Vec::new();
+                        for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
+                            let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                            let value = data.get(&core_key)
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0) / 100.0; // Normalize to 0.0-1.0
+                            core_targets.push(value);
+                        }
+
+                        // If no specific core values found, try to find any core values
+                        if core_targets.is_empty() {
+                            for core_idx in 0..128 {
+                                let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                                if let Some(v) = data.get(&core_key).and_then(|v| v.as_f64()) {
+                                    core_targets.push(v / 100.0);
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Get or create animated values for this prefix
+                        let anims = display_data.core_bar_values.entry(prefix.clone()).or_insert_with(Vec::new);
+
+                        // Ensure we have enough AnimatedValue entries
+                        while anims.len() < core_targets.len() {
+                            anims.push(AnimatedValue::default());
+                        }
+                        // Truncate if we have too many
+                        anims.truncate(core_targets.len());
+
+                        // Update targets
+                        for (i, &target) in core_targets.iter().enumerate() {
+                            if let Some(anim) = anims.get_mut(i) {
+                                anim.target = target;
+                                if anim.first_update || !animation_enabled {
+                                    anim.current = target;
+                                    anim.first_update = false;
+                                }
+                            }
                         }
                     }
                 }

@@ -48,6 +48,7 @@ struct HeadersWidgets {
     top_text_color_widget: Rc<ColorButtonWidget>,
     top_font_btn: Button,
     top_font_size_spin: SpinButton,
+    top_bold_check: CheckButton,
     top_align_dropdown: DropDown,
     // Bottom header
     bottom_show_check: CheckButton,
@@ -57,6 +58,7 @@ struct HeadersWidgets {
     bottom_text_color_widget: Rc<ColorButtonWidget>,
     bottom_font_btn: Button,
     bottom_font_size_spin: SpinButton,
+    bottom_bold_check: CheckButton,
     bottom_align_dropdown: DropDown,
 }
 
@@ -588,11 +590,16 @@ impl LcarsConfigWidget {
         let top_font_box = GtkBox::new(Orientation::Horizontal, 6);
         top_font_box.append(&Label::new(Some("Font:")));
 
-        let top_font_btn = Button::with_label(&format!(
-            "{} {:.0}",
-            config.borrow().frame.top_header.font,
-            config.borrow().frame.top_header.font_size
-        ));
+        let top_font_initial = {
+            let cfg = config.borrow();
+            let font = if cfg.frame.top_header.font.is_empty() {
+                "Sans"
+            } else {
+                &cfg.frame.top_header.font
+            };
+            format!("{} {:.0}", font, cfg.frame.top_header.font_size)
+        };
+        let top_font_btn = Button::with_label(&top_font_initial);
         top_font_btn.set_hexpand(true);
         top_font_box.append(&top_font_btn);
 
@@ -607,6 +614,19 @@ impl LcarsConfigWidget {
         let top_paste_font_btn = Button::with_label("Paste");
         top_font_box.append(&top_copy_font_btn);
         top_font_box.append(&top_paste_font_btn);
+
+        // Bold checkbox
+        let top_bold_check = CheckButton::with_label("Bold");
+        top_bold_check.set_active(config.borrow().frame.top_header.font_bold);
+        top_font_box.append(&top_bold_check);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        top_bold_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.top_header.font_bold = check.is_active();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
 
         // Font button click handler
         let config_clone = config.clone();
@@ -657,7 +677,10 @@ impl LcarsConfigWidget {
         let top_font_btn_clone = top_font_btn.clone();
         top_font_size_spin.connect_value_changed(move |spin| {
             let new_size = spin.value();
-            let family = config_clone.borrow().frame.top_header.font.clone();
+            let family = {
+                let f = config_clone.borrow().frame.top_header.font.clone();
+                if f.is_empty() { "Sans".to_string() } else { f }
+            };
             config_clone.borrow_mut().frame.top_header.font_size = new_size;
             top_font_btn_clone.set_label(&format!("{} {:.0}", family, new_size));
             Self::queue_redraw(&preview_clone, &on_change_clone);
@@ -882,11 +905,16 @@ impl LcarsConfigWidget {
         let bottom_font_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_font_box.append(&Label::new(Some("Font:")));
 
-        let bottom_font_btn = Button::with_label(&format!(
-            "{} {:.0}",
-            config.borrow().frame.bottom_header.font,
-            config.borrow().frame.bottom_header.font_size
-        ));
+        let bottom_font_initial = {
+            let cfg = config.borrow();
+            let font = if cfg.frame.bottom_header.font.is_empty() {
+                "Sans"
+            } else {
+                &cfg.frame.bottom_header.font
+            };
+            format!("{} {:.0}", font, cfg.frame.bottom_header.font_size)
+        };
+        let bottom_font_btn = Button::with_label(&bottom_font_initial);
         bottom_font_btn.set_hexpand(true);
         bottom_font_box.append(&bottom_font_btn);
 
@@ -901,6 +929,19 @@ impl LcarsConfigWidget {
         let bottom_paste_font_btn = Button::with_label("Paste");
         bottom_font_box.append(&bottom_copy_font_btn);
         bottom_font_box.append(&bottom_paste_font_btn);
+
+        // Bold checkbox
+        let bottom_bold_check = CheckButton::with_label("Bold");
+        bottom_bold_check.set_active(config.borrow().frame.bottom_header.font_bold);
+        bottom_font_box.append(&bottom_bold_check);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        bottom_bold_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.bottom_header.font_bold = check.is_active();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
 
         // Font button click handler
         let config_clone = config.clone();
@@ -951,7 +992,10 @@ impl LcarsConfigWidget {
         let bottom_font_btn_clone = bottom_font_btn.clone();
         bottom_font_size_spin.connect_value_changed(move |spin| {
             let new_size = spin.value();
-            let family = config_clone.borrow().frame.bottom_header.font.clone();
+            let family = {
+                let f = config_clone.borrow().frame.bottom_header.font.clone();
+                if f.is_empty() { "Sans".to_string() } else { f }
+            };
             config_clone.borrow_mut().frame.bottom_header.font_size = new_size;
             bottom_font_btn_clone.set_label(&format!("{} {:.0}", family, new_size));
             Self::queue_redraw(&preview_clone, &on_change_clone);
@@ -1024,6 +1068,7 @@ impl LcarsConfigWidget {
             top_text_color_widget: top_text_color_widget.clone(),
             top_font_btn: top_font_btn.clone(),
             top_font_size_spin: top_font_size_spin.clone(),
+            top_bold_check: top_bold_check.clone(),
             top_align_dropdown: top_align_dropdown.clone(),
             bottom_show_check: bottom_show_check.clone(),
             bottom_text_entry: bottom_text_entry.clone(),
@@ -1032,6 +1077,7 @@ impl LcarsConfigWidget {
             bottom_text_color_widget: bottom_text_color_widget.clone(),
             bottom_font_btn: bottom_font_btn.clone(),
             bottom_font_size_spin: bottom_font_size_spin.clone(),
+            bottom_bold_check: bottom_bold_check.clone(),
             bottom_align_dropdown: bottom_align_dropdown.clone(),
         });
 
@@ -2201,6 +2247,26 @@ impl LcarsConfigWidget {
     }
 
     pub fn set_config(&self, new_config: LcarsDisplayConfig) {
+        // Debug: Log the font values being loaded
+        log::debug!(
+            "LCARS set_config - top font: '{}', bottom font: '{}'",
+            new_config.frame.top_header.font,
+            new_config.frame.bottom_header.font
+        );
+
+        // First update the internal config with the new values
+        // Handle empty fonts by substituting defaults
+        let mut config_to_use = new_config.clone();
+        if config_to_use.frame.top_header.font.is_empty() {
+            config_to_use.frame.top_header.font = "Sans".to_string();
+        }
+        if config_to_use.frame.bottom_header.font.is_empty() {
+            config_to_use.frame.bottom_header.font = "Sans".to_string();
+        }
+
+        // Update internal config
+        *self.config.borrow_mut() = config_to_use.clone();
+
         // Update frame widgets to reflect the new config
         if let Some(ref widgets) = *self.frame_widgets.borrow() {
             widgets.sidebar_spin.set_value(new_config.frame.sidebar_width);
@@ -2241,22 +2307,23 @@ impl LcarsConfigWidget {
         // Update headers widgets
         if let Some(ref widgets) = *self.headers_widgets.borrow() {
             // Top header
-            widgets.top_show_check.set_active(new_config.frame.top_header.position == HeaderPosition::Top);
-            widgets.top_text_entry.set_text(&new_config.frame.top_header.text);
-            let top_shape_idx = match new_config.frame.top_header.shape {
+            widgets.top_show_check.set_active(config_to_use.frame.top_header.position == HeaderPosition::Top);
+            widgets.top_text_entry.set_text(&config_to_use.frame.top_header.text);
+            let top_shape_idx = match config_to_use.frame.top_header.shape {
                 HeaderShape::Pill => 0,
                 HeaderShape::Square => 1,
             };
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
-            widgets.top_bg_widget.set_color(new_config.frame.top_header.bg_color);
-            widgets.top_text_color_widget.set_color(new_config.frame.top_header.text_color);
+            widgets.top_bg_widget.set_color(config_to_use.frame.top_header.bg_color);
+            widgets.top_text_color_widget.set_color(config_to_use.frame.top_header.text_color);
             widgets.top_font_btn.set_label(&format!(
                 "{} {:.0}",
-                new_config.frame.top_header.font,
-                new_config.frame.top_header.font_size
+                config_to_use.frame.top_header.font,
+                config_to_use.frame.top_header.font_size
             ));
-            widgets.top_font_size_spin.set_value(new_config.frame.top_header.font_size);
-            let top_align_idx = match new_config.frame.top_header.align {
+            widgets.top_font_size_spin.set_value(config_to_use.frame.top_header.font_size);
+            widgets.top_bold_check.set_active(config_to_use.frame.top_header.font_bold);
+            let top_align_idx = match config_to_use.frame.top_header.align {
                 HeaderAlign::Left => 0,
                 HeaderAlign::Center => 1,
                 HeaderAlign::Right => 2,
@@ -2264,27 +2331,30 @@ impl LcarsConfigWidget {
             widgets.top_align_dropdown.set_selected(top_align_idx);
 
             // Bottom header
-            widgets.bottom_show_check.set_active(new_config.frame.bottom_header.position == HeaderPosition::Bottom);
-            widgets.bottom_text_entry.set_text(&new_config.frame.bottom_header.text);
-            let bottom_shape_idx = match new_config.frame.bottom_header.shape {
+            widgets.bottom_show_check.set_active(config_to_use.frame.bottom_header.position == HeaderPosition::Bottom);
+            widgets.bottom_text_entry.set_text(&config_to_use.frame.bottom_header.text);
+            let bottom_shape_idx = match config_to_use.frame.bottom_header.shape {
                 HeaderShape::Pill => 0,
                 HeaderShape::Square => 1,
             };
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
-            widgets.bottom_bg_widget.set_color(new_config.frame.bottom_header.bg_color);
-            widgets.bottom_text_color_widget.set_color(new_config.frame.bottom_header.text_color);
+            widgets.bottom_bg_widget.set_color(config_to_use.frame.bottom_header.bg_color);
+            widgets.bottom_text_color_widget.set_color(config_to_use.frame.bottom_header.text_color);
             widgets.bottom_font_btn.set_label(&format!(
                 "{} {:.0}",
-                new_config.frame.bottom_header.font,
-                new_config.frame.bottom_header.font_size
+                config_to_use.frame.bottom_header.font,
+                config_to_use.frame.bottom_header.font_size
             ));
-            widgets.bottom_font_size_spin.set_value(new_config.frame.bottom_header.font_size);
-            let bottom_align_idx = match new_config.frame.bottom_header.align {
+            widgets.bottom_font_size_spin.set_value(config_to_use.frame.bottom_header.font_size);
+            widgets.bottom_bold_check.set_active(config_to_use.frame.bottom_header.font_bold);
+            let bottom_align_idx = match config_to_use.frame.bottom_header.align {
                 HeaderAlign::Left => 0,
                 HeaderAlign::Center => 1,
                 HeaderAlign::Right => 2,
             };
             widgets.bottom_align_dropdown.set_selected(bottom_align_idx);
+        } else {
+            log::warn!("LCARS headers_widgets not available when setting config");
         }
 
         // Update segments widgets
