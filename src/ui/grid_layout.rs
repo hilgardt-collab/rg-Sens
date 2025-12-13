@@ -637,6 +637,7 @@ impl GridLayout {
 
         // Setup background rendering
         let panel_clone_bg = panel.clone();
+        let background_area_weak = background_area.downgrade();
         background_area.set_draw_func(move |_, cr, w, h| {
             match panel_clone_bg.try_read() {
                 Ok(panel_guard) => {
@@ -681,8 +682,13 @@ impl GridLayout {
                     }
                 }
                 Err(_) => {
-                    // Lock contention - skip this frame, will retry on next draw
-                    log::debug!("Skipped background render due to lock contention");
+                    // Lock contention - schedule a retry on next frame
+                    log::debug!("Skipped background render due to lock contention, scheduling retry");
+                    if let Some(bg_area) = background_area_weak.upgrade() {
+                        gtk4::glib::idle_add_local_once(move || {
+                            bg_area.queue_draw();
+                        });
+                    }
                 }
             }
         });
@@ -1532,6 +1538,7 @@ impl GridLayout {
 
                                 // Setup background rendering
                                 let panel_clone_bg = new_panel.clone();
+                                let background_area_weak = background_area.downgrade();
                                 background_area.set_draw_func(move |_, cr, w, h| {
                                     match panel_clone_bg.try_read() {
                                         Ok(panel_guard) => {
@@ -1576,8 +1583,13 @@ impl GridLayout {
                                             }
                                         }
                                         Err(_) => {
-                                            // Lock contention - skip this frame, will retry on next draw
-                                            log::debug!("Skipped background render due to lock contention");
+                                            // Lock contention - schedule a retry on next frame
+                                            log::debug!("Skipped background render due to lock contention, scheduling retry");
+                                            if let Some(bg_area) = background_area_weak.upgrade() {
+                                                gtk4::glib::idle_add_local_once(move || {
+                                                    bg_area.queue_draw();
+                                                });
+                                            }
                                         }
                                     }
                                 });
@@ -2299,6 +2311,7 @@ impl GridLayout {
 
                                                             // Setup background rendering
                                                             let panel_clone_bg = new_panel.clone();
+                                                            let background_area_weak = background_area.downgrade();
                                                             background_area.set_draw_func(move |_, cr, w, h| {
                                                                 match panel_clone_bg.try_read() {
                                                                     Ok(panel_guard) => {
@@ -2340,8 +2353,13 @@ impl GridLayout {
                                                                         }
                                                                     }
                                                                     Err(_) => {
-                                                                        // Lock contention - skip this frame, will retry on next draw
-                                                                        log::debug!("Skipped background render due to lock contention");
+                                                                        // Lock contention - schedule a retry on next frame
+                                                                        log::debug!("Skipped background render due to lock contention, scheduling retry");
+                                                                        if let Some(bg_area) = background_area_weak.upgrade() {
+                                                                            gtk4::glib::idle_add_local_once(move || {
+                                                                                bg_area.queue_draw();
+                                                                            });
+                                                                        }
                                                                     }
                                                                 }
                                                             });
@@ -2642,6 +2660,9 @@ fn show_panel_properties_dialog(
     let old_source_id = panel_guard.source.metadata().id.clone();
     let old_displayer_id = panel_guard.displayer.id().to_string();
 
+    // Get parent window for transient_for
+    let parent_window = _container.root().and_then(|r| r.downcast::<Window>().ok());
+
     // Create dialog window
     let dialog = Window::builder()
         .title(format!("Panel Properties - {}", panel_id))
@@ -2649,6 +2670,11 @@ fn show_panel_properties_dialog(
         .default_width(550)
         .default_height(650)
         .build();
+
+    // Set transient for parent window so dialog stays on top
+    if let Some(ref parent) = parent_window {
+        dialog.set_transient_for(Some(parent));
+    }
 
     // Main container
     let vbox = GtkBox::new(Orientation::Vertical, 12);
@@ -3256,6 +3282,14 @@ fn show_panel_properties_dialog(
                 cpu_cores_config_widget.set_config(config);
             }
         }
+    }
+
+    // Count available CPU cores from source fields (e.g., "core0_usage", "core1_usage", ...)
+    let core_count = available_fields.iter()
+        .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
+        .count();
+    if core_count > 0 {
+        cpu_cores_config_widget.set_max_cores(core_count);
     }
 
     displayer_tab_box.append(&cpu_cores_config_label);

@@ -404,6 +404,15 @@ impl CoreBarsConfigWidget {
         fg_gradient_editor.widget().set_visible(false);
         page.append(fg_gradient_editor.widget());
 
+        // Foreground gradient copy/paste buttons
+        let fg_copy_paste_box = GtkBox::new(Orientation::Horizontal, 8);
+        let fg_copy_gradient_btn = Button::with_label("Copy Gradient");
+        let fg_paste_gradient_btn = Button::with_label("Paste Gradient");
+        fg_copy_paste_box.append(&fg_copy_gradient_btn);
+        fg_copy_paste_box.append(&fg_paste_gradient_btn);
+        fg_copy_paste_box.set_visible(false);
+        page.append(&fg_copy_paste_box);
+
         // Background section
         let bg_label = Label::new(Some("Background:"));
         bg_label.set_xalign(0.0);
@@ -429,6 +438,15 @@ impl CoreBarsConfigWidget {
         bg_gradient_editor.widget().set_visible(false);
         page.append(bg_gradient_editor.widget());
 
+        // Background gradient copy/paste buttons
+        let bg_copy_paste_box = GtkBox::new(Orientation::Horizontal, 8);
+        let bg_copy_gradient_btn = Button::with_label("Copy Gradient");
+        let bg_paste_gradient_btn = Button::with_label("Paste Gradient");
+        bg_copy_paste_box.append(&bg_copy_gradient_btn);
+        bg_copy_paste_box.append(&bg_paste_gradient_btn);
+        bg_copy_paste_box.set_visible(false);
+        page.append(&bg_copy_paste_box);
+
         // Border section
         let border_label = Label::new(Some("Border:"));
         border_label.set_xalign(0.0);
@@ -449,12 +467,14 @@ impl CoreBarsConfigWidget {
         // Connect foreground signals
         let fg_color_widget_vis = fg_color_widget.widget().clone();
         let fg_gradient_editor_vis = fg_gradient_editor.widget().clone();
+        let fg_copy_paste_box_vis = fg_copy_paste_box.clone();
         let config_for_fg_solid = config.clone();
         let on_change_for_fg_solid = on_change.clone();
         let fg_color_widget_for_solid = fg_color_widget.clone();
         fg_solid_radio.connect_toggled(move |radio| {
             fg_color_widget_vis.set_visible(radio.is_active());
             fg_gradient_editor_vis.set_visible(!radio.is_active());
+            fg_copy_paste_box_vis.set_visible(!radio.is_active());
             if radio.is_active() {
                 let color = fg_color_widget_for_solid.color();
                 config_for_fg_solid.borrow_mut().foreground = BarFillType::Solid { color };
@@ -466,12 +486,14 @@ impl CoreBarsConfigWidget {
 
         let fg_color_widget_vis2 = fg_color_widget.widget().clone();
         let fg_gradient_editor_vis2 = fg_gradient_editor.widget().clone();
+        let fg_copy_paste_box_vis2 = fg_copy_paste_box.clone();
         let config_for_fg_gradient = config.clone();
         let on_change_for_fg_gradient_radio = on_change.clone();
         let fg_gradient_editor_for_radio = fg_gradient_editor.clone();
         fg_gradient_radio.connect_toggled(move |radio| {
             fg_color_widget_vis2.set_visible(!radio.is_active());
             fg_gradient_editor_vis2.set_visible(radio.is_active());
+            fg_copy_paste_box_vis2.set_visible(radio.is_active());
             if radio.is_active() {
                 let gradient = fg_gradient_editor_for_radio.get_gradient();
                 config_for_fg_gradient.borrow_mut().foreground = BarFillType::Gradient {
@@ -510,12 +532,14 @@ impl CoreBarsConfigWidget {
         // Connect background signals
         let bg_color_widget_vis = bg_color_widget.widget().clone();
         let bg_gradient_editor_vis = bg_gradient_editor.widget().clone();
+        let bg_copy_paste_box_vis = bg_copy_paste_box.clone();
         let config_for_bg_solid = config.clone();
         let on_change_for_bg_solid = on_change.clone();
         let bg_color_widget_for_solid = bg_color_widget.clone();
         bg_solid_radio.connect_toggled(move |radio| {
             bg_color_widget_vis.set_visible(radio.is_active());
             bg_gradient_editor_vis.set_visible(false);
+            bg_copy_paste_box_vis.set_visible(false);
             if radio.is_active() {
                 let color = bg_color_widget_for_solid.color();
                 config_for_bg_solid.borrow_mut().background = BarBackgroundType::Solid { color };
@@ -527,12 +551,14 @@ impl CoreBarsConfigWidget {
 
         let bg_color_widget_vis2 = bg_color_widget.widget().clone();
         let bg_gradient_editor_vis2 = bg_gradient_editor.widget().clone();
+        let bg_copy_paste_box_vis2 = bg_copy_paste_box.clone();
         let config_for_bg_gradient = config.clone();
         let on_change_for_bg_gradient_radio = on_change.clone();
         let bg_gradient_editor_for_radio = bg_gradient_editor.clone();
         bg_gradient_radio.connect_toggled(move |radio| {
             bg_color_widget_vis2.set_visible(false);
             bg_gradient_editor_vis2.set_visible(radio.is_active());
+            bg_copy_paste_box_vis2.set_visible(radio.is_active());
             if radio.is_active() {
                 let gradient = bg_gradient_editor_for_radio.get_gradient();
                 config_for_bg_gradient.borrow_mut().background = BarBackgroundType::Gradient {
@@ -547,11 +573,13 @@ impl CoreBarsConfigWidget {
 
         let bg_color_widget_vis3 = bg_color_widget.widget().clone();
         let bg_gradient_editor_vis3 = bg_gradient_editor.widget().clone();
+        let bg_copy_paste_box_vis3 = bg_copy_paste_box.clone();
         let config_clone5 = config.clone();
         let on_change_clone5 = on_change.clone();
         bg_transparent_radio.connect_toggled(move |radio| {
             bg_color_widget_vis3.set_visible(false);
             bg_gradient_editor_vis3.set_visible(false);
+            bg_copy_paste_box_vis3.set_visible(false);
             if radio.is_active() {
                 config_clone5.borrow_mut().background = BarBackgroundType::Transparent;
                 if let Some(ref cb) = *on_change_clone5.borrow() {
@@ -580,6 +608,62 @@ impl CoreBarsConfigWidget {
             };
             if let Some(ref cb) = *on_change_for_bg_gradient.borrow() {
                 cb();
+            }
+        });
+
+        // Connect foreground gradient copy/paste buttons
+        let fg_gradient_editor_for_copy = fg_gradient_editor.clone();
+        fg_copy_gradient_btn.connect_clicked(move |_| {
+            let gradient = fg_gradient_editor_for_copy.get_gradient();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_gradient_stops(gradient.stops);
+            }
+        });
+
+        let fg_gradient_editor_for_paste = fg_gradient_editor.clone();
+        let config_for_fg_paste = config.clone();
+        let on_change_for_fg_paste = on_change.clone();
+        fg_paste_gradient_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(stops) = clipboard.paste_gradient_stops() {
+                    fg_gradient_editor_for_paste.set_stops(stops.clone());
+                    let gradient = fg_gradient_editor_for_paste.get_gradient();
+                    config_for_fg_paste.borrow_mut().foreground = BarFillType::Gradient {
+                        stops: gradient.stops,
+                        angle: gradient.angle
+                    };
+                    if let Some(ref cb) = *on_change_for_fg_paste.borrow() {
+                        cb();
+                    }
+                }
+            }
+        });
+
+        // Connect background gradient copy/paste buttons
+        let bg_gradient_editor_for_copy = bg_gradient_editor.clone();
+        bg_copy_gradient_btn.connect_clicked(move |_| {
+            let gradient = bg_gradient_editor_for_copy.get_gradient();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_gradient_stops(gradient.stops);
+            }
+        });
+
+        let bg_gradient_editor_for_paste = bg_gradient_editor.clone();
+        let config_for_bg_paste = config.clone();
+        let on_change_for_bg_paste = on_change.clone();
+        bg_paste_gradient_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(stops) = clipboard.paste_gradient_stops() {
+                    bg_gradient_editor_for_paste.set_stops(stops.clone());
+                    let gradient = bg_gradient_editor_for_paste.get_gradient();
+                    config_for_bg_paste.borrow_mut().background = BarBackgroundType::Gradient {
+                        stops: gradient.stops,
+                        angle: gradient.angle
+                    };
+                    if let Some(ref cb) = *on_change_for_bg_paste.borrow() {
+                        cb();
+                    }
+                }
             }
         });
 
