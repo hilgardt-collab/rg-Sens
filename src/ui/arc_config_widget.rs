@@ -588,6 +588,18 @@ impl ArcConfigWidget {
         // Color stops editor using GradientEditor
         page.append(&Label::new(Some("Color Stops:")));
 
+        // Create gradient editor first so we can reference it in paste handler
+        let gradient_editor = GradientEditor::new();
+
+        // Initialize gradient editor with current color stops
+        let initial_gradient = LinearGradientConfig {
+            angle: 0.0, // Angle doesn't matter for arc, we just use the stops
+            stops: config.borrow().color_stops.clone(),
+        };
+        gradient_editor.set_gradient(&initial_gradient);
+
+        let gradient_editor_ref = Rc::new(gradient_editor);
+
         // Copy/Paste gradient buttons
         let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
         let copy_gradient_btn = Button::with_label("Copy Gradient");
@@ -607,12 +619,17 @@ impl ArcConfigWidget {
         let config_for_paste = config.clone();
         let preview_for_paste = preview.clone();
         let on_change_for_paste = on_change.clone();
+        let gradient_editor_for_paste = gradient_editor_ref.clone();
         paste_gradient_btn.connect_clicked(move |_| {
             use crate::ui::CLIPBOARD;
 
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
-                    config_for_paste.borrow_mut().color_stops = stops;
+                    config_for_paste.borrow_mut().color_stops = stops.clone();
+
+                    // Update the gradient editor widget
+                    gradient_editor_for_paste.set_stops(stops);
+
                     preview_for_paste.queue_draw();
 
                     if let Some(callback) = on_change_for_paste.borrow().as_ref() {
@@ -630,20 +647,10 @@ impl ArcConfigWidget {
         copy_paste_box.append(&paste_gradient_btn);
         page.append(&copy_paste_box);
 
-        let gradient_editor = GradientEditor::new();
-
-        // Initialize gradient editor with current color stops
-        let initial_gradient = LinearGradientConfig {
-            angle: 0.0, // Angle doesn't matter for arc, we just use the stops
-            stops: config.borrow().color_stops.clone(),
-        };
-        gradient_editor.set_gradient(&initial_gradient);
-
         // Set up change handler for gradient editor
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let gradient_editor_ref = Rc::new(gradient_editor);
         let gradient_editor_clone = gradient_editor_ref.clone();
 
         gradient_editor_ref.set_on_change(move || {
