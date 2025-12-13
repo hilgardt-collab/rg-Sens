@@ -709,16 +709,21 @@ impl GridLayout {
         {
             let panel_guard = panel.blocking_read();
             let radius = panel_guard.corner_radius;
+            let panel_id = panel_guard.id.clone();
             drop(panel_guard);
 
             if radius > 0.0 {
+                // Use a unique CSS class per panel to avoid global style conflicts
+                let css_class = format!("panel-radius-{}", panel_id.replace('-', "_"));
+                frame.add_css_class(&css_class);
+
                 let css_provider = gtk4::CssProvider::new();
                 let css = format!(
-                    "frame {{ border-radius: {}px; }}",
-                    radius
+                    ".{} {{ border-radius: {}px; }}",
+                    css_class, radius
                 );
                 css_provider.load_from_data(&css);
-                // Use modern GTK4 API - add provider to widget's display
+                // Add provider to display (CSS class ensures it only affects this panel)
                 let display = frame.display();
                 gtk4::style_context_add_provider_for_display(
                     &display,
