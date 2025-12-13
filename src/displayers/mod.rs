@@ -12,6 +12,7 @@ mod graph;
 mod clock_analog;
 mod clock_digital;
 mod lcars_combo;
+mod cpu_cores;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -23,6 +24,7 @@ pub use graph::GraphDisplayer;
 pub use clock_analog::ClockAnalogDisplayer;
 pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
 pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
+pub use cpu_cores::CpuCoresDisplayer;
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -86,6 +88,13 @@ pub fn register_all() {
         "lcars",
         "LCARS",
         || Box::new(LcarsComboDisplayer::new()),
+    );
+
+    // Register CPU Cores displayer
+    global_registry().register_displayer_with_info(
+        "cpu_cores",
+        "CPU Cores",
+        || Box::new(CpuCoresDisplayer::new()),
     );
 
     // TODO: Register more displayers

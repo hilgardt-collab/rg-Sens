@@ -38,6 +38,8 @@ pub mod clock_display;
 pub mod lcars_display;
 mod lcars_config_widget;
 mod color_button_widget;
+pub mod core_bars_display;
+mod core_bars_config_widget;
 
 pub use main_window::MainWindow;
 pub use color_button_widget::ColorButtonWidget;
@@ -76,6 +78,8 @@ pub use lcars_display::{
     HeaderWidthMode, HeaderPosition, DividerCapStyle, SplitOrientation, ContentDisplayType,
     SegmentConfig, HeaderConfig, DividerConfig, ContentItemConfig,
     ContentItemData, render_lcars_frame, render_content_background, render_divider,
-    render_content_bar, render_content_text, get_content_bounds, calculate_item_layouts,
+    render_content_bar, render_content_text, render_content_core_bars, get_content_bounds, calculate_item_layouts,
 };
 pub use lcars_config_widget::LcarsConfigWidget;
+pub use core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
+pub use core_bars_config_widget::CoreBarsConfigWidget;

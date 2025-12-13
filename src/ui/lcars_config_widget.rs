@@ -21,6 +21,7 @@ use crate::ui::lcars_display::{
 use crate::ui::background::Color;
 use crate::ui::graph_config_widget::GraphConfigWidget;
 use crate::ui::bar_config_widget::BarConfigWidget;
+use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
 use crate::displayers::LcarsDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
@@ -1542,7 +1543,7 @@ impl LcarsConfigWidget {
         // Display type dropdown (removed Level Bar - functionality in Bar)
         let type_box = GtkBox::new(Orientation::Horizontal, 6);
         type_box.append(&Label::new(Some("Display As:")));
-        let type_list = StringList::new(&["Bar", "Text", "Graph"]);
+        let type_list = StringList::new(&["Bar", "Text", "Graph", "Core Bars"]);
         let type_dropdown = DropDown::new(Some(type_list), None::<gtk4::Expression>);
         type_dropdown.set_hexpand(true);
 
@@ -1558,6 +1559,7 @@ impl LcarsConfigWidget {
             ContentDisplayType::Bar | ContentDisplayType::LevelBar => 0, // LevelBar falls back to Bar
             ContentDisplayType::Text => 1,
             ContentDisplayType::Graph => 2,
+            ContentDisplayType::CoreBars => 3,
         };
         type_dropdown.set_selected(type_idx);
         type_box.append(&type_dropdown);
@@ -1730,15 +1732,55 @@ impl LcarsConfigWidget {
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
 
+        // === Core Bars Configuration Section ===
+        let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
+        core_bars_config_frame.set_margin_top(12);
+
+        // Create CoreBarsConfigWidget
+        let core_bars_widget = CoreBarsConfigWidget::new();
+
+        // Initialize with current config if exists
+        let current_core_bars_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.core_bars_config.clone())
+                .unwrap_or_default()
+        };
+        core_bars_widget.set_config(current_core_bars_config);
+
+        // Set up change callback to sync config back
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let core_bars_widget_rc = Rc::new(core_bars_widget);
+        let core_bars_widget_for_callback = core_bars_widget_rc.clone();
+        core_bars_widget_rc.set_on_change(move || {
+            let core_bars_config = core_bars_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.core_bars_config = core_bars_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
+        inner_box.append(&core_bars_config_frame);
+
         // Show/hide config sections based on display type
         // Bar config: only for Bar and LevelBar (shows bar style + colors + text overlay)
         // Text config: only for Text (shows only text lines)
         // Graph config: only for Graph
+        // Core Bars config: only for CoreBars
         let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
         let show_text = current_type == ContentDisplayType::Text;
         bar_config_frame.set_visible(show_bar);
         text_config_frame.set_visible(show_text);
         graph_config_frame.set_visible(current_type == ContentDisplayType::Graph);
+        core_bars_config_frame.set_visible(current_type == ContentDisplayType::CoreBars);
 
         scroll.set_child(Some(&inner_box));
         tab.append(&scroll);
@@ -1753,11 +1795,13 @@ impl LcarsConfigWidget {
         let bar_config_frame_clone = bar_config_frame.clone();
         let text_config_frame_clone = text_config_frame.clone();
         let graph_config_frame_clone = graph_config_frame.clone();
+        let core_bars_config_frame_clone = core_bars_config_frame.clone();
         type_dropdown.connect_selected_notify(move |dropdown| {
             let display_type = match dropdown.selected() {
                 0 => ContentDisplayType::Bar,
                 1 => ContentDisplayType::Text,
-                _ => ContentDisplayType::Graph,
+                2 => ContentDisplayType::Graph,
+                _ => ContentDisplayType::CoreBars,
             };
             // Show appropriate config for each display type
             let show_bar = matches!(display_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
@@ -1765,6 +1809,7 @@ impl LcarsConfigWidget {
             bar_config_frame_clone.set_visible(show_bar);
             text_config_frame_clone.set_visible(show_text);
             graph_config_frame_clone.set_visible(display_type == ContentDisplayType::Graph);
+            core_bars_config_frame_clone.set_visible(display_type == ContentDisplayType::CoreBars);
             let mut cfg = config_clone.borrow_mut();
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())

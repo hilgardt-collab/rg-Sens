@@ -20,7 +20,7 @@ use crate::core::{ConfigOption, ConfigSchema, Displayer};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     get_content_bounds, render_content_background, render_content_bar, render_content_text,
-    render_content_graph, render_divider, render_lcars_frame, calculate_item_layouts,
+    render_content_graph, render_content_core_bars, render_divider, render_lcars_frame, calculate_item_layouts,
     ContentDisplayType, ContentItemData, LcarsFrameConfig, SplitOrientation,
 };
 
@@ -310,6 +310,45 @@ impl LcarsComboDisplayer {
                         &item_config.bar_config,
                         &item_data,
                         Some(&slot_values),
+                    )?;
+                }
+                ContentDisplayType::CoreBars => {
+                    // Extract core usage values from the source values
+                    // Values are named like core0_usage, core1_usage, etc. (prefixed with slot name)
+                    let core_bars_config = &item_config.core_bars_config;
+                    let mut core_values: Vec<f64> = Vec::new();
+
+                    // Get core values within the configured range
+                    for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
+                        let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                        let value = values.get(&core_key)
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        // Normalize to 0.0-1.0 (CPU usage is 0-100%)
+                        core_values.push(value / 100.0);
+                    }
+
+                    // If no specific core values found, try to find any core values
+                    if core_values.is_empty() {
+                        for core_idx in 0..128 {
+                            let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                            if let Some(v) = values.get(&core_key).and_then(|v| v.as_f64()) {
+                                core_values.push(v / 100.0);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    // Render core bars
+                    render_content_core_bars(
+                        cr,
+                        item_x,
+                        item_y,
+                        item_w,
+                        item_h,
+                        core_bars_config,
+                        &core_values,
                     )?;
                 }
             }

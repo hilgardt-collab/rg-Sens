@@ -12,6 +12,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::Color;
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
+use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
 
 /// Sidebar position (left or right)
@@ -129,6 +130,8 @@ pub enum ContentDisplayType {
     Graph,
     #[serde(rename = "level_bar")]
     LevelBar,
+    #[serde(rename = "core_bars")]
+    CoreBars,
 }
 
 /// Configuration for a sidebar segment
@@ -308,6 +311,8 @@ pub struct ContentItemConfig {
     pub bar_config: BarDisplayConfig,
     #[serde(default)]
     pub graph_config: GraphDisplayConfig,
+    #[serde(default)]
+    pub core_bars_config: CoreBarsConfig,
 }
 
 fn default_item_height() -> f64 {
@@ -321,6 +326,7 @@ impl Default for ContentItemConfig {
             item_height: default_item_height(),
             bar_config: BarDisplayConfig::default(),
             graph_config: GraphDisplayConfig::default(),
+            core_bars_config: CoreBarsConfig::default(),
         }
     }
 }
@@ -1469,6 +1475,26 @@ pub fn render_content_graph(
 
     // Call the graph_display render function
     render_graph(cr, config, data, source_values, w, h)?;
+
+    cr.restore()?;
+    Ok(())
+}
+
+/// Render core bars content item using the core_bars_display module
+pub fn render_content_core_bars(
+    cr: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    config: &CoreBarsConfig,
+    core_values: &[f64],
+) -> Result<(), cairo::Error> {
+    cr.save()?;
+    cr.translate(x, y);
+
+    // Call the core_bars_display render function
+    render_core_bars(cr, config, core_values, w, h)?;
 
     cr.restore()?;
     Ok(())
