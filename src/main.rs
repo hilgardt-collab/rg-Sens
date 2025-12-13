@@ -506,39 +506,14 @@ fn build_ui(app: &Application) {
 
     scrolled_window.add_controller(double_click_gesture);
 
-    // Setup smooth auto-scroll
-    // Animation state
-    #[derive(Clone)]
-    struct AutoScrollState {
-        direction: u8,           // 0=right, 1=down, 2=left, 3=up
-        is_animating: bool,      // Currently animating?
-        start_pos: f64,          // Start position of current animation
-        target_pos: f64,         // Target position of current animation
-        animation_progress: f64, // 0.0 to 1.0
-        wait_elapsed: u64,       // Time waited since last scroll (ms)
-    }
+    // Setup efficient auto-scroll
+    // Uses timeout_add_local_once for delay, then short animation burst
+    let auto_scroll_active = Rc::new(RefCell::new(false));
 
-    impl Default for AutoScrollState {
-        fn default() -> Self {
-            Self {
-                direction: 0,
-                is_animating: false,
-                start_pos: 0.0,
-                target_pos: 0.0,
-                animation_progress: 0.0,
-                wait_elapsed: 0,
-            }
-        }
-    }
-
-    let auto_scroll_state = Rc::new(RefCell::new(AutoScrollState::default()));
     let scrolled_window_for_auto = scrolled_window.clone();
     let app_config_for_auto = app_config.clone();
     let grid_layout_for_auto = grid_layout.clone();
     let window_background_for_auto = window_background.clone();
-
-    // Timer source ID for cleanup
-    let auto_scroll_source_id: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
 
     // Ease-in-out function for smooth animation
     fn ease_in_out(t: f64) -> f64 {
@@ -549,23 +524,117 @@ fn build_ui(app: &Application) {
         }
     }
 
-    // Function to start/restart the auto-scroll timer
+    // Helper to perform one scroll animation then schedule next
+    // Pattern: scroll right until edge, then move down+left to start of next row, repeat
+    // When at bottom-right, wrap to top-left
+    fn schedule_auto_scroll(
+        scrolled: gtk4::ScrolledWindow,
+        config: Rc<RefCell<AppConfig>>,
+        layout: Rc<RefCell<GridLayout>>,
+        active: Rc<RefCell<bool>>,
+        bg: gtk4::DrawingArea,
+    ) {
+        let cfg = config.borrow();
+        if !cfg.window.auto_scroll_enabled {
+            *active.borrow_mut() = false;
+            return;
+        }
+        let delay_ms = cfg.window.auto_scroll_delay_ms;
+        drop(cfg);
+
+        *active.borrow_mut() = true;
+
+        // Schedule the scroll after delay
+        glib::timeout_add_local_once(std::time::Duration::from_millis(delay_ms), move || {
+            let cfg = config.borrow();
+            if !cfg.window.auto_scroll_enabled {
+                *active.borrow_mut() = false;
+                return;
+            }
+            drop(cfg);
+
+            // Get scroll info
+            let h_adj = scrolled.hadjustment();
+            let v_adj = scrolled.vadjustment();
+            let content_size = layout.borrow().get_content_size();
+            let content_width = content_size.0 as f64;
+            let content_height = content_size.1 as f64;
+            let viewport_width = h_adj.page_size();
+            let viewport_height = v_adj.page_size();
+
+            let needs_h_scroll = content_width > viewport_width + 1.0;
+            let needs_v_scroll = content_height > viewport_height + 1.0;
+
+            if !needs_h_scroll && !needs_v_scroll {
+                // No scrolling needed, reschedule check
+                schedule_auto_scroll(scrolled, config, layout, active, bg);
+                return;
+            }
+
+            // Update background size
+            bg.set_size_request(content_size.0, content_size.1);
+
+            // Check current position
+            let at_h_end = h_adj.value() >= h_adj.upper() - viewport_width - 1.0;
+            let at_v_end = v_adj.value() >= v_adj.upper() - viewport_height - 1.0;
+
+            // Determine scroll action based on position
+            // Pattern: right across row, then down+left to next row, repeat
+            let (h_start, h_target, v_start, v_target) = if !at_h_end && needs_h_scroll {
+                // Scroll right one viewport width
+                let h_start = h_adj.value();
+                let h_target = (h_start + viewport_width).min(h_adj.upper() - viewport_width);
+                (h_start, h_target, v_adj.value(), v_adj.value())
+            } else if at_h_end && !at_v_end && needs_v_scroll {
+                // At right edge, move down one row and back to left
+                let v_start = v_adj.value();
+                let v_target = (v_start + viewport_height).min(v_adj.upper() - viewport_height);
+                (h_adj.value(), 0.0, v_start, v_target)
+            } else {
+                // At bottom-right or only horizontal content, wrap to top-left
+                (h_adj.value(), 0.0, v_adj.value(), 0.0)
+            };
+
+            // Run animation (200ms total, ~12 frames)
+            const ANIMATION_MS: u64 = 200;
+            const FRAME_MS: u64 = 16;
+            let frame_count = Rc::new(RefCell::new(0u32));
+            let total_frames = (ANIMATION_MS / FRAME_MS) as u32;
+
+            glib::timeout_add_local(std::time::Duration::from_millis(FRAME_MS), move || {
+                let mut frame = frame_count.borrow_mut();
+                *frame += 1;
+
+                let progress = (*frame as f64) / (total_frames as f64);
+                let eased = ease_in_out(progress.min(1.0));
+
+                // Animate both h and v positions
+                let h_pos = h_start + (h_target - h_start) * eased;
+                let v_pos = v_start + (v_target - v_start) * eased;
+                h_adj.set_value(h_pos);
+                v_adj.set_value(v_pos);
+
+                if *frame >= total_frames {
+                    // Animation done, schedule next scroll
+                    schedule_auto_scroll(scrolled.clone(), config.clone(), layout.clone(), active.clone(), bg.clone());
+                    return glib::ControlFlow::Break;
+                }
+
+                glib::ControlFlow::Continue
+            });
+        });
+    }
+
+    // Function to start/restart the auto-scroll system
     let start_auto_scroll = {
         let scrolled_window = scrolled_window_for_auto.clone();
         let app_config = app_config_for_auto.clone();
         let grid_layout = grid_layout_for_auto.clone();
-        let scroll_state = auto_scroll_state.clone();
-        let source_id = auto_scroll_source_id.clone();
+        let active = auto_scroll_active.clone();
         let window_background = window_background_for_auto.clone();
 
         move || {
-            // Remove existing timer if any
-            if let Some(id) = source_id.borrow_mut().take() {
-                id.remove();
-            }
-
-            // Reset scroll state
-            *scroll_state.borrow_mut() = AutoScrollState::default();
+            *active.borrow_mut() = false;
 
             let cfg = app_config.borrow();
             if !cfg.window.auto_scroll_enabled {
@@ -573,159 +642,18 @@ fn build_ui(app: &Application) {
             }
             drop(cfg);
 
-            let scrolled = scrolled_window.clone();
-            let config = app_config.clone();
-            let layout = grid_layout.clone();
-            let state = scroll_state.clone();
-            let src_id = source_id.clone();
-            let bg = window_background.clone();
+            // Reset scroll position to top-left when starting
+            scrolled_window.hadjustment().set_value(0.0);
+            scrolled_window.vadjustment().set_value(0.0);
 
-            // Animation duration in ms (how long each scroll takes)
-            const ANIMATION_DURATION_MS: u64 = 1000;
-            // Frame interval for smooth animation (~60fps)
-            const FRAME_INTERVAL_MS: u64 = 16;
-
-            let id = glib::timeout_add_local(std::time::Duration::from_millis(FRAME_INTERVAL_MS), move || {
-                // Check if still enabled
-                let cfg = config.borrow();
-                if !cfg.window.auto_scroll_enabled {
-                    return glib::ControlFlow::Break;
-                }
-                let delay_ms = cfg.window.auto_scroll_delay_ms;
-                drop(cfg);
-
-                // Get scroll adjustments
-                let h_adj = scrolled.hadjustment();
-                let v_adj = scrolled.vadjustment();
-
-                // Get content size
-                let content_size = layout.borrow().get_content_size();
-                let content_width = content_size.0 as f64;
-                let content_height = content_size.1 as f64;
-
-                // Get viewport size
-                let viewport_width = h_adj.page_size();
-                let viewport_height = v_adj.page_size();
-
-                // Check if scrolling is needed
-                let needs_h_scroll = content_width > viewport_width + 1.0;
-                let needs_v_scroll = content_height > viewport_height + 1.0;
-
-                if !needs_h_scroll && !needs_v_scroll {
-                    return glib::ControlFlow::Continue;
-                }
-
-                // Update background size
-                bg.set_size_request(content_size.0, content_size.1);
-
-                let mut s = state.borrow_mut();
-
-                if s.is_animating {
-                    // Continue animation
-                    s.animation_progress += FRAME_INTERVAL_MS as f64 / ANIMATION_DURATION_MS as f64;
-
-                    if s.animation_progress >= 1.0 {
-                        // Animation complete
-                        s.animation_progress = 1.0;
-                        s.is_animating = false;
-                        s.wait_elapsed = 0;
-
-                        // Set final position
-                        let final_pos = s.target_pos;
-                        match s.direction {
-                            0 | 2 => h_adj.set_value(final_pos),
-                            1 | 3 => v_adj.set_value(final_pos),
-                            _ => {}
-                        }
-
-                        // Move to next direction if we've reached the edge
-                        let at_h_end = h_adj.value() >= h_adj.upper() - viewport_width - 1.0;
-                        let at_h_start = h_adj.value() <= 1.0;
-                        let at_v_end = v_adj.value() >= v_adj.upper() - viewport_height - 1.0;
-                        let at_v_start = v_adj.value() <= 1.0;
-
-                        match s.direction {
-                            0 if at_h_end => s.direction = if needs_v_scroll { 1 } else { 2 },
-                            1 if at_v_end => s.direction = if needs_h_scroll { 2 } else { 3 },
-                            2 if at_h_start => s.direction = if needs_v_scroll { 3 } else { 0 },
-                            3 if at_v_start => s.direction = 0,
-                            _ => {}
-                        }
-                    } else {
-                        // Interpolate position with easing
-                        let eased = ease_in_out(s.animation_progress);
-                        let current_pos = s.start_pos + (s.target_pos - s.start_pos) * eased;
-
-                        match s.direction {
-                            0 | 2 => h_adj.set_value(current_pos),
-                            1 | 3 => v_adj.set_value(current_pos),
-                            _ => {}
-                        }
-                    }
-                } else {
-                    // Waiting between scrolls
-                    s.wait_elapsed += FRAME_INTERVAL_MS;
-
-                    if s.wait_elapsed >= delay_ms {
-                        // Start new animation
-                        s.is_animating = true;
-                        s.animation_progress = 0.0;
-
-                        // Calculate target based on direction
-                        match s.direction {
-                            0 => {
-                                // Scroll right
-                                if needs_h_scroll {
-                                    s.start_pos = h_adj.value();
-                                    let new_target = (s.start_pos + viewport_width).min(h_adj.upper() - viewport_width);
-                                    s.target_pos = new_target;
-                                } else {
-                                    s.direction = 1;
-                                    s.is_animating = false;
-                                }
-                            }
-                            1 => {
-                                // Scroll down
-                                if needs_v_scroll {
-                                    s.start_pos = v_adj.value();
-                                    let new_target = (s.start_pos + viewport_height).min(v_adj.upper() - viewport_height);
-                                    s.target_pos = new_target;
-                                } else {
-                                    s.direction = 2;
-                                    s.is_animating = false;
-                                }
-                            }
-                            2 => {
-                                // Scroll left
-                                if needs_h_scroll {
-                                    s.start_pos = h_adj.value();
-                                    let new_target = (s.start_pos - viewport_width).max(0.0);
-                                    s.target_pos = new_target;
-                                } else {
-                                    s.direction = 3;
-                                    s.is_animating = false;
-                                }
-                            }
-                            3 => {
-                                // Scroll up
-                                if needs_v_scroll {
-                                    s.start_pos = v_adj.value();
-                                    let new_target = (s.start_pos - viewport_height).max(0.0);
-                                    s.target_pos = new_target;
-                                } else {
-                                    s.direction = 0;
-                                    s.is_animating = false;
-                                }
-                            }
-                            _ => s.direction = 0,
-                        }
-                    }
-                }
-
-                glib::ControlFlow::Continue
-            });
-
-            *src_id.borrow_mut() = Some(id);
+            // Start the auto-scroll cycle
+            schedule_auto_scroll(
+                scrolled_window.clone(),
+                app_config.clone(),
+                grid_layout.clone(),
+                active.clone(),
+                window_background.clone(),
+            );
         }
     };
 
