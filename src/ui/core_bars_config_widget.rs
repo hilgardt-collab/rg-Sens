@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use crate::ui::background::Color;
 use crate::ui::bar_display::{BarBackgroundType, BarFillType, BarOrientation, BarStyle};
+use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
 use crate::ui::shared_font_dialog::shared_font_dialog;
@@ -448,9 +449,39 @@ impl CoreBarsConfigWidget {
         // Connect foreground signals
         let fg_color_widget_vis = fg_color_widget.widget().clone();
         let fg_gradient_editor_vis = fg_gradient_editor.widget().clone();
+        let config_for_fg_solid = config.clone();
+        let on_change_for_fg_solid = on_change.clone();
+        let fg_color_widget_for_solid = fg_color_widget.clone();
         fg_solid_radio.connect_toggled(move |radio| {
             fg_color_widget_vis.set_visible(radio.is_active());
             fg_gradient_editor_vis.set_visible(!radio.is_active());
+            if radio.is_active() {
+                let color = fg_color_widget_for_solid.color();
+                config_for_fg_solid.borrow_mut().foreground = BarFillType::Solid { color };
+                if let Some(ref cb) = *on_change_for_fg_solid.borrow() {
+                    cb();
+                }
+            }
+        });
+
+        let fg_color_widget_vis2 = fg_color_widget.widget().clone();
+        let fg_gradient_editor_vis2 = fg_gradient_editor.widget().clone();
+        let config_for_fg_gradient = config.clone();
+        let on_change_for_fg_gradient_radio = on_change.clone();
+        let fg_gradient_editor_for_radio = fg_gradient_editor.clone();
+        fg_gradient_radio.connect_toggled(move |radio| {
+            fg_color_widget_vis2.set_visible(!radio.is_active());
+            fg_gradient_editor_vis2.set_visible(radio.is_active());
+            if radio.is_active() {
+                let gradient = fg_gradient_editor_for_radio.get_gradient();
+                config_for_fg_gradient.borrow_mut().foreground = BarFillType::Gradient {
+                    stops: gradient.stops,
+                    angle: gradient.angle
+                };
+                if let Some(ref cb) = *on_change_for_fg_gradient_radio.borrow() {
+                    cb();
+                }
+            }
         });
 
         let config_clone2 = config.clone();
@@ -462,8 +493,15 @@ impl CoreBarsConfigWidget {
             }
         });
 
+        let config_for_fg_gradient = config.clone();
         let on_change_for_fg_gradient = on_change.clone();
+        let fg_gradient_editor_for_change = fg_gradient_editor.clone();
         fg_gradient_editor.set_on_change(move || {
+            let gradient = fg_gradient_editor_for_change.get_gradient();
+            config_for_fg_gradient.borrow_mut().foreground = BarFillType::Gradient {
+                stops: gradient.stops,
+                angle: gradient.angle
+            };
             if let Some(ref cb) = *on_change_for_fg_gradient.borrow() {
                 cb();
             }
@@ -472,16 +510,39 @@ impl CoreBarsConfigWidget {
         // Connect background signals
         let bg_color_widget_vis = bg_color_widget.widget().clone();
         let bg_gradient_editor_vis = bg_gradient_editor.widget().clone();
+        let config_for_bg_solid = config.clone();
+        let on_change_for_bg_solid = on_change.clone();
+        let bg_color_widget_for_solid = bg_color_widget.clone();
         bg_solid_radio.connect_toggled(move |radio| {
             bg_color_widget_vis.set_visible(radio.is_active());
             bg_gradient_editor_vis.set_visible(false);
+            if radio.is_active() {
+                let color = bg_color_widget_for_solid.color();
+                config_for_bg_solid.borrow_mut().background = BarBackgroundType::Solid { color };
+                if let Some(ref cb) = *on_change_for_bg_solid.borrow() {
+                    cb();
+                }
+            }
         });
 
         let bg_color_widget_vis2 = bg_color_widget.widget().clone();
         let bg_gradient_editor_vis2 = bg_gradient_editor.widget().clone();
+        let config_for_bg_gradient = config.clone();
+        let on_change_for_bg_gradient_radio = on_change.clone();
+        let bg_gradient_editor_for_radio = bg_gradient_editor.clone();
         bg_gradient_radio.connect_toggled(move |radio| {
             bg_color_widget_vis2.set_visible(false);
             bg_gradient_editor_vis2.set_visible(radio.is_active());
+            if radio.is_active() {
+                let gradient = bg_gradient_editor_for_radio.get_gradient();
+                config_for_bg_gradient.borrow_mut().background = BarBackgroundType::Gradient {
+                    stops: gradient.stops,
+                    angle: gradient.angle
+                };
+                if let Some(ref cb) = *on_change_for_bg_gradient_radio.borrow() {
+                    cb();
+                }
+            }
         });
 
         let bg_color_widget_vis3 = bg_color_widget.widget().clone();
@@ -504,6 +565,20 @@ impl CoreBarsConfigWidget {
         bg_color_widget.set_on_change(move |color| {
             config_clone6.borrow_mut().background = BarBackgroundType::Solid { color };
             if let Some(ref cb) = *on_change_clone6.borrow() {
+                cb();
+            }
+        });
+
+        let config_for_bg_gradient = config.clone();
+        let on_change_for_bg_gradient = on_change.clone();
+        let bg_gradient_editor_for_change = bg_gradient_editor.clone();
+        bg_gradient_editor.set_on_change(move || {
+            let gradient = bg_gradient_editor_for_change.get_gradient();
+            config_for_bg_gradient.borrow_mut().background = BarBackgroundType::Gradient {
+                stops: gradient.stops,
+                angle: gradient.angle
+            };
+            if let Some(ref cb) = *on_change_for_bg_gradient.borrow() {
                 cb();
             }
         });
@@ -576,7 +651,7 @@ impl CoreBarsConfigWidget {
         pos_row.append(&label_position_dropdown);
         page.append(&pos_row);
 
-        // Font button
+        // Font button with copy/paste
         let font_row = GtkBox::new(Orientation::Horizontal, 8);
         font_row.append(&Label::new(Some("Font:")));
         let cfg = config.borrow();
@@ -584,6 +659,17 @@ impl CoreBarsConfigWidget {
         label_font_button.set_hexpand(true);
         font_row.append(&label_font_button);
         drop(cfg);
+
+        // Copy font button
+        let copy_font_btn = Button::with_label("Copy");
+        copy_font_btn.set_tooltip_text(Some("Copy font settings"));
+        font_row.append(&copy_font_btn);
+
+        // Paste font button
+        let paste_font_btn = Button::with_label("Paste");
+        paste_font_btn.set_tooltip_text(Some("Paste font settings"));
+        font_row.append(&paste_font_btn);
+
         page.append(&font_row);
 
         // Font size
@@ -701,6 +787,37 @@ impl CoreBarsConfigWidget {
             config_clone.borrow_mut().label_bold = check.is_active();
             if let Some(ref cb) = *on_change_clone.borrow() {
                 cb();
+            }
+        });
+
+        // Copy font handler
+        let config_for_copy = config.clone();
+        copy_font_btn.connect_clicked(move |_| {
+            let cfg = config_for_copy.borrow();
+            let mut clipboard = CLIPBOARD.lock().unwrap();
+            clipboard.copy_font(cfg.label_font.clone(), cfg.label_size, cfg.label_bold, false);
+        });
+
+        // Paste font handler
+        let config_for_paste = config.clone();
+        let on_change_for_paste = on_change.clone();
+        let font_btn_for_paste = label_font_button.clone();
+        let size_spin_for_paste = label_size_spin.clone();
+        let bold_check_for_paste = label_bold_check.clone();
+        paste_font_btn.connect_clicked(move |_| {
+            let clipboard = CLIPBOARD.lock().unwrap();
+            if let Some((family, size, bold, _italic)) = clipboard.paste_font() {
+                let mut cfg = config_for_paste.borrow_mut();
+                cfg.label_font = family.clone();
+                cfg.label_size = size;
+                cfg.label_bold = bold;
+                drop(cfg);
+                font_btn_for_paste.set_label(&format!("{} {:.0}", family, size));
+                size_spin_for_paste.set_value(size);
+                bold_check_for_paste.set_active(bold);
+                if let Some(ref cb) = *on_change_for_paste.borrow() {
+                    cb();
+                }
             }
         });
 
@@ -860,7 +977,19 @@ impl CoreBarsConfigWidget {
 
     /// Set callback for config changes
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
+        let preview = self.preview.clone();
+        *self.on_change.borrow_mut() = Some(Box::new(move || {
+            preview.queue_draw();
+            callback();
+        }));
+    }
+
+    /// Set the maximum core count (call this when CPU source is available)
+    pub fn set_max_cores(&self, max_cores: usize) {
+        if max_cores > 0 {
+            self.end_core_spin.adjustment().set_upper((max_cores - 1) as f64);
+            self.start_core_spin.adjustment().set_upper((max_cores - 1) as f64);
+        }
     }
 }
 
