@@ -476,12 +476,10 @@ impl GridLayout {
                                     let intersects = !(rect_x2 < panel_x || rect_x1 > panel_x2
                                         || rect_y2 < panel_y || rect_y1 > panel_y2);
 
-                                    if intersects {
-                                        if !selected.contains(id) {
-                                            selected.insert(id.clone());
-                                            state.selected = true;
-                                            state.frame.add_css_class("selected");
-                                        }
+                                    if intersects && !selected.contains(id) {
+                                        selected.insert(id.clone());
+                                        state.selected = true;
+                                        state.frame.add_css_class("selected");
                                     }
                                 }
                             }
@@ -541,7 +539,7 @@ impl GridLayout {
 
                     // Calculate icon position (same as in displayer draw code)
                     let icon_size = if width.min(height) > 100.0 {
-                        (width.min(height) * 0.15).max(16.0).min(32.0)
+                        (width.min(height) * 0.15).clamp(16.0, 32.0)
                     } else {
                         20.0_f64.min(height * 0.25)
                     };
@@ -720,7 +718,10 @@ impl GridLayout {
                     radius
                 );
                 css_provider.load_from_data(&css);
-                frame.style_context().add_provider(
+                // Use modern GTK4 API - add provider to widget's display
+                let display = frame.display();
+                gtk4::style_context_add_provider_for_display(
+                    &display,
                     &css_provider,
                     gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
                 );
@@ -2782,10 +2783,7 @@ fn show_panel_properties_dialog(
     gpu_config_widget.widget().set_visible(old_source_id == "gpu");
 
     // Populate GPU information from cached GPU hardware info
-    let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names()
-        .iter()
-        .map(|s| s.clone())
-        .collect();
+    let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
     gpu_config_widget.set_available_gpus(&gpu_names);
 
     // Load existing GPU config if source is GPU
