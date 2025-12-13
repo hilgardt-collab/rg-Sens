@@ -231,6 +231,16 @@ pub struct WindowConfig {
     /// Borderless window mode (no title bar or window decorations)
     #[serde(default)]
     pub borderless: bool,
+    /// Enable auto-scroll when content extends beyond visible area
+    #[serde(default)]
+    pub auto_scroll_enabled: bool,
+    /// Delay between auto-scroll steps in milliseconds
+    #[serde(default = "default_auto_scroll_delay")]
+    pub auto_scroll_delay_ms: u64,
+}
+
+fn default_auto_scroll_delay() -> u64 {
+    5000 // 5 seconds default
 }
 
 fn default_panel_corner_radius() -> f64 {
@@ -250,6 +260,8 @@ impl Default for WindowConfig {
             fullscreen_enabled: false,
             fullscreen_monitor: None,
             borderless: false,
+            auto_scroll_enabled: false,
+            auto_scroll_delay_ms: 5000,
         }
     }
 }

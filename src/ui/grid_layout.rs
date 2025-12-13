@@ -830,6 +830,9 @@ impl GridLayout {
         );
 
         self.panels.borrow_mut().push(panel);
+
+        // Update container size to fit all content (enables scrolling for off-screen panels)
+        self.update_content_bounds();
     }
 
     /// Setup panel interaction (selection and drag)
@@ -2566,6 +2569,30 @@ impl GridLayout {
                 }
             }
 
+            // Update container size to fit all content (for scrolling)
+            {
+                let config = config_for_end.borrow();
+                let states = panel_states_end.borrow();
+                let cell_width = config.cell_width;
+                let cell_height = config.cell_height;
+                let spacing = config.spacing;
+
+                let mut max_width = config.columns as i32 * (cell_width + spacing) - spacing;
+                let mut max_height = config.rows as i32 * (cell_height + spacing) - spacing;
+
+                for (_panel_id, state) in states.iter() {
+                    let panel_guard = state.panel.blocking_read();
+                    let geom = &panel_guard.geometry;
+                    let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
+                    let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
+                    max_width = max_width.max(panel_right);
+                    max_height = max_height.max(panel_bottom);
+                }
+
+                container_for_copy.set_size_request(max_width, max_height);
+                drop_zone_layer_end.set_size_request(max_width, max_height);
+            }
+
             // Notify that panel positions have changed
             if let Some(callback) = on_change_end.borrow().as_ref() {
                 callback();
@@ -2640,6 +2667,42 @@ impl GridLayout {
 
     pub fn widget(&self) -> Widget {
         self.overlay.clone().upcast()
+    }
+
+    /// Get the current content size (width, height) in pixels
+    /// This accounts for panels that may extend beyond the default grid bounds
+    pub fn get_content_size(&self) -> (i32, i32) {
+        let config = self.config.borrow();
+        let cell_width = config.cell_width;
+        let cell_height = config.cell_height;
+        let spacing = config.spacing;
+
+        // Start with config-based size
+        let mut max_width = config.columns as i32 * (cell_width + spacing) - spacing;
+        let mut max_height = config.rows as i32 * (cell_height + spacing) - spacing;
+
+        // Check if any panels extend beyond the default grid bounds
+        for (_panel_id, state) in self.panel_states.borrow().iter() {
+            let panel_guard = state.panel.blocking_read();
+            let geom = &panel_guard.geometry;
+
+            // Calculate pixel position + size for this panel
+            let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
+            let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
+
+            max_width = max_width.max(panel_right);
+            max_height = max_height.max(panel_bottom);
+        }
+
+        (max_width, max_height)
+    }
+
+    /// Update the container size to fit all content
+    /// Call this after adding/moving panels to ensure scrolling works correctly
+    pub fn update_content_bounds(&self) {
+        let (width, height) = self.get_content_size();
+        self.container.set_size_request(width, height);
+        self.drop_zone_layer.set_size_request(width, height);
     }
 
     /// Update grid cell size and spacing

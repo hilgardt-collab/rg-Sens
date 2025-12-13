@@ -276,7 +276,7 @@ fn build_ui(app: &Application) {
         }
     }
 
-    // Create window background
+    // Create window background - sized to match grid content
     let window_background = gtk4::DrawingArea::new();
     let window_bg_config = app_config.borrow().window.background.clone();
     window_background.set_draw_func(move |_, cr, width, height| {
@@ -284,13 +284,25 @@ fn build_ui(app: &Application) {
         let _ = render_background(cr, &window_bg_config, width as f64, height as f64);
     });
 
+    // Set initial background size to match grid content size
+    let grid_content_size = grid_layout.get_content_size();
+    window_background.set_size_request(grid_content_size.0, grid_content_size.1);
+
     // Create overlay to show background behind grid
     let window_overlay = gtk4::Overlay::new();
     window_overlay.set_child(Some(&window_background));
     window_overlay.add_overlay(&grid_layout.widget());
 
-    // Set overlay as window content
-    window.set_child(Some(&window_overlay));
+    // Wrap in ScrolledWindow to allow scrolling when panels extend beyond visible area
+    let scrolled_window = gtk4::ScrolledWindow::new();
+    scrolled_window.set_policy(gtk4::PolicyType::Automatic, gtk4::PolicyType::Automatic);
+    scrolled_window.set_child(Some(&window_overlay));
+    // Allow the scrolled area to expand
+    scrolled_window.set_hexpand(true);
+    scrolled_window.set_vexpand(true);
+
+    // Set scrolled window as window content
+    window.set_child(Some(&scrolled_window));
 
     // Set initial fullscreen state - CLI overrides config
     let should_fullscreen = cli.fullscreen.is_some() || app_config.borrow().window.fullscreen_enabled;
@@ -492,7 +504,236 @@ fn build_ui(app: &Application) {
         }
     });
 
-    window_overlay.add_controller(double_click_gesture);
+    scrolled_window.add_controller(double_click_gesture);
+
+    // Setup smooth auto-scroll
+    // Animation state
+    #[derive(Clone)]
+    struct AutoScrollState {
+        direction: u8,           // 0=right, 1=down, 2=left, 3=up
+        is_animating: bool,      // Currently animating?
+        start_pos: f64,          // Start position of current animation
+        target_pos: f64,         // Target position of current animation
+        animation_progress: f64, // 0.0 to 1.0
+        wait_elapsed: u64,       // Time waited since last scroll (ms)
+    }
+
+    impl Default for AutoScrollState {
+        fn default() -> Self {
+            Self {
+                direction: 0,
+                is_animating: false,
+                start_pos: 0.0,
+                target_pos: 0.0,
+                animation_progress: 0.0,
+                wait_elapsed: 0,
+            }
+        }
+    }
+
+    let auto_scroll_state = Rc::new(RefCell::new(AutoScrollState::default()));
+    let scrolled_window_for_auto = scrolled_window.clone();
+    let app_config_for_auto = app_config.clone();
+    let grid_layout_for_auto = grid_layout.clone();
+    let window_background_for_auto = window_background.clone();
+
+    // Timer source ID for cleanup
+    let auto_scroll_source_id: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+
+    // Ease-in-out function for smooth animation
+    fn ease_in_out(t: f64) -> f64 {
+        if t < 0.5 {
+            2.0 * t * t
+        } else {
+            1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+        }
+    }
+
+    // Function to start/restart the auto-scroll timer
+    let start_auto_scroll = {
+        let scrolled_window = scrolled_window_for_auto.clone();
+        let app_config = app_config_for_auto.clone();
+        let grid_layout = grid_layout_for_auto.clone();
+        let scroll_state = auto_scroll_state.clone();
+        let source_id = auto_scroll_source_id.clone();
+        let window_background = window_background_for_auto.clone();
+
+        move || {
+            // Remove existing timer if any
+            if let Some(id) = source_id.borrow_mut().take() {
+                id.remove();
+            }
+
+            // Reset scroll state
+            *scroll_state.borrow_mut() = AutoScrollState::default();
+
+            let cfg = app_config.borrow();
+            if !cfg.window.auto_scroll_enabled {
+                return;
+            }
+            drop(cfg);
+
+            let scrolled = scrolled_window.clone();
+            let config = app_config.clone();
+            let layout = grid_layout.clone();
+            let state = scroll_state.clone();
+            let src_id = source_id.clone();
+            let bg = window_background.clone();
+
+            // Animation duration in ms (how long each scroll takes)
+            const ANIMATION_DURATION_MS: u64 = 1000;
+            // Frame interval for smooth animation (~60fps)
+            const FRAME_INTERVAL_MS: u64 = 16;
+
+            let id = glib::timeout_add_local(std::time::Duration::from_millis(FRAME_INTERVAL_MS), move || {
+                // Check if still enabled
+                let cfg = config.borrow();
+                if !cfg.window.auto_scroll_enabled {
+                    return glib::ControlFlow::Break;
+                }
+                let delay_ms = cfg.window.auto_scroll_delay_ms;
+                drop(cfg);
+
+                // Get scroll adjustments
+                let h_adj = scrolled.hadjustment();
+                let v_adj = scrolled.vadjustment();
+
+                // Get content size
+                let content_size = layout.borrow().get_content_size();
+                let content_width = content_size.0 as f64;
+                let content_height = content_size.1 as f64;
+
+                // Get viewport size
+                let viewport_width = h_adj.page_size();
+                let viewport_height = v_adj.page_size();
+
+                // Check if scrolling is needed
+                let needs_h_scroll = content_width > viewport_width + 1.0;
+                let needs_v_scroll = content_height > viewport_height + 1.0;
+
+                if !needs_h_scroll && !needs_v_scroll {
+                    return glib::ControlFlow::Continue;
+                }
+
+                // Update background size
+                bg.set_size_request(content_size.0, content_size.1);
+
+                let mut s = state.borrow_mut();
+
+                if s.is_animating {
+                    // Continue animation
+                    s.animation_progress += FRAME_INTERVAL_MS as f64 / ANIMATION_DURATION_MS as f64;
+
+                    if s.animation_progress >= 1.0 {
+                        // Animation complete
+                        s.animation_progress = 1.0;
+                        s.is_animating = false;
+                        s.wait_elapsed = 0;
+
+                        // Set final position
+                        let final_pos = s.target_pos;
+                        match s.direction {
+                            0 | 2 => h_adj.set_value(final_pos),
+                            1 | 3 => v_adj.set_value(final_pos),
+                            _ => {}
+                        }
+
+                        // Move to next direction if we've reached the edge
+                        let at_h_end = h_adj.value() >= h_adj.upper() - viewport_width - 1.0;
+                        let at_h_start = h_adj.value() <= 1.0;
+                        let at_v_end = v_adj.value() >= v_adj.upper() - viewport_height - 1.0;
+                        let at_v_start = v_adj.value() <= 1.0;
+
+                        match s.direction {
+                            0 if at_h_end => s.direction = if needs_v_scroll { 1 } else { 2 },
+                            1 if at_v_end => s.direction = if needs_h_scroll { 2 } else { 3 },
+                            2 if at_h_start => s.direction = if needs_v_scroll { 3 } else { 0 },
+                            3 if at_v_start => s.direction = 0,
+                            _ => {}
+                        }
+                    } else {
+                        // Interpolate position with easing
+                        let eased = ease_in_out(s.animation_progress);
+                        let current_pos = s.start_pos + (s.target_pos - s.start_pos) * eased;
+
+                        match s.direction {
+                            0 | 2 => h_adj.set_value(current_pos),
+                            1 | 3 => v_adj.set_value(current_pos),
+                            _ => {}
+                        }
+                    }
+                } else {
+                    // Waiting between scrolls
+                    s.wait_elapsed += FRAME_INTERVAL_MS;
+
+                    if s.wait_elapsed >= delay_ms {
+                        // Start new animation
+                        s.is_animating = true;
+                        s.animation_progress = 0.0;
+
+                        // Calculate target based on direction
+                        match s.direction {
+                            0 => {
+                                // Scroll right
+                                if needs_h_scroll {
+                                    s.start_pos = h_adj.value();
+                                    let new_target = (s.start_pos + viewport_width).min(h_adj.upper() - viewport_width);
+                                    s.target_pos = new_target;
+                                } else {
+                                    s.direction = 1;
+                                    s.is_animating = false;
+                                }
+                            }
+                            1 => {
+                                // Scroll down
+                                if needs_v_scroll {
+                                    s.start_pos = v_adj.value();
+                                    let new_target = (s.start_pos + viewport_height).min(v_adj.upper() - viewport_height);
+                                    s.target_pos = new_target;
+                                } else {
+                                    s.direction = 2;
+                                    s.is_animating = false;
+                                }
+                            }
+                            2 => {
+                                // Scroll left
+                                if needs_h_scroll {
+                                    s.start_pos = h_adj.value();
+                                    let new_target = (s.start_pos - viewport_width).max(0.0);
+                                    s.target_pos = new_target;
+                                } else {
+                                    s.direction = 3;
+                                    s.is_animating = false;
+                                }
+                            }
+                            3 => {
+                                // Scroll up
+                                if needs_v_scroll {
+                                    s.start_pos = v_adj.value();
+                                    let new_target = (s.start_pos - viewport_height).max(0.0);
+                                    s.target_pos = new_target;
+                                } else {
+                                    s.direction = 0;
+                                    s.is_animating = false;
+                                }
+                            }
+                            _ => s.direction = 0,
+                        }
+                    }
+                }
+
+                glib::ControlFlow::Continue
+            });
+
+            *src_id.borrow_mut() = Some(id);
+        }
+    };
+
+    // Start auto-scroll if enabled in config
+    start_auto_scroll();
+
+    // Store the start function for use in settings dialog
+    let start_auto_scroll = Rc::new(start_auto_scroll);
 
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
@@ -540,6 +781,7 @@ fn build_ui(app: &Application) {
     let window_bg_for_settings = window_background.clone();
     let grid_layout_for_settings = grid_layout.clone();
     let config_dirty_for_settings = config_dirty.clone();
+    let start_auto_scroll_for_settings = start_auto_scroll.clone();
 
     // Add right-click gesture for context menu
     let gesture_click = gtk4::GestureClick::new();
@@ -551,6 +793,7 @@ fn build_ui(app: &Application) {
     let window_bg_for_menu = window_background.clone();
     let grid_layout_for_menu = grid_layout_for_settings.clone();
     let config_dirty_for_menu = config_dirty.clone();
+    let start_auto_scroll_for_menu = start_auto_scroll.clone();
 
     gesture_click.connect_pressed(move |gesture, _, x, y| {
         use gtk4::{Popover, Box as GtkBox, Button, Separator, Orientation};
@@ -986,6 +1229,7 @@ fn build_ui(app: &Application) {
         let window_bg_for_options = window_bg_for_menu.clone();
         let grid_layout_for_options = grid_layout_for_menu.clone();
         let config_dirty_for_options = config_dirty_for_menu.clone();
+        let start_auto_scroll_for_options = start_auto_scroll_for_menu.clone();
         let popover_for_options = popover_ref.clone();
         options_btn.connect_clicked(move |_| {
             popover_for_options.popdown();
@@ -995,6 +1239,7 @@ fn build_ui(app: &Application) {
                 &window_bg_for_options,
                 &grid_layout_for_options,
                 &config_dirty_for_options,
+                &start_auto_scroll_for_options,
             );
         });
 
@@ -1024,6 +1269,7 @@ fn build_ui(app: &Application) {
                 &window_bg_for_settings,
                 &grid_layout_for_key,
                 &config_dirty_for_settings,
+                &start_auto_scroll_for_settings,
             );
             glib::Propagation::Stop
         } else {
@@ -1112,13 +1358,16 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
 }
 
 /// Show window settings dialog
-fn show_window_settings_dialog(
+fn show_window_settings_dialog<F>(
     parent_window: &ApplicationWindow,
     app_config: &Rc<RefCell<AppConfig>>,
     window_background: &gtk4::DrawingArea,
     grid_layout: &Rc<RefCell<GridLayout>>,
     config_dirty: &Rc<RefCell<bool>>,
-) {
+    on_auto_scroll_change: &Rc<F>,
+) where
+    F: Fn() + 'static,
+{
     use gtk4::{Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
     use rg_sens::ui::BackgroundConfigWidget;
 
@@ -1385,6 +1634,47 @@ fn show_window_settings_dialog(
 
     window_mode_tab_box.append(&borderless_info_frame);
 
+    // Auto-scroll section
+    let auto_scroll_label = Label::new(Some("Auto-Scroll"));
+    auto_scroll_label.add_css_class("heading");
+    auto_scroll_label.set_halign(gtk4::Align::Start);
+    auto_scroll_label.set_margin_top(18);
+    window_mode_tab_box.append(&auto_scroll_label);
+
+    // Auto-scroll enabled
+    let auto_scroll_check = CheckButton::with_label("Auto-scroll when content extends beyond window");
+    auto_scroll_check.set_active(app_config.borrow().window.auto_scroll_enabled);
+    auto_scroll_check.set_margin_start(12);
+    window_mode_tab_box.append(&auto_scroll_check);
+
+    // Auto-scroll delay
+    let delay_box = GtkBox::new(Orientation::Horizontal, 6);
+    delay_box.set_margin_start(12);
+    delay_box.append(&Label::new(Some("Scroll delay:")));
+
+    let delay_spin = SpinButton::with_range(500.0, 60000.0, 500.0);
+    delay_spin.set_value(app_config.borrow().window.auto_scroll_delay_ms as f64);
+    delay_spin.set_hexpand(true);
+    delay_spin.set_sensitive(auto_scroll_check.is_active());
+    delay_box.append(&delay_spin);
+    delay_box.append(&Label::new(Some("ms")));
+    window_mode_tab_box.append(&delay_box);
+
+    // Enable/disable delay spin based on checkbox
+    let delay_spin_clone = delay_spin.clone();
+    auto_scroll_check.connect_toggled(move |check| {
+        delay_spin_clone.set_sensitive(check.is_active());
+    });
+
+    // Auto-scroll help text
+    let auto_scroll_help = Label::new(Some("Scrolls one window width/height at a time when content is larger than the window"));
+    auto_scroll_help.set_halign(gtk4::Align::Start);
+    auto_scroll_help.set_margin_start(12);
+    auto_scroll_help.set_margin_top(6);
+    auto_scroll_help.add_css_class("dim-label");
+    auto_scroll_help.set_wrap(true);
+    window_mode_tab_box.append(&auto_scroll_help);
+
     notebook.append_page(&window_mode_tab_box, Some(&Label::new(Some("Window Mode"))));
 
     vbox.append(&notebook);
@@ -1417,7 +1707,10 @@ fn show_window_settings_dialog(
     let fullscreen_enabled_check_clone = fullscreen_enabled_check.clone();
     let monitor_dropdown_clone = monitor_dropdown.clone();
     let borderless_check_clone = borderless_check.clone();
+    let auto_scroll_check_clone = auto_scroll_check.clone();
+    let delay_spin_clone = delay_spin.clone();
     let parent_window_clone = parent_window.clone();
+    let on_auto_scroll_change_clone = on_auto_scroll_change.clone();
 
     let apply_changes = Rc::new(move || {
         let new_background = background_widget_clone.get_config();
@@ -1452,6 +1745,8 @@ fn show_window_settings_dialog(
         cfg.window.fullscreen_enabled = fullscreen_enabled;
         cfg.window.fullscreen_monitor = fullscreen_monitor;
         cfg.window.borderless = borderless;
+        cfg.window.auto_scroll_enabled = auto_scroll_check_clone.is_active();
+        cfg.window.auto_scroll_delay_ms = delay_spin_clone.value() as u64;
         drop(cfg);
 
         // Apply borderless state to parent window
@@ -1492,6 +1787,9 @@ fn show_window_settings_dialog(
 
         // Mark config as dirty
         *config_dirty_clone.borrow_mut() = true;
+
+        // Restart auto-scroll timer with new settings
+        on_auto_scroll_change_clone();
 
         info!("Window settings applied");
     });
