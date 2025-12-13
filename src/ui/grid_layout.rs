@@ -1862,6 +1862,85 @@ impl GridLayout {
                                 });
                                 action_group.add_action(&paste_style_action);
 
+                                // Add Save to File action
+                                let save_to_file_action = gio::SimpleAction::new("save_to_file", None);
+                                let panel_save_file = new_panel.clone();
+                                let container_for_save = container_for_copy.clone();
+                                save_to_file_action.connect_activate(move |_, _| {
+                                    log::info!("Saving panel to file");
+
+                                    let panel_data = {
+                                        let panel_guard = panel_save_file.blocking_read();
+                                        panel_guard.to_data()
+                                    };
+
+                                    let data = panel_data;
+                                    if let Some(root) = container_for_save.root() {
+                                        if let Some(window) = root.downcast_ref::<gtk4::Window>() {
+                                            let window_clone = window.clone();
+
+                                            gtk4::glib::MainContext::default().spawn_local(async move {
+                                                use gtk4::FileDialog;
+
+                                                let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                                                    .map(|d| d.config_dir().to_path_buf())
+                                                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+                                                let json_filter = gtk4::FileFilter::new();
+                                                json_filter.set_name(Some("JSON files"));
+                                                json_filter.add_pattern("*.json");
+
+                                                let all_filter = gtk4::FileFilter::new();
+                                                all_filter.set_name(Some("All files"));
+                                                all_filter.add_pattern("*");
+
+                                                let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                                                filters.append(&json_filter);
+                                                filters.append(&all_filter);
+
+                                                let suggested_name = format!("panel_{}.json", data.id.replace("-", "_"));
+
+                                                let file_dialog = FileDialog::builder()
+                                                    .title("Save Panel to File")
+                                                    .modal(true)
+                                                    .initial_folder(&gio::File::for_path(&initial_dir))
+                                                    .initial_name(&suggested_name)
+                                                    .filters(&filters)
+                                                    .default_filter(&json_filter)
+                                                    .build();
+
+                                                match file_dialog.save_future(Some(&window_clone)).await {
+                                                    Ok(file) => {
+                                                        if let Some(path) = file.path() {
+                                                            log::info!("Saving panel to {:?}", path);
+
+                                                            match serde_json::to_string_pretty(&data) {
+                                                                Ok(json) => {
+                                                                    match std::fs::write(&path, json) {
+                                                                        Ok(()) => {
+                                                                            log::info!("Panel saved successfully to {:?}", path);
+                                                                        }
+                                                                        Err(e) => {
+                                                                            log::warn!("Failed to write panel file: {}", e);
+                                                                        }
+                                                                    }
+                                                                }
+                                                                Err(e) => {
+                                                                    log::warn!("Failed to serialize panel data: {}", e);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        log::info!("Save panel dialog cancelled or failed: {}", e);
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                });
+                                action_group.add_action(&save_to_file_action);
+
                                 // Setup right-click context menu
                                 let gesture_secondary = GestureClick::new();
                                 gesture_secondary.set_button(3);
@@ -1880,10 +1959,15 @@ impl GridLayout {
                                 section2.append(Some("Paste Style"), Some("panel.paste_style"));
                                 menu.append_section(None, &section2);
 
-                                // Section 3: Delete
+                                // Section 3: Save to File
                                 let section3 = gio::Menu::new();
-                                section3.append(Some("Delete"), Some("panel.delete"));
+                                section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
                                 menu.append_section(None, &section3);
+
+                                // Section 4: Delete
+                                let section4 = gio::Menu::new();
+                                section4.append(Some("Delete"), Some("panel.delete"));
+                                menu.append_section(None, &section4);
 
                                 let popover = PopoverMenu::from_model(Some(&menu));
                                 popover.set_parent(&widget_for_menu);
@@ -3177,6 +3261,9 @@ fn show_panel_properties_dialog(
     displayer_tab_box.append(&cpu_cores_config_label);
     displayer_tab_box.append(cpu_cores_config_widget.widget());
 
+    // Set up change callback so the internal preview updates
+    cpu_cores_config_widget.set_on_change(|| {});
+
     // Wrap cpu_cores_config_widget in Rc for sharing
     let cpu_cores_config_widget = Rc::new(cpu_cores_config_widget);
 
@@ -3728,10 +3815,21 @@ fn show_panel_properties_dialog(
                         section1.append(Some("Properties..."), Some("panel.properties"));
                         menu.append_section(None, &section1);
 
-                        // Section 2: Delete
+                        // Section 2: Copy/Paste Style
                         let section2 = gio::Menu::new();
-                        section2.append(Some("Delete"), Some("panel.delete"));
+                        section2.append(Some("Copy Style"), Some("panel.copy_style"));
+                        section2.append(Some("Paste Style"), Some("panel.paste_style"));
                         menu.append_section(None, &section2);
+
+                        // Section 3: Save to File
+                        let section3 = gio::Menu::new();
+                        section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
+                        menu.append_section(None, &section3);
+
+                        // Section 4: Delete
+                        let section4 = gio::Menu::new();
+                        section4.append(Some("Delete"), Some("panel.delete"));
+                        menu.append_section(None, &section4);
 
                         let popover_menu = gtk4::PopoverMenu::from_model(Some(&menu));
                         popover_menu.set_parent(&new_widget);
@@ -3770,6 +3868,155 @@ fn show_panel_properties_dialog(
                             );
                         });
                         action_group.add_action(&properties_action);
+
+                        // Copy Style action
+                        let copy_style_action = gio::SimpleAction::new("copy_style", None);
+                        let panel_copy_style = panel_clone.clone();
+                        copy_style_action.connect_activate(move |_, _| {
+                            log::info!("Copying panel style");
+                            let panel_guard = panel_copy_style.blocking_read();
+                            use crate::ui::{PanelStyle, CLIPBOARD};
+
+                            let mut displayer_config = panel_guard.config.clone();
+                            displayer_config.remove("cpu_config");
+                            displayer_config.remove("gpu_config");
+                            displayer_config.remove("memory_config");
+
+                            let style = PanelStyle {
+                                background: panel_guard.background.clone(),
+                                corner_radius: panel_guard.corner_radius,
+                                border: panel_guard.border.clone(),
+                                displayer_config,
+                            };
+
+                            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                                clipboard.copy_panel_style(style);
+                                log::info!("Panel style copied to clipboard");
+                            }
+                        });
+                        action_group.add_action(&copy_style_action);
+
+                        // Paste Style action
+                        let paste_style_action = gio::SimpleAction::new("paste_style", None);
+                        let panel_paste_style = panel_clone.clone();
+                        let panel_states_paste = panel_states_for_apply.clone();
+                        let on_change_paste = on_change.clone();
+                        let drop_zone_paste = drop_zone.clone();
+                        paste_style_action.connect_activate(move |_, _| {
+                            use crate::ui::CLIPBOARD;
+
+                            if let Ok(clipboard) = CLIPBOARD.lock() {
+                                if let Some(style) = clipboard.paste_panel_style() {
+                                    log::info!("Pasting panel style");
+
+                                    let mut panel_guard = panel_paste_style.blocking_write();
+                                    panel_guard.background = style.background;
+                                    panel_guard.corner_radius = style.corner_radius;
+                                    panel_guard.border = style.border;
+
+                                    for (key, value) in style.displayer_config {
+                                        panel_guard.config.insert(key, value);
+                                    }
+
+                                    let config_clone = panel_guard.config.clone();
+                                    let _ = panel_guard.displayer.apply_config(&config_clone);
+
+                                    if let Some(state) = panel_states_paste.borrow().get(&panel_guard.id) {
+                                        state.background_area.queue_draw();
+                                        state.widget.queue_draw();
+                                    }
+
+                                    if let Some(ref callback) = *on_change_paste.borrow() {
+                                        callback();
+                                    }
+
+                                    drop_zone_paste.queue_draw();
+                                    log::info!("Panel style pasted successfully");
+                                } else {
+                                    log::info!("No panel style in clipboard");
+                                }
+                            }
+                        });
+                        action_group.add_action(&paste_style_action);
+
+                        // Save to File action
+                        let save_to_file_action = gio::SimpleAction::new("save_to_file", None);
+                        let panel_save_file = panel_clone.clone();
+                        let container_for_save = container_for_apply.clone();
+                        save_to_file_action.connect_activate(move |_, _| {
+                            log::info!("Saving panel to file");
+
+                            let panel_data = {
+                                let panel_guard = panel_save_file.blocking_read();
+                                panel_guard.to_data()
+                            };
+
+                            let data = panel_data;
+                            if let Some(root) = container_for_save.root() {
+                                if let Some(window) = root.downcast_ref::<gtk4::Window>() {
+                                    let window_clone = window.clone();
+
+                                    gtk4::glib::MainContext::default().spawn_local(async move {
+                                        use gtk4::FileDialog;
+
+                                        let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                                            .map(|d| d.config_dir().to_path_buf())
+                                            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+                                        let json_filter = gtk4::FileFilter::new();
+                                        json_filter.set_name(Some("JSON files"));
+                                        json_filter.add_pattern("*.json");
+
+                                        let all_filter = gtk4::FileFilter::new();
+                                        all_filter.set_name(Some("All files"));
+                                        all_filter.add_pattern("*");
+
+                                        let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                                        filters.append(&json_filter);
+                                        filters.append(&all_filter);
+
+                                        let suggested_name = format!("panel_{}.json", data.id.replace("-", "_"));
+
+                                        let file_dialog = FileDialog::builder()
+                                            .title("Save Panel to File")
+                                            .modal(true)
+                                            .initial_folder(&gio::File::for_path(&initial_dir))
+                                            .initial_name(&suggested_name)
+                                            .filters(&filters)
+                                            .default_filter(&json_filter)
+                                            .build();
+
+                                        match file_dialog.save_future(Some(&window_clone)).await {
+                                            Ok(file) => {
+                                                if let Some(path) = file.path() {
+                                                    log::info!("Saving panel to {:?}", path);
+
+                                                    match serde_json::to_string_pretty(&data) {
+                                                        Ok(json) => {
+                                                            match std::fs::write(&path, json) {
+                                                                Ok(()) => {
+                                                                    log::info!("Panel saved successfully to {:?}", path);
+                                                                }
+                                                                Err(e) => {
+                                                                    log::warn!("Failed to write panel file: {}", e);
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            log::warn!("Failed to serialize panel data: {}", e);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::info!("Save panel dialog cancelled or failed: {}", e);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                        action_group.add_action(&save_to_file_action);
 
                         // Delete action
                         let panel_del = panel_clone.clone();
