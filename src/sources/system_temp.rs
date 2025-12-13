@@ -51,6 +51,11 @@ pub enum SensorCategory {
 /// Configuration for system temperature source
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemTempConfig {
+    /// Sensor label - stable identifier (preferred over index)
+    #[serde(default)]
+    pub sensor_label: Option<String>,
+    /// Sensor index - deprecated, kept for backward compatibility
+    /// Will be resolved from sensor_label if available
     #[serde(default)]
     pub sensor_index: usize,
     #[serde(default)]
@@ -78,6 +83,7 @@ fn default_auto_detect_limits() -> bool {
 impl Default for SystemTempConfig {
     fn default() -> Self {
         Self {
+            sensor_label: None,
             sensor_index: 0,
             temp_unit: TemperatureUnit::Celsius,
             update_interval_ms: default_update_interval(),
@@ -86,6 +92,29 @@ impl Default for SystemTempConfig {
             max_limit: None,
             auto_detect_limits: default_auto_detect_limits(),
         }
+    }
+}
+
+impl SystemTempConfig {
+    /// Resolve sensor_label to sensor_index, updating the index if label is set
+    /// Returns the effective sensor index to use
+    pub fn resolve_sensor_index(&mut self) -> usize {
+        if let Some(ref label) = self.sensor_label {
+            // Find the sensor by label
+            if let Some(idx) = SYSTEM_SENSORS.iter().position(|s| s.label == *label) {
+                self.sensor_index = idx;
+                return idx;
+            } else {
+                log::warn!("Sensor label '{}' not found, falling back to index {}", label, self.sensor_index);
+            }
+        }
+        self.sensor_index
+    }
+
+    /// Set sensor by index and also store the label for stability
+    pub fn set_sensor_by_index(&mut self, index: usize) {
+        self.sensor_index = index;
+        self.sensor_label = SYSTEM_SENSORS.get(index).map(|s| s.label.clone());
     }
 }
 
@@ -394,6 +423,9 @@ impl DataSource for SystemTempSource {
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("system_temp_config") {
             self.config = serde_json::from_value(config_value.clone())?;
+
+            // Resolve sensor_label to sensor_index for stable sensor selection
+            self.config.resolve_sensor_index();
 
             // Reset detected limits when configuration changes
             if self.config.auto_detect_limits {

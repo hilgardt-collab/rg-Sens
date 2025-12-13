@@ -143,7 +143,9 @@ impl SystemTempConfigWidget {
         // Wire up handlers
         let config_clone = config.clone();
         sensor_combo.connect_selected_notify(move |combo| {
-            config_clone.borrow_mut().sensor_index = combo.selected() as usize;
+            let index = combo.selected() as usize;
+            // Use set_sensor_by_index to store both index and label for stability
+            config_clone.borrow_mut().set_sensor_by_index(index);
         });
 
         let config_clone = config.clone();
@@ -226,8 +228,12 @@ impl SystemTempConfigWidget {
     }
 
     pub fn set_config(&self, config: SystemTempConfig) {
+        // Resolve sensor_label to get the correct index (handles sensor order changes)
+        let mut config = config;
+        let sensor_index = config.resolve_sensor_index();
+
         // Update UI widgets based on config
-        self.sensor_combo.set_selected(config.sensor_index as u32);
+        self.sensor_combo.set_selected(sensor_index as u32);
 
         self.unit_combo.set_selected(match config.temp_unit {
             SystemTempUnit::Celsius => 0,
@@ -271,6 +277,10 @@ impl SystemTempConfigWidget {
 
     pub fn get_config(&self) -> SystemTempConfig {
         let mut config = self.config.borrow().clone();
+
+        // Ensure sensor_label is set based on current index for stability across restarts
+        let index = self.sensor_combo.selected() as usize;
+        config.set_sensor_by_index(index);
 
         // When auto_detect is disabled, ensure we use the spinbutton values
         // This handles the case where set_config was called with None limits
