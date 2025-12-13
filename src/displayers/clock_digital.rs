@@ -80,6 +80,8 @@ pub struct DigitalClockConfig {
     pub vertical_layout: bool,
 
     // Alarm/Timer icon
+    #[serde(default = "default_true")]
+    pub show_icon: bool,
     #[serde(default = "default_icon_text")]
     pub icon_text: String,
     #[serde(default = "default_icon_font")]
@@ -160,6 +162,7 @@ impl Default for DigitalClockConfig {
             alarm_color: default_alarm_color(),
             blink_colon: true,
             vertical_layout: false,
+            show_icon: true,
             icon_text: default_icon_text(),
             icon_font: default_icon_font(),
             icon_size: default_icon_size(),
@@ -249,89 +252,91 @@ impl Displayer for ClockDigitalDisplayer {
                 }
 
                 // Bottom-right corner: show timer countdown when running/paused/finished, or icon when idle
-                let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
+                if data.config.show_icon {
+                    let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
 
-                // Get icon config from data.config
-                let icon_font = &data.config.icon_font;
-                let icon_text = &data.config.icon_text;
-                let icon_size_px = data.config.icon_size;
-                let icon_bold = data.config.icon_bold;
-                let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+                    // Get icon config from data.config
+                    let icon_font = &data.config.icon_font;
+                    let icon_text = &data.config.icon_text;
+                    let icon_size_px = data.config.icon_size;
+                    let icon_bold = data.config.icon_bold;
+                    let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
 
-                if timer_active && !data.timer_display.is_empty() {
-                    // Show countdown timer text
-                    cr.save().ok();
+                    if timer_active && !data.timer_display.is_empty() {
+                        // Show countdown timer text
+                        cr.save().ok();
 
-                    let font_size = icon_size_px.min(height as f64 * 0.2);
-                    cr.select_font_face(icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                    cr.set_font_size(font_size);
+                        let font_size = icon_size_px.min(height as f64 * 0.2);
+                        cr.select_font_face(icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                        cr.set_font_size(font_size);
 
-                    let (text_w, text_h) = if let Ok(te) = cr.text_extents(&data.timer_display) {
-                        (te.width(), te.height())
-                    } else {
-                        (50.0, 12.0) // Fallback dimensions
-                    };
-                    let text_x = width as f64 - text_w - 6.0;
-                    let text_y = height as f64 - 6.0;
-
-                    // Background for readability
-                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
-                    cr.rectangle(
-                        text_x - 4.0,
-                        text_y - text_h - 2.0,
-                        text_w + 8.0,
-                        text_h + 6.0,
-                    );
-                    cr.fill().ok();
-
-                    // Timer text color based on state
-                    if data.timer_state == "finished" {
-                        if data.blink_state {
-                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
+                        let (text_w, text_h) = if let Ok(te) = cr.text_extents(&data.timer_display) {
+                            (te.width(), te.height())
                         } else {
-                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
-                        }
-                    } else if data.timer_state == "paused" {
-                        cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
-                    } else {
-                        cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
-                    }
+                            (50.0, 12.0) // Fallback dimensions
+                        };
+                        let text_x = width as f64 - text_w - 6.0;
+                        let text_y = height as f64 - 6.0;
 
-                    cr.move_to(text_x, text_y);
-                    cr.show_text(&data.timer_display).ok();
-                    cr.restore().ok();
-                } else {
-                    // Show custom icon when no timer is active
-                    cr.save().ok();
+                        // Background for readability
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
+                        cr.rectangle(
+                            text_x - 4.0,
+                            text_y - text_h - 2.0,
+                            text_w + 8.0,
+                            text_h + 6.0,
+                        );
+                        cr.fill().ok();
 
-                    let icon_size = icon_size_px.min(height as f64 * 0.25);
-                    cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
-                    cr.set_font_size(icon_size);
-
-                    let icon_w = if let Ok(te) = cr.text_extents(icon_text) {
-                        te.width()
-                    } else {
-                        icon_size * 0.8 // Fallback width
-                    };
-                    let icon_x = width as f64 - icon_w - 6.0;
-                    let icon_y = height as f64 - 6.0;
-
-                    // Color based on state
-                    if data.alarm_triggered {
-                        if data.blink_state {
-                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
+                        // Timer text color based on state
+                        if data.timer_state == "finished" {
+                            if data.blink_state {
+                                cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
+                            } else {
+                                cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
+                            }
+                        } else if data.timer_state == "paused" {
+                            cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
                         } else {
-                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0);
+                            cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
                         }
-                    } else if data.alarm_enabled {
-                        cr.set_source_rgba(0.3, 0.7, 1.0, 1.0); // Blue for alarm enabled
-                    } else {
-                        cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
-                    }
 
-                    cr.move_to(icon_x, icon_y);
-                    cr.show_text(icon_text).ok();
-                    cr.restore().ok();
+                        cr.move_to(text_x, text_y);
+                        cr.show_text(&data.timer_display).ok();
+                        cr.restore().ok();
+                    } else {
+                        // Show custom icon when no timer is active
+                        cr.save().ok();
+
+                        let icon_size = icon_size_px.min(height as f64 * 0.25);
+                        cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
+                        cr.set_font_size(icon_size);
+
+                        let icon_w = if let Ok(te) = cr.text_extents(icon_text) {
+                            te.width()
+                        } else {
+                            icon_size * 0.8 // Fallback width
+                        };
+                        let icon_x = width as f64 - icon_w - 6.0;
+                        let icon_y = height as f64 - 6.0;
+
+                        // Color based on state
+                        if data.alarm_triggered {
+                            if data.blink_state {
+                                cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
+                            } else {
+                                cr.set_source_rgba(1.0, 0.6, 0.3, 1.0);
+                            }
+                        } else if data.alarm_enabled {
+                            cr.set_source_rgba(0.3, 0.7, 1.0, 1.0); // Blue for alarm enabled
+                        } else {
+                            cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
+                        }
+
+                        cr.move_to(icon_x, icon_y);
+                        cr.show_text(icon_text).ok();
+                        cr.restore().ok();
+                    }
                 }
             }
         });

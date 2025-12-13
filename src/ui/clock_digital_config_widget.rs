@@ -9,9 +9,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::displayers::{DigitalClockConfig, DigitalStyle};
-use crate::ui::background::Color;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::shared_font_dialog::shared_font_dialog;
-use crate::ui::ColorPickerDialog;
 
 /// Widget for configuring Digital Clock displayer
 pub struct ClockDigitalConfigWidget {
@@ -29,17 +28,18 @@ pub struct ClockDigitalConfigWidget {
     time_size_spin: SpinButton,
     time_bold_check: CheckButton,
     time_italic_check: CheckButton,
-    time_color_btn: Button,
+    time_color_widget: Rc<ColorButtonWidget>,
     // Date font controls
     date_font_button: Button,
     date_size_spin: SpinButton,
     date_bold_check: CheckButton,
     date_italic_check: CheckButton,
-    date_color_btn: Button,
+    date_color_widget: Rc<ColorButtonWidget>,
     // Other color buttons
-    timer_color_btn: Button,
-    alarm_color_btn: Button,
+    timer_color_widget: Rc<ColorButtonWidget>,
+    alarm_color_widget: Rc<ColorButtonWidget>,
     // Icon config
+    show_icon_check: CheckButton,
     icon_text_entry: gtk4::Entry,
     icon_font_button: Button,
     icon_size_spin: SpinButton,
@@ -144,9 +144,8 @@ impl ClockDigitalConfigWidget {
         // Time color
         let time_color_row = GtkBox::new(Orientation::Horizontal, 6);
         time_color_row.append(&Label::new(Some("Color:")));
-        let time_color_btn = Button::with_label("■");
-        time_color_btn.set_hexpand(true);
-        time_color_row.append(&time_color_btn);
+        let time_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().time_color));
+        time_color_row.append(time_color_widget.widget());
         time_box.append(&time_color_row);
 
         time_frame.set_child(Some(&time_box));
@@ -199,9 +198,8 @@ impl ClockDigitalConfigWidget {
         // Date color
         let date_color_row = GtkBox::new(Orientation::Horizontal, 6);
         date_color_row.append(&Label::new(Some("Color:")));
-        let date_color_btn = Button::with_label("■");
-        date_color_btn.set_hexpand(true);
-        date_color_row.append(&date_color_btn);
+        let date_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().date_color));
+        date_color_row.append(date_color_widget.widget());
         date_box.append(&date_color_row);
 
         date_frame.set_child(Some(&date_box));
@@ -218,17 +216,15 @@ impl ClockDigitalConfigWidget {
         // Timer color
         let timer_color_row = GtkBox::new(Orientation::Horizontal, 6);
         timer_color_row.append(&Label::new(Some("Timer Color:")));
-        let timer_color_btn = Button::with_label("■");
-        timer_color_btn.set_hexpand(true);
-        timer_color_row.append(&timer_color_btn);
+        let timer_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().timer_color));
+        timer_color_row.append(timer_color_widget.widget());
         colors_box.append(&timer_color_row);
 
         // Alarm color
         let alarm_color_row = GtkBox::new(Orientation::Horizontal, 6);
         alarm_color_row.append(&Label::new(Some("Alarm Color:")));
-        let alarm_color_btn = Button::with_label("■");
-        alarm_color_btn.set_hexpand(true);
-        alarm_color_row.append(&alarm_color_btn);
+        let alarm_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().alarm_color));
+        alarm_color_row.append(alarm_color_widget.widget());
         colors_box.append(&alarm_color_row);
 
         colors_frame.set_child(Some(&colors_box));
@@ -241,6 +237,11 @@ impl ClockDigitalConfigWidget {
         icon_box.set_margin_end(8);
         icon_box.set_margin_top(8);
         icon_box.set_margin_bottom(8);
+
+        // Show icon checkbox
+        let show_icon_check = CheckButton::with_label("Show Icon");
+        show_icon_check.set_active(config.borrow().show_icon);
+        icon_box.append(&show_icon_check);
 
         // Icon text (emoji/character)
         let icon_text_row = GtkBox::new(Orientation::Horizontal, 6);
@@ -404,20 +405,10 @@ impl ClockDigitalConfigWidget {
             }
         });
 
-        // Time color button
+        // Time color widget callback
         let config_for_time_color = config.clone();
-        let time_color_btn_clone = time_color_btn.clone();
-        time_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_time_color.borrow().time_color;
-            let config_clone = config_for_time_color.clone();
-            let btn_clone = time_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().time_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
+        time_color_widget.set_on_change(move |color| {
+            config_for_time_color.borrow_mut().time_color = color;
         });
 
         // Date font button - opens font dialog
@@ -508,52 +499,28 @@ impl ClockDigitalConfigWidget {
             }
         });
 
-        // Date color button
+        // Date color widget callback
         let config_for_date_color = config.clone();
-        let date_color_btn_clone = date_color_btn.clone();
-        date_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_date_color.borrow().date_color;
-            let config_clone = config_for_date_color.clone();
-            let btn_clone = date_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().date_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
+        date_color_widget.set_on_change(move |color| {
+            config_for_date_color.borrow_mut().date_color = color;
         });
 
-        // Timer color button
+        // Timer color widget callback
         let config_for_timer_color = config.clone();
-        let timer_color_btn_clone = timer_color_btn.clone();
-        timer_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_timer_color.borrow().timer_color;
-            let config_clone = config_for_timer_color.clone();
-            let btn_clone = timer_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().timer_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
+        timer_color_widget.set_on_change(move |color| {
+            config_for_timer_color.borrow_mut().timer_color = color;
         });
 
-        // Alarm color button
+        // Alarm color widget callback
         let config_for_alarm_color = config.clone();
-        let alarm_color_btn_clone = alarm_color_btn.clone();
-        alarm_color_btn.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let current = config_for_alarm_color.borrow().alarm_color;
-            let config_clone = config_for_alarm_color.clone();
-            let btn_clone = alarm_color_btn_clone.clone();
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(color) = ColorPickerDialog::pick_color(window.as_ref(), current).await {
-                    config_clone.borrow_mut().alarm_color = color;
-                    btn_clone.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
-                }
-            });
+        alarm_color_widget.set_on_change(move |color| {
+            config_for_alarm_color.borrow_mut().alarm_color = color;
+        });
+
+        // Show icon checkbox
+        let config_for_show_icon = config.clone();
+        show_icon_check.connect_toggled(move |check| {
+            config_for_show_icon.borrow_mut().show_icon = check.is_active();
         });
 
         // Icon text entry
@@ -625,14 +592,15 @@ impl ClockDigitalConfigWidget {
             time_size_spin,
             time_bold_check,
             time_italic_check,
-            time_color_btn,
+            time_color_widget,
             date_font_button,
             date_size_spin,
             date_bold_check,
             date_italic_check,
-            date_color_btn,
-            timer_color_btn,
-            alarm_color_btn,
+            date_color_widget,
+            timer_color_widget,
+            alarm_color_widget,
+            show_icon_check,
             icon_text_entry,
             icon_font_button,
             icon_size_spin,
@@ -667,20 +635,21 @@ impl ClockDigitalConfigWidget {
         self.time_size_spin.set_value(config.time_size);
         self.time_bold_check.set_active(config.time_bold);
         self.time_italic_check.set_active(config.time_italic);
-        Self::update_color_button(&self.time_color_btn, &config.time_color);
+        self.time_color_widget.set_color(config.time_color);
 
         // Date font
         self.date_font_button.set_label(&format!("{} {:.0}", config.date_font, config.date_size));
         self.date_size_spin.set_value(config.date_size);
         self.date_bold_check.set_active(config.date_bold);
         self.date_italic_check.set_active(config.date_italic);
-        Self::update_color_button(&self.date_color_btn, &config.date_color);
+        self.date_color_widget.set_color(config.date_color);
 
         // Other colors
-        Self::update_color_button(&self.timer_color_btn, &config.timer_color);
-        Self::update_color_button(&self.alarm_color_btn, &config.alarm_color);
+        self.timer_color_widget.set_color(config.timer_color);
+        self.alarm_color_widget.set_color(config.alarm_color);
 
         // Icon config
+        self.show_icon_check.set_active(config.show_icon);
         self.icon_text_entry.set_text(&config.icon_text);
         self.icon_font_button.set_label(&format!("{} {:.0}px", config.icon_font, config.icon_size));
         self.icon_size_spin.set_value(config.icon_size);
@@ -688,10 +657,6 @@ impl ClockDigitalConfigWidget {
 
         // Store config
         *self.config.borrow_mut() = config;
-    }
-
-    fn update_color_button(btn: &Button, color: &Color) {
-        btn.set_label(&format!("■ ({:.0},{:.0},{:.0})", color.r * 255.0, color.g * 255.0, color.b * 255.0));
     }
 }
 
