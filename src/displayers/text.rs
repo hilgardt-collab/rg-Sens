@@ -1,6 +1,6 @@
 //! Text displayer implementation
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::displayers::TextDisplayerConfig;
 use anyhow::Result;
 use cairo::Context;
@@ -181,5 +181,13 @@ impl Displayer for TextDisplayer {
 
     fn needs_redraw(&self) -> bool {
         true
+    }
+
+    fn get_typed_config(&self) -> Option<DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(DisplayerConfig::Text(data.config.clone()))
+        } else {
+            None
+        }
     }
 }

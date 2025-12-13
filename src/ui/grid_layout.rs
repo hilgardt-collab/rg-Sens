@@ -3053,18 +3053,28 @@ fn show_panel_properties_dialog(
     text_config_label.set_visible(old_displayer_id == "text");
 
     // Load existing text config if displayer is text
+    // Prefer getting config directly from displayer (most up-to-date), fall back to panel config
     if old_displayer_id == "text" {
-        // Try to load config from panel
-        let text_config = if let Some(lines_value) = panel_guard.config.get("lines") {
-            // Load from saved config
-            serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
-                serde_json::json!({ "lines": lines_value })
-            ).unwrap_or_default()
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Text(text_config)) = panel_guard.displayer.get_typed_config() {
+            text_config_widget.set_config(text_config);
+            true
         } else {
-            // Use default config if no saved config exists
-            crate::displayers::TextDisplayerConfig::default()
+            false
         };
-        text_config_widget.set_config(text_config);
+
+        // Fall back to panel config hashmap if get_typed_config didn't work
+        if !config_loaded {
+            let text_config = if let Some(lines_value) = panel_guard.config.get("lines") {
+                // Load from saved config
+                serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
+                    serde_json::json!({ "lines": lines_value })
+                ).unwrap_or_default()
+            } else {
+                // Use default config if no saved config exists
+                crate::displayers::TextDisplayerConfig::default()
+            };
+            text_config_widget.set_config(text_config);
+        }
     }
 
     displayer_tab_box.append(&text_config_label);
