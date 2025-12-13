@@ -520,6 +520,14 @@ impl PanelConfig {
                 }
                 DisplayerConfig::default_for_type("lcars").unwrap_or_default()
             }
+            "cpu_cores" => {
+                if let Some(val) = self.settings.get("core_bars_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::CpuCores(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("cpu_cores").unwrap_or_default()
+            }
             _ => {
                 warn!("Unknown displayer type '{}', using default Text config", self.displayer);
                 DisplayerConfig::default()

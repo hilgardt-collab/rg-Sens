@@ -30,6 +30,7 @@ pub use crate::ui::GraphDisplayConfig;
 pub use crate::ui::AnalogClockConfig;
 pub use crate::displayers::DigitalClockConfig;
 pub use crate::displayers::LcarsDisplayConfig;
+pub use crate::ui::CoreBarsConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -188,6 +189,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "lcars")]
     Lcars(LcarsDisplayConfig),
+
+    #[serde(rename = "cpu_cores")]
+    CpuCores(CoreBarsConfig),
 }
 
 impl DisplayerConfig {
@@ -202,6 +206,7 @@ impl DisplayerConfig {
             DisplayerConfig::ClockAnalog(_) => "clock_analog",
             DisplayerConfig::ClockDigital(_) => "clock_digital",
             DisplayerConfig::Lcars(_) => "lcars",
+            DisplayerConfig::CpuCores(_) => "cpu_cores",
         }
     }
 
@@ -249,6 +254,11 @@ impl DisplayerConfig {
                     map.insert("lcars_config".to_string(), val);
                 }
             }
+            DisplayerConfig::CpuCores(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("core_bars_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -264,6 +274,7 @@ impl DisplayerConfig {
             "clock_analog" => Some(DisplayerConfig::ClockAnalog(AnalogClockConfig::default())),
             "clock_digital" => Some(DisplayerConfig::ClockDigital(DigitalClockConfig::default())),
             "lcars" => Some(DisplayerConfig::Lcars(LcarsDisplayConfig::default())),
+            "cpu_cores" => Some(DisplayerConfig::CpuCores(CoreBarsConfig::default())),
             _ => None,
         }
     }

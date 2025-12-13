@@ -346,6 +346,14 @@ impl Panel {
                 }
                 DisplayerConfig::default_for_type("lcars").unwrap_or_default()
             }
+            "cpu_cores" => {
+                if let Some(val) = self.config.get("core_bars_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::CpuCores(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("cpu_cores").unwrap_or_default()
+            }
             _ => DisplayerConfig::default()
         }
     }
