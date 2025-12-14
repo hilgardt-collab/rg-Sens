@@ -99,10 +99,11 @@ fn render_combined_parts(
         return;
     }
 
-    // Calculate total width of all parts combined
+    // Calculate total width and combined bounding box of all parts
     let mut total_width = 0.0;
     let mut part_widths = Vec::new();
-    let max_font_size = parts.iter().map(|(cfg, _)| cfg.font_size).fold(0.0, f64::max);
+    let mut min_y_bearing: f64 = 0.0;  // Most negative (highest point above baseline)
+    let mut max_descent: f64 = 0.0;    // Lowest point below baseline
 
     for (config, text) in parts {
         cr.save().ok();
@@ -117,6 +118,11 @@ fn render_combined_parts(
 
         part_widths.push(extents.width());
         total_width += extents.width();
+
+        // Track the combined vertical extent (y_bearing is negative for text above baseline)
+        min_y_bearing = min_y_bearing.min(extents.y_bearing());
+        max_descent = max_descent.max(extents.y_bearing() + extents.height());
+
         cr.restore().ok();
     }
 
@@ -125,6 +131,9 @@ fn render_combined_parts(
         total_width += 5.0 * (parts.len() - 1) as f64;
     }
 
+    // Calculate combined text height from extents
+    let combined_height = max_descent - min_y_bearing;
+
     // Calculate starting X position based on horizontal alignment
     let base_x = match h_pos {
         HorizontalPosition::Left => 10.0,
@@ -132,22 +141,23 @@ fn render_combined_parts(
         HorizontalPosition::Right => width - total_width - 10.0,
     };
 
-    // Calculate Y position
+    // Calculate Y position using actual text extents for proper centering
     let base_y = match v_pos {
-        VerticalPosition::Top => 10.0 + max_font_size,
-        VerticalPosition::Center => (height + max_font_size) / 2.0,
-        VerticalPosition::Bottom => height - 10.0,
+        VerticalPosition::Top => 10.0 - min_y_bearing,
+        VerticalPosition::Center => (height - combined_height) / 2.0 - min_y_bearing,
+        VerticalPosition::Bottom => height - 10.0 - combined_height - min_y_bearing,
     };
 
     // Apply rotation if needed
     cr.save().ok();
     if rotation_angle != 0.0 {
-        // Calculate center point for rotation
+        // Calculate center point for rotation (visual center of combined text)
         let center_x = base_x + total_width / 2.0 + offset_x;
-        let center_y = base_y - max_font_size / 2.0 + offset_y;
+        let center_y = base_y + min_y_bearing + combined_height / 2.0 + offset_y;
         cr.translate(center_x, center_y);
         cr.rotate(rotation_angle.to_radians());
-        cr.translate(-total_width / 2.0, max_font_size / 2.0);
+        // Move to draw position relative to center
+        cr.translate(-total_width / 2.0, -min_y_bearing - combined_height / 2.0);
     } else {
         // Just apply offset without rotation
         cr.translate(base_x + offset_x, base_y + offset_y);
@@ -247,19 +257,24 @@ fn render_text_with_alignment(
         HorizontalPosition::Right => width - extents.width() - 10.0,
     };
 
+    // Calculate Y position using actual text extents for proper centering
+    // y_bearing is negative (distance from baseline to top of text)
+    // For center: place text so its visual center is at height/2
     let text_y = match v_pos {
-        VerticalPosition::Top => 10.0 + font_size,
-        VerticalPosition::Center => (height + font_size) / 2.0,
-        VerticalPosition::Bottom => height - 10.0,
+        VerticalPosition::Top => 10.0 - extents.y_bearing(),
+        VerticalPosition::Center => (height - extents.height()) / 2.0 - extents.y_bearing(),
+        VerticalPosition::Bottom => height - 10.0 - extents.height() - extents.y_bearing(),
     };
 
     // Apply offset and rotation
     if rotation_angle != 0.0 {
+        // Rotate around the visual center of the text
         let center_x = text_x + extents.width() / 2.0 + offset_x;
-        let center_y = text_y - font_size / 2.0 + offset_y;
+        let center_y = text_y + extents.y_bearing() + extents.height() / 2.0 + offset_y;
         cr.translate(center_x, center_y);
         cr.rotate(rotation_angle.to_radians());
-        cr.move_to(-extents.width() / 2.0, font_size / 2.0);
+        // Move to draw position relative to center
+        cr.move_to(-extents.width() / 2.0, -extents.y_bearing() - extents.height() / 2.0);
     } else {
         cr.move_to(text_x + offset_x, text_y + offset_y);
     }
