@@ -1,56 +1,32 @@
 //! Clock data source implementation
 //!
 //! Provides current time, date, alarm, and timer functionality.
+//! Supports multiple concurrent alarms and timers with individual sound configuration.
 
+use crate::audio::{AlarmSoundConfig, AudioPlayer};
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use anyhow::Result;
 use chrono::{Local, Timelike, Datelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-
-/// Alarm sound configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AlarmSoundConfig {
-    /// Enable audible alarm
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// Path to custom sound file (None = system bell)
-    #[serde(default)]
-    pub custom_sound_path: Option<String>,
-    /// Enable visual flash effect
-    #[serde(default = "default_true")]
-    pub visual_enabled: bool,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-impl Default for AlarmSoundConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            custom_sound_path: None,
-            visual_enabled: true,
-        }
-    }
-}
+use uuid::Uuid;
 
 /// Alarm configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AlarmConfig {
+    /// Unique identifier for this alarm
+    #[serde(default = "generate_uuid")]
+    pub id: String,
     pub enabled: bool,
     pub hour: u32,
     pub minute: u32,
     pub second: u32,
     /// Days of week the alarm is active (0=Sunday, 6=Saturday)
+    /// Empty = every day, otherwise specific days
     pub days: Vec<u32>,
-    /// Whether the alarm is currently triggered (ringing)
-    #[serde(skip)]
-    pub triggered: bool,
     /// Custom alarm label
     pub label: Option<String>,
     /// Sound configuration for this alarm
@@ -58,17 +34,39 @@ pub struct AlarmConfig {
     pub sound: AlarmSoundConfig,
 }
 
+fn generate_uuid() -> String {
+    Uuid::new_v4().to_string()
+}
+
 impl Default for AlarmConfig {
     fn default() -> Self {
         Self {
+            id: generate_uuid(),
             enabled: false,
             hour: 7,
             minute: 0,
             second: 0,
             days: vec![1, 2, 3, 4, 5], // Weekdays by default
-            triggered: false,
             label: None,
             sound: AlarmSoundConfig::default(),
+        }
+    }
+}
+
+impl AlarmConfig {
+    /// Create a new alarm with a unique ID
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create an alarm with specific time
+    pub fn with_time(hour: u32, minute: u32, second: u32) -> Self {
+        Self {
+            hour,
+            minute,
+            second,
+            enabled: true,
+            ..Self::default()
         }
     }
 }
@@ -100,6 +98,9 @@ pub enum TimerState {
 /// Timer configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerConfig {
+    /// Unique identifier for this timer
+    #[serde(default = "generate_uuid")]
+    pub id: String,
     pub mode: TimerMode,
     /// Countdown duration in seconds
     pub countdown_duration: u64,
@@ -122,6 +123,7 @@ pub struct TimerConfig {
 impl Default for TimerConfig {
     fn default() -> Self {
         Self {
+            id: generate_uuid(),
             mode: TimerMode::Countdown,
             countdown_duration: 300, // 5 minutes
             state: TimerState::Stopped,
@@ -129,6 +131,30 @@ impl Default for TimerConfig {
             start_instant: None,
             label: None,
             sound: AlarmSoundConfig::default(),
+        }
+    }
+}
+
+impl TimerConfig {
+    /// Create a new timer with a unique ID
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a countdown timer with specific duration
+    pub fn countdown(duration_secs: u64) -> Self {
+        Self {
+            mode: TimerMode::Countdown,
+            countdown_duration: duration_secs,
+            ..Self::default()
+        }
+    }
+
+    /// Create a stopwatch timer
+    pub fn stopwatch() -> Self {
+        Self {
+            mode: TimerMode::Stopwatch,
+            ..Self::default()
         }
     }
 }
@@ -171,10 +197,18 @@ pub struct ClockSourceConfig {
     /// Timezone ID (e.g., "America/New_York", "Europe/London", "Local")
     #[serde(default = "default_timezone")]
     pub timezone: String,
+    /// Multiple alarms (replaces single alarm)
     #[serde(default)]
-    pub alarm: AlarmConfig,
+    pub alarms: Vec<AlarmConfig>,
+    /// Multiple timers (replaces single timer)
     #[serde(default)]
-    pub timer: TimerConfig,
+    pub timers: Vec<TimerConfig>,
+    /// Legacy single alarm (for backward compatibility, migrated to alarms)
+    #[serde(default, skip_serializing)]
+    alarm: Option<AlarmConfig>,
+    /// Legacy single timer (for backward compatibility, migrated to timers)
+    #[serde(default, skip_serializing)]
+    timer: Option<TimerConfig>,
 }
 
 fn default_timezone() -> String {
@@ -193,8 +227,37 @@ impl Default for ClockSourceConfig {
             date_format: DateFormat::YearMonthDay,
             show_seconds: true,
             timezone: default_timezone(),
-            alarm: AlarmConfig::default(),
-            timer: TimerConfig::default(),
+            alarms: Vec::new(),
+            timers: Vec::new(),
+            alarm: None,
+            timer: None,
+        }
+    }
+}
+
+impl ClockSourceConfig {
+    /// Migrate legacy single alarm/timer to vectors
+    pub fn migrate_legacy(&mut self) {
+        // Migrate single alarm to alarms vector
+        if let Some(mut legacy_alarm) = self.alarm.take() {
+            if legacy_alarm.enabled || legacy_alarm.hour != 7 || legacy_alarm.minute != 0 {
+                // Only migrate if it was actually configured
+                if legacy_alarm.id.is_empty() {
+                    legacy_alarm.id = generate_uuid();
+                }
+                self.alarms.push(legacy_alarm);
+            }
+        }
+
+        // Migrate single timer to timers vector
+        if let Some(mut legacy_timer) = self.timer.take() {
+            if legacy_timer.countdown_duration != 300 || legacy_timer.label.is_some() {
+                // Only migrate if it was actually configured
+                if legacy_timer.id.is_empty() {
+                    legacy_timer.id = generate_uuid();
+                }
+                self.timers.push(legacy_timer);
+            }
         }
     }
 }
@@ -217,14 +280,20 @@ pub struct ClockSource {
     date_string: String,
     day_name: String,
     month_name: String,
-    // Alarm state
-    alarm_triggered: bool,
-    last_alarm_check: Option<(u32, u32, u32)>,
-    alarm_sound_played: bool,
-    // Timer values
+    // Alarm state - IDs of currently triggered alarms
+    triggered_alarms: HashSet<String>,
+    // Alarms that have already played their sound this trigger cycle
+    alarm_sound_played: HashSet<String>,
+    // Last check time for each alarm (to prevent re-triggering within same second)
+    last_alarm_check: HashMap<String, (u32, u32, u32)>,
+    // Timers that have already played their sound
+    timer_sound_played: HashSet<String>,
+    // Timer display for the "next" timer
     timer_display: String,
     timer_progress: f64,
-    timer_sound_played: bool,
+    // Next alarm info for display
+    next_alarm_time: Option<String>,
+    next_alarm_id: Option<String>,
 }
 
 impl ClockSource {
@@ -233,7 +302,7 @@ impl ClockSource {
             metadata: SourceMetadata {
                 id: "clock".to_string(),
                 name: "Clock".to_string(),
-                description: "Current time, date, alarm, and timer".to_string(),
+                description: "Current time, date, alarms, and timers".to_string(),
                 available_keys: vec![
                     "hour".to_string(),
                     "minute".to_string(),
@@ -248,7 +317,9 @@ impl ClockSource {
                     "day_name".to_string(),
                     "month_name".to_string(),
                     "alarm_triggered".to_string(),
-                    "alarm_time".to_string(),
+                    "alarm_enabled".to_string(),
+                    "triggered_alarm_ids".to_string(),
+                    "next_alarm_time".to_string(),
                     "timer_display".to_string(),
                     "timer_state".to_string(),
                     "timer_progress".to_string(),
@@ -269,85 +340,45 @@ impl ClockSource {
             date_string: String::new(),
             day_name: String::new(),
             month_name: String::new(),
-            alarm_triggered: false,
-            last_alarm_check: None,
-            alarm_sound_played: false,
-            timer_display: "00:00".to_string(),
+            triggered_alarms: HashSet::new(),
+            alarm_sound_played: HashSet::new(),
+            last_alarm_check: HashMap::new(),
+            timer_sound_played: HashSet::new(),
+            timer_display: String::new(),
             timer_progress: 0.0,
-            timer_sound_played: false,
+            next_alarm_time: None,
+            next_alarm_id: None,
         }
     }
 
-    /// Play alarm/timer sound
-    fn play_alarm_sound(sound_config: &AlarmSoundConfig) {
+    /// Play alarm/timer sound using spawn-and-forget
+    /// Note: Sounds play to completion and cannot be stopped mid-play
+    fn play_sound_for_id(&self, _id: &str, sound_config: &AlarmSoundConfig) {
         if !sound_config.enabled {
             return;
         }
 
-        // Spawn a thread to play the sound to avoid blocking
         let custom_path = sound_config.custom_sound_path.clone();
+        let volume = sound_config.volume;
+
+        // Spawn a thread to play the sound to avoid blocking
         std::thread::spawn(move || {
-            if let Some(path) = custom_path {
-                // Try to play custom sound file using system player
-                #[cfg(target_os = "linux")]
-                {
-                    let _ = std::process::Command::new("paplay")
-                        .arg(&path)
-                        .spawn();
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    let _ = std::process::Command::new("afplay")
-                        .arg(&path)
-                        .spawn();
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    // Windows: use PowerShell to play sound
-                    let _ = std::process::Command::new("powershell")
-                        .args(["-c", &format!("(New-Object Media.SoundPlayer '{}').PlaySync()", path)])
-                        .spawn();
-                }
-            } else {
-                // System bell/beep
-                #[cfg(target_os = "linux")]
-                {
-                    // Try paplay first (PulseAudio), then fall back to other methods
-                    let paplay_success = std::process::Command::new("paplay")
-                        .arg("/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga")
-                        .status()
-                        .map(|s| s.success())
-                        .unwrap_or(false);
+            if let Ok(player) = AudioPlayer::new() {
+                player.set_volume(volume);
 
-                    if !paplay_success {
-                        // Try canberra-gtk-play (GNOME)
-                        let canberra_success = std::process::Command::new("canberra-gtk-play")
-                            .arg("-i")
-                            .arg("alarm-clock-elapsed")
-                            .status()
-                            .map(|s| s.success())
-                            .unwrap_or(false);
+                let result = if let Some(ref path) = custom_path {
+                    player.play(path)
+                } else {
+                    player.play_system_alert()
+                };
 
-                        if !canberra_success {
-                            // Fall back to terminal bell
-                            print!("\x07");
-                            let _ = std::io::Write::flush(&mut std::io::stdout());
-                        }
-                    }
+                if let Err(e) = result {
+                    log::warn!("Failed to play alarm sound: {:?}", e);
                 }
-                #[cfg(target_os = "macos")]
-                {
-                    let _ = std::process::Command::new("afplay")
-                        .arg("/System/Library/Sounds/Glass.aiff")
-                        .spawn();
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    // Windows system beep
-                    let _ = std::process::Command::new("powershell")
-                        .args(["-c", "[console]::beep(800, 500); [console]::beep(800, 500)"])
-                        .spawn();
-                }
+
+                // Keep thread alive while sound plays
+                // For non-looped sounds, wait a reasonable time
+                std::thread::sleep(std::time::Duration::from_secs(5));
             }
         });
     }
@@ -425,144 +456,304 @@ impl ClockSource {
     }
 
     fn check_alarm(&mut self) {
-        if !self.config.alarm.enabled {
-            self.alarm_triggered = false;
-            self.alarm_sound_played = false;
-            return;
+        let current = (self.hour, self.minute, self.second);
+
+        // Collect alarm checks first to avoid borrow issues
+        let alarm_checks: Vec<_> = self.config.alarms.iter()
+            .filter(|a| a.enabled)
+            .map(|alarm| {
+                let alarm_time = (alarm.hour, alarm.minute, alarm.second);
+                let day_matches = alarm.days.is_empty() || alarm.days.contains(&self.day_of_week);
+                (alarm.id.clone(), alarm_time, day_matches, alarm.sound.clone())
+            })
+            .collect();
+
+        for (alarm_id, alarm_time, day_matches, sound_config) in alarm_checks {
+            let last_check = self.last_alarm_check.get(&alarm_id).cloned();
+
+            if day_matches && current == alarm_time {
+                // Only trigger once per second
+                if last_check != Some(current) {
+                    self.triggered_alarms.insert(alarm_id.clone());
+                    self.last_alarm_check.insert(alarm_id.clone(), current);
+
+                    // Play alarm sound once when triggered
+                    if !self.alarm_sound_played.contains(&alarm_id) {
+                        self.play_sound_for_id(&alarm_id, &sound_config);
+                        self.alarm_sound_played.insert(alarm_id);
+                    }
+                }
+            } else if last_check.is_some() && last_check != Some(current) {
+                // Time has passed - auto re-arm for repeating alarms
+                self.triggered_alarms.remove(&alarm_id);
+                self.alarm_sound_played.remove(&alarm_id);
+                self.last_alarm_check.remove(&alarm_id);
+            }
         }
 
-        let current = (self.hour, self.minute, self.second);
-        let alarm = (
-            self.config.alarm.hour,
-            self.config.alarm.minute,
-            self.config.alarm.second,
-        );
+        // Update next alarm info
+        self.update_next_alarm();
+    }
 
-        // Check if current day is in alarm days
-        let day_matches = self.config.alarm.days.is_empty()
-            || self.config.alarm.days.contains(&self.day_of_week);
+    /// Find and set the next upcoming alarm
+    fn update_next_alarm(&mut self) {
+        let mut next_alarm: Option<(&AlarmConfig, u64)> = None;
 
-        if day_matches && current == alarm {
-            // Only trigger once per second
-            if self.last_alarm_check != Some(current) {
-                self.alarm_triggered = true;
-                self.last_alarm_check = Some(current);
-                // Play alarm sound once when triggered
-                if !self.alarm_sound_played {
-                    Self::play_alarm_sound(&self.config.alarm.sound);
-                    self.alarm_sound_played = true;
+        for alarm in self.config.alarms.iter().filter(|a| a.enabled) {
+            let minutes_until = self.minutes_until_alarm(alarm);
+            if let Some((_, current_min)) = next_alarm {
+                if minutes_until < current_min {
+                    next_alarm = Some((alarm, minutes_until));
+                }
+            } else {
+                next_alarm = Some((alarm, minutes_until));
+            }
+        }
+
+        if let Some((alarm, _)) = next_alarm {
+            self.next_alarm_time = Some(format!("{:02}:{:02}", alarm.hour, alarm.minute));
+            self.next_alarm_id = Some(alarm.id.clone());
+        } else {
+            self.next_alarm_time = None;
+            self.next_alarm_id = None;
+        }
+    }
+
+    /// Calculate minutes until an alarm fires (accounting for days)
+    fn minutes_until_alarm(&self, alarm: &AlarmConfig) -> u64 {
+        let current_minutes = (self.hour * 60 + self.minute) as i64;
+        let alarm_minutes = (alarm.hour * 60 + alarm.minute) as i64;
+
+        let mut diff = alarm_minutes - current_minutes;
+
+        // If alarm is today but already passed, or not on this day, calculate next occurrence
+        if diff <= 0 || (!alarm.days.is_empty() && !alarm.days.contains(&self.day_of_week)) {
+            // Find next valid day
+            if alarm.days.is_empty() {
+                // Every day - if passed today, it's tomorrow
+                diff += 24 * 60;
+            } else {
+                // Find next day in the list
+                let mut days_until = 1u64;
+                for i in 1..=7 {
+                    let check_day = (self.day_of_week + i) % 7;
+                    if alarm.days.contains(&check_day) {
+                        days_until = i as u64;
+                        break;
+                    }
+                }
+                diff = (days_until as i64 * 24 * 60) + (alarm_minutes - current_minutes);
+                if diff < 0 {
+                    diff += 24 * 60; // Wrap around
                 }
             }
-        } else {
-            // Reset trigger after the alarm second passes
-            if self.last_alarm_check.is_some() && self.last_alarm_check != Some(current) {
-                self.alarm_triggered = false;
-                self.alarm_sound_played = false;
-            }
         }
+
+        diff.max(0) as u64
     }
 
     fn update_timer(&mut self) {
-        match self.config.timer.state {
-            TimerState::Running => {
-                if let Some(start) = self.config.timer.start_instant {
-                    let elapsed_since_start = start.elapsed().as_millis() as u64;
+        // Update all timers
+        for timer in &mut self.config.timers {
+            match timer.state {
+                TimerState::Running => {
+                    if let Some(start) = timer.start_instant {
+                        let elapsed_since_start = start.elapsed().as_millis() as u64;
 
-                    match self.config.timer.mode {
-                        TimerMode::Stopwatch => {
-                            self.config.timer.elapsed_ms += elapsed_since_start;
-                            self.config.timer.start_instant = Some(Instant::now());
-                            self.timer_progress = 0.0; // Stopwatch has no progress
-                        }
-                        TimerMode::Countdown => {
-                            let total_ms = self.config.timer.countdown_duration * 1000;
-                            if self.config.timer.elapsed_ms >= elapsed_since_start {
-                                self.config.timer.elapsed_ms -= elapsed_since_start;
-                                self.config.timer.start_instant = Some(Instant::now());
-                            } else {
-                                self.config.timer.elapsed_ms = 0;
-                                self.config.timer.state = TimerState::Finished;
-                                self.config.timer.start_instant = None;
-                                // Play timer finished sound once
-                                if !self.timer_sound_played {
-                                    Self::play_alarm_sound(&self.config.timer.sound);
-                                    self.timer_sound_played = true;
+                        match timer.mode {
+                            TimerMode::Stopwatch => {
+                                timer.elapsed_ms += elapsed_since_start;
+                                timer.start_instant = Some(Instant::now());
+                            }
+                            TimerMode::Countdown => {
+                                if timer.elapsed_ms >= elapsed_since_start {
+                                    timer.elapsed_ms -= elapsed_since_start;
+                                    timer.start_instant = Some(Instant::now());
+                                } else {
+                                    timer.elapsed_ms = 0;
+                                    timer.state = TimerState::Finished;
+                                    timer.start_instant = None;
                                 }
                             }
-                            self.timer_progress = if total_ms > 0 {
-                                1.0 - (self.config.timer.elapsed_ms as f64 / total_ms as f64)
-                            } else {
-                                1.0
-                            };
                         }
                     }
                 }
-            }
-            TimerState::Stopped => {
-                match self.config.timer.mode {
-                    TimerMode::Countdown => {
-                        self.config.timer.elapsed_ms = self.config.timer.countdown_duration * 1000;
-                        self.timer_progress = 0.0;
-                    }
-                    TimerMode::Stopwatch => {
-                        self.config.timer.elapsed_ms = 0;
-                        self.timer_progress = 0.0;
+                TimerState::Stopped => {
+                    match timer.mode {
+                        TimerMode::Countdown => {
+                            timer.elapsed_ms = timer.countdown_duration * 1000;
+                        }
+                        TimerMode::Stopwatch => {
+                            timer.elapsed_ms = 0;
+                        }
                     }
                 }
+                _ => {}
             }
-            _ => {}
         }
 
-        // Format timer display
-        let total_seconds = self.config.timer.elapsed_ms / 1000;
-        let hours = total_seconds / 3600;
-        let minutes = (total_seconds % 3600) / 60;
-        let seconds = total_seconds % 60;
+        // Check for finished timers and play sounds
+        let finished_timers: Vec<_> = self.config.timers.iter()
+            .filter(|t| t.state == TimerState::Finished)
+            .map(|t| (t.id.clone(), t.sound.clone()))
+            .collect();
 
-        self.timer_display = if hours > 0 {
-            format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+        for (timer_id, sound_config) in finished_timers {
+            if !self.timer_sound_played.contains(&timer_id) {
+                self.play_sound_for_id(&timer_id, &sound_config);
+                self.timer_sound_played.insert(timer_id);
+            }
+        }
+
+        // Update timer display for the "active" timer (first running/paused/finished, or first countdown)
+        self.update_timer_display();
+    }
+
+    /// Update timer display string for the most relevant timer
+    fn update_timer_display(&mut self) {
+        // Priority: finished > running > paused > first countdown
+        let display_timer = self.config.timers.iter()
+            .find(|t| t.state == TimerState::Finished)
+            .or_else(|| self.config.timers.iter().find(|t| t.state == TimerState::Running))
+            .or_else(|| self.config.timers.iter().find(|t| t.state == TimerState::Paused))
+            .or_else(|| self.config.timers.iter().find(|t| t.mode == TimerMode::Countdown));
+
+        if let Some(timer) = display_timer {
+            let total_seconds = timer.elapsed_ms / 1000;
+            let hours = total_seconds / 3600;
+            let minutes = (total_seconds % 3600) / 60;
+            let seconds = total_seconds % 60;
+
+            self.timer_display = if hours > 0 {
+                format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+            } else {
+                format!("{:02}:{:02}", minutes, seconds)
+            };
+
+            // Calculate progress for countdown timers
+            if timer.mode == TimerMode::Countdown {
+                let total_ms = timer.countdown_duration * 1000;
+                self.timer_progress = if total_ms > 0 {
+                    1.0 - (timer.elapsed_ms as f64 / total_ms as f64)
+                } else {
+                    1.0
+                };
+            } else {
+                self.timer_progress = 0.0;
+            }
         } else {
-            format!("{:02}:{:02}", minutes, seconds)
-        };
-    }
-
-    /// Start the timer
-    pub fn start_timer(&mut self) {
-        if self.config.timer.state == TimerState::Stopped || self.config.timer.state == TimerState::Finished {
-            // Initialize elapsed time for countdown
-            if self.config.timer.mode == TimerMode::Countdown {
-                self.config.timer.elapsed_ms = self.config.timer.countdown_duration * 1000;
-            }
-            self.timer_sound_played = false; // Reset sound flag when starting fresh
+            self.timer_display.clear();
+            self.timer_progress = 0.0;
         }
-        self.config.timer.state = TimerState::Running;
-        self.config.timer.start_instant = Some(Instant::now());
     }
 
-    /// Pause the timer
-    pub fn pause_timer(&mut self) {
-        self.config.timer.state = TimerState::Paused;
-        self.config.timer.start_instant = None;
+    /// Start a timer by ID
+    pub fn start_timer(&mut self, timer_id: &str) {
+        if let Some(timer) = self.config.timers.iter_mut().find(|t| t.id == timer_id) {
+            if timer.state == TimerState::Stopped || timer.state == TimerState::Finished {
+                // Initialize elapsed time for countdown
+                if timer.mode == TimerMode::Countdown {
+                    timer.elapsed_ms = timer.countdown_duration * 1000;
+                }
+                self.timer_sound_played.remove(timer_id);
+            }
+            timer.state = TimerState::Running;
+            timer.start_instant = Some(Instant::now());
+        }
     }
 
-    /// Resume the timer
-    pub fn resume_timer(&mut self) {
-        self.config.timer.state = TimerState::Running;
-        self.config.timer.start_instant = Some(Instant::now());
+    /// Pause a timer by ID
+    pub fn pause_timer(&mut self, timer_id: &str) {
+        if let Some(timer) = self.config.timers.iter_mut().find(|t| t.id == timer_id) {
+            timer.state = TimerState::Paused;
+            timer.start_instant = None;
+        }
     }
 
-    /// Stop and reset the timer
-    pub fn stop_timer(&mut self) {
-        self.config.timer.state = TimerState::Stopped;
-        self.config.timer.start_instant = None;
-        self.config.timer.elapsed_ms = 0;
-        self.timer_sound_played = false; // Reset sound flag
+    /// Resume a timer by ID
+    pub fn resume_timer(&mut self, timer_id: &str) {
+        if let Some(timer) = self.config.timers.iter_mut().find(|t| t.id == timer_id) {
+            timer.state = TimerState::Running;
+            timer.start_instant = Some(Instant::now());
+        }
     }
 
-    /// Dismiss the alarm
-    pub fn dismiss_alarm(&mut self) {
-        self.alarm_triggered = false;
-        self.alarm_sound_played = false; // Reset sound flag
+    /// Stop and reset a timer by ID
+    pub fn stop_timer(&mut self, timer_id: &str) {
+        if let Some(timer) = self.config.timers.iter_mut().find(|t| t.id == timer_id) {
+            timer.state = TimerState::Stopped;
+            timer.start_instant = None;
+            timer.elapsed_ms = 0;
+        }
+        self.timer_sound_played.remove(timer_id);
+    }
+
+    /// Dismiss a specific alarm by ID
+    pub fn dismiss_alarm(&mut self, alarm_id: &str) {
+        self.triggered_alarms.remove(alarm_id);
+        self.alarm_sound_played.remove(alarm_id);
+        self.last_alarm_check.remove(alarm_id);
+    }
+
+    /// Dismiss all triggered alarms
+    pub fn dismiss_all_alarms(&mut self) {
+        let ids: Vec<_> = self.triggered_alarms.iter().cloned().collect();
+        for id in ids {
+            self.dismiss_alarm(&id);
+        }
+    }
+
+    /// Dismiss all finished timers (reset them to stopped state)
+    pub fn dismiss_finished_timers(&mut self) {
+        let finished_ids: Vec<_> = self.config.timers.iter()
+            .filter(|t| t.state == TimerState::Finished)
+            .map(|t| t.id.clone())
+            .collect();
+        for id in finished_ids {
+            self.stop_timer(&id);
+        }
+    }
+
+    /// Add a new alarm
+    pub fn add_alarm(&mut self, alarm: AlarmConfig) {
+        self.config.alarms.push(alarm);
+    }
+
+    /// Remove an alarm by ID
+    pub fn remove_alarm(&mut self, alarm_id: &str) {
+        self.dismiss_alarm(alarm_id);
+        self.config.alarms.retain(|a| a.id != alarm_id);
+    }
+
+    /// Add a new timer
+    pub fn add_timer(&mut self, timer: TimerConfig) {
+        self.config.timers.push(timer);
+    }
+
+    /// Remove a timer by ID
+    pub fn remove_timer(&mut self, timer_id: &str) {
+        self.stop_timer(timer_id);
+        self.config.timers.retain(|t| t.id != timer_id);
+    }
+
+    /// Get the current alarms configuration
+    pub fn get_alarms(&self) -> &[AlarmConfig] {
+        &self.config.alarms
+    }
+
+    /// Get the current timers configuration
+    pub fn get_timers(&self) -> &[TimerConfig] {
+        &self.config.timers
+    }
+
+    /// Check if any alarm is currently triggered
+    pub fn any_alarm_triggered(&self) -> bool {
+        !self.triggered_alarms.is_empty()
+    }
+
+    /// Get IDs of all triggered alarms
+    pub fn get_triggered_alarm_ids(&self) -> Vec<String> {
+        self.triggered_alarms.iter().cloned().collect()
     }
 }
 
@@ -756,21 +947,41 @@ impl DataSource for ClockSource {
         values.insert("year".to_string(), Value::from(self.year));
         values.insert("day_of_week".to_string(), Value::from(self.day_of_week));
 
-        // Alarm
-        values.insert("alarm_triggered".to_string(), Value::from(self.alarm_triggered));
-        values.insert("alarm_enabled".to_string(), Value::from(self.config.alarm.enabled));
-        let alarm_time = format!(
-            "{:02}:{:02}:{:02}",
-            self.config.alarm.hour,
-            self.config.alarm.minute,
-            self.config.alarm.second
-        );
-        values.insert("alarm_time".to_string(), Value::from(alarm_time));
+        // Alarm - backward compatible fields
+        let any_triggered = !self.triggered_alarms.is_empty();
+        values.insert("alarm_triggered".to_string(), Value::from(any_triggered));
+        let any_alarm_enabled = self.config.alarms.iter().any(|a| a.enabled);
+        values.insert("alarm_enabled".to_string(), Value::from(any_alarm_enabled));
 
-        // Timer
+        // Next alarm info for display
+        if let Some(ref next_time) = self.next_alarm_time {
+            values.insert("next_alarm_time".to_string(), Value::from(next_time.clone()));
+        }
+
+        // Expose triggered alarm IDs for dismiss handling
+        let triggered_ids: Vec<_> = self.triggered_alarms.iter().cloned().collect();
+        values.insert("triggered_alarm_ids".to_string(),
+            serde_json::to_value(&triggered_ids).unwrap_or(Value::Array(vec![])));
+
+        // Expose all alarms and timers for UI
+        values.insert("alarms".to_string(),
+            serde_json::to_value(&self.config.alarms).unwrap_or(Value::Array(vec![])));
+        values.insert("timers".to_string(),
+            serde_json::to_value(&self.config.timers).unwrap_or(Value::Array(vec![])));
+
+        // Timer display (most relevant timer)
         values.insert("timer_display".to_string(), Value::from(self.timer_display.clone()));
         values.insert("timer_progress".to_string(), Value::from(self.timer_progress));
-        let timer_state = match self.config.timer.state {
+
+        // Timer state - find most relevant timer
+        let display_timer_state = self.config.timers.iter()
+            .find(|t| t.state == TimerState::Finished)
+            .or_else(|| self.config.timers.iter().find(|t| t.state == TimerState::Running))
+            .or_else(|| self.config.timers.iter().find(|t| t.state == TimerState::Paused))
+            .map(|t| t.state)
+            .unwrap_or(TimerState::Stopped);
+
+        let timer_state = match display_timer_state {
             TimerState::Stopped => "stopped",
             TimerState::Running => "running",
             TimerState::Paused => "paused",
@@ -811,42 +1022,58 @@ impl DataSource for ClockSource {
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("clock_config") {
-            let new_config: ClockSourceConfig = serde_json::from_value(config_value.clone())?;
+            let mut new_config: ClockSourceConfig = serde_json::from_value(config_value.clone())?;
 
-            // Preserve timer runtime state if not changing timer settings
-            let preserve_timer = self.config.timer.countdown_duration == new_config.timer.countdown_duration
-                && self.config.timer.mode == new_config.timer.mode;
+            // Migrate legacy single alarm/timer if present
+            new_config.migrate_legacy();
 
-            let old_timer_state = self.config.timer.state;
-            let old_timer_elapsed = self.config.timer.elapsed_ms;
-            let old_timer_instant = self.config.timer.start_instant;
+            // Preserve timer runtime state for existing timers
+            let old_timer_states: HashMap<String, (TimerState, u64, Option<Instant>)> =
+                self.config.timers.iter()
+                    .map(|t| (t.id.clone(), (t.state, t.elapsed_ms, t.start_instant)))
+                    .collect();
 
             self.config = new_config;
 
-            if preserve_timer {
-                self.config.timer.state = old_timer_state;
-                self.config.timer.elapsed_ms = old_timer_elapsed;
-                self.config.timer.start_instant = old_timer_instant;
+            // Restore timer runtime state for timers that still exist
+            for timer in &mut self.config.timers {
+                if let Some((state, elapsed, instant)) = old_timer_states.get(&timer.id) {
+                    timer.state = *state;
+                    timer.elapsed_ms = *elapsed;
+                    timer.start_instant = *instant;
+                }
             }
         }
 
-        // Handle timer commands
-        if let Some(cmd) = config.get("timer_command") {
-            if let Some(cmd_str) = cmd.as_str() {
-                match cmd_str {
-                    "start" => self.start_timer(),
-                    "pause" => self.pause_timer(),
-                    "resume" => self.resume_timer(),
-                    "stop" => self.stop_timer(),
+        // Handle timer commands with ID
+        if let Some(timer_id) = config.get("timer_id").and_then(|v| v.as_str()) {
+            if let Some(cmd) = config.get("timer_command").and_then(|v| v.as_str()) {
+                match cmd {
+                    "start" => self.start_timer(timer_id),
+                    "pause" => self.pause_timer(timer_id),
+                    "resume" => self.resume_timer(timer_id),
+                    "stop" => self.stop_timer(timer_id),
                     _ => {}
                 }
             }
         }
 
-        // Handle alarm dismiss
-        if let Some(dismiss) = config.get("dismiss_alarm") {
+        // Handle alarm dismiss by ID
+        if let Some(alarm_id) = config.get("dismiss_alarm_id").and_then(|v| v.as_str()) {
+            self.dismiss_alarm(alarm_id);
+        }
+
+        // Handle dismiss all alarms
+        if let Some(dismiss) = config.get("dismiss_all_alarms") {
             if dismiss.as_bool().unwrap_or(false) {
-                self.dismiss_alarm();
+                self.dismiss_all_alarms();
+            }
+        }
+
+        // Handle dismiss finished timers
+        if let Some(dismiss) = config.get("dismiss_finished_timers") {
+            if dismiss.as_bool().unwrap_or(false) {
+                self.dismiss_finished_timers();
             }
         }
 

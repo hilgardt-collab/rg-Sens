@@ -188,6 +188,8 @@ struct DisplayData {
     timer_state: String,
     alarm_enabled: bool,
     alarm_triggered: bool,
+    next_alarm_time: Option<String>,  // Next alarm time to display (e.g., "08:30")
+    next_alarm_label: Option<String>, // Optional label for next alarm
     second: u32,
     blink_state: bool,
     dirty: bool, // Flag to indicate data has changed and needs redraw
@@ -204,6 +206,8 @@ impl ClockDigitalDisplayer {
             timer_state: "stopped".to_string(),
             alarm_enabled: false,
             alarm_triggered: false,
+            next_alarm_time: None,
+            next_alarm_label: None,
             second: 0,
             blink_state: true,
             dirty: true,
@@ -305,20 +309,48 @@ impl Displayer for ClockDigitalDisplayer {
                         cr.show_text(&data.timer_display).ok();
                         cr.restore().ok();
                     } else {
-                        // Show custom icon when no timer is active
+                        // Show icon with optional next alarm time
                         cr.save().ok();
 
                         let icon_size = icon_size_px.min(height as f64 * 0.25);
                         cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
                         cr.set_font_size(icon_size);
 
-                        let icon_w = if let Ok(te) = cr.text_extents(icon_text) {
+                        // Build display text: icon + optional next alarm time
+                        let display_text = if let Some(ref next_time) = data.next_alarm_time {
+                            if data.alarm_enabled {
+                                format!("{} {}", icon_text, next_time)
+                            } else {
+                                icon_text.clone()
+                            }
+                        } else {
+                            icon_text.clone()
+                        };
+
+                        let text_w = if let Ok(te) = cr.text_extents(&display_text) {
                             te.width()
                         } else {
                             icon_size * 0.8 // Fallback width
                         };
-                        let icon_x = width as f64 - icon_w - 6.0;
-                        let icon_y = height as f64 - 6.0;
+                        let text_h = if let Ok(te) = cr.text_extents(&display_text) {
+                            te.height()
+                        } else {
+                            icon_size * 0.8
+                        };
+                        let text_x = width as f64 - text_w - 6.0;
+                        let text_y = height as f64 - 6.0;
+
+                        // Background for readability when showing time
+                        if data.next_alarm_time.is_some() && data.alarm_enabled {
+                            cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+                            cr.rectangle(
+                                text_x - 4.0,
+                                text_y - text_h - 2.0,
+                                text_w + 8.0,
+                                text_h + 6.0,
+                            );
+                            cr.fill().ok();
+                        }
 
                         // Color based on state
                         if data.alarm_triggered {
@@ -333,8 +365,8 @@ impl Displayer for ClockDigitalDisplayer {
                             cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
                         }
 
-                        cr.move_to(icon_x, icon_y);
-                        cr.show_text(icon_text).ok();
+                        cr.move_to(text_x, text_y);
+                        cr.show_text(&display_text).ok();
                         cr.restore().ok();
                     }
                 }
@@ -414,6 +446,14 @@ impl Displayer for ClockDigitalDisplayer {
 
             if let Some(alarm_trig) = values.get("alarm_triggered") {
                 data.alarm_triggered = alarm_trig.as_bool().unwrap_or(false);
+            }
+
+            // Next alarm information
+            if let Some(next_time) = values.get("next_alarm_time") {
+                data.next_alarm_time = next_time.as_str().map(|s| s.to_string());
+            }
+            if let Some(next_label) = values.get("next_alarm_label") {
+                data.next_alarm_label = next_label.as_str().map(|s| s.to_string());
             }
 
             if let Some(sec) = values.get("second") {

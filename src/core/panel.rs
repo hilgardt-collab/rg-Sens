@@ -151,6 +151,18 @@ impl Panel {
         let values = self.source.get_values();
         self.displayer.update_data(&values);
 
+        // Sync certain live values into panel.config for UI access
+        // This allows dialogs and click handlers to read live state
+        const SYNC_KEYS: &[&str] = &[
+            "alarms", "timers", "triggered_alarm_ids",
+            "timer_state", "alarm_triggered", "alarm_enabled",
+        ];
+        for key in SYNC_KEYS {
+            if let Some(value) = values.get(*key) {
+                self.config.insert(key.to_string(), value.clone());
+            }
+        }
+
         Ok(())
     }
 

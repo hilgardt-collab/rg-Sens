@@ -13,6 +13,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::if_same_then_else)]
 
+pub mod audio;
 pub mod core;
 pub mod sources;
 pub mod displayers;
