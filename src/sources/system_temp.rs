@@ -120,13 +120,13 @@ impl SystemTempConfig {
 
 /// Cached sensor information (discovered once at startup)
 static SYSTEM_SENSORS: Lazy<Vec<SensorInfo>> = Lazy::new(|| {
-    log::info!("=== Discovering system temperature sensors (one-time initialization) ===");
+    log::warn!("=== Discovering system temperature sensors (one-time initialization) ===");
 
     // Use shared sensors instead of creating new Components
     let all_temps = shared_sensors::get_refreshed_temperatures();
     let sensors = discover_all_sensors_from_list(&all_temps);
 
-    log::info!("System temperature discovery complete: {} sensors found", sensors.len());
+    log::warn!("System temperature discovery complete: {} sensors found", sensors.len());
 
     sensors
 });

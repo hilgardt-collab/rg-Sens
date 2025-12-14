@@ -38,6 +38,10 @@ struct Cli {
     #[arg(short = 'l', long = "list")]
     list_monitors: bool,
 
+    /// Debug verbosity level (0=quiet, 1=info, 2=debug, 3=trace)
+    #[arg(short = 'd', long = "debug", value_name = "LEVEL", default_value = "0")]
+    debug: u8,
+
     /// Layout file to load at startup
     #[arg(value_name = "LAYOUT_FILE")]
     layout_file: Option<String>,
@@ -63,10 +67,21 @@ fn main() {
     // Parse command line arguments
     let cli = Cli::parse();
 
-    // Initialize logger
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    // Initialize logger with verbosity based on -d/--debug flag
+    // Level 0 (default): warn only (quiet, shows only important === messages)
+    // Level 1: info (normal verbosity)
+    // Level 2: debug (detailed)
+    // Level 3+: trace (very detailed)
+    let log_level = match cli.debug {
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        _ => "trace",
+    };
+    // Allow RUST_LOG to override CLI setting
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
-    info!("Starting rg-Sens v{}", env!("CARGO_PKG_VERSION"));
+    warn!("Starting rg-Sens v{}", env!("CARGO_PKG_VERSION"));
 
     // Handle --list option (list monitors and exit)
     if cli.list_monitors {
@@ -146,6 +161,7 @@ fn build_ui(app: &Application) {
         borderless: None,
         at: None,
         list_monitors: false,
+        debug: 0,
         layout_file: None,
     });
 

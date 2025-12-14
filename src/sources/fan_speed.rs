@@ -77,11 +77,11 @@ impl Default for FanSpeedConfig {
 
 /// Cached fan sensor information (discovered once at startup)
 static FAN_SENSORS: Lazy<Vec<FanInfo>> = Lazy::new(|| {
-    log::info!("=== Discovering fan speed sensors (one-time initialization) ===");
+    log::warn!("=== Discovering fan speed sensors (one-time initialization) ===");
 
     let fans = discover_all_fans();
 
-    log::info!("Fan speed discovery complete: {} sensors found", fans.len());
+    log::warn!("Fan speed discovery complete: {} sensors found", fans.len());
 
     fans
 });

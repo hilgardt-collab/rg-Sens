@@ -15,7 +15,7 @@ pub fn detect_gpus() -> DetectedGpus {
     let mut gpus: Vec<Box<dyn GpuBackend>> = Vec::new();
     let mut info: Vec<GpuInfo> = Vec::new();
 
-    log::info!("=== Detecting GPUs ===");
+    log::warn!("=== Detecting GPUs ===");
 
     // Detect NVIDIA GPUs
     detect_nvidia_gpus(&mut gpus, &mut info);
@@ -27,7 +27,7 @@ pub fn detect_gpus() -> DetectedGpus {
     if gpus.is_empty() {
         log::warn!("No GPUs detected");
     } else {
-        log::info!("Total GPUs detected: {}", gpus.len());
+        log::warn!("Total GPUs detected: {}", gpus.len());
         for gpu_info in &info {
             log::info!("  [{}] {} - {}", gpu_info.index, gpu_info.vendor.as_str(), gpu_info.name);
         }

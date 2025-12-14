@@ -13,7 +13,7 @@ use sysinfo::Components;
 /// The Components are wrapped in a Mutex to allow thread-safe refresh operations.
 /// The Lazy ensures one-time initialization on first access.
 static SHARED_COMPONENTS: Lazy<Mutex<Components>> = Lazy::new(|| {
-    log::info!("=== Initializing shared temperature sensors (one-time) ===");
+    log::warn!("=== Initializing shared temperature sensors (one-time) ===");
     let components = Components::new_with_refreshed_list();
     log::info!("Shared temperature sensors initialized: {} components", components.len());
     Mutex::new(components)

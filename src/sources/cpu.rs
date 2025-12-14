@@ -26,7 +26,7 @@ struct CpuHardwareInfo {
 
 /// Global cache for CPU hardware info (discovered once at startup)
 static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
-    log::info!("=== Discovering CPU hardware (one-time initialization) ===");
+    log::warn!("=== Discovering CPU hardware (one-time initialization) ===");
 
     // Get sensor info from shared components (already initialized)
     let all_temps = shared_sensors::get_refreshed_temperatures();
@@ -38,7 +38,7 @@ static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
     );
     let core_count = system.cpus().len();
 
-    log::info!("CPU hardware discovery complete: {} sensors, {} cores", sensors.len(), core_count);
+    log::warn!("CPU hardware discovery complete: {} sensors, {} cores", sensors.len(), core_count);
 
     CpuHardwareInfo {
         sensors,
