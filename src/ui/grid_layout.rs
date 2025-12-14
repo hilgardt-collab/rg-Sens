@@ -64,6 +64,8 @@ pub struct GridLayout {
     /// Callback for borderless window drag (move/resize)
     /// If set and returns true, the drag gesture is claimed for window operations
     on_borderless_drag: Rc<RefCell<Option<BorderlessDragCallback>>>,
+    /// Viewport (window) dimensions for auto-scroll boundary visualization
+    viewport_size: Rc<RefCell<(i32, i32)>>,
 }
 
 impl GridLayout {
@@ -106,6 +108,7 @@ impl GridLayout {
             selection_box: Rc::new(RefCell::new(None)),
             on_change: Rc::new(RefCell::new(None)),
             on_borderless_drag: Rc::new(RefCell::new(None)),
+            viewport_size: Rc::new(RefCell::new((800, 600))), // Default, updated by main window
         };
 
         grid_layout.setup_drop_zone_drawing();
@@ -192,10 +195,12 @@ impl GridLayout {
         let drag_preview_cells = self.drag_preview_cells.clone();
         let is_dragging = self.is_dragging.clone();
         let selection_box = self.selection_box.clone();
+        let viewport_size = self.viewport_size.clone();
 
         self.drop_zone_layer.set_draw_func(move |_, cr, width, height| {
             let config = config.borrow();
             let sel_box = selection_box.borrow();
+            let viewport = *viewport_size.borrow();
 
             // Draw selection box if present
             if let Some((x1, y1, x2, y2)) = *sel_box {
@@ -245,6 +250,52 @@ impl GridLayout {
                 cr.line_to(width as f64, y);
             }
             cr.stroke().ok();
+
+            // Draw viewport boundary rectangles (window-sized areas)
+            // Only draw if viewport is valid (non-zero dimensions)
+            if viewport.0 > 0 && viewport.1 > 0 {
+                let vp_width = viewport.0 as f64;
+                let vp_height = viewport.1 as f64;
+
+                // Calculate how many viewports fit in the grid area
+                let vp_cols = (width as f64 / vp_width).ceil() as i32;
+                let vp_rows = (height as f64 / vp_height).ceil() as i32;
+
+                // Draw viewport boundary rectangles with dashed lines
+                cr.save().ok();
+                cr.set_source_rgba(0.9, 0.6, 0.1, 0.7); // Orange color for visibility
+                cr.set_line_width(2.0);
+                cr.set_dash(&[8.0, 4.0], 0.0);
+
+                for vp_row in 0..vp_rows {
+                    for vp_col in 0..vp_cols {
+                        let rect_x = vp_col as f64 * vp_width;
+                        let rect_y = vp_row as f64 * vp_height;
+
+                        // Only draw if within grid bounds
+                        if rect_x < width as f64 && rect_y < height as f64 {
+                            cr.rectangle(rect_x, rect_y, vp_width, vp_height);
+                        }
+                    }
+                }
+                cr.stroke().ok();
+
+                // Add viewport labels at top-left of each viewport
+                cr.set_source_rgba(0.9, 0.6, 0.1, 0.9);
+                for vp_row in 0..vp_rows {
+                    for vp_col in 0..vp_cols {
+                        let rect_x = vp_col as f64 * vp_width + 5.0;
+                        let rect_y = vp_row as f64 * vp_height + 15.0;
+
+                        if rect_x < width as f64 && rect_y < height as f64 {
+                            let label = format!("Page {}", vp_row * vp_cols + vp_col + 1);
+                            cr.move_to(rect_x, rect_y);
+                            cr.show_text(&label).ok();
+                        }
+                    }
+                }
+                cr.restore().ok();
+            }
 
             // Highlight occupied cells in red
             for (cell_x, cell_y) in occupied.iter() {
@@ -2703,6 +2754,14 @@ impl GridLayout {
         let (width, height) = self.get_content_size();
         self.container.set_size_request(width, height);
         self.drop_zone_layer.set_size_request(width, height);
+    }
+
+    /// Set the viewport (window) dimensions for auto-scroll boundary visualization
+    /// These rectangles are shown when dragging panels to help with placement
+    pub fn set_viewport_size(&self, width: i32, height: i32) {
+        *self.viewport_size.borrow_mut() = (width, height);
+        // Trigger redraw of drop zone layer to update viewport boundaries
+        self.drop_zone_layer.queue_draw();
     }
 
     /// Update grid cell size and spacing

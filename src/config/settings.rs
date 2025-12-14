@@ -237,6 +237,12 @@ pub struct WindowConfig {
     /// Delay between auto-scroll steps in milliseconds
     #[serde(default = "default_auto_scroll_delay")]
     pub auto_scroll_delay_ms: u64,
+    /// Viewport width for auto-scroll page boundaries (0 = use window width)
+    #[serde(default)]
+    pub viewport_width: i32,
+    /// Viewport height for auto-scroll page boundaries (0 = use window height)
+    #[serde(default)]
+    pub viewport_height: i32,
 }
 
 fn default_auto_scroll_delay() -> u64 {
@@ -262,6 +268,8 @@ impl Default for WindowConfig {
             borderless: false,
             auto_scroll_enabled: false,
             auto_scroll_delay_ms: 5000,
+            viewport_width: 0,
+            viewport_height: 0,
         }
     }
 }

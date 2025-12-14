@@ -480,6 +480,23 @@ fn build_ui(app: &Application) {
         *config_dirty_clone3.borrow_mut() = true;
     });
 
+    // Set initial viewport size for drag visualization from config
+    // If config values are 0, use default window dimensions
+    {
+        let config = app_config.borrow();
+        let vp_width = if config.window.viewport_width > 0 {
+            config.window.viewport_width
+        } else {
+            config.window.width
+        };
+        let vp_height = if config.window.viewport_height > 0 {
+            config.window.viewport_height
+        } else {
+            config.window.height
+        };
+        grid_layout.borrow().set_viewport_size(vp_width, vp_height);
+    }
+
     // Add double-click gesture on overlay to toggle fullscreen
     let double_click_gesture = gtk4::GestureClick::new();
     double_click_gesture.set_button(gtk4::gdk::BUTTON_PRIMARY);
@@ -1436,6 +1453,11 @@ fn show_window_settings_dialog<F>(
     notebook.append_page(&panel_tab_box, Some(&Label::new(Some("Panel Defaults"))));
 
     // === Tab 4: Window Mode ===
+    // Wrap in ScrolledWindow since this tab has a lot of content
+    let window_mode_scroll = gtk4::ScrolledWindow::new();
+    window_mode_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    window_mode_scroll.set_vexpand(true);
+
     let window_mode_tab_box = GtkBox::new(Orientation::Vertical, 12);
     window_mode_tab_box.set_margin_start(12);
     window_mode_tab_box.set_margin_end(12);
@@ -1603,7 +1625,116 @@ fn show_window_settings_dialog<F>(
     auto_scroll_help.set_wrap(true);
     window_mode_tab_box.append(&auto_scroll_help);
 
-    notebook.append_page(&window_mode_tab_box, Some(&Label::new(Some("Window Mode"))));
+    // Viewport dimensions for auto-scroll page boundaries
+    let viewport_label = Label::new(Some("Viewport Page Dimensions"));
+    viewport_label.set_halign(gtk4::Align::Start);
+    viewport_label.set_margin_top(12);
+    viewport_label.add_css_class("heading");
+    window_mode_tab_box.append(&viewport_label);
+
+    let viewport_help = Label::new(Some("Define the page size for auto-scroll boundaries. Shown as dashed rectangles when dragging panels."));
+    viewport_help.set_halign(gtk4::Align::Start);
+    viewport_help.set_margin_start(12);
+    viewport_help.add_css_class("dim-label");
+    viewport_help.set_wrap(true);
+    window_mode_tab_box.append(&viewport_help);
+
+    // Viewport width/height inputs
+    let viewport_dims_box = GtkBox::new(Orientation::Horizontal, 12);
+    viewport_dims_box.set_margin_start(12);
+    viewport_dims_box.set_margin_top(6);
+
+    let vp_width_box = GtkBox::new(Orientation::Horizontal, 4);
+    vp_width_box.append(&Label::new(Some("Width:")));
+    let viewport_width_spin = SpinButton::with_range(0.0, 10000.0, 10.0);
+    viewport_width_spin.set_value(app_config.borrow().window.viewport_width as f64);
+    viewport_width_spin.set_width_chars(6);
+    vp_width_box.append(&viewport_width_spin);
+    vp_width_box.append(&Label::new(Some("px")));
+    viewport_dims_box.append(&vp_width_box);
+
+    let vp_height_box = GtkBox::new(Orientation::Horizontal, 4);
+    vp_height_box.append(&Label::new(Some("Height:")));
+    let viewport_height_spin = SpinButton::with_range(0.0, 10000.0, 10.0);
+    viewport_height_spin.set_value(app_config.borrow().window.viewport_height as f64);
+    viewport_height_spin.set_width_chars(6);
+    vp_height_box.append(&viewport_height_spin);
+    vp_height_box.append(&Label::new(Some("px")));
+    viewport_dims_box.append(&vp_height_box);
+
+    window_mode_tab_box.append(&viewport_dims_box);
+
+    // Copy buttons
+    let copy_buttons_box = GtkBox::new(Orientation::Horizontal, 6);
+    copy_buttons_box.set_margin_start(12);
+    copy_buttons_box.set_margin_top(6);
+
+    let copy_window_btn = Button::with_label("Copy from Window");
+    let copy_monitor_btn = Button::with_label("Copy from Monitor");
+
+    // Monitor dropdown for copy
+    let monitor_list = StringList::new(&[]);
+    if let Some(display) = gtk4::gdk::Display::default() {
+        let monitors = display.monitors();
+        for i in 0..monitors.n_items() {
+            if let Some(mon) = monitors.item(i) {
+                if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+                    let geom = monitor.geometry();
+                    let name = monitor.model().map(|s| s.to_string()).unwrap_or_else(|| format!("Monitor {}", i));
+                    monitor_list.append(&format!("{} ({}x{})", name, geom.width(), geom.height()));
+                }
+            }
+        }
+    }
+    let vp_monitor_dropdown = DropDown::new(Some(monitor_list.clone()), None::<gtk4::Expression>);
+    vp_monitor_dropdown.set_selected(0);
+
+    copy_buttons_box.append(&copy_window_btn);
+    copy_buttons_box.append(&copy_monitor_btn);
+    copy_buttons_box.append(&vp_monitor_dropdown);
+    window_mode_tab_box.append(&copy_buttons_box);
+
+    // Connect copy from window button
+    {
+        let parent_clone = parent_window.clone();
+        let vp_width = viewport_width_spin.clone();
+        let vp_height = viewport_height_spin.clone();
+        copy_window_btn.connect_clicked(move |_| {
+            vp_width.set_value(parent_clone.width() as f64);
+            vp_height.set_value(parent_clone.height() as f64);
+        });
+    }
+
+    // Connect copy from monitor button
+    {
+        let vp_width = viewport_width_spin.clone();
+        let vp_height = viewport_height_spin.clone();
+        let monitor_dd = vp_monitor_dropdown.clone();
+        copy_monitor_btn.connect_clicked(move |_| {
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let selected = monitor_dd.selected();
+                if let Some(mon) = display.monitors().item(selected) {
+                    if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+                        let geom = monitor.geometry();
+                        vp_width.set_value(geom.width() as f64);
+                        vp_height.set_value(geom.height() as f64);
+                    }
+                }
+            }
+        });
+    }
+
+    // Zero = use window size help text
+    let vp_zero_help = Label::new(Some("Set to 0 to use current window dimensions"));
+    vp_zero_help.set_halign(gtk4::Align::Start);
+    vp_zero_help.set_margin_start(12);
+    vp_zero_help.set_margin_top(4);
+    vp_zero_help.add_css_class("dim-label");
+    window_mode_tab_box.append(&vp_zero_help);
+
+    // Set the scrolled window content and add to notebook
+    window_mode_scroll.set_child(Some(&window_mode_tab_box));
+    notebook.append_page(&window_mode_scroll, Some(&Label::new(Some("Window Mode"))));
 
     vbox.append(&notebook);
 
@@ -1637,6 +1768,8 @@ fn show_window_settings_dialog<F>(
     let borderless_check_clone = borderless_check.clone();
     let auto_scroll_check_clone = auto_scroll_check.clone();
     let delay_spin_clone = delay_spin.clone();
+    let viewport_width_spin_clone = viewport_width_spin.clone();
+    let viewport_height_spin_clone = viewport_height_spin.clone();
     let parent_window_clone = parent_window.clone();
     let on_auto_scroll_change_clone = on_auto_scroll_change.clone();
 
@@ -1675,7 +1808,24 @@ fn show_window_settings_dialog<F>(
         cfg.window.borderless = borderless;
         cfg.window.auto_scroll_enabled = auto_scroll_check_clone.is_active();
         cfg.window.auto_scroll_delay_ms = delay_spin_clone.value() as u64;
+        cfg.window.viewport_width = viewport_width_spin_clone.value() as i32;
+        cfg.window.viewport_height = viewport_height_spin_clone.value() as i32;
+
+        // Calculate effective viewport size (use window size if set to 0)
+        let vp_width = if cfg.window.viewport_width > 0 {
+            cfg.window.viewport_width
+        } else {
+            parent_window_clone.width()
+        };
+        let vp_height = if cfg.window.viewport_height > 0 {
+            cfg.window.viewport_height
+        } else {
+            parent_window_clone.height()
+        };
         drop(cfg);
+
+        // Update grid layout viewport size for drag visualization
+        grid_layout_clone.borrow().set_viewport_size(vp_width, vp_height);
 
         // Apply borderless state to parent window
         log::info!("Setting window decorated: {} (borderless: {})", !borderless, borderless);
