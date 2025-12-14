@@ -745,8 +745,32 @@ fn build_ui(app: &Application) {
             let viewport_width = h_adj.page_size();
             let viewport_height = v_adj.page_size();
 
-            let needs_h_scroll = content_width > viewport_width + 1.0;
-            let needs_v_scroll = content_height > viewport_height + 1.0;
+            // Check if whole pages mode is enabled
+            let cfg = config.borrow();
+            let whole_pages = cfg.window.auto_scroll_whole_pages;
+            drop(cfg);
+
+            // Calculate effective scroll bounds and container size
+            // When whole_pages is enabled, align to complete page boundaries
+            let (max_h_scroll, max_v_scroll, container_width, container_height) = if whole_pages && viewport_width > 0.0 && viewport_height > 0.0 {
+                // Calculate number of complete pages needed to cover content
+                let h_pages = (content_width / viewport_width).ceil() as i32;
+                let v_pages = (content_height / viewport_height).ceil() as i32;
+                // Max scroll position is (pages - 1) * viewport_size
+                let max_h = ((h_pages - 1).max(0) as f64) * viewport_width;
+                let max_v = ((v_pages - 1).max(0) as f64) * viewport_height;
+                // Container size must be large enough to scroll to all page boundaries
+                // Size = pages * viewport_size (so we can scroll to the last page)
+                let cont_w = (h_pages as f64 * viewport_width) as i32;
+                let cont_h = (v_pages as f64 * viewport_height) as i32;
+                (max_h, max_v, cont_w, cont_h)
+            } else {
+                // Default: scroll to content bounds
+                ((content_width - viewport_width).max(0.0), (content_height - viewport_height).max(0.0), content_size.0, content_size.1)
+            };
+
+            let needs_h_scroll = max_h_scroll > 1.0;
+            let needs_v_scroll = max_v_scroll > 1.0;
 
             if !needs_h_scroll && !needs_v_scroll {
                 // No scrolling needed, reschedule check
@@ -754,24 +778,24 @@ fn build_ui(app: &Application) {
                 return;
             }
 
-            // Update background size
-            bg.set_size_request(content_size.0, content_size.1);
+            // Update background size (expanded for whole pages mode)
+            bg.set_size_request(container_width, container_height);
 
-            // Check current position
-            let at_h_end = h_adj.value() >= h_adj.upper() - viewport_width - 1.0;
-            let at_v_end = v_adj.value() >= v_adj.upper() - viewport_height - 1.0;
+            // Check current position against effective bounds
+            let at_h_end = h_adj.value() >= max_h_scroll - 1.0;
+            let at_v_end = v_adj.value() >= max_v_scroll - 1.0;
 
             // Determine scroll action based on position
             // Pattern: right across row, then down+left to next row, repeat
             let (h_start, h_target, v_start, v_target) = if !at_h_end && needs_h_scroll {
                 // Scroll right one viewport width
                 let h_start = h_adj.value();
-                let h_target = (h_start + viewport_width).min(h_adj.upper() - viewport_width);
+                let h_target = (h_start + viewport_width).min(max_h_scroll);
                 (h_start, h_target, v_adj.value(), v_adj.value())
             } else if at_h_end && !at_v_end && needs_v_scroll {
                 // At right edge, move down one row and back to left
                 let v_start = v_adj.value();
-                let v_target = (v_start + viewport_height).min(v_adj.upper() - viewport_height);
+                let v_target = (v_start + viewport_height).min(max_v_scroll);
                 (h_adj.value(), 0.0, v_start, v_target)
             } else {
                 // At bottom-right or only horizontal content, wrap to top-left
@@ -1808,14 +1832,23 @@ fn show_window_settings_dialog<F>(
     delay_box.append(&Label::new(Some("ms")));
     window_mode_tab_box.append(&delay_box);
 
-    // Enable/disable delay spin based on checkbox
+    // Whole pages checkbox
+    let whole_pages_check = CheckButton::with_label("Scroll whole pages only");
+    whole_pages_check.set_active(app_config.borrow().window.auto_scroll_whole_pages);
+    whole_pages_check.set_margin_start(12);
+    whole_pages_check.set_sensitive(auto_scroll_check.is_active());
+    window_mode_tab_box.append(&whole_pages_check);
+
+    // Enable/disable delay spin and whole pages based on checkbox
     let delay_spin_clone = delay_spin.clone();
+    let whole_pages_check_clone = whole_pages_check.clone();
     auto_scroll_check.connect_toggled(move |check| {
         delay_spin_clone.set_sensitive(check.is_active());
+        whole_pages_check_clone.set_sensitive(check.is_active());
     });
 
     // Auto-scroll help text
-    let auto_scroll_help = Label::new(Some("Scrolls one window width/height at a time when content is larger than the window"));
+    let auto_scroll_help = Label::new(Some("Scrolls one viewport page at a time. When 'whole pages only' is enabled, scrolls through complete page grid regardless of panel positions."));
     auto_scroll_help.set_halign(gtk4::Align::Start);
     auto_scroll_help.set_margin_start(12);
     auto_scroll_help.set_margin_top(6);
@@ -1985,6 +2018,7 @@ fn show_window_settings_dialog<F>(
     let borderless_check_clone = borderless_check.clone();
     let auto_scroll_check_clone = auto_scroll_check.clone();
     let delay_spin_clone = delay_spin.clone();
+    let whole_pages_check_clone = whole_pages_check.clone();
     let viewport_width_spin_clone = viewport_width_spin.clone();
     let viewport_height_spin_clone = viewport_height_spin.clone();
     let parent_window_clone = parent_window.clone();
@@ -2025,6 +2059,7 @@ fn show_window_settings_dialog<F>(
         cfg.window.borderless = borderless;
         cfg.window.auto_scroll_enabled = auto_scroll_check_clone.is_active();
         cfg.window.auto_scroll_delay_ms = delay_spin_clone.value() as u64;
+        cfg.window.auto_scroll_whole_pages = whole_pages_check_clone.is_active();
         cfg.window.viewport_width = viewport_width_spin_clone.value() as i32;
         cfg.window.viewport_height = viewport_height_spin_clone.value() as i32;
 

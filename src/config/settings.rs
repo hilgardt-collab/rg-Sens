@@ -243,6 +243,9 @@ pub struct WindowConfig {
     /// Viewport height for auto-scroll page boundaries (0 = use window height)
     #[serde(default)]
     pub viewport_height: i32,
+    /// Scroll whole pages only (align to viewport boundaries, ignore panel positions)
+    #[serde(default)]
+    pub auto_scroll_whole_pages: bool,
 }
 
 fn default_auto_scroll_delay() -> u64 {
@@ -270,6 +273,7 @@ impl Default for WindowConfig {
             auto_scroll_delay_ms: 5000,
             viewport_width: 0,
             viewport_height: 0,
+            auto_scroll_whole_pages: false,
         }
     }
 }
