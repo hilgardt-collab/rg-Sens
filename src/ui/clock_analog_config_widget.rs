@@ -45,6 +45,7 @@ pub struct ClockAnalogConfigWidget {
     minute_color_widget: Rc<ColorButtonWidget>,
     second_color_widget: Rc<ColorButtonWidget>,
     // Icon config
+    show_icon_check: CheckButton,
     icon_text_entry: gtk4::Entry,
     icon_font_button: Button,
     icon_size_spin: SpinButton,
@@ -325,6 +326,11 @@ impl ClockAnalogConfigWidget {
         icon_box.set_margin_top(8);
         icon_box.set_margin_bottom(8);
 
+        // Show icon checkbox
+        let show_icon_check = CheckButton::with_label("Show Icon");
+        show_icon_check.set_active(config.borrow().show_icon);
+        icon_box.append(&show_icon_check);
+
         // Icon text (emoji/character)
         let icon_text_row = GtkBox::new(Orientation::Horizontal, 6);
         icon_text_row.append(&Label::new(Some("Icon Text:")));
@@ -534,6 +540,12 @@ impl ClockAnalogConfigWidget {
             config_for_second_w.borrow_mut().second_hand_width = spin.value();
         });
 
+        // Show icon checkbox
+        let config_for_show_icon = config.clone();
+        show_icon_check.connect_toggled(move |check| {
+            config_for_show_icon.borrow_mut().show_icon = check.is_active();
+        });
+
         // Icon text entry
         let config_for_icon_text = config.clone();
         icon_text_entry.connect_changed(move |entry| {
@@ -609,6 +621,7 @@ impl ClockAnalogConfigWidget {
             hour_color_widget,
             minute_color_widget,
             second_color_widget,
+            show_icon_check,
             icon_text_entry,
             icon_font_button,
             icon_size_spin,
@@ -682,6 +695,7 @@ impl ClockAnalogConfigWidget {
         self.second_color_widget.set_color(config.second_hand_color);
 
         // Icon config
+        self.show_icon_check.set_active(config.show_icon);
         self.icon_text_entry.set_text(&config.icon_text);
         self.icon_font_button.set_label(&format!("{} {:.0}%", config.icon_font, config.icon_size));
         self.icon_size_spin.set_value(config.icon_size);

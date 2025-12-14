@@ -489,6 +489,7 @@ impl Displayer for ClockDigitalDisplayer {
             if let Some(cfg) = config.get("clock_digital_config") {
                 if let Ok(new_config) = serde_json::from_value(cfg.clone()) {
                     data.config = new_config;
+                    data.dirty = true; // Trigger redraw with new config
                     return Ok(());
                 }
             }
@@ -496,6 +497,7 @@ impl Displayer for ClockDigitalDisplayer {
             if let Some(cfg) = config.get("digital_clock_config") {
                 if let Ok(new_config) = serde_json::from_value(cfg.clone()) {
                     data.config = new_config;
+                    data.dirty = true; // Trigger redraw with new config
                 }
             }
         }

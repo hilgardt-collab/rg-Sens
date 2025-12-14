@@ -140,6 +140,8 @@ pub struct AnalogClockConfig {
     pub smooth_seconds: bool,
 
     // Alarm/Timer icon
+    #[serde(default = "default_true")]
+    pub show_icon: bool,
     #[serde(default = "default_icon_text")]
     pub icon_text: String,
     #[serde(default = "default_icon_font")]
@@ -287,6 +289,7 @@ impl Default for AnalogClockConfig {
             center_hub_color: default_center_hub_color(),
             center_hub_size: default_center_hub_size(),
             smooth_seconds: true,
+            show_icon: true,
             icon_text: default_icon_text(),
             icon_font: default_icon_font(),
             icon_size: default_icon_size(),

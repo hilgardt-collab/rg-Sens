@@ -106,16 +106,17 @@ impl Displayer for ClockAnalogDisplayer {
                 }
 
                 // Bottom-right corner: show timer countdown when running/paused/finished, or icon when idle
-                let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
+                if data.config.show_icon {
+                    let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
 
-                // Get icon config from data.config
-                let icon_font = &data.config.icon_font;
-                let icon_text = &data.config.icon_text;
-                let icon_size_pct = data.config.icon_size;
-                let icon_bold = data.config.icon_bold;
-                let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+                    // Get icon config from data.config
+                    let icon_font = &data.config.icon_font;
+                    let icon_text = &data.config.icon_text;
+                    let icon_size_pct = data.config.icon_size;
+                    let icon_bold = data.config.icon_bold;
+                    let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
 
-                if timer_active && !data.timer_display.is_empty() {
+                    if timer_active && !data.timer_display.is_empty() {
                     // Show countdown timer text
                     cr.save().ok();
 
@@ -189,6 +190,7 @@ impl Displayer for ClockAnalogDisplayer {
                     cr.move_to(icon_x, icon_y);
                     cr.show_text(icon_text).ok();
                     cr.restore().ok();
+                    }
                 }
             }
         });
