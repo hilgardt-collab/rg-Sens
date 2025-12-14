@@ -394,12 +394,37 @@ fn build_ui(app: &Application) {
         }
     });
 
-    // === Borderless window move support ===
+    // === Borderless window move/resize support ===
     // Set up borderless drag callback on GridLayout
     // This callback is called from GridLayout's container gesture (on the Fixed widget)
-    // Using Ctrl+drag for window move (Shift causes GNOME edge snapping)
+    // Using Ctrl+drag for window move/resize (Shift causes GNOME edge snapping)
+    // - Ctrl+drag near edges: resize window
+    // - Ctrl+drag in center: move window
     let app_config_for_drag = app_config.clone();
     let window_for_drag = window.clone();
+
+    // Edge detection threshold in pixels
+    const EDGE_THRESHOLD: f64 = 10.0;
+
+    /// Detect which edge/corner the cursor is near, if any
+    fn detect_edge(x: f64, y: f64, width: f64, height: f64, threshold: f64) -> Option<gtk4::gdk::SurfaceEdge> {
+        let near_left = x < threshold;
+        let near_right = x > width - threshold;
+        let near_top = y < threshold;
+        let near_bottom = y > height - threshold;
+
+        match (near_left, near_right, near_top, near_bottom) {
+            (true, false, true, false) => Some(gtk4::gdk::SurfaceEdge::NorthWest),
+            (false, true, true, false) => Some(gtk4::gdk::SurfaceEdge::NorthEast),
+            (true, false, false, true) => Some(gtk4::gdk::SurfaceEdge::SouthWest),
+            (false, true, false, true) => Some(gtk4::gdk::SurfaceEdge::SouthEast),
+            (true, false, false, false) => Some(gtk4::gdk::SurfaceEdge::West),
+            (false, true, false, false) => Some(gtk4::gdk::SurfaceEdge::East),
+            (false, false, true, false) => Some(gtk4::gdk::SurfaceEdge::North),
+            (false, false, false, true) => Some(gtk4::gdk::SurfaceEdge::South),
+            _ => None, // Not near any edge
+        }
+    }
 
     grid_layout.set_on_borderless_drag(move |gesture, x, y| {
         // Check if Ctrl is pressed (via event modifiers) and borderless mode is enabled
@@ -414,8 +439,6 @@ fn build_ui(app: &Application) {
         if !is_ctrl || !is_borderless || is_fullscreen {
             return false; // Don't handle - let normal selection proceed
         }
-
-        log::info!("Borderless window move: Ctrl+drag at ({}, {})", x, y);
 
         // Get event parameters
         let timestamp = event.as_ref().map(|e| e.time()).unwrap_or(0);
@@ -439,6 +462,10 @@ fn build_ui(app: &Application) {
                 return false;
             }
         };
+
+        // Get window dimensions for edge detection
+        let win_width = window_for_drag.width() as f64;
+        let win_height = window_for_drag.height() as f64;
 
         // Get surface from window
         use gtk4::prelude::NativeExt;
@@ -466,13 +493,82 @@ fn build_ui(app: &Application) {
             }
         };
 
-        // Begin window move
-        toplevel.begin_move(dev, button, win_x, win_y, timestamp);
+        // Check if near an edge for resize, otherwise move
+        if let Some(edge) = detect_edge(win_x, win_y, win_width, win_height, EDGE_THRESHOLD) {
+            log::info!("Borderless window resize: Ctrl+drag at ({}, {}) edge {:?}", x, y, edge);
+            toplevel.begin_resize(edge, Some(dev), button, win_x, win_y, timestamp);
+        } else {
+            log::info!("Borderless window move: Ctrl+drag at ({}, {})", x, y);
+            toplevel.begin_move(dev, button, win_x, win_y, timestamp);
+        }
 
         // Claim the gesture
         gesture.set_state(gtk4::EventSequenceState::Claimed);
         true // Handled
     });
+
+    // === Cursor feedback for borderless resize ===
+    // Show resize cursors when hovering near window edges with Ctrl held
+    let motion_controller = gtk4::EventControllerMotion::new();
+    let app_config_for_cursor = app_config.clone();
+    let window_for_cursor = window.clone();
+
+    /// Get cursor name for a given edge
+    fn cursor_for_edge(edge: gtk4::gdk::SurfaceEdge) -> &'static str {
+        use gtk4::gdk::SurfaceEdge;
+        match edge {
+            SurfaceEdge::North => "n-resize",
+            SurfaceEdge::South => "s-resize",
+            SurfaceEdge::East => "e-resize",
+            SurfaceEdge::West => "w-resize",
+            SurfaceEdge::NorthWest => "nw-resize",
+            SurfaceEdge::NorthEast => "ne-resize",
+            SurfaceEdge::SouthWest => "sw-resize",
+            SurfaceEdge::SouthEast => "se-resize",
+            _ => "default",
+        }
+    }
+
+    motion_controller.connect_motion(move |controller, x, y| {
+        let is_borderless = app_config_for_cursor.borrow().window.borderless;
+        let is_fullscreen = window_for_cursor.is_fullscreen();
+
+        if !is_borderless || is_fullscreen {
+            window_for_cursor.set_cursor_from_name(None);
+            return;
+        }
+
+        // Check if Ctrl is pressed
+        let is_ctrl = controller
+            .current_event()
+            .map(|e| e.modifier_state().contains(gtk4::gdk::ModifierType::CONTROL_MASK))
+            .unwrap_or(false);
+
+        if !is_ctrl {
+            window_for_cursor.set_cursor_from_name(None);
+            return;
+        }
+
+        // Get window dimensions
+        let win_width = window_for_cursor.width() as f64;
+        let win_height = window_for_cursor.height() as f64;
+
+        // Check if near an edge
+        if let Some(edge) = detect_edge(x, y, win_width, win_height, EDGE_THRESHOLD) {
+            window_for_cursor.set_cursor_from_name(Some(cursor_for_edge(edge)));
+        } else {
+            // In center area with Ctrl - show move cursor
+            window_for_cursor.set_cursor_from_name(Some("move"));
+        }
+    });
+
+    // Reset cursor when leaving the window
+    let window_for_leave = window.clone();
+    motion_controller.connect_leave(move |_| {
+        window_for_leave.set_cursor_from_name(None);
+    });
+
+    window.add_controller(motion_controller);
 
     // Wrap grid_layout in Rc<RefCell<>> for sharing across closures
     let grid_layout = Rc::new(RefCell::new(grid_layout));
@@ -1666,8 +1762,9 @@ fn show_window_settings_dialog<F>(
     borderless_info_box.append(&info_icon);
 
     let borderless_info_label = Label::new(Some(
-        "When borderless mode is active, hold Ctrl and drag\n\
-         on the window background to move the window."
+        "When borderless mode is active, hold Ctrl and drag:\n\
+         • Near edges/corners to resize the window\n\
+         • In center area to move the window"
     ));
     borderless_info_label.set_halign(gtk4::Align::Start);
     borderless_info_label.set_wrap(true);
