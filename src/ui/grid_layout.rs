@@ -1062,28 +1062,33 @@ impl GridLayout {
                 if let Some(style) = clipboard.paste_panel_style() {
                     info!("Pasting panel style");
 
-                    let mut panel_guard = panel_paste_style.blocking_write();
-                    // Apply the style
-                    panel_guard.background = style.background;
-                    panel_guard.corner_radius = style.corner_radius;
-                    panel_guard.border = style.border;
+                    // Apply style and get panel ID, then drop the lock before calling callbacks
+                    let panel_id = {
+                        let mut panel_guard = panel_paste_style.blocking_write();
+                        // Apply the style
+                        panel_guard.background = style.background;
+                        panel_guard.corner_radius = style.corner_radius;
+                        panel_guard.border = style.border;
 
-                    // Merge displayer config (keep source-specific configs)
-                    for (key, value) in style.displayer_config {
-                        panel_guard.config.insert(key, value);
-                    }
+                        // Merge displayer config (keep source-specific configs)
+                        for (key, value) in style.displayer_config {
+                            panel_guard.config.insert(key, value);
+                        }
 
-                    // Apply config to displayer (clone config to avoid borrow conflict)
-                    let config_clone = panel_guard.config.clone();
-                    let _ = panel_guard.displayer.apply_config(&config_clone);
+                        // Apply config to displayer (clone config to avoid borrow conflict)
+                        let config_clone = panel_guard.config.clone();
+                        let _ = panel_guard.displayer.apply_config(&config_clone);
 
-                    // Trigger redraw
-                    if let Some(state) = panel_states_paste.borrow().get(&panel_guard.id) {
+                        panel_guard.id.clone()
+                    }; // panel_guard dropped here
+
+                    // Trigger redraw (after releasing panel lock)
+                    if let Some(state) = panel_states_paste.borrow().get(&panel_id) {
                         state.background_area.queue_draw();
                         state.widget.queue_draw();
                     }
 
-                    // Trigger on_change callback
+                    // Trigger on_change callback (after releasing panel lock to avoid deadlock)
                     if let Some(ref callback) = *on_change_paste.borrow() {
                         callback();
                     }
@@ -1952,23 +1957,30 @@ impl GridLayout {
                                         if let Some(style) = clipboard.paste_panel_style() {
                                             log::info!("Pasting panel style");
 
-                                            let mut panel_guard = panel_paste_style.blocking_write();
-                                            panel_guard.background = style.background;
-                                            panel_guard.corner_radius = style.corner_radius;
-                                            panel_guard.border = style.border;
+                                            // Apply style and get panel ID, then drop the lock before calling callbacks
+                                            let panel_id = {
+                                                let mut panel_guard = panel_paste_style.blocking_write();
+                                                panel_guard.background = style.background;
+                                                panel_guard.corner_radius = style.corner_radius;
+                                                panel_guard.border = style.border;
 
-                                            for (key, value) in style.displayer_config {
-                                                panel_guard.config.insert(key, value);
-                                            }
+                                                for (key, value) in style.displayer_config {
+                                                    panel_guard.config.insert(key, value);
+                                                }
 
-                                            let config_clone = panel_guard.config.clone();
-                                            let _ = panel_guard.displayer.apply_config(&config_clone);
+                                                let config_clone = panel_guard.config.clone();
+                                                let _ = panel_guard.displayer.apply_config(&config_clone);
 
-                                            if let Some(state) = panel_states_paste.borrow().get(&panel_guard.id) {
+                                                panel_guard.id.clone()
+                                            }; // panel_guard dropped here
+
+                                            // Trigger redraw (after releasing panel lock)
+                                            if let Some(state) = panel_states_paste.borrow().get(&panel_id) {
                                                 state.background_area.queue_draw();
                                                 state.widget.queue_draw();
                                             }
 
+                                            // Trigger on_change callback (after releasing panel lock to avoid deadlock)
                                             if let Some(ref callback) = *on_change_paste.borrow() {
                                                 callback();
                                             }
@@ -2761,6 +2773,13 @@ impl GridLayout {
     pub fn set_viewport_size(&self, width: i32, height: i32) {
         *self.viewport_size.borrow_mut() = (width, height);
         // Trigger redraw of drop zone layer to update viewport boundaries
+        self.drop_zone_layer.queue_draw();
+    }
+
+    /// Show or hide the grid overlay (cell grid and viewport boundaries)
+    /// Used for space bar hold and window resize visualization
+    pub fn set_grid_visible(&self, visible: bool) {
+        *self.is_dragging.borrow_mut() = visible;
         self.drop_zone_layer.queue_draw();
     }
 
@@ -4205,23 +4224,30 @@ fn show_panel_properties_dialog(
                                 if let Some(style) = clipboard.paste_panel_style() {
                                     log::info!("Pasting panel style");
 
-                                    let mut panel_guard = panel_paste_style.blocking_write();
-                                    panel_guard.background = style.background;
-                                    panel_guard.corner_radius = style.corner_radius;
-                                    panel_guard.border = style.border;
+                                    // Apply style and get panel ID, then drop the lock before calling callbacks
+                                    let panel_id = {
+                                        let mut panel_guard = panel_paste_style.blocking_write();
+                                        panel_guard.background = style.background;
+                                        panel_guard.corner_radius = style.corner_radius;
+                                        panel_guard.border = style.border;
 
-                                    for (key, value) in style.displayer_config {
-                                        panel_guard.config.insert(key, value);
-                                    }
+                                        for (key, value) in style.displayer_config {
+                                            panel_guard.config.insert(key, value);
+                                        }
 
-                                    let config_clone = panel_guard.config.clone();
-                                    let _ = panel_guard.displayer.apply_config(&config_clone);
+                                        let config_clone = panel_guard.config.clone();
+                                        let _ = panel_guard.displayer.apply_config(&config_clone);
 
-                                    if let Some(state) = panel_states_paste.borrow().get(&panel_guard.id) {
+                                        panel_guard.id.clone()
+                                    }; // panel_guard dropped here
+
+                                    // Trigger redraw (after releasing panel lock)
+                                    if let Some(state) = panel_states_paste.borrow().get(&panel_id) {
                                         state.background_area.queue_draw();
                                         state.widget.queue_draw();
                                     }
 
+                                    // Trigger on_change callback (after releasing panel lock to avoid deadlock)
                                     if let Some(ref callback) = *on_change_paste.borrow() {
                                         callback();
                                     }

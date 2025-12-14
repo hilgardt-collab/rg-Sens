@@ -380,10 +380,18 @@ fn build_ui(app: &Application) {
     // Track if configuration has changed (dirty flag)
     let config_dirty = Rc::new(RefCell::new(false));
 
-    // Mark config as dirty when panels are moved
+    // Mark config as dirty and update background size when panels are moved
     let config_dirty_clone = config_dirty.clone();
+    let window_bg_for_change = window_background.clone();
+    let grid_layout_for_change = Rc::new(RefCell::new(None::<Rc<RefCell<rg_sens::ui::GridLayout>>>));
+    let grid_layout_for_change_clone = grid_layout_for_change.clone();
     grid_layout.set_on_change(move || {
         *config_dirty_clone.borrow_mut() = true;
+        // Update background size to match grid content
+        if let Some(layout) = grid_layout_for_change_clone.borrow().as_ref() {
+            let content_size = layout.borrow().get_content_size();
+            window_bg_for_change.set_size_request(content_size.0, content_size.1);
+        }
     });
 
     // === Borderless window move support ===
@@ -469,6 +477,9 @@ fn build_ui(app: &Application) {
     // Wrap grid_layout in Rc<RefCell<>> for sharing across closures
     let grid_layout = Rc::new(RefCell::new(grid_layout));
 
+    // Set the grid_layout reference for the on_change callback (now that it's wrapped)
+    *grid_layout_for_change.borrow_mut() = Some(grid_layout.clone());
+
     // Mark config as dirty when window is resized
     let config_dirty_clone2 = config_dirty.clone();
     window.connect_default_width_notify(move |_| {
@@ -478,6 +489,51 @@ fn build_ui(app: &Application) {
     let config_dirty_clone3 = config_dirty.clone();
     window.connect_default_height_notify(move |_| {
         *config_dirty_clone3.borrow_mut() = true;
+    });
+
+    // Show grid overlay during window resize (with debounced hide)
+    let resize_hide_timer: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+
+    let grid_layout_for_resize_w = grid_layout.clone();
+    let resize_timer_w = resize_hide_timer.clone();
+    window.connect_default_width_notify(move |_| {
+        // Show grid immediately
+        grid_layout_for_resize_w.borrow().set_grid_visible(true);
+
+        // Cancel any pending hide timer
+        if let Some(source_id) = resize_timer_w.borrow_mut().take() {
+            source_id.remove();
+        }
+
+        // Schedule hide after 500ms of no resize events
+        let grid_layout_hide = grid_layout_for_resize_w.clone();
+        let timer_ref = resize_timer_w.clone();
+        let source_id = glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+            grid_layout_hide.borrow().set_grid_visible(false);
+            *timer_ref.borrow_mut() = None;
+        });
+        *resize_timer_w.borrow_mut() = Some(source_id);
+    });
+
+    let grid_layout_for_resize_h = grid_layout.clone();
+    let resize_timer_h = resize_hide_timer.clone();
+    window.connect_default_height_notify(move |_| {
+        // Show grid immediately
+        grid_layout_for_resize_h.borrow().set_grid_visible(true);
+
+        // Cancel any pending hide timer
+        if let Some(source_id) = resize_timer_h.borrow_mut().take() {
+            source_id.remove();
+        }
+
+        // Schedule hide after 500ms of no resize events
+        let grid_layout_hide = grid_layout_for_resize_h.clone();
+        let timer_ref = resize_timer_h.clone();
+        let source_id = glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+            grid_layout_hide.borrow().set_grid_visible(false);
+            *timer_ref.borrow_mut() = None;
+        });
+        *resize_timer_h.borrow_mut() = Some(source_id);
     });
 
     // Set initial viewport size for drag visualization from config
@@ -1233,8 +1289,11 @@ fn build_ui(app: &Application) {
 
     // Clone for closure
     let grid_layout_for_key = grid_layout_for_settings.clone();
+    let grid_layout_for_space = grid_layout_for_settings.clone();
+    let grid_layout_for_space_release = grid_layout_for_settings.clone();
 
     key_controller.connect_key_pressed(move |_, key, _code, modifiers| {
+        // Ctrl+Comma opens settings
         if modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK)
             && key == gtk4::gdk::Key::comma {
             show_window_settings_dialog(
@@ -1245,9 +1304,22 @@ fn build_ui(app: &Application) {
                 &config_dirty_for_settings,
                 &start_auto_scroll_for_settings,
             );
-            glib::Propagation::Stop
-        } else {
-            glib::Propagation::Proceed
+            return glib::Propagation::Stop;
+        }
+
+        // Space bar shows grid overlay
+        if key == gtk4::gdk::Key::space {
+            grid_layout_for_space.borrow().set_grid_visible(true);
+            return glib::Propagation::Stop;
+        }
+
+        glib::Propagation::Proceed
+    });
+
+    // Hide grid when space is released
+    key_controller.connect_key_released(move |_, key, _code, _modifiers| {
+        if key == gtk4::gdk::Key::space {
+            grid_layout_for_space_release.borrow().set_grid_visible(false);
         }
     });
 
@@ -1760,6 +1832,25 @@ fn show_window_settings_dialog<F>(
     vp_zero_help.set_margin_top(4);
     vp_zero_help.add_css_class("dim-label");
     window_mode_tab_box.append(&vp_zero_help);
+
+    // Grid overlay shortcuts help
+    let grid_shortcuts_label = Label::new(Some("Grid Overlay Shortcuts"));
+    grid_shortcuts_label.set_halign(gtk4::Align::Start);
+    grid_shortcuts_label.set_margin_top(12);
+    grid_shortcuts_label.add_css_class("heading");
+    window_mode_tab_box.append(&grid_shortcuts_label);
+
+    let grid_shortcuts_help = Label::new(Some(
+        "• Hold Space to show the cell grid and viewport boundaries\n\
+         • Grid also appears automatically when resizing the window\n\
+         • Grid appears when dragging panels"
+    ));
+    grid_shortcuts_help.set_halign(gtk4::Align::Start);
+    grid_shortcuts_help.set_margin_start(12);
+    grid_shortcuts_help.set_margin_top(4);
+    grid_shortcuts_help.add_css_class("dim-label");
+    grid_shortcuts_help.set_wrap(true);
+    window_mode_tab_box.append(&grid_shortcuts_help);
 
     // Set the scrolled window content and add to notebook
     window_mode_scroll.set_child(Some(&window_mode_tab_box));
