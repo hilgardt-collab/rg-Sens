@@ -1013,7 +1013,11 @@ impl CoreBarsConfigWidget {
                 self.fg_solid_radio.set_active(true);
                 self.fg_color_widget.set_color(*color);
             }
-            BarFillType::Gradient { .. } => {
+            BarFillType::Gradient { stops, angle } => {
+                self.fg_gradient_editor.set_gradient(&crate::ui::background::LinearGradientConfig {
+                    stops: stops.clone(),
+                    angle: *angle,
+                });
                 self.fg_gradient_radio.set_active(true);
             }
         }
@@ -1023,7 +1027,11 @@ impl CoreBarsConfigWidget {
                 self.bg_solid_radio.set_active(true);
                 self.bg_color_widget.set_color(*color);
             }
-            BarBackgroundType::Gradient { .. } => {
+            BarBackgroundType::Gradient { stops, angle } => {
+                self.bg_gradient_editor.set_gradient(&crate::ui::background::LinearGradientConfig {
+                    stops: stops.clone(),
+                    angle: *angle,
+                });
                 self.bg_gradient_radio.set_active(true);
             }
             BarBackgroundType::Transparent => {
