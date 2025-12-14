@@ -526,6 +526,7 @@ fn build_ui(app: &Application) {
     // Setup efficient auto-scroll
     // Uses timeout_add_local_once for delay, then short animation burst
     let auto_scroll_active = Rc::new(RefCell::new(false));
+    let auto_scroll_generation = Rc::new(RefCell::new(0u32));
 
     let scrolled_window_for_auto = scrolled_window.clone();
     let app_config_for_auto = app_config.clone();
@@ -544,13 +545,21 @@ fn build_ui(app: &Application) {
     // Helper to perform one scroll animation then schedule next
     // Pattern: scroll right until edge, then move down+left to start of next row, repeat
     // When at bottom-right, wrap to top-left
+    // Uses a generation counter to prevent overlapping scroll cycles
     fn schedule_auto_scroll(
         scrolled: gtk4::ScrolledWindow,
         config: Rc<RefCell<AppConfig>>,
         layout: Rc<RefCell<GridLayout>>,
         active: Rc<RefCell<bool>>,
+        generation: Rc<RefCell<u32>>,
+        current_gen: u32,
         bg: gtk4::DrawingArea,
     ) {
+        // Check if this is a stale callback from an old generation
+        if *generation.borrow() != current_gen {
+            return;
+        }
+
         let cfg = config.borrow();
         if !cfg.window.auto_scroll_enabled {
             *active.borrow_mut() = false;
@@ -563,6 +572,11 @@ fn build_ui(app: &Application) {
 
         // Schedule the scroll after delay
         glib::timeout_add_local_once(std::time::Duration::from_millis(delay_ms), move || {
+            // Check generation again - might have been reset while waiting
+            if *generation.borrow() != current_gen {
+                return;
+            }
+
             let cfg = config.borrow();
             if !cfg.window.auto_scroll_enabled {
                 *active.borrow_mut() = false;
@@ -584,7 +598,7 @@ fn build_ui(app: &Application) {
 
             if !needs_h_scroll && !needs_v_scroll {
                 // No scrolling needed, reschedule check
-                schedule_auto_scroll(scrolled, config, layout, active, bg);
+                schedule_auto_scroll(scrolled, config, layout, active, generation, current_gen, bg);
                 return;
             }
 
@@ -619,6 +633,11 @@ fn build_ui(app: &Application) {
             let total_frames = (ANIMATION_MS / FRAME_MS) as u32;
 
             glib::timeout_add_local(std::time::Duration::from_millis(FRAME_MS), move || {
+                // Check generation - stop if a new cycle was started
+                if *generation.borrow() != current_gen {
+                    return glib::ControlFlow::Break;
+                }
+
                 let mut frame = frame_count.borrow_mut();
                 *frame += 1;
 
@@ -632,8 +651,8 @@ fn build_ui(app: &Application) {
                 v_adj.set_value(v_pos);
 
                 if *frame >= total_frames {
-                    // Animation done, schedule next scroll
-                    schedule_auto_scroll(scrolled.clone(), config.clone(), layout.clone(), active.clone(), bg.clone());
+                    // Animation done, schedule next scroll after delay
+                    schedule_auto_scroll(scrolled.clone(), config.clone(), layout.clone(), active.clone(), generation.clone(), current_gen, bg.clone());
                     return glib::ControlFlow::Break;
                 }
 
@@ -648,10 +667,18 @@ fn build_ui(app: &Application) {
         let app_config = app_config_for_auto.clone();
         let grid_layout = grid_layout_for_auto.clone();
         let active = auto_scroll_active.clone();
+        let generation = auto_scroll_generation.clone();
         let window_background = window_background_for_auto.clone();
 
         move || {
             *active.borrow_mut() = false;
+
+            // Increment generation to invalidate any pending scroll cycles
+            let new_gen = {
+                let mut gen = generation.borrow_mut();
+                *gen = gen.wrapping_add(1);
+                *gen
+            };
 
             let cfg = app_config.borrow();
             if !cfg.window.auto_scroll_enabled {
@@ -663,12 +690,14 @@ fn build_ui(app: &Application) {
             scrolled_window.hadjustment().set_value(0.0);
             scrolled_window.vadjustment().set_value(0.0);
 
-            // Start the auto-scroll cycle
+            // Start the auto-scroll cycle with current generation
             schedule_auto_scroll(
                 scrolled_window.clone(),
                 app_config.clone(),
                 grid_layout.clone(),
                 active.clone(),
+                generation.clone(),
+                new_gen,
                 window_background.clone(),
             );
         }
