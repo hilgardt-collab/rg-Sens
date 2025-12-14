@@ -2,54 +2,91 @@
 
 A fast, customizable system monitoring dashboard for Linux, written in Rust.
 
+![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)
+![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)
+![GTK4](https://img.shields.io/badge/GTK-4.10%2B-green)
+
 ## Overview
 
-rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), designed to provide:
-- **High Performance**: Lower CPU and memory usage compared to Python implementation
+rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), providing a highly customizable system monitoring dashboard with:
+
+- **High Performance**: Low CPU and memory usage with native Rust implementation
 - **Customizable Grid Layout**: Drag-and-drop panels with flexible sizing
-- **Rich Visualizations**: Multiple displayer types (gauges, graphs, LCARS themes, etc.)
-- **Extensible**: Plugin system for custom data sources and displayers
+- **Rich Visualizations**: Multiple displayer types including gauges, graphs, and LCARS themes
+- **Multi-Monitor Support**: Fullscreen on specific monitors, borderless mode
+- **Auto-Scroll**: Automatic scrolling through large dashboards
 - **Native**: Built with GTK4 for seamless Linux desktop integration
 
-## Status
+## Screenshots
 
-🚧 **Early Development** - The project is in its initial stages. Core architecture is being established.
+*Coming soon*
 
-### Roadmap
+## Features
 
-- [x] Project structure and core traits
-- [ ] Basic GTK4 window and grid layout
-- [ ] First data source (CPU)
-- [ ] First displayer (text/level bar)
-- [ ] Configuration loading/saving
-- [ ] Additional sources (Memory, GPU, Temps, etc.)
-- [ ] Additional displayers (gauges, graphs, etc.)
-- [ ] Drag-and-drop panel arrangement
-- [ ] Configuration dialog
-- [ ] Plugin system (dynamic loading)
-- [ ] Python gSens config migration
+### Data Sources
+- **CPU**: Usage, frequency, per-core stats, temperature sensors
+- **Memory**: RAM and swap usage
+- **GPU**: NVIDIA (via NVML) and AMD (via sysfs) support
+- **System Temperature**: All system temperature sensors
+- **Fan Speed**: System fan RPM monitoring
+- **Clock**: Current time with timezone support
+- **Timer**: Countdown timer with alarm
+- **Combo**: Combine multiple sources into one panel
 
-## Building
+### Displayers
+- **Text**: Customizable text display with templates
+- **Bar**: Horizontal/vertical bars with gradients and segments
+- **Arc**: Circular gauge displays
+- **Graph**: Line graphs with history
+- **Speedometer**: Analog speedometer-style gauge
+- **Clock**: Digital and analog clock displays
+- **LCARS**: Star Trek LCARS-themed displays
+
+### Customization
+- Panel backgrounds (solid, gradient, image, polygon)
+- Configurable colors and gradients
+- Custom fonts and text styling
+- Border styles and corner radius
+- Per-panel update intervals
+- Grid cell size and spacing
+
+### User Interface
+- Drag-and-drop panel arrangement
+- Multi-select panels (Ctrl+Click, box selection)
+- Copy/paste panels and styles
+- Right-click context menus
+- Panel configuration dialog
+- Window settings dialog (Ctrl+,)
+- Fullscreen mode (double-click to toggle)
+- Borderless window mode
+- Auto-scroll for large dashboards
+
+### Keyboard Shortcuts
+- **Ctrl+,** - Open settings dialog
+- **Space** (hold) - Show grid overlay
+- **Delete** - Delete selected panels
+- **Double-click** - Toggle fullscreen
+
+## Installation
 
 ### Prerequisites
 
 - Rust 1.70+ (install via [rustup](https://rustup.rs/))
 - GTK4 development libraries
-- System monitoring libraries
 
-**On Debian/Ubuntu:**
+**Debian/Ubuntu:**
 ```bash
-sudo apt install libgtk-4-dev libcairo2-dev libpango1.0-dev lm-sensors
+sudo apt install libgtk-4-dev libcairo2-dev libpango1.0-dev
 ```
 
-**On Fedora:**
+**Fedora:**
 ```bash
-sudo dnf install gtk4-devel cairo-devel pango-devel lm_sensors
+sudo dnf install gtk4-devel cairo-devel pango-devel
 ```
 
-**On Arch:**
+**Arch Linux:**
 ```bash
-sudo pacman -S gtk4 cairo pango lm_sensors
+sudo pacman -S gtk4 cairo pango
 ```
 
 ### Build and Run
@@ -59,90 +96,121 @@ sudo pacman -S gtk4 cairo pango lm_sensors
 git clone https://github.com/hilgardt-collab/rg-Sens.git
 cd rg-Sens
 
-# Build
+# Build (release mode recommended)
 cargo build --release
 
 # Run
 cargo run --release
 ```
 
-## Architecture
+### Build Options
 
-rg-Sens is built around a modular architecture:
+```bash
+# Build without NVIDIA GPU support
+cargo build --release --no-default-features
 
-- **Data Sources**: Collect system metrics (CPU, memory, GPU, temps, etc.)
-- **Displayers**: Visualize data (text, gauges, graphs, etc.)
-- **Panels**: Container combining a source and displayer
-- **Grid Layout**: Manages panel placement and sizing
-- **Update Manager**: Coordinates periodic data updates
-- **Registry**: Manages available sources and displayers
+# Run with debug logging
+RUST_LOG=debug cargo run
+```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed information.
+## Command Line Options
+
+```
+rg-sens [OPTIONS] [LAYOUT_FILE]
+
+Arguments:
+  [LAYOUT_FILE]  Load a specific layout file instead of default config
+
+Options:
+  -f, --fullscreen[=<MONITOR>]  Start in fullscreen mode (optionally on specific monitor)
+  -b, --borderless[=<MONITOR>]  Start in borderless mode (optionally on specific monitor)
+  -l, --list-monitors           List available monitors and exit
+  -a, --at <X,Y>                Position window at specific coordinates
+  -h, --help                    Print help
+  -V, --version                 Print version
+```
+
+### Examples
+
+```bash
+# Start fullscreen on monitor 1
+rg-sens -f=1
+
+# Start borderless at position 100,100
+rg-sens -b -a 100,100
+
+# Load a specific layout
+rg-sens ~/my-dashboard.json
+
+# List available monitors
+rg-sens -l
+```
 
 ## Configuration
 
-Configuration is stored in `~/.config/rg-sens/config.json` (or `$XDG_CONFIG_HOME/rg-sens/config.json`).
+Configuration is stored in `~/.config/rg-sens/config.json` (respects `$XDG_CONFIG_HOME`).
 
-The configuration format is designed to be compatible with Python gSens for easy migration.
+### Configuration Structure
 
-## Features
+```json
+{
+  "window": {
+    "width": 800,
+    "height": 600,
+    "fullscreen_enabled": false,
+    "borderless": false,
+    "auto_scroll_enabled": false,
+    "auto_scroll_delay_ms": 5000,
+    "viewport_width": 0,
+    "viewport_height": 0
+  },
+  "grid": {
+    "columns": 10,
+    "rows": 8,
+    "cell_width": 100,
+    "cell_height": 100,
+    "spacing": 4
+  },
+  "panels": [...]
+}
+```
 
-### Current Features
-- Core architecture with trait-based design
-- Configuration management
+## Architecture
 
-### Planned Features
-- Multiple data sources:
-  - CPU (usage, frequency, per-core stats)
-  - Memory (RAM, swap)
-  - GPU (NVIDIA, AMD, Intel)
-  - Temperatures (lm-sensors)
-  - Disk I/O
-  - Network I/O
-  - System processes
-  - And more...
+rg-Sens uses a modular, trait-based architecture:
 
-- Multiple displayers:
-  - Text display
-  - Level bars
-  - Arc gauges
-  - Line graphs
-  - Multi-core CPU grid
-  - Analog clock
-  - LCARS themes
-  - And more...
+- **DataSource trait**: Collects system metrics
+- **Displayer trait**: Visualizes data using Cairo rendering
+- **Panel**: Combines a source and displayer with geometry
+- **GridLayout**: Manages panel placement with drag-and-drop
+- **UpdateManager**: Coordinates periodic data updates
+- **Registry**: Manages available sources and displayers
 
-- Customization:
-  - Colors and gradients
-  - Fonts and text styling
-  - Border styles
-  - Update intervals
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
-## Performance Goals
+## Performance
 
 Compared to the Python gSens implementation:
-- **CPU Usage**: <5% idle (vs ~10-15% for Python)
-- **Memory**: <50MB (vs ~100-150MB for Python)
-- **Update Latency**: <10ms per source
-- **Rendering**: 60 FPS capable
+- **CPU Usage**: <5% idle
+- **Memory**: <50MB typical
+- **Rendering**: 60 FPS capable with smooth animations
 
 ## Contributing
 
-Contributions are welcome! This is a hobby project in early development.
+Contributions are welcome! Areas where help is appreciated:
 
-Areas where help is appreciated:
-- Implementing data sources
-- Implementing displayers
+- Implementing new data sources
+- Implementing new displayers
 - Testing on different Linux distributions
-- Documentation
+- Documentation improvements
 - Bug reports and feature requests
 
 ## License
 
-MIT OR Apache-2.0 (same as Rust ecosystem standard)
+Dual-licensed under MIT OR Apache-2.0 (Rust ecosystem standard).
 
 ## Acknowledgments
 
 - Original [gSens](https://github.com/hilgardt-collab/gSens) Python implementation
-- GTK and cairo-rs communities
+- GTK4 and cairo-rs communities
 - Rust systems programming ecosystem
