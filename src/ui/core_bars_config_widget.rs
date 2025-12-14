@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::Color;
-use crate::ui::bar_display::{BarBackgroundType, BarFillType, BarOrientation, BarStyle};
+use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle};
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
@@ -30,6 +30,7 @@ pub struct CoreBarsConfigWidget {
     // Bar style
     style_dropdown: DropDown,
     orientation_dropdown: DropDown,
+    fill_direction_dropdown: DropDown,
     corner_radius_spin: SpinButton,
     bar_spacing_spin: SpinButton,
 
@@ -90,8 +91,8 @@ impl CoreBarsConfigWidget {
         notebook.append_page(&cores_page, Some(&Label::new(Some("Cores"))));
 
         // === Tab 2: Bar Style ===
-        let (style_page, style_dropdown, orientation_dropdown, corner_radius_spin, bar_spacing_spin,
-             segment_count_spin, segment_spacing_spin) =
+        let (style_page, style_dropdown, orientation_dropdown, fill_direction_dropdown,
+             corner_radius_spin, bar_spacing_spin, segment_count_spin, segment_spacing_spin) =
             Self::create_style_page(&config, &on_change);
         notebook.append_page(&style_page, Some(&Label::new(Some("Style"))));
 
@@ -146,6 +147,7 @@ impl CoreBarsConfigWidget {
             end_core_spin,
             style_dropdown,
             orientation_dropdown,
+            fill_direction_dropdown,
             corner_radius_spin,
             bar_spacing_spin,
             segment_count_spin,
@@ -233,7 +235,7 @@ impl CoreBarsConfigWidget {
     fn create_style_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, DropDown, DropDown, SpinButton, SpinButton, SpinButton, SpinButton) {
+    ) -> (GtkBox, DropDown, DropDown, DropDown, SpinButton, SpinButton, SpinButton, SpinButton) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -259,6 +261,16 @@ impl CoreBarsConfigWidget {
         orientation_dropdown.set_hexpand(true);
         orient_row.append(&orientation_dropdown);
         page.append(&orient_row);
+
+        // Fill direction dropdown (will be populated based on orientation)
+        let direction_row = GtkBox::new(Orientation::Horizontal, 8);
+        direction_row.append(&Label::new(Some("Fill Direction:")));
+        let direction_options = StringList::new(&["Left to Right", "Right to Left"]); // Initial horizontal options
+        let fill_direction_dropdown = DropDown::new(Some(direction_options), Option::<gtk4::Expression>::None);
+        fill_direction_dropdown.set_selected(0);
+        fill_direction_dropdown.set_hexpand(true);
+        direction_row.append(&fill_direction_dropdown);
+        page.append(&direction_row);
 
         // Corner radius
         let radius_row = GtkBox::new(Orientation::Horizontal, 8);
@@ -316,12 +328,53 @@ impl CoreBarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
+        let fill_direction_dropdown_clone = fill_direction_dropdown.clone();
         orientation_dropdown.connect_selected_notify(move |dd| {
-            let orient = match dd.selected() {
+            let orientation = match dd.selected() {
                 0 => BarOrientation::Horizontal,
                 _ => BarOrientation::Vertical,
             };
-            config_clone.borrow_mut().orientation = orient;
+
+            // Update fill direction dropdown options based on orientation
+            let new_options = if matches!(orientation, BarOrientation::Horizontal) {
+                StringList::new(&["Left to Right", "Right to Left"])
+            } else {
+                StringList::new(&["Bottom to Top", "Top to Bottom"])
+            };
+            fill_direction_dropdown_clone.set_model(Some(&new_options));
+
+            // Set appropriate default
+            fill_direction_dropdown_clone.set_selected(0);
+
+            config_clone.borrow_mut().orientation = orientation;
+            config_clone.borrow_mut().fill_direction = if matches!(orientation, BarOrientation::Horizontal) {
+                BarFillDirection::LeftToRight
+            } else {
+                BarFillDirection::BottomToTop
+            };
+
+            if let Some(ref cb) = *on_change_clone.borrow() {
+                cb();
+            }
+        });
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let orientation_dropdown_clone = orientation_dropdown.clone();
+        fill_direction_dropdown.connect_selected_notify(move |dd| {
+            let is_horizontal = orientation_dropdown_clone.selected() == 0;
+            let direction = if is_horizontal {
+                match dd.selected() {
+                    0 => BarFillDirection::LeftToRight,
+                    _ => BarFillDirection::RightToLeft,
+                }
+            } else {
+                match dd.selected() {
+                    0 => BarFillDirection::BottomToTop,
+                    _ => BarFillDirection::TopToBottom,
+                }
+            };
+            config_clone.borrow_mut().fill_direction = direction;
             if let Some(ref cb) = *on_change_clone.borrow() {
                 cb();
             }
@@ -363,8 +416,8 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        (page, style_dropdown, orientation_dropdown, corner_radius_spin, bar_spacing_spin,
-         segment_count_spin, segment_spacing_spin)
+        (page, style_dropdown, orientation_dropdown, fill_direction_dropdown, corner_radius_spin,
+         bar_spacing_spin, segment_count_spin, segment_spacing_spin)
     }
 
     fn create_colors_page(
@@ -1001,6 +1054,26 @@ impl CoreBarsConfigWidget {
             BarOrientation::Horizontal => 0,
             BarOrientation::Vertical => 1,
         });
+
+        // Update fill direction dropdown options based on orientation
+        let direction_options = if matches!(config.orientation, BarOrientation::Horizontal) {
+            StringList::new(&["Left to Right", "Right to Left"])
+        } else {
+            StringList::new(&["Bottom to Top", "Top to Bottom"])
+        };
+        self.fill_direction_dropdown.set_model(Some(&direction_options));
+
+        // Set the correct selection based on orientation
+        let selection = match (&config.orientation, &config.fill_direction) {
+            (BarOrientation::Horizontal, BarFillDirection::LeftToRight) => 0,
+            (BarOrientation::Horizontal, BarFillDirection::RightToLeft) => 1,
+            (BarOrientation::Vertical, BarFillDirection::BottomToTop) => 0,
+            (BarOrientation::Vertical, BarFillDirection::TopToBottom) => 1,
+            // Fallback to defaults if orientation/direction mismatch
+            (BarOrientation::Horizontal, _) => 0, // Default to LeftToRight
+            (BarOrientation::Vertical, _) => 0,   // Default to BottomToTop
+        };
+        self.fill_direction_dropdown.set_selected(selection);
 
         self.corner_radius_spin.set_value(config.corner_radius);
         self.bar_spacing_spin.set_value(config.bar_spacing);

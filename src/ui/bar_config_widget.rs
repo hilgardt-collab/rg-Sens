@@ -564,8 +564,8 @@ impl BarConfigWidget {
                 direction_dropdown_paste.set_selected(match cfg.fill_direction {
                     BarFillDirection::LeftToRight => 0,
                     BarFillDirection::RightToLeft => 1,
-                    BarFillDirection::TopToBottom => 2,
-                    BarFillDirection::BottomToTop => 3,
+                    BarFillDirection::BottomToTop => 2,
+                    BarFillDirection::TopToBottom => 3,
                 });
 
                 // Foreground

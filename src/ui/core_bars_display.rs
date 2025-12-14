@@ -8,7 +8,7 @@ use gtk4::cairo;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::bar_display::{BarBackgroundType, BarFillType, BarOrientation, BarStyle, BorderConfig};
+use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig};
 
 /// Label position relative to the bar
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -36,6 +36,8 @@ pub struct CoreBarsConfig {
     pub bar_style: BarStyle,
     #[serde(default)]
     pub orientation: BarOrientation,
+    #[serde(default)]
+    pub fill_direction: BarFillDirection,
     #[serde(default)]
     pub foreground: BarFillType,
     #[serde(default)]
@@ -129,6 +131,7 @@ impl Default for CoreBarsConfig {
             end_core: default_end_core(),
             bar_style: BarStyle::default(),
             orientation: BarOrientation::default(),
+            fill_direction: BarFillDirection::default(),
             foreground: BarFillType::default(),
             background: BarBackgroundType::default(),
             corner_radius: default_corner_radius(),
@@ -362,15 +365,19 @@ fn render_single_bar(
             render_background(cr, &config.background, x, y, width, height)?;
             cr.restore()?;
 
-            // Render foreground based on value
+            // Render foreground based on value and fill direction
             cr.save()?;
-            let (fill_x, fill_y, fill_w, fill_h) = if horizontal {
-                // Fill left to right
-                (x, y, width * value, height)
-            } else {
-                // Fill bottom to top
-                let fill_height = height * value;
-                (x, y + height - fill_height, width, fill_height)
+            let (fill_x, fill_y, fill_w, fill_h) = match config.fill_direction {
+                BarFillDirection::LeftToRight => (x, y, width * value, height),
+                BarFillDirection::RightToLeft => {
+                    let fill_width = width * value;
+                    (x + width - fill_width, y, fill_width, height)
+                }
+                BarFillDirection::BottomToTop => {
+                    let fill_height = height * value;
+                    (x, y + height - fill_height, width, fill_height)
+                }
+                BarFillDirection::TopToBottom => (x, y, width, height * value),
             };
 
             if fill_w > 0.0 && fill_h > 0.0 {
@@ -417,8 +424,20 @@ fn render_segmented_single_bar(
         let radius = config.corner_radius.min(segment_width / 2.0).min(height / 2.0);
 
         for i in 0..segment_count {
-            let seg_x = x + i as f64 * (segment_width + spacing);
-            let is_filled = i < filled_segments;
+            // Determine segment index based on fill direction
+            let seg_index = match config.fill_direction {
+                BarFillDirection::LeftToRight => i,
+                BarFillDirection::RightToLeft => segment_count - 1 - i,
+                _ => i, // For vertical fill directions, use left-to-right layout
+            };
+
+            let seg_x = x + seg_index as f64 * (segment_width + spacing);
+
+            // Determine if filled based on direction
+            let is_filled = match config.fill_direction {
+                BarFillDirection::RightToLeft => i < filled_segments,
+                _ => seg_index < filled_segments,
+            };
 
             render_segment(
                 cr,
@@ -441,10 +460,20 @@ fn render_segmented_single_bar(
         let radius = config.corner_radius.min(width / 2.0).min(segment_height / 2.0);
 
         for i in 0..segment_count {
-            // Fill from bottom to top
-            let seg_index = segment_count - 1 - i;
+            // Determine segment index based on fill direction
+            let seg_index = match config.fill_direction {
+                BarFillDirection::BottomToTop => segment_count - 1 - i,
+                BarFillDirection::TopToBottom => i,
+                _ => segment_count - 1 - i, // For horizontal fill directions, use bottom-to-top layout
+            };
+
             let seg_y = y + seg_index as f64 * (segment_height + spacing);
-            let is_filled = i < filled_segments;
+
+            // Determine if filled based on direction
+            let is_filled = match config.fill_direction {
+                BarFillDirection::TopToBottom => i < filled_segments,
+                _ => (segment_count - 1 - seg_index) < filled_segments,
+            };
 
             render_segment(
                 cr,
