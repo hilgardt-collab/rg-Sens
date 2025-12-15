@@ -272,13 +272,6 @@ impl LcarsComboDisplayer {
                     let empty_history = VecDeque::new();
                     let history = graph_history.get(&graph_key).unwrap_or(&empty_history);
 
-                    // Convert values to serde_json HashMap for render_content_graph
-                    let source_values: HashMap<String, serde_json::Value> = values
-                        .iter()
-                        .filter(|(k, _)| k.starts_with(&prefix))
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-
                     if let Err(e) = render_content_graph(
                         cr,
                         item_x,
@@ -287,7 +280,7 @@ impl LcarsComboDisplayer {
                         item_h,
                         &item_config.graph_config,
                         history,
-                        &source_values,
+                        &slot_values,
                     ) {
                         log::warn!("Failed to render graph for {}: {}", prefix, e);
                         // Fall back to text display on error

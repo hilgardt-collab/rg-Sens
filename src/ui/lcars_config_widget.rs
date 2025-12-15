@@ -122,6 +122,7 @@ pub struct LcarsConfigWidget {
 
 impl LcarsConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        log::info!("=== LcarsConfigWidget::new() called with {} fields ===", available_fields.len());
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(LcarsDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
@@ -1511,13 +1512,19 @@ impl LcarsConfigWidget {
 
         let summaries = source_summaries.borrow();
 
+        log::info!(
+            "=== rebuild_content_notebook_tabs: source_summaries has {} entries ===",
+            summaries.len()
+        );
+
         if summaries.is_empty() {
             // Show placeholder when no sources configured
+            log::warn!("rebuild_content_notebook_tabs: summaries is EMPTY, showing placeholder (need Combination source)");
             let placeholder = GtkBox::new(Orientation::Vertical, 8);
             placeholder.set_margin_start(12);
             placeholder.set_margin_end(12);
             placeholder.set_margin_top(12);
-            let label = Label::new(Some("No sources configured.\nGo to 'Data Source' tab to add sources."));
+            let label = Label::new(Some("No sources configured.\nGo to 'Data Source' tab and select 'Combination' source to configure LCARS content."));
             label.set_halign(gtk4::Align::Start);
             placeholder.append(&label);
             notebook.append_page(&placeholder, Some(&Label::new(Some("No Sources"))));
@@ -1573,6 +1580,7 @@ impl LcarsConfigWidget {
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     ) -> GtkBox {
+        log::info!("=== create_slot_config_tab() called for slot '{}' ===", slot_name);
         let tab = GtkBox::new(Orientation::Vertical, 8);
         tab.set_margin_start(12);
         tab.set_margin_end(12);
@@ -1714,6 +1722,20 @@ impl LcarsConfigWidget {
                 .map(|item| item.graph_config.clone())
                 .unwrap_or_default()
         };
+        log::info!(
+            "=== LcarsConfigWidget: Loading graph config for slot '{}' ===",
+            slot_name
+        );
+        log::info!(
+            "    text_overlay has {} lines, field_ids: {:?}",
+            current_graph_config.text_overlay.len(),
+            current_graph_config.text_overlay.iter().map(|l| l.field_id.as_str()).collect::<Vec<_>>()
+        );
+        log::info!(
+            "    lcars_fields count: {}, field_ids: {:?}",
+            lcars_fields.len(),
+            lcars_fields.iter().map(|f| f.id.as_str()).collect::<Vec<_>>()
+        );
         graph_widget.set_config(current_graph_config);
 
         // Set up change callback to sync config back
@@ -1725,6 +1747,17 @@ impl LcarsConfigWidget {
         let graph_widget_for_callback = graph_widget_rc.clone();
         graph_widget_rc.set_on_change(move || {
             let graph_config = graph_widget_for_callback.get_config();
+            log::info!(
+                "=== LcarsConfigWidget: graph on_change for slot '{}', text_overlay has {} lines ===",
+                slot_name_clone,
+                graph_config.text_overlay.len()
+            );
+            if !graph_config.text_overlay.is_empty() {
+                for (i, line) in graph_config.text_overlay.iter().enumerate() {
+                    log::info!("    text_overlay[{}]: field_id='{}', font='{}', size={}",
+                        i, line.field_id, line.font_family, line.font_size);
+                }
+            }
             let mut cfg = config_clone.borrow_mut();
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())
@@ -2253,6 +2286,14 @@ impl LcarsConfigWidget {
             new_config.frame.top_header.font,
             new_config.frame.bottom_header.font
         );
+        // Debug: Log text_overlay for each content item
+        for (slot_name, item) in &new_config.frame.content_items {
+            log::debug!(
+                "LcarsConfigWidget::set_config - slot '{}' has {} text_overlay lines in graph_config",
+                slot_name,
+                item.graph_config.text_overlay.len()
+            );
+        }
 
         // First update the internal config with the new values
         // Handle empty fonts by substituting defaults
@@ -2418,7 +2459,18 @@ impl LcarsConfigWidget {
     }
 
     pub fn get_config(&self) -> LcarsDisplayConfig {
-        self.config.borrow().clone()
+        let config = self.config.borrow().clone();
+        // Debug log text_overlay for each content item
+        for (slot_name, item) in &config.frame.content_items {
+            if !item.graph_config.text_overlay.is_empty() {
+                log::debug!(
+                    "LcarsConfigWidget::get_config - slot '{}' has {} text_overlay lines",
+                    slot_name,
+                    item.graph_config.text_overlay.len()
+                );
+            }
+        }
+        config
     }
 
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {

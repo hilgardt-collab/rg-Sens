@@ -284,7 +284,7 @@ fn render_text_with_alignment(
 }
 
 fn get_field_value(field_id: &str, values: &HashMap<String, Value>) -> Option<String> {
-    values.get(field_id).map(|value| {
+    let result = values.get(field_id).map(|value| {
         match value {
             Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
@@ -297,5 +297,9 @@ fn get_field_value(field_id: &str, values: &HashMap<String, Value>) -> Option<St
             Value::Bool(b) => b.to_string(),
             _ => format!("{}", value),
         }
-    })
+    });
+    if result.is_none() {
+        log::debug!("Text overlay field '{}' not found in values", field_id);
+    }
+    result
 }

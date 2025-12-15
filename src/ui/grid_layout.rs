@@ -3567,6 +3567,7 @@ fn show_panel_properties_dialog(
     lcars_config_label.add_css_class("heading");
     lcars_config_label.set_visible(old_displayer_id == "lcars");
 
+    log::info!("=== Creating LcarsConfigWidget, old_displayer='{}', old_source='{}' ===", old_displayer_id, old_source_id);
     let lcars_config_widget = crate::ui::LcarsConfigWidget::new(available_fields.clone());
     lcars_config_widget.widget().set_visible(old_displayer_id == "lcars");
 
@@ -3574,6 +3575,7 @@ fn show_panel_properties_dialog(
     // Prefer getting config directly from displayer (most up-to-date), fall back to panel config
     if old_displayer_id == "lcars" {
         let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading LCARS config from displayer.get_typed_config() ===");
             lcars_config_widget.set_config(lcars_config);
             true
         } else {
@@ -3584,6 +3586,7 @@ fn show_panel_properties_dialog(
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("lcars_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading LCARS config from panel config hashmap ===");
                     lcars_config_widget.set_config(config);
                 }
             }
@@ -3651,9 +3654,34 @@ fn show_panel_properties_dialog(
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
+            log::info!("=== Initializing LCARS at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
             lcars_config_widget.set_available_fields(fields);
             lcars_config_widget.set_source_summaries(summaries);
+        } else {
+            log::info!("=== Skipping LCARS init: old_source_id='{}' (need 'combination') ===", old_source_id);
         }
+    }
+
+    // Update LCARS widget when source dropdown changes to "combination"
+    {
+        let lcars_widget_clone = lcars_config_widget.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let sources_clone = sources.clone();
+        source_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(source_id) = sources_clone.get(selected_idx) {
+                if source_id == "combination" {
+                    // Update LCARS with source summaries from combo config
+                    let widget = combo_widget_clone.borrow();
+                    let summaries = widget.get_source_summaries();
+                    let fields = widget.get_available_fields();
+                    drop(widget);
+                    log::info!("=== Source changed to 'combination': updating LCARS with {} source summaries ===", summaries.len());
+                    lcars_widget_clone.set_available_fields(fields);
+                    lcars_widget_clone.set_source_summaries(summaries);
+                }
+            }
+        });
     }
 
     // Show/hide text, bar, arc, speedometer, graph, clock, lcars, and cpu_cores config based on displayer selection
@@ -3707,6 +3735,36 @@ fn show_panel_properties_dialog(
                 lcars_label_clone.set_visible(is_lcars);
                 cpu_cores_widget_clone.widget().set_visible(is_cpu_cores);
                 cpu_cores_label_clone.set_visible(is_cpu_cores);
+            }
+        });
+    }
+
+    // Update LCARS widget when displayer changes to "lcars" and source is "combination"
+    {
+        let lcars_widget_clone = lcars_config_widget.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+                if displayer_id == "lcars" {
+                    // Check if current source is "combination"
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            // Update LCARS with source summaries from combo config
+                            let widget = combo_widget_clone.borrow();
+                            let summaries = widget.get_source_summaries();
+                            let fields = widget.get_available_fields();
+                            drop(widget);
+                            log::info!("=== Displayer changed to 'lcars' with 'combination' source: updating LCARS with {} source summaries ===", summaries.len());
+                            lcars_widget_clone.set_available_fields(fields);
+                            lcars_widget_clone.set_source_summaries(summaries);
+                        }
+                    }
+                }
             }
         });
     }

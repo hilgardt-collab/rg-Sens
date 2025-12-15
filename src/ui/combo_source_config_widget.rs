@@ -920,6 +920,11 @@ impl ComboSourceConfigWidget {
         let config = self.config.borrow();
         let mut summaries = Vec::new();
 
+        log::debug!(
+            "ComboSourceConfigWidget::get_source_summaries - config has {} groups",
+            config.groups.len()
+        );
+
         // Iterate through groups and items
         for (group_idx, group) in config.groups.iter().enumerate() {
             let group_num = group_idx + 1;

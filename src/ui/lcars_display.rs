@@ -1481,6 +1481,18 @@ pub fn render_content_graph(
     data: &VecDeque<DataPoint>,
     source_values: &HashMap<String, serde_json::Value>,
 ) -> anyhow::Result<()> {
+    log::debug!(
+        "LCARS render_content_graph: text_overlay has {} lines, source_values keys: {:?}",
+        config.text_overlay.len(),
+        source_values.keys().collect::<Vec<_>>()
+    );
+    if !config.text_overlay.is_empty() {
+        for (i, line) in config.text_overlay.iter().enumerate() {
+            log::debug!("  text_overlay[{}]: field_id='{}', found={}",
+                i, line.field_id, source_values.contains_key(&line.field_id));
+        }
+    }
+
     // Save state and translate to the item's position
     cr.save()?;
     cr.translate(x, y);

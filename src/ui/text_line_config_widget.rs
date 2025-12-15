@@ -25,6 +25,7 @@ pub struct TextLineConfigWidget {
 impl TextLineConfigWidget {
     /// Create a new text line configuration widget
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        log::debug!("TextLineConfigWidget::new() called with {} available fields", available_fields.len());
         let widget = GtkBox::new(Orientation::Vertical, 6);
 
         // Header with add button and copy/paste
@@ -99,17 +100,23 @@ impl TextLineConfigWidget {
 
         let on_change_for_add = on_change.clone();
         add_button.connect_clicked(move |_| {
+            log::info!("=== TextLineConfigWidget: Add Line clicked ===");
             // Add new line to data
             {
                 let mut lines = lines_for_add.borrow_mut();
                 let new_line = TextLineConfig::default();
+                log::info!("    Adding new line with default field_id='{}'", new_line.field_id);
                 lines.push(new_line);
+                log::info!("    Total lines now: {}", lines.len());
             }
             // Trigger full rebuild so the new line has the rebuild callback
             rebuild_closure();
             // Trigger on_change callback
             if let Some(ref callback) = *on_change_for_add.borrow() {
+                log::info!("    Calling on_change callback");
                 callback();
+            } else {
+                log::warn!("    on_change callback is None!");
             }
         });
 
@@ -203,9 +210,17 @@ impl TextLineConfigWidget {
         let field_list = StringList::new(&field_strings);
         let field_combo = DropDown::new(Some(field_list), Option::<gtk4::Expression>::None);
 
-        // Find selected index
+        // Find selected index, or default to first field if field_id is empty
         if let Some(idx) = fields.iter().position(|f| f.id == line_config.field_id) {
             field_combo.set_selected(idx as u32);
+        } else if !fields.is_empty() {
+            // If field_id doesn't match any field (e.g., new line with empty field_id),
+            // set it to the first available field
+            field_combo.set_selected(0);
+            let mut lines_ref = lines.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.field_id = fields[0].id.clone();
+            }
         }
 
         field_box.append(&field_combo);
@@ -841,6 +856,10 @@ impl TextLineConfigWidget {
 
     /// Set the configuration
     pub fn set_config(&self, config: TextDisplayerConfig) {
+        log::debug!(
+            "TextLineConfigWidget::set_config: received {} lines",
+            config.lines.len()
+        );
         // Update lines vector
         *self.lines.borrow_mut() = config.lines;
 
@@ -850,9 +869,12 @@ impl TextLineConfigWidget {
 
     /// Get the current configuration
     pub fn get_config(&self) -> TextDisplayerConfig {
-        TextDisplayerConfig {
-            lines: self.lines.borrow().clone(),
-        }
+        let lines = self.lines.borrow().clone();
+        log::debug!(
+            "TextLineConfigWidget::get_config: returning {} lines",
+            lines.len()
+        );
+        TextDisplayerConfig { lines }
     }
 
     /// Get the widget

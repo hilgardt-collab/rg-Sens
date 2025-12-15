@@ -96,6 +96,7 @@ fn notify_change_static(on_change: &OnChangeCallback) {
 
 impl GraphConfigWidget {
     pub fn new(available_fields: Vec<crate::core::FieldMetadata>) -> Self {
+        log::info!("=== GraphConfigWidget::new() called with {} available fields ===", available_fields.len());
         let widget = GtkBox::new(Orientation::Vertical, 0);
         let config = Rc::new(RefCell::new(GraphDisplayConfig::default()));
 
@@ -277,14 +278,12 @@ impl GraphConfigWidget {
                 background_color_widget_p.set_color(cfg.background_color);
                 plot_background_color_widget_p.set_color(cfg.plot_background_color);
 
-                // Update text overlay
-                for (i, text_line) in cfg.text_overlay.iter().enumerate() {
-                    if i < text_config_widgets_p.len() {
-                        let text_displayer_config = crate::displayers::TextDisplayerConfig {
-                            lines: vec![text_line.clone()],
-                        };
-                        text_config_widgets_p[i].set_config(text_displayer_config);
-                    }
+                // Update text overlay - pass all lines to the single widget
+                if !text_config_widgets_p.is_empty() {
+                    let text_displayer_config = crate::displayers::TextDisplayerConfig {
+                        lines: cfg.text_overlay.clone(),
+                    };
+                    text_config_widgets_p[0].set_config(text_displayer_config);
                 }
 
                 // Trigger on_change
@@ -356,9 +355,14 @@ impl GraphConfigWidget {
         // Update text overlay from widgets
         config.text_overlay = self.text_config_widgets
             .iter()
-            .flat_map(|w| w.get_config().lines)
+            .flat_map(|w| {
+                let lines = w.get_config().lines;
+                log::debug!("GraphConfigWidget::get_config - widget has {} text lines", lines.len());
+                lines
+            })
             .collect();
 
+        log::debug!("GraphConfigWidget::get_config - total text_overlay lines: {}", config.text_overlay.len());
         config
     }
 
@@ -444,14 +448,17 @@ impl GraphConfigWidget {
         self.smooth_lines_check.set_active(config.smooth_lines);
         self.animate_new_points_check.set_active(config.animate_new_points);
 
-        // Set text overlay configs
-        for (i, text_line) in config.text_overlay.iter().enumerate() {
-            if i < self.text_config_widgets.len() {
-                let text_displayer_config = crate::displayers::TextDisplayerConfig {
-                    lines: vec![text_line.clone()],
-                };
-                self.text_config_widgets[i].set_config(text_displayer_config);
-            }
+        // Set text overlay configs - pass all lines to the single widget
+        log::debug!(
+            "GraphConfigWidget::set_config: text_overlay has {} lines, text_config_widgets count: {}",
+            config.text_overlay.len(),
+            self.text_config_widgets.len()
+        );
+        if !self.text_config_widgets.is_empty() {
+            let text_displayer_config = crate::displayers::TextDisplayerConfig {
+                lines: config.text_overlay.clone(),
+            };
+            self.text_config_widgets[0].set_config(text_displayer_config);
         }
 
         *self.config.borrow_mut() = config;
@@ -1458,7 +1465,7 @@ fn create_layout_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChan
     }
 }
 
-fn create_text_overlay_page(_config: Rc<RefCell<GraphDisplayConfig>>, available_fields: Vec<crate::core::FieldMetadata>, _on_change: OnChangeCallback) -> TextOverlayPageWidgets {
+fn create_text_overlay_page(_config: Rc<RefCell<GraphDisplayConfig>>, available_fields: Vec<crate::core::FieldMetadata>, on_change: OnChangeCallback) -> TextOverlayPageWidgets {
     let page = GtkBox::new(Orientation::Vertical, 12);
     page.set_margin_start(12);
     page.set_margin_end(12);
@@ -1473,12 +1480,20 @@ fn create_text_overlay_page(_config: Rc<RefCell<GraphDisplayConfig>>, available_
     let mut text_config_widgets = Vec::new();
     let text_widget = Rc::new(TextLineConfigWidget::new(available_fields.clone()));
 
-    // Note: TextLineConfigWidget doesn't have an on_change callback yet
-    // Text overlay changes will be reflected when get_config() is called
+    // Connect the text widget's on_change to propagate changes up
+    let on_change_clone = on_change.clone();
+    text_widget.set_on_change(move || {
+        log::info!("=== GraphConfigWidget: text_widget on_change triggered ===");
+        if let Some(ref callback) = *on_change_clone.borrow() {
+            log::info!("    Parent callback exists, calling it");
+            callback();
+        } else {
+            log::warn!("    Parent callback is None - changes won't be saved!");
+        }
+    });
 
     page.append(text_widget.widget());
 
-    // Note: We'll collect configs when get_config() is called
     text_config_widgets.push(text_widget);
 
     TextOverlayPageWidgets {

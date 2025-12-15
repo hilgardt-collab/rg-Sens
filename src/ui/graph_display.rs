@@ -2,11 +2,74 @@
 
 use anyhow::Result;
 use cairo::{Context, LineCap, LineJoin};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::VecDeque;
 
 use super::background::Color;
 use crate::displayers::TextLineConfig;
+
+/// Custom deserializer for text_overlay that handles both formats:
+/// - New format: Vec<TextLineConfig> directly
+/// - Old format: { enabled: bool, text_config: { lines: Vec<TextLineConfig> } }
+fn deserialize_text_overlay<'de, D>(deserializer: D) -> Result<Vec<TextLineConfig>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::{self, MapAccess, SeqAccess, Visitor};
+    use std::fmt;
+
+    struct TextOverlayVisitor;
+
+    impl<'de> Visitor<'de> for TextOverlayVisitor {
+        type Value = Vec<TextLineConfig>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a sequence of TextLineConfig or an object with text_config.lines")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut lines = Vec::new();
+            while let Some(line) = seq.next_element()? {
+                lines.push(line);
+            }
+            Ok(lines)
+        }
+
+        fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            // Old format: { enabled: bool, text_config: { lines: [...] } }
+            let mut lines = Vec::new();
+            while let Some(key) = map.next_key::<String>()? {
+                match key.as_str() {
+                    "text_config" => {
+                        #[derive(Deserialize)]
+                        struct TextConfig {
+                            lines: Vec<TextLineConfig>,
+                        }
+                        let config: TextConfig = map.next_value()?;
+                        lines = config.lines;
+                    }
+                    "enabled" => {
+                        // Skip the enabled field, we don't need it for graphs
+                        let _: bool = map.next_value()?;
+                    }
+                    _ => {
+                        // Skip unknown fields
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+            }
+            Ok(lines)
+        }
+    }
+
+    deserializer.deserialize_any(TextOverlayVisitor)
+}
 
 /// Graph type
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -148,7 +211,8 @@ pub struct GraphDisplayConfig {
     pub smooth_lines: bool,
     pub animate_new_points: bool,
 
-    // Text overlay
+    // Text overlay - supports both Vec<TextLineConfig> and legacy TextOverlayConfig format
+    #[serde(default, deserialize_with = "deserialize_text_overlay")]
     pub text_overlay: Vec<TextLineConfig>,
 }
 
@@ -564,6 +628,11 @@ pub fn render_graph(
 
     // Draw text overlay
     if !config.text_overlay.is_empty() {
+        log::debug!(
+            "Graph text overlay: {} lines, source_values keys: {:?}",
+            config.text_overlay.len(),
+            source_values.keys().collect::<Vec<_>>()
+        );
         let text_config = crate::displayers::TextDisplayerConfig {
             lines: config.text_overlay.clone(),
         };
@@ -574,6 +643,8 @@ pub fn render_graph(
             &text_config,
             source_values,
         );
+    } else {
+        log::debug!("Graph text overlay is empty, source_values keys: {:?}", source_values.keys().collect::<Vec<_>>());
     }
 
     Ok(())
