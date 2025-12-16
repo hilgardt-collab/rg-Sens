@@ -150,6 +150,12 @@ pub struct AnalogClockConfig {
     pub icon_size: f64, // As percentage of panel size (5-30%)
     #[serde(default)]
     pub icon_bold: bool,
+
+    // Indicator layout options
+    #[serde(default = "default_true")]
+    pub center_indicator: bool, // Place indicator in center below clock instead of corner
+    #[serde(default = "default_true")]
+    pub shrink_for_indicator: bool, // Shrink clock face when indicator is visible
 }
 
 fn default_face_color() -> Color {
@@ -294,6 +300,8 @@ impl Default for AnalogClockConfig {
             icon_font: default_icon_font(),
             icon_size: default_icon_size(),
             icon_bold: false,
+            center_indicator: true,
+            shrink_for_indicator: true,
         }
     }
 }

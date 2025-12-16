@@ -235,39 +235,47 @@ impl UpdateManager {
         let mut config_updates: Vec<(String, u64, Duration)> = Vec::new();
 
         for (panel_id, state) in panels.iter() {
-            // Quick check using cached interval (no deserialization!)
-            let elapsed = now.duration_since(state.last_update);
-            if elapsed >= state.cached_interval {
-                // Check if config has changed (need to re-parse interval)
-                let (current_hash, new_interval) = {
-                    if let Ok(panel_guard) = state.panel.try_read() {
-                        // Prefer PanelData if available
-                        if let Some(ref data) = panel_guard.data {
-                            let hash = compute_config_hash_from_data(&data.source_config);
-                            let interval = Duration::from_millis(data.source_config.update_interval_ms());
-                            (hash, Some(interval))
-                        } else {
-                            // Fall back to legacy HashMap config
-                            let hash = compute_config_hash(&panel_guard.config);
-                            (hash, None)
-                        }
+            // Check if config has changed on EVERY tick (not just when update is due)
+            // This ensures interval changes are detected immediately
+            let (current_hash, new_interval) = {
+                if let Ok(panel_guard) = state.panel.try_read() {
+                    // Prefer PanelData if available
+                    if let Some(ref data) = panel_guard.data {
+                        let hash = compute_config_hash_from_data(&data.source_config);
+                        let interval = Duration::from_millis(data.source_config.update_interval_ms());
+                        (hash, Some(interval))
                     } else {
-                        (state.config_hash, None) // Keep old hash if can't read
+                        // Fall back to legacy HashMap config
+                        let hash = compute_config_hash(&panel_guard.config);
+                        (hash, None)
                     }
-                };
-
-                if current_hash != state.config_hash {
-                    // Config changed, need to update cached interval
-                    let interval = new_interval.unwrap_or_else(|| {
-                        if let Ok(panel_guard) = state.panel.try_read() {
-                            extract_update_interval(&panel_guard.config, panel_id)
-                        } else {
-                            state.cached_interval
-                        }
-                    });
-                    config_updates.push((panel_id.clone(), current_hash, interval));
+                } else {
+                    (state.config_hash, None) // Keep old hash if can't read
                 }
+            };
 
+            if current_hash != state.config_hash {
+                // Config changed, need to update cached interval
+                let interval = new_interval.unwrap_or_else(|| {
+                    if let Ok(panel_guard) = state.panel.try_read() {
+                        extract_update_interval(&panel_guard.config, panel_id)
+                    } else {
+                        state.cached_interval
+                    }
+                });
+                config_updates.push((panel_id.clone(), current_hash, interval));
+            }
+
+            // Now check if update is due using (potentially updated) cached interval
+            // Use the new interval if config changed, otherwise use cached
+            let effective_interval = config_updates
+                .iter()
+                .find(|(id, _, _)| id == panel_id)
+                .map(|(_, _, interval)| *interval)
+                .unwrap_or(state.cached_interval);
+
+            let elapsed = now.duration_since(state.last_update);
+            if elapsed >= effective_interval {
                 let panel = state.panel.clone();
                 let panel_id_owned = panel_id.clone();
                 let panel_id_for_task = panel_id_owned.clone();
@@ -286,7 +294,7 @@ impl UpdateManager {
             if let Some(state) = panels.get_mut(&panel_id) {
                 state.config_hash = new_hash;
                 state.cached_interval = new_interval;
-                trace!("Updated cached interval for panel {}: {:?}", panel_id, state.cached_interval);
+                info!("Updated cached interval for panel {}: {:?}", panel_id, state.cached_interval);
             }
         }
 

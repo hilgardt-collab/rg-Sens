@@ -20,8 +20,9 @@ pub use memory::MemorySource;
 pub use system_temp::{SystemTempSource, SensorInfo, SensorCategory, SystemTempConfig, TemperatureUnit as SystemTempUnit};
 pub use fan_speed::{FanSpeedSource, FanInfo, FanCategory, FanSpeedConfig};
 pub use disk::DiskSource;
-pub use clock::{ClockSource, ClockSourceConfig, TimeFormat, DateFormat, AlarmConfig, TimerConfig, TimerMode, TimerState};
+pub use clock::{ClockSource, ClockSourceConfig, TimeFormat, DateFormat, AlarmConfig, TimerConfig};
 pub use crate::audio::AlarmSoundConfig;
+pub use crate::core::{TimerMode, TimerState, TimerDisplayConfig};
 pub use combo::{ComboSource, ComboSourceConfig, SlotConfig, GroupConfig};
 // pub use network::NetworkSource;
 

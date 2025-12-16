@@ -1497,8 +1497,8 @@ pub fn render_content_graph(
     cr.save()?;
     cr.translate(x, y);
 
-    // Call the graph_display render function
-    render_graph(cr, config, data, source_values, w, h)?;
+    // Call the graph_display render function (no scroll animation in LCARS mode)
+    render_graph(cr, config, data, source_values, w, h, 0.0)?;
 
     cr.restore()?;
     Ok(())

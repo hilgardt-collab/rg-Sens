@@ -206,6 +206,19 @@ fn build_ui(app: &Application) {
     // Wrap app_config in Rc<RefCell<>> for shared mutable access
     let app_config = Rc::new(RefCell::new(app_config));
 
+    // Initialize global timer manager with saved timers/alarms and global sound
+    {
+        let cfg = app_config.borrow();
+        if let Ok(mut manager) = rg_sens::core::global_timer_manager().write() {
+            manager.load_config_with_sound(
+                cfg.timers.clone(),
+                cfg.alarms.clone(),
+                Some(cfg.global_timer_sound.clone()),
+            );
+            info!("Loaded {} timers and {} alarms from config", cfg.timers.len(), cfg.alarms.len());
+        }
+    }
+
     // Create grid configuration from loaded config
     let grid_config = {
         let cfg = app_config.borrow();
@@ -1530,6 +1543,14 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
     config.window.x = None; // GTK4 doesn't provide window position
     config.window.y = None;
     config.set_panels(panel_data_list);
+
+    // Save global timers, alarms, and timer sound
+    if let Ok(manager) = rg_sens::core::global_timer_manager().read() {
+        let (timers, alarms, global_sound) = manager.get_full_config();
+        config.set_timers(timers);
+        config.set_alarms(alarms);
+        config.set_global_timer_sound(global_sound);
+    }
 
     // Save to disk
     match config.save() {

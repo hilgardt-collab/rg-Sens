@@ -26,6 +26,7 @@ struct DisplayData {
     last_update: std::time::Instant,
     values: HashMap<String, Value>, // All source data for text overlay
     dirty: bool, // Flag to indicate data has changed and needs redraw
+    initialized: bool, // Flag to track if animated_value has been set
 }
 
 impl ArcDisplayer {
@@ -38,6 +39,7 @@ impl ArcDisplayer {
             last_update: std::time::Instant::now(),
             values: HashMap::new(),
             dirty: true,
+            initialized: false,
         }));
 
         Self {
@@ -97,6 +99,11 @@ impl Displayer for ArcDisplayer {
                 let needs_redraw = if let Ok(mut data) = data_clone.lock() {
                     let mut redraw = false;
 
+                    // Always calculate elapsed time since last frame to ensure smooth animation
+                    let now = std::time::Instant::now();
+                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                    data.last_update = now;
+
                     // Check if data changed (dirty flag)
                     if data.dirty {
                         data.dirty = false;
@@ -105,10 +112,6 @@ impl Displayer for ArcDisplayer {
 
                     // Check if animation is active
                     if data.config.animate && (data.animated_value - data.target_value).abs() > 0.001 {
-                        let now = std::time::Instant::now();
-                        let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                        data.last_update = now;
-
                         // Calculate animation speed based on duration (prevent division by zero)
                         let animation_speed = 1.0 / data.config.animation_duration.max(0.1);
                         let delta = (data.target_value - data.animated_value) * animation_speed * elapsed;
@@ -183,9 +186,10 @@ impl Displayer for ArcDisplayer {
             display_data.value = new_value;
             display_data.target_value = new_value;
 
-            // If animation is disabled or this is the first value, set animated_value immediately
-            if !display_data.config.animate || display_data.animated_value == 0.0 {
+            // On first update or if animation is disabled, set animated value immediately
+            if !display_data.initialized || !display_data.config.animate {
                 display_data.animated_value = new_value;
+                display_data.initialized = true;
             }
 
             // Store all values for text overlay

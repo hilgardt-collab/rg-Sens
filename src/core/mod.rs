@@ -6,6 +6,7 @@ mod field_metadata;
 mod panel;
 mod panel_data;
 mod registry;
+mod timer_manager;
 mod update_manager;
 
 pub use data_source::{BoxedDataSource, DataSource, SourceMetadata};
@@ -14,4 +15,8 @@ pub use field_metadata::{FieldMetadata, FieldPurpose, FieldType};
 pub use panel::{Panel, PanelGeometry, PanelBorderConfig};
 pub use panel_data::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
 pub use registry::{global_registry, Registry, SourceInfo, DisplayerInfo};
+pub use timer_manager::{
+    global_timer_manager, play_preview_sound, stop_all_sounds, AlarmConfig, TimerAlarmManager,
+    TimerConfig, TimerDisplayConfig, TimerMode, TimerState,
+};
 pub use update_manager::{UpdateManager, init_global_update_manager, global_update_manager};

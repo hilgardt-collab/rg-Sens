@@ -15,7 +15,7 @@ fn deserialize_text_overlay<'de, D>(deserializer: D) -> Result<Vec<TextLineConfi
 where
     D: Deserializer<'de>,
 {
-    use serde::de::{self, MapAccess, SeqAccess, Visitor};
+    use serde::de::{MapAccess, SeqAccess, Visitor};
     use std::fmt;
 
     struct TextOverlayVisitor;
@@ -210,10 +210,16 @@ pub struct GraphDisplayConfig {
     // Animation/smoothing
     pub smooth_lines: bool,
     pub animate_new_points: bool,
+    #[serde(default = "default_update_interval")]
+    pub update_interval: f64, // Expected time between data updates in seconds (for smooth scrolling)
 
     // Text overlay - supports both Vec<TextLineConfig> and legacy TextOverlayConfig format
     #[serde(default, deserialize_with = "deserialize_text_overlay")]
     pub text_overlay: Vec<TextLineConfig>,
+}
+
+fn default_update_interval() -> f64 {
+    1.0 // Default 1 second between updates
 }
 
 impl Default for GraphDisplayConfig {
@@ -249,6 +255,7 @@ impl Default for GraphDisplayConfig {
 
             smooth_lines: true,
             animate_new_points: false,
+            update_interval: default_update_interval(),
 
             text_overlay: Vec::new(),
         }
@@ -280,6 +287,7 @@ fn apply_line_style(cr: &Context, style: LineStyle, width: f64) {
 }
 
 /// Render graph display
+/// scroll_offset: 0.0 to 1.0, represents smooth scroll progress toward next point position
 pub fn render_graph(
     cr: &Context,
     config: &GraphDisplayConfig,
@@ -287,6 +295,7 @@ pub fn render_graph(
     source_values: &std::collections::HashMap<String, serde_json::Value>,
     width: f64,
     height: f64,
+    scroll_offset: f64,
 ) -> Result<()> {
     // Clear background
     cr.save()?;
@@ -389,11 +398,21 @@ pub fn render_graph(
     cr.clip();
 
     if !data.is_empty() {
+        // Calculate point spacing and scroll offset in pixels
+        let point_spacing = plot_width / (config.max_data_points - 1).max(1) as f64;
+        let scroll_pixels = if config.animate_new_points {
+            scroll_offset * point_spacing
+        } else {
+            0.0
+        };
+
         let points: Vec<(f64, f64)> = data
             .iter()
             .enumerate()
             .map(|(i, point)| {
-                let x = plot_x + (i as f64 / (config.max_data_points - 1).max(1) as f64) * plot_width;
+                // Offset X position by scroll amount for smooth scrolling
+                let base_x = plot_x + (i as f64 / (config.max_data_points - 1).max(1) as f64) * plot_width;
+                let x = base_x - scroll_pixels;
                 let normalized = ((point.value - min_val) / value_range).clamp(0.0, 1.0);
                 let y = plot_y + plot_height - (normalized * plot_height);
                 (x, y)

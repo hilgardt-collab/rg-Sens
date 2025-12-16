@@ -50,6 +50,8 @@ pub struct ClockAnalogConfigWidget {
     icon_font_button: Button,
     icon_size_spin: SpinButton,
     icon_bold_check: CheckButton,
+    center_indicator_check: CheckButton,
+    shrink_for_indicator_check: CheckButton,
 }
 
 impl ClockAnalogConfigWidget {
@@ -363,6 +365,24 @@ impl ClockAnalogConfigWidget {
         icon_bold_check.set_active(config.borrow().icon_bold);
         icon_box.append(&icon_bold_check);
 
+        // Layout options separator
+        let layout_label = Label::new(Some("Layout Options:"));
+        layout_label.set_xalign(0.0);
+        layout_label.set_margin_top(8);
+        icon_box.append(&layout_label);
+
+        // Center indicator checkbox
+        let center_indicator_check = CheckButton::with_label("Center indicator below clock");
+        center_indicator_check.set_active(config.borrow().center_indicator);
+        center_indicator_check.set_tooltip_text(Some("Place the alarm/timer indicator centered below the clock face"));
+        icon_box.append(&center_indicator_check);
+
+        // Shrink for indicator checkbox
+        let shrink_for_indicator_check = CheckButton::with_label("Shrink clock when indicator visible");
+        shrink_for_indicator_check.set_active(config.borrow().shrink_for_indicator);
+        shrink_for_indicator_check.set_tooltip_text(Some("Reduce clock size to prevent overlap with indicator"));
+        icon_box.append(&shrink_for_indicator_check);
+
         icon_frame.set_child(Some(&icon_box));
         icon_tab_box.append(&icon_frame);
 
@@ -596,6 +616,18 @@ impl ClockAnalogConfigWidget {
             config_for_icon_bold.borrow_mut().icon_bold = check.is_active();
         });
 
+        // Center indicator checkbox
+        let config_for_center = config.clone();
+        center_indicator_check.connect_toggled(move |check| {
+            config_for_center.borrow_mut().center_indicator = check.is_active();
+        });
+
+        // Shrink for indicator checkbox
+        let config_for_shrink = config.clone();
+        shrink_for_indicator_check.connect_toggled(move |check| {
+            config_for_shrink.borrow_mut().shrink_for_indicator = check.is_active();
+        });
+
         Self {
             widget: notebook,
             config,
@@ -626,6 +658,8 @@ impl ClockAnalogConfigWidget {
             icon_font_button,
             icon_size_spin,
             icon_bold_check,
+            center_indicator_check,
+            shrink_for_indicator_check,
         }
     }
 
@@ -700,6 +734,8 @@ impl ClockAnalogConfigWidget {
         self.icon_font_button.set_label(&format!("{} {:.0}%", config.icon_font, config.icon_size));
         self.icon_size_spin.set_value(config.icon_size);
         self.icon_bold_check.set_active(config.icon_bold);
+        self.center_indicator_check.set_active(config.center_indicator);
+        self.shrink_for_indicator_check.set_active(config.shrink_for_indicator);
 
         // Store config
         *self.config.borrow_mut() = config;

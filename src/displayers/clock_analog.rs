@@ -78,10 +78,47 @@ impl Displayer for ClockAnalogDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                let width = width as f64;
+                let height = height as f64;
+
                 // Calculate smooth time values
                 let hour = data.hour;
                 let minute = data.minute;
                 let second = data.second;
+
+                // Determine if indicator should be shown (icon always shown if show_icon is true)
+                let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
+
+                // Get indicator text and calculate its size
+                let icon_font = &data.config.icon_font;
+                let icon_text = &data.config.icon_text;
+                let icon_size_pct = data.config.icon_size;
+                let icon_bold = data.config.icon_bold;
+                let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+
+                // Calculate indicator height for layout purposes - always reserve space if icon is shown and centered
+                let indicator_height = if data.config.show_icon && data.config.center_indicator {
+                    let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
+                    font_size + 16.0 // Font height + padding
+                } else {
+                    0.0
+                };
+
+                // Calculate clock area - shrink if icon is shown, centered, and shrink option enabled
+                let (clock_width, clock_height, clock_offset_y) = if data.config.show_icon && data.config.shrink_for_indicator && data.config.center_indicator {
+                    let available_height = height - indicator_height;
+                    let clock_size = width.min(available_height);
+                    (clock_size, clock_size, (available_height - clock_size) / 2.0)
+                } else {
+                    (width, height, 0.0)
+                };
+
+                // Draw clock in calculated area
+                cr.save().ok();
+                if clock_offset_y > 0.0 || clock_width < width {
+                    let offset_x = (width - clock_width) / 2.0;
+                    cr.translate(offset_x, clock_offset_y);
+                }
 
                 let _ = render_analog_clock(
                     cr,
@@ -89,89 +126,36 @@ impl Displayer for ClockAnalogDisplayer {
                     hour,
                     minute,
                     second,
-                    width as f64,
-                    height as f64,
+                    clock_width,
+                    clock_height,
                 );
 
                 // Flash effect when alarm/timer triggers
                 let show_flash = (data.alarm_triggered || data.timer_state == "finished") && data.flash_state;
                 if show_flash {
-                    cr.save().ok();
                     cr.set_source_rgba(1.0, 0.3, 0.3, 0.4);
                     cr.arc(
-                        width as f64 / 2.0,
-                        height as f64 / 2.0,
-                        width.min(height) as f64 / 2.0 - 5.0,
+                        clock_width / 2.0,
+                        clock_height / 2.0,
+                        clock_width.min(clock_height) / 2.0 - 5.0,
                         0.0,
                         2.0 * std::f64::consts::PI,
                     );
                     cr.fill().ok();
-                    cr.restore().ok();
                 }
 
-                // Bottom-right corner: show timer countdown when running/paused/finished, or icon when idle
+                cr.restore().ok();
+
+                // Draw indicator
                 if data.config.show_icon {
-                    let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
-
-                    // Get icon config from data.config
-                    let icon_font = &data.config.icon_font;
-                    let icon_text = &data.config.icon_text;
-                    let icon_size_pct = data.config.icon_size;
-                    let icon_bold = data.config.icon_bold;
-                    let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-
-                    if timer_active && !data.timer_display.is_empty() {
-                    // Show countdown timer text
-                    cr.save().ok();
-
-                    let font_size = (width.min(height) as f64 * icon_size_pct / 100.0).clamp(12.0, 24.0);
-                    cr.select_font_face(icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                    let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
+                    cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
                     cr.set_font_size(font_size);
 
-                    let (text_w, text_h) = if let Ok(te) = cr.text_extents(&data.timer_display) {
-                        (te.width(), te.height())
-                    } else {
-                        (50.0, 12.0) // Fallback dimensions
-                    };
-                    let text_x = width as f64 - text_w - 6.0;
-                    let text_y = height as f64 - 6.0;
-
-                    // Background for readability
-                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
-                    cr.rectangle(
-                        text_x - 4.0,
-                        text_y - text_h - 2.0,
-                        text_w + 8.0,
-                        text_h + 6.0,
-                    );
-                    cr.fill().ok();
-
-                    // Timer text color based on state
-                    if data.timer_state == "finished" {
-                        if data.flash_state {
-                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
-                        } else {
-                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
-                        }
-                    } else if data.timer_state == "paused" {
-                        cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
-                    } else {
-                        cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
-                    }
-
-                    cr.move_to(text_x, text_y);
-                    cr.show_text(&data.timer_display).ok();
-                    cr.restore().ok();
-                } else {
-                    // Show icon with optional next alarm time
-                    cr.save().ok();
-
-                    let icon_size = (width.min(height) as f64 * icon_size_pct / 100.0).clamp(14.0, 28.0);
-                    cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
-                    cr.set_font_size(icon_size);
-
-                    // Build display text: icon + optional next alarm time
-                    let display_text = if let Some(ref next_time) = data.next_alarm_time {
+                    // Build display text based on state
+                    let display_text = if timer_active && !data.timer_display.is_empty() {
+                        data.timer_display.clone()
+                    } else if let Some(ref next_time) = data.next_alarm_time {
                         if data.alarm_enabled {
                             format!("{} {}", icon_text, next_time)
                         } else {
@@ -181,22 +165,33 @@ impl Displayer for ClockAnalogDisplayer {
                         icon_text.clone()
                     };
 
-                    let text_w = if let Ok(te) = cr.text_extents(&display_text) {
-                        te.width()
+                    let (text_w, text_h) = if let Ok(te) = cr.text_extents(&display_text) {
+                        (te.width(), te.height())
                     } else {
-                        icon_size * 0.8 // Fallback width
+                        (font_size * 3.0, font_size)
                     };
-                    let text_h = if let Ok(te) = cr.text_extents(&display_text) {
-                        te.height()
-                    } else {
-                        icon_size * 0.8
-                    };
-                    let text_x = width as f64 - text_w - 6.0;
-                    let text_y = height as f64 - 6.0;
 
-                    // Background for readability when showing time
-                    if data.next_alarm_time.is_some() && data.alarm_enabled {
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+                    // Position based on center_indicator setting
+                    let (text_x, text_y) = if data.config.center_indicator {
+                        // Center below clock
+                        let x = (width - text_w) / 2.0;
+                        let y = if data.config.shrink_for_indicator {
+                            height - 8.0
+                        } else {
+                            height - 8.0
+                        };
+                        (x, y)
+                    } else {
+                        // Bottom-right corner (original behavior)
+                        (width - text_w - 6.0, height - 6.0)
+                    };
+
+                    cr.save().ok();
+
+                    // Background for readability
+                    let show_background = timer_active || (data.next_alarm_time.is_some() && data.alarm_enabled) || data.alarm_triggered;
+                    if show_background {
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
                         cr.rectangle(
                             text_x - 4.0,
                             text_y - text_h - 2.0,
@@ -206,8 +201,20 @@ impl Displayer for ClockAnalogDisplayer {
                         cr.fill().ok();
                     }
 
-                    // Color based on state
-                    if data.alarm_triggered {
+                    // Text color based on state
+                    if timer_active {
+                        if data.timer_state == "finished" {
+                            if data.flash_state {
+                                cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
+                            } else {
+                                cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
+                            }
+                        } else if data.timer_state == "paused" {
+                            cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
+                        } else {
+                            cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
+                        }
+                    } else if data.alarm_triggered {
                         if data.flash_state {
                             cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
                         } else {
@@ -222,7 +229,6 @@ impl Displayer for ClockAnalogDisplayer {
                     cr.move_to(text_x, text_y);
                     cr.show_text(&display_text).ok();
                     cr.restore().ok();
-                    }
                 }
             }
         });

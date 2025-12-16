@@ -7,7 +7,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ui::background::BackgroundConfig;
-use crate::core::{PanelBorderConfig, PanelGeometry, PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
+use crate::core::{
+    AlarmConfig, PanelBorderConfig, PanelGeometry, PanelData, PanelAppearance, SourceConfig,
+    DisplayerConfig, TimerConfig,
+};
+use crate::audio::AlarmSoundConfig;
 
 /// Current config format version
 pub const CONFIG_VERSION: u32 = 2;
@@ -30,6 +34,15 @@ pub struct AppConfig {
     /// Note: This is only used during v1 deserialization
     #[serde(skip)]
     pub panels_v1: Vec<PanelConfig>,
+    /// Global timers (shared across all clock displays)
+    #[serde(default)]
+    pub timers: Vec<TimerConfig>,
+    /// Global alarms (shared across all clock displays)
+    #[serde(default)]
+    pub alarms: Vec<AlarmConfig>,
+    /// Global timer sound configuration (used for all timers)
+    #[serde(default)]
+    pub global_timer_sound: AlarmSoundConfig,
 }
 
 fn default_version() -> u32 {
@@ -66,6 +79,9 @@ impl AppConfig {
                 grid: loaded.grid,
                 panels_v2: loaded.panels,
                 panels_v1: Vec::new(),
+                timers: loaded.timers,
+                alarms: loaded.alarms,
+                global_timer_sound: loaded.global_timer_sound,
             })
         } else {
             // V1 format - load and migrate
@@ -149,7 +165,25 @@ impl AppConfig {
             window: self.window.clone(),
             grid: self.grid.clone(),
             panels,
+            timers: self.timers.clone(),
+            alarms: self.alarms.clone(),
+            global_timer_sound: self.global_timer_sound.clone(),
         }
+    }
+
+    /// Update timers from global manager
+    pub fn set_timers(&mut self, timers: Vec<TimerConfig>) {
+        self.timers = timers;
+    }
+
+    /// Update alarms from global manager
+    pub fn set_alarms(&mut self, alarms: Vec<AlarmConfig>) {
+        self.alarms = alarms;
+    }
+
+    /// Update global timer sound from global manager
+    pub fn set_global_timer_sound(&mut self, sound: AlarmSoundConfig) {
+        self.global_timer_sound = sound;
     }
 }
 
@@ -161,6 +195,9 @@ impl Default for AppConfig {
             grid: GridConfig::default(),
             panels_v2: Vec::new(),
             panels_v1: Vec::new(),
+            timers: Vec::new(),
+            alarms: Vec::new(),
+            global_timer_sound: AlarmSoundConfig::default(),
         }
     }
 }
@@ -184,6 +221,9 @@ impl AppConfigV1 {
             grid: self.grid,
             panels_v2: self.panels.iter().map(|p| PanelConfigV2::from_panel_data(p.to_panel_data())).collect(),
             panels_v1: Vec::new(), // Don't keep v1 after migration
+            timers: Vec::new(), // V1 configs don't have global timers
+            alarms: Vec::new(), // V1 configs don't have global alarms
+            global_timer_sound: AlarmSoundConfig::default(),
         }
     }
 }
@@ -195,6 +235,9 @@ struct AppConfigSave {
     pub window: WindowConfig,
     pub grid: GridConfig,
     pub panels: Vec<PanelConfigV2>,
+    pub timers: Vec<TimerConfig>,
+    pub alarms: Vec<AlarmConfig>,
+    pub global_timer_sound: AlarmSoundConfig,
 }
 
 /// Config format for loading v2 configs
@@ -206,6 +249,12 @@ struct AppConfigLoad {
     pub grid: GridConfig,
     #[serde(default)]
     pub panels: Vec<PanelConfigV2>,
+    #[serde(default)]
+    pub timers: Vec<TimerConfig>,
+    #[serde(default)]
+    pub alarms: Vec<AlarmConfig>,
+    #[serde(default)]
+    pub global_timer_sound: AlarmSoundConfig,
 }
 
 /// Window configuration

@@ -648,151 +648,42 @@ impl GridLayout {
         };
         widget.set_size_request(width, height);
 
-        // For clock displayers, add click handler for alarm/timer icon
+        // For clock displayers, add click handler for alarm/timer management
         if displayer_id == "clock_analog" || displayer_id == "clock_digital" {
             let gesture = gtk4::GestureClick::new();
-            let panel_for_click = panel.clone();
-            gesture.connect_released(move |gesture, _, x, y| {
+            gesture.connect_released(move |gesture, _, _x, _y| {
                 if let Some(widget) = gesture.widget() {
-                    let width = widget.width() as f64;
-                    let height = widget.height() as f64;
-
-                    // Calculate icon position (same as in displayer draw code)
-                    let icon_size = if width.min(height) > 100.0 {
-                        (width.min(height) * 0.15).clamp(16.0, 32.0)
-                    } else {
-                        20.0_f64.min(height * 0.25)
-                    };
-                    let icon_x = width - icon_size - 4.0;
-                    let icon_y = height - icon_size - 4.0;
-
                     // First check if any alarm is triggered or timer is finished - if so, clicking anywhere dismisses it
+                    // Use global timer manager for accurate state
                     let (alarm_triggered, timer_finished) = {
-                        let panel_guard = panel_for_click.blocking_read();
-                        let alarm_trig = panel_guard.config.get("alarm_triggered")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
-                        let timer_state = panel_guard.config.get("timer_state")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("stopped");
-                        (alarm_trig, timer_state == "finished")
+                        if let Ok(manager) = crate::core::global_timer_manager().read() {
+                            (manager.any_alarm_triggered(), manager.any_timer_finished())
+                        } else {
+                            (false, false)
+                        }
                     };
 
                     if alarm_triggered || timer_finished {
                         // Click anywhere dismisses all triggered alarms and finished timers
-                        let mut panel_guard = panel_for_click.blocking_write();
-                        let mut config = panel_guard.config.clone();
-                        if alarm_triggered {
-                            config.insert("dismiss_all_alarms".to_string(), serde_json::json!(true));
-                        }
-                        if timer_finished {
-                            config.insert("dismiss_finished_timers".to_string(), serde_json::json!(true));
-                        }
-                        if let Err(e) = panel_guard.apply_config(config) {
-                            log::error!("Failed to dismiss alarms/timers: {}", e);
+                        // Also stop any playing sounds
+                        crate::core::stop_all_sounds();
+                        if let Ok(mut manager) = crate::core::global_timer_manager().write() {
+                            if alarm_triggered {
+                                manager.dismiss_all_alarms();
+                            }
+                            if timer_finished {
+                                manager.dismiss_finished_timers();
+                            }
                         }
                         return; // Don't open dialog when dismissing
                     }
 
-                    // Check if click is within icon area to open dialog
-                    let padding = 8.0;
-                    if x >= icon_x - padding && x <= icon_x + icon_size + padding &&
-                       y >= icon_y - padding && y <= icon_y + icon_size + padding {
-                        // Open alarm/timer dialog
-                        {
-                            let panel_guard = panel_for_click.blocking_read();
+                    // Click anywhere on clock opens the alarm/timer dialog
+                    let window = widget.root()
+                        .and_then(|r| r.downcast::<gtk4::Window>().ok());
 
-                            // Get alarms and timers - try top level first (from get_values),
-                            // then fall back to clock_config (from saved config)
-                            let alarms: Vec<crate::sources::AlarmConfig> = panel_guard.config.get("alarms")
-                                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                                .or_else(|| {
-                                    panel_guard.config.get("clock_config")
-                                        .and_then(|v| v.get("alarms"))
-                                        .and_then(|v| serde_json::from_value(v.clone()).ok())
-                                })
-                                .unwrap_or_default();
-                            let timers: Vec<crate::sources::TimerConfig> = panel_guard.config.get("timers")
-                                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                                .or_else(|| {
-                                    panel_guard.config.get("clock_config")
-                                        .and_then(|v| v.get("timers"))
-                                        .and_then(|v| serde_json::from_value(v.clone()).ok())
-                                })
-                                .unwrap_or_default();
-
-                            // Get triggered alarm IDs
-                            let triggered_ids: std::collections::HashSet<String> = panel_guard.config.get("triggered_alarm_ids")
-                                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                                .unwrap_or_default();
-
-                            drop(panel_guard);
-
-                            // Get the window from widget ancestry
-                            let window = widget.root()
-                                .and_then(|r| r.downcast::<gtk4::Window>().ok());
-
-                            let dialog = crate::ui::AlarmTimerDialog::new(
-                                window.as_ref(),
-                                alarms,
-                                timers,
-                                triggered_ids,
-                            );
-
-                            // Set up list change callback
-                            let panel_for_list = panel_for_click.clone();
-                            dialog.set_on_list_change(move |alarms, timers| {
-                                let mut panel_guard = panel_for_list.blocking_write();
-                                let mut config = panel_guard.config.clone();
-
-                                // Update clock_config with new alarms and timers
-                                let mut clock_config = config.get("clock_config")
-                                    .and_then(|v| v.as_object().cloned())
-                                    .unwrap_or_default();
-
-                                clock_config.insert("alarms".to_string(), serde_json::to_value(alarms).unwrap_or_default());
-                                clock_config.insert("timers".to_string(), serde_json::to_value(timers).unwrap_or_default());
-
-                                config.insert("clock_config".to_string(), serde_json::Value::Object(clock_config));
-                                if let Err(e) = panel_guard.apply_config(config) {
-                                    log::error!("Failed to update alarms/timers: {}", e);
-                                }
-                            });
-
-                            // Set up alarm dismiss callback
-                            let panel_for_dismiss = panel_for_click.clone();
-                            dialog.set_on_alarm_dismiss(move |alarm_id| {
-                                let mut panel_guard = panel_for_dismiss.blocking_write();
-                                let mut config = panel_guard.config.clone();
-                                config.insert("dismiss_alarm_id".to_string(), serde_json::json!(alarm_id));
-                                if let Err(e) = panel_guard.apply_config(config) {
-                                    log::error!("Failed to dismiss alarm: {}", e);
-                                }
-                            });
-
-                            // Set up timer action callback
-                            let panel_for_action = panel_for_click.clone();
-                            dialog.set_on_timer_action(move |timer_id, action| {
-                                let cmd = match action {
-                                    crate::ui::TimerAction::Start => "start",
-                                    crate::ui::TimerAction::Pause => "pause",
-                                    crate::ui::TimerAction::Resume => "resume",
-                                    crate::ui::TimerAction::Stop => "stop",
-                                };
-
-                                // Get write lock and apply the command
-                                let mut panel_guard = panel_for_action.blocking_write();
-                                let mut config = panel_guard.config.clone();
-                                config.insert("timer_id".to_string(), serde_json::json!(timer_id));
-                                config.insert("timer_command".to_string(), serde_json::json!(cmd));
-                                if let Err(e) = panel_guard.apply_config(config) {
-                                    log::error!("Failed to apply timer command: {}", e);
-                                }
-                            });
-
-                            dialog.present();
-                        }
-                    }
+                    let dialog = crate::ui::AlarmTimerDialog::new(window.as_ref());
+                    dialog.present();
                 }
             });
             widget.add_controller(gesture);

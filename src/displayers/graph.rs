@@ -25,6 +25,8 @@ struct GraphData {
     source_values: HashMap<String, Value>,
     start_time: f64,
     last_update_time: f64,
+    last_frame_time: std::time::Instant, // For smooth animation timing
+    scroll_offset: f64, // 0.0 to 1.0, represents progress toward next point position
     dirty: bool, // Flag to indicate data has changed and needs redraw
 }
 
@@ -45,6 +47,8 @@ impl GraphDisplayer {
                 source_values: HashMap::new(),
                 start_time,
                 last_update_time: start_time,
+                last_frame_time: std::time::Instant::now(),
+                scroll_offset: 0.0,
                 dirty: true,
             })),
         }
@@ -100,6 +104,7 @@ impl Displayer for GraphDisplayer {
                     &data_guard.source_values,
                     width as f64,
                     height as f64,
+                    data_guard.scroll_offset,
                 );
             }
         });
@@ -116,6 +121,11 @@ impl Displayer for GraphDisplayer {
                     let needs_redraw = if let Ok(mut data_guard) = data_for_animation.lock() {
                         let mut redraw = false;
 
+                        // Always calculate elapsed time since last frame to ensure smooth animation
+                        let now = std::time::Instant::now();
+                        let elapsed = now.duration_since(data_guard.last_frame_time).as_secs_f64();
+                        data_guard.last_frame_time = now;
+
                         // Check if data changed (dirty flag)
                         if data_guard.dirty {
                             data_guard.dirty = false;
@@ -128,7 +138,19 @@ impl Displayer for GraphDisplayer {
                                 .unwrap_or_default()
                                 .as_secs_f64();
 
-                            // Smooth interpolation factor (adjust for animation speed)
+                            // Update scroll offset for smooth horizontal scrolling
+                            // scroll_offset advances at rate of 1.0 per update_interval seconds
+                            let update_interval = data_guard.config.update_interval.max(0.1);
+                            data_guard.scroll_offset += elapsed / update_interval;
+
+                            // Clamp scroll_offset - it will be reset when new data arrives
+                            // Allow it to go slightly beyond 1.0 to handle timing variations
+                            data_guard.scroll_offset = data_guard.scroll_offset.min(1.5);
+
+                            // Always redraw when animating for smooth scrolling
+                            redraw = true;
+
+                            // Smooth interpolation factor for Y-value animation
                             let lerp_factor = 0.15;
 
                             // Ensure animated_points has the same length as data_points
@@ -145,9 +167,6 @@ impl Displayer for GraphDisplayer {
                             } else {
                                 Vec::new()
                             };
-
-                            // Check if any animation is needed
-                            let mut any_animation_needed = !new_timestamps.is_empty();
 
                             // Add new points if needed
                             for timestamp in new_timestamps {
@@ -171,10 +190,6 @@ impl Displayer for GraphDisplayer {
 
                             for (i, animated) in data_guard.animated_points.iter_mut().enumerate() {
                                 if let Some(&(target_value, target_timestamp)) = targets.get(i) {
-                                    // Check if this point needs animation
-                                    if (animated.value - target_value).abs() > 0.001 {
-                                        any_animation_needed = true;
-                                    }
                                     // Linear interpolation (lerp) toward target value
                                     animated.value += (target_value - animated.value) * lerp_factor;
                                     animated.timestamp = target_timestamp;
@@ -182,10 +197,12 @@ impl Displayer for GraphDisplayer {
                             }
 
                             data_guard.last_update_time = current_time;
-                            redraw || any_animation_needed
+                            redraw
                         } else {
                             // If animation is disabled, copy data_points to animated_points
+                            // and reset scroll offset
                             data_guard.animated_points = data_guard.data_points.clone();
+                            data_guard.scroll_offset = 0.0;
                             redraw // Still redraw if dirty flag was set
                         }
                     } else {
@@ -227,6 +244,10 @@ impl Displayer for GraphDisplayer {
                     while data.data_points.len() > data.config.max_data_points {
                         data.data_points.pop_front();
                     }
+
+                    // Reset scroll offset when new data arrives for smooth continuous scrolling
+                    // The graph has now "scrolled" one position, so we start fresh
+                    data.scroll_offset = 0.0;
                 }
             }
 
@@ -247,6 +268,7 @@ impl Displayer for GraphDisplayer {
                 &data_guard.source_values,
                 width,
                 height,
+                data_guard.scroll_offset,
             )?;
         }
         Ok(())

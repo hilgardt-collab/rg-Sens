@@ -1,28 +1,16 @@
 //! Alarm and Timer list management dialog
 //!
-//! This dialog provides full control over multiple alarms and timers.
-//! Users can add, edit, remove, and control alarms and timers from a list view.
+//! This dialog provides full control over multiple alarms and timers using the global manager.
+//! Timers can be edited inline when stopped. Changes are reflected on all clock displays.
 
+use crate::core::{global_timer_manager, play_preview_sound, stop_all_sounds, AlarmConfig, TimerConfig, TimerState};
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, CheckButton, Entry, Frame, Label, ListBox,
-    ListBoxRow, Orientation, ScrolledWindow, Separator, SpinButton, StringList,
-    DropDown, Window,
+    Adjustment, Box as GtkBox, Button, CheckButton, Entry, FileDialog, FileFilter, Frame, Label,
+    ListBox, ListBoxRow, Orientation, ScrolledWindow, Separator, SpinButton, Window,
 };
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
-
-use crate::sources::{AlarmConfig, TimerConfig, TimerMode, TimerState};
-
-/// Callback for when alarms/timers list changes
-pub type OnListChangeCallback = Box<dyn Fn(&[AlarmConfig], &[TimerConfig])>;
-
-/// Callback for timer control actions with timer ID
-pub type TimerActionCallback = Box<dyn Fn(&str, TimerAction)>;
-
-/// Callback for alarm dismiss with alarm ID
-pub type AlarmDismissCallback = Box<dyn Fn(&str)>;
 
 /// Timer control actions
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,26 +32,16 @@ impl std::fmt::Display for TimerAction {
     }
 }
 
-/// Alarm and Timer list management dialog
+/// Alarm and Timer list management dialog using global manager
 pub struct AlarmTimerDialog {
     window: Window,
-    alarms: Rc<RefCell<Vec<AlarmConfig>>>,
-    timers: Rc<RefCell<Vec<TimerConfig>>>,
-    triggered_alarm_ids: Rc<RefCell<HashSet<String>>>,
     alarm_list_box: ListBox,
     timer_list_box: ListBox,
-    on_list_change: Rc<RefCell<Option<OnListChangeCallback>>>,
-    on_timer_action: Rc<RefCell<Option<TimerActionCallback>>>,
-    on_alarm_dismiss: Rc<RefCell<Option<AlarmDismissCallback>>>,
+    refresh_source_id: Rc<RefCell<Option<gtk4::glib::SourceId>>>,
 }
 
 impl AlarmTimerDialog {
-    pub fn new(
-        parent: Option<&Window>,
-        initial_alarms: Vec<AlarmConfig>,
-        initial_timers: Vec<TimerConfig>,
-        triggered_ids: HashSet<String>,
-    ) -> Self {
+    pub fn new(parent: Option<&Window>) -> Self {
         let window = Window::builder()
             .title("Alarms & Timers")
             .modal(true)
@@ -76,18 +54,72 @@ impl AlarmTimerDialog {
             window.set_transient_for(Some(parent));
         }
 
-        let alarms = Rc::new(RefCell::new(initial_alarms));
-        let timers = Rc::new(RefCell::new(initial_timers));
-        let triggered_alarm_ids = Rc::new(RefCell::new(triggered_ids));
-        let on_list_change: Rc<RefCell<Option<OnListChangeCallback>>> = Rc::new(RefCell::new(None));
-        let on_timer_action: Rc<RefCell<Option<TimerActionCallback>>> = Rc::new(RefCell::new(None));
-        let on_alarm_dismiss: Rc<RefCell<Option<AlarmDismissCallback>>> = Rc::new(RefCell::new(None));
-
         let main_box = GtkBox::new(Orientation::Vertical, 12);
         main_box.set_margin_start(12);
         main_box.set_margin_end(12);
         main_box.set_margin_top(12);
         main_box.set_margin_bottom(12);
+
+        // ===== TIMER SECTION =====
+        let timer_frame = Frame::new(Some("Timers"));
+        let timer_vbox = GtkBox::new(Orientation::Vertical, 8);
+        timer_vbox.set_margin_start(8);
+        timer_vbox.set_margin_end(8);
+        timer_vbox.set_margin_top(8);
+        timer_vbox.set_margin_bottom(8);
+
+        let timer_scroll = ScrolledWindow::new();
+        timer_scroll.set_min_content_height(200);
+        timer_scroll.set_vexpand(true);
+
+        let timer_list_box = ListBox::new();
+        timer_list_box.set_selection_mode(gtk4::SelectionMode::None);
+        timer_list_box.add_css_class("boxed-list");
+        timer_scroll.set_child(Some(&timer_list_box));
+        timer_vbox.append(&timer_scroll);
+
+        // Add timer button row with global sound setting
+        let add_row = GtkBox::new(Orientation::Horizontal, 8);
+
+        let add_timer_button = Button::with_label("+ Add Timer");
+        add_row.append(&add_timer_button);
+
+        // Global timer sound setting
+        add_row.append(&Separator::new(Orientation::Vertical));
+        let sound_check = CheckButton::with_label("Sound");
+        let sound_path_label = Label::new(None::<&str>);
+        sound_path_label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+        sound_path_label.set_hexpand(true);
+        sound_path_label.set_halign(gtk4::Align::Start);
+
+        // Initialize from global manager
+        if let Ok(manager) = global_timer_manager().read() {
+            let sound = manager.get_global_timer_sound();
+            sound_check.set_active(sound.enabled);
+            sound_path_label.set_text(sound.custom_sound_path.as_deref().unwrap_or("System default"));
+        }
+
+        add_row.append(&sound_check);
+        add_row.append(&sound_path_label);
+
+        let browse_sound_btn = Button::with_label("...");
+        browse_sound_btn.set_tooltip_text(Some("Browse for sound file"));
+        add_row.append(&browse_sound_btn);
+
+        let preview_timer_sound_btn = Button::new();
+        preview_timer_sound_btn.set_icon_name("audio-speakers-symbolic");
+        preview_timer_sound_btn.set_tooltip_text(Some("Preview timer sound"));
+        add_row.append(&preview_timer_sound_btn);
+
+        let stop_timer_sound_btn = Button::new();
+        stop_timer_sound_btn.set_icon_name("media-playback-stop-symbolic");
+        stop_timer_sound_btn.set_tooltip_text(Some("Stop sound"));
+        add_row.append(&stop_timer_sound_btn);
+
+        timer_vbox.append(&add_row);
+
+        timer_frame.set_child(Some(&timer_vbox));
+        main_box.append(&timer_frame);
 
         // ===== ALARM SECTION =====
         let alarm_frame = Frame::new(Some("Alarms"));
@@ -97,7 +129,6 @@ impl AlarmTimerDialog {
         alarm_vbox.set_margin_top(8);
         alarm_vbox.set_margin_bottom(8);
 
-        // Scrollable alarm list
         let alarm_scroll = ScrolledWindow::new();
         alarm_scroll.set_min_content_height(150);
         alarm_scroll.set_vexpand(true);
@@ -108,40 +139,12 @@ impl AlarmTimerDialog {
         alarm_scroll.set_child(Some(&alarm_list_box));
         alarm_vbox.append(&alarm_scroll);
 
-        // Add alarm button
         let add_alarm_button = Button::with_label("+ Add Alarm");
         add_alarm_button.set_halign(gtk4::Align::Start);
         alarm_vbox.append(&add_alarm_button);
 
         alarm_frame.set_child(Some(&alarm_vbox));
         main_box.append(&alarm_frame);
-
-        // ===== TIMER SECTION =====
-        let timer_frame = Frame::new(Some("Timers"));
-        let timer_vbox = GtkBox::new(Orientation::Vertical, 8);
-        timer_vbox.set_margin_start(8);
-        timer_vbox.set_margin_end(8);
-        timer_vbox.set_margin_top(8);
-        timer_vbox.set_margin_bottom(8);
-
-        // Scrollable timer list
-        let timer_scroll = ScrolledWindow::new();
-        timer_scroll.set_min_content_height(150);
-        timer_scroll.set_vexpand(true);
-
-        let timer_list_box = ListBox::new();
-        timer_list_box.set_selection_mode(gtk4::SelectionMode::None);
-        timer_list_box.add_css_class("boxed-list");
-        timer_scroll.set_child(Some(&timer_list_box));
-        timer_vbox.append(&timer_scroll);
-
-        // Add timer button
-        let add_timer_button = Button::with_label("+ Add Timer");
-        add_timer_button.set_halign(gtk4::Align::Start);
-        timer_vbox.append(&add_timer_button);
-
-        timer_frame.set_child(Some(&timer_vbox));
-        main_box.append(&timer_frame);
 
         // ===== CLOSE BUTTON =====
         main_box.append(&Separator::new(Orientation::Horizontal));
@@ -155,129 +158,157 @@ impl AlarmTimerDialog {
 
         let dialog = Self {
             window: window.clone(),
-            alarms: alarms.clone(),
-            timers: timers.clone(),
-            triggered_alarm_ids: triggered_alarm_ids.clone(),
             alarm_list_box: alarm_list_box.clone(),
             timer_list_box: timer_list_box.clone(),
-            on_list_change: on_list_change.clone(),
-            on_timer_action: on_timer_action.clone(),
-            on_alarm_dismiss: on_alarm_dismiss.clone(),
+            refresh_source_id: Rc::new(RefCell::new(None)),
         };
 
-        // Populate initial lists
-        dialog.refresh_alarm_list();
+        // Populate lists
         dialog.refresh_timer_list();
+        dialog.refresh_alarm_list();
 
-        // ===== SIGNAL HANDLERS =====
+        // Set up periodic refresh only for running timer countdown display (1 second)
+        // This is less aggressive and only needed to update running timer displays
+        let timer_list_box_for_refresh = timer_list_box.clone();
+        let alarm_list_box_for_refresh = alarm_list_box.clone();
+        let refresh_id = gtk4::glib::timeout_add_local(
+            std::time::Duration::from_secs(1),
+            move || {
+                // Only refresh if there are running/paused timers or triggered alarms
+                let needs_refresh = if let Ok(manager) = global_timer_manager().read() {
+                    manager.timers.iter().any(|t| {
+                        t.state == TimerState::Running || t.state == TimerState::Paused || t.state == TimerState::Finished
+                    }) || !manager.triggered_alarms.is_empty()
+                } else {
+                    false
+                };
 
-        // Add alarm button
-        let alarms_clone = alarms.clone();
-        let on_list_change_clone = on_list_change.clone();
-        let timers_for_callback = timers.clone();
-        let alarm_list_box_clone = alarm_list_box.clone();
-        let triggered_ids_clone = triggered_alarm_ids.clone();
-        let on_alarm_dismiss_clone = on_alarm_dismiss.clone();
-        add_alarm_button.connect_clicked(move |_| {
-            let new_alarm = AlarmConfig::default();
-            alarms_clone.borrow_mut().push(new_alarm);
+                if needs_refresh {
+                    Self::refresh_timer_list_static(&timer_list_box_for_refresh);
+                    Self::refresh_alarm_list_static(&alarm_list_box_for_refresh);
+                }
+                gtk4::glib::ControlFlow::Continue
+            },
+        );
+        *dialog.refresh_source_id.borrow_mut() = Some(refresh_id);
 
-            // Refresh the list
-            Self::refresh_alarm_list_static(
-                &alarm_list_box_clone,
-                &alarms_clone,
-                &triggered_ids_clone,
-                &on_list_change_clone,
-                &timers_for_callback,
-                &on_alarm_dismiss_clone,
-            );
-
-            // Notify change
-            if let Some(ref cb) = *on_list_change_clone.borrow() {
-                cb(&alarms_clone.borrow(), &timers_for_callback.borrow());
+        // Global sound checkbox handler
+        sound_check.connect_toggled(move |check| {
+            if let Ok(mut manager) = global_timer_manager().write() {
+                let mut sound = manager.get_global_timer_sound().clone();
+                sound.enabled = check.is_active();
+                manager.set_global_timer_sound(sound);
             }
         });
 
-        // Add timer button
-        let timers_clone = timers.clone();
-        let on_list_change_clone = on_list_change.clone();
-        let alarms_for_callback = alarms.clone();
-        let timer_list_box_clone = timer_list_box.clone();
-        let on_timer_action_clone = on_timer_action.clone();
-        add_timer_button.connect_clicked(move |_| {
-            let new_timer = TimerConfig::default();
-            timers_clone.borrow_mut().push(new_timer);
+        // Browse sound file handler
+        let sound_path_label_for_browse = sound_path_label.clone();
+        browse_sound_btn.connect_clicked(move |btn| {
+            let filter = FileFilter::new();
+            filter.add_mime_type("audio/*");
+            filter.set_name(Some("Audio files"));
 
-            // Refresh the list
-            Self::refresh_timer_list_static(
-                &timer_list_box_clone,
-                &timers_clone,
-                &on_list_change_clone,
-                &alarms_for_callback,
-                &on_timer_action_clone,
-            );
+            let filters = gtk4::gio::ListStore::new::<FileFilter>();
+            filters.append(&filter);
 
-            // Notify change
-            if let Some(ref cb) = *on_list_change_clone.borrow() {
-                cb(&alarms_for_callback.borrow(), &timers_clone.borrow());
+            let file_dialog = FileDialog::builder()
+                .title("Select Timer Sound File")
+                .filters(&filters)
+                .build();
+
+            let lbl = sound_path_label_for_browse.clone();
+            let win = btn.root().and_downcast::<Window>();
+
+            file_dialog.open(win.as_ref(), gtk4::gio::Cancellable::NONE, move |result| {
+                if let Ok(file) = result {
+                    if let Some(path) = file.path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        lbl.set_text(&path_str);
+                        if let Ok(mut manager) = global_timer_manager().write() {
+                            let mut sound = manager.get_global_timer_sound().clone();
+                            sound.custom_sound_path = Some(path_str);
+                            manager.set_global_timer_sound(sound);
+                        }
+                    }
+                }
+            });
+        });
+
+        // Preview timer sound handler
+        preview_timer_sound_btn.connect_clicked(move |_| {
+            // First stop any currently playing sound
+            stop_all_sounds();
+            // Then play the preview
+            if let Ok(manager) = global_timer_manager().read() {
+                let sound = manager.get_global_timer_sound().clone();
+                play_preview_sound(&sound);
             }
+        });
+
+        // Stop timer sound handler
+        stop_timer_sound_btn.connect_clicked(move |_| {
+            stop_all_sounds();
+        });
+
+        // Add timer button
+        let timer_list_for_add = timer_list_box.clone();
+        add_timer_button.connect_clicked(move |_| {
+            let new_timer = TimerConfig::new();
+            if let Ok(mut manager) = global_timer_manager().write() {
+                manager.add_timer(new_timer);
+            }
+            Self::refresh_timer_list_static(&timer_list_for_add);
+        });
+
+        // Add alarm button
+        let alarm_list_for_add = alarm_list_box.clone();
+        add_alarm_button.connect_clicked(move |_| {
+            let new_alarm = AlarmConfig::new();
+            if let Ok(mut manager) = global_timer_manager().write() {
+                manager.add_alarm(new_alarm);
+            }
+            Self::refresh_alarm_list_static(&alarm_list_for_add);
         });
 
         // Close button
         let window_clone = window.clone();
+        let refresh_id_for_close = dialog.refresh_source_id.clone();
         close_button.connect_clicked(move |_| {
+            if let Some(id) = refresh_id_for_close.borrow_mut().take() {
+                id.remove();
+            }
             window_clone.close();
+        });
+
+        // Stop refresh when window closes
+        let refresh_id_for_destroy = dialog.refresh_source_id.clone();
+        window.connect_destroy(move |_| {
+            if let Some(id) = refresh_id_for_destroy.borrow_mut().take() {
+                id.remove();
+            }
         });
 
         dialog
     }
 
-    /// Refresh the alarm list display
-    fn refresh_alarm_list(&self) {
-        Self::refresh_alarm_list_static(
-            &self.alarm_list_box,
-            &self.alarms,
-            &self.triggered_alarm_ids,
-            &self.on_list_change,
-            &self.timers,
-            &self.on_alarm_dismiss,
-        );
+    fn refresh_timer_list(&self) {
+        Self::refresh_timer_list_static(&self.timer_list_box);
     }
 
-    fn refresh_alarm_list_static(
-        list_box: &ListBox,
-        alarms: &Rc<RefCell<Vec<AlarmConfig>>>,
-        triggered_ids: &Rc<RefCell<HashSet<String>>>,
-        on_list_change: &Rc<RefCell<Option<OnListChangeCallback>>>,
-        timers: &Rc<RefCell<Vec<TimerConfig>>>,
-        on_alarm_dismiss: &Rc<RefCell<Option<AlarmDismissCallback>>>,
-    ) {
+    fn refresh_timer_list_static(list_box: &ListBox) {
         // Clear existing rows
         while let Some(child) = list_box.first_child() {
             list_box.remove(&child);
         }
 
-        let alarms_borrowed = alarms.borrow();
-        let triggered = triggered_ids.borrow();
+        let timers = if let Ok(manager) = global_timer_manager().read() {
+            manager.timers.clone()
+        } else {
+            Vec::new()
+        };
 
-        for (idx, alarm) in alarms_borrowed.iter().enumerate() {
-            let is_triggered = triggered.contains(&alarm.id);
-            let row = Self::create_alarm_row(
-                alarm,
-                idx,
-                is_triggered,
-                alarms.clone(),
-                triggered_ids.clone(),
-                on_list_change.clone(),
-                timers.clone(),
-                list_box.clone(),
-                on_alarm_dismiss.clone(),
-            );
-            list_box.append(&row);
-        }
-
-        if alarms_borrowed.is_empty() {
-            let empty_label = Label::new(Some("No alarms configured"));
+        if timers.is_empty() {
+            let empty_label = Label::new(Some("No timers. Click '+ Add Timer' to create one."));
             empty_label.add_css_class("dim-label");
             empty_label.set_margin_top(12);
             empty_label.set_margin_bottom(12);
@@ -286,20 +317,222 @@ impl AlarmTimerDialog {
             row.set_selectable(false);
             row.set_activatable(false);
             list_box.append(&row);
+            return;
+        }
+
+        for timer in &timers {
+            let row = Self::create_timer_row(timer, list_box);
+            list_box.append(&row);
         }
     }
 
-    fn create_alarm_row(
-        alarm: &AlarmConfig,
-        _idx: usize,
-        is_triggered: bool,
-        alarms: Rc<RefCell<Vec<AlarmConfig>>>,
-        triggered_ids: Rc<RefCell<HashSet<String>>>,
-        on_list_change: Rc<RefCell<Option<OnListChangeCallback>>>,
-        timers: Rc<RefCell<Vec<TimerConfig>>>,
-        list_box: ListBox,
-        on_alarm_dismiss: Rc<RefCell<Option<AlarmDismissCallback>>>,
-    ) -> ListBoxRow {
+    fn create_timer_row(timer: &TimerConfig, list_box: &ListBox) -> ListBoxRow {
+        let row = ListBoxRow::new();
+        row.set_selectable(false);
+        row.set_activatable(false);
+
+        let timer_id = timer.id.clone();
+        let is_stopped = timer.state == TimerState::Stopped;
+
+        let hbox = GtkBox::new(Orientation::Horizontal, 6);
+        hbox.set_margin_start(8);
+        hbox.set_margin_end(8);
+        hbox.set_margin_top(6);
+        hbox.set_margin_bottom(6);
+
+        // Play/Pause/Resume button
+        let play_pause_btn = Button::new();
+        play_pause_btn.set_tooltip_text(Some(match timer.state {
+            TimerState::Stopped | TimerState::Finished => "Start",
+            TimerState::Running => "Pause",
+            TimerState::Paused => "Resume",
+        }));
+        play_pause_btn.set_icon_name(match timer.state {
+            TimerState::Stopped | TimerState::Finished => "media-playback-start-symbolic",
+            TimerState::Running => "media-playback-pause-symbolic",
+            TimerState::Paused => "media-playback-start-symbolic",
+        });
+        if timer.state == TimerState::Stopped || timer.state == TimerState::Finished {
+            play_pause_btn.add_css_class("suggested-action");
+        }
+        let tid = timer_id.clone();
+        let lb = list_box.clone();
+        play_pause_btn.connect_clicked(move |_| {
+            // Read current state from manager at click time
+            let action_taken = if let Ok(mut manager) = global_timer_manager().write() {
+                let current_state = manager.timers.iter()
+                    .find(|t| t.id == tid)
+                    .map(|t| t.state)
+                    .unwrap_or(TimerState::Stopped);
+                match current_state {
+                    TimerState::Stopped | TimerState::Finished => manager.start_timer(&tid),
+                    TimerState::Running => manager.pause_timer(&tid),
+                    TimerState::Paused => manager.resume_timer(&tid),
+                }
+                true
+            } else {
+                false
+            };
+            if action_taken {
+                Self::refresh_timer_list_static(&lb);
+            }
+        });
+        hbox.append(&play_pause_btn);
+
+        // Stop button
+        let stop_btn = Button::new();
+        stop_btn.set_icon_name("media-playback-stop-symbolic");
+        stop_btn.set_tooltip_text(Some("Stop/Reset"));
+        stop_btn.set_sensitive(timer.state != TimerState::Stopped);
+        let tid = timer_id.clone();
+        let lb = list_box.clone();
+        stop_btn.connect_clicked(move |_| {
+            let action_taken = if let Ok(mut manager) = global_timer_manager().write() {
+                manager.stop_timer(&tid);
+                true
+            } else {
+                false
+            };
+            if action_taken {
+                Self::refresh_timer_list_static(&lb);
+            }
+        });
+        hbox.append(&stop_btn);
+
+        // H:M:S spinners (editable when stopped)
+        let hours = (timer.countdown_duration / 3600) as f64;
+        let mins = ((timer.countdown_duration % 3600) / 60) as f64;
+        let secs = (timer.countdown_duration % 60) as f64;
+
+        let hour_adj = Adjustment::new(hours, 0.0, 99.0, 1.0, 1.0, 0.0);
+        let hour_spin = SpinButton::new(Some(&hour_adj), 1.0, 0);
+        hour_spin.set_width_chars(2);
+        hour_spin.set_sensitive(is_stopped);
+        hbox.append(&hour_spin);
+        hbox.append(&Label::new(Some("H")));
+
+        let min_adj = Adjustment::new(mins, 0.0, 59.0, 1.0, 5.0, 0.0);
+        let min_spin = SpinButton::new(Some(&min_adj), 1.0, 0);
+        min_spin.set_width_chars(2);
+        min_spin.set_sensitive(is_stopped);
+        hbox.append(&min_spin);
+        hbox.append(&Label::new(Some("M")));
+
+        let sec_adj = Adjustment::new(secs, 0.0, 59.0, 1.0, 5.0, 0.0);
+        let sec_spin = SpinButton::new(Some(&sec_adj), 1.0, 0);
+        sec_spin.set_width_chars(2);
+        sec_spin.set_sensitive(is_stopped);
+        hbox.append(&sec_spin);
+        hbox.append(&Label::new(Some("S")));
+
+        // Current time display (when running/paused/finished)
+        if !is_stopped {
+            let time_str = timer.display_string();
+            let time_label = Label::new(Some(&time_str));
+            time_label.add_css_class("monospace");
+            time_label.set_width_chars(10);
+            match timer.state {
+                TimerState::Running => time_label.add_css_class("success"),
+                TimerState::Paused => time_label.add_css_class("warning"),
+                TimerState::Finished => time_label.add_css_class("error"),
+                _ => {}
+            }
+            hbox.append(&time_label);
+        }
+
+        // Spacer
+        let spacer = GtkBox::new(Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+        hbox.append(&spacer);
+
+        // Delete button
+        let delete_btn = Button::new();
+        delete_btn.set_icon_name("user-trash-symbolic");
+        delete_btn.set_tooltip_text(Some("Delete timer"));
+        delete_btn.add_css_class("destructive-action");
+        let tid = timer_id.clone();
+        let lb = list_box.clone();
+        delete_btn.connect_clicked(move |_| {
+            let deleted = if let Ok(mut manager) = global_timer_manager().write() {
+                manager.remove_timer(&tid);
+                true
+            } else {
+                false
+            };
+            if deleted {
+                Self::refresh_timer_list_static(&lb);
+            }
+        });
+        hbox.append(&delete_btn);
+
+        // Connect spinner value changes (only apply when stopped)
+        if is_stopped {
+            let tid = timer_id.clone();
+            let hour_spin_c = hour_spin.clone();
+            let min_spin_c = min_spin.clone();
+            let sec_spin_c = sec_spin.clone();
+
+            let apply_duration = Rc::new(move || {
+                let duration = (hour_spin_c.value() as u64) * 3600
+                    + (min_spin_c.value() as u64) * 60
+                    + sec_spin_c.value() as u64;
+                if let Ok(mut manager) = global_timer_manager().write() {
+                    manager.update_timer(&tid, |t| {
+                        t.countdown_duration = duration;
+                    });
+                }
+            });
+
+            let apply = apply_duration.clone();
+            hour_spin.connect_value_changed(move |_| apply());
+
+            let apply = apply_duration.clone();
+            min_spin.connect_value_changed(move |_| apply());
+
+            let apply = apply_duration.clone();
+            sec_spin.connect_value_changed(move |_| apply());
+        }
+
+        row.set_child(Some(&hbox));
+        row
+    }
+
+    fn refresh_alarm_list(&self) {
+        Self::refresh_alarm_list_static(&self.alarm_list_box);
+    }
+
+    fn refresh_alarm_list_static(list_box: &ListBox) {
+        while let Some(child) = list_box.first_child() {
+            list_box.remove(&child);
+        }
+
+        let (alarms, triggered_ids) = if let Ok(manager) = global_timer_manager().read() {
+            (manager.alarms.clone(), manager.triggered_alarms.clone())
+        } else {
+            (Vec::new(), std::collections::HashSet::new())
+        };
+
+        if alarms.is_empty() {
+            let empty_label = Label::new(Some("No alarms. Click '+ Add Alarm' to create one."));
+            empty_label.add_css_class("dim-label");
+            empty_label.set_margin_top(12);
+            empty_label.set_margin_bottom(12);
+            let row = ListBoxRow::new();
+            row.set_child(Some(&empty_label));
+            row.set_selectable(false);
+            row.set_activatable(false);
+            list_box.append(&row);
+            return;
+        }
+
+        for alarm in &alarms {
+            let is_triggered = triggered_ids.contains(&alarm.id);
+            let row = Self::create_alarm_row(alarm, is_triggered, list_box.clone());
+            list_box.append(&row);
+        }
+    }
+
+    fn create_alarm_row(alarm: &AlarmConfig, is_triggered: bool, list_box: ListBox) -> ListBoxRow {
         let row = ListBoxRow::new();
         row.set_selectable(false);
         row.set_activatable(false);
@@ -316,6 +549,14 @@ impl AlarmTimerDialog {
         let enabled_check = CheckButton::new();
         enabled_check.set_active(alarm.enabled);
         enabled_check.set_tooltip_text(Some("Enable/Disable"));
+        let aid_for_toggle = alarm_id.clone();
+        enabled_check.connect_toggled(move |check| {
+            if let Ok(mut manager) = global_timer_manager().write() {
+                manager.update_alarm(&aid_for_toggle, |a| {
+                    a.enabled = check.is_active();
+                });
+            }
+        });
         hbox.append(&enabled_check);
 
         // Time display
@@ -340,100 +581,60 @@ impl AlarmTimerDialog {
         label_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
         hbox.append(&label_label);
 
-        // Triggered indicator and dismiss button
+        // Triggered indicator
         if is_triggered {
             let triggered_label = Label::new(Some("RINGING"));
             triggered_label.add_css_class("error");
             hbox.append(&triggered_label);
 
-            let dismiss_button = Button::with_label("Dismiss");
-            dismiss_button.add_css_class("destructive-action");
-            let alarm_id_for_dismiss = alarm_id.clone();
-            let on_dismiss_clone = on_alarm_dismiss.clone();
-            let triggered_ids_for_dismiss = triggered_ids.clone();
-            let alarms_for_dismiss = alarms.clone();
-            let timers_for_dismiss = timers.clone();
-            let on_list_change_for_dismiss = on_list_change.clone();
-            let list_box_for_dismiss = list_box.clone();
-            let on_alarm_dismiss_for_dismiss = on_alarm_dismiss.clone();
-            dismiss_button.connect_clicked(move |_| {
-                if let Some(ref cb) = *on_dismiss_clone.borrow() {
-                    cb(&alarm_id_for_dismiss);
+            let dismiss_btn = Button::with_label("Dismiss");
+            dismiss_btn.add_css_class("destructive-action");
+            let aid = alarm_id.clone();
+            let lb = list_box.clone();
+            dismiss_btn.connect_clicked(move |_| {
+                let dismissed = if let Ok(mut manager) = global_timer_manager().write() {
+                    manager.dismiss_alarm(&aid);
+                    true
+                } else {
+                    false
+                };
+                if dismissed {
+                    Self::refresh_alarm_list_static(&lb);
                 }
-                triggered_ids_for_dismiss.borrow_mut().remove(&alarm_id_for_dismiss);
-                Self::refresh_alarm_list_static(
-                    &list_box_for_dismiss,
-                    &alarms_for_dismiss,
-                    &triggered_ids_for_dismiss,
-                    &on_list_change_for_dismiss,
-                    &timers_for_dismiss,
-                    &on_alarm_dismiss_for_dismiss,
-                );
             });
-            hbox.append(&dismiss_button);
+            hbox.append(&dismiss_btn);
         }
 
         // Edit button
-        let edit_button = Button::with_label("Edit");
+        let edit_btn = Button::new();
+        edit_btn.set_icon_name("document-edit-symbolic");
+        edit_btn.set_tooltip_text(Some("Edit alarm"));
         let alarm_clone = alarm.clone();
-        let alarms_for_edit = alarms.clone();
-        let triggered_for_edit = triggered_ids.clone();
-        let on_list_change_for_edit = on_list_change.clone();
-        let timers_for_edit = timers.clone();
-        let list_box_for_edit = list_box.clone();
-        let on_alarm_dismiss_for_edit = on_alarm_dismiss.clone();
-        edit_button.connect_clicked(move |_| {
-            Self::show_alarm_edit_dialog(
-                &alarm_clone,
-                alarms_for_edit.clone(),
-                triggered_for_edit.clone(),
-                on_list_change_for_edit.clone(),
-                timers_for_edit.clone(),
-                list_box_for_edit.clone(),
-                on_alarm_dismiss_for_edit.clone(),
-            );
+        let lb_edit = list_box.clone();
+        edit_btn.connect_clicked(move |btn| {
+            Self::show_alarm_edit_dialog(&alarm_clone, lb_edit.clone(), btn.root().and_downcast::<Window>().as_ref());
         });
-        hbox.append(&edit_button);
+        hbox.append(&edit_btn);
 
         // Delete button
-        let delete_button = Button::with_label("Delete");
-        delete_button.add_css_class("destructive-action");
-        let alarm_id_for_delete = alarm_id.clone();
-        let alarms_for_delete = alarms.clone();
-        let triggered_for_delete = triggered_ids.clone();
-        let on_list_change_for_delete = on_list_change.clone();
-        let timers_for_delete = timers.clone();
-        let list_box_for_delete = list_box.clone();
-        let on_alarm_dismiss_for_delete = on_alarm_dismiss.clone();
-        delete_button.connect_clicked(move |_| {
-            alarms_for_delete.borrow_mut().retain(|a| a.id != alarm_id_for_delete);
-            Self::refresh_alarm_list_static(
-                &list_box_for_delete,
-                &alarms_for_delete,
-                &triggered_for_delete,
-                &on_list_change_for_delete,
-                &timers_for_delete,
-                &on_alarm_dismiss_for_delete,
-            );
-            if let Some(ref cb) = *on_list_change_for_delete.borrow() {
-                cb(&alarms_for_delete.borrow(), &timers_for_delete.borrow());
+        let delete_btn = Button::new();
+        delete_btn.set_icon_name("user-trash-symbolic");
+        delete_btn.set_tooltip_text(Some("Delete alarm"));
+        delete_btn.add_css_class("destructive-action");
+        let aid_del = alarm_id.clone();
+        let lb = list_box.clone();
+        delete_btn.connect_clicked(move |_| {
+            let deleted = if let Ok(mut manager) = global_timer_manager().write() {
+                manager.remove_alarm(&aid_del);
+                true
+            } else {
+                false
+            };
+            if deleted {
+                Self::refresh_alarm_list_static(&lb);
             }
         });
-        hbox.append(&delete_button);
-
-        // Enable toggle handler
-        let alarm_id_for_toggle = alarm_id.clone();
-        let alarms_for_toggle = alarms.clone();
-        let on_list_change_for_toggle = on_list_change.clone();
-        let timers_for_toggle = timers.clone();
-        enabled_check.connect_toggled(move |check| {
-            if let Some(alarm) = alarms_for_toggle.borrow_mut().iter_mut().find(|a| a.id == alarm_id_for_toggle) {
-                alarm.enabled = check.is_active();
-            }
-            if let Some(ref cb) = *on_list_change_for_toggle.borrow() {
-                cb(&alarms_for_toggle.borrow(), &timers_for_toggle.borrow());
-            }
-        });
+        hbox.append(&delete_btn);
 
         row.set_child(Some(&hbox));
         row
@@ -446,27 +647,24 @@ impl AlarmTimerDialog {
         let day_names = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
         let mut sorted_days = days.to_vec();
         sorted_days.sort();
-        sorted_days.iter()
+        sorted_days
+            .iter()
             .map(|&d| *day_names.get(d as usize).unwrap_or(&"?"))
             .collect::<Vec<_>>()
             .join(",")
     }
 
-    fn show_alarm_edit_dialog(
-        alarm: &AlarmConfig,
-        alarms: Rc<RefCell<Vec<AlarmConfig>>>,
-        triggered_ids: Rc<RefCell<HashSet<String>>>,
-        on_list_change: Rc<RefCell<Option<OnListChangeCallback>>>,
-        timers: Rc<RefCell<Vec<TimerConfig>>>,
-        list_box: ListBox,
-        on_alarm_dismiss: Rc<RefCell<Option<AlarmDismissCallback>>>,
-    ) {
+    fn show_alarm_edit_dialog(alarm: &AlarmConfig, list_box: ListBox, parent: Option<&Window>) {
         let dialog = Window::builder()
             .title("Edit Alarm")
             .modal(true)
-            .default_width(350)
-            .default_height(400)
+            .default_width(400)
+            .default_height(450)
             .build();
+
+        if let Some(parent) = parent {
+            dialog.set_transient_for(Some(parent));
+        }
 
         let alarm_id = alarm.id.clone();
         let vbox = GtkBox::new(Orientation::Vertical, 12);
@@ -478,17 +676,14 @@ impl AlarmTimerDialog {
         // Time
         let time_box = GtkBox::new(Orientation::Horizontal, 6);
         time_box.append(&Label::new(Some("Time:")));
-
         let hour_adj = Adjustment::new(alarm.hour as f64, 0.0, 23.0, 1.0, 1.0, 0.0);
         let hour_spin = SpinButton::new(Some(&hour_adj), 1.0, 0);
         time_box.append(&hour_spin);
         time_box.append(&Label::new(Some(":")));
-
         let min_adj = Adjustment::new(alarm.minute as f64, 0.0, 59.0, 1.0, 1.0, 0.0);
         let min_spin = SpinButton::new(Some(&min_adj), 1.0, 0);
         time_box.append(&min_spin);
         time_box.append(&Label::new(Some(":")));
-
         let sec_adj = Adjustment::new(alarm.second as f64, 0.0, 59.0, 1.0, 1.0, 0.0);
         let sec_spin = SpinButton::new(Some(&sec_adj), 1.0, 0);
         time_box.append(&sec_spin);
@@ -524,446 +719,132 @@ impl AlarmTimerDialog {
         sound_check.set_active(alarm.sound.enabled);
         vbox.append(&sound_check);
 
+        // Sound file
+        let sound_box = GtkBox::new(Orientation::Horizontal, 6);
+        sound_box.append(&Label::new(Some("Sound:")));
+        let sound_label = Label::new(Some(
+            alarm.sound.custom_sound_path.as_deref().unwrap_or("System default")
+        ));
+        sound_label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+        sound_label.set_hexpand(true);
+        sound_box.append(&sound_label);
+
+        let browse_btn = Button::with_label("Browse...");
+        let sound_label_for_browse = sound_label.clone();
+        let alarm_id_for_sound = alarm_id.clone();
+        browse_btn.connect_clicked(move |btn| {
+            let filter = FileFilter::new();
+            filter.add_mime_type("audio/*");
+            filter.set_name(Some("Audio files"));
+
+            let filters = gtk4::gio::ListStore::new::<FileFilter>();
+            filters.append(&filter);
+
+            let file_dialog = FileDialog::builder()
+                .title("Select Sound File")
+                .filters(&filters)
+                .build();
+
+            let lbl = sound_label_for_browse.clone();
+            let aid = alarm_id_for_sound.clone();
+            let win = btn.root().and_downcast::<Window>();
+
+            file_dialog.open(win.as_ref(), gtk4::gio::Cancellable::NONE, move |result| {
+                if let Ok(file) = result {
+                    if let Some(path) = file.path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        lbl.set_text(&path_str);
+                        if let Ok(mut manager) = global_timer_manager().write() {
+                            manager.update_alarm(&aid, |a| {
+                                a.sound.custom_sound_path = Some(path_str);
+                            });
+                        }
+                    }
+                }
+            });
+        });
+        sound_box.append(&browse_btn);
+
+        // Preview alarm sound button
+        let preview_alarm_btn = Button::new();
+        preview_alarm_btn.set_icon_name("audio-speakers-symbolic");
+        preview_alarm_btn.set_tooltip_text(Some("Preview alarm sound"));
+        let alarm_id_for_preview = alarm.id.clone();
+        preview_alarm_btn.connect_clicked(move |_| {
+            // Stop any currently playing sound
+            stop_all_sounds();
+            // Play this alarm's sound
+            if let Ok(manager) = global_timer_manager().read() {
+                if let Some(alarm) = manager.alarms.iter().find(|a| a.id == alarm_id_for_preview) {
+                    play_preview_sound(&alarm.sound);
+                }
+            }
+        });
+        sound_box.append(&preview_alarm_btn);
+
+        let stop_alarm_btn = Button::new();
+        stop_alarm_btn.set_icon_name("media-playback-stop-symbolic");
+        stop_alarm_btn.set_tooltip_text(Some("Stop sound"));
+        stop_alarm_btn.connect_clicked(move |_| {
+            stop_all_sounds();
+        });
+        sound_box.append(&stop_alarm_btn);
+
+        vbox.append(&sound_box);
+
         // Visual flash
         let flash_check = CheckButton::with_label("Visual flash");
         flash_check.set_active(alarm.sound.visual_enabled);
         vbox.append(&flash_check);
 
         // Buttons
+        vbox.append(&Separator::new(Orientation::Horizontal));
         let button_box = GtkBox::new(Orientation::Horizontal, 8);
         button_box.set_halign(gtk4::Align::End);
 
-        let cancel_button = Button::with_label("Cancel");
+        let cancel_btn = Button::with_label("Cancel");
         let dialog_for_cancel = dialog.clone();
-        cancel_button.connect_clicked(move |_| dialog_for_cancel.close());
-        button_box.append(&cancel_button);
+        cancel_btn.connect_clicked(move |_| dialog_for_cancel.close());
+        button_box.append(&cancel_btn);
 
-        let save_button = Button::with_label("Save");
-        save_button.add_css_class("suggested-action");
+        let save_btn = Button::with_label("Save");
+        save_btn.add_css_class("suggested-action");
         let dialog_for_save = dialog.clone();
-        save_button.connect_clicked(move |_| {
-            // Update alarm
-            if let Some(alarm) = alarms.borrow_mut().iter_mut().find(|a| a.id == alarm_id) {
-                alarm.hour = hour_spin.value() as u32;
-                alarm.minute = min_spin.value() as u32;
-                alarm.second = sec_spin.value() as u32;
+        save_btn.connect_clicked(move |_| {
+            if let Ok(mut manager) = global_timer_manager().write() {
+                manager.update_alarm(&alarm_id, |a| {
+                    a.hour = hour_spin.value() as u32;
+                    a.minute = min_spin.value() as u32;
+                    a.second = sec_spin.value() as u32;
 
-                let mut days = Vec::new();
-                for (i, check) in day_checks.iter().enumerate() {
-                    if check.is_active() {
-                        days.push(i as u32);
+                    let mut days = Vec::new();
+                    for (i, check) in day_checks.iter().enumerate() {
+                        if check.is_active() {
+                            days.push(i as u32);
+                        }
                     }
-                }
-                alarm.days = days;
+                    a.days = days;
 
-                let label_text = label_entry.text().to_string();
-                alarm.label = if label_text.is_empty() { None } else { Some(label_text) };
-                alarm.sound.enabled = sound_check.is_active();
-                alarm.sound.visual_enabled = flash_check.is_active();
+                    let label_text = label_entry.text().to_string();
+                    a.label = if label_text.is_empty() { None } else { Some(label_text) };
+                    a.sound.enabled = sound_check.is_active();
+                    a.sound.visual_enabled = flash_check.is_active();
+                });
             }
-
-            // Refresh list
-            Self::refresh_alarm_list_static(
-                &list_box,
-                &alarms,
-                &triggered_ids,
-                &on_list_change,
-                &timers,
-                &on_alarm_dismiss,
-            );
-
-            // Notify change
-            if let Some(ref cb) = *on_list_change.borrow() {
-                cb(&alarms.borrow(), &timers.borrow());
-            }
-
+            Self::refresh_alarm_list_static(&list_box);
             dialog_for_save.close();
         });
-        button_box.append(&save_button);
+        button_box.append(&save_btn);
         vbox.append(&button_box);
 
         dialog.set_child(Some(&vbox));
         dialog.present();
     }
 
-    /// Refresh the timer list display
-    fn refresh_timer_list(&self) {
-        Self::refresh_timer_list_static(
-            &self.timer_list_box,
-            &self.timers,
-            &self.on_list_change,
-            &self.alarms,
-            &self.on_timer_action,
-        );
-    }
-
-    fn refresh_timer_list_static(
-        list_box: &ListBox,
-        timers: &Rc<RefCell<Vec<TimerConfig>>>,
-        on_list_change: &Rc<RefCell<Option<OnListChangeCallback>>>,
-        alarms: &Rc<RefCell<Vec<AlarmConfig>>>,
-        on_timer_action: &Rc<RefCell<Option<TimerActionCallback>>>,
-    ) {
-        // Clear existing rows
-        while let Some(child) = list_box.first_child() {
-            list_box.remove(&child);
-        }
-
-        let timers_borrowed = timers.borrow();
-
-        for (idx, timer) in timers_borrowed.iter().enumerate() {
-            let row = Self::create_timer_row(
-                timer,
-                idx,
-                timers.clone(),
-                on_list_change.clone(),
-                alarms.clone(),
-                list_box.clone(),
-                on_timer_action.clone(),
-            );
-            list_box.append(&row);
-        }
-
-        if timers_borrowed.is_empty() {
-            let empty_label = Label::new(Some("No timers configured"));
-            empty_label.add_css_class("dim-label");
-            empty_label.set_margin_top(12);
-            empty_label.set_margin_bottom(12);
-            let row = ListBoxRow::new();
-            row.set_child(Some(&empty_label));
-            row.set_selectable(false);
-            row.set_activatable(false);
-            list_box.append(&row);
-        }
-    }
-
-    fn create_timer_row(
-        timer: &TimerConfig,
-        _idx: usize,
-        timers: Rc<RefCell<Vec<TimerConfig>>>,
-        on_list_change: Rc<RefCell<Option<OnListChangeCallback>>>,
-        alarms: Rc<RefCell<Vec<AlarmConfig>>>,
-        list_box: ListBox,
-        on_timer_action: Rc<RefCell<Option<TimerActionCallback>>>,
-    ) -> ListBoxRow {
-        let row = ListBoxRow::new();
-        row.set_selectable(false);
-        row.set_activatable(false);
-
-        let timer_id = timer.id.clone();
-
-        let hbox = GtkBox::new(Orientation::Horizontal, 8);
-        hbox.set_margin_start(8);
-        hbox.set_margin_end(8);
-        hbox.set_margin_top(8);
-        hbox.set_margin_bottom(8);
-
-        // Mode indicator
-        let mode_str = match timer.mode {
-            TimerMode::Countdown => "⏱",
-            TimerMode::Stopwatch => "⏲",
-        };
-        let mode_label = Label::new(Some(mode_str));
-        hbox.append(&mode_label);
-
-        // Duration/time display
-        let duration_str = if timer.mode == TimerMode::Countdown {
-            let mins = timer.countdown_duration / 60;
-            let secs = timer.countdown_duration % 60;
-            format!("{:02}:{:02}", mins, secs)
-        } else {
-            let total_secs = timer.elapsed_ms / 1000;
-            let mins = total_secs / 60;
-            let secs = total_secs % 60;
-            format!("{:02}:{:02}", mins, secs)
-        };
-        let duration_label = Label::new(Some(&duration_str));
-        duration_label.add_css_class("heading");
-        duration_label.set_width_chars(8);
-        hbox.append(&duration_label);
-
-        // State
-        let state_str = match timer.state {
-            TimerState::Stopped => "Stopped",
-            TimerState::Running => "Running",
-            TimerState::Paused => "Paused",
-            TimerState::Finished => "Finished!",
-        };
-        let state_label = Label::new(Some(state_str));
-        if timer.state == TimerState::Finished {
-            state_label.add_css_class("error");
-        } else if timer.state == TimerState::Running {
-            state_label.add_css_class("success");
-        }
-        hbox.append(&state_label);
-
-        // Label
-        let label_text = timer.label.clone().unwrap_or_default();
-        let label_label = Label::new(Some(&label_text));
-        label_label.set_hexpand(true);
-        label_label.set_halign(gtk4::Align::Start);
-        label_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-        hbox.append(&label_label);
-
-        // Timer control buttons based on state
-        let timer_id_for_action = timer_id.clone();
-        let on_action_clone = on_timer_action.clone();
-
-        match timer.state {
-            TimerState::Stopped | TimerState::Finished => {
-                let start_btn = Button::with_label("Start");
-                start_btn.add_css_class("suggested-action");
-                let tid = timer_id_for_action.clone();
-                let on_act = on_action_clone.clone();
-                start_btn.connect_clicked(move |_| {
-                    if let Some(ref cb) = *on_act.borrow() {
-                        cb(&tid, TimerAction::Start);
-                    }
-                });
-                hbox.append(&start_btn);
-            }
-            TimerState::Running => {
-                let pause_btn = Button::with_label("Pause");
-                let tid = timer_id_for_action.clone();
-                let on_act = on_action_clone.clone();
-                pause_btn.connect_clicked(move |_| {
-                    if let Some(ref cb) = *on_act.borrow() {
-                        cb(&tid, TimerAction::Pause);
-                    }
-                });
-                hbox.append(&pause_btn);
-
-                let stop_btn = Button::with_label("Stop");
-                stop_btn.add_css_class("destructive-action");
-                let tid2 = timer_id_for_action.clone();
-                let on_act2 = on_action_clone.clone();
-                stop_btn.connect_clicked(move |_| {
-                    if let Some(ref cb) = *on_act2.borrow() {
-                        cb(&tid2, TimerAction::Stop);
-                    }
-                });
-                hbox.append(&stop_btn);
-            }
-            TimerState::Paused => {
-                let resume_btn = Button::with_label("Resume");
-                resume_btn.add_css_class("suggested-action");
-                let tid = timer_id_for_action.clone();
-                let on_act = on_action_clone.clone();
-                resume_btn.connect_clicked(move |_| {
-                    if let Some(ref cb) = *on_act.borrow() {
-                        cb(&tid, TimerAction::Resume);
-                    }
-                });
-                hbox.append(&resume_btn);
-
-                let stop_btn = Button::with_label("Stop");
-                stop_btn.add_css_class("destructive-action");
-                let tid2 = timer_id_for_action.clone();
-                let on_act2 = on_action_clone.clone();
-                stop_btn.connect_clicked(move |_| {
-                    if let Some(ref cb) = *on_act2.borrow() {
-                        cb(&tid2, TimerAction::Stop);
-                    }
-                });
-                hbox.append(&stop_btn);
-            }
-        }
-
-        // Edit button
-        let edit_button = Button::with_label("Edit");
-        let timer_clone = timer.clone();
-        let timers_for_edit = timers.clone();
-        let on_list_change_for_edit = on_list_change.clone();
-        let alarms_for_edit = alarms.clone();
-        let list_box_for_edit = list_box.clone();
-        let on_timer_action_for_edit = on_timer_action.clone();
-        edit_button.connect_clicked(move |_| {
-            Self::show_timer_edit_dialog(
-                &timer_clone,
-                timers_for_edit.clone(),
-                on_list_change_for_edit.clone(),
-                alarms_for_edit.clone(),
-                list_box_for_edit.clone(),
-                on_timer_action_for_edit.clone(),
-            );
-        });
-        hbox.append(&edit_button);
-
-        // Delete button
-        let delete_button = Button::with_label("Delete");
-        delete_button.add_css_class("destructive-action");
-        let timer_id_for_delete = timer_id.clone();
-        let timers_for_delete = timers.clone();
-        let on_list_change_for_delete = on_list_change.clone();
-        let alarms_for_delete = alarms.clone();
-        let list_box_for_delete = list_box.clone();
-        let on_timer_action_for_delete = on_timer_action.clone();
-        delete_button.connect_clicked(move |_| {
-            timers_for_delete.borrow_mut().retain(|t| t.id != timer_id_for_delete);
-            Self::refresh_timer_list_static(
-                &list_box_for_delete,
-                &timers_for_delete,
-                &on_list_change_for_delete,
-                &alarms_for_delete,
-                &on_timer_action_for_delete,
-            );
-            if let Some(ref cb) = *on_list_change_for_delete.borrow() {
-                cb(&alarms_for_delete.borrow(), &timers_for_delete.borrow());
-            }
-        });
-        hbox.append(&delete_button);
-
-        row.set_child(Some(&hbox));
-        row
-    }
-
-    fn show_timer_edit_dialog(
-        timer: &TimerConfig,
-        timers: Rc<RefCell<Vec<TimerConfig>>>,
-        on_list_change: Rc<RefCell<Option<OnListChangeCallback>>>,
-        alarms: Rc<RefCell<Vec<AlarmConfig>>>,
-        list_box: ListBox,
-        on_timer_action: Rc<RefCell<Option<TimerActionCallback>>>,
-    ) {
-        let dialog = Window::builder()
-            .title("Edit Timer")
-            .modal(true)
-            .default_width(350)
-            .default_height(300)
-            .build();
-
-        let timer_id = timer.id.clone();
-        let vbox = GtkBox::new(Orientation::Vertical, 12);
-        vbox.set_margin_start(12);
-        vbox.set_margin_end(12);
-        vbox.set_margin_top(12);
-        vbox.set_margin_bottom(12);
-
-        // Mode
-        let mode_box = GtkBox::new(Orientation::Horizontal, 6);
-        mode_box.append(&Label::new(Some("Mode:")));
-        let mode_options = StringList::new(&["Countdown", "Stopwatch"]);
-        let mode_dropdown = DropDown::new(Some(mode_options), Option::<gtk4::Expression>::None);
-        mode_dropdown.set_selected(match timer.mode {
-            TimerMode::Countdown => 0,
-            TimerMode::Stopwatch => 1,
-        });
-        mode_box.append(&mode_dropdown);
-        vbox.append(&mode_box);
-
-        // Duration
-        let duration_box = GtkBox::new(Orientation::Horizontal, 6);
-        duration_box.append(&Label::new(Some("Duration:")));
-        let mins = timer.countdown_duration / 60;
-        let secs = timer.countdown_duration % 60;
-
-        let min_adj = Adjustment::new(mins as f64, 0.0, 1440.0, 1.0, 5.0, 0.0);
-        let min_spin = SpinButton::new(Some(&min_adj), 1.0, 0);
-        duration_box.append(&min_spin);
-        duration_box.append(&Label::new(Some("min")));
-
-        let sec_adj = Adjustment::new(secs as f64, 0.0, 59.0, 1.0, 5.0, 0.0);
-        let sec_spin = SpinButton::new(Some(&sec_adj), 1.0, 0);
-        duration_box.append(&sec_spin);
-        duration_box.append(&Label::new(Some("sec")));
-        vbox.append(&duration_box);
-
-        // Label
-        let label_box = GtkBox::new(Orientation::Horizontal, 6);
-        label_box.append(&Label::new(Some("Label:")));
-        let label_entry = Entry::new();
-        label_entry.set_text(&timer.label.clone().unwrap_or_default());
-        label_entry.set_hexpand(true);
-        label_box.append(&label_entry);
-        vbox.append(&label_box);
-
-        // Sound enabled
-        let sound_check = CheckButton::with_label("Play sound when finished");
-        sound_check.set_active(timer.sound.enabled);
-        vbox.append(&sound_check);
-
-        // Buttons
-        let button_box = GtkBox::new(Orientation::Horizontal, 8);
-        button_box.set_halign(gtk4::Align::End);
-
-        let cancel_button = Button::with_label("Cancel");
-        let dialog_for_cancel = dialog.clone();
-        cancel_button.connect_clicked(move |_| dialog_for_cancel.close());
-        button_box.append(&cancel_button);
-
-        let save_button = Button::with_label("Save");
-        save_button.add_css_class("suggested-action");
-        let dialog_for_save = dialog.clone();
-        save_button.connect_clicked(move |_| {
-            // Update timer
-            if let Some(timer) = timers.borrow_mut().iter_mut().find(|t| t.id == timer_id) {
-                timer.mode = match mode_dropdown.selected() {
-                    0 => TimerMode::Countdown,
-                    _ => TimerMode::Stopwatch,
-                };
-                timer.countdown_duration = (min_spin.value() as u64) * 60 + (sec_spin.value() as u64);
-
-                let label_text = label_entry.text().to_string();
-                timer.label = if label_text.is_empty() { None } else { Some(label_text) };
-                timer.sound.enabled = sound_check.is_active();
-            }
-
-            // Refresh list
-            Self::refresh_timer_list_static(
-                &list_box,
-                &timers,
-                &on_list_change,
-                &alarms,
-                &on_timer_action,
-            );
-
-            // Notify change
-            if let Some(ref cb) = *on_list_change.borrow() {
-                cb(&alarms.borrow(), &timers.borrow());
-            }
-
-            dialog_for_save.close();
-        });
-        button_box.append(&save_button);
-        vbox.append(&button_box);
-
-        dialog.set_child(Some(&vbox));
-        dialog.present();
-    }
-
-    /// Show the dialog
     pub fn present(&self) {
         self.window.present();
     }
 
-    /// Set the callback for when alarm/timer lists change
-    pub fn set_on_list_change<F: Fn(&[AlarmConfig], &[TimerConfig]) + 'static>(&self, callback: F) {
-        *self.on_list_change.borrow_mut() = Some(Box::new(callback));
-    }
-
-    /// Set the callback for timer control actions
-    pub fn set_on_timer_action<F: Fn(&str, TimerAction) + 'static>(&self, callback: F) {
-        *self.on_timer_action.borrow_mut() = Some(Box::new(callback));
-    }
-
-    /// Set the callback for alarm dismiss action
-    pub fn set_on_alarm_dismiss<F: Fn(&str) + 'static>(&self, callback: F) {
-        *self.on_alarm_dismiss.borrow_mut() = Some(Box::new(callback));
-    }
-
-    /// Update triggered alarm IDs
-    pub fn update_triggered_alarms(&self, triggered_ids: HashSet<String>) {
-        *self.triggered_alarm_ids.borrow_mut() = triggered_ids;
-        self.refresh_alarm_list();
-    }
-
-    /// Update timer states (for live display updates)
-    pub fn update_timers(&self, new_timers: Vec<TimerConfig>) {
-        *self.timers.borrow_mut() = new_timers;
-        self.refresh_timer_list();
-    }
-
-    /// Get the window for external use
     pub fn window(&self) -> &Window {
         &self.window
     }
