@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Widget};
@@ -23,6 +23,7 @@ struct GraphData {
     data_points: VecDeque<DataPoint>,
     animated_points: VecDeque<DataPoint>, // Smoothly animated version of data_points
     source_values: HashMap<String, Value>,
+    transform: PanelTransform,
     start_time: f64,
     last_update_time: f64,
     last_frame_time: std::time::Instant, // For smooth animation timing
@@ -45,6 +46,7 @@ impl GraphDisplayer {
                 data_points: VecDeque::new(),
                 animated_points: VecDeque::new(),
                 source_values: HashMap::new(),
+                transform: PanelTransform::default(),
                 start_time,
                 last_update_time: start_time,
                 last_frame_time: std::time::Instant::now(),
@@ -90,6 +92,7 @@ impl Displayer for GraphDisplayer {
 
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data_guard) = data.lock() {
+                data_guard.transform.apply(cr, width as f64, height as f64);
                 // Use animated points if animation is enabled, otherwise use actual data points
                 let points_to_render = if data_guard.config.animate_new_points {
                     &data_guard.animated_points
@@ -106,6 +109,7 @@ impl Displayer for GraphDisplayer {
                     height as f64,
                     data_guard.scroll_offset,
                 );
+                data_guard.transform.restore(cr);
             }
         });
 
@@ -254,6 +258,9 @@ impl Displayer for GraphDisplayer {
             // Store all source values for text overlay
             data.source_values = values.clone();
 
+            // Extract transform from values
+            data.transform = PanelTransform::from_values(values);
+
             // Mark as dirty to trigger redraw
             data.dirty = true;
         }
@@ -261,6 +268,7 @@ impl Displayer for GraphDisplayer {
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data_guard) = self.data.lock() {
+            data_guard.transform.apply(cr, width, height);
             render_graph(
                 cr,
                 &data_guard.config,
@@ -270,6 +278,7 @@ impl Displayer for GraphDisplayer {
                 height,
                 data_guard.scroll_offset,
             )?;
+            data_guard.transform.restore(cr);
         }
         Ok(())
     }

@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::background::Color;
 
 /// Digital clock display style
@@ -193,6 +193,7 @@ struct DisplayData {
     second: u32,
     blink_state: bool,
     dirty: bool, // Flag to indicate data has changed and needs redraw
+    transform: PanelTransform,
 }
 
 impl ClockDigitalDisplayer {
@@ -211,6 +212,7 @@ impl ClockDigitalDisplayer {
             second: 0,
             blink_state: true,
             dirty: true,
+            transform: PanelTransform::default(),
         }));
 
         Self {
@@ -243,6 +245,7 @@ impl Displayer for ClockDigitalDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                data.transform.apply(cr, width as f64, height as f64);
                 let _ = render_digital_clock(cr, &data, width as f64, height as f64);
 
                 // Flash effect when alarm/timer triggers
@@ -370,6 +373,7 @@ impl Displayer for ClockDigitalDisplayer {
                         cr.restore().ok();
                     }
                 }
+                data.transform.restore(cr);
             }
         });
 
@@ -462,6 +466,9 @@ impl Displayer for ClockDigitalDisplayer {
                 }
             }
 
+            // Extract transform from values
+            data.transform = PanelTransform::from_values(values);
+
             // Mark as dirty to trigger redraw
             data.dirty = true;
         }
@@ -469,7 +476,9 @@ impl Displayer for ClockDigitalDisplayer {
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             render_digital_clock(cr, &data, width, height)?;
+            data.transform.restore(cr);
         }
         Ok(())
     }

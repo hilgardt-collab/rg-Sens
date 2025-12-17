@@ -3,7 +3,7 @@
 //! Displays a color based on a value mapped to a gradient (0% -> 100%).
 //! Can show full panel fill, circles, squares, or polygons.
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform};
 use crate::displayers::TextDisplayerConfig;
 use crate::ui::background::{Color, ColorStop};
 use anyhow::Result;
@@ -324,6 +324,7 @@ pub struct IndicatorDisplayer {
 struct DisplayData {
     values: HashMap<String, Value>,
     config: IndicatorConfig,
+    transform: PanelTransform,
     dirty: bool,
 }
 
@@ -335,6 +336,7 @@ impl IndicatorDisplayer {
             data: Arc::new(Mutex::new(DisplayData {
                 values: HashMap::new(),
                 config: IndicatorConfig::default(),
+                transform: PanelTransform::default(),
                 dirty: true,
             })),
         }
@@ -393,7 +395,9 @@ impl Displayer for IndicatorDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_widget, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                data.transform.apply(cr, width as f64, height as f64);
                 Self::draw_internal(cr, width, height, &data);
+                data.transform.restore(cr);
             }
         });
 
@@ -430,13 +434,16 @@ impl Displayer for IndicatorDisplayer {
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
             display_data.values = data.clone();
+            display_data.transform = PanelTransform::from_values(data);
             display_data.dirty = true;
         }
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             Self::draw_internal(cr, width as i32, height as i32, &data);
+            data.transform.restore(cr);
         }
         Ok(())
     }

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::core_bars_display::{render_core_bars, CoreBarsConfig};
 
 /// Animation state for a single value
@@ -45,6 +45,7 @@ struct DisplayData {
     core_values: Vec<AnimatedValue>, // Animated values per displayed core
     detected_core_count: usize,      // Total cores detected from source
     last_update: Instant,
+    transform: PanelTransform,
     dirty: bool,
 }
 
@@ -55,6 +56,7 @@ impl Default for DisplayData {
             core_values: Vec::new(),
             detected_core_count: 0,
             last_update: Instant::now(),
+            transform: PanelTransform::default(),
             dirty: true,
         }
     }
@@ -125,12 +127,14 @@ impl Displayer for CpuCoresDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                data.transform.apply(cr, width as f64, height as f64);
                 // Collect current animated values
                 let values: Vec<f64> = data.core_values.iter().map(|v| v.current).collect();
 
                 if !values.is_empty() {
                     let _ = render_core_bars(cr, &data.config, &values, width as f64, height as f64);
                 }
+                data.transform.restore(cr);
             }
         });
 
@@ -230,17 +234,22 @@ impl Displayer for CpuCoresDisplayer {
                 display_data.core_values[i].target = *value;
             }
 
+            // Extract transform from values
+            display_data.transform = PanelTransform::from_values(data);
+
             display_data.dirty = true;
         }
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             let values: Vec<f64> = data.core_values.iter().map(|v| v.current).collect();
 
             if !values.is_empty() {
                 render_core_bars(cr, &data.config, &values, width, height)?;
             }
+            data.transform.restore(cr);
         }
         Ok(())
     }

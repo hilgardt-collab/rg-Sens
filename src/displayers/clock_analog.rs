@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::clock_display::{render_analog_clock, AnalogClockConfig};
 
 /// Analog clock displayer
@@ -30,6 +30,7 @@ struct DisplayData {
     timer_state: String,
     timer_display: String,
     flash_state: bool,
+    transform: PanelTransform,
 }
 
 impl ClockAnalogDisplayer {
@@ -46,6 +47,7 @@ impl ClockAnalogDisplayer {
             timer_state: "stopped".to_string(),
             timer_display: String::new(),
             flash_state: false,
+            transform: PanelTransform::default(),
         }));
 
         Self {
@@ -80,6 +82,7 @@ impl Displayer for ClockAnalogDisplayer {
             if let Ok(data) = data_clone.lock() {
                 let width = width as f64;
                 let height = height as f64;
+                data.transform.apply(cr, width, height);
 
                 // Calculate smooth time values
                 let hour = data.hour;
@@ -230,6 +233,7 @@ impl Displayer for ClockAnalogDisplayer {
                     cr.show_text(&display_text).ok();
                     cr.restore().ok();
                 }
+                data.transform.restore(cr);
             }
         });
 
@@ -344,11 +348,15 @@ impl Displayer for ClockAnalogDisplayer {
                     data.timer_display = d.to_string();
                 }
             }
+
+            // Extract transform from values
+            data.transform = PanelTransform::from_values(values);
         }
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             render_analog_clock(
                 cr,
                 &data.config,
@@ -358,6 +366,7 @@ impl Displayer for ClockAnalogDisplayer {
                 width,
                 height,
             )?;
+            data.transform.restore(cr);
         }
         Ok(())
     }

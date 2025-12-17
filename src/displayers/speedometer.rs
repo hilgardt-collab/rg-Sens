@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::speedometer_display::{render_speedometer, SpeedometerConfig};
 
 /// Speedometer gauge displayer
@@ -25,6 +25,7 @@ struct DisplayData {
     animated_value: f64,
     last_update: std::time::Instant,
     values: HashMap<String, Value>, // All source data for text overlay
+    transform: PanelTransform,
     dirty: bool, // Flag to indicate data has changed and needs redraw
     initialized: bool, // Flag to track if animated_value has been set
 }
@@ -38,6 +39,7 @@ impl SpeedometerDisplayer {
             animated_value: 0.0,
             last_update: std::time::Instant::now(),
             values: HashMap::new(),
+            transform: PanelTransform::default(),
             dirty: true,
             initialized: false,
         }));
@@ -75,12 +77,14 @@ impl Displayer for SpeedometerDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                data.transform.apply(cr, width as f64, height as f64);
                 let display_value = if data.config.animate {
                     data.animated_value
                 } else {
                     data.value
                 };
                 let _ = render_speedometer(cr, &data.config, display_value, &data.values, width as f64, height as f64);
+                data.transform.restore(cr);
             }
         });
 
@@ -203,6 +207,9 @@ impl Displayer for SpeedometerDisplayer {
 
             display_data.values = data.clone();
 
+            // Extract transform from values
+            display_data.transform = PanelTransform::from_values(data);
+
             // Mark as dirty to trigger redraw
             display_data.dirty = true;
         }
@@ -210,6 +217,7 @@ impl Displayer for SpeedometerDisplayer {
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             let display_value = if data.config.animate {
                 data.animated_value
             } else {
@@ -217,6 +225,7 @@ impl Displayer for SpeedometerDisplayer {
             };
             render_speedometer(cr, &data.config, display_value, &data.values, width, height)
                 .map_err(|e| anyhow::anyhow!("Failed to render speedometer: {}", e))?;
+            data.transform.restore(cr);
         }
         Ok(())
     }

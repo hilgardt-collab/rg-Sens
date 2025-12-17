@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     get_content_bounds, render_content_background, render_content_bar, render_content_text,
@@ -85,6 +85,7 @@ struct DisplayData {
     graph_history: HashMap<String, VecDeque<DataPoint>>,
     graph_start_time: Instant,
     last_update: Instant,
+    transform: PanelTransform,
     dirty: bool,
 }
 
@@ -98,6 +99,7 @@ impl Default for DisplayData {
             graph_history: HashMap::new(),
             graph_start_time: Instant::now(),
             last_update: Instant::now(),
+            transform: PanelTransform::default(),
             dirty: true,
         }
     }
@@ -383,6 +385,7 @@ impl Displayer for LcarsComboDisplayer {
             if let Ok(data) = data_clone.lock() {
                 let w = width as f64;
                 let h = height as f64;
+                data.transform.apply(cr, w, h);
 
                 // Draw the LCARS frame
                 if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
@@ -532,6 +535,7 @@ impl Displayer for LcarsComboDisplayer {
                 }
 
                 cr.restore().ok();
+                data.transform.restore(cr);
             }
         });
 
@@ -710,14 +714,19 @@ impl Displayer for LcarsComboDisplayer {
                 }
             }
 
+            // Extract transform from values
+            display_data.transform = PanelTransform::from_values(data);
+
             display_data.dirty = true;
         }
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             render_lcars_frame(cr, &data.config.frame, width, height)?;
             render_content_background(cr, &data.config.frame, width, height)?;
+            data.transform.restore(cr);
         }
         Ok(())
     }
