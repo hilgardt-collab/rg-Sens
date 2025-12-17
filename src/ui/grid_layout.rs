@@ -2949,6 +2949,41 @@ fn show_panel_properties_dialog(
 
     panel_props_box.append(&size_box);
 
+    // Content Transform section
+    let transform_label = Label::new(Some("Content Transform"));
+    transform_label.add_css_class("heading");
+    transform_label.set_margin_top(12);
+    panel_props_box.append(&transform_label);
+
+    // Scale control
+    let scale_box = GtkBox::new(Orientation::Horizontal, 6);
+    scale_box.set_margin_start(12);
+    let scale_label = Label::new(Some("Scale:"));
+    let scale_spin = SpinButton::with_range(0.1, 5.0, 0.1);
+    scale_spin.set_digits(2);
+    scale_spin.set_value(panel_guard.scale);
+    scale_spin.set_hexpand(true);
+    scale_box.append(&scale_label);
+    scale_box.append(&scale_spin);
+    panel_props_box.append(&scale_box);
+
+    // Translation controls
+    let translate_box = GtkBox::new(Orientation::Horizontal, 6);
+    translate_box.set_margin_start(12);
+    let translate_x_label = Label::new(Some("Offset X:"));
+    let translate_x_spin = SpinButton::with_range(-500.0, 500.0, 1.0);
+    translate_x_spin.set_digits(1);
+    translate_x_spin.set_value(panel_guard.translate_x);
+    let translate_y_label = Label::new(Some("Y:"));
+    let translate_y_spin = SpinButton::with_range(-500.0, 500.0, 1.0);
+    translate_y_spin.set_digits(1);
+    translate_y_spin.set_value(panel_guard.translate_y);
+    translate_box.append(&translate_x_label);
+    translate_box.append(&translate_x_spin);
+    translate_box.append(&translate_y_label);
+    translate_box.append(&translate_y_spin);
+    panel_props_box.append(&translate_box);
+
     notebook.append_page(&panel_props_box, Some(&Label::new(Some("Size"))));
 
     // === Tab 2: Data Source ===
@@ -3963,6 +3998,9 @@ fn show_panel_properties_dialog(
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
+    let scale_spin_clone = scale_spin.clone();
+    let translate_x_spin_clone = translate_x_spin.clone();
+    let translate_y_spin_clone = translate_y_spin.clone();
     let corner_radius_spin_clone = corner_radius_spin.clone();
     let border_enabled_check_clone = border_enabled_check.clone();
     let border_width_spin_clone = border_width_spin.clone();
@@ -4109,6 +4147,11 @@ fn show_panel_properties_dialog(
             panel_guard.border.enabled = border_enabled_check_clone.is_active();
             panel_guard.border.width = border_width_spin_clone.value();
             panel_guard.border.color = *border_color_clone.borrow();
+
+            // Update content transform (scale and translate)
+            panel_guard.scale = scale_spin_clone.value();
+            panel_guard.translate_x = translate_x_spin_clone.value();
+            panel_guard.translate_y = translate_y_spin_clone.value();
 
             // Update source if changed
             if source_changed {

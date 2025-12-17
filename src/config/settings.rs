@@ -439,6 +439,9 @@ impl PanelConfig {
             background: self.background.clone(),
             corner_radius: self.corner_radius,
             border: self.border.clone(),
+            scale: 1.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
         };
 
         PanelData {

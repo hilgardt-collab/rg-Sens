@@ -97,3 +97,59 @@ pub trait Displayer: Send + Sync {
 
 /// Type-erased displayer for dynamic dispatch
 pub type BoxedDisplayer = Box<dyn Displayer>;
+
+/// Panel transform configuration for displayers
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PanelTransform {
+    /// Scale factor (1.0 = normal size)
+    pub scale: f64,
+    /// X translation in pixels
+    pub translate_x: f64,
+    /// Y translation in pixels
+    pub translate_y: f64,
+}
+
+impl PanelTransform {
+    /// Extract transform from data values
+    pub fn from_values(values: &HashMap<String, Value>) -> Self {
+        Self {
+            scale: values.get("_panel_scale")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0),
+            translate_x: values.get("_panel_translate_x")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            translate_y: values.get("_panel_translate_y")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+        }
+    }
+
+    /// Apply transform to Cairo context
+    ///
+    /// Call this at the start of drawing, then restore() when done.
+    /// Returns the effective width and height after scaling.
+    pub fn apply(&self, cr: &Context, width: f64, height: f64) -> (f64, f64) {
+        cr.save().ok();
+
+        // Apply translation first
+        cr.translate(self.translate_x, self.translate_y);
+
+        // Scale from center
+        if (self.scale - 1.0).abs() > 0.001 {
+            let center_x = width / 2.0;
+            let center_y = height / 2.0;
+            cr.translate(center_x, center_y);
+            cr.scale(self.scale, self.scale);
+            cr.translate(-center_x, -center_y);
+        }
+
+        // Return effective dimensions (for drawing at scale 1.0)
+        (width, height)
+    }
+
+    /// Restore Cairo context after transform
+    pub fn restore(&self, cr: &Context) {
+        cr.restore().ok();
+    }
+}

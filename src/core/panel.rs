@@ -84,6 +84,15 @@ pub struct Panel {
     /// **DEPRECATED**: Use `data.appearance.border` instead.
     /// This field is synced from PanelData for rendering code compatibility.
     pub border: PanelBorderConfig,
+    /// Content scale factor (1.0 = normal)
+    /// **DEPRECATED**: Use `data.appearance.scale` instead.
+    pub scale: f64,
+    /// Content translation X offset in pixels
+    /// **DEPRECATED**: Use `data.appearance.translate_x` instead.
+    pub translate_x: f64,
+    /// Content translation Y offset in pixels
+    /// **DEPRECATED**: Use `data.appearance.translate_y` instead.
+    pub translate_y: f64,
     /// Unified panel data - the single source of truth
     ///
     /// When `Some`, this is the authoritative source for all panel configuration.
@@ -109,6 +118,9 @@ impl Panel {
             background: BackgroundConfig::default(),
             corner_radius: 8.0,
             border: PanelBorderConfig::default(),
+            scale: 1.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
             data: None, // Legacy panels don't have PanelData yet
         }
     }
@@ -166,6 +178,9 @@ impl Panel {
             background: data.appearance.background.clone(),
             corner_radius: data.appearance.corner_radius,
             border: data.appearance.border.clone(),
+            scale: data.appearance.scale,
+            translate_x: data.appearance.translate_x,
+            translate_y: data.appearance.translate_y,
             data: Some(data),
         };
 
@@ -200,6 +215,12 @@ impl Panel {
             self.source.get_values()
         };
 
+        // Add transform values for displayers to use
+        let mut values = values;
+        values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
+        values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
+        values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+
         // Update displayer with the values
         self.displayer.update_data(&values);
 
@@ -223,7 +244,13 @@ impl Panel {
     /// This is called by UpdateManager after it has updated all shared sources.
     /// It avoids the need to look up values again.
     pub fn update_with_values(&mut self, values: &HashMap<String, serde_json::Value>) {
-        self.displayer.update_data(values);
+        // Add transform values for displayers to use
+        let mut values = values.clone();
+        values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
+        values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
+        values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+
+        self.displayer.update_data(&values);
 
         // Sync certain live values into panel.config for UI access
         const SYNC_KEYS: &[&str] = &[
@@ -287,6 +314,9 @@ impl Panel {
                 background: self.background.clone(),
                 corner_radius: self.corner_radius,
                 border: self.border.clone(),
+                scale: self.scale,
+                translate_x: self.translate_x,
+                translate_y: self.translate_y,
             },
         }
     }
@@ -527,6 +557,9 @@ impl Panel {
         self.background = new_data.appearance.background.clone();
         self.corner_radius = new_data.appearance.corner_radius;
         self.border = new_data.appearance.border.clone();
+        self.scale = new_data.appearance.scale;
+        self.translate_x = new_data.appearance.translate_x;
+        self.translate_y = new_data.appearance.translate_y;
         self.config = new_data.combined_config_map();
         self.data = Some(new_data);
 
@@ -545,6 +578,9 @@ impl Panel {
         self.background = data.appearance.background.clone();
         self.corner_radius = data.appearance.corner_radius;
         self.border = data.appearance.border.clone();
+        self.scale = data.appearance.scale;
+        self.translate_x = data.appearance.translate_x;
+        self.translate_y = data.appearance.translate_y;
         self.config = data.combined_config_map();
         self.data = Some(data);
 

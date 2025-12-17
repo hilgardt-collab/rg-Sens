@@ -11,7 +11,7 @@ mod timer_manager;
 mod update_manager;
 
 pub use data_source::{BoxedDataSource, DataSource, SourceMetadata};
-pub use displayer::{BoxedDisplayer, ConfigOption, ConfigSchema, Displayer};
+pub use displayer::{BoxedDisplayer, ConfigOption, ConfigSchema, Displayer, PanelTransform};
 pub use field_metadata::{FieldMetadata, FieldPurpose, FieldType};
 pub use panel::{Panel, PanelGeometry, PanelBorderConfig};
 pub use panel_data::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};

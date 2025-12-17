@@ -2237,6 +2237,9 @@ fn create_panel_from_config(
             background,
             corner_radius,
             border,
+            scale: 1.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
         },
     };
 

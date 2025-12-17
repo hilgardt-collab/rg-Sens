@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::bar_display::{render_bar, BarDisplayConfig};
 
 /// Bar displayer
@@ -22,6 +22,7 @@ struct DisplayData {
     config: BarDisplayConfig,
     value: f64,
     values: HashMap<String, Value>, // All source data for text overlay
+    transform: PanelTransform,
     dirty: bool, // Flag to indicate data has changed and needs redraw
 }
 
@@ -31,6 +32,7 @@ impl BarDisplayer {
             config: BarDisplayConfig::default(),
             value: 0.0,
             values: HashMap::new(),
+            transform: PanelTransform::default(),
             dirty: true,
         }));
 
@@ -67,7 +69,9 @@ impl Displayer for BarDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                data.transform.apply(cr, width as f64, height as f64);
                 let _ = render_bar(cr, &data.config, data.value, &data.values, width as f64, height as f64);
+                data.transform.restore(cr);
             }
         });
 
@@ -146,6 +150,8 @@ impl Displayer for BarDisplayer {
             display_data.value = normalized.clamp(0.0, 1.0);
             // Store all values for text overlay
             display_data.values = data.clone();
+            // Extract transform
+            display_data.transform = PanelTransform::from_values(data);
             // Mark as dirty to trigger redraw
             display_data.dirty = true;
         }
@@ -153,7 +159,9 @@ impl Displayer for BarDisplayer {
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            data.transform.apply(cr, width, height);
             render_bar(cr, &data.config, data.value, &data.values, width, height)?;
+            data.transform.restore(cr);
         }
         Ok(())
     }

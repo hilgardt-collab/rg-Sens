@@ -309,12 +309,25 @@ impl Default for DisplayerConfig {
     }
 }
 
-/// Panel appearance settings (background, border, corner radius)
+/// Panel appearance settings (background, border, corner radius, transform)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanelAppearance {
     pub background: BackgroundConfig,
     pub corner_radius: f64,
     pub border: PanelBorderConfig,
+    /// Scale factor for content (1.0 = normal, 0.5 = half size, 2.0 = double)
+    #[serde(default = "default_scale")]
+    pub scale: f64,
+    /// Translation X offset in pixels
+    #[serde(default)]
+    pub translate_x: f64,
+    /// Translation Y offset in pixels
+    #[serde(default)]
+    pub translate_y: f64,
+}
+
+fn default_scale() -> f64 {
+    1.0
 }
 
 impl Default for PanelAppearance {
@@ -323,6 +336,9 @@ impl Default for PanelAppearance {
             background: BackgroundConfig::default(),
             corner_radius: 8.0,
             border: PanelBorderConfig::default(),
+            scale: 1.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
         }
     }
 }

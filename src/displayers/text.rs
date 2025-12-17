@@ -1,6 +1,6 @@
 //! Text displayer implementation
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform};
 use crate::displayers::TextDisplayerConfig;
 use anyhow::Result;
 use cairo::Context;
@@ -24,6 +24,8 @@ struct DisplayData {
     values: HashMap<String, Value>,
     /// Text display configuration
     config: TextDisplayerConfig,
+    /// Panel transform (scale and translate)
+    transform: PanelTransform,
     /// Flag to indicate data has changed and needs redraw
     dirty: bool,
 }
@@ -33,6 +35,7 @@ impl TextDisplayer {
         let data = Arc::new(Mutex::new(DisplayData {
             values: HashMap::new(),
             config: TextDisplayerConfig::default(),
+            transform: PanelTransform::default(),
             dirty: true,
         }));
 
@@ -46,6 +49,9 @@ impl TextDisplayer {
     fn draw_internal(cr: &Context, width: i32, height: i32, data: &DisplayData) {
         // Don't clear background - let the custom panel background show through
 
+        // Apply panel transform (scale and translate)
+        data.transform.apply(cr, width as f64, height as f64);
+
         // Use shared text renderer
         crate::ui::text_renderer::render_text_lines(
             cr,
@@ -54,6 +60,9 @@ impl TextDisplayer {
             &data.config,
             &data.values,
         );
+
+        // Restore transform
+        data.transform.restore(cr);
     }
 }
 
@@ -119,8 +128,9 @@ impl Displayer for TextDisplayer {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        // Store the data values
+        // Store the data values and extract transform
         if let Ok(mut display_data) = self.data.lock() {
+            display_data.transform = PanelTransform::from_values(data);
             display_data.values = data.clone();
             display_data.dirty = true;
         }
