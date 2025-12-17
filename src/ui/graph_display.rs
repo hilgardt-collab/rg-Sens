@@ -343,9 +343,16 @@ pub fn render_graph(
     };
 
     let value_range = max_val - min_val;
-    if value_range == 0.0 {
-        return Ok(());
-    }
+    // Handle case where all values are the same - use a minimum range to avoid division by zero
+    // and still draw a horizontal line at the data value
+    let (min_val, max_val, value_range) = if value_range == 0.0 || value_range.abs() < 0.001 {
+        // Use the data value as center with a range of 10% of its absolute value, or 1.0 if near zero
+        let center = if !data.is_empty() { data[0].value } else { 0.0 };
+        let half_range = if center.abs() > 0.001 { center.abs() * 0.1 } else { 0.5 };
+        (center - half_range, center + half_range, half_range * 2.0)
+    } else {
+        (min_val, max_val, value_range)
+    };
 
     // Draw grid
     if config.y_axis.show_grid {

@@ -20,6 +20,7 @@ pub use crate::sources::ClockSourceConfig;
 pub use crate::sources::ComboSourceConfig;
 pub use crate::sources::SystemTempConfig;
 pub use crate::sources::FanSpeedConfig;
+pub use crate::sources::TestSourceConfig;
 
 // Re-export displayer configs
 pub use crate::displayers::TextDisplayerConfig;
@@ -31,6 +32,7 @@ pub use crate::ui::AnalogClockConfig;
 pub use crate::displayers::DigitalClockConfig;
 pub use crate::displayers::LcarsDisplayConfig;
 pub use crate::ui::CoreBarsConfig;
+pub use crate::displayers::IndicatorConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -60,6 +62,9 @@ pub enum SourceConfig {
 
     #[serde(rename = "fan_speed")]
     FanSpeed(FanSpeedConfig),
+
+    #[serde(rename = "test")]
+    Test(TestSourceConfig),
 }
 
 impl SourceConfig {
@@ -74,6 +79,7 @@ impl SourceConfig {
             SourceConfig::Combo(_) => "combination",
             SourceConfig::SystemTemp(_) => "system_temp",
             SourceConfig::FanSpeed(_) => "fan_speed",
+            SourceConfig::Test(_) => "test",
         }
     }
 
@@ -88,6 +94,7 @@ impl SourceConfig {
             SourceConfig::Combo(cfg) => cfg.update_interval_ms,
             SourceConfig::SystemTemp(cfg) => cfg.update_interval_ms,
             SourceConfig::FanSpeed(cfg) => cfg.update_interval_ms,
+            SourceConfig::Test(cfg) => cfg.update_interval_ms,
         }
     }
 
@@ -135,6 +142,11 @@ impl SourceConfig {
                     map.insert("fan_speed_config".to_string(), val);
                 }
             }
+            SourceConfig::Test(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("test_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -150,6 +162,7 @@ impl SourceConfig {
             "combination" => Some(SourceConfig::Combo(ComboSourceConfig::default())),
             "system_temp" => Some(SourceConfig::SystemTemp(SystemTempConfig::default())),
             "fan_speed" => Some(SourceConfig::FanSpeed(FanSpeedConfig::default())),
+            "test" => Some(SourceConfig::Test(TestSourceConfig::default())),
             _ => None,
         }
     }
@@ -192,6 +205,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "cpu_cores")]
     CpuCores(CoreBarsConfig),
+
+    #[serde(rename = "indicator")]
+    Indicator(IndicatorConfig),
 }
 
 impl DisplayerConfig {
@@ -207,6 +223,7 @@ impl DisplayerConfig {
             DisplayerConfig::ClockDigital(_) => "clock_digital",
             DisplayerConfig::Lcars(_) => "lcars",
             DisplayerConfig::CpuCores(_) => "cpu_cores",
+            DisplayerConfig::Indicator(_) => "indicator",
         }
     }
 
@@ -259,6 +276,11 @@ impl DisplayerConfig {
                     map.insert("core_bars_config".to_string(), val);
                 }
             }
+            DisplayerConfig::Indicator(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("indicator_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -275,6 +297,7 @@ impl DisplayerConfig {
             "clock_digital" => Some(DisplayerConfig::ClockDigital(DigitalClockConfig::default())),
             "lcars" => Some(DisplayerConfig::Lcars(LcarsDisplayConfig::default())),
             "cpu_cores" => Some(DisplayerConfig::CpuCores(CoreBarsConfig::default())),
+            "indicator" => Some(DisplayerConfig::Indicator(IndicatorConfig::default())),
             _ => None,
         }
     }

@@ -48,6 +48,38 @@ pub enum BarFillDirection {
 }
 
 
+/// Bar tapering style
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
+pub enum BarTaperStyle {
+    #[serde(rename = "none")]
+    #[default]
+    None,           // No tapering, constant width
+    #[serde(rename = "start")]
+    Start,          // Narrower at start
+    #[serde(rename = "end")]
+    End,            // Narrower at end
+    #[serde(rename = "both")]
+    Both,           // Narrower at both ends
+}
+
+
+/// Bar taper alignment (where the taper is anchored)
+/// For horizontal bars: Start=Top, Center=Center, End=Bottom
+/// For vertical bars: Start=Left, Center=Center, End=Right
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
+pub enum BarTaperAlignment {
+    #[serde(rename = "start")]
+    Start,          // Top for horizontal, Left for vertical
+    #[serde(rename = "center")]
+    #[default]
+    Center,         // Centered (default)
+    #[serde(rename = "end")]
+    End,            // Bottom for horizontal, Right for vertical
+}
+
+
 /// Foreground fill type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
@@ -162,6 +194,14 @@ pub struct BarDisplayConfig {
     #[serde(default)]
     pub border: BorderConfig,
 
+    // Taper style
+    #[serde(default)]
+    pub taper_style: BarTaperStyle,
+    #[serde(default = "default_taper_amount")]
+    pub taper_amount: f64, // 0.0 to 1.0 (how much to taper)
+    #[serde(default)]
+    pub taper_alignment: BarTaperAlignment, // Where the taper is anchored
+
     // Text overlay
     #[serde(default)]
     pub text_overlay: TextOverlayConfig,
@@ -213,6 +253,10 @@ fn default_animation_speed() -> f64 {
     0.5
 }
 
+fn default_taper_amount() -> f64 {
+    0.5
+}
+
 impl Default for BarDisplayConfig {
     fn default() -> Self {
         Self {
@@ -230,6 +274,9 @@ impl Default for BarDisplayConfig {
             segment_width: default_segment_width(),
             segment_height: default_segment_height(),
             border: BorderConfig::default(),
+            taper_style: BarTaperStyle::default(),
+            taper_amount: default_taper_amount(),
+            taper_alignment: BarTaperAlignment::default(),
             text_overlay: TextOverlayConfig::default(),
             smooth_animation: default_true(),
             animation_speed: default_animation_speed(),
@@ -263,6 +310,40 @@ pub fn render_bar(
     Ok(())
 }
 
+/// Calculate tapered dimension at position t (0.0 to 1.0)
+fn calculate_tapered_dimension(base_dim: f64, t: f64, style: BarTaperStyle, amount: f64) -> f64 {
+    match style {
+        BarTaperStyle::None => base_dim,
+        BarTaperStyle::Start => {
+            // Narrower at start (t=0)
+            let factor = 1.0 - amount * (1.0 - t);
+            base_dim * factor
+        }
+        BarTaperStyle::End => {
+            // Narrower at end (t=1)
+            let factor = 1.0 - amount * t;
+            base_dim * factor
+        }
+        BarTaperStyle::Both => {
+            // Narrower at both ends
+            let factor = 1.0 - amount * (2.0 * (t - 0.5)).abs();
+            base_dim * factor
+        }
+    }
+}
+
+/// Calculate the offset for a tapered segment based on alignment
+/// base_dim: the full dimension (height for horizontal bars, width for vertical)
+/// tapered_dim: the tapered dimension at this position
+/// alignment: where to anchor the taper
+fn calculate_taper_offset(base_dim: f64, tapered_dim: f64, alignment: BarTaperAlignment) -> f64 {
+    match alignment {
+        BarTaperAlignment::Start => 0.0,                           // Top/Left aligned
+        BarTaperAlignment::Center => (base_dim - tapered_dim) / 2.0, // Centered
+        BarTaperAlignment::End => base_dim - tapered_dim,          // Bottom/Right aligned
+    }
+}
+
 /// Render full panel style bar
 fn render_full_bar(
     cr: &cairo::Context,
@@ -271,36 +352,165 @@ fn render_full_bar(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    // Render background with clipping to bar bounds
-    cr.save()?;
-    rounded_rectangle(cr, 0.0, 0.0, width, height, config.corner_radius);
-    cr.clip();
-    render_background(cr, &config.background, width, height)?;
-    cr.restore()?;
+    let has_taper = config.taper_style != BarTaperStyle::None;
+
+    // Render background
+    if has_taper {
+        render_tapered_bar_background(cr, config, width, height)?;
+    } else {
+        cr.save()?;
+        rounded_rectangle(cr, 0.0, 0.0, width, height, config.corner_radius);
+        cr.clip();
+        render_background(cr, &config.background, width, height)?;
+        cr.restore()?;
+    }
 
     // Render foreground based on value
-    cr.save()?;
+    if has_taper {
+        render_tapered_bar_foreground(cr, config, value, 0.0, 0.0, width, height)?;
+    } else {
+        cr.save()?;
 
-    let (fill_width, fill_height, fill_x, fill_y) = match config.fill_direction {
-        BarFillDirection::LeftToRight => (width * value, height, 0.0, 0.0),
-        BarFillDirection::RightToLeft => (width * value, height, width * (1.0 - value), 0.0),
-        BarFillDirection::BottomToTop => (width, height * value, 0.0, height * (1.0 - value)),
-        BarFillDirection::TopToBottom => (width, height * value, 0.0, 0.0),
-    };
+        let (fill_width, fill_height, fill_x, fill_y) = match config.fill_direction {
+            BarFillDirection::LeftToRight => (width * value, height, 0.0, 0.0),
+            BarFillDirection::RightToLeft => (width * value, height, width * (1.0 - value), 0.0),
+            BarFillDirection::BottomToTop => (width, height * value, 0.0, height * (1.0 - value)),
+            BarFillDirection::TopToBottom => (width, height * value, 0.0, 0.0),
+        };
 
-    // Use rounded rectangle for clipping to apply corner radius
-    rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, config.corner_radius);
-    cr.clip();
+        // Use rounded rectangle for clipping to apply corner radius
+        rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, config.corner_radius);
+        cr.clip();
 
-    render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
+        render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
 
-    cr.restore()?;
+        cr.restore()?;
+    }
 
-    // Render border with corner radius
-    if config.border.enabled {
+    // Render border with corner radius (only for non-tapered)
+    if config.border.enabled && !has_taper {
         render_border(cr, &config.border, 0.0, 0.0, width, height, config.corner_radius)?;
     }
 
+    Ok(())
+}
+
+/// Render tapered bar background
+fn render_tapered_bar_background(
+    cr: &cairo::Context,
+    config: &BarDisplayConfig,
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let num_segments = 50;
+    let is_horizontal = matches!(
+        config.fill_direction,
+        BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
+    );
+
+    cr.save()?;
+
+    if is_horizontal {
+        let segment_width = width / num_segments as f64;
+        for i in 0..num_segments {
+            let t = (i as f64 + 0.5) / num_segments as f64;
+            let seg_height = calculate_tapered_dimension(height, t, config.taper_style, config.taper_amount);
+            let seg_x = i as f64 * segment_width;
+            let seg_y = calculate_taper_offset(height, seg_height, config.taper_alignment);
+
+            cr.save()?;
+            cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height); // +0.5 to avoid gaps
+            cr.clip();
+            render_background(cr, &config.background, width, height)?;
+            cr.restore()?;
+        }
+    } else {
+        let segment_height = height / num_segments as f64;
+        for i in 0..num_segments {
+            let t = (i as f64 + 0.5) / num_segments as f64;
+            let seg_width = calculate_tapered_dimension(width, t, config.taper_style, config.taper_amount);
+            let seg_x = calculate_taper_offset(width, seg_width, config.taper_alignment);
+            let seg_y = i as f64 * segment_height;
+
+            cr.save()?;
+            cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
+            cr.clip();
+            render_background(cr, &config.background, width, height)?;
+            cr.restore()?;
+        }
+    }
+
+    cr.restore()?;
+    Ok(())
+}
+
+/// Render tapered bar foreground
+fn render_tapered_bar_foreground(
+    cr: &cairo::Context,
+    config: &BarDisplayConfig,
+    value: f64,
+    bar_x: f64,
+    bar_y: f64,
+    bar_width: f64,
+    bar_height: f64,
+) -> Result<(), cairo::Error> {
+    if value <= 0.0 {
+        return Ok(());
+    }
+
+    let num_segments = 50;
+    let is_horizontal = matches!(
+        config.fill_direction,
+        BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
+    );
+
+    cr.save()?;
+
+    if is_horizontal {
+        let segment_width = bar_width / num_segments as f64;
+        let filled_segments = (value * num_segments as f64).ceil() as i32;
+
+        for i in 0..filled_segments {
+            let draw_index = match config.fill_direction {
+                BarFillDirection::RightToLeft => num_segments - 1 - i,
+                _ => i,
+            };
+
+            let t = (draw_index as f64 + 0.5) / num_segments as f64;
+            let seg_height = calculate_tapered_dimension(bar_height, t, config.taper_style, config.taper_amount);
+            let seg_x = bar_x + draw_index as f64 * segment_width;
+            let seg_y = bar_y + calculate_taper_offset(bar_height, seg_height, config.taper_alignment);
+
+            cr.save()?;
+            cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height);
+            cr.clip();
+            render_foreground(cr, &config.foreground, config.fill_direction, bar_width, bar_height)?;
+            cr.restore()?;
+        }
+    } else {
+        let segment_height = bar_height / num_segments as f64;
+        let filled_segments = (value * num_segments as f64).ceil() as i32;
+
+        for i in 0..filled_segments {
+            let draw_index = match config.fill_direction {
+                BarFillDirection::TopToBottom => i,
+                _ => num_segments - 1 - i, // BottomToTop
+            };
+
+            let t = (draw_index as f64 + 0.5) / num_segments as f64;
+            let seg_width = calculate_tapered_dimension(bar_width, t, config.taper_style, config.taper_amount);
+            let seg_x = bar_x + calculate_taper_offset(bar_width, seg_width, config.taper_alignment);
+            let seg_y = bar_y + draw_index as f64 * segment_height;
+
+            cr.save()?;
+            cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
+            cr.clip();
+            render_foreground(cr, &config.foreground, config.fill_direction, bar_width, bar_height)?;
+            cr.restore()?;
+        }
+    }
+
+    cr.restore()?;
     Ok(())
 }
 
@@ -314,6 +524,7 @@ fn render_rectangle_bar(
 ) -> Result<(), cairo::Error> {
     let _padding = config.padding;
     let radius = config.corner_radius;
+    let has_taper = config.taper_style != BarTaperStyle::None;
 
     // Calculate bar dimensions based on configured percentages
     let bar_width = width * config.rectangle_width;
@@ -324,35 +535,94 @@ fn render_rectangle_bar(
     let bar_y = (height - bar_height) / 2.0;
 
     // Render background
-    cr.save()?;
-    rounded_rectangle(cr, bar_x, bar_y, bar_width, bar_height, radius);
-    cr.clip();
-    render_background(cr, &config.background, width, height)?;
-    cr.restore()?;
+    if has_taper {
+        render_tapered_rectangle_background(cr, config, bar_x, bar_y, bar_width, bar_height)?;
+    } else {
+        cr.save()?;
+        rounded_rectangle(cr, bar_x, bar_y, bar_width, bar_height, radius);
+        cr.clip();
+        render_background(cr, &config.background, width, height)?;
+        cr.restore()?;
+    }
 
     // Render foreground based on value
-    cr.save()?;
+    if has_taper {
+        render_tapered_bar_foreground(cr, config, value, bar_x, bar_y, bar_width, bar_height)?;
+    } else {
+        cr.save()?;
 
-    let (fill_width, fill_height, fill_x, fill_y) = match config.fill_direction {
-        BarFillDirection::LeftToRight => (bar_width * value, bar_height, bar_x, bar_y),
-        BarFillDirection::RightToLeft => (bar_width * value, bar_height, bar_x + bar_width * (1.0 - value), bar_y),
-        BarFillDirection::BottomToTop => (bar_width, bar_height * value, bar_x, bar_y + bar_height * (1.0 - value)),
-        BarFillDirection::TopToBottom => (bar_width, bar_height * value, bar_x, bar_y),
-    };
+        let (fill_width, fill_height, fill_x, fill_y) = match config.fill_direction {
+            BarFillDirection::LeftToRight => (bar_width * value, bar_height, bar_x, bar_y),
+            BarFillDirection::RightToLeft => (bar_width * value, bar_height, bar_x + bar_width * (1.0 - value), bar_y),
+            BarFillDirection::BottomToTop => (bar_width, bar_height * value, bar_x, bar_y + bar_height * (1.0 - value)),
+            BarFillDirection::TopToBottom => (bar_width, bar_height * value, bar_x, bar_y),
+        };
 
-    rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, radius);
-    cr.clip();
+        rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, radius);
+        cr.clip();
 
-    render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
+        render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
 
-    cr.restore()?;
+        cr.restore()?;
+    }
 
-    // Render border
-    if config.border.enabled {
+    // Render border (only for non-tapered)
+    if config.border.enabled && !has_taper {
         rounded_rectangle(cr, bar_x, bar_y, bar_width, bar_height, radius);
         render_border(cr, &config.border, bar_x, bar_y, bar_width, bar_height, radius)?;
     }
 
+    Ok(())
+}
+
+/// Render tapered rectangle background
+fn render_tapered_rectangle_background(
+    cr: &cairo::Context,
+    config: &BarDisplayConfig,
+    bar_x: f64,
+    bar_y: f64,
+    bar_width: f64,
+    bar_height: f64,
+) -> Result<(), cairo::Error> {
+    let num_segments = 50;
+    let is_horizontal = matches!(
+        config.fill_direction,
+        BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
+    );
+
+    cr.save()?;
+
+    if is_horizontal {
+        let segment_width = bar_width / num_segments as f64;
+        for i in 0..num_segments {
+            let t = (i as f64 + 0.5) / num_segments as f64;
+            let seg_height = calculate_tapered_dimension(bar_height, t, config.taper_style, config.taper_amount);
+            let seg_x = bar_x + i as f64 * segment_width;
+            let seg_y = bar_y + calculate_taper_offset(bar_height, seg_height, config.taper_alignment);
+
+            cr.save()?;
+            cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height);
+            cr.clip();
+            render_background(cr, &config.background, bar_width, bar_height)?;
+            cr.restore()?;
+        }
+    } else {
+        let segment_height = bar_height / num_segments as f64;
+        for i in 0..num_segments {
+            let t = (i as f64 + 0.5) / num_segments as f64;
+            let seg_width = calculate_tapered_dimension(bar_width, t, config.taper_style, config.taper_amount);
+            let seg_x = bar_x + calculate_taper_offset(bar_width, seg_width, config.taper_alignment);
+            let seg_y = bar_y + i as f64 * segment_height;
+
+            cr.save()?;
+            cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
+            cr.clip();
+            render_background(cr, &config.background, bar_width, bar_height)?;
+            cr.restore()?;
+        }
+    }
+
+    cr.restore()?;
     Ok(())
 }
 
@@ -378,6 +648,7 @@ fn render_segmented_bar(
     let filled_segments = (value * segment_count as f64).ceil() as u32;
 
     let is_horizontal = matches!(config.fill_direction, BarFillDirection::LeftToRight | BarFillDirection::RightToLeft);
+    let has_taper = config.taper_style != BarTaperStyle::None;
 
     if is_horizontal {
         let total_spacing = spacing * (segment_count - 1) as f64;
@@ -387,8 +658,16 @@ fn render_segmented_bar(
             let reverse = matches!(config.fill_direction, BarFillDirection::RightToLeft);
             let seg_index = if reverse { segment_count - 1 - i } else { i };
 
+            // Calculate taper position (t) based on segment position
+            let t = (seg_index as f64 + 0.5) / segment_count as f64;
+            let seg_height = if has_taper {
+                calculate_tapered_dimension(bar_height, t, config.taper_style, config.taper_amount)
+            } else {
+                bar_height
+            };
+
             let seg_x = bar_x + seg_index as f64 * (segment_width + spacing);
-            let seg_y = bar_y;
+            let seg_y = bar_y + calculate_taper_offset(bar_height, seg_height, config.taper_alignment);
 
             let is_filled = if reverse {
                 i < filled_segments
@@ -403,7 +682,7 @@ fn render_segmented_bar(
                 seg_x,
                 seg_y,
                 segment_width,
-                bar_height,
+                seg_height,
                 bar_x,
                 bar_y,
                 bar_width,
@@ -418,7 +697,15 @@ fn render_segmented_bar(
             let reverse = matches!(config.fill_direction, BarFillDirection::TopToBottom);
             let seg_index = if reverse { i } else { segment_count - 1 - i };
 
-            let seg_x = bar_x;
+            // Calculate taper position (t) based on segment position
+            let t = (seg_index as f64 + 0.5) / segment_count as f64;
+            let seg_width = if has_taper {
+                calculate_tapered_dimension(bar_width, t, config.taper_style, config.taper_amount)
+            } else {
+                bar_width
+            };
+
+            let seg_x = bar_x + calculate_taper_offset(bar_width, seg_width, config.taper_alignment);
             let seg_y = bar_y + seg_index as f64 * (segment_height + spacing);
 
             let is_filled = if reverse {
@@ -433,7 +720,7 @@ fn render_segmented_bar(
                 is_filled,
                 seg_x,
                 seg_y,
-                bar_width,
+                seg_width,
                 segment_height,
                 bar_x,
                 bar_y,

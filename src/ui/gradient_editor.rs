@@ -22,15 +22,20 @@ pub struct GradientEditor {
 
 impl GradientEditor {
     pub fn new() -> Self {
-        Self::new_with_options(true)
+        Self::new_with_options(true, true)
     }
 
     /// Create a gradient editor without the angle control (for radial gradients)
     pub fn new_without_angle() -> Self {
-        Self::new_with_options(false)
+        Self::new_with_options(false, false)
     }
 
-    fn new_with_options(show_angle: bool) -> Self {
+    /// Create a gradient editor with linear preview but no angle control (for value mapping)
+    pub fn new_linear_no_angle() -> Self {
+        Self::new_with_options(false, true)
+    }
+
+    fn new_with_options(show_angle: bool, use_linear_preview: bool) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         container.set_margin_start(12);
         container.set_margin_end(12);
@@ -39,7 +44,7 @@ impl GradientEditor {
         container.set_vexpand(true);
 
         let stops = Rc::new(RefCell::new(Vec::new()));
-        let angle = Rc::new(RefCell::new(90.0));
+        let angle = Rc::new(RefCell::new(0.0));
         let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         // Preview area (created early so angle handlers can reference it)
@@ -49,7 +54,6 @@ impl GradientEditor {
 
         let stops_clone = stops.clone();
         let angle_clone = angle.clone();
-        let show_angle_for_preview = show_angle;
         preview.set_draw_func(move |_, cr, width, height| {
             use crate::ui::background::render_background;
             use crate::ui::background::{BackgroundConfig, BackgroundType, LinearGradientConfig, RadialGradientConfig};
@@ -60,7 +64,7 @@ impl GradientEditor {
             let stops = stops_clone.borrow();
             let angle = *angle_clone.borrow();
 
-            let config = if show_angle_for_preview {
+            let config = if use_linear_preview {
                 BackgroundConfig {
                     background: BackgroundType::LinearGradient(LinearGradientConfig {
                         angle,
@@ -88,10 +92,10 @@ impl GradientEditor {
 
             let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
             angle_scale.set_hexpand(true);
-            angle_scale.set_value(90.0);
+            angle_scale.set_value(0.0);
 
             let angle_spin = SpinButton::with_range(0.0, 360.0, 1.0);
-            angle_spin.set_value(90.0);
+            angle_spin.set_value(0.0);
             angle_spin.set_digits(0);
 
             // Sync scale and spin button

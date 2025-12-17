@@ -12,6 +12,7 @@ mod disk;
 mod clock;
 mod shared_sensors;
 mod combo;
+mod test;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
@@ -24,6 +25,7 @@ pub use clock::{ClockSource, ClockSourceConfig, TimeFormat, DateFormat, AlarmCon
 pub use crate::audio::AlarmSoundConfig;
 pub use crate::core::{TimerMode, TimerState, TimerDisplayConfig};
 pub use combo::{ComboSource, ComboSourceConfig, SlotConfig, GroupConfig};
+pub use test::{TestSource, TestSourceConfig, TestMode, TEST_SOURCE_STATE};
 // pub use network::NetworkSource;
 
 /// Initialize shared sensor caches (call once at startup)
@@ -36,7 +38,7 @@ pub fn register_all() {
     use crate::core::global_registry;
 
     // General metric displayers available to most sources
-    let general_displayers = &["text", "bar", "arc", "speedometer", "graph"];
+    let general_displayers = &["text", "bar", "arc", "speedometer", "graph", "indicator"];
 
     // Register CPU source
     global_registry().register_source_with_info(
@@ -100,6 +102,14 @@ pub fn register_all() {
         "Combination",
         &["lcars"],
         || Box::new(ComboSource::new()),
+    );
+
+    // Register Test source - for debugging and demonstration
+    global_registry().register_source_with_info(
+        "test",
+        "Test",
+        general_displayers,
+        || Box::new(TestSource::new()),
     );
 
     // TODO: Register more sources

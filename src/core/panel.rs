@@ -2,9 +2,11 @@
 
 use super::{BoxedDataSource, BoxedDisplayer, Registry, global_registry};
 use super::panel_data::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
+use super::shared_source_manager::{SharedSourceManager, global_shared_source_manager};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::ui::{BackgroundConfig, Color};
 
 /// Position and size of a panel in the grid
@@ -59,8 +61,11 @@ pub struct Panel {
     pub id: String,
     /// Geometry in the grid
     pub geometry: PanelGeometry,
-    /// The data source
+    /// The data source (kept for metadata/fields access, not for data polling)
     pub source: BoxedDataSource,
+    /// Key to the shared source in SharedSourceManager
+    /// When set, data is fetched from the shared source instead of polling directly
+    pub source_key: Option<String>,
     /// The displayer
     pub displayer: BoxedDisplayer,
     /// Custom configuration
@@ -98,6 +103,7 @@ impl Panel {
             id,
             geometry,
             source,
+            source_key: None, // Legacy panels don't use shared sources
             displayer,
             config: HashMap::new(),
             background: BackgroundConfig::default(),
@@ -111,15 +117,41 @@ impl Panel {
     ///
     /// This creates source and displayer instances from the registry based on
     /// the types specified in the PanelData, then applies the configurations.
+    /// If a SharedSourceManager is available, the panel will use shared sources.
     pub fn from_data(data: PanelData) -> Result<Self> {
         Self::from_data_with_registry(data, global_registry())
     }
 
     /// Create a new panel from PanelData using a specific registry
     pub fn from_data_with_registry(data: PanelData, registry: &Registry) -> Result<Self> {
-        // Create source and displayer from registry
+        Self::from_data_with_registry_and_source_manager(data, registry, global_shared_source_manager().cloned())
+    }
+
+    /// Create a new panel from PanelData with explicit source manager
+    pub fn from_data_with_registry_and_source_manager(
+        data: PanelData,
+        registry: &Registry,
+        source_manager: Option<Arc<SharedSourceManager>>,
+    ) -> Result<Self> {
+        // Create source from registry (for metadata/fields access)
         let source = registry.create_source(data.source_config.source_type())?;
         let displayer = registry.create_displayer(data.displayer_config.displayer_type())?;
+
+        // Register with shared source manager if available
+        let source_key = if let Some(ref manager) = source_manager {
+            match manager.get_or_create_source(&data.source_config, &data.id, registry) {
+                Ok(key) => {
+                    log::debug!("Panel {} using shared source {}", data.id, key);
+                    Some(key)
+                }
+                Err(e) => {
+                    log::warn!("Failed to create shared source for panel {}: {}, falling back to direct polling", data.id, e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         // Build the combined config map for legacy interfaces
         let config = data.combined_config_map();
@@ -128,6 +160,7 @@ impl Panel {
             id: data.id.clone(),
             geometry: data.geometry,
             source,
+            source_key,
             displayer,
             config,
             background: data.appearance.background.clone(),
@@ -143,12 +176,31 @@ impl Panel {
     }
 
     /// Update the data source and refresh the displayer
+    ///
+    /// If a shared source is being used (source_key is set), this fetches
+    /// cached values from the SharedSourceManager. Otherwise, it polls directly.
     pub fn update(&mut self) -> Result<()> {
-        // Update source
-        self.source.update()?;
+        // Get values - either from shared source or by polling directly
+        let values = if let Some(ref key) = self.source_key {
+            // Use shared source - values are already updated by UpdateManager
+            if let Some(manager) = global_shared_source_manager() {
+                manager.get_values(key).unwrap_or_else(|| {
+                    log::warn!("Shared source {} not found, falling back to direct poll", key);
+                    self.source.update().ok();
+                    self.source.get_values()
+                })
+            } else {
+                // No manager available, fall back to direct poll
+                self.source.update()?;
+                self.source.get_values()
+            }
+        } else {
+            // No shared source, poll directly (legacy behavior)
+            self.source.update()?;
+            self.source.get_values()
+        };
 
-        // Get data and update displayer
-        let values = self.source.get_values();
+        // Update displayer with the values
         self.displayer.update_data(&values);
 
         // Sync certain live values into panel.config for UI access
@@ -164,6 +216,25 @@ impl Panel {
         }
 
         Ok(())
+    }
+
+    /// Update the displayer with pre-fetched values from a shared source
+    ///
+    /// This is called by UpdateManager after it has updated all shared sources.
+    /// It avoids the need to look up values again.
+    pub fn update_with_values(&mut self, values: &HashMap<String, serde_json::Value>) {
+        self.displayer.update_data(values);
+
+        // Sync certain live values into panel.config for UI access
+        const SYNC_KEYS: &[&str] = &[
+            "alarms", "timers", "triggered_alarm_ids",
+            "timer_state", "alarm_triggered", "alarm_enabled",
+        ];
+        for key in SYNC_KEYS {
+            if let Some(value) = values.get(*key) {
+                self.config.insert(key.to_string(), value.clone());
+            }
+        }
     }
 
     /// Apply configuration to the source and displayer (legacy method)
@@ -287,6 +358,14 @@ impl Panel {
                 }
                 SourceConfig::default_for_type("fan_speed").unwrap_or_default()
             }
+            "test" => {
+                if let Some(val) = self.config.get("test_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Test(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("test").unwrap_or_default()
+            }
             _ => SourceConfig::default()
         }
     }
@@ -366,6 +445,14 @@ impl Panel {
                 }
                 DisplayerConfig::default_for_type("cpu_cores").unwrap_or_default()
             }
+            "indicator" => {
+                if let Some(val) = self.config.get("indicator_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Indicator(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("indicator").unwrap_or_default()
+            }
             _ => DisplayerConfig::default()
         }
     }
@@ -383,9 +470,13 @@ impl Panel {
 
     /// Update the panel from new PanelData using a specific registry
     pub fn update_from_data_with_registry(&mut self, new_data: PanelData, registry: &Registry) -> Result<()> {
-        let old_source_type = self.data.as_ref()
-            .map(|d| d.source_config.source_type())
-            .unwrap_or_else(|| self.source.metadata().id.as_str());
+        let old_source_key = SharedSourceManager::generate_source_key(
+            self.data.as_ref()
+                .map(|d| &d.source_config)
+                .unwrap_or(&SourceConfig::default())
+        );
+        let new_source_key = SharedSourceManager::generate_source_key(&new_data.source_config);
+
         let old_displayer_type = self.data.as_ref()
             .map(|d| d.displayer_config.displayer_type())
             .unwrap_or_else(|| self.displayer.id());
@@ -393,9 +484,36 @@ impl Panel {
         let new_source_type = new_data.source_config.source_type();
         let new_displayer_type = new_data.displayer_config.displayer_type();
 
-        // Recreate source if type changed
-        if old_source_type != new_source_type {
+        // Handle shared source changes
+        if old_source_key != new_source_key {
+            // Release old shared source
+            if let Some(ref old_key) = self.source_key {
+                if let Some(manager) = global_shared_source_manager() {
+                    manager.release_source(old_key, &self.id);
+                }
+            }
+
+            // Create new source instance (for metadata/fields)
             self.source = registry.create_source(new_source_type)?;
+
+            // Register with shared source manager
+            if let Some(manager) = global_shared_source_manager() {
+                match manager.get_or_create_source(&new_data.source_config, &self.id, registry) {
+                    Ok(key) => {
+                        log::debug!("Panel {} updated to shared source {}", self.id, key);
+                        self.source_key = Some(key);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to create shared source for panel {}: {}", self.id, e);
+                        self.source_key = None;
+                    }
+                }
+            }
+        } else if let Some(ref key) = self.source_key {
+            // Source key unchanged but config might have - update the shared source config
+            if let Some(manager) = global_shared_source_manager() {
+                let _ = manager.configure_source(key, &new_data.source_config);
+            }
         }
 
         // Recreate displayer if type changed

@@ -5,7 +5,7 @@ use gtk4::{Box as GtkBox, Button, DropDown, DrawingArea, Entry, Label, Orientati
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig};
+use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig, IndicatorBackgroundConfig};
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::GradientEditor;
 
@@ -20,6 +20,7 @@ pub struct BackgroundConfigWidget {
     type_dropdown_handler_id: gtk4::glib::SignalHandlerId,
     linear_gradient_editor: Rc<GradientEditor>,
     radial_gradient_editor: Rc<GradientEditor>,
+    indicator_gradient_editor: Rc<GradientEditor>,
 }
 
 impl BackgroundConfigWidget {
@@ -43,6 +44,7 @@ impl BackgroundConfigWidget {
             "Radial Gradient",
             "Image",
             "Tessellated Polygons",
+            "Indicator",
         ]);
         let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
         type_dropdown.set_selected(0); // Default to Solid Color
@@ -92,6 +94,10 @@ impl BackgroundConfigWidget {
         let polygon_page = Self::create_polygon_config(&config, &preview, &on_change);
         config_stack.add_named(&polygon_page, Some("polygons"));
 
+        // Indicator configuration
+        let (indicator_page, indicator_gradient_editor) = Self::create_indicator_config(&config, &preview, &on_change);
+        config_stack.add_named(&indicator_page, Some("indicator"));
+
         container.append(&config_stack);
 
         // Connect type selector
@@ -108,6 +114,7 @@ impl BackgroundConfigWidget {
                 2 => "radial_gradient",
                 3 => "image",
                 4 => "polygons",
+                5 => "indicator",
                 _ => "solid",
             };
 
@@ -123,6 +130,7 @@ impl BackgroundConfigWidget {
                     BackgroundType::RadialGradient(_) => 2,
                     BackgroundType::Image { .. } => 3,
                     BackgroundType::Polygons(_) => 4,
+                    BackgroundType::Indicator(_) => 5,
                 }
             };
 
@@ -140,6 +148,7 @@ impl BackgroundConfigWidget {
                         alpha: 1.0,
                     },
                     4 => BackgroundType::Polygons(PolygonConfig::default()),
+                    5 => BackgroundType::Indicator(IndicatorBackgroundConfig::default()),
                     _ => BackgroundType::default(),
                 };
 
@@ -165,6 +174,7 @@ impl BackgroundConfigWidget {
             type_dropdown_handler_id,
             linear_gradient_editor,
             radial_gradient_editor,
+            indicator_gradient_editor,
         }
     }
 
@@ -716,6 +726,240 @@ impl BackgroundConfigWidget {
         page
     }
 
+    /// Create indicator configuration page
+    fn create_indicator_config(
+        config: &Rc<RefCell<BackgroundConfig>>,
+        preview: &DrawingArea,
+        on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+    ) -> (GtkBox, Rc<GradientEditor>) {
+        use crate::ui::background::IndicatorBackgroundShape;
+
+        let page = GtkBox::new(Orientation::Vertical, 12);
+        page.set_margin_start(12);
+        page.set_margin_end(12);
+        page.set_margin_top(12);
+        page.set_margin_bottom(12);
+
+        // Shape selection
+        let shape_box = GtkBox::new(Orientation::Horizontal, 6);
+        shape_box.append(&Label::new(Some("Shape:")));
+        let shape_list = StringList::new(&["Fill", "Circle", "Square", "Triangle", "Pentagon", "Hexagon"]);
+        let shape_dropdown = DropDown::new(Some(shape_list), gtk4::Expression::NONE);
+        shape_dropdown.set_hexpand(true);
+        shape_box.append(&shape_dropdown);
+        page.append(&shape_box);
+
+        // Shape size
+        let size_box = GtkBox::new(Orientation::Horizontal, 6);
+        size_box.append(&Label::new(Some("Size:")));
+        let size_scale = Scale::with_range(Orientation::Horizontal, 0.1, 1.0, 0.05);
+        size_scale.set_value(0.8);
+        size_scale.set_hexpand(true);
+        size_box.append(&size_scale);
+        page.append(&size_box);
+
+        // Rotation
+        let rotation_box = GtkBox::new(Orientation::Horizontal, 6);
+        rotation_box.append(&Label::new(Some("Rotation:")));
+        let rotation_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        rotation_spin.set_value(0.0);
+        rotation_box.append(&rotation_spin);
+        page.append(&rotation_box);
+
+        // Value field (from panel's source)
+        let field_box = GtkBox::new(Orientation::Horizontal, 6);
+        field_box.append(&Label::new(Some("Value Field:")));
+        let field_entry = gtk4::Entry::new();
+        field_entry.set_hexpand(true);
+        field_entry.set_placeholder_text(Some("e.g., usage, temperature"));
+        // Initialize from config
+        {
+            let cfg = config.borrow();
+            if let BackgroundType::Indicator(ref ind) = cfg.background {
+                field_entry.set_text(&ind.value_field);
+            }
+        }
+        field_box.append(&field_entry);
+        page.append(&field_box);
+
+        // Info label
+        let info_label = Label::new(Some("Uses the panel's data source field (leave empty for static value)"));
+        info_label.set_halign(gtk4::Align::Start);
+        info_label.add_css_class("dim-label");
+        page.append(&info_label);
+
+        // Static value (for preview/initial state)
+        let value_box = GtkBox::new(Orientation::Horizontal, 6);
+        value_box.append(&Label::new(Some("Preview/Static Value:")));
+        let value_scale = Scale::with_range(Orientation::Horizontal, 0.0, 100.0, 1.0);
+        value_scale.set_value(50.0);
+        value_scale.set_hexpand(true);
+        value_box.append(&value_scale);
+        page.append(&value_box);
+
+        // Gradient editor for color mapping (linear preview for value mapping)
+        let gradient_label = Label::new(Some("Color Gradient (0%=min, 100%=max):"));
+        gradient_label.set_halign(gtk4::Align::Start);
+        page.append(&gradient_label);
+
+        // Copy/Paste gradient buttons
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        copy_paste_box.set_halign(gtk4::Align::End);
+        let copy_gradient_btn = Button::with_label("Copy Gradient");
+        let paste_gradient_btn = Button::with_label("Paste Gradient");
+        copy_paste_box.append(&copy_gradient_btn);
+        copy_paste_box.append(&paste_gradient_btn);
+        page.append(&copy_paste_box);
+
+        let gradient_editor = Rc::new(GradientEditor::new_linear_no_angle());
+        page.append(gradient_editor.widget());
+
+        // Initialize gradient editor with existing stops
+        {
+            let cfg = config.borrow();
+            if let BackgroundType::Indicator(ref ind) = cfg.background {
+                gradient_editor.set_stops(ind.gradient_stops.clone());
+            }
+        }
+
+        // Copy button handler - copy stops (angle is not relevant for indicator)
+        let gradient_editor_copy = gradient_editor.clone();
+        copy_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+            let stops = gradient_editor_copy.get_stops();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.gradient_stops = Some(stops);
+            }
+        });
+
+        // Paste button handler - paste only stops, ignore angle
+        let gradient_editor_paste = gradient_editor.clone();
+        let config_paste = config.clone();
+        let on_change_paste = on_change.clone();
+        let preview_paste = preview.clone();
+        paste_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(ref stops) = clipboard.gradient_stops {
+                    gradient_editor_paste.set_stops(stops.clone());
+                    let mut cfg = config_paste.borrow_mut();
+                    if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                        ind.gradient_stops = stops.clone();
+                    }
+                    drop(cfg);
+                    preview_paste.queue_draw();
+                    if let Some(callback) = on_change_paste.borrow().as_ref() {
+                        callback();
+                    }
+                }
+            }
+        });
+
+        // Connect handlers
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        shape_dropdown.connect_selected_notify(move |dropdown| {
+            let shape = match dropdown.selected() {
+                0 => IndicatorBackgroundShape::Fill,
+                1 => IndicatorBackgroundShape::Circle,
+                2 => IndicatorBackgroundShape::Square,
+                3 => IndicatorBackgroundShape::Polygon(3),
+                4 => IndicatorBackgroundShape::Polygon(5),
+                5 => IndicatorBackgroundShape::Polygon(6),
+                _ => IndicatorBackgroundShape::Fill,
+            };
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.shape = shape;
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        size_scale.connect_value_changed(move |scale| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.shape_size = scale.value();
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        rotation_spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.rotation_angle = spin.value();
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        // Value field change handler
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        field_entry.connect_changed(move |entry| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.value_field = entry.text().to_string();
+            }
+            drop(cfg);
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        value_scale.connect_value_changed(move |scale| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.static_value = scale.value();
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        // Connect gradient change handler to update config
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        let gradient_editor_clone = gradient_editor.clone();
+        gradient_editor.set_on_change(move || {
+            let stops = gradient_editor_clone.get_stops();
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.gradient_stops = stops;
+            }
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        (page, gradient_editor)
+    }
+
     /// Get the container widget
     pub fn widget(&self) -> &GtkBox {
         &self.container
@@ -730,6 +974,7 @@ impl BackgroundConfigWidget {
             BackgroundType::RadialGradient(_) => 2,
             BackgroundType::Image { .. } => 3,
             BackgroundType::Polygons(_) => 4,
+            BackgroundType::Indicator(_) => 5,
         };
 
         // Load gradient data into editors if applicable
@@ -738,6 +983,9 @@ impl BackgroundConfigWidget {
         }
         if let BackgroundType::RadialGradient(ref grad) = new_config.background {
             self.radial_gradient_editor.set_stops(grad.stops.clone());
+        }
+        if let BackgroundType::Indicator(ref ind) = new_config.background {
+            self.indicator_gradient_editor.set_stops(ind.gradient_stops.clone());
         }
 
         *self.config.borrow_mut() = new_config;
@@ -758,6 +1006,7 @@ impl BackgroundConfigWidget {
             2 => "radial_gradient",
             3 => "image",
             4 => "polygons",
+            5 => "indicator",
             _ => "solid",
         };
         self.config_stack.set_visible_child_name(page_name);

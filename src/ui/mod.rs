@@ -40,13 +40,17 @@ mod lcars_config_widget;
 mod color_button_widget;
 pub mod core_bars_display;
 mod core_bars_config_widget;
+mod indicator_config_widget;
+mod test_source_dialog;
+mod test_source_config_widget;
 
 pub use main_window::MainWindow;
+pub use test_source_dialog::show_test_source_dialog;
 pub use color_button_widget::ColorButtonWidget;
 pub use grid_layout::{GridConfig, GridLayout, BorderlessDragCallback};
 pub use config_dialog::ConfigDialog;
 pub use color_picker::ColorPickerDialog;
-pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background, ImageDisplayMode};
+pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background, render_background_with_source, ImageDisplayMode, IndicatorBackgroundConfig, IndicatorBackgroundShape, render_indicator_background_with_value};
 pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
 pub use image_picker::ImagePicker;
@@ -83,3 +87,5 @@ pub use lcars_display::{
 pub use lcars_config_widget::LcarsConfigWidget;
 pub use core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
 pub use core_bars_config_widget::CoreBarsConfigWidget;
+pub use indicator_config_widget::IndicatorConfigWidget;
+pub use test_source_config_widget::TestSourceConfigWidget;

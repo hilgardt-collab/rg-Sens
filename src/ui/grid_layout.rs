@@ -718,7 +718,9 @@ impl GridLayout {
                     // Render background with clipping
                     cr.save().ok();
                     cr.clip();
-                    if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, width, height) {
+                    // Get source values for indicator backgrounds
+                    let source_values = panel_guard.source.get_values();
+                    if let Err(e) = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values) {
                         log::warn!("Failed to render background: {}", e);
                     }
                     cr.restore().ok();
@@ -749,6 +751,24 @@ impl GridLayout {
                     }
                 }
             }
+        });
+
+        // Set up periodic redraw for indicator backgrounds
+        // This ensures the background color updates when source values change
+        let panel_for_bg_timer = panel.clone();
+        let background_area_weak_timer = background_area.downgrade();
+        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+            // Stop if background area is gone (panel deleted)
+            let Some(bg_area) = background_area_weak_timer.upgrade() else {
+                return gtk4::glib::ControlFlow::Break;
+            };
+            // Check if panel background is indicator type
+            if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
+                if matches!(panel_guard.background.background, crate::ui::BackgroundType::Indicator(_)) {
+                    bg_area.queue_draw();
+                }
+            }
+            gtk4::glib::ControlFlow::Continue
         });
 
         // Create overlay to stack background and widget
@@ -1569,6 +1589,11 @@ impl GridLayout {
                                 // Add to panels list
                                 panels_for_copy.borrow_mut().push(new_panel.clone());
 
+                                // Register with update manager so the panel gets periodic updates
+                                if let Some(update_manager) = crate::core::global_update_manager() {
+                                    update_manager.queue_add_panel(new_panel.clone());
+                                }
+
                                 // Mark new cells as occupied
                                 let mut occupied_write = occupied_cells_end.borrow_mut();
                                 for dx in 0..geometry_size.0 {
@@ -1625,7 +1650,8 @@ impl GridLayout {
                                             // Render background with clipping
                                             cr.save().ok();
                                             cr.clip();
-                                            if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, width, height) {
+                                            let source_values = panel_guard.source.get_values();
+                                            if let Err(e) = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values) {
                                                 log::warn!("Failed to render background: {}", e);
                                             }
                                             cr.restore().ok();
@@ -2406,7 +2432,8 @@ impl GridLayout {
 
                                                                         cr.save().ok();
                                                                         cr.clip();
-                                                                        if let Err(e) = crate::ui::render_background(cr, &panel_guard.background, width, height) {
+                                                                        let source_values = panel_guard.source.get_values();
+                                                                        if let Err(e) = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values) {
                                                                             log::warn!("Failed to render background: {}", e);
                                                                         }
                                                                         cr.restore().ok();
@@ -3114,6 +3141,24 @@ fn show_panel_properties_dialog(
     // Wrap combo_config_widget in Rc<RefCell> for sharing (needs RefCell for set_on_change)
     let combo_config_widget = Rc::new(std::cell::RefCell::new(combo_config_widget));
 
+    // === Test Source Config ===
+    let test_config_widget = crate::ui::TestSourceConfigWidget::new();
+    test_config_widget.widget().set_visible(old_source_id == "test");
+
+    // Load existing Test config if source is test
+    if old_source_id == "test" {
+        if let Some(test_config_value) = panel_guard.config.get("test_config") {
+            if let Ok(test_config) = serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone()) {
+                test_config_widget.set_config(&test_config);
+            }
+        }
+    }
+
+    source_tab_box.append(test_config_widget.widget());
+
+    // Wrap test_config_widget in Rc for sharing
+    let test_config_widget = Rc::new(test_config_widget);
+
     // Show/hide source config widgets based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
@@ -3124,6 +3169,7 @@ fn show_panel_properties_dialog(
         let disk_widget_clone = disk_config_widget.clone();
         let clock_widget_clone = clock_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
+        let test_widget_clone = test_config_widget.clone();
         let sources_clone = sources.clone();
         let panel_clone = panel.clone();
 
@@ -3138,6 +3184,7 @@ fn show_panel_properties_dialog(
                 disk_widget_clone.widget().set_visible(source_id == "disk");
                 clock_widget_clone.widget().set_visible(source_id == "clock");
                 combo_widget_clone.borrow().widget().set_visible(source_id == "combination");
+                test_widget_clone.widget().set_visible(source_id == "test");
 
                 // Reload config for the selected source
                 {
@@ -3196,6 +3243,13 @@ fn show_panel_properties_dialog(
                             if let Some(combo_config_value) = panel_guard.config.get("combo_config") {
                                 if let Ok(combo_config) = serde_json::from_value::<crate::sources::ComboSourceConfig>(combo_config_value.clone()) {
                                     combo_widget_clone.borrow().set_config(combo_config);
+                                }
+                            }
+                        }
+                        "test" => {
+                            if let Some(test_config_value) = panel_guard.config.get("test_config") {
+                                if let Ok(test_config) = serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone()) {
+                                    test_widget_clone.set_config(&test_config);
                                 }
                             }
                         }
@@ -3525,6 +3579,33 @@ fn show_panel_properties_dialog(
     // Wrap cpu_cores_config_widget in Rc for sharing
     let cpu_cores_config_widget = Rc::new(cpu_cores_config_widget);
 
+    // === Indicator Configuration ===
+    let indicator_config_label = Label::new(Some("Indicator Configuration:"));
+    indicator_config_label.set_halign(gtk4::Align::Start);
+    indicator_config_label.add_css_class("heading");
+    indicator_config_label.set_visible(old_displayer_id == "indicator");
+
+    let indicator_config_widget = crate::ui::IndicatorConfigWidget::new(available_fields.clone());
+    indicator_config_widget.widget().set_visible(old_displayer_id == "indicator");
+
+    // Load existing Indicator config if displayer is indicator
+    if old_displayer_id == "indicator" {
+        if let Some(config_value) = panel_guard.config.get("indicator_config") {
+            if let Ok(config) = serde_json::from_value::<crate::displayers::IndicatorConfig>(config_value.clone()) {
+                indicator_config_widget.set_config(&config);
+            }
+        }
+    }
+
+    displayer_tab_box.append(&indicator_config_label);
+    displayer_tab_box.append(indicator_config_widget.widget());
+
+    // Set up change callback
+    indicator_config_widget.set_on_change(|| {});
+
+    // Wrap indicator_config_widget in Rc for sharing
+    let indicator_config_widget = Rc::new(indicator_config_widget);
+
     // Connect combo_config_widget to update lcars_config_widget when sources change
     {
         let lcars_widget_clone = lcars_config_widget.clone();
@@ -3595,6 +3676,8 @@ fn show_panel_properties_dialog(
         let lcars_label_clone = lcars_config_label.clone();
         let cpu_cores_widget_clone = cpu_cores_config_widget.clone();
         let cpu_cores_label_clone = cpu_cores_config_label.clone();
+        let indicator_widget_clone = indicator_config_widget.clone();
+        let indicator_label_clone = indicator_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -3608,6 +3691,7 @@ fn show_panel_properties_dialog(
                 let is_clock_digital = displayer_id == "clock_digital";
                 let is_lcars = displayer_id == "lcars";
                 let is_cpu_cores = displayer_id == "cpu_cores";
+                let is_indicator = displayer_id == "indicator";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -3626,6 +3710,8 @@ fn show_panel_properties_dialog(
                 lcars_label_clone.set_visible(is_lcars);
                 cpu_cores_widget_clone.widget().set_visible(is_cpu_cores);
                 cpu_cores_label_clone.set_visible(is_cpu_cores);
+                indicator_widget_clone.widget().set_visible(is_indicator);
+                indicator_label_clone.set_visible(is_indicator);
             }
         });
     }
@@ -3868,10 +3954,12 @@ fn show_panel_properties_dialog(
     let disk_config_widget_clone = disk_config_widget.clone();
     let clock_config_widget_clone = clock_config_widget.clone();
     let combo_config_widget_clone = combo_config_widget.clone();
+    let test_config_widget_clone = test_config_widget.clone();
     let clock_analog_config_widget_clone = clock_analog_config_widget.clone();
     let clock_digital_config_widget_clone = clock_digital_config_widget.clone();
     let lcars_config_widget_clone = lcars_config_widget.clone();
     let cpu_cores_config_widget_clone = cpu_cores_config_widget.clone();
+    let indicator_config_widget_clone = indicator_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -4024,9 +4112,46 @@ fn show_panel_properties_dialog(
 
             // Update source if changed
             if source_changed {
+                // Release old shared source if present
+                if let Some(ref old_key) = panel_guard.source_key {
+                    if let Some(manager) = crate::core::global_shared_source_manager() {
+                        manager.release_source(old_key, &panel_id);
+                    }
+                    panel_guard.source_key = None;
+                }
+
                 match registry.create_source(&new_source_id) {
                     Ok(new_source) => {
                         panel_guard.source = new_source;
+
+                        // Register with shared source manager for the new source
+                        // Get the actual config from the config widget for the new source type
+                        let source_config: Option<crate::core::SourceConfig> = match new_source_id.as_str() {
+                            "cpu" => Some(crate::core::SourceConfig::Cpu(cpu_config_widget_clone.get_config())),
+                            "gpu" => Some(crate::core::SourceConfig::Gpu(gpu_config_widget_clone.get_config())),
+                            "memory" => Some(crate::core::SourceConfig::Memory(memory_config_widget_clone.get_config())),
+                            "system_temp" => Some(crate::core::SourceConfig::SystemTemp(system_temp_config_widget_clone.get_config())),
+                            "fan_speed" => Some(crate::core::SourceConfig::FanSpeed(fan_speed_config_widget_clone.get_config())),
+                            "disk" => Some(crate::core::SourceConfig::Disk(disk_config_widget_clone.get_config())),
+                            "clock" => Some(crate::core::SourceConfig::Clock(clock_config_widget_clone.get_config())),
+                            "combination" => Some(crate::core::SourceConfig::Combo(combo_config_widget_clone.borrow().get_config())),
+                            "test" => Some(crate::core::SourceConfig::Test(test_config_widget_clone.get_config())),
+                            _ => crate::core::SourceConfig::default_for_type(&new_source_id),
+                        };
+
+                        if let Some(config) = source_config {
+                            if let Some(manager) = crate::core::global_shared_source_manager() {
+                                match manager.get_or_create_source(&config, &panel_id, registry) {
+                                    Ok(key) => {
+                                        log::debug!("Panel {} updated to shared source {}", panel_id, key);
+                                        panel_guard.source_key = Some(key);
+                                    }
+                                    Err(e) => {
+                                        log::warn!("Failed to create shared source for panel {}: {}", panel_id, e);
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(e) => {
                         log::warn!("Failed to create source {}: {}", new_source_id, e);
@@ -4572,6 +4697,22 @@ fn show_panel_properties_dialog(
                 }
             }
 
+            // Apply Indicator configuration if indicator displayer is active
+            if new_displayer_id == "indicator" {
+                let indicator_config = indicator_config_widget_clone.get_config();
+                if let Ok(indicator_config_json) = serde_json::to_value(&indicator_config) {
+                    panel_guard.config.insert("indicator_config".to_string(), indicator_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply Indicator config: {}", e);
+                    }
+                }
+            }
+
             // Apply CPU source configuration if CPU source is active
             if new_source_id == "cpu" {
                 let cpu_config = cpu_config_widget_clone.get_config();
@@ -4731,6 +4872,27 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the source
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply combo config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
+            // Apply Test source configuration if test source is active
+            if new_source_id == "test" {
+                let test_config = test_config_widget_clone.get_config();
+                if let Ok(test_config_json) = serde_json::to_value(&test_config) {
+                    panel_guard.config.insert("test_config".to_string(), test_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply test config to source: {}", e);
                     }
 
                     // Update the source with new configuration

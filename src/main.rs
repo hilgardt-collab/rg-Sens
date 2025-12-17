@@ -260,6 +260,10 @@ fn build_ui(app: &Application) {
     // Create registry
     let registry = rg_sens::core::global_registry();
 
+    // Create shared source manager (ensures each source type is polled only once)
+    let shared_source_manager = Arc::new(rg_sens::core::SharedSourceManager::new());
+    rg_sens::core::init_global_shared_source_manager(shared_source_manager.clone());
+
     // Create update manager
     let update_manager = Arc::new(UpdateManager::new());
 
@@ -306,6 +310,11 @@ fn build_ui(app: &Application) {
                 }
             }
         }
+    }
+
+    // Debug: Print shared source statistics to verify source sharing
+    if let Some(manager) = rg_sens::core::global_shared_source_manager() {
+        manager.debug_print_sources();
     }
 
     // Create window background - sized to match grid content
@@ -1027,6 +1036,10 @@ fn build_ui(app: &Application) {
 
         menu_box.append(&Separator::new(Orientation::Horizontal));
 
+        // Test Source button
+        let test_source_btn = create_menu_button("Test Source...");
+        menu_box.append(&test_source_btn);
+
         // Options button
         let options_btn = create_menu_button("Options");
         menu_box.append(&options_btn);
@@ -1403,6 +1416,14 @@ fn build_ui(app: &Application) {
                     }
                 }
             });
+        });
+
+        // Test Source button handler
+        let window_for_test = window_for_menu.clone();
+        let popover_for_test = popover_ref.clone();
+        test_source_btn.connect_clicked(move |_| {
+            popover_for_test.popdown();
+            rg_sens::ui::show_test_source_dialog(&window_for_test);
         });
 
         // Options button handler
@@ -2309,13 +2330,13 @@ fn show_new_panel_dialog(
 
     let size_box = GtkBox::new(Orientation::Horizontal, 6);
     size_box.append(&Label::new(Some("Width:")));
-    let width_adj = Adjustment::new(4.0, 1.0, 512.0, 1.0, 5.0, 0.0);
+    let width_adj = Adjustment::new(8.0, 1.0, 512.0, 1.0, 5.0, 0.0);
     let width_spin = SpinButton::new(Some(&width_adj), 1.0, 0);
     width_spin.set_hexpand(true);
     size_box.append(&width_spin);
 
     size_box.append(&Label::new(Some("Height:")));
-    let height_adj = Adjustment::new(2.0, 1.0, 512.0, 1.0, 5.0, 0.0);
+    let height_adj = Adjustment::new(8.0, 1.0, 512.0, 1.0, 5.0, 0.0);
     let height_spin = SpinButton::new(Some(&height_adj), 1.0, 0);
     height_spin.set_hexpand(true);
     size_box.append(&height_spin);

@@ -1,9 +1,15 @@
 //! Update manager for scheduling and coordinating source updates
+//!
+//! The update flow is:
+//! 1. Collect all unique shared sources that need updating
+//! 2. Update each shared source ONCE (regardless of how many panels use it)
+//! 3. Update each panel's displayer with the cached values from its shared source
 
 use super::Panel;
 use super::panel_data::SourceConfig;
+use super::shared_source_manager::global_shared_source_manager;
 use anyhow::Result;
-use log::{error, trace, info};
+use log::{error, trace, info, debug};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,6 +25,14 @@ struct PanelUpdateState {
     cached_interval: Duration,
     /// Hash of config to detect changes
     config_hash: u64,
+    /// Key to the shared source (if using shared sources)
+    source_key: Option<String>,
+}
+
+/// Tracks update timing for a shared source
+struct SharedSourceUpdateState {
+    last_update: Instant,
+    interval: Duration,
 }
 
 /// Compute a hash from PanelData's source config (preferred method)
@@ -123,6 +137,8 @@ enum UpdateManagerMessage {
 /// Manages periodic updates for panels
 pub struct UpdateManager {
     panels: Arc<RwLock<HashMap<String, PanelUpdateState>>>,
+    /// Tracks shared source update timing
+    shared_sources: Arc<RwLock<HashMap<String, SharedSourceUpdateState>>>,
     /// Sender for adding panels from sync code (GTK main thread)
     sender: mpsc::UnboundedSender<UpdateManagerMessage>,
     /// Receiver for processing panel additions (used in the update loop)
@@ -135,6 +151,7 @@ impl UpdateManager {
         let (sender, receiver) = mpsc::unbounded_channel();
         Self {
             panels: Arc::new(RwLock::new(HashMap::new())),
+            shared_sources: Arc::new(RwLock::new(HashMap::new())),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
         }
@@ -175,31 +192,53 @@ impl UpdateManager {
 
     /// Add a panel to be updated
     pub async fn add_panel(&self, panel: Arc<RwLock<Panel>>) {
-        let (panel_id, config_hash, cached_interval) = {
+        let (panel_id, config_hash, cached_interval, source_key) = {
             let panel_guard = panel.read().await;
             // Prefer PanelData if available (new typed config system)
             if let Some(ref data) = panel_guard.data {
                 let hash = compute_config_hash_from_data(&data.source_config);
                 let interval = Duration::from_millis(data.source_config.update_interval_ms());
-                (panel_guard.id.clone(), hash, interval)
+                (panel_guard.id.clone(), hash, interval, panel_guard.source_key.clone())
             } else {
                 // Fall back to legacy HashMap config
                 let hash = compute_config_hash(&panel_guard.config);
                 let interval = extract_update_interval(&panel_guard.config, &panel_guard.id);
-                (panel_guard.id.clone(), hash, interval)
+                (panel_guard.id.clone(), hash, interval, None)
             }
         };
 
+        // Register shared source if panel uses one
+        if let Some(ref key) = source_key {
+            let mut shared_sources = self.shared_sources.write().await;
+            if !shared_sources.contains_key(key) {
+                // Get interval from SharedSourceManager
+                let interval = global_shared_source_manager()
+                    .and_then(|m| m.get_interval(key))
+                    .unwrap_or(cached_interval);
+
+                shared_sources.insert(
+                    key.clone(),
+                    SharedSourceUpdateState {
+                        last_update: Instant::now() - interval, // Force immediate update
+                        interval,
+                    },
+                );
+                debug!("Registered shared source {} with interval {:?}", key, interval);
+            }
+        }
+
         let mut panels = self.panels.write().await;
         panels.insert(
-            panel_id,
+            panel_id.clone(),
             PanelUpdateState {
                 panel,
                 last_update: Instant::now(),
                 cached_interval,
                 config_hash,
+                source_key,
             },
         );
+        debug!("Added panel {} to update manager", panel_id);
     }
 
     /// Start the update loop
@@ -225,37 +264,39 @@ impl UpdateManager {
     }
 
     /// Update all panels that are due for an update
+    ///
+    /// The update flow is:
+    /// 1. Update shared sources that are due (each source polled only once)
+    /// 2. Update panels that are due (using cached values from shared sources)
     async fn update_all(&self) -> Result<()> {
         let now = Instant::now();
 
-        // First pass: collect panels that need updating and check for config changes
-        // We need write lock to potentially update cached intervals
+        // === PHASE 1: Update shared sources ===
+        let updated_sources = self.update_shared_sources(now).await;
+
+        // === PHASE 2: Update panels ===
         let mut panels = self.panels.write().await;
         let mut tasks = Vec::new();
-        let mut config_updates: Vec<(String, u64, Duration)> = Vec::new();
+        let mut config_updates: Vec<(String, u64, Duration, Option<String>)> = Vec::new();
 
         for (panel_id, state) in panels.iter() {
-            // Check if config has changed on EVERY tick (not just when update is due)
-            // This ensures interval changes are detected immediately
-            let (current_hash, new_interval) = {
+            // Check if config has changed on EVERY tick
+            let (current_hash, new_interval, new_source_key) = {
                 if let Ok(panel_guard) = state.panel.try_read() {
-                    // Prefer PanelData if available
                     if let Some(ref data) = panel_guard.data {
                         let hash = compute_config_hash_from_data(&data.source_config);
                         let interval = Duration::from_millis(data.source_config.update_interval_ms());
-                        (hash, Some(interval))
+                        (hash, Some(interval), panel_guard.source_key.clone())
                     } else {
-                        // Fall back to legacy HashMap config
                         let hash = compute_config_hash(&panel_guard.config);
-                        (hash, None)
+                        (hash, None, None)
                     }
                 } else {
-                    (state.config_hash, None) // Keep old hash if can't read
+                    (state.config_hash, None, state.source_key.clone())
                 }
             };
 
             if current_hash != state.config_hash {
-                // Config changed, need to update cached interval
                 let interval = new_interval.unwrap_or_else(|| {
                     if let Ok(panel_guard) = state.panel.try_read() {
                         extract_update_interval(&panel_guard.config, panel_id)
@@ -263,15 +304,14 @@ impl UpdateManager {
                         state.cached_interval
                     }
                 });
-                config_updates.push((panel_id.clone(), current_hash, interval));
+                config_updates.push((panel_id.clone(), current_hash, interval, new_source_key.clone()));
             }
 
-            // Now check if update is due using (potentially updated) cached interval
-            // Use the new interval if config changed, otherwise use cached
+            // Check if update is due
             let effective_interval = config_updates
                 .iter()
-                .find(|(id, _, _)| id == panel_id)
-                .map(|(_, _, interval)| *interval)
+                .find(|(id, _, _, _)| id == panel_id)
+                .map(|(_, _, interval, _)| *interval)
                 .unwrap_or(state.cached_interval);
 
             let elapsed = now.duration_since(state.last_update);
@@ -279,8 +319,20 @@ impl UpdateManager {
                 let panel = state.panel.clone();
                 let panel_id_owned = panel_id.clone();
                 let panel_id_for_task = panel_id_owned.clone();
+                let source_key = state.source_key.clone();
+
+                // Check if this panel's source was updated in phase 1
+                // (currently unused but may be useful for future optimizations)
+                let _source_was_updated = source_key
+                    .as_ref()
+                    .map(|k| updated_sources.contains(k))
+                    .unwrap_or(false);
+
                 let task = tokio::spawn(async move {
                     let mut panel_guard = panel.write().await;
+
+                    // If using shared source and it was updated, panel.update() will use cached values
+                    // If not using shared source, panel.update() will poll directly
                     if let Err(e) = panel_guard.update() {
                         error!("Error updating panel {}: {}", panel_id_for_task, e);
                     }
@@ -289,12 +341,58 @@ impl UpdateManager {
             }
         }
 
-        // Update cached intervals for panels with config changes
-        for (panel_id, new_hash, new_interval) in config_updates {
+        // Update cached state for panels with config changes
+        // Also track old source keys for cleanup
+        let mut old_source_keys: Vec<String> = Vec::new();
+        for (panel_id, new_hash, new_interval, new_source_key) in config_updates {
             if let Some(state) = panels.get_mut(&panel_id) {
+                // Check if source_key changed and register new shared source if needed
+                if state.source_key != new_source_key {
+                    // Track old key for potential cleanup
+                    if let Some(ref old_key) = state.source_key {
+                        old_source_keys.push(old_key.clone());
+                    }
+
+                    if let Some(ref new_key) = new_source_key {
+                        let mut shared_sources = self.shared_sources.write().await;
+                        if !shared_sources.contains_key(new_key) {
+                            // Get interval from SharedSourceManager
+                            let interval = global_shared_source_manager()
+                                .and_then(|m| m.get_interval(new_key))
+                                .unwrap_or(new_interval);
+
+                            shared_sources.insert(
+                                new_key.clone(),
+                                SharedSourceUpdateState {
+                                    last_update: Instant::now() - interval, // Force immediate update
+                                    interval,
+                                },
+                            );
+                            debug!("Registered new shared source {} for panel {} with interval {:?}", new_key, panel_id, interval);
+                        }
+                    }
+                }
+
                 state.config_hash = new_hash;
                 state.cached_interval = new_interval;
+                state.source_key = new_source_key;
                 info!("Updated cached interval for panel {}: {:?}", panel_id, state.cached_interval);
+            }
+        }
+
+        // Clean up old shared sources that are no longer referenced by any panel
+        if !old_source_keys.is_empty() {
+            let active_keys: std::collections::HashSet<String> = panels
+                .values()
+                .filter_map(|s| s.source_key.clone())
+                .collect();
+
+            let mut shared_sources = self.shared_sources.write().await;
+            for old_key in old_source_keys {
+                if !active_keys.contains(&old_key) {
+                    shared_sources.remove(&old_key);
+                    debug!("Removed unused shared source {} from update manager", old_key);
+                }
             }
         }
 
@@ -305,9 +403,9 @@ impl UpdateManager {
             }
         }
 
-        drop(panels); // Release write lock before awaiting tasks
+        drop(panels);
 
-        // Wait for all updates to complete
+        // Wait for all panel updates to complete
         for (panel_id, task) in tasks {
             if let Err(e) = task.await {
                 error!("Panel update task failed for {}: {}", panel_id, e);
@@ -315,6 +413,58 @@ impl UpdateManager {
         }
 
         Ok(())
+    }
+
+    /// Update shared sources that are due for an update
+    ///
+    /// Returns a set of source keys that were updated
+    async fn update_shared_sources(&self, now: Instant) -> std::collections::HashSet<String> {
+        let mut updated = std::collections::HashSet::new();
+
+        let manager = match global_shared_source_manager() {
+            Some(m) => m,
+            None => return updated,
+        };
+
+        let mut shared_sources = self.shared_sources.write().await;
+
+        // Collect sources that need updating
+        let sources_to_update: Vec<String> = shared_sources
+            .iter()
+            .filter(|(_, state)| now.duration_since(state.last_update) >= state.interval)
+            .map(|(key, _)| key.clone())
+            .collect();
+
+        // Update each source
+        for key in sources_to_update {
+            match manager.update_source(&key) {
+                Ok(_) => {
+                    trace!("Updated shared source {}", key);
+                    updated.insert(key.clone());
+
+                    // Update last_update time
+                    if let Some(state) = shared_sources.get_mut(&key) {
+                        state.last_update = now;
+
+                        // Also refresh interval from manager in case it changed
+                        if let Some(new_interval) = manager.get_interval(&key) {
+                            if new_interval != state.interval {
+                                debug!(
+                                    "Shared source {} interval changed from {:?} to {:?}",
+                                    key, state.interval, new_interval
+                                );
+                                state.interval = new_interval;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Error updating shared source {}: {}", key, e);
+                }
+            }
+        }
+
+        updated
     }
 }
 

@@ -175,6 +175,96 @@ pub enum BackgroundType {
     },
     #[serde(rename = "polygons")]
     Polygons(PolygonConfig),
+    #[serde(rename = "indicator")]
+    Indicator(IndicatorBackgroundConfig),
+}
+
+/// Configuration for indicator background (value-based color from gradient)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IndicatorBackgroundConfig {
+    /// Gradient stops defining the color mapping (position 0.0 = 0%, position 1.0 = 100%)
+    #[serde(default = "default_indicator_gradient")]
+    pub gradient_stops: Vec<ColorStop>,
+    /// Shape to display
+    #[serde(default)]
+    pub shape: IndicatorBackgroundShape,
+    /// Size of shape (0.0-1.0 relative to panel)
+    #[serde(default = "default_indicator_size")]
+    pub shape_size: f64,
+    /// Rotation angle in degrees
+    #[serde(default)]
+    pub rotation_angle: f64,
+    /// Border width
+    #[serde(default)]
+    pub border_width: f64,
+    /// Border color
+    #[serde(default = "default_indicator_border_color")]
+    pub border_color: Color,
+    /// Static value to use when no live data available (0-100)
+    #[serde(default = "default_indicator_value")]
+    pub static_value: f64,
+    /// Field to bind to for live value updates
+    #[serde(default)]
+    pub value_field: String,
+    /// Min value for mapping
+    #[serde(default)]
+    pub min_value: f64,
+    /// Max value for mapping
+    #[serde(default = "default_indicator_max")]
+    pub max_value: f64,
+}
+
+fn default_indicator_gradient() -> Vec<ColorStop> {
+    vec![
+        ColorStop::new(0.0, Color::new(0.0, 0.5, 1.0, 1.0)),   // Blue at 0%
+        ColorStop::new(0.4, Color::new(0.0, 1.0, 0.0, 1.0)),   // Green at 40%
+        ColorStop::new(0.7, Color::new(1.0, 1.0, 0.0, 1.0)),   // Yellow at 70%
+        ColorStop::new(1.0, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 100%
+    ]
+}
+
+fn default_indicator_size() -> f64 {
+    0.8
+}
+
+fn default_indicator_border_color() -> Color {
+    Color::new(1.0, 1.0, 1.0, 0.5)
+}
+
+fn default_indicator_value() -> f64 {
+    50.0
+}
+
+fn default_indicator_max() -> f64 {
+    100.0
+}
+
+/// Shape for indicator background
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum IndicatorBackgroundShape {
+    #[default]
+    Fill,
+    Circle,
+    Square,
+    Polygon(u32),
+}
+
+impl Default for IndicatorBackgroundConfig {
+    fn default() -> Self {
+        Self {
+            gradient_stops: default_indicator_gradient(),
+            shape: IndicatorBackgroundShape::default(),
+            shape_size: default_indicator_size(),
+            rotation_angle: 0.0,
+            border_width: 0.0,
+            border_color: default_indicator_border_color(),
+            static_value: default_indicator_value(),
+            value_field: "value".to_string(),
+            min_value: 0.0,
+            max_value: 100.0,
+        }
+    }
 }
 
 fn default_alpha() -> f64 {
@@ -221,6 +311,38 @@ pub fn render_background(
         }
         BackgroundType::Polygons(poly) => {
             render_polygon_background(cr, poly, width, height)?;
+        }
+        BackgroundType::Indicator(indicator) => {
+            render_indicator_background(cr, indicator, width, height)?;
+        }
+    }
+    Ok(())
+}
+
+/// Render a background with source values (for indicator backgrounds that use live data)
+pub fn render_background_with_source(
+    cr: &cairo::Context,
+    config: &BackgroundConfig,
+    width: f64,
+    height: f64,
+    source_values: &std::collections::HashMap<String, serde_json::Value>,
+) -> Result<(), cairo::Error> {
+    match &config.background {
+        BackgroundType::Indicator(indicator) => {
+            // Get value from source based on value_field
+            let value = if !indicator.value_field.is_empty() {
+                source_values
+                    .get(&indicator.value_field)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(indicator.static_value)
+            } else {
+                indicator.static_value
+            };
+            render_indicator_background_with_value(cr, indicator, value, width, height)?;
+        }
+        // For non-indicator backgrounds, just render normally
+        _ => {
+            render_background(cr, config, width, height)?;
         }
     }
     Ok(())
@@ -536,4 +658,172 @@ fn render_generic_polygon_tiling(
         }
     }
     Ok(())
+}
+
+/// Render indicator background with value-based coloring
+fn render_indicator_background(
+    cr: &cairo::Context,
+    config: &IndicatorBackgroundConfig,
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let color = interpolate_indicator_gradient(
+        &config.gradient_stops,
+        config.static_value,
+        config.min_value,
+        config.max_value,
+    );
+
+    cr.save()?;
+
+    match config.shape {
+        IndicatorBackgroundShape::Fill => {
+            color.apply_to_cairo(cr);
+            cr.rectangle(0.0, 0.0, width, height);
+            cr.fill()?;
+        }
+        IndicatorBackgroundShape::Circle => {
+            let center_x = width / 2.0;
+            let center_y = height / 2.0;
+            let radius = (width.min(height) / 2.0) * config.shape_size;
+
+            color.apply_to_cairo(cr);
+            cr.arc(center_x, center_y, radius, 0.0, std::f64::consts::TAU);
+            cr.fill()?;
+
+            if config.border_width > 0.0 {
+                config.border_color.apply_to_cairo(cr);
+                cr.set_line_width(config.border_width);
+                cr.arc(center_x, center_y, radius, 0.0, std::f64::consts::TAU);
+                cr.stroke()?;
+            }
+        }
+        IndicatorBackgroundShape::Square => {
+            let center_x = width / 2.0;
+            let center_y = height / 2.0;
+            let size = width.min(height) * config.shape_size;
+
+            cr.translate(center_x, center_y);
+            cr.rotate(config.rotation_angle.to_radians());
+
+            color.apply_to_cairo(cr);
+            cr.rectangle(-size / 2.0, -size / 2.0, size, size);
+            cr.fill()?;
+
+            if config.border_width > 0.0 {
+                config.border_color.apply_to_cairo(cr);
+                cr.set_line_width(config.border_width);
+                cr.rectangle(-size / 2.0, -size / 2.0, size, size);
+                cr.stroke()?;
+            }
+        }
+        IndicatorBackgroundShape::Polygon(sides) => {
+            let center_x = width / 2.0;
+            let center_y = height / 2.0;
+            let radius = (width.min(height) / 2.0) * config.shape_size;
+            let sides = sides.max(3);
+
+            cr.translate(center_x, center_y);
+            cr.rotate(config.rotation_angle.to_radians());
+
+            // Draw polygon centered at origin
+            let angle_step = std::f64::consts::TAU / sides as f64;
+            let start_angle = -std::f64::consts::FRAC_PI_2;
+
+            for i in 0..sides {
+                let angle = start_angle + i as f64 * angle_step;
+                let x = radius * angle.cos();
+                let y = radius * angle.sin();
+
+                if i == 0 {
+                    cr.move_to(x, y);
+                } else {
+                    cr.line_to(x, y);
+                }
+            }
+            cr.close_path();
+
+            color.apply_to_cairo(cr);
+            cr.fill_preserve()?;
+
+            if config.border_width > 0.0 {
+                config.border_color.apply_to_cairo(cr);
+                cr.set_line_width(config.border_width);
+                cr.stroke()?;
+            } else {
+                cr.new_path();
+            }
+        }
+    }
+
+    cr.restore()?;
+    Ok(())
+}
+
+/// Render indicator background with a dynamic value (for panels that update)
+pub fn render_indicator_background_with_value(
+    cr: &cairo::Context,
+    config: &IndicatorBackgroundConfig,
+    value: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), cairo::Error> {
+    let mut config_copy = config.clone();
+    config_copy.static_value = value;
+    render_indicator_background(cr, &config_copy, width, height)
+}
+
+/// Interpolate gradient for indicator background
+fn interpolate_indicator_gradient(stops: &[ColorStop], value: f64, min: f64, max: f64) -> Color {
+    if stops.is_empty() {
+        return Color::new(0.5, 0.5, 0.5, 1.0);
+    }
+
+    if stops.len() == 1 {
+        return stops[0].color;
+    }
+
+    // Normalize value to 0.0-1.0 range
+    let range = max - min;
+    let normalized = if range > 0.0 {
+        ((value - min) / range).clamp(0.0, 1.0)
+    } else {
+        0.5
+    };
+
+    // Find the two stops to interpolate between
+    let mut sorted_stops: Vec<&ColorStop> = stops.iter().collect();
+    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+
+    // Handle edge cases
+    if normalized <= sorted_stops[0].position {
+        return sorted_stops[0].color;
+    }
+    if normalized >= sorted_stops.last().unwrap().position {
+        return sorted_stops.last().unwrap().color;
+    }
+
+    // Find surrounding stops and interpolate
+    for i in 0..sorted_stops.len() - 1 {
+        let start = sorted_stops[i];
+        let end = sorted_stops[i + 1];
+
+        if normalized >= start.position && normalized <= end.position {
+            let segment_range = end.position - start.position;
+            let t = if segment_range > 0.0 {
+                (normalized - start.position) / segment_range
+            } else {
+                0.0
+            };
+
+            return Color::new(
+                start.color.r + (end.color.r - start.color.r) * t,
+                start.color.g + (end.color.g - start.color.g) * t,
+                start.color.b + (end.color.b - start.color.b) * t,
+                start.color.a + (end.color.a - start.color.a) * t,
+            );
+        }
+    }
+
+    sorted_stops[0].color
 }

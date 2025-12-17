@@ -13,6 +13,7 @@ mod clock_analog;
 mod clock_digital;
 mod lcars_combo;
 mod cpu_cores;
+mod indicator;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -25,6 +26,7 @@ pub use clock_analog::ClockAnalogDisplayer;
 pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
 pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
 pub use cpu_cores::CpuCoresDisplayer;
+pub use indicator::{IndicatorDisplayer, IndicatorConfig, IndicatorShape, interpolate_gradient, render_indicator};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -95,6 +97,13 @@ pub fn register_all() {
         "cpu_cores",
         "CPU Cores",
         || Box::new(CpuCoresDisplayer::new()),
+    );
+
+    // Register Indicator displayer
+    global_registry().register_displayer_with_info(
+        "indicator",
+        "Indicator",
+        || Box::new(IndicatorDisplayer::new()),
     );
 
     // TODO: Register more displayers

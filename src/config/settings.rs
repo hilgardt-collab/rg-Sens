@@ -518,6 +518,14 @@ impl PanelConfig {
                 }
                 SourceConfig::default_for_type("fan_speed").unwrap_or_default()
             }
+            "test" => {
+                if let Some(val) = self.settings.get("test_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::Test(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("test").unwrap_or_default()
+            }
             _ => {
                 warn!("Unknown source type '{}', using default CPU config", self.source);
                 SourceConfig::default()
@@ -600,6 +608,14 @@ impl PanelConfig {
                     }
                 }
                 DisplayerConfig::default_for_type("cpu_cores").unwrap_or_default()
+            }
+            "indicator" => {
+                if let Some(val) = self.settings.get("indicator_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return DisplayerConfig::Indicator(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("indicator").unwrap_or_default()
             }
             _ => {
                 warn!("Unknown displayer type '{}', using default Text config", self.displayer);

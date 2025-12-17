@@ -8,7 +8,10 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::bar_display::*;
+use crate::ui::bar_display::{
+    BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
+    BarStyle, BarTaperAlignment, BarTaperStyle, render_bar,
+};
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::GradientEditor;
@@ -53,6 +56,11 @@ pub struct BarConfigWidget {
     segment_width_spin: SpinButton,
     segment_height_spin: SpinButton,
     segment_corner_radius_spin: SpinButton,
+
+    // Taper UI elements
+    taper_style_dropdown: DropDown,
+    taper_amount_spin: SpinButton,
+    taper_alignment_dropdown: DropDown,
 
     // Border UI elements
     border_check: CheckButton,
@@ -237,6 +245,95 @@ impl BarConfigWidget {
         options_page.set_margin_end(12);
         options_page.set_margin_top(12);
         options_page.set_margin_bottom(12);
+
+        // Taper style selector
+        let taper_box = GtkBox::new(Orientation::Horizontal, 6);
+        taper_box.append(&Label::new(Some("Taper Style:")));
+        let taper_options = StringList::new(&["None", "Start", "End", "Both"]);
+        let taper_style_dropdown = DropDown::new(Some(taper_options), Option::<gtk4::Expression>::None);
+        let taper_index = match config.borrow().taper_style {
+            BarTaperStyle::None => 0,
+            BarTaperStyle::Start => 1,
+            BarTaperStyle::End => 2,
+            BarTaperStyle::Both => 3,
+        };
+        taper_style_dropdown.set_selected(taper_index);
+        taper_style_dropdown.set_hexpand(true);
+        taper_box.append(&taper_style_dropdown);
+        options_page.append(&taper_box);
+
+        // Taper amount
+        let taper_amount_box = GtkBox::new(Orientation::Horizontal, 6);
+        taper_amount_box.append(&Label::new(Some("Taper Amount (%):")));
+        let taper_amount_spin = SpinButton::with_range(0.0, 100.0, 5.0);
+        taper_amount_spin.set_value(config.borrow().taper_amount * 100.0);
+        taper_amount_spin.set_hexpand(true);
+        taper_amount_box.append(&taper_amount_spin);
+        options_page.append(&taper_amount_box);
+
+        // Taper alignment selector
+        let taper_align_box = GtkBox::new(Orientation::Horizontal, 6);
+        taper_align_box.append(&Label::new(Some("Taper Alignment:")));
+        let taper_align_options = StringList::new(&["Top / Left", "Center", "Bottom / Right"]);
+        let taper_alignment_dropdown = DropDown::new(Some(taper_align_options), Option::<gtk4::Expression>::None);
+        let align_index = match config.borrow().taper_alignment {
+            BarTaperAlignment::Start => 0,
+            BarTaperAlignment::Center => 1,
+            BarTaperAlignment::End => 2,
+        };
+        taper_alignment_dropdown.set_selected(align_index);
+        taper_alignment_dropdown.set_hexpand(true);
+        taper_align_box.append(&taper_alignment_dropdown);
+        options_page.append(&taper_align_box);
+
+        // Taper style change handler
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        taper_style_dropdown.connect_selected_notify(move |dropdown| {
+            let style = match dropdown.selected() {
+                0 => BarTaperStyle::None,
+                1 => BarTaperStyle::Start,
+                2 => BarTaperStyle::End,
+                3 => BarTaperStyle::Both,
+                _ => BarTaperStyle::None,
+            };
+            config_clone.borrow_mut().taper_style = style;
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        // Taper amount change handler
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        taper_amount_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().taper_amount = spin.value() / 100.0;
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        // Taper alignment change handler
+        let config_clone = config.clone();
+        let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
+        taper_alignment_dropdown.connect_selected_notify(move |dropdown| {
+            let alignment = match dropdown.selected() {
+                0 => BarTaperAlignment::Start,
+                1 => BarTaperAlignment::Center,
+                2 => BarTaperAlignment::End,
+                _ => BarTaperAlignment::Center,
+            };
+            config_clone.borrow_mut().taper_alignment = alignment;
+            preview_clone.queue_draw();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
 
         let style_stack = Stack::new();
         style_stack.set_vexpand(true);
@@ -535,6 +632,9 @@ impl BarConfigWidget {
         let segment_spacing_spin_paste = segment_spacing_spin.clone();
         let segment_width_spin_paste = segment_width_spin.clone();
         let segment_height_spin_paste = segment_height_spin.clone();
+        let taper_style_dropdown_paste = taper_style_dropdown.clone();
+        let taper_amount_spin_paste = taper_amount_spin.clone();
+        let taper_alignment_dropdown_paste = taper_alignment_dropdown.clone();
         let border_check_paste = border_check.clone();
         let border_width_spin_paste = border_width_spin.clone();
         let border_color_widget_paste = border_color_widget.clone();
@@ -607,6 +707,20 @@ impl BarConfigWidget {
                 segment_width_spin_paste.set_value(cfg.segment_width);
                 segment_height_spin_paste.set_value(cfg.segment_height);
 
+                // Taper options
+                taper_style_dropdown_paste.set_selected(match cfg.taper_style {
+                    BarTaperStyle::None => 0,
+                    BarTaperStyle::Start => 1,
+                    BarTaperStyle::End => 2,
+                    BarTaperStyle::Both => 3,
+                });
+                taper_amount_spin_paste.set_value(cfg.taper_amount * 100.0);
+                taper_alignment_dropdown_paste.set_selected(match cfg.taper_alignment {
+                    BarTaperAlignment::Start => 0,
+                    BarTaperAlignment::Center => 1,
+                    BarTaperAlignment::End => 2,
+                });
+
                 // Border
                 border_check_paste.set_active(cfg.border.enabled);
                 border_width_spin_paste.set_value(cfg.border.width);
@@ -649,6 +763,9 @@ impl BarConfigWidget {
             segment_width_spin,
             segment_height_spin,
             segment_corner_radius_spin,
+            taper_style_dropdown,
+            taper_amount_spin,
+            taper_alignment_dropdown,
             border_check,
             border_width_spin,
             text_config_widget: Some(text_config_widget),
@@ -1238,6 +1355,22 @@ impl BarConfigWidget {
         self.segment_width_spin.set_value(new_config.segment_width * 100.0);
         self.segment_height_spin.set_value(new_config.segment_height * 100.0);
         self.segment_corner_radius_spin.set_value(new_config.corner_radius);
+
+        // Update taper options
+        let taper_index = match new_config.taper_style {
+            BarTaperStyle::None => 0,
+            BarTaperStyle::Start => 1,
+            BarTaperStyle::End => 2,
+            BarTaperStyle::Both => 3,
+        };
+        self.taper_style_dropdown.set_selected(taper_index);
+        self.taper_amount_spin.set_value(new_config.taper_amount * 100.0);
+        let align_index = match new_config.taper_alignment {
+            BarTaperAlignment::Start => 0,
+            BarTaperAlignment::Center => 1,
+            BarTaperAlignment::End => 2,
+        };
+        self.taper_alignment_dropdown.set_selected(align_index);
 
         // Update border
         self.border_check.set_active(new_config.border.enabled);
