@@ -96,7 +96,17 @@ impl TestSource {
                 id: "test".to_string(),
                 name: "Test".to_string(),
                 description: "Test source for debugging and demonstration".to_string(),
-                available_keys: vec!["value".to_string(), "normalized".to_string(), "min".to_string(), "max".to_string()],
+                available_keys: vec![
+                    "caption".to_string(),
+                    "value".to_string(),
+                    "unit".to_string(),
+                    "normalized".to_string(),
+                    "numerical_value".to_string(),
+                    "min".to_string(),
+                    "max".to_string(),
+                    "min_limit".to_string(),
+                    "max_limit".to_string(),
+                ],
                 default_interval: Duration::from_millis(100),
             },
         }
@@ -153,11 +163,25 @@ impl DataSource for TestSource {
     fn fields(&self) -> Vec<FieldMetadata> {
         vec![
             FieldMetadata::new(
+                "caption",
+                "Caption",
+                "Display caption",
+                FieldType::Text,
+                FieldPurpose::Caption,
+            ),
+            FieldMetadata::new(
                 "value",
                 "Value",
                 "Test value (configurable)",
                 FieldType::Numerical,
                 FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "unit",
+                "Unit",
+                "Display unit",
+                FieldType::Text,
+                FieldPurpose::Unit,
             ),
             FieldMetadata::new(
                 "normalized",
@@ -191,7 +215,20 @@ impl DataSource for TestSource {
     fn get_values(&self) -> HashMap<String, Value> {
         let mut values = HashMap::new();
 
-        let state = TEST_SOURCE_STATE.lock().unwrap();
+        // Use try_lock to avoid blocking if mutex is held
+        let Ok(state) = TEST_SOURCE_STATE.try_lock() else {
+            // Return default values if lock is busy
+            values.insert("caption".to_string(), Value::from("Test"));
+            values.insert("value".to_string(), Value::from(50.0));
+            values.insert("unit".to_string(), Value::from(""));
+            values.insert("normalized".to_string(), Value::from(50.0));
+            values.insert("numerical_value".to_string(), Value::from(50.0));
+            values.insert("min".to_string(), Value::from(0.0));
+            values.insert("max".to_string(), Value::from(100.0));
+            values.insert("min_limit".to_string(), Value::from(0.0));
+            values.insert("max_limit".to_string(), Value::from(100.0));
+            return values;
+        };
         let value = Self::calculate_value(&state);
         let config = &state.config;
 
@@ -203,19 +240,35 @@ impl DataSource for TestSource {
             50.0
         };
 
+        // Caption based on mode
+        let caption = match config.mode {
+            TestMode::Manual => "Test",
+            TestMode::SineWave => "Sine",
+            TestMode::Sawtooth => "Saw",
+            TestMode::Triangle => "Tri",
+            TestMode::Square => "Sqr",
+        };
+        values.insert("caption".to_string(), Value::from(caption));
         values.insert("value".to_string(), Value::from(value));
+        values.insert("unit".to_string(), Value::from(""));
         values.insert("normalized".to_string(), Value::from(normalized));
         values.insert("min".to_string(), Value::from(config.min_value));
         values.insert("max".to_string(), Value::from(config.max_value));
         // Also provide min_limit/max_limit for displayers that expect these names
         values.insert("min_limit".to_string(), Value::from(config.min_value));
         values.insert("max_limit".to_string(), Value::from(config.max_value));
+        // Provide numerical_value for LCARS compatibility
+        values.insert("numerical_value".to_string(), Value::from(value));
 
         values
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
-        let mut state = TEST_SOURCE_STATE.lock().unwrap();
+        // Use try_lock to avoid blocking - if busy, configuration is skipped
+        let Ok(mut state) = TEST_SOURCE_STATE.try_lock() else {
+            log::debug!("TestSource::configure: Skipped due to lock contention");
+            return Ok(());
+        };
 
         if let Some(mode) = config.get("mode").and_then(|v| v.as_str()) {
             state.config.mode = match mode {
