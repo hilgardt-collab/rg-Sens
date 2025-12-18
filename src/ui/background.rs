@@ -793,7 +793,8 @@ fn interpolate_indicator_gradient(stops: &[ColorStop], value: f64, min: f64, max
 
     // Find the two stops to interpolate between
     let mut sorted_stops: Vec<&ColorStop> = stops.iter().collect();
-    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+    // Use unwrap_or to handle NaN values safely (NaN positions sort as equal)
+    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
 
     // Handle edge cases
     if normalized <= sorted_stops[0].position {

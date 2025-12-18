@@ -174,7 +174,7 @@ impl GradientEditor {
                 0.5
             } else {
                 let mut positions: Vec<f64> = stops_list.iter().map(|s| s.position).collect();
-                positions.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
                 let mut max_gap = positions[0];
                 let mut max_gap_pos = positions[0] / 2.0;
@@ -196,7 +196,7 @@ impl GradientEditor {
 
             let new_stop = ColorStop::new(position, Color::new(0.5, 0.5, 0.5, 1.0));
             stops_list.push(new_stop);
-            stops_list.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+            stops_list.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
 
             drop(stops_list);
 
@@ -426,7 +426,7 @@ impl GradientEditor {
                 if let Some(stop) = stops.get_mut(index) {
                     stop.position = new_position;
                 }
-                stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+                stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
             }
 
             // Only rebuild the list if the order changed - defer to idle to avoid
