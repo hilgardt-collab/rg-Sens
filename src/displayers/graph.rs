@@ -198,9 +198,8 @@ impl Displayer for GraphDisplayer {
                             data_guard.last_update_time = current_time;
                             redraw
                         } else {
-                            // If animation is disabled, copy data_points to animated_points
-                            // and reset scroll offset
-                            data_guard.animated_points = data_guard.data_points.clone();
+                            // Animation disabled - render uses data_points directly,
+                            // no need to copy to animated_points
                             data_guard.scroll_offset = 0.0;
                             redraw // Still redraw if dirty flag was set
                         }

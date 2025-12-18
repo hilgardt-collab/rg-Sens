@@ -16,37 +16,48 @@ use std::time::Duration;
 pub struct SharedSource {
     /// The actual data source instance
     pub source: BoxedDataSource,
-    /// Cached values from the last update
-    pub cached_values: HashMap<String, serde_json::Value>,
+    /// Cached values from the last update (Arc for cheap cloning)
+    pub cached_values: Arc<HashMap<String, serde_json::Value>>,
     /// Number of panels using this source
     pub ref_count: usize,
     /// Minimum update interval requested by any panel using this source
     pub min_interval: Duration,
-    /// List of panel IDs using this source (for debugging)
-    pub panel_ids: Vec<String>,
+    /// Map of panel IDs to their requested intervals (for recalculating min)
+    pub panel_intervals: HashMap<String, Duration>,
 }
 
 impl SharedSource {
     fn new(source: BoxedDataSource, interval: Duration, panel_id: String) -> Self {
+        let mut panel_intervals = HashMap::new();
+        panel_intervals.insert(panel_id, interval);
         Self {
             source,
-            cached_values: HashMap::new(),
+            cached_values: Arc::new(HashMap::new()),
             ref_count: 1,
             min_interval: interval,
-            panel_ids: vec![panel_id],
+            panel_intervals,
         }
+    }
+
+    /// Recalculate min_interval from panel_intervals
+    fn recalculate_min_interval(&mut self) {
+        self.min_interval = self.panel_intervals
+            .values()
+            .copied()
+            .min()
+            .unwrap_or(Duration::from_millis(1000));
     }
 
     /// Update the source and cache the values
     pub fn update(&mut self) -> Result<()> {
         self.source.update()?;
-        self.cached_values = self.source.get_values();
+        self.cached_values = Arc::new(self.source.get_values());
         Ok(())
     }
 
-    /// Get the cached values without polling hardware
-    pub fn get_values(&self) -> &HashMap<String, serde_json::Value> {
-        &self.cached_values
+    /// Get the cached values without polling hardware (cheap Arc clone)
+    pub fn get_values(&self) -> Arc<HashMap<String, serde_json::Value>> {
+        Arc::clone(&self.cached_values)
     }
 }
 
@@ -117,19 +128,13 @@ impl SharedSourceManager {
         let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
         if let Some(shared) = sources.get_mut(&key) {
-            // Source already exists, increment ref count and update interval if needed
+            // Source already exists, increment ref count and track panel interval
             shared.ref_count += 1;
-            shared.panel_ids.push(panel_id.to_string());
-            if interval < shared.min_interval {
-                info!(
-                    "Updating min interval for source {} from {:?} to {:?} (panel {})",
-                    key, shared.min_interval, interval, panel_id
-                );
-                shared.min_interval = interval;
-            }
+            shared.panel_intervals.insert(panel_id.to_string(), interval);
+            shared.recalculate_min_interval();
             debug!(
-                "Reusing shared source {} for panel {} (ref_count: {})",
-                key, panel_id, shared.ref_count
+                "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                key, panel_id, shared.ref_count, shared.min_interval
             );
         } else {
             // Create new source
@@ -152,15 +157,17 @@ impl SharedSourceManager {
     /// Release a reference to a shared source
     ///
     /// When ref_count reaches 0, the source is removed.
+    /// When a panel is removed, the min_interval is recalculated.
     pub fn release_source(&self, key: &str, panel_id: &str) {
         if let Ok(mut sources) = self.sources.write() {
             if let Some(shared) = sources.get_mut(key) {
                 shared.ref_count = shared.ref_count.saturating_sub(1);
-                shared.panel_ids.retain(|id| id != panel_id);
+                shared.panel_intervals.remove(panel_id);
+                shared.recalculate_min_interval();
 
                 debug!(
-                    "Released source {} for panel {} (ref_count: {})",
-                    key, panel_id, shared.ref_count
+                    "Released source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                    key, panel_id, shared.ref_count, shared.min_interval
                 );
 
                 if shared.ref_count == 0 {
@@ -171,21 +178,21 @@ impl SharedSourceManager {
         }
     }
 
-    /// Update a specific source and return its values
-    pub fn update_source(&self, key: &str) -> Result<HashMap<String, serde_json::Value>> {
+    /// Update a specific source and return its values (cheap Arc clone)
+    pub fn update_source(&self, key: &str) -> Result<Arc<HashMap<String, serde_json::Value>>> {
         let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
         if let Some(shared) = sources.get_mut(key) {
             shared.update()?;
-            Ok(shared.cached_values.clone())
+            Ok(Arc::clone(&shared.cached_values))
         } else {
             Err(anyhow!("Source not found: {}", key))
         }
     }
 
-    /// Get cached values for a source (without updating)
-    pub fn get_values(&self, key: &str) -> Option<HashMap<String, serde_json::Value>> {
-        self.sources.read().ok()?.get(key).map(|s| s.cached_values.clone())
+    /// Get cached values for a source (without updating) - cheap Arc clone
+    pub fn get_values(&self, key: &str) -> Option<Arc<HashMap<String, serde_json::Value>>> {
+        self.sources.read().ok()?.get(key).map(|s| Arc::clone(&s.cached_values))
     }
 
     /// Get the minimum update interval for a source
@@ -210,14 +217,16 @@ impl SharedSourceManager {
     pub fn update_interval(&self, key: &str, panel_id: &str, new_interval: Duration) {
         if let Ok(mut sources) = self.sources.write() {
             if let Some(shared) = sources.get_mut(key) {
-                // Recalculate minimum interval across all panels
-                // For now, just update if the new interval is smaller
-                if new_interval < shared.min_interval {
+                // Update this panel's interval and recalculate minimum
+                let old_min = shared.min_interval;
+                shared.panel_intervals.insert(panel_id.to_string(), new_interval);
+                shared.recalculate_min_interval();
+
+                if shared.min_interval != old_min {
                     info!(
-                        "Panel {} updated interval for source {} to {:?}",
-                        panel_id, key, new_interval
+                        "Panel {} updated interval for source {} from {:?} to {:?}",
+                        panel_id, key, old_min, shared.min_interval
                     );
-                    shared.min_interval = new_interval;
                 }
             }
         }
@@ -250,9 +259,10 @@ impl SharedSourceManager {
         if let Ok(sources) = self.sources.read() {
             info!("=== Shared Sources ({} total) ===", sources.len());
             for (key, shared) in sources.iter() {
+                let panel_ids: Vec<_> = shared.panel_intervals.keys().collect();
                 info!(
                     "  {} : ref_count={}, interval={:?}, panels={:?}",
-                    key, shared.ref_count, shared.min_interval, shared.panel_ids
+                    key, shared.ref_count, shared.min_interval, panel_ids
                 );
             }
         }

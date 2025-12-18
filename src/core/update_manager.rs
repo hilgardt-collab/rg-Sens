@@ -84,53 +84,26 @@ fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
 }
 
 /// Extract update interval from panel config
-fn extract_update_interval(config: &HashMap<String, serde_json::Value>, panel_id: &str) -> Duration {
-    if let Some(cpu_config_value) = config.get("cpu_config") {
-        match serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
-            Ok(cpu_config) => return Duration::from_millis(cpu_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize CPU config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(gpu_config_value) = config.get("gpu_config") {
-        match serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
-            Ok(gpu_config) => return Duration::from_millis(gpu_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize GPU config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(memory_config_value) = config.get("memory_config") {
-        match serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
-            Ok(memory_config) => return Duration::from_millis(memory_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize Memory config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(system_temp_config_value) = config.get("system_temp_config") {
-        match serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
-            Ok(system_temp_config) => return Duration::from_millis(system_temp_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize System Temp config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(fan_speed_config_value) = config.get("fan_speed_config") {
-        match serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
-            Ok(fan_speed_config) => return Duration::from_millis(fan_speed_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize Fan Speed config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(disk_config_value) = config.get("disk_config") {
-        match serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
-            Ok(disk_config) => return Duration::from_millis(disk_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize Disk config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(clock_config_value) = config.get("clock_config") {
-        match serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
-            Ok(clock_config) => return Duration::from_millis(clock_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize Clock config for panel {}: {}", panel_id, e),
-        }
-    }
-    if let Some(combo_config_value) = config.get("combo_config") {
-        match serde_json::from_value::<crate::sources::ComboSourceConfig>(combo_config_value.clone()) {
-            Ok(combo_config) => return Duration::from_millis(combo_config.update_interval_ms),
-            Err(e) => log::warn!("Failed to deserialize Combo config for panel {}: {}", panel_id, e),
+///
+/// Optimized to directly extract `update_interval_ms` field from JSON without
+/// deserializing the entire config struct.
+fn extract_update_interval(config: &HashMap<String, serde_json::Value>, _panel_id: &str) -> Duration {
+    // All source configs have update_interval_ms as a field
+    // Instead of deserializing the full struct, just extract the field directly
+    const CONFIG_KEYS: &[&str] = &[
+        "cpu_config", "gpu_config", "memory_config", "system_temp_config",
+        "fan_speed_config", "disk_config", "clock_config", "combo_config",
+    ];
+
+    for key in CONFIG_KEYS {
+        if let Some(config_value) = config.get(*key) {
+            if let Some(obj) = config_value.as_object() {
+                if let Some(interval) = obj.get("update_interval_ms") {
+                    if let Some(ms) = interval.as_u64() {
+                        return Duration::from_millis(ms);
+                    }
+                }
+            }
         }
     }
 

@@ -248,10 +248,16 @@ fn interpolate_color_at(stops: &[ColorStop], t: f64) -> Color {
     }
 }
 
-/// Cache for text extent measurements
+/// Cached text extents entry with access tracking
+struct CachedTextExtents {
+    extents: cairo::TextExtents,
+    last_access: Instant,
+}
+
+/// Cache for text extent measurements with LRU eviction
 pub struct TextExtentsCache {
     /// Cached extents keyed by (font_family, font_size_x10, text)
-    cache: HashMap<(String, i32, String), cairo::TextExtents>,
+    cache: HashMap<(String, i32, String), CachedTextExtents>,
     max_entries: usize,
 }
 
@@ -287,9 +293,10 @@ impl TextExtentsCache {
             text.to_string(),
         );
 
-        // Return cached value if available
-        if let Some(extents) = self.cache.get(&key) {
-            return Some(*extents);
+        // Return cached value if available, updating access time
+        if let Some(entry) = self.cache.get_mut(&key) {
+            entry.last_access = Instant::now();
+            return Some(entry.extents);
         }
 
         // Compute extents
@@ -313,21 +320,24 @@ impl TextExtentsCache {
 
         cr.restore().ok()?;
 
-        // Cache the result (evict if needed)
+        // Cache the result (evict LRU entries if needed)
         if self.cache.len() >= self.max_entries {
-            // Simple eviction: clear half the cache
-            let keys_to_remove: Vec<_> = self
-                .cache
-                .keys()
-                .take(self.max_entries / 2)
-                .cloned()
+            // LRU eviction: remove oldest half of entries by access time
+            let mut entries: Vec<_> = self.cache.iter()
+                .map(|(k, v)| (k.clone(), v.last_access))
                 .collect();
-            for key in keys_to_remove {
-                self.cache.remove(&key);
+            entries.sort_by_key(|(_, time)| *time);
+
+            // Remove oldest half
+            for (old_key, _) in entries.into_iter().take(self.max_entries / 2) {
+                self.cache.remove(&old_key);
             }
         }
 
-        self.cache.insert(key, extents);
+        self.cache.insert(key, CachedTextExtents {
+            extents,
+            last_access: Instant::now(),
+        });
         Some(extents)
     }
 
