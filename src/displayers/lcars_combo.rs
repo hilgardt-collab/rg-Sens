@@ -319,7 +319,8 @@ impl LcarsComboDisplayer {
                         animated.iter().map(|av| av.current).collect()
                     } else {
                         // Fall back to raw values (for first frame before animation starts)
-                        let mut raw_values: Vec<f64> = Vec::new();
+                        let capacity = core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
+                        let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
                         for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let core_key = format!("{}_core{}_usage", prefix, core_idx);
                             let value = values.get(&core_key)
@@ -669,8 +670,9 @@ impl Displayer for LcarsComboDisplayer {
                         // Update core bar animated values
                         let core_bars_config = &item_config.core_bars_config;
 
-                        // Collect core values from source data
-                        let mut core_targets: Vec<f64> = Vec::new();
+                        // Collect core values from source data (pre-allocate for expected size)
+                        let capacity = core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
+                        let mut core_targets: Vec<f64> = Vec::with_capacity(capacity);
                         for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let core_key = format!("{}_core{}_usage", prefix, core_idx);
                             let value = data.get(&core_key)

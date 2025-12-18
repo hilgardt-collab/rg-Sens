@@ -43,6 +43,7 @@ pub struct CpuCoresDisplayer {
 struct DisplayData {
     config: CoreBarsConfig,
     core_values: Vec<AnimatedValue>, // Animated values per displayed core
+    render_cache: Vec<f64>,          // Cached current values for rendering (avoids allocation per frame)
     detected_core_count: usize,      // Total cores detected from source
     last_update: Instant,
     transform: PanelTransform,
@@ -54,6 +55,7 @@ impl Default for DisplayData {
         Self {
             config: CoreBarsConfig::default(),
             core_values: Vec::new(),
+            render_cache: Vec::new(),
             detected_core_count: 0,
             last_update: Instant::now(),
             transform: PanelTransform::default(),
@@ -128,11 +130,9 @@ impl Displayer for CpuCoresDisplayer {
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
                 data.transform.apply(cr, width as f64, height as f64);
-                // Collect current animated values
-                let values: Vec<f64> = data.core_values.iter().map(|v| v.current).collect();
-
-                if !values.is_empty() {
-                    let _ = render_core_bars(cr, &data.config, &values, width as f64, height as f64);
+                // Use cached render values (updated by animation timer)
+                if !data.render_cache.is_empty() {
+                    let _ = render_core_bars(cr, &data.config, &data.render_cache, width as f64, height as f64);
                 }
                 data.transform.restore(cr);
             }
@@ -174,6 +174,15 @@ impl Displayer for CpuCoresDisplayer {
                         for val in &mut data.core_values {
                             val.current = val.target;
                         }
+                    }
+
+                    // Update render cache (reuse allocation, only reallocate if size changes)
+                    let core_count = data.core_values.len();
+                    if data.render_cache.len() != core_count {
+                        data.render_cache.resize(core_count, 0.0);
+                    }
+                    for i in 0..core_count {
+                        data.render_cache[i] = data.core_values[i].current;
                     }
 
                     let should_redraw = data.dirty || any_animating;
@@ -245,10 +254,9 @@ impl Displayer for CpuCoresDisplayer {
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
             data.transform.apply(cr, width, height);
-            let values: Vec<f64> = data.core_values.iter().map(|v| v.current).collect();
-
-            if !values.is_empty() {
-                render_core_bars(cr, &data.config, &values, width, height)?;
+            // Use cached render values (avoids Vec allocation per frame)
+            if !data.render_cache.is_empty() {
+                render_core_bars(cr, &data.config, &data.render_cache, width, height)?;
             }
             data.transform.restore(cr);
         }

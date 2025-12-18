@@ -244,13 +244,23 @@ impl Panel {
     /// This is called by UpdateManager after it has updated all shared sources.
     /// It avoids the need to look up values again.
     pub fn update_with_values(&mut self, values: &HashMap<String, serde_json::Value>) {
-        // Add transform values for displayers to use
-        let mut values = values.clone();
-        values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
-        values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
-        values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+        // Only clone HashMap if we need to add transform values (non-default transforms)
+        // Default: scale=1.0, translate_x=0.0, translate_y=0.0
+        let has_transform = (self.scale - 1.0).abs() > f64::EPSILON
+            || self.translate_x.abs() > f64::EPSILON
+            || self.translate_y.abs() > f64::EPSILON;
 
-        self.displayer.update_data(&values);
+        if has_transform {
+            // Clone and add transform values
+            let mut values_with_transform = values.clone();
+            values_with_transform.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
+            values_with_transform.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
+            values_with_transform.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+            self.displayer.update_data(&values_with_transform);
+        } else {
+            // No transform needed, pass reference directly without cloning
+            self.displayer.update_data(values);
+        }
 
         // Sync certain live values into panel.config for UI access
         const SYNC_KEYS: &[&str] = &[

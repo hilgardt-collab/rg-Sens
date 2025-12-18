@@ -162,23 +162,15 @@ impl Displayer for GraphDisplayer {
                             let target_len = data_guard.data_points.len();
                             let animated_len = data_guard.animated_points.len();
 
-                            // Collect timestamps for new points to avoid borrow conflicts
-                            let new_timestamps: Vec<f64> = if animated_len < target_len {
-                                data_guard.data_points
-                                    .iter()
-                                    .skip(animated_len)
-                                    .map(|p| p.timestamp)
-                                    .collect()
-                            } else {
-                                Vec::new()
-                            };
-
-                            // Add new points if needed
-                            for timestamp in new_timestamps {
-                                data_guard.animated_points.push_back(DataPoint {
-                                    value: 0.0, // Start from baseline
-                                    timestamp,
-                                });
+                            // Add new points if needed (copy values to avoid borrow conflicts)
+                            for i in animated_len..target_len {
+                                if let Some(p) = data_guard.data_points.get(i) {
+                                    let timestamp = p.timestamp; // Copy before mutable borrow
+                                    data_guard.animated_points.push_back(DataPoint {
+                                        value: 0.0, // Start from baseline
+                                        timestamp,
+                                    });
+                                }
                             }
 
                             // Remove excess points if needed
@@ -187,15 +179,17 @@ impl Displayer for GraphDisplayer {
                             }
 
                             // Interpolate all points toward their target values
-                            // Collect target values first to avoid simultaneous borrows
-                            let targets: Vec<(f64, f64)> = data_guard.data_points
-                                .iter()
-                                .map(|p| (p.value, p.timestamp))
-                                .collect();
-
-                            for (i, animated) in data_guard.animated_points.iter_mut().enumerate() {
-                                if let Some(&(target_value, target_timestamp)) = targets.get(i) {
-                                    // Linear interpolation (lerp) toward target value
+                            // Access by index to avoid intermediate Vec allocation
+                            let len = data_guard.animated_points.len();
+                            for i in 0..len {
+                                // Get target values first (immutable borrow)
+                                let (target_value, target_timestamp) = if let Some(target) = data_guard.data_points.get(i) {
+                                    (target.value, target.timestamp)
+                                } else {
+                                    continue;
+                                };
+                                // Then update animated point (mutable borrow)
+                                if let Some(animated) = data_guard.animated_points.get_mut(i) {
                                     animated.value += (target_value - animated.value) * lerp_factor;
                                     animated.timestamp = target_timestamp;
                                 }
