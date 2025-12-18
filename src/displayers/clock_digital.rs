@@ -384,7 +384,8 @@ impl Displayer for ClockDigitalDisplayer {
         let drawing_area_weak = drawing_area.downgrade();
         glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             if let Some(da) = drawing_area_weak.upgrade() {
-                let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                     data.blink_state = !data.blink_state;
 
                     // Check if data was updated (dirty flag)

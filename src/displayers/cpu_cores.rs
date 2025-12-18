@@ -144,7 +144,8 @@ impl Displayer for CpuCoresDisplayer {
 
         glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
             if let Some(da) = drawing_area_weak.upgrade() {
-                let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                     let now = Instant::now();
                     let delta = now.duration_since(data.last_update).as_secs_f64();
                     data.last_update = now;

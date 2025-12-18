@@ -6,27 +6,56 @@
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use sysinfo::Components;
+
+/// Minimum interval between sensor refreshes (250ms)
+/// This prevents redundant refreshes when multiple sources read temperatures
+const MIN_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Shared components with refresh timestamp
+struct SharedSensors {
+    components: Components,
+    last_refresh: Instant,
+}
+
+impl SharedSensors {
+    fn new() -> Self {
+        Self {
+            components: Components::new_with_refreshed_list(),
+            last_refresh: Instant::now(),
+        }
+    }
+
+    /// Refresh only if enough time has passed since last refresh
+    fn refresh_if_needed(&mut self) {
+        if self.last_refresh.elapsed() >= MIN_REFRESH_INTERVAL {
+            self.components.refresh();
+            self.last_refresh = Instant::now();
+        }
+    }
+}
 
 /// Global shared components instance
 ///
 /// The Components are wrapped in a Mutex to allow thread-safe refresh operations.
 /// The Lazy ensures one-time initialization on first access.
-static SHARED_COMPONENTS: Lazy<Mutex<Components>> = Lazy::new(|| {
+static SHARED_COMPONENTS: Lazy<Mutex<SharedSensors>> = Lazy::new(|| {
     log::warn!("=== Initializing shared temperature sensors (one-time) ===");
-    let components = Components::new_with_refreshed_list();
-    log::info!("Shared temperature sensors initialized: {} components", components.len());
-    Mutex::new(components)
+    let sensors = SharedSensors::new();
+    log::info!("Shared temperature sensors initialized: {} components", sensors.components.len());
+    Mutex::new(sensors)
 });
 
 /// Refresh the shared components and get current temperature readings
 ///
-/// This function refreshes the global components and returns the current
+/// This function refreshes the global components (if needed) and returns the current
 /// temperatures as a Vec of (label, temperature_celsius) pairs.
+/// Uses cached refresh to avoid redundant sensor polling.
 pub fn get_refreshed_temperatures() -> Vec<(String, f32)> {
-    if let Ok(mut components) = SHARED_COMPONENTS.lock() {
-        components.refresh();
-        components
+    if let Ok(mut sensors) = SHARED_COMPONENTS.lock() {
+        sensors.refresh_if_needed();
+        sensors.components
             .iter()
             .map(|c| (c.label().to_string(), c.temperature()))
             .collect()
@@ -36,11 +65,11 @@ pub fn get_refreshed_temperatures() -> Vec<(String, f32)> {
     }
 }
 
-/// Get temperature for a specific sensor label (after refreshing)
+/// Get temperature for a specific sensor label (refreshes if needed)
 pub fn get_temperature_by_label(label: &str) -> Option<f32> {
-    if let Ok(mut components) = SHARED_COMPONENTS.lock() {
-        components.refresh();
-        for component in components.iter() {
+    if let Ok(mut sensors) = SHARED_COMPONENTS.lock() {
+        sensors.refresh_if_needed();
+        for component in sensors.components.iter() {
             if component.label() == label {
                 return Some(component.temperature());
             }
@@ -49,11 +78,11 @@ pub fn get_temperature_by_label(label: &str) -> Option<f32> {
     None
 }
 
-/// Get temperature by index (after refreshing)
+/// Get temperature by index (refreshes if needed)
 pub fn get_temperature_by_index(index: usize) -> Option<f32> {
-    if let Ok(mut components) = SHARED_COMPONENTS.lock() {
-        components.refresh();
-        components.get(index).map(|c| c.temperature())
+    if let Ok(mut sensors) = SHARED_COMPONENTS.lock() {
+        sensors.refresh_if_needed();
+        sensors.components.get(index).map(|c| c.temperature())
     } else {
         None
     }
@@ -71,8 +100,8 @@ pub fn initialize() {
 /// Get the total number of temperature components
 #[allow(dead_code)]
 pub fn component_count() -> usize {
-    if let Ok(components) = SHARED_COMPONENTS.lock() {
-        components.len()
+    if let Ok(sensors) = SHARED_COMPONENTS.lock() {
+        sensors.components.len()
     } else {
         0
     }

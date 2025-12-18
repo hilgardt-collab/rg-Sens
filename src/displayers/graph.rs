@@ -122,7 +122,8 @@ impl Displayer for GraphDisplayer {
                 // Check if widget still exists - this automatically stops the timeout
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
                     // Update animation if enabled - check dirty flag and animation state
-                    let needs_redraw = if let Ok(mut data_guard) = data_for_animation.lock() {
+                    // Use try_lock to avoid blocking UI thread if lock is held
+                    let needs_redraw = if let Ok(mut data_guard) = data_for_animation.try_lock() {
                         let mut redraw = false;
 
                         // Always calculate elapsed time since last frame to ensure smooth animation

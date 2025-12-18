@@ -245,7 +245,8 @@ impl Displayer for ClockAnalogDisplayer {
         let mut flash_counter = 0u32;
         glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
             if let Some(da) = drawing_area_weak.upgrade() {
-                let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                     // Toggle flash state every 500ms (10 * 50ms)
                     flash_counter += 1;
                     let mut redraw = false;

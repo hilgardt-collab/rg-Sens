@@ -17,10 +17,17 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
+/// Minimum interval between config hash checks (500ms)
+/// Config changes are rare (user must open dialog, change settings, click save)
+/// so checking every tick is wasteful
+const CONFIG_CHECK_INTERVAL: Duration = Duration::from_millis(500);
+
 /// Tracks update timing for a panel
 struct PanelUpdateState {
     panel: Arc<RwLock<Panel>>,
     last_update: Instant,
+    /// Last time we checked for config changes
+    last_config_check: Instant,
     /// Cached update interval to avoid deserializing config every cycle
     cached_interval: Duration,
     /// Hash of config to detect changes
@@ -140,15 +147,17 @@ pub struct UpdateManager {
     /// Tracks shared source update timing
     shared_sources: Arc<RwLock<HashMap<String, SharedSourceUpdateState>>>,
     /// Sender for adding panels from sync code (GTK main thread)
-    sender: mpsc::UnboundedSender<UpdateManagerMessage>,
+    /// Uses bounded channel (capacity 256) to provide backpressure
+    sender: mpsc::Sender<UpdateManagerMessage>,
     /// Receiver for processing panel additions (used in the update loop)
-    receiver: Arc<tokio::sync::Mutex<mpsc::UnboundedReceiver<UpdateManagerMessage>>>,
+    receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<UpdateManagerMessage>>>,
 }
 
 impl UpdateManager {
     /// Create a new update manager
     pub fn new() -> Self {
-        let (sender, receiver) = mpsc::unbounded_channel();
+        // Use bounded channel with capacity 256 to prevent unbounded memory growth
+        let (sender, receiver) = mpsc::channel(256);
         Self {
             panels: Arc::new(RwLock::new(HashMap::new())),
             shared_sources: Arc::new(RwLock::new(HashMap::new())),
@@ -160,14 +169,16 @@ impl UpdateManager {
     /// Queue a panel to be added (can be called from sync code like GTK main thread)
     /// This is the recommended way to add panels after the update loop has started.
     pub fn queue_add_panel(&self, panel: Arc<RwLock<Panel>>) {
-        if let Err(e) = self.sender.send(UpdateManagerMessage::AddPanel(panel)) {
+        // Use try_send for non-blocking send from sync code
+        if let Err(e) = self.sender.try_send(UpdateManagerMessage::AddPanel(panel)) {
             error!("Failed to queue panel for addition: {}", e);
         }
     }
 
     /// Queue a panel to be removed by ID (can be called from sync code)
     pub fn queue_remove_panel(&self, panel_id: String) {
-        if let Err(e) = self.sender.send(UpdateManagerMessage::RemovePanel(panel_id)) {
+        // Use try_send for non-blocking send from sync code
+        if let Err(e) = self.sender.try_send(UpdateManagerMessage::RemovePanel(panel_id)) {
             error!("Failed to queue panel for removal: {}", e);
         }
     }
@@ -233,6 +244,7 @@ impl UpdateManager {
             PanelUpdateState {
                 panel,
                 last_update: Instant::now(),
+                last_config_check: Instant::now(),
                 cached_interval,
                 config_hash,
                 source_key,
@@ -279,9 +291,15 @@ impl UpdateManager {
         let mut tasks = Vec::new();
         let mut config_updates: Vec<(String, u64, Duration, Option<String>)> = Vec::new();
 
+        // Track panels that had their config checked (for updating last_config_check)
+        let mut config_checked: Vec<String> = Vec::new();
+
         for (panel_id, state) in panels.iter() {
-            // Check if config has changed on EVERY tick
-            let (current_hash, new_interval, new_source_key) = {
+            // Only check config hash if enough time has elapsed (throttle to avoid CPU waste)
+            let should_check_config = now.duration_since(state.last_config_check) >= CONFIG_CHECK_INTERVAL;
+
+            let (current_hash, new_interval, new_source_key) = if should_check_config {
+                config_checked.push(panel_id.clone());
                 if let Ok(panel_guard) = state.panel.try_read() {
                     if let Some(ref data) = panel_guard.data {
                         let hash = compute_config_hash_from_data(&data.source_config);
@@ -294,6 +312,9 @@ impl UpdateManager {
                 } else {
                     (state.config_hash, None, state.source_key.clone())
                 }
+            } else {
+                // Skip hash computation, use cached values
+                (state.config_hash, None, state.source_key.clone())
             };
 
             if current_hash != state.config_hash {
@@ -377,6 +398,13 @@ impl UpdateManager {
                 state.cached_interval = new_interval;
                 state.source_key = new_source_key;
                 info!("Updated cached interval for panel {}: {:?}", panel_id, state.cached_interval);
+            }
+        }
+
+        // Update last_config_check for all panels that had their config checked
+        for panel_id in config_checked {
+            if let Some(state) = panels.get_mut(&panel_id) {
+                state.last_config_check = now;
             }
         }
 

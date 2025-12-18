@@ -100,7 +100,8 @@ impl Displayer for ArcDisplayer {
                 };
 
                 // Update animation state and check if redraw needed
-                let needs_redraw = if let Ok(mut data) = data_clone.lock() {
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_clone.try_lock() {
                     let mut redraw = false;
 
                     // Always calculate elapsed time since last frame to ensure smooth animation

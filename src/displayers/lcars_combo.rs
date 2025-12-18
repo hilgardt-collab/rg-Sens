@@ -548,7 +548,8 @@ impl Displayer for LcarsComboDisplayer {
                     return glib::ControlFlow::Break;
                 };
 
-                let needs_redraw = if let Ok(mut data) = data_clone.lock() {
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_clone.try_lock() {
                     let mut redraw = data.dirty;
                     if data.dirty {
                         data.dirty = false;

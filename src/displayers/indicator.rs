@@ -410,7 +410,8 @@ impl Displayer for IndicatorDisplayer {
             let data_for_timer = self.data.clone();
             move || {
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                    // Use try_lock to avoid blocking UI thread if lock is held
+                    let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                         if data.dirty {
                             data.dirty = false;
                             true

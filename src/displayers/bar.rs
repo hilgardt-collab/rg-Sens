@@ -82,7 +82,8 @@ impl Displayer for BarDisplayer {
             move || {
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
                     // Only redraw if data changed
-                    let needs_redraw = if let Ok(mut data) = data_for_timer.lock() {
+                    // Use try_lock to avoid blocking UI thread if lock is held
+                    let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                         if data.dirty {
                             data.dirty = false;
                             true
