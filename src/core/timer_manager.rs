@@ -565,9 +565,10 @@ impl TimerAlarmManager {
                 TimerState::Running => {
                     if let Some(start) = timer.start_instant {
                         let elapsed_since_start = start.elapsed().as_millis() as u64;
-                        // All timers are countdown timers
-                        if timer.elapsed_ms >= elapsed_since_start {
-                            timer.elapsed_ms -= elapsed_since_start;
+                        // All timers are countdown timers - use saturating_sub for safety
+                        let remaining = timer.elapsed_ms.saturating_sub(elapsed_since_start);
+                        if remaining > 0 {
+                            timer.elapsed_ms = remaining;
                             timer.start_instant = Some(Instant::now());
                         } else {
                             timer.elapsed_ms = 0;
