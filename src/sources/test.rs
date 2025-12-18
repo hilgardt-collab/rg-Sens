@@ -271,6 +271,16 @@ impl DataSource for TestSource {
             return Ok(());
         };
 
+        // First check for test_config key (from typed config serialization)
+        if let Some(test_config_value) = config.get("test_config") {
+            if let Ok(test_config) = serde_json::from_value::<TestSourceConfig>(test_config_value.clone()) {
+                log::debug!("TestSource::configure: Loaded from test_config: mode={:?}", test_config.mode);
+                state.config = test_config;
+                return Ok(());
+            }
+        }
+
+        // Fallback: look for individual keys (for backwards compatibility)
         if let Some(mode) = config.get("mode").and_then(|v| v.as_str()) {
             state.config.mode = match mode {
                 "manual" => TestMode::Manual,
