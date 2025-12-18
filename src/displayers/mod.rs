@@ -3,6 +3,52 @@
 //! This module contains implementations of various visualization widgets.
 //! Each displayer renders data in a specific visual format.
 
+use serde_json::Value;
+use std::collections::HashMap;
+
+/// Extract a numeric value from data and normalize it to 0.0-1.0 range.
+///
+/// This helper looks for common keys like "value", "percent", "usage", "level"
+/// and normalizes the value using min/max limits if available, or heuristics
+/// based on the value range.
+///
+/// Used by bar, arc, and other gauge-style displayers.
+pub(crate) fn extract_normalized_value(data: &HashMap<String, Value>) -> f64 {
+    // Try to find a numeric value from common keys
+    let raw_value = data
+        .get("value")
+        .or_else(|| data.get("percent"))
+        .or_else(|| data.get("usage"))
+        .or_else(|| data.get("level"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+
+    // Get min/max limits from data source if available
+    let min_limit = data.get("min_limit").and_then(|v| v.as_f64());
+    let max_limit = data.get("max_limit").and_then(|v| v.as_f64());
+
+    // Normalize to 0.0-1.0 range
+    let normalized = if let (Some(min), Some(max)) = (min_limit, max_limit) {
+        // Use min/max range if available
+        if max > min {
+            (raw_value - min) / (max - min)
+        } else {
+            0.0
+        }
+    } else if raw_value <= 1.0 {
+        // Value already in 0-1 range
+        raw_value
+    } else if raw_value <= 100.0 {
+        // Assume percentage (0-100)
+        raw_value / 100.0
+    } else {
+        // For values > 100 without explicit range, can't normalize
+        0.0
+    };
+
+    normalized.clamp(0.0, 1.0)
+}
+
 mod text;
 mod text_config;
 mod bar;

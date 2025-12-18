@@ -73,8 +73,10 @@ fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
                 "fan_speed_config", "disk_config", "clock_config"] {
         if let Some(value) = config.get(key) {
             key.hash(&mut hasher);
-            // Hash the string representation for simplicity
-            value.to_string().hash(&mut hasher);
+            // Use to_vec() instead of to_string() - avoids UTF-8 validation overhead
+            if let Ok(bytes) = serde_json::to_vec(value) {
+                bytes.hash(&mut hasher);
+            }
         }
     }
 
@@ -409,15 +411,12 @@ impl UpdateManager {
         }
 
         // Clean up old shared sources that are no longer referenced by any panel
+        // Use linear search instead of HashSet - old_source_keys is typically 0-1 items
         if !old_source_keys.is_empty() {
-            let active_keys: std::collections::HashSet<String> = panels
-                .values()
-                .filter_map(|s| s.source_key.clone())
-                .collect();
-
             let mut shared_sources = self.shared_sources.write().await;
             for old_key in old_source_keys {
-                if !active_keys.contains(&old_key) {
+                let is_still_active = panels.values().any(|s| s.source_key.as_ref() == Some(&old_key));
+                if !is_still_active {
                     shared_sources.remove(&old_key);
                     debug!("Removed unused shared source {} from update manager", old_key);
                 }
