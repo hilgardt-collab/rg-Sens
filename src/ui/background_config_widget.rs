@@ -18,6 +18,7 @@ pub struct BackgroundConfigWidget {
     type_dropdown: DropDown,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     type_dropdown_handler_id: gtk4::glib::SignalHandlerId,
+    solid_color_widget: Rc<ColorButtonWidget>,
     linear_gradient_editor: Rc<GradientEditor>,
     radial_gradient_editor: Rc<GradientEditor>,
     indicator_gradient_editor: Rc<GradientEditor>,
@@ -75,7 +76,7 @@ impl BackgroundConfigWidget {
         config_stack.set_vexpand(true);
 
         // Solid color configuration
-        let solid_page = Self::create_solid_config(&config, &preview, &on_change);
+        let (solid_page, solid_color_widget) = Self::create_solid_config(&config, &preview, &on_change);
         config_stack.add_named(&solid_page, Some("solid"));
 
         // Linear gradient configuration
@@ -172,6 +173,7 @@ impl BackgroundConfigWidget {
             type_dropdown,
             on_change,
             type_dropdown_handler_id,
+            solid_color_widget,
             linear_gradient_editor,
             radial_gradient_editor,
             indicator_gradient_editor,
@@ -205,7 +207,7 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> GtkBox {
+    ) -> (GtkBox, Rc<ColorButtonWidget>) {
         let page = GtkBox::new(Orientation::Vertical, 6);
 
         // Solid color - using ColorButtonWidget
@@ -217,7 +219,7 @@ impl BackgroundConfigWidget {
         } else {
             Color::default()
         };
-        let color_widget = ColorButtonWidget::new(initial_color);
+        let color_widget = Rc::new(ColorButtonWidget::new(initial_color));
         color_box.append(color_widget.widget());
         page.append(&color_box);
 
@@ -232,7 +234,7 @@ impl BackgroundConfigWidget {
             }
         });
 
-        page
+        (page, color_widget)
     }
 
     fn create_linear_gradient_config(
@@ -977,7 +979,10 @@ impl BackgroundConfigWidget {
             BackgroundType::Indicator(_) => 5,
         };
 
-        // Load gradient data into editors if applicable
+        // Load data into widgets if applicable
+        if let BackgroundType::Solid { color } = new_config.background {
+            self.solid_color_widget.set_color(color);
+        }
         if let BackgroundType::LinearGradient(ref grad) = new_config.background {
             self.linear_gradient_editor.set_gradient(grad);
         }
