@@ -174,11 +174,11 @@ impl IndicatorConfigWidget {
         // Rotation
         let rotation_box = GtkBox::new(Orientation::Horizontal, 12);
         rotation_box.append(&Label::new(Some("Rotation:")));
-        let rotation_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        let rotation_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         rotation_spin.set_value(0.0);
         rotation_spin.set_digits(0);
         rotation_box.append(&rotation_spin);
-        rotation_box.append(&Label::new(Some("deg")));
+        rotation_box.append(&Label::new(Some("°")));
         page.append(&rotation_box);
 
         // Connect handlers

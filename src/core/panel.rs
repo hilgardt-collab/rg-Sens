@@ -282,8 +282,21 @@ impl Panel {
     pub fn apply_config(&mut self, config: HashMap<String, serde_json::Value>) -> Result<()> {
         self.config = config.clone();
 
-        // Configure the data source
+        // Configure the data source (local copy for metadata)
         self.source.configure(&config)?;
+
+        // Also configure the shared source if we're using one
+        if let Some(ref key) = self.source_key {
+            if let Some(manager) = global_shared_source_manager() {
+                // Try to extract typed config from the HashMap
+                let source_config = SourceConfig::extract_from_hashmap(&config, self.source.metadata().id.as_str());
+                if let Some(typed_config) = source_config {
+                    if let Err(e) = manager.configure_source(key, &typed_config) {
+                        log::warn!("Failed to configure shared source {}: {}", key, e);
+                    }
+                }
+            }
+        }
 
         // Configure the displayer
         self.displayer.apply_config(&config)
@@ -299,6 +312,15 @@ impl Panel {
             // Use typed config methods - they internally convert to HashMap if needed
             self.source.configure_typed(&data.source_config)?;
             self.displayer.apply_config_typed(&data.displayer_config)?;
+
+            // Also configure the shared source if we're using one
+            if let Some(ref key) = self.source_key {
+                if let Some(manager) = global_shared_source_manager() {
+                    if let Err(e) = manager.configure_source(key, &data.source_config) {
+                        log::warn!("Failed to configure shared source {}: {}", key, e);
+                    }
+                }
+            }
         }
         Ok(())
     }

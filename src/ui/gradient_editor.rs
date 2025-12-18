@@ -90,11 +90,11 @@ impl GradientEditor {
             let angle_box = GtkBox::new(Orientation::Horizontal, 6);
             angle_box.append(&Label::new(Some("Angle:")));
 
-            let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 1.0);
+            let angle_scale = Scale::with_range(Orientation::Horizontal, -360.0, 360.0, 1.0);
             angle_scale.set_hexpand(true);
             angle_scale.set_value(0.0);
 
-            let angle_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+            let angle_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
             angle_spin.set_value(0.0);
             angle_spin.set_digits(0);
 

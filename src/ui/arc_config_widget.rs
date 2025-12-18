@@ -172,7 +172,7 @@ impl ArcConfigWidget {
         // Start angle
         let start_box = GtkBox::new(Orientation::Horizontal, 6);
         start_box.append(&Label::new(Some("Start Angle:")));
-        let start_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        let start_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         start_spin.set_value(config.borrow().start_angle);
         start_spin.set_hexpand(true);
         start_box.append(&start_spin);
@@ -193,7 +193,7 @@ impl ArcConfigWidget {
         // End angle
         let end_box = GtkBox::new(Orientation::Horizontal, 6);
         end_box.append(&Label::new(Some("End Angle:")));
-        let end_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        let end_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         end_spin.set_value(config.borrow().end_angle);
         end_spin.set_hexpand(true);
         end_box.append(&end_spin);

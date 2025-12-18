@@ -635,7 +635,7 @@ impl BackgroundConfigWidget {
         let angle_box = GtkBox::new(Orientation::Horizontal, 6);
         angle_box.append(&Label::new(Some("Rotation:")));
 
-        let angle_scale = Scale::with_range(Orientation::Horizontal, 0.0, 360.0, 5.0);
+        let angle_scale = Scale::with_range(Orientation::Horizontal, -360.0, 360.0, 5.0);
         angle_scale.set_value(0.0);
         angle_scale.set_hexpand(true);
 
@@ -761,7 +761,7 @@ impl BackgroundConfigWidget {
         // Rotation
         let rotation_box = GtkBox::new(Orientation::Horizontal, 6);
         rotation_box.append(&Label::new(Some("Rotation:")));
-        let rotation_spin = SpinButton::with_range(0.0, 360.0, 1.0);
+        let rotation_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         rotation_spin.set_value(0.0);
         rotation_box.append(&rotation_spin);
         page.append(&rotation_box);

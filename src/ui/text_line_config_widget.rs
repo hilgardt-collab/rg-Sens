@@ -403,7 +403,7 @@ impl TextLineConfigWidget {
         });
 
         extras_box.append(&Label::new(Some("Angle:")));
-        let angle_spin = SpinButton::with_range(0.0, 360.0, 5.0);
+        let angle_spin = SpinButton::with_range(-360.0, 360.0, 5.0);
         angle_spin.set_value(line_config.rotation_angle);
         extras_box.append(&angle_spin);
         row_box.append(&extras_box);

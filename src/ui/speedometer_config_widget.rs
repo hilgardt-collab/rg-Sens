@@ -259,7 +259,7 @@ impl SpeedometerConfigWidget {
         // Start angle
         let start_angle_box = GtkBox::new(Orientation::Horizontal, 6);
         start_angle_box.append(&Label::new(Some("Start Angle (°):")));
-        let start_angle_adj = Adjustment::new(135.0, 0.0, 360.0, 1.0, 10.0, 0.0);
+        let start_angle_adj = Adjustment::new(135.0, -360.0, 360.0, 1.0, 10.0, 0.0);
         let start_angle_spin = SpinButton::new(Some(&start_angle_adj), 1.0, 1);
         start_angle_spin.set_hexpand(true);
         start_angle_box.append(&start_angle_spin);
@@ -276,7 +276,7 @@ impl SpeedometerConfigWidget {
         // End angle
         let end_angle_box = GtkBox::new(Orientation::Horizontal, 6);
         end_angle_box.append(&Label::new(Some("End Angle (°):")));
-        let end_angle_adj = Adjustment::new(45.0, 0.0, 360.0, 1.0, 10.0, 0.0);
+        let end_angle_adj = Adjustment::new(45.0, -360.0, 360.0, 1.0, 10.0, 0.0);
         let end_angle_spin = SpinButton::new(Some(&end_angle_adj), 1.0, 1);
         end_angle_spin.set_hexpand(true);
         end_angle_box.append(&end_angle_spin);

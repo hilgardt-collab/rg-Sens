@@ -166,6 +166,49 @@ impl SourceConfig {
             _ => None,
         }
     }
+
+    /// Extract a typed SourceConfig from a legacy HashMap configuration
+    ///
+    /// This looks for the appropriate config key based on source type
+    /// (e.g., "cpu_config" for cpu source) and deserializes it.
+    pub fn extract_from_hashmap(config: &HashMap<String, serde_json::Value>, source_type: &str) -> Option<Self> {
+        let config_key = match source_type {
+            "cpu" => "cpu_config",
+            "gpu" => "gpu_config",
+            "memory" => "memory_config",
+            "disk" => "disk_config",
+            "clock" => "clock_config",
+            "combination" => "combo_config",
+            "system_temp" => "system_temp_config",
+            "fan_speed" => "fan_speed_config",
+            "test" => "test_config",
+            _ => return None,
+        };
+
+        config.get(config_key).and_then(|value| {
+            match source_type {
+                "cpu" => serde_json::from_value::<CpuSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Cpu),
+                "gpu" => serde_json::from_value::<GpuSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Gpu),
+                "memory" => serde_json::from_value::<MemorySourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Memory),
+                "disk" => serde_json::from_value::<DiskSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Disk),
+                "clock" => serde_json::from_value::<ClockSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Clock),
+                "combination" => serde_json::from_value::<ComboSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Combo),
+                "system_temp" => serde_json::from_value::<SystemTempConfig>(value.clone())
+                    .ok().map(SourceConfig::SystemTemp),
+                "fan_speed" => serde_json::from_value::<FanSpeedConfig>(value.clone())
+                    .ok().map(SourceConfig::FanSpeed),
+                "test" => serde_json::from_value::<TestSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::Test),
+                _ => None,
+            }
+        })
+    }
 }
 
 impl Default for SourceConfig {
