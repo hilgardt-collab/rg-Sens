@@ -10,10 +10,28 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::sources::{TestMode, TEST_SOURCE_STATE};
+use crate::sources::{TestMode, TestSourceConfig, TEST_SOURCE_STATE};
+
+/// Callback type for when test source config changes
+pub type TestSourceSaveCallback = Box<dyn Fn(&TestSourceConfig) + 'static>;
+
+/// Show the test source configuration dialog with optional save callback
+pub fn show_test_source_dialog_with_callback(
+    parent: &impl IsA<gtk4::Window>,
+    on_save: Option<TestSourceSaveCallback>,
+) {
+    show_test_source_dialog_inner(parent, on_save);
+}
 
 /// Show the test source configuration dialog
 pub fn show_test_source_dialog(parent: &impl IsA<gtk4::Window>) {
+    show_test_source_dialog_inner(parent, None);
+}
+
+fn show_test_source_dialog_inner(
+    parent: &impl IsA<gtk4::Window>,
+    on_save: Option<TestSourceSaveCallback>,
+) {
     let dialog = Window::builder()
         .title("Test Source Configuration")
         .transient_for(parent)
@@ -251,18 +269,52 @@ pub fn show_test_source_dialog(parent: &impl IsA<gtk4::Window>) {
         period_box.set_visible(!is_manual);
     }
 
-    // Close button
+    // Wrap the save callback in Rc<RefCell> for sharing between handlers
+    let on_save = Rc::new(RefCell::new(on_save));
+
+    // Button box
     let button_box = GtkBox::new(Orientation::Horizontal, 6);
     button_box.set_halign(gtk4::Align::End);
     button_box.set_margin_top(12);
 
+    // Save button - saves config and keeps dialog open
+    let save_button = Button::with_label("Save");
+    let on_save_clone = on_save.clone();
+    save_button.connect_clicked(move |_| {
+        if let Some(ref callback) = *on_save_clone.borrow() {
+            if let Ok(state) = TEST_SOURCE_STATE.lock() {
+                callback(&state.config);
+            }
+        }
+    });
+    button_box.append(&save_button);
+
+    // Close button - saves and closes
     let close_button = Button::with_label("Close");
     let dialog_clone = dialog.clone();
+    let on_save_clone = on_save.clone();
     close_button.connect_clicked(move |_| {
+        // Save config before closing
+        if let Some(ref callback) = *on_save_clone.borrow() {
+            if let Ok(state) = TEST_SOURCE_STATE.lock() {
+                callback(&state.config);
+            }
+        }
         dialog_clone.close();
     });
     button_box.append(&close_button);
     content.append(&button_box);
+
+    // Also save on window close (X button)
+    let on_save_for_close = on_save.clone();
+    dialog.connect_close_request(move |_| {
+        if let Some(ref callback) = *on_save_for_close.borrow() {
+            if let Ok(state) = TEST_SOURCE_STATE.lock() {
+                callback(&state.config);
+            }
+        }
+        gtk4::glib::Propagation::Proceed
+    });
 
     dialog.set_child(Some(&content));
     dialog.present();

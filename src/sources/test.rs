@@ -215,9 +215,10 @@ impl DataSource for TestSource {
     fn get_values(&self) -> HashMap<String, Value> {
         let mut values = HashMap::new();
 
-        // Use try_lock to avoid blocking if mutex is held
-        let Ok(state) = TEST_SOURCE_STATE.try_lock() else {
-            // Return default values if lock is busy
+        // Use blocking lock - handlers only hold the lock briefly so this is safe
+        // try_lock was causing values to reset to defaults during any lock contention
+        let Ok(state) = TEST_SOURCE_STATE.lock() else {
+            // Return default values only if lock is poisoned (thread panic)
             values.insert("caption".to_string(), Value::from("Test"));
             values.insert("value".to_string(), Value::from(50.0));
             values.insert("unit".to_string(), Value::from(""));
@@ -264,9 +265,9 @@ impl DataSource for TestSource {
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
-        // Use try_lock to avoid blocking - if busy, configuration is skipped
-        let Ok(mut state) = TEST_SOURCE_STATE.try_lock() else {
-            log::debug!("TestSource::configure: Skipped due to lock contention");
+        // Use blocking lock - handlers only hold the lock briefly
+        let Ok(mut state) = TEST_SOURCE_STATE.lock() else {
+            log::warn!("TestSource::configure: Lock poisoned");
             return Ok(());
         };
 

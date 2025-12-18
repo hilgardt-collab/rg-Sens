@@ -180,12 +180,14 @@ pub fn interpolate_gradient(stops: &[ColorStop], value: f64, min: f64, max: f64)
         a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Handle edge cases
-    if normalized <= sorted_stops[0].position {
-        return sorted_stops[0].color;
+    // Handle edge cases - use first/last references to avoid repeated lookups
+    let first = &sorted_stops[0];
+    let last = sorted_stops.last().unwrap();
+    if normalized <= first.position {
+        return first.color;
     }
-    if normalized >= sorted_stops.last().unwrap().position {
-        return sorted_stops.last().unwrap().color;
+    if normalized >= last.position {
+        return last.color;
     }
 
     // Find surrounding stops

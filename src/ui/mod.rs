@@ -45,7 +45,7 @@ mod test_source_dialog;
 mod test_source_config_widget;
 
 pub use main_window::MainWindow;
-pub use test_source_dialog::show_test_source_dialog;
+pub use test_source_dialog::{show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback};
 pub use color_button_widget::ColorButtonWidget;
 pub use grid_layout::{GridConfig, GridLayout, BorderlessDragCallback};
 pub use config_dialog::ConfigDialog;

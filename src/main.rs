@@ -1421,9 +1421,30 @@ fn build_ui(app: &Application) {
         // Test Source button handler
         let window_for_test = window_for_menu.clone();
         let popover_for_test = popover_ref.clone();
+        let grid_layout_for_test = grid_layout_for_menu.clone();
+        let config_dirty_for_test = config_dirty_for_menu.clone();
         test_source_btn.connect_clicked(move |_| {
             popover_for_test.popdown();
-            rg_sens::ui::show_test_source_dialog(&window_for_test);
+            // Create callback to save test source config to all test panels
+            let grid_layout = grid_layout_for_test.clone();
+            let config_dirty = config_dirty_for_test.clone();
+            let save_callback: rg_sens::ui::TestSourceSaveCallback = Box::new(move |test_config| {
+                // Save to all panels that use test source
+                let panels = grid_layout.borrow().get_panels();
+                for panel in panels {
+                    if let Ok(mut panel_guard) = panel.try_write() {
+                        if panel_guard.source.metadata().id == "test" {
+                            if let Ok(config_json) = serde_json::to_value(test_config) {
+                                panel_guard.config.insert("test_config".to_string(), config_json);
+                                log::debug!("Saved test source config to panel {}", panel_guard.id);
+                            }
+                        }
+                    }
+                }
+                // Mark config as dirty so it gets saved
+                config_dirty.replace(true);
+            });
+            rg_sens::ui::show_test_source_dialog_with_callback(&window_for_test, Some(save_callback));
         });
 
         // Options button handler
