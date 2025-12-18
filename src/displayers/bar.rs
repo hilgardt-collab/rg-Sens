@@ -21,9 +21,12 @@ pub struct BarDisplayer {
 struct DisplayData {
     config: BarDisplayConfig,
     value: f64,
+    animated_value: f64,
     values: HashMap<String, Value>, // All source data for text overlay
     transform: PanelTransform,
     dirty: bool, // Flag to indicate data has changed and needs redraw
+    initialized: bool, // Flag to track if animated_value has been set
+    last_frame_time: std::time::Instant,
 }
 
 impl BarDisplayer {
@@ -31,9 +34,12 @@ impl BarDisplayer {
         let data = Arc::new(Mutex::new(DisplayData {
             config: BarDisplayConfig::default(),
             value: 0.0,
+            animated_value: 0.0,
             values: HashMap::new(),
             transform: PanelTransform::default(),
             dirty: true,
+            initialized: false,
+            last_frame_time: std::time::Instant::now(),
         }));
 
         Self {
@@ -69,22 +75,48 @@ impl Displayer for BarDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                // Use animated_value if animation is enabled, otherwise use target value
+                let display_value = if data.config.smooth_animation {
+                    data.animated_value
+                } else {
+                    data.value
+                };
                 data.transform.apply(cr, width as f64, height as f64);
-                let _ = render_bar(cr, &data.config, data.value, &data.values, width as f64, height as f64);
+                let _ = render_bar(cr, &data.config, display_value, &data.values, width as f64, height as f64);
                 data.transform.restore(cr);
             }
         });
 
-        // Set up periodic redraw - only redraw when data has changed
-        glib::timeout_add_local(std::time::Duration::from_millis(100), {
+        // Set up periodic redraw for animation (~60fps)
+        glib::timeout_add_local(std::time::Duration::from_millis(16), {
             let drawing_area_weak = drawing_area.downgrade();
             let data_for_timer = self.data.clone();
             move || {
                 if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    // Only redraw if data changed
                     // Use try_lock to avoid blocking UI thread if lock is held
                     let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                        if data.dirty {
+                        // Check if animation is in progress
+                        if data.config.smooth_animation && (data.animated_value - data.value).abs() > 0.001 {
+                            // Calculate elapsed time for smooth animation
+                            let now = std::time::Instant::now();
+                            let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
+                            data.last_frame_time = now;
+
+                            // Animation speed: higher value = faster animation
+                            // animation_speed of 1.0 means very fast, 0.1 means slow
+                            let animation_speed = data.config.animation_speed.clamp(0.01, 1.0) * 10.0;
+                            let delta = (data.value - data.animated_value) * animation_speed * elapsed;
+
+                            // Apply delta with smoothing
+                            data.animated_value += delta;
+
+                            // Snap to target if close enough
+                            if (data.animated_value - data.value).abs() < 0.001 {
+                                data.animated_value = data.value;
+                            }
+
+                            true
+                        } else if data.dirty {
                             data.dirty = false;
                             true
                         } else {
@@ -112,6 +144,12 @@ impl Displayer for BarDisplayer {
         let normalized = super::extract_normalized_value(data);
 
         if let Ok(mut display_data) = self.data.lock() {
+            // On first update or if animation is disabled, set animated value immediately
+            if !display_data.initialized || !display_data.config.smooth_animation {
+                display_data.animated_value = normalized;
+                display_data.initialized = true;
+            }
+
             display_data.value = normalized;
             // Store all values for text overlay
             display_data.values = data.clone();
@@ -124,8 +162,13 @@ impl Displayer for BarDisplayer {
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            let display_value = if data.config.smooth_animation {
+                data.animated_value
+            } else {
+                data.value
+            };
             data.transform.apply(cr, width, height);
-            render_bar(cr, &data.config, data.value, &data.values, width, height)?;
+            render_bar(cr, &data.config, display_value, &data.values, width, height)?;
             data.transform.restore(cr);
         }
         Ok(())

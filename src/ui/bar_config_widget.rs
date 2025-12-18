@@ -66,6 +66,10 @@ pub struct BarConfigWidget {
     border_check: CheckButton,
     border_width_spin: SpinButton,
 
+    // Animation UI elements
+    animate_check: CheckButton,
+    animation_speed_spin: SpinButton,
+
     // Text overlay
     text_config_widget: Option<Rc<TextLineConfigWidget>>,
 }
@@ -412,6 +416,34 @@ impl BarConfigWidget {
 
         notebook.append_page(&border_page, Some(&Label::new(Some("Border"))));
 
+        // === Tab 7: Animation ===
+        let animation_page = GtkBox::new(Orientation::Vertical, 12);
+        animation_page.set_margin_start(12);
+        animation_page.set_margin_end(12);
+        animation_page.set_margin_top(12);
+        animation_page.set_margin_bottom(12);
+
+        let animate_check = CheckButton::with_label("Enable smooth animation");
+        animate_check.set_active(config.borrow().smooth_animation);
+        animation_page.append(&animate_check);
+
+        let speed_box = GtkBox::new(Orientation::Horizontal, 6);
+        speed_box.append(&Label::new(Some("Animation Speed:")));
+        let animation_speed_spin = SpinButton::with_range(0.1, 1.0, 0.1);
+        animation_speed_spin.set_value(config.borrow().animation_speed);
+        animation_speed_spin.set_digits(1);
+        animation_speed_spin.set_hexpand(true);
+        speed_box.append(&animation_speed_spin);
+        animation_page.append(&speed_box);
+
+        // Help text
+        let help_label = Label::new(Some("Animation smoothly transitions the bar value.\nHigher speed = faster transition."));
+        help_label.set_halign(gtk4::Align::Start);
+        help_label.add_css_class("dim-label");
+        animation_page.append(&help_label);
+
+        notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
+
         // === Copy/Paste buttons for entire bar config ===
         let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
         copy_paste_box.set_halign(gtk4::Align::End);
@@ -599,6 +631,25 @@ impl BarConfigWidget {
             }
         });
 
+        // Animation handlers
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        animate_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().smooth_animation = check.is_active();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        animation_speed_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().animation_speed = spin.value();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
         // Copy button handler
         let config_for_copy = config.clone();
         copy_btn.connect_clicked(move |_| {
@@ -768,6 +819,8 @@ impl BarConfigWidget {
             taper_alignment_dropdown,
             border_check,
             border_width_spin,
+            animate_check,
+            animation_speed_spin,
             text_config_widget: Some(text_config_widget),
         }
     }
@@ -1375,6 +1428,10 @@ impl BarConfigWidget {
         // Update border
         self.border_check.set_active(new_config.border.enabled);
         self.border_width_spin.set_value(new_config.border.width);
+
+        // Update animation
+        self.animate_check.set_active(new_config.smooth_animation);
+        self.animation_speed_spin.set_value(new_config.animation_speed);
 
         // Update foreground UI
         match &new_config.foreground {
