@@ -4,8 +4,13 @@ use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, Entry, Label, ListBox, ListBoxRow, Orientation, ScrolledWindow, Window,
 };
+use gtk4::glib::WeakRef;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+thread_local! {
+    static TIMEZONE_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
+}
 
 /// Result state for the async dialog
 #[derive(Clone, Debug)]
@@ -143,7 +148,7 @@ impl TimezoneDialog {
 
         let dialog = Window::builder()
             .title("Select Timezone")
-            .modal(true)
+            .modal(false)
             .default_width(400)
             .default_height(500)
             .resizable(true)
@@ -152,6 +157,18 @@ impl TimezoneDialog {
         if let Some(parent) = parent {
             dialog.set_transient_for(Some(parent));
         }
+
+        // Close any existing dialog (singleton pattern)
+        TIMEZONE_DIALOG.with(|dialog_ref| {
+            let mut dialog_opt = dialog_ref.borrow_mut();
+            if let Some(weak) = dialog_opt.as_ref() {
+                if let Some(existing) = weak.upgrade() {
+                    existing.close();
+                }
+            }
+            // Store the new dialog
+            *dialog_opt = Some(dialog.downgrade());
+        });
 
         let result: Rc<RefCell<DialogResult>> = Rc::new(RefCell::new(DialogResult::Pending));
         let waker: Rc<RefCell<Option<Waker>>> = Rc::new(RefCell::new(None));
@@ -291,6 +308,10 @@ impl TimezoneDialog {
             if let Some(waker) = waker_for_close.borrow_mut().take() {
                 waker.wake();
             }
+            // Clear the singleton reference
+            TIMEZONE_DIALOG.with(|dialog_ref| {
+                *dialog_ref.borrow_mut() = None;
+            });
             gtk4::glib::Propagation::Proceed
         });
 

@@ -8,8 +8,14 @@ use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, HeaderBar, Label, ListBox,
     ListBoxRow, Orientation, Paned, Picture, ScrolledWindow, StringList, Window,
 };
+use gtk4::glib::WeakRef;
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::cell::RefCell;
+
+thread_local! {
+    static IMAGE_PICKER_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
+}
 
 /// Image picker for selecting image files
 pub struct ImagePicker {
@@ -37,7 +43,7 @@ impl ImagePicker {
 
         let window = Window::builder()
             .title(&self.title)
-            .modal(true)
+            .modal(false)
             .default_width(1100)
             .default_height(650)
             .build();
@@ -45,6 +51,18 @@ impl ImagePicker {
         if let Some(parent) = parent {
             window.set_transient_for(Some(parent));
         }
+
+        // Close any existing dialog (singleton pattern)
+        IMAGE_PICKER_DIALOG.with(|dialog_ref| {
+            let mut dialog_opt = dialog_ref.borrow_mut();
+            if let Some(weak) = dialog_opt.as_ref() {
+                if let Some(existing) = weak.upgrade() {
+                    existing.close();
+                }
+            }
+            // Store the new dialog
+            *dialog_opt = Some(window.downgrade());
+        });
 
         // Create header bar with buttons
         let header = HeaderBar::new();
@@ -474,6 +492,14 @@ impl ImagePicker {
             let result = selected_file_clone.borrow().clone();
             callback_clone(result);
             window_clone.close();
+        });
+
+        // Clear singleton reference when window closes
+        window.connect_close_request(move |_| {
+            IMAGE_PICKER_DIALOG.with(|dialog_ref| {
+                *dialog_ref.borrow_mut() = None;
+            });
+            gtk4::glib::Propagation::Proceed
         });
 
         window.present();

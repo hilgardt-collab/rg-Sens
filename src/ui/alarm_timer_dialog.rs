@@ -9,8 +9,13 @@ use gtk4::{
     Adjustment, Box as GtkBox, Button, CheckButton, Entry, FileDialog, FileFilter, Frame, Label,
     ListBox, ListBoxRow, Orientation, ScrolledWindow, Separator, SpinButton, Window,
 };
+use gtk4::glib::WeakRef;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+thread_local! {
+    static ALARM_TIMER_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
+}
 
 /// Timer control actions
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,7 +49,7 @@ impl AlarmTimerDialog {
     pub fn new(parent: Option<&Window>) -> Self {
         let window = Window::builder()
             .title("Alarms & Timers")
-            .modal(true)
+            .modal(false)
             .default_width(500)
             .default_height(600)
             .resizable(true)
@@ -280,15 +285,39 @@ impl AlarmTimerDialog {
             window_clone.close();
         });
 
-        // Stop refresh when window closes
+        // Stop refresh when window closes and clear singleton reference
         let refresh_id_for_destroy = dialog.refresh_source_id.clone();
         window.connect_destroy(move |_| {
             if let Some(id) = refresh_id_for_destroy.borrow_mut().take() {
                 id.remove();
             }
+            // Clear the singleton reference
+            ALARM_TIMER_DIALOG.with(|dialog_ref| {
+                *dialog_ref.borrow_mut() = None;
+            });
         });
 
         dialog
+    }
+
+    /// Show the Alarm/Timer dialog (singleton pattern - only one instance at a time)
+    pub fn show(parent: Option<&Window>) {
+        ALARM_TIMER_DIALOG.with(|dialog_ref| {
+            let mut dialog_opt = dialog_ref.borrow_mut();
+
+            // Check if dialog already exists and is still alive
+            if let Some(weak) = dialog_opt.as_ref() {
+                if let Some(window) = weak.upgrade() {
+                    window.present();  // Bring to front
+                    return;
+                }
+            }
+
+            // Create new dialog
+            let dialog = Self::new(parent);
+            *dialog_opt = Some(dialog.window.downgrade());
+            dialog.window.present();
+        });
     }
 
     fn refresh_timer_list(&self) {

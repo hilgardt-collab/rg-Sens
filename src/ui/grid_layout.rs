@@ -2,13 +2,18 @@
 
 use crate::core::Panel;
 use gtk4::gdk::ModifierType;
-use gtk4::{prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
+use gtk4::glib::WeakRef;
+use gtk4::{prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget, Window};
 use log::info;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+thread_local! {
+    static PANEL_PROPERTIES_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
+}
 
 /// Grid configuration
 #[derive(Debug, Clone, Copy)]
@@ -682,8 +687,7 @@ impl GridLayout {
                     let window = widget.root()
                         .and_then(|r| r.downcast::<gtk4::Window>().ok());
 
-                    let dialog = crate::ui::AlarmTimerDialog::new(window.as_ref());
-                    dialog.present();
+                    crate::ui::AlarmTimerDialog::show(window.as_ref());
                 }
             });
             widget.add_controller(gesture);
@@ -2900,20 +2904,18 @@ fn setup_copied_panel_interaction(
                     frame_click.add_css_class("selected");
                 }
             }
-        } else {
-            if !selected.contains(&panel_id_click) || selected.len() == 1 {
-                for (id, state) in states.iter_mut() {
-                    if state.selected && id != &panel_id_click {
-                        state.selected = false;
-                        state.frame.remove_css_class("selected");
-                    }
+        } else if !selected.contains(&panel_id_click) || selected.len() == 1 {
+            for (id, state) in states.iter_mut() {
+                if state.selected && id != &panel_id_click {
+                    state.selected = false;
+                    state.frame.remove_css_class("selected");
                 }
-                selected.clear();
-                selected.insert(panel_id_click.clone());
-                if let Some(state) = states.get_mut(&panel_id_click) {
-                    state.selected = true;
-                    frame_click.add_css_class("selected");
-                }
+            }
+            selected.clear();
+            selected.insert(panel_id_click.clone());
+            if let Some(state) = states.get_mut(&panel_id_click) {
+                state.selected = true;
+                frame_click.add_css_class("selected");
             }
         }
     });
@@ -3710,7 +3712,7 @@ fn show_panel_properties_dialog(
     // Create dialog window
     let dialog = Window::builder()
         .title(format!("Panel Properties - {}", panel_id))
-        .modal(true)
+        .modal(false)
         .default_width(550)
         .default_height(650)
         .build();
@@ -3719,6 +3721,18 @@ fn show_panel_properties_dialog(
     if let Some(ref parent) = parent_window {
         dialog.set_transient_for(Some(parent));
     }
+
+    // Close any existing panel properties dialog (singleton pattern)
+    PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
+        let mut dialog_opt = dialog_ref.borrow_mut();
+        if let Some(weak) = dialog_opt.as_ref() {
+            if let Some(existing) = weak.upgrade() {
+                existing.close();
+            }
+        }
+        // Store the new dialog
+        *dialog_opt = Some(dialog.downgrade());
+    });
 
     // Main container
     let vbox = GtkBox::new(Orientation::Vertical, 12);
@@ -5826,6 +5840,15 @@ fn show_panel_properties_dialog(
     vbox.append(&button_box);
 
     dialog.set_child(Some(&vbox));
+
+    // Clear singleton reference when window closes
+    dialog.connect_close_request(move |_| {
+        PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
+            *dialog_ref.borrow_mut() = None;
+        });
+        gtk4::glib::Propagation::Proceed
+    });
+
     dialog.present();
 }
 
