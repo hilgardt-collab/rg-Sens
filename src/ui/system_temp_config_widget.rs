@@ -288,8 +288,11 @@ impl SystemTempConfigWidget {
         let mut config = self.config.borrow().clone();
 
         // Ensure sensor_label is set based on current index for stability across restarts
-        let index = self.sensor_combo.selected() as usize;
-        config.set_sensor_by_index(index);
+        let selected = self.sensor_combo.selected();
+        // Only update if a valid selection (GTK returns INVALID_LIST_POSITION when nothing selected)
+        if selected != gtk4::INVALID_LIST_POSITION {
+            config.set_sensor_by_index(selected as usize);
+        }
 
         // When auto_detect is disabled, ensure we use the spinbutton values
         // This handles the case where set_config was called with None limits

@@ -22,6 +22,10 @@ use tokio::time::Instant;
 /// so checking every tick is wasteful
 const CONFIG_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 
+/// Maximum number of concurrent panel update tasks
+/// This prevents spawning too many tasks at once if many panels are due
+const MAX_CONCURRENT_UPDATES: usize = 16;
+
 /// Tracks update timing for a panel
 struct PanelUpdateState {
     panel: Arc<RwLock<Panel>>,
@@ -126,6 +130,8 @@ pub struct UpdateManager {
     sender: mpsc::Sender<UpdateManagerMessage>,
     /// Receiver for processing panel additions (used in the update loop)
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<UpdateManagerMessage>>>,
+    /// Semaphore to limit concurrent panel update tasks
+    update_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 impl UpdateManager {
@@ -138,6 +144,7 @@ impl UpdateManager {
             shared_sources: Arc::new(RwLock::new(HashMap::new())),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
+            update_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_UPDATES)),
         }
     }
 
@@ -324,7 +331,13 @@ impl UpdateManager {
                     .map(|k| updated_sources.contains(k))
                     .unwrap_or(false);
 
+                // Clone semaphore for the task - limits concurrent updates
+                let semaphore = self.update_semaphore.clone();
+
                 let task = tokio::spawn(async move {
+                    // Acquire permit to limit concurrent updates (automatically released on drop)
+                    let _permit = semaphore.acquire().await;
+
                     let mut panel_guard = panel.write().await;
 
                     // If using shared source and it was updated, panel.update() will use cached values

@@ -641,8 +641,8 @@ impl Displayer for LcarsComboDisplayer {
             }
 
             // Update each item
-            for prefix in prefixes {
-                let item_data = Self::get_item_data(data, &prefix);
+            for prefix in &prefixes {
+                let item_data = Self::get_item_data(data, prefix);
                 let bar_key = format!("{}_bar", prefix);
                 let target = item_data.percent();
 
@@ -655,7 +655,7 @@ impl Displayer for LcarsComboDisplayer {
                 }
 
                 // Check if this item is configured as a graph or core bars
-                if let Some(item_config) = content_items.get(&prefix) {
+                if let Some(item_config) = content_items.get(prefix) {
                     if matches!(item_config.display_as, ContentDisplayType::Graph) {
                         let graph_key = format!("{}_graph", prefix);
                         let history = display_data.graph_history.entry(graph_key).or_insert_with(VecDeque::new);
@@ -719,6 +719,47 @@ impl Displayer for LcarsComboDisplayer {
                             }
                         }
                     }
+                }
+            }
+
+            // Clean up stale animation entries that no longer match active prefixes
+            // This prevents memory leaks when config changes remove content items
+            {
+                // Collect keys to remove (can't modify while iterating)
+                let bar_keys_to_remove: Vec<String> = display_data.bar_values.keys()
+                    .filter(|k| {
+                        // Extract prefix from key (e.g., "group1_1_bar" -> "group1_1")
+                        k.strip_suffix("_bar")
+                            .map(|prefix| !prefixes.iter().any(|p| p == prefix))
+                            .unwrap_or(true)
+                    })
+                    .cloned()
+                    .collect();
+
+                let core_keys_to_remove: Vec<String> = display_data.core_bar_values.keys()
+                    .filter(|k| !prefixes.iter().any(|p| p == *k))
+                    .cloned()
+                    .collect();
+
+                let graph_keys_to_remove: Vec<String> = display_data.graph_history.keys()
+                    .filter(|k| {
+                        // Extract prefix from key (e.g., "group1_1_graph" -> "group1_1")
+                        k.strip_suffix("_graph")
+                            .map(|prefix| !prefixes.iter().any(|p| p == prefix))
+                            .unwrap_or(true)
+                    })
+                    .cloned()
+                    .collect();
+
+                // Remove stale entries
+                for key in bar_keys_to_remove {
+                    display_data.bar_values.remove(&key);
+                }
+                for key in core_keys_to_remove {
+                    display_data.core_bar_values.remove(&key);
+                }
+                for key in graph_keys_to_remove {
+                    display_data.graph_history.remove(&key);
                 }
             }
 
