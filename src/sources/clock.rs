@@ -404,8 +404,8 @@ impl DataSource for ClockSource {
             ),
             FieldMetadata::new(
                 "value",
-                "Value",
-                "Normalized time value for analog display (0.0-1.0 based on seconds)",
+                "Day Progress",
+                "Percentage of 24-hour period elapsed (0.0 at midnight, 1.0 at end of day)",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
@@ -597,8 +597,14 @@ impl DataSource for ClockSource {
         let second_value = (self.second as f64 + ms_frac) / 60.0;
         values.insert("second_value".to_string(), Value::from(second_value));
 
-        // Generic value for compatibility
-        values.insert("value".to_string(), Value::from(second_value));
+        // Day progress value (0-1 representing percentage of 24-hour period elapsed)
+        // 24 hours = 86400 seconds
+        let total_seconds = self.hour as f64 * 3600.0
+            + self.minute as f64 * 60.0
+            + self.second as f64
+            + ms_frac;
+        let day_progress = total_seconds / 86400.0;
+        values.insert("value".to_string(), Value::from(day_progress));
 
         // Caption for text displays
         values.insert(
