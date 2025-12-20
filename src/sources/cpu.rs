@@ -406,7 +406,7 @@ impl DataSource for CpuSource {
 
                 log::debug!("Auto-detect limits update {}: value={:.2}, min={:.2}, max={:.2}",
                            self.update_count, value,
-                           self.detected_min.unwrap(), self.detected_max.unwrap());
+                           self.detected_min.unwrap_or(value), self.detected_max.unwrap_or(value));
             }
         }
 
