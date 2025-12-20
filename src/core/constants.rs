@@ -18,3 +18,17 @@ pub const ANIMATION_SNAP_THRESHOLD: f64 = 0.001;
 /// Values smaller than this are considered effectively zero/unchanged.
 /// Using 0.001 instead of f64::EPSILON for practical UI-level precision.
 pub const TRANSFORM_THRESHOLD: f64 = 0.001;
+
+// Memory unit conversion constants (bytes to larger units)
+
+/// Bytes per kilobyte (1024)
+pub const BYTES_PER_KB: f64 = 1024.0;
+
+/// Bytes per megabyte (1024^2)
+pub const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
+
+/// Bytes per gigabyte (1024^3)
+pub const BYTES_PER_GB: f64 = 1024.0 * 1024.0 * 1024.0;
+
+/// Bytes per terabyte (1024^4)
+pub const BYTES_PER_TB: f64 = 1024.0 * 1024.0 * 1024.0 * 1024.0;

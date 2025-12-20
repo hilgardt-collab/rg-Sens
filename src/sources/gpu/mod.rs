@@ -9,6 +9,7 @@ pub use backend::{GpuBackend, GpuInfo};
 use detector::detect_gpus;
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::core::constants::{BYTES_PER_MB, BYTES_PER_GB};
 use crate::ui::{GpuField, GpuSourceConfig, MemoryUnit, TemperatureUnit};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
@@ -143,8 +144,8 @@ impl GpuSource {
     /// Convert memory from bytes to configured unit
     fn convert_memory(&self, bytes: u64) -> f64 {
         match self.config.memory_unit {
-            MemoryUnit::MB => bytes as f64 / (1024.0 * 1024.0),
-            MemoryUnit::GB => bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+            MemoryUnit::MB => bytes as f64 / BYTES_PER_MB,
+            MemoryUnit::GB => bytes as f64 / BYTES_PER_GB,
         }
     }
 

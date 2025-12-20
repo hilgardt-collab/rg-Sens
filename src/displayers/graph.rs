@@ -171,11 +171,19 @@ impl Displayer for GraphDisplayer {
                             let animated_len = data_guard.animated_points.len();
 
                             // Add new points if needed (copy values to avoid borrow conflicts)
+                            // If adding multiple points at once (e.g., animation just enabled),
+                            // initialize to actual values to avoid jarring "grow from zero" effect
+                            let initialize_to_actual = (target_len - animated_len) > 1;
                             for i in animated_len..target_len {
                                 if let Some(p) = data_guard.data_points.get(i) {
-                                    let timestamp = p.timestamp; // Copy before mutable borrow
+                                    let timestamp = p.timestamp;
+                                    let initial_value = if initialize_to_actual {
+                                        p.value // Use actual value for bulk initialization
+                                    } else {
+                                        0.0 // Single new point animates from baseline
+                                    };
                                     data_guard.animated_points.push_back(DataPoint {
-                                        value: 0.0, // Start from baseline
+                                        value: initial_value,
                                         timestamp,
                                     });
                                 }

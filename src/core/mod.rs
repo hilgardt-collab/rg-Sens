@@ -1,6 +1,6 @@
 //! Core traits and types for rg-Sens
 
-mod constants;
+pub mod constants;
 mod data_source;
 mod displayer;
 mod field_metadata;

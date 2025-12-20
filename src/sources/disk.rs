@@ -1,6 +1,7 @@
 //! Disk usage data source implementation
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::core::constants::{BYTES_PER_MB, BYTES_PER_GB, BYTES_PER_TB};
 use crate::ui::{DiskField, DiskSourceConfig, DiskUnit};
 use anyhow::Result;
 use serde_json::Value;
@@ -79,9 +80,9 @@ impl DiskSource {
     /// Convert disk space from bytes to configured unit
     fn convert_space(&self, bytes: u64) -> f64 {
         match self.config.disk_unit {
-            DiskUnit::MB => bytes as f64 / (1024.0 * 1024.0),
-            DiskUnit::GB => bytes as f64 / (1024.0 * 1024.0 * 1024.0),
-            DiskUnit::TB => bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0),
+            DiskUnit::MB => bytes as f64 / BYTES_PER_MB,
+            DiskUnit::GB => bytes as f64 / BYTES_PER_GB,
+            DiskUnit::TB => bytes as f64 / BYTES_PER_TB,
         }
     }
 

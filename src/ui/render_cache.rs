@@ -322,15 +322,18 @@ impl TextExtentsCache {
 
         // Cache the result (evict LRU entries if needed)
         if self.cache.len() >= self.max_entries {
-            // LRU eviction: remove oldest half of entries by access time
-            let mut entries: Vec<_> = self.cache.iter()
-                .map(|(k, v)| (k.clone(), v.last_access))
+            // LRU eviction: find median access time and remove older entries
+            // This avoids cloning all keys and full sorting
+            let now = Instant::now();
+            let mut access_times: Vec<_> = self.cache.values()
+                .map(|v| now.duration_since(v.last_access))
                 .collect();
-            entries.sort_by_key(|(_, time)| *time);
+            access_times.sort_unstable();
 
-            // Remove oldest half
-            for (old_key, _) in entries.into_iter().take(self.max_entries / 2) {
-                self.cache.remove(&old_key);
+            // Find median age threshold (entries older than this will be removed)
+            let threshold = access_times.get(access_times.len() / 2).copied();
+            if let Some(threshold) = threshold {
+                self.cache.retain(|_, v| now.duration_since(v.last_access) <= threshold);
             }
         }
 
