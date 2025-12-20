@@ -1547,7 +1547,7 @@ impl GridLayout {
                         drop(panel_states_read);
 
                         // Read original panel data
-                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size) = {
+                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, panel_data) = {
                             let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
@@ -1557,6 +1557,10 @@ impl GridLayout {
                                 panel_guard.corner_radius,
                                 panel_guard.border.clone(),
                                 (panel_guard.geometry.width, panel_guard.geometry.height),
+                                panel_guard.scale,
+                                panel_guard.translate_x,
+                                panel_guard.translate_y,
+                                panel_guard.data.clone(),
                             )
                         };
 
@@ -1582,10 +1586,14 @@ impl GridLayout {
                                     new_displayer,
                                 );
 
-                                // Set the background, corner radius, and border
+                                // Set the background, corner radius, border, scale and offset
                                 new_panel.background = background;
                                 new_panel.corner_radius = corner_radius;
                                 new_panel.border = border;
+                                new_panel.scale = scale;
+                                new_panel.translate_x = translate_x;
+                                new_panel.translate_y = translate_y;
+                                new_panel.data = panel_data;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
 
@@ -2343,7 +2351,7 @@ impl GridLayout {
                                                     drop(panel_states_read);
 
                                                     // Read original panel configuration
-                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size) = {
+                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, panel_data) = {
                                                         let panel_guard = original_panel.blocking_read();
                                                         (
                                                             panel_guard.source.metadata().clone(),
@@ -2353,6 +2361,10 @@ impl GridLayout {
                                                             panel_guard.corner_radius,
                                                             panel_guard.border.clone(),
                                                             (panel_guard.geometry.width, panel_guard.geometry.height),
+                                                            panel_guard.scale,
+                                                            panel_guard.translate_x,
+                                                            panel_guard.translate_y,
+                                                            panel_guard.data.clone(),
                                                         )
                                                     };
 
@@ -2378,10 +2390,14 @@ impl GridLayout {
                                                                 new_displayer,
                                                             );
 
-                                                            // Copy all settings
+                                                            // Copy all settings including scale and offset
                                                             new_panel.background = background;
                                                             new_panel.corner_radius = corner_radius;
                                                             new_panel.border = border;
+                                                            new_panel.scale = scale;
+                                                            new_panel.translate_x = translate_x;
+                                                            new_panel.translate_y = translate_y;
+                                                            new_panel.data = panel_data;
 
                                                             let new_panel = Arc::new(RwLock::new(new_panel));
 
@@ -3413,7 +3429,7 @@ fn setup_copied_panel_interaction(
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        let (source_meta, displayer_id, panel_config, background, corner_radius, border, geometry_size) = {
+                        let (source_meta, displayer_id, panel_config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, panel_data) = {
                             let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
@@ -3423,6 +3439,10 @@ fn setup_copied_panel_interaction(
                                 panel_guard.corner_radius,
                                 panel_guard.border.clone(),
                                 (panel_guard.geometry.width, panel_guard.geometry.height),
+                                panel_guard.scale,
+                                panel_guard.translate_x,
+                                panel_guard.translate_y,
+                                panel_guard.data.clone(),
                             )
                         };
 
@@ -3443,6 +3463,10 @@ fn setup_copied_panel_interaction(
                                 new_panel.background = background;
                                 new_panel.corner_radius = corner_radius;
                                 new_panel.border = border;
+                                new_panel.scale = scale;
+                                new_panel.translate_x = translate_x;
+                                new_panel.translate_y = translate_y;
+                                new_panel.data = panel_data;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
                                 {
