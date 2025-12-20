@@ -13,3 +13,8 @@ pub const ANIMATION_FRAME_MS: u64 = 16;
 /// the animation is considered complete and snaps to the target.
 /// This represents 0.1% precision, suitable for 0.0-1.0 normalized values.
 pub const ANIMATION_SNAP_THRESHOLD: f64 = 0.001;
+
+/// Threshold for detecting meaningful transform changes (scale, translate).
+/// Values smaller than this are considered effectively zero/unchanged.
+/// Using 0.001 instead of f64::EPSILON for practical UI-level precision.
+pub const TRANSFORM_THRESHOLD: f64 = 0.001;

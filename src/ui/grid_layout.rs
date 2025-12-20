@@ -147,33 +147,31 @@ impl GridLayout {
     /// Returns (x, y) grid coordinates where the panel can be placed
     pub fn find_available_position(&self, width: u32, height: u32) -> (u32, u32) {
         let occupied = self.occupied_cells.borrow();
+        let config = self.config.borrow();
+
+        // Search within actual grid dimensions (with some overflow for expansion)
+        // Add panel size to allow placing at edges, cap at reasonable max
+        let max_x = (config.columns + width).min(100);
+        let max_y = (config.rows + height).min(100);
 
         // Search for available position starting from (0, 0)
         // Scan row by row, column by column
-        for y in 0..100 {
-            for x in 0..100 {
-                let mut fits = true;
-
+        for y in 0..max_y {
+            'next_x: for x in 0..max_x {
                 // Check if all cells for this panel would be available
                 for dx in 0..width {
                     for dy in 0..height {
                         if occupied.contains(&(x + dx, y + dy)) {
-                            fits = false;
-                            break;
+                            continue 'next_x;
                         }
                     }
-                    if !fits {
-                        break;
-                    }
                 }
-
-                if fits {
-                    return (x, y);
-                }
+                // All cells are available
+                return (x, y);
             }
         }
 
-        // Fallback: return (0, 0) if no space found (shouldn't happen with 100x100 grid)
+        // Fallback: return (0, 0) if no space found
         (0, 0)
     }
 

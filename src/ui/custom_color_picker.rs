@@ -1799,19 +1799,21 @@ impl CustomColorPicker {
 
 // HSV/RGB conversion utilities
 fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    const EPSILON: f64 = 1e-10;
+
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
     let delta = max - min;
 
     let v = max;
 
-    let s = if max == 0.0 { 0.0 } else { delta / max };
+    let s = if max.abs() < EPSILON { 0.0 } else { delta / max };
 
-    let h = if delta == 0.0 {
+    let h = if delta.abs() < EPSILON {
         0.0
-    } else if max == r {
+    } else if (max - r).abs() < EPSILON {
         60.0 * (((g - b) / delta) % 6.0)
-    } else if max == g {
+    } else if (max - g).abs() < EPSILON {
         60.0 * (((b - r) / delta) + 2.0)
     } else {
         60.0 * (((r - g) / delta) + 4.0)

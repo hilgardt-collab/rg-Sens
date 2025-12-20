@@ -1,5 +1,6 @@
 //! Displayer trait and related types
 
+use super::constants::TRANSFORM_THRESHOLD;
 use super::panel_data::DisplayerConfig;
 use anyhow::Result;
 use cairo::Context;
@@ -136,7 +137,7 @@ impl PanelTransform {
         cr.translate(self.translate_x, self.translate_y);
 
         // Scale from center
-        if (self.scale - 1.0).abs() > 0.001 {
+        if (self.scale - 1.0).abs() > TRANSFORM_THRESHOLD {
             let center_x = width / 2.0;
             let center_y = height / 2.0;
             cr.translate(center_x, center_y);

@@ -1,6 +1,7 @@
 //! Panel - container for a data source and displayer pair
 
 use super::{BoxedDataSource, BoxedDisplayer, Registry, global_registry};
+use super::constants::TRANSFORM_THRESHOLD;
 use super::panel_data::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
 use super::shared_source_manager::{SharedSourceManager, global_shared_source_manager};
 use anyhow::Result;
@@ -221,9 +222,9 @@ impl Panel {
 
         // Only add transform values if panel has non-default transforms
         // Default: scale=1.0, translate_x=0.0, translate_y=0.0
-        let has_transform = (self.scale - 1.0).abs() > f64::EPSILON
-            || self.translate_x.abs() > f64::EPSILON
-            || self.translate_y.abs() > f64::EPSILON;
+        let has_transform = (self.scale - 1.0).abs() > TRANSFORM_THRESHOLD
+            || self.translate_x.abs() > TRANSFORM_THRESHOLD
+            || self.translate_y.abs() > TRANSFORM_THRESHOLD;
 
         // Add transform values if needed, then update displayer
         let values = if has_transform {
@@ -258,9 +259,9 @@ impl Panel {
     pub fn update_with_values(&mut self, values: &HashMap<String, serde_json::Value>) {
         // Only clone HashMap if we need to add transform values (non-default transforms)
         // Default: scale=1.0, translate_x=0.0, translate_y=0.0
-        let has_transform = (self.scale - 1.0).abs() > f64::EPSILON
-            || self.translate_x.abs() > f64::EPSILON
-            || self.translate_y.abs() > f64::EPSILON;
+        let has_transform = (self.scale - 1.0).abs() > TRANSFORM_THRESHOLD
+            || self.translate_x.abs() > TRANSFORM_THRESHOLD
+            || self.translate_y.abs() > TRANSFORM_THRESHOLD;
 
         if has_transform {
             // Clone and add transform values
