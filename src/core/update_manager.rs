@@ -435,6 +435,9 @@ impl UpdateManager {
             .map(|(key, _)| key.clone())
             .collect();
 
+        // Track sources that should be removed (no longer exist in SharedSourceManager)
+        let mut sources_to_remove: Vec<String> = Vec::new();
+
         // Update each source
         for key in sources_to_update {
             match manager.update_source(&key) {
@@ -459,9 +462,21 @@ impl UpdateManager {
                     }
                 }
                 Err(e) => {
-                    error!("Error updating shared source {}: {}", key, e);
+                    // Source not found means it was released (e.g., panel changed source)
+                    // Remove it from our tracking to prevent repeated errors
+                    if e.to_string().contains("Source not found") {
+                        debug!("Shared source {} no longer exists, removing from update tracking", key);
+                        sources_to_remove.push(key);
+                    } else {
+                        error!("Error updating shared source {}: {}", key, e);
+                    }
                 }
             }
+        }
+
+        // Remove stale sources from tracking
+        for key in sources_to_remove {
+            shared_sources.remove(&key);
         }
 
         updated
