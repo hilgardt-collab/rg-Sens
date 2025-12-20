@@ -165,36 +165,8 @@ impl Displayer for SpeedometerDisplayer {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        // Try to find a numeric value to display
-        let new_value = data
-            .get("value")
-            .or_else(|| data.get("percent"))
-            .or_else(|| data.get("usage"))
-            .or_else(|| data.get("level"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-
-        // Get min/max limits from data source if available
-        let min_limit = data
-            .get("min_limit")
-            .and_then(|v| v.as_f64());
-
-        let max_limit = data
-            .get("max_limit")
-            .and_then(|v| v.as_f64());
-
-        // Normalize to 0.0-1.0 range
-        let normalized = if let (Some(min), Some(max)) = (min_limit, max_limit) {
-            // Use min/max range if available
-            if max > min {
-                (new_value - min) / (max - min)
-            } else {
-                0.0
-            }
-        } else {
-            // Assume value is already 0-100, normalize to 0.0-1.0
-            (new_value / 100.0).clamp(0.0, 1.0)
-        };
+        // Use shared helper to extract and normalize value
+        let normalized = super::extract_normalized_value(data);
 
         if let Ok(mut display_data) = self.data.lock() {
             display_data.value = normalized;
