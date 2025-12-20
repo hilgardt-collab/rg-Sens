@@ -30,6 +30,10 @@ struct Cli {
     #[arg(short = 'b', long = "borderless", value_name = "MONITOR")]
     borderless: Option<Option<i32>>,
 
+    /// Force normal windowed mode (overrides saved fullscreen/borderless/maximized state)
+    #[arg(short = 'w', long = "windowed")]
+    windowed: bool,
+
     /// Launch window at specific coordinates (e.g., -a=50,50 or --at=50,50)
     #[arg(short = 'a', long = "at", value_name = "X,Y", value_parser = parse_coordinates)]
     at: Option<(i32, i32)>,
@@ -159,6 +163,7 @@ fn build_ui(app: &Application) {
     let cli = CLI_OPTIONS.get().cloned().unwrap_or(Cli {
         fullscreen: None,
         borderless: None,
+        windowed: false,
         at: None,
         list_monitors: false,
         debug: 0,
@@ -231,10 +236,12 @@ fn build_ui(app: &Application) {
         }
     };
 
-    // Determine borderless mode - CLI option overrides config
-    let is_borderless = cli.borderless.is_some() || {
-        let cfg = app_config.borrow();
-        cfg.window.borderless
+    // Determine borderless mode - CLI options override config
+    // --windowed forces normal windowed mode, overriding saved borderless
+    let is_borderless = if cli.windowed {
+        false
+    } else {
+        cli.borderless.is_some() || app_config.borrow().window.borderless
     };
 
     // Create the main window with saved dimensions
@@ -346,7 +353,12 @@ fn build_ui(app: &Application) {
     window.set_child(Some(&scrolled_window));
 
     // Set initial fullscreen state - CLI overrides config
-    let should_fullscreen = cli.fullscreen.is_some() || app_config.borrow().window.fullscreen_enabled;
+    // --windowed forces normal windowed mode, overriding saved fullscreen
+    let should_fullscreen = if cli.windowed {
+        false
+    } else {
+        cli.fullscreen.is_some() || app_config.borrow().window.fullscreen_enabled
+    };
     if should_fullscreen {
         // Determine which monitor to fullscreen on
         // Priority: CLI argument > saved connector name > saved monitor index
@@ -382,8 +394,12 @@ fn build_ui(app: &Application) {
         }
     }
 
-    // Restore maximized state from config (if not fullscreen)
-    let should_maximize = !should_fullscreen && app_config.borrow().window.maximized;
+    // Restore maximized state from config
+    // Only restore if:
+    // - Not fullscreen (CLI or config)
+    // - No CLI options that override window state (--windowed, -f, -b, -a)
+    let cli_overrides_maximized = cli.windowed || cli.fullscreen.is_some() || cli.borderless.is_some() || cli.at.is_some();
+    let should_maximize = !should_fullscreen && !cli_overrides_maximized && app_config.borrow().window.maximized;
     if should_maximize {
         window.maximize();
         info!("Restored maximized window state");
