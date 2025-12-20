@@ -360,8 +360,21 @@ pub struct LcarsFrameConfig {
     // Frame geometry
     #[serde(default = "default_corner_radius")]
     pub corner_radius: f64,
+    /// Overall content padding (added to all sides)
     #[serde(default = "default_content_padding")]
     pub content_padding: f64,
+    /// Additional top padding (added to overall)
+    #[serde(default)]
+    pub content_padding_top: f64,
+    /// Additional left padding (added to overall)
+    #[serde(default)]
+    pub content_padding_left: f64,
+    /// Additional right padding (added to overall)
+    #[serde(default)]
+    pub content_padding_right: f64,
+    /// Additional bottom padding (added to overall)
+    #[serde(default)]
+    pub content_padding_bottom: f64,
 
     // Colors
     #[serde(default = "default_frame_color")]
@@ -477,6 +490,10 @@ impl Default for LcarsFrameConfig {
             extension_corner_style: CornerStyle::default(),
             corner_radius: default_corner_radius(),
             content_padding: default_content_padding(),
+            content_padding_top: 0.0,
+            content_padding_left: 0.0,
+            content_padding_right: 0.0,
+            content_padding_bottom: 0.0,
             frame_color: default_frame_color(),
             content_bg_color: default_content_bg_color(),
             segment_count: default_segment_count(),
@@ -1216,18 +1233,22 @@ pub fn get_content_bounds(
     let top_bar_h = if has_top_ext { config.top_bar_height } else { 0.0 };
     let bottom_ext_h = if has_bottom_ext { config.bottom_bar_height } else { 0.0 };
 
-    let padding = config.content_padding;
+    // Calculate effective padding for each side (overall + individual)
+    let padding_top = config.content_padding + config.content_padding_top;
+    let padding_bottom = config.content_padding + config.content_padding_bottom;
+    let padding_left = config.content_padding + config.content_padding_left;
+    let padding_right = config.content_padding + config.content_padding_right;
 
     let content_x = match config.sidebar_position {
-        SidebarPosition::Left => config.sidebar_width + padding,
-        SidebarPosition::Right => padding,
+        SidebarPosition::Left => config.sidebar_width + padding_left,
+        SidebarPosition::Right => padding_left,
     };
-    let content_y = top_bar_h + padding;
+    let content_y = top_bar_h + padding_top;
     let content_w = match config.sidebar_position {
-        SidebarPosition::Left => width - config.sidebar_width - padding - padding,
-        SidebarPosition::Right => width - config.sidebar_width - padding - padding,
+        SidebarPosition::Left => width - config.sidebar_width - padding_left - padding_right,
+        SidebarPosition::Right => width - config.sidebar_width - padding_left - padding_right,
     };
-    let content_h = height - top_bar_h - bottom_ext_h - (2.0 * padding);
+    let content_h = height - top_bar_h - bottom_ext_h - padding_top - padding_bottom;
 
     (content_x, content_y, content_w, content_h)
 }

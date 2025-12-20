@@ -36,6 +36,10 @@ struct FrameWidgets {
     ext_corner_dropdown: DropDown,
     content_color_widget: Rc<ColorButtonWidget>,
     padding_spin: SpinButton,
+    padding_top_spin: SpinButton,
+    padding_left_spin: SpinButton,
+    padding_right_spin: SpinButton,
+    padding_bottom_spin: SpinButton,
 }
 
 /// Holds references to Headers tab widgets for updating when config changes
@@ -391,9 +395,15 @@ impl LcarsConfigWidget {
         });
         page.append(&content_color_box);
 
-        // Content padding
+        // Content padding section
+        let padding_label = Label::new(Some("Content Padding"));
+        padding_label.set_halign(gtk4::Align::Start);
+        padding_label.add_css_class("heading");
+        page.append(&padding_label);
+
+        // Overall padding
         let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Content Padding:")));
+        padding_box.append(&Label::new(Some("Overall:")));
         let padding_spin = SpinButton::with_range(0.0, 50.0, 1.0);
         padding_spin.set_value(config.borrow().frame.content_padding);
         padding_spin.set_hexpand(true);
@@ -408,6 +418,74 @@ impl LcarsConfigWidget {
         });
         page.append(&padding_box);
 
+        // Top padding
+        let padding_top_box = GtkBox::new(Orientation::Horizontal, 6);
+        padding_top_box.append(&Label::new(Some("Top:")));
+        let padding_top_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
+        padding_top_spin.set_value(config.borrow().frame.content_padding_top);
+        padding_top_spin.set_hexpand(true);
+        padding_top_box.append(&padding_top_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        padding_top_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.content_padding_top = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&padding_top_box);
+
+        // Left padding
+        let padding_left_box = GtkBox::new(Orientation::Horizontal, 6);
+        padding_left_box.append(&Label::new(Some("Left:")));
+        let padding_left_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
+        padding_left_spin.set_value(config.borrow().frame.content_padding_left);
+        padding_left_spin.set_hexpand(true);
+        padding_left_box.append(&padding_left_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        padding_left_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.content_padding_left = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&padding_left_box);
+
+        // Right padding
+        let padding_right_box = GtkBox::new(Orientation::Horizontal, 6);
+        padding_right_box.append(&Label::new(Some("Right:")));
+        let padding_right_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
+        padding_right_spin.set_value(config.borrow().frame.content_padding_right);
+        padding_right_spin.set_hexpand(true);
+        padding_right_box.append(&padding_right_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        padding_right_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.content_padding_right = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&padding_right_box);
+
+        // Bottom padding
+        let padding_bottom_box = GtkBox::new(Orientation::Horizontal, 6);
+        padding_bottom_box.append(&Label::new(Some("Bottom:")));
+        let padding_bottom_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
+        padding_bottom_spin.set_value(config.borrow().frame.content_padding_bottom);
+        padding_bottom_spin.set_hexpand(true);
+        padding_bottom_box.append(&padding_bottom_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        padding_bottom_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.content_padding_bottom = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&padding_bottom_box);
+
         // Store widget references for updating when config changes
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
             sidebar_spin: sidebar_spin.clone(),
@@ -419,6 +497,10 @@ impl LcarsConfigWidget {
             ext_corner_dropdown: ext_corner_dropdown.clone(),
             content_color_widget: content_color_widget.clone(),
             padding_spin: padding_spin.clone(),
+            padding_top_spin: padding_top_spin.clone(),
+            padding_left_spin: padding_left_spin.clone(),
+            padding_right_spin: padding_right_spin.clone(),
+            padding_bottom_spin: padding_bottom_spin.clone(),
         });
 
         page
@@ -2343,6 +2425,10 @@ impl LcarsConfigWidget {
             widgets.content_color_widget.set_color(new_config.frame.content_bg_color);
 
             widgets.padding_spin.set_value(new_config.frame.content_padding);
+            widgets.padding_top_spin.set_value(new_config.frame.content_padding_top);
+            widgets.padding_left_spin.set_value(new_config.frame.content_padding_left);
+            widgets.padding_right_spin.set_value(new_config.frame.content_padding_right);
+            widgets.padding_bottom_spin.set_value(new_config.frame.content_padding_bottom);
         }
 
         // Update headers widgets
