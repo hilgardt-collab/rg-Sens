@@ -100,19 +100,12 @@ impl TestSourceConfigWidget {
     }
 
     pub fn set_config(&self, config: &TestSourceConfig) {
-        *self.config.borrow_mut() = config.clone();
+        // Only update the local update_interval_ms - don't overwrite global test source state
+        // The global state is managed by the Test Source Dialog (Tools menu)
+        self.config.borrow_mut().update_interval_ms = config.update_interval_ms;
 
         // Update UI
         self.update_interval_spin.set_value(config.update_interval_ms as f64);
-
-        // Also update global state with other config values
-        if let Ok(mut state) = crate::sources::TEST_SOURCE_STATE.lock() {
-            state.config.mode = config.mode;
-            state.config.manual_value = config.manual_value;
-            state.config.min_value = config.min_value;
-            state.config.max_value = config.max_value;
-            state.config.period = config.period;
-        }
     }
 }
 

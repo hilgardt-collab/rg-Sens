@@ -4008,7 +4008,8 @@ fn show_panel_properties_dialog(
     let test_config_widget = crate::ui::TestSourceConfigWidget::new();
     test_config_widget.widget().set_visible(old_source_id == "test");
 
-    // Load existing Test config if source is test (or use defaults to initialize global state)
+    // Load existing Test config if source is test (only loads update_interval_ms)
+    // Other test source settings come from global TEST_SOURCE_STATE
     if old_source_id == "test" {
         let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
             serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
@@ -4016,6 +4017,7 @@ fn show_panel_properties_dialog(
         } else {
             crate::sources::TestSourceConfig::default()
         };
+        // Only sets update_interval_ms, doesn't touch global state
         test_config_widget.set_config(&test_config);
     }
 
@@ -4112,14 +4114,16 @@ fn show_panel_properties_dialog(
                             }
                         }
                         "test" => {
-                            // Load existing config or use defaults
+                            // Load existing config (for update_interval_ms) or use default interval
+                            // Don't read other settings from panel - they come from global TEST_SOURCE_STATE
                             let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
                                 serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
                                     .unwrap_or_default()
                             } else {
-                                // No existing config - use defaults and ensure global state is initialized
+                                // No existing config - just use default interval
                                 crate::sources::TestSourceConfig::default()
                             };
+                            // Only sets update_interval_ms, doesn't touch global state
                             test_widget_clone.set_config(&test_config);
                         }
                         _ => {}
