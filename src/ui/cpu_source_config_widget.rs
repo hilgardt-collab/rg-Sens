@@ -361,7 +361,16 @@ impl CpuSourceConfigWidget {
 
         let config_clone = config.clone();
         sensor_combo.connect_selected_notify(move |combo| {
-            config_clone.borrow_mut().sensor_index = combo.selected() as usize;
+            let selected = combo.selected();
+            // GTK returns u32::MAX (GTK_INVALID_LIST_POSITION) when nothing is selected
+            if selected != gtk4::INVALID_LIST_POSITION {
+                // Validate against the model size
+                if let Some(model) = combo.model() {
+                    if (selected as usize) < model.n_items() as usize {
+                        config_clone.borrow_mut().sensor_index = selected as usize;
+                    }
+                }
+            }
         });
 
         let config_clone = config.clone();
@@ -378,6 +387,10 @@ impl CpuSourceConfigWidget {
         let config_clone = config.clone();
         core_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
+            // GTK returns u32::MAX (GTK_INVALID_LIST_POSITION) when nothing is selected
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
             let selection = if selected == 0 {
                 CoreSelection::Overall
             } else {

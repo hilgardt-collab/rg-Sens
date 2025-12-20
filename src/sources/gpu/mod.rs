@@ -101,7 +101,18 @@ impl GpuSource {
     pub fn set_config(&mut self, config: GpuSourceConfig) {
         // Update backend if GPU index changed
         if config.gpu_index != self.config.gpu_index {
-            self.backend = GPU_MANAGER.backends.get(config.gpu_index as usize).cloned();
+            // Validate gpu_index is within bounds before accessing
+            let gpu_count = GPU_MANAGER.backends.len();
+            if (config.gpu_index as usize) < gpu_count {
+                self.backend = GPU_MANAGER.backends.get(config.gpu_index as usize).cloned();
+            } else {
+                log::warn!(
+                    "GPU index {} out of bounds (only {} GPUs available), keeping current backend",
+                    config.gpu_index,
+                    gpu_count
+                );
+                // Don't update backend - keep the existing one or None
+            }
         }
         self.config = config;
     }

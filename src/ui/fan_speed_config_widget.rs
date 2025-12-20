@@ -120,8 +120,13 @@ impl FanSpeedConfigWidget {
 
         // Wire up handlers
         let config_clone = config.clone();
+        let sensor_count = sensors.len();
         sensor_combo.connect_selected_notify(move |combo| {
-            config_clone.borrow_mut().sensor_index = combo.selected() as usize;
+            let selected = combo.selected();
+            // GTK returns u32::MAX (GTK_INVALID_LIST_POSITION) when nothing is selected
+            if selected != gtk4::INVALID_LIST_POSITION && (selected as usize) < sensor_count {
+                config_clone.borrow_mut().sensor_index = selected as usize;
+            }
         });
 
         let config_clone = config.clone();

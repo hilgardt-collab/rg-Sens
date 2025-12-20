@@ -143,9 +143,18 @@ impl SystemTempConfigWidget {
         // Wire up handlers
         let config_clone = config.clone();
         sensor_combo.connect_selected_notify(move |combo| {
-            let index = combo.selected() as usize;
-            // Use set_sensor_by_index to store both index and label for stability
-            config_clone.borrow_mut().set_sensor_by_index(index);
+            let selected = combo.selected();
+            // GTK returns u32::MAX (GTK_INVALID_LIST_POSITION) when nothing is selected
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            // Validate against the model size
+            if let Some(model) = combo.model() {
+                if (selected as usize) < model.n_items() as usize {
+                    // Use set_sensor_by_index to store both index and label for stability
+                    config_clone.borrow_mut().set_sensor_by_index(selected as usize);
+                }
+            }
         });
 
         let config_clone = config.clone();

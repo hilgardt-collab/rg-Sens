@@ -317,7 +317,8 @@ pub struct TimerAlarmManager {
     pub next_alarm_time: Option<String>,
     pub next_alarm_id: Option<String>,
     /// Callback for when timer/alarm state changes (for UI updates)
-    change_callbacks: Vec<Box<dyn Fn() + Send + Sync>>,
+    /// Using HashMap with UUID keys to allow callback removal and prevent memory leaks
+    change_callbacks: HashMap<String, Box<dyn Fn() + Send + Sync>>,
 }
 
 impl TimerAlarmManager {
@@ -332,7 +333,7 @@ impl TimerAlarmManager {
             timer_sound_played: HashSet::new(),
             next_alarm_time: None,
             next_alarm_id: None,
-            change_callbacks: Vec::new(),
+            change_callbacks: HashMap::new(),
         }
     }
 
@@ -348,16 +349,25 @@ impl TimerAlarmManager {
     }
 
     /// Register a callback for state changes
-    pub fn on_change<F>(&mut self, callback: F)
+    /// Returns a callback ID that can be used to remove the callback later
+    pub fn on_change<F>(&mut self, callback: F) -> String
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.change_callbacks.push(Box::new(callback));
+        let id = Uuid::new_v4().to_string();
+        self.change_callbacks.insert(id.clone(), Box::new(callback));
+        id
+    }
+
+    /// Remove a previously registered callback by its ID
+    /// Returns true if a callback was removed, false if the ID was not found
+    pub fn remove_callback(&mut self, callback_id: &str) -> bool {
+        self.change_callbacks.remove(callback_id).is_some()
     }
 
     /// Notify all callbacks of a change
     fn notify_change(&self) {
-        for callback in &self.change_callbacks {
+        for callback in self.change_callbacks.values() {
             callback();
         }
     }
