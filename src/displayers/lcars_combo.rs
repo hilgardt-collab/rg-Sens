@@ -549,6 +549,11 @@ impl Displayer for LcarsComboDisplayer {
                     return glib::ControlFlow::Break;
                 };
 
+                // Skip animation updates when widget is not visible (saves CPU)
+                if !drawing_area.is_mapped() {
+                    return glib::ControlFlow::Continue;
+                }
+
                 // Use try_lock to avoid blocking UI thread if lock is held
                 let needs_redraw = if let Ok(mut data) = data_clone.try_lock() {
                     let mut redraw = data.dirty;

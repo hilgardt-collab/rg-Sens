@@ -244,39 +244,44 @@ impl Displayer for ClockAnalogDisplayer {
         let drawing_area_weak = drawing_area.downgrade();
         let mut flash_counter = 0u32;
         glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-            if let Some(da) = drawing_area_weak.upgrade() {
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                    // Toggle flash state every 500ms (10 * 50ms)
-                    flash_counter += 1;
-                    let mut redraw = false;
+            let Some(da) = drawing_area_weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
 
-                    if flash_counter >= 10 {
-                        flash_counter = 0;
-                        // Only toggle flash if alarm or timer is active
-                        if data.alarm_triggered || data.timer_state == "finished" {
-                            data.flash_state = !data.flash_state;
-                            redraw = true;
-                        }
-                    }
+            // Skip updates when widget is not visible (saves CPU)
+            if !da.is_mapped() {
+                return glib::ControlFlow::Continue;
+            }
 
-                    // Need smooth redraw if smooth_seconds is enabled and show_second_hand is true
-                    if data.config.smooth_seconds && data.config.show_second_hand {
+            // Use try_lock to avoid blocking UI thread if lock is held
+            let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
+                // Toggle flash state every 500ms (10 * 50ms)
+                flash_counter += 1;
+                let mut redraw = false;
+
+                if flash_counter >= 10 {
+                    flash_counter = 0;
+                    // Only toggle flash if alarm or timer is active
+                    if data.alarm_triggered || data.timer_state == "finished" {
+                        data.flash_state = !data.flash_state;
                         redraw = true;
                     }
-
-                    redraw
-                } else {
-                    false
-                };
-
-                if needs_redraw {
-                    da.queue_draw();
                 }
-                glib::ControlFlow::Continue
+
+                // Need smooth redraw if smooth_seconds is enabled and show_second_hand is true
+                if data.config.smooth_seconds && data.config.show_second_hand {
+                    redraw = true;
+                }
+
+                redraw
             } else {
-                glib::ControlFlow::Break
+                false
+            };
+
+            if needs_redraw {
+                da.queue_draw();
             }
+            glib::ControlFlow::Continue
         });
 
         drawing_area.upcast()

@@ -120,10 +120,18 @@ impl Displayer for GraphDisplayer {
             let drawing_area_weak = drawing_area.downgrade();
             move || {
                 // Check if widget still exists - this automatically stops the timeout
-                if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    // Update animation if enabled - check dirty flag and animation state
-                    // Use try_lock to avoid blocking UI thread if lock is held
-                    let needs_redraw = if let Ok(mut data_guard) = data_for_animation.try_lock() {
+                let Some(drawing_area) = drawing_area_weak.upgrade() else {
+                    return gtk4::glib::ControlFlow::Break;
+                };
+
+                // Skip animation updates when widget is not visible (saves CPU)
+                if !drawing_area.is_mapped() {
+                    return gtk4::glib::ControlFlow::Continue;
+                }
+
+                // Update animation if enabled - check dirty flag and animation state
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data_guard) = data_for_animation.try_lock() {
                         let mut redraw = false;
 
                         // Always calculate elapsed time since last frame to ensure smooth animation
@@ -207,14 +215,11 @@ impl Displayer for GraphDisplayer {
                         false
                     };
 
-                    // Only queue draw if animation actually updated
-                    if needs_redraw {
-                        drawing_area.queue_draw();
-                    }
-                    gtk4::glib::ControlFlow::Continue
-                } else {
-                    gtk4::glib::ControlFlow::Break
+                // Only queue draw if animation actually updated
+                if needs_redraw {
+                    drawing_area.queue_draw();
                 }
+                gtk4::glib::ControlFlow::Continue
             }
         });
 

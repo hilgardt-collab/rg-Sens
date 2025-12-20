@@ -37,7 +37,7 @@ impl AudioPlayer {
         let source = Decoder::new(BufReader::new(file))
             .with_context(|| format!("Failed to decode sound file: {}", path))?;
 
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.append(source);
         sink.play();
         Ok(())
@@ -51,7 +51,7 @@ impl AudioPlayer {
             .with_context(|| format!("Failed to decode sound file: {}", path))?
             .repeat_infinite();
 
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.append(source);
         sink.play();
         Ok(())
@@ -98,7 +98,7 @@ impl AudioPlayer {
             .take_duration(duration)
             .amplify(0.3); // Reduce volume to avoid being too loud
 
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.append(source);
         sink.play();
         Ok(())
@@ -106,31 +106,35 @@ impl AudioPlayer {
 
     /// Stop the currently playing sound
     pub fn stop(&self) {
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.stop();
     }
 
     /// Set the volume (0.0 to 1.0)
     pub fn set_volume(&self, volume: f32) {
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.set_volume(volume.clamp(0.0, 1.0));
     }
 
     /// Check if audio is currently playing
     pub fn is_playing(&self) -> bool {
-        let sink = self.sink.lock().unwrap();
-        !sink.empty()
+        // Return false if lock is poisoned - safer than panicking
+        if let Ok(sink) = self.sink.lock() {
+            !sink.empty()
+        } else {
+            false
+        }
     }
 
     /// Pause playback
     pub fn pause(&self) {
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.pause();
     }
 
     /// Resume playback
     pub fn resume(&self) {
-        let sink = self.sink.lock().unwrap();
+        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner());
         sink.play();
     }
 }

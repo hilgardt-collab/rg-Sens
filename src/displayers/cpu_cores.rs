@@ -143,9 +143,17 @@ impl Displayer for CpuCoresDisplayer {
         let drawing_area_weak = drawing_area.downgrade();
 
         glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
-            if let Some(da) = drawing_area_weak.upgrade() {
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
+            let Some(da) = drawing_area_weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+
+            // Skip animation updates when widget is not visible (saves CPU)
+            if !da.is_mapped() {
+                return glib::ControlFlow::Continue;
+            }
+
+            // Use try_lock to avoid blocking UI thread if lock is held
+            let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                     let now = Instant::now();
                     let delta = now.duration_since(data.last_update).as_secs_f64();
                     data.last_update = now;
@@ -192,14 +200,11 @@ impl Displayer for CpuCoresDisplayer {
                     false
                 };
 
-                if needs_redraw {
-                    da.queue_draw();
-                }
-
-                glib::ControlFlow::Continue
-            } else {
-                glib::ControlFlow::Break
+            if needs_redraw {
+                da.queue_draw();
             }
+
+            glib::ControlFlow::Continue
         });
 
         drawing_area.upcast()

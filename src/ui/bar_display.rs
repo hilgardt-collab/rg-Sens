@@ -458,7 +458,7 @@ fn render_tapered_bar_foreground(
         return Ok(());
     }
 
-    let num_segments = 50;
+    let num_segments: i32 = 50;
     let is_horizontal = matches!(
         config.fill_direction,
         BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
@@ -468,7 +468,8 @@ fn render_tapered_bar_foreground(
 
     if is_horizontal {
         let segment_width = bar_width / num_segments as f64;
-        let filled_segments = (value * num_segments as f64).ceil() as i32;
+        // Clamp filled_segments to valid range to prevent index out of bounds
+        let filled_segments = ((value.clamp(0.0, 1.0) * num_segments as f64).ceil() as i32).min(num_segments);
 
         for i in 0..filled_segments {
             let draw_index = match config.fill_direction {
@@ -489,7 +490,8 @@ fn render_tapered_bar_foreground(
         }
     } else {
         let segment_height = bar_height / num_segments as f64;
-        let filled_segments = (value * num_segments as f64).ceil() as i32;
+        // Clamp filled_segments to valid range to prevent index out of bounds
+        let filled_segments = ((value.clamp(0.0, 1.0) * num_segments as f64).ceil() as i32).min(num_segments);
 
         for i in 0..filled_segments {
             let draw_index = match config.fill_direction {

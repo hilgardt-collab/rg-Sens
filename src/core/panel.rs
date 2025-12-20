@@ -219,24 +219,42 @@ impl Panel {
             self.source.get_values()
         };
 
-        // Add transform values for displayers to use
-        let mut values = values;
-        values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
-        values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
-        values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+        // Only add transform values if panel has non-default transforms
+        // Default: scale=1.0, translate_x=0.0, translate_y=0.0
+        let has_transform = (self.scale - 1.0).abs() > f64::EPSILON
+            || self.translate_x.abs() > f64::EPSILON
+            || self.translate_y.abs() > f64::EPSILON;
 
-        // Update displayer with the values
-        self.displayer.update_data(&values);
+        if has_transform {
+            let mut values = values;
+            values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
+            values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
+            values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+            self.displayer.update_data(&values);
 
-        // Sync certain live values into panel.config for UI access
-        // This allows dialogs and click handlers to read live state
-        const SYNC_KEYS: &[&str] = &[
-            "alarms", "timers", "triggered_alarm_ids",
-            "timer_state", "alarm_triggered", "alarm_enabled",
-        ];
-        for key in SYNC_KEYS {
-            if let Some(value) = values.get(*key) {
-                self.config.insert(key.to_string(), value.clone());
+            // Sync certain live values into panel.config for UI access
+            const SYNC_KEYS: &[&str] = &[
+                "alarms", "timers", "triggered_alarm_ids",
+                "timer_state", "alarm_triggered", "alarm_enabled",
+            ];
+            for key in SYNC_KEYS {
+                if let Some(value) = values.get(*key) {
+                    self.config.insert(key.to_string(), value.clone());
+                }
+            }
+        } else {
+            // No transform needed, use values directly
+            self.displayer.update_data(&values);
+
+            // Sync certain live values into panel.config for UI access
+            const SYNC_KEYS: &[&str] = &[
+                "alarms", "timers", "triggered_alarm_ids",
+                "timer_state", "alarm_triggered", "alarm_enabled",
+            ];
+            for key in SYNC_KEYS {
+                if let Some(value) = values.get(*key) {
+                    self.config.insert(key.to_string(), value.clone());
+                }
             }
         }
 

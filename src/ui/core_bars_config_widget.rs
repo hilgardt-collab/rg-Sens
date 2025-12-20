@@ -931,8 +931,9 @@ impl CoreBarsConfigWidget {
         let config_for_copy = config.clone();
         copy_font_btn.connect_clicked(move |_| {
             let cfg = config_for_copy.borrow();
-            let mut clipboard = CLIPBOARD.lock().unwrap();
-            clipboard.copy_font(cfg.label_font.clone(), cfg.label_size, cfg.label_bold, false);
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_font(cfg.label_font.clone(), cfg.label_size, cfg.label_bold, false);
+            }
         });
 
         // Paste font handler
@@ -942,7 +943,7 @@ impl CoreBarsConfigWidget {
         let size_spin_for_paste = label_size_spin.clone();
         let bold_check_for_paste = label_bold_check.clone();
         paste_font_btn.connect_clicked(move |_| {
-            let clipboard = CLIPBOARD.lock().unwrap();
+            let Ok(clipboard) = CLIPBOARD.lock() else { return };
             if let Some((family, size, bold, _italic)) = clipboard.paste_font() {
                 let mut cfg = config_for_paste.borrow_mut();
                 cfg.label_font = family.clone();

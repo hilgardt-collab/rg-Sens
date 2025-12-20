@@ -92,9 +92,17 @@ impl Displayer for BarDisplayer {
             let drawing_area_weak = drawing_area.downgrade();
             let data_for_timer = self.data.clone();
             move || {
-                if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    // Use try_lock to avoid blocking UI thread if lock is held
-                    let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
+                let Some(drawing_area) = drawing_area_weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+
+                // Skip animation updates when widget is not visible (saves CPU)
+                if !drawing_area.is_mapped() {
+                    return glib::ControlFlow::Continue;
+                }
+
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                         // Check if animation is in progress
                         if data.config.smooth_animation && (data.animated_value - data.value).abs() > 0.001 {
                             // Calculate elapsed time for smooth animation
@@ -126,13 +134,10 @@ impl Displayer for BarDisplayer {
                         false
                     };
 
-                    if needs_redraw {
-                        drawing_area.queue_draw();
-                    }
-                    glib::ControlFlow::Continue
-                } else {
-                    glib::ControlFlow::Break
+                if needs_redraw {
+                    drawing_area.queue_draw();
                 }
+                glib::ControlFlow::Continue
             }
         });
 

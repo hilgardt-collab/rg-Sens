@@ -388,8 +388,8 @@ pub fn render_graph(
         cr.set_line_width(config.x_axis.grid_width);
         apply_line_style(cr, config.x_axis.grid_line_style, config.x_axis.grid_width);
 
-        // Draw vertical grid lines
-        let num_lines = 5.min(data.len() - 1);
+        // Draw vertical grid lines (ensure at least 1 to avoid division by zero)
+        let num_lines = 5.min(data.len().saturating_sub(1)).max(1);
         for i in 0..=num_lines {
             let x = plot_x + (i as f64 / num_lines as f64) * plot_width;
             cr.move_to(x, plot_y);

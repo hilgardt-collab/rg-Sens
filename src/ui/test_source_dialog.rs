@@ -108,7 +108,7 @@ fn show_test_source_dialog_inner(
 
     // Initialize from current state
     {
-        let state = TEST_SOURCE_STATE.lock().unwrap();
+        let state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
         let config = &state.config;
 
         mode_dropdown.set_selected(match config.mode {
@@ -150,7 +150,7 @@ fn show_test_source_dialog_inner(
         manual_box_clone.set_visible(is_manual);
         period_box_clone.set_visible(!is_manual);
 
-        let mut state = TEST_SOURCE_STATE.lock().unwrap();
+        let mut state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
         state.config.mode = mode;
     });
 
@@ -162,7 +162,7 @@ fn show_test_source_dialog_inner(
         let max = max_spin_clone.value();
         if min < max {
             manual_scale_clone.set_range(min, max);
-            let mut state = TEST_SOURCE_STATE.lock().unwrap();
+            let mut state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
             state.config.min_value = min;
         }
     });
@@ -174,7 +174,7 @@ fn show_test_source_dialog_inner(
         let min = min_spin_clone.value();
         if max > min {
             manual_scale_clone.set_range(min, max);
-            let mut state = TEST_SOURCE_STATE.lock().unwrap();
+            let mut state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
             state.config.max_value = max;
         }
     });
@@ -189,7 +189,7 @@ fn show_test_source_dialog_inner(
         *updating_clone.borrow_mut() = true;
         let value = scale.value();
         manual_spin_clone.set_value(value);
-        let mut state = TEST_SOURCE_STATE.lock().unwrap();
+        let mut state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
         state.config.manual_value = value;
         *updating_clone.borrow_mut() = false;
     });
@@ -203,14 +203,14 @@ fn show_test_source_dialog_inner(
         *updating_clone.borrow_mut() = true;
         let value = spin.value();
         manual_scale_clone.set_value(value);
-        let mut state = TEST_SOURCE_STATE.lock().unwrap();
+        let mut state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
         state.config.manual_value = value;
         *updating_clone.borrow_mut() = false;
     });
 
     // Period change handler
     period_spin.connect_value_changed(move |spin| {
-        let mut state = TEST_SOURCE_STATE.lock().unwrap();
+        let mut state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
         state.config.period = spin.value();
     });
 
@@ -262,7 +262,7 @@ fn show_test_source_dialog_inner(
 
     // Set initial visibility based on mode
     {
-        let state = TEST_SOURCE_STATE.lock().unwrap();
+        let state = TEST_SOURCE_STATE.lock().unwrap_or_else(|e| e.into_inner());
         let is_manual = state.config.mode == TestMode::Manual;
         manual_label.set_visible(is_manual);
         manual_box.set_visible(is_manual);

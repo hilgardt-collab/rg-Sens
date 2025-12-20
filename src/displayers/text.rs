@@ -101,27 +101,32 @@ impl Displayer for TextDisplayer {
             let data_for_timer = self.data.clone();
             move || {
                 // Check if widget still exists - this automatically stops the timeout
-                if let Some(drawing_area) = drawing_area_weak.upgrade() {
-                    // Only redraw if data changed
-                    // Use try_lock to avoid blocking UI thread if lock is held
-                    let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                        if data.dirty {
-                            data.dirty = false;
-                            true
-                        } else {
-                            false
-                        }
+                let Some(drawing_area) = drawing_area_weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+
+                // Skip updates when widget is not visible (saves CPU)
+                if !drawing_area.is_mapped() {
+                    return glib::ControlFlow::Continue;
+                }
+
+                // Only redraw if data changed
+                // Use try_lock to avoid blocking UI thread if lock is held
+                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
+                    if data.dirty {
+                        data.dirty = false;
+                        true
                     } else {
                         false
-                    };
-
-                    if needs_redraw {
-                        drawing_area.queue_draw();
                     }
-                    glib::ControlFlow::Continue
                 } else {
-                    glib::ControlFlow::Break
+                    false
+                };
+
+                if needs_redraw {
+                    drawing_area.queue_draw();
                 }
+                glib::ControlFlow::Continue
             }
         });
 
