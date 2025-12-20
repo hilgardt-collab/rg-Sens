@@ -280,6 +280,12 @@ pub struct WindowConfig {
     /// Borderless window mode (no title bar or window decorations)
     #[serde(default)]
     pub borderless: bool,
+    /// Window was maximized when last closed
+    #[serde(default)]
+    pub maximized: bool,
+    /// Monitor connector name where window was last shown (e.g., "HDMI-1", "DP-1")
+    #[serde(default)]
+    pub monitor_connector: Option<String>,
     /// Enable auto-scroll when content extends beyond visible area
     #[serde(default)]
     pub auto_scroll_enabled: bool,
@@ -318,6 +324,8 @@ impl Default for WindowConfig {
             fullscreen_enabled: false,
             fullscreen_monitor: None,
             borderless: false,
+            maximized: false,
+            monitor_connector: None,
             auto_scroll_enabled: false,
             auto_scroll_delay_ms: 5000,
             viewport_width: 0,

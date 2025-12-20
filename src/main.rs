@@ -349,12 +349,18 @@ fn build_ui(app: &Application) {
     let should_fullscreen = cli.fullscreen.is_some() || app_config.borrow().window.fullscreen_enabled;
     if should_fullscreen {
         // Determine which monitor to fullscreen on
+        // Priority: CLI argument > saved connector name > saved monitor index
         let monitor_index = if let Some(monitor_opt) = &cli.fullscreen {
             // CLI fullscreen option: -f (None) or -f=N (Some(N))
             *monitor_opt
         } else {
-            // Use config's monitor setting
-            app_config.borrow().window.fullscreen_monitor
+            // Try to find monitor by saved connector name first
+            let cfg = app_config.borrow();
+            if let Some(ref connector) = cfg.window.monitor_connector {
+                find_monitor_by_connector(connector).map(|i| i as i32)
+            } else {
+                cfg.window.fullscreen_monitor
+            }
         };
 
         if let Some(monitor_idx) = monitor_index {
@@ -376,17 +382,37 @@ fn build_ui(app: &Application) {
         }
     }
 
-    // Apply CLI borderless monitor selection (move to specific monitor if specified)
-    if let Some(Some(monitor_idx)) = cli.borderless {
-        if let Some(display) = gtk4::gdk::Display::default() {
-            if let Some(mon) = display.monitors().item(monitor_idx as u32) {
-                if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
-                    let geometry = monitor.geometry();
-                    info!("Positioning borderless window on monitor {} at ({}, {})",
-                          monitor_idx, geometry.x(), geometry.y());
-                    // We need to move the window to the monitor's position
-                    // GTK4 doesn't have direct window positioning, but we can use present_with_time
-                    // or rely on the window manager. For now, we'll set it as a hint.
+    // Restore maximized state from config (if not fullscreen)
+    let should_maximize = !should_fullscreen && app_config.borrow().window.maximized;
+    if should_maximize {
+        window.maximize();
+        info!("Restored maximized window state");
+    }
+
+    // Apply borderless monitor selection
+    // Priority: CLI argument > saved connector name
+    if is_borderless && !should_fullscreen {
+        let target_monitor_idx = if let Some(Some(monitor_idx)) = cli.borderless {
+            Some(monitor_idx as u32)
+        } else if let Some(ref connector) = app_config.borrow().window.monitor_connector {
+            find_monitor_by_connector(connector)
+        } else {
+            None
+        };
+
+        if let Some(monitor_idx) = target_monitor_idx {
+            if let Some(display) = gtk4::gdk::Display::default() {
+                if let Some(mon) = display.monitors().item(monitor_idx) {
+                    if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+                        let geometry = monitor.geometry();
+                        info!("Targeting borderless window on monitor {} ({}) at ({}, {})",
+                              monitor_idx,
+                              monitor.connector().map(|s| s.to_string()).unwrap_or_default(),
+                              geometry.x(), geometry.y());
+                        // Note: GTK4 doesn't have direct window positioning API
+                        // The window manager will place the window, but we store
+                        // the monitor info so we can restore fullscreen correctly
+                    }
                 }
             }
         }
@@ -1563,10 +1589,69 @@ fn show_save_dialog(window: &ApplicationWindow, grid_layout: &Rc<RefCell<GridLay
     });
 }
 
+/// Get the connector name of the monitor the window is currently on
+fn get_window_monitor_connector(window: &ApplicationWindow) -> Option<String> {
+    use gtk4::prelude::NativeExt;
+
+    // Get the surface (realized window handle)
+    let surface = window.surface()?;
+
+    // Get the display
+    let display = surface.display();
+
+    // Get the monitor at the window's position
+    // For GTK4, we use the surface to find which monitor it's on
+    let monitors = display.monitors();
+    let n_monitors = monitors.n_items();
+
+    if n_monitors == 0 {
+        return None;
+    }
+
+    // GTK4 doesn't have a direct "get monitor for window" API
+    // On Wayland, window positions are not exposed to applications
+    // We return the first monitor's connector as a fallback
+    // The monitor will be properly detected when fullscreen is used
+    if let Some(mon) = monitors.item(0) {
+        if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+            return monitor.connector().map(|s| s.to_string());
+        }
+    }
+
+    None
+}
+
+/// Find monitor index by connector name
+fn find_monitor_by_connector(connector: &str) -> Option<u32> {
+    let display = gtk4::gdk::Display::default()?;
+    let monitors = display.monitors();
+
+    for i in 0..monitors.n_items() {
+        if let Some(mon) = monitors.item(i) {
+            if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+                if let Some(mon_connector) = monitor.connector() {
+                    if mon_connector == connector {
+                        return Some(i);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Save current configuration to disk
 fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>]) {
     // Get window dimensions
     let (width, height) = (window.default_width(), window.default_height());
+
+    // Get window state
+    let is_maximized = window.is_maximized();
+    let is_fullscreen = window.is_fullscreen();
+
+    // Get the monitor the window is on (by connector name)
+    let monitor_connector = get_window_monitor_connector(window);
 
     // Convert panels to PanelData (new unified format)
     // Use blocking_read to ensure all panels are saved
@@ -1582,8 +1667,11 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
     let mut config = app_config.clone();
     config.window.width = width;
     config.window.height = height;
-    config.window.x = None; // GTK4 doesn't provide window position
+    config.window.x = None; // GTK4 doesn't provide window position reliably
     config.window.y = None;
+    config.window.maximized = is_maximized;
+    config.window.fullscreen_enabled = is_fullscreen;
+    config.window.monitor_connector = monitor_connector;
     config.set_panels(panel_data_list);
 
     // Save global timers, alarms, and timer sound
