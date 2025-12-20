@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     get_content_bounds, render_content_background, render_content_bar, render_content_text,
@@ -541,7 +541,7 @@ impl Displayer for LcarsComboDisplayer {
         });
 
         // Set up animation timer (60fps)
-        glib::timeout_add_local(std::time::Duration::from_millis(16), {
+        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
             let data_clone = self.data.clone();
             let drawing_area_weak = drawing_area.downgrade();
             move || {
@@ -571,13 +571,13 @@ impl Displayer for LcarsComboDisplayer {
 
                         // Animate bar values
                         for (_key, anim) in data.bar_values.iter_mut() {
-                            if (anim.current - anim.target).abs() > 0.001 {
+                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
                                 // Lerp toward target
                                 let delta = (anim.target - anim.current) * speed * elapsed;
                                 anim.current += delta;
 
                                 // Snap if very close
-                                if (anim.current - anim.target).abs() < 0.001 {
+                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
                                     anim.current = anim.target;
                                 }
                                 redraw = true;
@@ -587,13 +587,13 @@ impl Displayer for LcarsComboDisplayer {
                         // Animate core bar values
                         for (_key, core_anims) in data.core_bar_values.iter_mut() {
                             for anim in core_anims.iter_mut() {
-                                if (anim.current - anim.target).abs() > 0.001 {
+                                if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
                                     // Lerp toward target
                                     let delta = (anim.target - anim.current) * speed * elapsed;
                                     anim.current += delta;
 
                                     // Snap if very close
-                                    if (anim.current - anim.target).abs() < 0.001 {
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
                                         anim.current = anim.target;
                                     }
                                     redraw = true;

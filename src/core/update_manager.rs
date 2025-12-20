@@ -270,11 +270,12 @@ impl UpdateManager {
 
         // === PHASE 2: Update panels ===
         let mut panels = self.panels.write().await;
-        let mut tasks = Vec::new();
+        let panel_count = panels.len();
+        let mut tasks = Vec::with_capacity(panel_count);
         let mut config_updates: Vec<(String, u64, Duration, Option<String>)> = Vec::new();
 
         // Track panels that had their config checked (for updating last_config_check)
-        let mut config_checked: Vec<String> = Vec::new();
+        let mut config_checked: Vec<String> = Vec::with_capacity(panel_count);
 
         for (panel_id, state) in panels.iter() {
             // Only check config hash if enough time has elapsed (throttle to avoid CPU waste)

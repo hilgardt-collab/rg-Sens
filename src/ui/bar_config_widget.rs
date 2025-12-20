@@ -14,6 +14,7 @@ use crate::ui::bar_display::{
 };
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
 use crate::ui::TextLineConfigWidget;
 use crate::core::FieldMetadata;
@@ -134,7 +135,7 @@ impl BarConfigWidget {
         let config_clone = config.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             // Render checkerboard pattern to show transparency
-            Self::render_checkerboard(cr, width as f64, height as f64);
+            render_checkerboard(cr, width as f64, height as f64);
 
             let cfg = config_clone.borrow();
             let mut preview_values = std::collections::HashMap::new();
@@ -825,28 +826,6 @@ impl BarConfigWidget {
         }
     }
 
-    /// Render a checkerboard pattern to show transparency
-    fn render_checkerboard(cr: &gtk4::cairo::Context, width: f64, height: f64) {
-        let square_size = 10.0;
-        let light_gray = 0.8;
-        let dark_gray = 0.6;
-
-        for y in 0..((height / square_size).ceil() as i32) {
-            for x in 0..((width / square_size).ceil() as i32) {
-                let is_light = (x + y) % 2 == 0;
-                let gray = if is_light { light_gray } else { dark_gray };
-
-                cr.set_source_rgb(gray, gray, gray);
-                cr.rectangle(
-                    x as f64 * square_size,
-                    y as f64 * square_size,
-                    square_size,
-                    square_size,
-                );
-                let _ = cr.fill();
-            }
-        }
-    }
 
     fn setup_fg_handlers(
         config: &Rc<RefCell<BarDisplayConfig>>,

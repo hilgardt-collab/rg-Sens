@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::speedometer_display::{render_speedometer, SpeedometerConfig};
 
 /// Speedometer gauge displayer
@@ -89,7 +89,7 @@ impl Displayer for SpeedometerDisplayer {
         });
 
         // Set up periodic animation/redraw at 60fps
-        glib::timeout_add_local(std::time::Duration::from_millis(16), {
+        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
             let data_clone = self.data.clone();
             let drawing_area_weak = drawing_area.downgrade();
             move || {
@@ -120,7 +120,7 @@ impl Displayer for SpeedometerDisplayer {
                     }
 
                     // Check if animation is active
-                    if data.config.animate && (data.animated_value - data.target_value).abs() > 0.001 {
+                    if data.config.animate && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD {
 
                         // Use exponential decay formula for smooth animation
                         // This ensures the needle reaches ~95% of target in animation_duration seconds
@@ -147,7 +147,7 @@ impl Displayer for SpeedometerDisplayer {
                         }
 
                         // Snap to target if very close
-                        if (data.animated_value - data.target_value).abs() < 0.001 {
+                        if (data.animated_value - data.target_value).abs() < ANIMATION_SNAP_THRESHOLD {
                             data.animated_value = data.target_value;
                         }
                         redraw = true;

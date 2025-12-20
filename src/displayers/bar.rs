@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::bar_display::{render_bar, BarDisplayConfig};
 
 /// Bar displayer
@@ -88,7 +88,7 @@ impl Displayer for BarDisplayer {
         });
 
         // Set up periodic redraw for animation (~60fps)
-        glib::timeout_add_local(std::time::Duration::from_millis(16), {
+        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
             let drawing_area_weak = drawing_area.downgrade();
             let data_for_timer = self.data.clone();
             move || {
@@ -104,7 +104,7 @@ impl Displayer for BarDisplayer {
                 // Use try_lock to avoid blocking UI thread if lock is held
                 let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
                         // Check if animation is in progress
-                        if data.config.smooth_animation && (data.animated_value - data.value).abs() > 0.001 {
+                        if data.config.smooth_animation && (data.animated_value - data.value).abs() > ANIMATION_SNAP_THRESHOLD {
                             // Calculate elapsed time for smooth animation
                             let now = std::time::Instant::now();
                             let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
@@ -119,7 +119,7 @@ impl Displayer for BarDisplayer {
                             data.animated_value += delta;
 
                             // Snap to target if close enough
-                            if (data.animated_value - data.value).abs() < 0.001 {
+                            if (data.animated_value - data.value).abs() < ANIMATION_SNAP_THRESHOLD {
                                 data.animated_value = data.value;
                             }
 

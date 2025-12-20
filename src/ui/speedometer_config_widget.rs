@@ -12,6 +12,7 @@ use crate::ui::speedometer_display::{
     render_speedometer, NeedleStyle, NeedleTailStyle, SpeedometerConfig, TickStyle,
 };
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
 use crate::displayers::FieldMetadata;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
@@ -103,7 +104,7 @@ impl SpeedometerConfigWidget {
         let config_clone = config.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             // Render checkerboard pattern to show transparency
-            Self::render_checkerboard(cr, width as f64, height as f64);
+            render_checkerboard(cr, width as f64, height as f64);
 
             let cfg = config_clone.borrow();
             let mut preview_values = std::collections::HashMap::new();
@@ -212,30 +213,6 @@ impl SpeedometerConfigWidget {
             bounce_animation_check,
             text_config_widget,
         }
-    }
-
-    fn render_checkerboard(cr: &cairo::Context, width: f64, height: f64) {
-        let checker_size = 10.0;
-        cr.save().ok();
-
-        for y in 0..(height / checker_size).ceil() as i32 {
-            for x in 0..(width / checker_size).ceil() as i32 {
-                if (x + y) % 2 == 0 {
-                    cr.set_source_rgb(0.9, 0.9, 0.9);
-                } else {
-                    cr.set_source_rgb(1.0, 1.0, 1.0);
-                }
-                cr.rectangle(
-                    x as f64 * checker_size,
-                    y as f64 * checker_size,
-                    checker_size,
-                    checker_size,
-                );
-                cr.fill().ok();
-            }
-        }
-
-        cr.restore().ok();
     }
 
     fn queue_preview_redraw(preview: &DrawingArea, on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>) {

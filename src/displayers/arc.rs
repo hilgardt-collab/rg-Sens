@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::arc_display::{render_arc, ArcDisplayConfig};
 
 /// Arc gauge displayer
@@ -90,7 +90,7 @@ impl Displayer for ArcDisplayer {
 
         // Set up periodic animation/redraw at 60fps
         // The timeout automatically stops when the widget is destroyed (weak reference breaks)
-        glib::timeout_add_local(std::time::Duration::from_millis(16), {
+        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
             let data_clone = self.data.clone();
             let drawing_area_weak = drawing_area.downgrade();
             move || {
@@ -121,7 +121,7 @@ impl Displayer for ArcDisplayer {
                     }
 
                     // Check if animation is active
-                    if data.config.animate && (data.animated_value - data.target_value).abs() > 0.001 {
+                    if data.config.animate && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD {
                         // Calculate animation speed based on duration (prevent division by zero)
                         let animation_speed = 1.0 / data.config.animation_duration.max(0.1);
                         let delta = (data.target_value - data.animated_value) * animation_speed * elapsed;
@@ -130,7 +130,7 @@ impl Displayer for ArcDisplayer {
                         data.animated_value += delta;
 
                         // Snap to target if very close
-                        if (data.animated_value - data.target_value).abs() < 0.001 {
+                        if (data.animated_value - data.target_value).abs() < ANIMATION_SNAP_THRESHOLD {
                             data.animated_value = data.target_value;
                         }
                         redraw = true;

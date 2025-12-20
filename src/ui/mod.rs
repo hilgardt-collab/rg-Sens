@@ -1,5 +1,6 @@
 //! UI components
 
+mod render_utils;
 mod main_window;
 mod grid_layout;
 mod config_dialog;

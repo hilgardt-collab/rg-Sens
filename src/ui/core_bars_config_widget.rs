@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use crate::ui::background::Color;
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle};
+use crate::ui::render_utils::render_checkerboard;
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
@@ -122,7 +123,7 @@ impl CoreBarsConfigWidget {
         let config_for_preview = config.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             // Checkerboard background
-            Self::render_checkerboard(cr, width as f64, height as f64);
+            render_checkerboard(cr, width as f64, height as f64);
 
             let cfg = config_for_preview.borrow();
             // Sample values for preview
@@ -1007,26 +1008,6 @@ impl CoreBarsConfigWidget {
         });
 
         (page, animate_check, animation_speed_scale)
-    }
-
-    fn render_checkerboard(cr: &gtk4::cairo::Context, width: f64, height: f64) {
-        let checker_size = 10.0;
-        for y in 0..(height / checker_size).ceil() as i32 {
-            for x in 0..(width / checker_size).ceil() as i32 {
-                if (x + y) % 2 == 0 {
-                    cr.set_source_rgb(0.3, 0.3, 0.3);
-                } else {
-                    cr.set_source_rgb(0.2, 0.2, 0.2);
-                }
-                cr.rectangle(
-                    x as f64 * checker_size,
-                    y as f64 * checker_size,
-                    checker_size,
-                    checker_size,
-                );
-                let _ = cr.fill();
-            }
-        }
     }
 
     /// Get the container widget

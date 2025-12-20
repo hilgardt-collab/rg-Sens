@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL};
 use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Widget};
@@ -116,7 +116,7 @@ impl Displayer for GraphDisplayer {
         // Set up periodic redraw and animation updates
         // The timeout automatically stops when the widget is destroyed (weak reference breaks)
         let data_for_animation = self.data.clone();
-        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(16), {
+        gtk4::glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
             let drawing_area_weak = drawing_area.downgrade();
             move || {
                 // Check if widget still exists - this automatically stops the timeout

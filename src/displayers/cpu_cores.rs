@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::core_bars_display::{render_core_bars, CoreBarsConfig};
 
 /// Animation state for a single value
@@ -142,7 +142,7 @@ impl Displayer for CpuCoresDisplayer {
         let data_for_timer = self.data.clone();
         let drawing_area_weak = drawing_area.downgrade();
 
-        glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, move || {
             let Some(da) = drawing_area_weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
@@ -169,7 +169,7 @@ impl Displayer for CpuCoresDisplayer {
                                 val.first_update = false;
                             } else {
                                 let diff = (val.target - val.current).abs();
-                                if diff > 0.001 {
+                                if diff > ANIMATION_SNAP_THRESHOLD {
                                     val.current += (val.target - val.current) * (speed * delta).min(1.0);
                                     any_animating = true;
                                 } else {
