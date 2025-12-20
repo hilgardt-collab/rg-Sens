@@ -395,6 +395,13 @@ fn render_full_bar(
     Ok(())
 }
 
+/// Calculate number of segments for tapered bars based on dimension.
+/// Scales with panel size: ~1 segment per 5 pixels, clamped to 5-50 range.
+#[inline]
+fn calculate_tapered_segments(dimension: f64) -> i32 {
+    ((dimension / 5.0).round() as i32).clamp(5, 50)
+}
+
 /// Render tapered bar background
 fn render_tapered_bar_background(
     cr: &cairo::Context,
@@ -402,11 +409,11 @@ fn render_tapered_bar_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    let num_segments = 50;
     let is_horizontal = matches!(
         config.fill_direction,
         BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
     );
+    let num_segments = calculate_tapered_segments(if is_horizontal { width } else { height });
 
     cr.save()?;
 
@@ -458,11 +465,11 @@ fn render_tapered_bar_foreground(
         return Ok(());
     }
 
-    let num_segments: i32 = 50;
     let is_horizontal = matches!(
         config.fill_direction,
         BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
     );
+    let num_segments = calculate_tapered_segments(if is_horizontal { bar_width } else { bar_height });
 
     cr.save()?;
 

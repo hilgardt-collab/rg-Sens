@@ -225,36 +225,26 @@ impl Panel {
             || self.translate_x.abs() > f64::EPSILON
             || self.translate_y.abs() > f64::EPSILON;
 
-        if has_transform {
+        // Add transform values if needed, then update displayer
+        let values = if has_transform {
             let mut values = values;
             values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
             values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
             values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
-            self.displayer.update_data(&values);
-
-            // Sync certain live values into panel.config for UI access
-            const SYNC_KEYS: &[&str] = &[
-                "alarms", "timers", "triggered_alarm_ids",
-                "timer_state", "alarm_triggered", "alarm_enabled",
-            ];
-            for key in SYNC_KEYS {
-                if let Some(value) = values.get(*key) {
-                    self.config.insert(key.to_string(), value.clone());
-                }
-            }
+            values
         } else {
-            // No transform needed, use values directly
-            self.displayer.update_data(&values);
+            values
+        };
+        self.displayer.update_data(&values);
 
-            // Sync certain live values into panel.config for UI access
-            const SYNC_KEYS: &[&str] = &[
-                "alarms", "timers", "triggered_alarm_ids",
-                "timer_state", "alarm_triggered", "alarm_enabled",
-            ];
-            for key in SYNC_KEYS {
-                if let Some(value) = values.get(*key) {
-                    self.config.insert(key.to_string(), value.clone());
-                }
+        // Sync certain live values into panel.config for UI access
+        const SYNC_KEYS: &[&str] = &[
+            "alarms", "timers", "triggered_alarm_ids",
+            "timer_state", "alarm_triggered", "alarm_enabled",
+        ];
+        for key in SYNC_KEYS {
+            if let Some(value) = values.get(*key) {
+                self.config.insert(key.to_string(), value.clone());
             }
         }
 
@@ -298,8 +288,6 @@ impl Panel {
 
     /// Apply configuration to the source and displayer (legacy method)
     pub fn apply_config(&mut self, config: HashMap<String, serde_json::Value>) -> Result<()> {
-        self.config = config.clone();
-
         // Configure the data source (local copy for metadata)
         self.source.configure(&config)?;
 
@@ -317,7 +305,11 @@ impl Panel {
         }
 
         // Configure the displayer
-        self.displayer.apply_config(&config)
+        self.displayer.apply_config(&config)?;
+
+        // Store config by moving ownership (no clone needed)
+        self.config = config;
+        Ok(())
     }
 
     /// Apply configurations from the PanelData to source and displayer
