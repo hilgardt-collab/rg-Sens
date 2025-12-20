@@ -4008,13 +4008,15 @@ fn show_panel_properties_dialog(
     let test_config_widget = crate::ui::TestSourceConfigWidget::new();
     test_config_widget.widget().set_visible(old_source_id == "test");
 
-    // Load existing Test config if source is test
+    // Load existing Test config if source is test (or use defaults to initialize global state)
     if old_source_id == "test" {
-        if let Some(test_config_value) = panel_guard.config.get("test_config") {
-            if let Ok(test_config) = serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone()) {
-                test_config_widget.set_config(&test_config);
-            }
-        }
+        let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
+            serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
+                .unwrap_or_default()
+        } else {
+            crate::sources::TestSourceConfig::default()
+        };
+        test_config_widget.set_config(&test_config);
     }
 
     source_tab_box.append(test_config_widget.widget());
@@ -4110,11 +4112,15 @@ fn show_panel_properties_dialog(
                             }
                         }
                         "test" => {
-                            if let Some(test_config_value) = panel_guard.config.get("test_config") {
-                                if let Ok(test_config) = serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone()) {
-                                    test_widget_clone.set_config(&test_config);
-                                }
-                            }
+                            // Load existing config or use defaults
+                            let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
+                                serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
+                                    .unwrap_or_default()
+                            } else {
+                                // No existing config - use defaults and ensure global state is initialized
+                                crate::sources::TestSourceConfig::default()
+                            };
+                            test_widget_clone.set_config(&test_config);
                         }
                         _ => {}
                     }

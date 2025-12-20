@@ -87,11 +87,12 @@ impl TestSourceConfigWidget {
 
     pub fn get_config(&self) -> TestSourceConfig {
         // Get the global state and merge with our update interval
-        // Use try_lock to avoid blocking if mutex is held
-        let mut config = if let Ok(state) = crate::sources::TEST_SOURCE_STATE.try_lock() {
+        // Use blocking lock for consistency with set_config()
+        let mut config = if let Ok(state) = crate::sources::TEST_SOURCE_STATE.lock() {
             state.config.clone()
         } else {
-            // Fall back to local config if mutex is busy
+            // Fall back to local config only if mutex is poisoned
+            log::warn!("TestSourceConfigWidget::get_config: Lock poisoned, using local config");
             self.config.borrow().clone()
         };
         config.update_interval_ms = self.config.borrow().update_interval_ms;
