@@ -148,7 +148,12 @@ impl SharedSourceManager {
                 key, panel_id, interval
             );
 
-            sources.insert(key.clone(), SharedSource::new(source, interval, panel_id.to_string()));
+            // Create the shared source and do an initial update so values are immediately available
+            let mut shared = SharedSource::new(source, interval, panel_id.to_string());
+            if let Err(e) = shared.update() {
+                warn!("Initial update failed for source {}: {}", key, e);
+            }
+            sources.insert(key.clone(), shared);
         }
 
         Ok(key)
