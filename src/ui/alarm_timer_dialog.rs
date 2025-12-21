@@ -437,22 +437,22 @@ impl AlarmTimerDialog {
         let hour_spin = SpinButton::new(Some(&hour_adj), 1.0, 0);
         hour_spin.set_width_chars(2);
         hour_spin.set_sensitive(is_stopped);
+        hbox.append(&Label::new(Some("H :")));
         hbox.append(&hour_spin);
-        hbox.append(&Label::new(Some("H")));
 
         let min_adj = Adjustment::new(mins, 0.0, 59.0, 1.0, 5.0, 0.0);
         let min_spin = SpinButton::new(Some(&min_adj), 1.0, 0);
         min_spin.set_width_chars(2);
         min_spin.set_sensitive(is_stopped);
+        hbox.append(&Label::new(Some("M :")));
         hbox.append(&min_spin);
-        hbox.append(&Label::new(Some("M")));
 
         let sec_adj = Adjustment::new(secs, 0.0, 59.0, 1.0, 5.0, 0.0);
         let sec_spin = SpinButton::new(Some(&sec_adj), 1.0, 0);
         sec_spin.set_width_chars(2);
         sec_spin.set_sensitive(is_stopped);
+        hbox.append(&Label::new(Some("S :")));
         hbox.append(&sec_spin);
-        hbox.append(&Label::new(Some("S")));
 
         // Current time display (when running/paused/finished)
         if !is_stopped {
