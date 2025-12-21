@@ -184,10 +184,18 @@ impl Displayer for SpeedometerDisplayer {
             }
 
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            display_data.values = super::extract_text_values(
+            let mut values = super::extract_text_values(
                 data,
                 &display_data.config.text_overlay.text_config,
             );
+            // Also include min/max limits for tick label calculation
+            if let Some(v) = data.get("min_limit") {
+                values.insert("min_limit".to_string(), v.clone());
+            }
+            if let Some(v) = data.get("max_limit") {
+                values.insert("max_limit".to_string(), v.clone());
+            }
+            display_data.values = values;
 
             // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);
