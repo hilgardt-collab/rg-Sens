@@ -774,7 +774,10 @@ pub fn render_indicator_background_with_value(
 }
 
 /// Interpolate gradient for indicator background
+/// Uses cached LUT for efficient repeated lookups
 fn interpolate_indicator_gradient(stops: &[ColorStop], value: f64, min: f64, max: f64) -> Color {
+    use crate::ui::render_cache::get_cached_color_at;
+
     if stops.is_empty() {
         return Color::new(0.5, 0.5, 0.5, 1.0);
     }
@@ -791,42 +794,7 @@ fn interpolate_indicator_gradient(stops: &[ColorStop], value: f64, min: f64, max
         0.5
     };
 
-    // Find the two stops to interpolate between
-    let mut sorted_stops: Vec<&ColorStop> = stops.iter().collect();
-    // Use unwrap_or to handle NaN values safely (NaN positions sort as equal)
-    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
-
-    // Handle edge cases - use first/last references to avoid repeated lookups
-    let first = &sorted_stops[0];
-    let last = sorted_stops.last().unwrap();
-    if normalized <= first.position {
-        return first.color;
-    }
-    if normalized >= last.position {
-        return last.color;
-    }
-
-    // Find surrounding stops and interpolate
-    for i in 0..sorted_stops.len() - 1 {
-        let start = sorted_stops[i];
-        let end = sorted_stops[i + 1];
-
-        if normalized >= start.position && normalized <= end.position {
-            let segment_range = end.position - start.position;
-            let t = if segment_range > 0.0 {
-                (normalized - start.position) / segment_range
-            } else {
-                0.0
-            };
-
-            return Color::new(
-                start.color.r + (end.color.r - start.color.r) * t,
-                start.color.g + (end.color.g - start.color.g) * t,
-                start.color.b + (end.color.b - start.color.b) * t,
-                start.color.a + (end.color.a - start.color.a) * t,
-            );
-        }
-    }
-
-    sorted_stops[0].color
+    // Use cached LUT for fast color lookup
+    // The LUT handles unsorted stops internally (sorts once during construction)
+    get_cached_color_at(stops, normalized)
 }

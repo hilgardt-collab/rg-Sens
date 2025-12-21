@@ -162,13 +162,22 @@ pub struct ColorGradientLUT {
 
 impl ColorGradientLUT {
     /// Create a new LUT from color stops
+    /// Stops are sorted by position during LUT construction (handles unsorted input)
     pub fn from_stops(stops: &[ColorStop], resolution: usize) -> Self {
         let resolution = resolution.max(2);
         let mut colors = Vec::with_capacity(resolution);
 
+        // Sort stops by position (only done once during LUT creation)
+        let mut sorted_stops: Vec<ColorStop> = stops.to_vec();
+        sorted_stops.sort_by(|a, b| {
+            a.position
+                .partial_cmp(&b.position)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         for i in 0..resolution {
             let t = i as f64 / (resolution - 1) as f64;
-            colors.push(interpolate_color_at(stops, t));
+            colors.push(interpolate_color_at(&sorted_stops, t));
         }
 
         Self { colors, resolution }
