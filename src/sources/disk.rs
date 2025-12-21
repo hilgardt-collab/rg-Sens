@@ -24,6 +24,8 @@ pub struct DiskSource {
     // Cached values (in bytes)
     total_space: u64,
     available_space: u64,
+    // Cached file system type (avoids double lookup in get_values)
+    file_system: String,
 }
 
 impl DiskSource {
@@ -55,6 +57,7 @@ impl DiskSource {
             config: DiskSourceConfig::default(),
             total_space: 0,
             available_space: 0,
+            file_system: String::new(),
         }
     }
 
@@ -218,16 +221,18 @@ impl DataSource for DiskSource {
     fn update(&mut self) -> Result<()> {
         self.disks.refresh();
 
-        // Find the disk matching our configured path
+        // Find the disk matching our configured path and cache all values
         if let Some(disk) = self.disks.iter().find(|d| {
             d.mount_point().to_string_lossy() == self.config.disk_path
         }) {
             self.total_space = disk.total_space();
             self.available_space = disk.available_space();
+            self.file_system = disk.file_system().to_string_lossy().into_owned();
         } else {
             // Disk not found, reset values
             self.total_space = 0;
             self.available_space = 0;
+            self.file_system.clear();
         }
 
         Ok(())
@@ -241,12 +246,9 @@ impl DataSource for DiskSource {
 
         values.insert("mount_point".to_string(), Value::from(self.config.disk_path.as_str()));
 
-        // Get file system type if available
-        if let Some(disk) = self.disks.iter().find(|d| {
-            d.mount_point().to_string_lossy() == self.config.disk_path
-        }) {
-            values.insert("file_system".to_string(),
-                Value::from(disk.file_system().to_string_lossy().to_string()));
+        // Use cached file system type (cached during update() to avoid double lookup)
+        if !self.file_system.is_empty() {
+            values.insert("file_system".to_string(), Value::from(self.file_system.as_str()));
         }
 
         if self.total_space == 0 {

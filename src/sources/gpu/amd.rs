@@ -196,10 +196,7 @@ impl AmdBackend {
                 if line.contains('*') {
                     // Extract the clock value (e.g., "1200Mhz")
                     if let Some(clock_str) = line.split(':').nth(1) {
-                        let clock_str = clock_str.trim().replace("Mhz", "").replace("*", "").trim().to_string();
-                        if let Ok(clock) = clock_str.parse::<u32>() {
-                            return Some(clock);
-                        }
+                        return Self::parse_clock_value(clock_str);
                     }
                 }
             }
@@ -217,15 +214,27 @@ impl AmdBackend {
                 if line.contains('*') {
                     // Extract the clock value
                     if let Some(clock_str) = line.split(':').nth(1) {
-                        let clock_str = clock_str.trim().replace("Mhz", "").replace("*", "").trim().to_string();
-                        if let Ok(clock) = clock_str.parse::<u32>() {
-                            return Some(clock);
-                        }
+                        return Self::parse_clock_value(clock_str);
                     }
                 }
             }
         }
         None
+    }
+
+    /// Parse clock value from string like " 1200Mhz *" without unnecessary allocations
+    #[inline]
+    fn parse_clock_value(s: &str) -> Option<u32> {
+        // Extract just the numeric portion without allocating new strings
+        // Input examples: " 1200Mhz *", " 300Mhz", "1500Mhz *"
+        let s = s.trim();
+        // Find where the digits end
+        let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+        if end > 0 {
+            s[..end].parse().ok()
+        } else {
+            None
+        }
     }
 }
 

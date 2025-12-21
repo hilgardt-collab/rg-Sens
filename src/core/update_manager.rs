@@ -321,8 +321,6 @@ impl UpdateManager {
             let elapsed = now.duration_since(state.last_update);
             if elapsed >= effective_interval {
                 let panel = state.panel.clone();
-                // Clone once for the tasks Vec, move into async block for error logging
-                let panel_id_owned = panel_id.clone();
                 let source_key = state.source_key.clone();
 
                 // Check if this panel's source was updated in phase 1
@@ -335,8 +333,8 @@ impl UpdateManager {
                 // Clone semaphore for the task - limits concurrent updates
                 let semaphore = self.update_semaphore.clone();
 
-                // Clone panel_id for use inside the async block
-                let panel_id_for_task = panel_id_owned.clone();
+                // Clone panel_id once for the async block (used for error logging)
+                let panel_id_for_task = panel_id.clone();
                 let task = tokio::spawn(async move {
                     // Acquire permit to limit concurrent updates (automatically released on drop)
                     let _permit = semaphore.acquire().await;
@@ -349,7 +347,8 @@ impl UpdateManager {
                         error!("Error updating panel {}: {}", panel_id_for_task, e);
                     }
                 });
-                tasks.push((panel_id_owned, task));
+                // Clone panel_id for the result tuple (separate from async block)
+                tasks.push((panel_id.clone(), task));
             }
         }
 

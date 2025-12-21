@@ -39,6 +39,9 @@ pub struct GpuSource {
     config: GpuSourceConfig,
     backend: Option<Arc<Mutex<Box<dyn GpuBackend>>>>,
 
+    // Cached static info (doesn't change, avoids mutex lock in hot paths)
+    cached_vendor: String,
+
     // Cached values (read from backend after update)
     temperature: Option<f32>,
     utilization: Option<u32>,
@@ -73,10 +76,16 @@ impl GpuSource {
         // Get backend for default GPU (index 0)
         let backend = GPU_MANAGER.backends.first().cloned();
 
+        // Cache the vendor string to avoid mutex lock in generate_auto_caption
+        let cached_vendor = GPU_MANAGER.gpu_info.first()
+            .map(|info| info.vendor.as_str().to_string())
+            .unwrap_or_else(|| "GPU".to_string());
+
         Self {
             metadata,
             config: GpuSourceConfig::default(),
             backend,
+            cached_vendor,
             temperature: None,
             utilization: None,
             memory_used: None,
@@ -100,12 +109,17 @@ impl GpuSource {
 
     /// Set configuration
     pub fn set_config(&mut self, config: GpuSourceConfig) {
-        // Update backend if GPU index changed
+        // Update backend and cached vendor if GPU index changed
         if config.gpu_index != self.config.gpu_index {
             // Validate gpu_index is within bounds before accessing
             let gpu_count = GPU_MANAGER.backends.len();
             if (config.gpu_index as usize) < gpu_count {
                 self.backend = GPU_MANAGER.backends.get(config.gpu_index as usize).cloned();
+                // Update cached vendor for the new GPU
+                self.cached_vendor = GPU_MANAGER.gpu_info
+                    .get(config.gpu_index as usize)
+                    .map(|info| info.vendor.as_str().to_string())
+                    .unwrap_or_else(|| "GPU".to_string());
             } else {
                 log::warn!(
                     "GPU index {} out of bounds (only {} GPUs available), keeping current backend",
@@ -157,22 +171,13 @@ impl GpuSource {
         }
     }
 
-    /// Generate automatic caption
+    /// Generate automatic caption using cached vendor (no mutex lock needed)
     fn generate_auto_caption(&self) -> String {
-        // Include vendor in caption if we have backend info
-        let gpu_prefix = if let Some(ref backend) = self.backend {
-            if let Ok(backend_guard) = backend.lock() {
-                let info = backend_guard.info();
-                if self.config.gpu_index > 0 {
-                    format!("{} {} ", info.vendor.as_str(), self.config.gpu_index)
-                } else {
-                    format!("{} ", info.vendor.as_str())
-                }
-            } else {
-                "GPU ".to_string()
-            }
+        // Use cached vendor string to avoid locking backend mutex
+        let gpu_prefix = if self.config.gpu_index > 0 {
+            format!("{} {} ", self.cached_vendor, self.config.gpu_index)
         } else {
-            "GPU ".to_string()
+            format!("{} ", self.cached_vendor)
         };
 
         let field_type = match self.config.field {
