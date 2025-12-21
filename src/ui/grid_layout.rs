@@ -985,6 +985,7 @@ impl GridLayout {
         let section2 = gio::Menu::new();
         section2.append(Some("Copy Style"), Some("panel.copy_style"));
         section2.append(Some("Paste Style"), Some("panel.paste_style"));
+        section2.append(Some("Set as Default Style"), Some("panel.set_default_style"));
         menu.append_section(None, &section2);
 
         // Section 3: Save to File
@@ -1121,6 +1122,58 @@ impl GridLayout {
             }
         });
         action_group.add_action(&paste_style_action);
+
+        // Set as Default Style action
+        let panel_set_default = panel.clone();
+        let set_default_style_action = gio::SimpleAction::new("set_default_style", None);
+        set_default_style_action.connect_activate(move |_, _| {
+            use crate::config::DefaultsConfig;
+
+            info!("Setting panel style as default");
+            let panel_guard = panel_set_default.blocking_read();
+
+            // Get the displayer ID and its typed config
+            let displayer_id = panel_guard.displayer.id().to_string();
+
+            // Get the displayer's typed config and convert to JSON Value
+            let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
+                // Use the typed config for accurate serialization
+                serde_json::to_value(&typed_config).ok()
+            } else {
+                // Fall back to HashMap config (filter out source-specific keys)
+                let mut config = panel_guard.config.clone();
+                config.remove("cpu_config");
+                config.remove("gpu_config");
+                config.remove("memory_config");
+                config.remove("disk_config");
+                config.remove("clock_config");
+                config.remove("combo_config");
+                config.remove("system_temp_config");
+                config.remove("fan_speed_config");
+                config.remove("test_config");
+                serde_json::to_value(&config).ok()
+            };
+
+            drop(panel_guard);
+
+            if let Some(config_value) = displayer_config {
+                // Load current defaults, update, and save
+                let mut defaults = DefaultsConfig::load();
+                defaults.set_displayer_default(&displayer_id, config_value);
+
+                match defaults.save() {
+                    Ok(()) => {
+                        info!("Default style saved for displayer: {}", displayer_id);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to save default style: {}", e);
+                    }
+                }
+            } else {
+                log::warn!("Could not serialize displayer config for default style");
+            }
+        });
+        action_group.add_action(&set_default_style_action);
 
         // Save to File action
         let panel_save_file = panel.clone();

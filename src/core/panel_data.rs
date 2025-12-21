@@ -359,6 +359,24 @@ impl DisplayerConfig {
             _ => None,
         }
     }
+
+    /// Create a DisplayerConfig from a JSON value for a given displayer type ID
+    /// This is used to restore saved default configurations
+    pub fn from_value_for_type(displayer_type: &str, value: serde_json::Value) -> Option<Self> {
+        match displayer_type {
+            "text" => serde_json::from_value(value).ok().map(DisplayerConfig::Text),
+            "bar" => serde_json::from_value(value).ok().map(DisplayerConfig::Bar),
+            "arc" => serde_json::from_value(value).ok().map(DisplayerConfig::Arc),
+            "speedometer" => serde_json::from_value(value).ok().map(DisplayerConfig::Speedometer),
+            "graph" => serde_json::from_value(value).ok().map(DisplayerConfig::Graph),
+            "clock_analog" => serde_json::from_value(value).ok().map(DisplayerConfig::ClockAnalog),
+            "clock_digital" => serde_json::from_value(value).ok().map(DisplayerConfig::ClockDigital),
+            "lcars" => serde_json::from_value(value).ok().map(DisplayerConfig::Lcars),
+            "cpu_cores" => serde_json::from_value(value).ok().map(DisplayerConfig::CpuCores),
+            "indicator" => serde_json::from_value(value).ok().map(DisplayerConfig::Indicator),
+            _ => None,
+        }
+    }
 }
 
 impl Default for DisplayerConfig {
