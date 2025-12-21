@@ -742,20 +742,17 @@ fn draw_segment_text(
         cr.show_text("88:88:88")?; // Show all segments dimly
     }
 
-    // Draw glow
+    // Draw glow using cardinal directions only (4 draws instead of 8)
+    // This provides a visually similar glow effect with half the rendering cost
     cr.set_source_rgba(
         config.time_color.r,
         config.time_color.g,
         config.time_color.b,
         0.3,
     );
-    for dx in [-1.0, 0.0, 1.0] {
-        for dy in [-1.0, 0.0, 1.0] {
-            if dx != 0.0 || dy != 0.0 {
-                cr.move_to(x + dx, y + dy);
-                cr.show_text(text)?;
-            }
-        }
+    for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+        cr.move_to(x + dx, y + dy);
+        cr.show_text(text)?;
     }
 
     // Draw main text
