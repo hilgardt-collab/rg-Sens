@@ -386,9 +386,8 @@ fn draw_face(
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
+    // Draw face background with circular clip
     cr.save()?;
-
-    // Clip to circle for background
     cr.arc(cx, cy, radius, 0.0, 2.0 * PI);
     cr.clip();
 
@@ -400,12 +399,11 @@ fn draw_face(
     let face_height = radius * 2.0;
     let _ = crate::ui::render_background(cr, &config.face_background, face_width, face_height);
 
-    // Restore translation before resetting clip
-    cr.identity_matrix();
-    cr.reset_clip();
+    cr.restore()?; // Restores both clip and translation
 
-    // Draw border
+    // Draw border (outside the clipped region, using original transform)
     if config.border_width > 0.0 {
+        cr.save()?;
         cr.arc(cx, cy, radius - config.border_width / 2.0, 0.0, 2.0 * PI);
         cr.set_source_rgba(
             config.border_color.r,
@@ -415,9 +413,9 @@ fn draw_face(
         );
         cr.set_line_width(config.border_width);
         cr.stroke()?;
+        cr.restore()?;
     }
 
-    cr.restore()?;
     Ok(())
 }
 
