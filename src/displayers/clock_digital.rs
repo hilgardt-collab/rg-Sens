@@ -330,15 +330,10 @@ impl Displayer for ClockDigitalDisplayer {
                             icon_text.clone()
                         };
 
-                        let text_w = if let Ok(te) = cr.text_extents(&display_text) {
-                            te.width()
+                        let (text_w, text_h) = if let Ok(te) = cr.text_extents(&display_text) {
+                            (te.width(), te.height())
                         } else {
-                            icon_size * 0.8 // Fallback width
-                        };
-                        let text_h = if let Ok(te) = cr.text_extents(&display_text) {
-                            te.height()
-                        } else {
-                            icon_size * 0.8
+                            (icon_size * 0.8, icon_size * 0.8) // Fallback dimensions
                         };
                         let text_x = width as f64 - text_w - 6.0;
                         let text_y = height as f64 - 6.0;

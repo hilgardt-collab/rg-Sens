@@ -3,6 +3,7 @@
 use anyhow::Result;
 use cairo::Context;
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL};
+use crate::displayers::TextDisplayerConfig;
 use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Widget};
@@ -262,8 +263,15 @@ impl Displayer for GraphDisplayer {
                 }
             }
 
-            // Store all source values for text overlay
-            data.source_values = values.clone();
+            // Extract only needed values for text overlay (avoids cloning entire HashMap)
+            if !data.config.text_overlay.is_empty() {
+                let text_config = TextDisplayerConfig {
+                    lines: data.config.text_overlay.clone(),
+                };
+                data.source_values = super::extract_text_values(values, &text_config);
+            } else {
+                data.source_values.clear();
+            }
 
             // Extract transform from values
             data.transform = PanelTransform::from_values(values);

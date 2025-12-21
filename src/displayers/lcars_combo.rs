@@ -634,12 +634,6 @@ impl Displayer for LcarsComboDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
-            // Note: LCARS combo uses dynamic prefixes (group1_1_caption, etc.) and passes
-            // values to multiple rendering functions. Extracting only needed values would
-            // require tracking all prefixes and text configs, with limited benefit since
-            // combo sources already have moderate-sized HashMaps.
-            display_data.values = data.clone();
-
             // Copy config values we need
             let animation_enabled = display_data.config.animation_enabled;
             let group_item_counts = display_data.config.frame.group_item_counts.clone();
@@ -656,6 +650,13 @@ impl Displayer for LcarsComboDisplayer {
                     prefixes.push(format!("group{}_{}", group_num, item_idx));
                 }
             }
+
+            // Extract only values matching known prefixes (avoids cloning entire HashMap)
+            // This is more efficient when source has many extra values we don't need
+            display_data.values = data.iter()
+                .filter(|(k, _)| prefixes.iter().any(|prefix| k.starts_with(prefix)))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
 
             // Update each item
             for prefix in &prefixes {

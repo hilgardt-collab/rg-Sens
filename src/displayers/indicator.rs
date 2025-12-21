@@ -6,6 +6,7 @@
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform};
 use crate::displayers::TextDisplayerConfig;
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::render_cache::get_cached_color_at;
 use anyhow::Result;
 use cairo::Context;
 use gtk4::{glib, prelude::*, DrawingArea, Widget};
@@ -156,6 +157,7 @@ impl IndicatorConfig {
 }
 
 /// Interpolate a color from gradient stops based on a value
+/// Uses cached LUT for O(1) lookup instead of sorting stops on every call
 pub fn interpolate_gradient(stops: &[ColorStop], value: f64, min: f64, max: f64) -> Color {
     if stops.is_empty() {
         return Color::new(0.5, 0.5, 0.5, 1.0);
@@ -173,48 +175,9 @@ pub fn interpolate_gradient(stops: &[ColorStop], value: f64, min: f64, max: f64)
         0.5
     };
 
-    // Find the two stops to interpolate between
-    let mut sorted_stops: Vec<&ColorStop> = stops.iter().collect();
-    // Use unwrap_or to handle NaN values safely (NaN positions sort as equal)
-    sorted_stops.sort_by(|a, b| {
-        a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Handle edge cases - use first/last references to avoid repeated lookups
-    let first = &sorted_stops[0];
-    let last = sorted_stops.last().unwrap();
-    if normalized <= first.position {
-        return first.color;
-    }
-    if normalized >= last.position {
-        return last.color;
-    }
-
-    // Find surrounding stops
-    for i in 0..sorted_stops.len() - 1 {
-        let start = sorted_stops[i];
-        let end = sorted_stops[i + 1];
-
-        if normalized >= start.position && normalized <= end.position {
-            // Interpolate between these two stops
-            let segment_range = end.position - start.position;
-            let t = if segment_range > 0.0 {
-                (normalized - start.position) / segment_range
-            } else {
-                0.0
-            };
-
-            return Color::new(
-                start.color.r + (end.color.r - start.color.r) * t,
-                start.color.g + (end.color.g - start.color.g) * t,
-                start.color.b + (end.color.b - start.color.b) * t,
-                start.color.a + (end.color.a - start.color.a) * t,
-            );
-        }
-    }
-
-    // Fallback
-    sorted_stops[0].color
+    // Use cached LUT for fast O(1) color lookup
+    // The LUT handles sorting internally (once per unique gradient)
+    get_cached_color_at(stops, normalized)
 }
 
 /// Render an indicator shape
