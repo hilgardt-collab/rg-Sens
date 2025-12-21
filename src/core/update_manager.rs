@@ -26,6 +26,15 @@ const CONFIG_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 /// This prevents spawning too many tasks at once if many panels are due
 const MAX_CONCURRENT_UPDATES: usize = 16;
 
+/// Circuit breaker: number of consecutive failures before opening
+const CIRCUIT_BREAKER_THRESHOLD: u32 = 3;
+
+/// Circuit breaker: initial retry interval when circuit opens
+const CIRCUIT_BREAKER_BASE_RETRY: Duration = Duration::from_secs(10);
+
+/// Circuit breaker: maximum retry interval (caps exponential backoff)
+const CIRCUIT_BREAKER_MAX_RETRY: Duration = Duration::from_secs(300); // 5 minutes
+
 /// Tracks update timing for a panel
 struct PanelUpdateState {
     panel: Arc<RwLock<Panel>>,
@@ -40,10 +49,89 @@ struct PanelUpdateState {
     source_key: Option<String>,
 }
 
+/// Circuit breaker for handling repeated source failures
+///
+/// Prevents wasting resources on sources that consistently fail (e.g., disconnected GPU,
+/// unavailable sensor). After `failure_threshold` consecutive failures, the circuit opens
+/// and retries are delayed with exponential backoff.
+struct CircuitBreaker {
+    /// Number of consecutive failures
+    consecutive_failures: u32,
+    /// Time when circuit was opened (None = circuit closed)
+    opened_at: Option<Instant>,
+    /// Current retry interval (increases with backoff)
+    current_retry_interval: Duration,
+}
+
+impl CircuitBreaker {
+    fn new() -> Self {
+        Self {
+            consecutive_failures: 0,
+            opened_at: None,
+            current_retry_interval: CIRCUIT_BREAKER_BASE_RETRY,
+        }
+    }
+
+    /// Check if circuit is open and should skip update
+    fn should_skip(&self, now: Instant) -> bool {
+        if let Some(opened_at) = self.opened_at {
+            // Circuit is open - check if retry time has passed
+            now.duration_since(opened_at) < self.current_retry_interval
+        } else {
+            false
+        }
+    }
+
+    /// Record a successful update - closes the circuit
+    fn record_success(&mut self) {
+        if self.opened_at.is_some() {
+            debug!("Circuit breaker closed after successful update");
+        }
+        self.consecutive_failures = 0;
+        self.opened_at = None;
+        self.current_retry_interval = CIRCUIT_BREAKER_BASE_RETRY;
+    }
+
+    /// Record a failed update - may open the circuit
+    fn record_failure(&mut self, now: Instant, source_name: &str) {
+        self.consecutive_failures += 1;
+
+        if self.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD {
+            if self.opened_at.is_some() {
+                // Already open - apply exponential backoff
+                self.current_retry_interval =
+                    (self.current_retry_interval * 2).min(CIRCUIT_BREAKER_MAX_RETRY);
+                debug!(
+                    "Circuit breaker for {} still open, backoff increased to {:?}",
+                    source_name, self.current_retry_interval
+                );
+            } else {
+                // First time opening
+                info!(
+                    "Circuit breaker opened for {} after {} consecutive failures, retry in {:?}",
+                    source_name, self.consecutive_failures, self.current_retry_interval
+                );
+            }
+            self.opened_at = Some(now);
+        }
+    }
+
+    /// Check if circuit is in half-open state (ready to retry after timeout)
+    fn is_half_open(&self, now: Instant) -> bool {
+        if let Some(opened_at) = self.opened_at {
+            now.duration_since(opened_at) >= self.current_retry_interval
+        } else {
+            false
+        }
+    }
+}
+
 /// Tracks update timing for a shared source
 struct SharedSourceUpdateState {
     last_update: Instant,
     interval: Duration,
+    /// Circuit breaker for handling repeated failures
+    circuit_breaker: CircuitBreaker,
 }
 
 /// Compute a hash from PanelData's source config (preferred method)
@@ -215,6 +303,7 @@ impl UpdateManager {
                     SharedSourceUpdateState {
                         last_update: Instant::now() - interval, // Force immediate update
                         interval,
+                        circuit_breaker: CircuitBreaker::new(),
                     },
                 );
                 debug!("Registered shared source {} with interval {:?}", key, interval);
@@ -378,6 +467,7 @@ impl UpdateManager {
                                 SharedSourceUpdateState {
                                     last_update: Instant::now() - interval, // Force immediate update
                                     interval,
+                                    circuit_breaker: CircuitBreaker::new(),
                                 },
                             );
                             debug!("Registered new shared source {} for panel {} with interval {:?}", new_key, panel_id, interval);
@@ -433,7 +523,8 @@ impl UpdateManager {
 
     /// Update shared sources that are due for an update
     ///
-    /// Returns a set of source keys that were updated
+    /// Returns a set of source keys that were updated.
+    /// Uses circuit breaker pattern to avoid hammering failing sources.
     async fn update_shared_sources(&self, now: Instant) -> std::collections::HashSet<String> {
         let mut updated = std::collections::HashSet::new();
 
@@ -443,21 +534,44 @@ impl UpdateManager {
         };
 
         // Phase 1: Collect sources that need updating (read lock only)
-        let sources_to_update: Vec<(String, Duration)> = {
+        // Skip sources with open circuit breakers (unless ready to retry)
+        let sources_to_update: Vec<(String, Duration, bool)> = {
             let shared_sources = self.shared_sources.read().await;
             shared_sources
                 .iter()
-                .filter(|(_, state)| now.duration_since(state.last_update) >= state.interval)
-                .map(|(key, state)| (key.clone(), state.interval))
+                .filter(|(key, state)| {
+                    // Check if update is due based on interval
+                    let interval_due = now.duration_since(state.last_update) >= state.interval;
+                    if !interval_due {
+                        return false;
+                    }
+
+                    // Check circuit breaker state
+                    if state.circuit_breaker.should_skip(now) {
+                        trace!("Skipping source {} - circuit breaker open", key);
+                        return false;
+                    }
+
+                    true
+                })
+                .map(|(key, state)| {
+                    let is_half_open = state.circuit_breaker.is_half_open(now);
+                    (key.clone(), state.interval, is_half_open)
+                })
                 .collect()
         };
         // Lock released here before I/O
 
         // Phase 2: Perform I/O WITHOUT holding the lock
         // This prevents blocking readers during hardware polling
-        let mut update_results: Vec<(String, Result<(), String>, Option<Duration>)> = Vec::with_capacity(sources_to_update.len());
+        let mut update_results: Vec<(String, Result<(), String>, Option<Duration>, bool)> =
+            Vec::with_capacity(sources_to_update.len());
 
-        for (key, _interval) in sources_to_update {
+        for (key, _interval, is_half_open) in sources_to_update {
+            if is_half_open {
+                trace!("Retrying source {} (circuit breaker half-open)", key);
+            }
+
             let result = manager.update_source(&key);
             let new_interval = manager.get_interval(&key);
 
@@ -465,16 +579,22 @@ impl UpdateManager {
                 Ok(_) => {
                     trace!("Updated shared source {}", key);
                     updated.insert(key.clone());
-                    update_results.push((key, Ok(()), new_interval));
+                    update_results.push((key, Ok(()), new_interval, is_half_open));
                 }
                 Err(e) => {
                     let err_str = e.to_string();
                     if err_str.contains("Source not found") {
-                        debug!("Shared source {} no longer exists, removing from update tracking", key);
-                    } else {
+                        debug!(
+                            "Shared source {} no longer exists, removing from update tracking",
+                            key
+                        );
+                    } else if !is_half_open {
+                        // Only log errors for non-retry attempts to reduce log spam
                         error!("Error updating shared source {}: {}", key, e);
+                    } else {
+                        debug!("Retry failed for shared source {}: {}", key, e);
                     }
-                    update_results.push((key, Err(err_str), None));
+                    update_results.push((key, Err(err_str), None, is_half_open));
                 }
             }
         }
@@ -483,11 +603,12 @@ impl UpdateManager {
         {
             let mut shared_sources = self.shared_sources.write().await;
 
-            for (key, result, new_interval) in update_results {
+            for (key, result, new_interval, _is_half_open) in update_results {
                 match result {
                     Ok(()) => {
                         if let Some(state) = shared_sources.get_mut(&key) {
                             state.last_update = now;
+                            state.circuit_breaker.record_success();
 
                             // Also refresh interval from manager in case it changed
                             if let Some(new_int) = new_interval {
@@ -505,7 +626,10 @@ impl UpdateManager {
                         shared_sources.remove(&key);
                     }
                     Err(_) => {
-                        // Other errors: just log, don't remove
+                        // Record failure in circuit breaker
+                        if let Some(state) = shared_sources.get_mut(&key) {
+                            state.circuit_breaker.record_failure(now, &key);
+                        }
                     }
                 }
             }
