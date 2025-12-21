@@ -455,6 +455,14 @@ impl Panel {
                 }
                 SourceConfig::default_for_type("test").unwrap_or_default()
             }
+            "static_text" => {
+                if let Some(val) = self.config.get("static_text_config") {
+                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                        return SourceConfig::StaticText(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("static_text").unwrap_or_default()
+            }
             _ => SourceConfig::default()
         }
     }

@@ -233,4 +233,8 @@ impl DataSource for StaticTextSource {
         }
         Ok(())
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {
+        Some(crate::core::SourceConfig::StaticText(self.config.clone()))
+    }
 }
