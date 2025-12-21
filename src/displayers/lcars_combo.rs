@@ -20,7 +20,8 @@ use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATI
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     get_content_bounds, render_content_background, render_content_bar, render_content_text,
-    render_content_graph, render_content_core_bars, render_divider, render_lcars_frame, calculate_item_layouts,
+    render_content_graph, render_content_core_bars, render_content_static, render_divider,
+    render_lcars_frame, calculate_item_layouts,
     ContentDisplayType, ContentItemData, LcarsFrameConfig, SplitOrientation,
 };
 
@@ -352,6 +353,17 @@ impl LcarsComboDisplayer {
                         item_h,
                         core_bars_config,
                         &core_values,
+                    )?;
+                }
+                ContentDisplayType::Static => {
+                    // Render static background (no dynamic data)
+                    render_content_static(
+                        cr,
+                        item_x,
+                        item_y,
+                        item_w,
+                        item_h,
+                        &item_config.static_config,
                     )?;
                 }
             }

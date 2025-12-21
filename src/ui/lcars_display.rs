@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::f64::consts::PI;
 
-use crate::ui::background::Color;
+use crate::ui::background::{BackgroundConfig, Color, render_background};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
@@ -132,6 +132,8 @@ pub enum ContentDisplayType {
     LevelBar,
     #[serde(rename = "core_bars")]
     CoreBars,
+    #[serde(rename = "static")]
+    Static,
 }
 
 /// Configuration for a sidebar segment
@@ -307,6 +309,13 @@ impl Default for DividerConfig {
     }
 }
 
+/// Configuration for static display (background only, no dynamic data)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct StaticDisplayConfig {
+    #[serde(default)]
+    pub background: BackgroundConfig,
+}
+
 /// Configuration for a content item
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentItemConfig {
@@ -320,6 +329,8 @@ pub struct ContentItemConfig {
     pub graph_config: GraphDisplayConfig,
     #[serde(default)]
     pub core_bars_config: CoreBarsConfig,
+    #[serde(default)]
+    pub static_config: StaticDisplayConfig,
 }
 
 fn default_item_height() -> f64 {
@@ -334,6 +345,7 @@ impl Default for ContentItemConfig {
             bar_config: BarDisplayConfig::default(),
             graph_config: GraphDisplayConfig::default(),
             core_bars_config: CoreBarsConfig::default(),
+            static_config: StaticDisplayConfig::default(),
         }
     }
 }
@@ -1540,6 +1552,25 @@ pub fn render_content_core_bars(
 
     // Call the core_bars_display render function
     render_core_bars(cr, config, core_values, w, h)?;
+
+    cr.restore()?;
+    Ok(())
+}
+
+/// Render static content item (background only, no dynamic data)
+pub fn render_content_static(
+    cr: &cairo::Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    config: &StaticDisplayConfig,
+) -> Result<(), cairo::Error> {
+    cr.save()?;
+    cr.translate(x, y);
+
+    // Render the background
+    render_background(cr, &config.background, w, h)?;
 
     cr.restore()?;
     Ok(())
