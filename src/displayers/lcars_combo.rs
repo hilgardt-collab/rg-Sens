@@ -356,7 +356,7 @@ impl LcarsComboDisplayer {
                     )?;
                 }
                 ContentDisplayType::Static => {
-                    // Render static background (no dynamic data)
+                    // Render static background with optional text overlay
                     render_content_static(
                         cr,
                         item_x,
@@ -364,6 +364,8 @@ impl LcarsComboDisplayer {
                         item_w,
                         item_h,
                         &item_config.static_config,
+                        &item_config.bar_config,
+                        Some(&slot_values),
                     )?;
                 }
             }

@@ -1973,12 +1973,12 @@ impl LcarsConfigWidget {
 
         // Show/hide config sections based on display type
         // Bar config: only for Bar and LevelBar (shows bar style + colors + text overlay)
-        // Text config: only for Text (shows only text lines)
+        // Text config: for Text and Static (shows only text lines)
         // Graph config: only for Graph
         // Core Bars config: only for CoreBars
-        // Static config: only for Static
+        // Static config: only for Static (background + text overlay)
         let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
-        let show_text = current_type == ContentDisplayType::Text;
+        let show_text = matches!(current_type, ContentDisplayType::Text | ContentDisplayType::Static);
         bar_config_frame.set_visible(show_bar);
         text_config_frame.set_visible(show_text);
         graph_config_frame.set_visible(current_type == ContentDisplayType::Graph);
@@ -2010,7 +2010,7 @@ impl LcarsConfigWidget {
             };
             // Show appropriate config for each display type
             let show_bar = matches!(display_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
-            let show_text = display_type == ContentDisplayType::Text;
+            let show_text = matches!(display_type, ContentDisplayType::Text | ContentDisplayType::Static);
             bar_config_frame_clone.set_visible(show_bar);
             text_config_frame_clone.set_visible(show_text);
             graph_config_frame_clone.set_visible(display_type == ContentDisplayType::Graph);

@@ -1557,7 +1557,7 @@ pub fn render_content_core_bars(
     Ok(())
 }
 
-/// Render static content item (background only, no dynamic data)
+/// Render static content item (background with optional text overlay)
 pub fn render_content_static(
     cr: &cairo::Context,
     x: f64,
@@ -1565,12 +1565,26 @@ pub fn render_content_static(
     w: f64,
     h: f64,
     config: &StaticDisplayConfig,
+    bar_config: &BarDisplayConfig,
+    slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
     cr.translate(x, y);
 
     // Render the background
     render_background(cr, &config.background, w, h)?;
+
+    // Render text overlay if enabled
+    if bar_config.text_overlay.enabled {
+        let values = slot_values.cloned().unwrap_or_default();
+        crate::ui::text_renderer::render_text_lines(
+            cr,
+            w,
+            h,
+            &bar_config.text_overlay.text_config,
+            &values,
+        );
+    }
 
     cr.restore()?;
     Ok(())
