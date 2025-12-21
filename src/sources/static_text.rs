@@ -88,6 +88,17 @@ impl StaticTextSource {
 
     /// Set configuration
     pub fn set_config(&mut self, config: StaticTextSourceConfig) {
+        // Ensure at least one line exists
+        let config = if config.lines.is_empty() {
+            log::warn!("StaticTextSource::set_config - received empty lines, using default");
+            StaticTextSourceConfig {
+                lines: vec![StaticTextLine::default()],
+                ..config
+            }
+        } else {
+            config
+        };
+
         self.config = config;
         // Update available keys based on configured lines
         self.metadata.available_keys = vec![
@@ -175,24 +186,34 @@ impl DataSource for StaticTextSource {
     fn get_values(&self) -> HashMap<String, Value> {
         let mut values = HashMap::new();
 
+        // Ensure we have valid config - use default if lines is empty
+        let lines = if self.config.lines.is_empty() {
+            vec![StaticTextLine::default()]
+        } else {
+            self.config.lines.clone()
+        };
+
         // Set caption
         let caption = self.config.custom_caption
             .clone()
-            .unwrap_or_else(|| self.generate_auto_caption());
-        values.insert("caption".to_string(), Value::from(caption));
+            .unwrap_or_else(|| {
+                lines.first()
+                    .map(|l| l.label.clone())
+                    .unwrap_or_else(|| "Static Text".to_string())
+            });
+        values.insert("caption".to_string(), Value::from(caption.clone()));
 
         // Set primary value to first line's text
-        if let Some(first_line) = self.config.lines.first() {
-            values.insert("value".to_string(), Value::from(first_line.text.clone()));
-        } else {
-            values.insert("value".to_string(), Value::from(""));
-        }
+        let value_text = lines.first()
+            .map(|l| l.text.clone())
+            .unwrap_or_else(|| "Static Text".to_string());
+        values.insert("value".to_string(), Value::from(value_text.clone()));
 
         // Unit is empty for static text
         values.insert("unit".to_string(), Value::from(""));
 
         // Add all configured lines as their field_id
-        for line in &self.config.lines {
+        for line in &lines {
             values.insert(line.field_id.clone(), Value::from(line.text.clone()));
         }
 

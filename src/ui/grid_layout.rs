@@ -3126,6 +3126,7 @@ fn setup_copied_panel_interaction(
         displayer_config.remove("system_temp_config");
         displayer_config.remove("fan_speed_config");
         displayer_config.remove("test_config");
+        displayer_config.remove("static_text_config");
 
         let style = PanelStyle {
             background: panel_guard.background.clone(),
@@ -4869,6 +4870,7 @@ fn show_panel_properties_dialog(
         displayer_config.remove("system_temp_config");
         displayer_config.remove("fan_speed_config");
         displayer_config.remove("test_config");
+        displayer_config.remove("static_text_config");
 
         let style = PanelStyle {
             background: panel_guard.background.clone(),
