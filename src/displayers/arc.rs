@@ -242,6 +242,6 @@ impl Displayer for ArcDisplayer {
     }
 
     fn needs_redraw(&self) -> bool {
-        true
+        self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
 }

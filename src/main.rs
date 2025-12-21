@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 
@@ -463,8 +464,8 @@ fn build_ui(app: &Application) {
         });
     }
 
-    // Track if configuration has changed (dirty flag)
-    let config_dirty = Rc::new(RefCell::new(false));
+    // Track if configuration has changed (dirty flag) - thread-safe
+    let config_dirty = Arc::new(AtomicBool::new(false));
 
     // Mark config as dirty and update background size when panels are moved
     let config_dirty_clone = config_dirty.clone();
@@ -472,7 +473,7 @@ fn build_ui(app: &Application) {
     let grid_layout_for_change = Rc::new(RefCell::new(None::<Rc<RefCell<rg_sens::ui::GridLayout>>>));
     let grid_layout_for_change_clone = grid_layout_for_change.clone();
     grid_layout.set_on_change(move || {
-        *config_dirty_clone.borrow_mut() = true;
+        config_dirty_clone.store(true, Ordering::Relaxed);
         // Update background size to match grid content
         if let Some(layout) = grid_layout_for_change_clone.borrow().as_ref() {
             let content_size = layout.borrow().get_content_size();
@@ -665,12 +666,12 @@ fn build_ui(app: &Application) {
     // Mark config as dirty when window is resized
     let config_dirty_clone2 = config_dirty.clone();
     window.connect_default_width_notify(move |_| {
-        *config_dirty_clone2.borrow_mut() = true;
+        config_dirty_clone2.store(true, Ordering::Relaxed);
     });
 
     let config_dirty_clone3 = config_dirty.clone();
     window.connect_default_height_notify(move |_| {
-        *config_dirty_clone3.borrow_mut() = true;
+        config_dirty_clone3.store(true, Ordering::Relaxed);
     });
 
     // Show grid overlay during window resize (with debounced hide)
@@ -755,7 +756,7 @@ fn build_ui(app: &Application) {
                 app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
             }
             // Mark config as dirty
-            *config_dirty_for_fullscreen.borrow_mut() = true;
+            config_dirty_for_fullscreen.store(true, Ordering::Relaxed);
         }
     });
 
@@ -977,7 +978,7 @@ fn build_ui(app: &Application) {
     let app_config_for_close = app_config.clone();
 
     window.connect_close_request(move |window| {
-        let is_dirty = *config_dirty_clone4.borrow();
+        let is_dirty = config_dirty_clone4.load(Ordering::Relaxed);
 
         if is_dirty {
             // Show save confirmation dialog
@@ -1234,7 +1235,7 @@ fn build_ui(app: &Application) {
                                                     }
 
                                                     // Mark config as dirty
-                                                    *config_dirty.borrow_mut() = true;
+                                                    config_dirty.store(true, Ordering::Relaxed);
                                                     info!("Panel loaded successfully from {:?}", path);
                                                 }
                                                 Err(e) => {
@@ -1271,7 +1272,7 @@ fn build_ui(app: &Application) {
             info!("Save layout requested");
             let current_panels = grid_layout_for_save.borrow().get_panels();
             save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, &current_panels);
-            *config_dirty_for_save.borrow_mut() = false;
+            config_dirty_for_save.store(false, Ordering::Relaxed);
         });
 
         // Save to File button handler
@@ -1349,7 +1350,7 @@ fn build_ui(app: &Application) {
                             match app_config.borrow().save_to_path(&path) {
                                 Ok(()) => {
                                     info!("Layout saved successfully to {:?}", path);
-                                    *config_dirty.borrow_mut() = false;
+                                    config_dirty.store(false, Ordering::Relaxed);
                                 }
                                 Err(e) => {
                                     warn!("Failed to save layout: {}", e);
@@ -1448,7 +1449,7 @@ fn build_ui(app: &Application) {
                                         loaded_config.grid.cell_height,
                                         loaded_config.grid.spacing,
                                     );
-                                    *config_dirty.borrow_mut() = false;
+                                    config_dirty.store(false, Ordering::Relaxed);
                                 }
                                 Err(e) => {
                                     warn!("Failed to load layout: {}", e);
@@ -1490,7 +1491,7 @@ fn build_ui(app: &Application) {
                     }
                 }
                 // Mark config as dirty so it gets saved
-                config_dirty.replace(true);
+                config_dirty.store(true, Ordering::Relaxed);
             });
             rg_sens::ui::show_test_source_dialog_with_callback(&window_for_test, Some(save_callback));
         });
@@ -1722,7 +1723,7 @@ fn show_window_settings_dialog<F>(
     app_config: &Rc<RefCell<AppConfig>>,
     window_background: &gtk4::DrawingArea,
     grid_layout: &Rc<RefCell<GridLayout>>,
-    config_dirty: &Rc<RefCell<bool>>,
+    config_dirty: &Arc<AtomicBool>,
     on_auto_scroll_change: &Rc<F>,
 ) where
     F: Fn() + 'static,
@@ -2495,7 +2496,7 @@ fn show_window_settings_dialog<F>(
         grid_layout_clone.borrow_mut().update_grid_size(new_cell_width, new_cell_height, new_spacing);
 
         // Mark config as dirty
-        *config_dirty_clone.borrow_mut() = true;
+        config_dirty_clone.store(true, Ordering::Relaxed);
 
         // Restart auto-scroll timer with new settings
         on_auto_scroll_change_clone();
@@ -2601,7 +2602,7 @@ fn create_panel_from_data(
 fn show_new_panel_dialog(
     window: &ApplicationWindow,
     grid_layout: &Rc<RefCell<GridLayout>>,
-    config_dirty: &Rc<RefCell<bool>>,
+    config_dirty: &Arc<AtomicBool>,
     app_config: &Rc<RefCell<AppConfig>>,
     mouse_coords: Option<(f64, f64)>,
 ) {
@@ -2808,7 +2809,7 @@ fn show_new_panel_dialog(
                 }
 
                 // Mark config as dirty
-                *config_dirty.borrow_mut() = true;
+                config_dirty.store(true, Ordering::Relaxed);
 
                 info!("New panel created successfully");
                 dialog_clone.destroy();

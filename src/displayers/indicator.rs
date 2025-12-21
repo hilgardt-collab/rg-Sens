@@ -494,7 +494,7 @@ impl Displayer for IndicatorDisplayer {
     }
 
     fn needs_redraw(&self) -> bool {
-        true
+        self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {

@@ -87,6 +87,10 @@ impl CpuCoresDisplayer {
                     .trim_end_matches("_usage");
 
                 if let Ok(index) = index_str.parse::<usize>() {
+                    // Sanity check: reasonable max cores to prevent memory issues
+                    if index > 512 {
+                        continue;
+                    }
                     if let Some(usage) = value.as_f64() {
                         // Normalize from 0-100 to 0-1
                         let normalized = if usage > 1.0 {
@@ -333,6 +337,6 @@ impl Displayer for CpuCoresDisplayer {
     }
 
     fn needs_redraw(&self) -> bool {
-        true
+        self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
 }

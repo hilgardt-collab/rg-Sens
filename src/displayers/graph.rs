@@ -335,7 +335,6 @@ impl Displayer for GraphDisplayer {
     }
 
     fn needs_redraw(&self) -> bool {
-        // Always redraw for graphs since data changes frequently
-        true
+        self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
 }

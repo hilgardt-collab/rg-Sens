@@ -53,13 +53,14 @@ fn compute_config_hash_from_data(source_config: &SourceConfig) -> u64 {
 
     let mut hasher = DefaultHasher::new();
 
-    // Hash the source type and update interval
+    // Hash the source type and update interval (fast path for common checks)
     source_config.source_type().hash(&mut hasher);
     source_config.update_interval_ms().hash(&mut hasher);
 
     // Hash the serialized config for a complete picture
-    if let Ok(json) = serde_json::to_string(source_config) {
-        json.hash(&mut hasher);
+    // Use to_vec instead of to_string - avoids UTF-8 validation overhead
+    if let Ok(bytes) = serde_json::to_vec(source_config) {
+        bytes.hash(&mut hasher);
     }
 
     hasher.finish()

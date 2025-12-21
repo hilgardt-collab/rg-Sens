@@ -5,12 +5,19 @@
 
 use anyhow::Result;
 use log::{info, warn};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::RwLock;
 
 use crate::core::PanelBorderConfig;
 use crate::ui::background::BackgroundConfig;
+
+/// Global cached defaults configuration
+static DEFAULTS_CACHE: Lazy<RwLock<DefaultsConfig>> = Lazy::new(|| {
+    RwLock::new(DefaultsConfig::load_from_disk())
+});
 
 /// Current defaults format version
 pub const DEFAULTS_VERSION: u32 = 1;
@@ -112,9 +119,20 @@ impl Default for DefaultsConfig {
 }
 
 impl DefaultsConfig {
-    /// Load defaults from disk, returns default config if file doesn't exist
+    /// Load defaults from the global cache (fast, no disk I/O)
     pub fn load() -> Self {
-        match Self::try_load() {
+        DEFAULTS_CACHE
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|_| {
+                warn!("Failed to read defaults cache, using built-in defaults");
+                Self::default()
+            })
+    }
+
+    /// Load defaults directly from disk (used for initial cache population)
+    fn load_from_disk() -> Self {
+        match Self::try_load_from_disk() {
             Ok(config) => config,
             Err(e) => {
                 warn!("Failed to load defaults.json, using built-in defaults: {}", e);
@@ -124,7 +142,7 @@ impl DefaultsConfig {
     }
 
     /// Try to load defaults from disk
-    fn try_load() -> Result<Self> {
+    fn try_load_from_disk() -> Result<Self> {
         let config_path = Self::config_path()?;
 
         if !config_path.exists() {
@@ -137,7 +155,7 @@ impl DefaultsConfig {
         Ok(config)
     }
 
-    /// Save defaults to disk
+    /// Save defaults to disk and update the global cache
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
 
@@ -149,7 +167,20 @@ impl DefaultsConfig {
         let content = serde_json::to_string_pretty(self)?;
         std::fs::write(&config_path, content)?;
         info!("Saved defaults to {:?}", config_path);
+
+        // Update the global cache
+        if let Ok(mut cache) = DEFAULTS_CACHE.write() {
+            *cache = self.clone();
+        }
+
         Ok(())
+    }
+
+    /// Reload defaults from disk into the cache (use after external changes)
+    pub fn reload_cache() {
+        if let Ok(mut cache) = DEFAULTS_CACHE.write() {
+            *cache = Self::load_from_disk();
+        }
     }
 
     /// Get the defaults file path

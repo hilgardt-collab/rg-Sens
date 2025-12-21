@@ -11,6 +11,12 @@ pub struct AmdBackend {
     metrics: GpuMetrics,
     device_path: PathBuf,
     hwmon_path: Option<PathBuf>,
+    /// Cached path for temperature reading (discovered on first successful read)
+    cached_temp_path: Option<PathBuf>,
+    /// Cached path for power reading (discovered on first successful read)
+    cached_power_path: Option<PathBuf>,
+    /// Cached fan reading method: Some(true) = pwm, Some(false) = fan1_input, None = not discovered
+    cached_fan_method: Option<bool>,
 }
 
 impl AmdBackend {
@@ -44,6 +50,9 @@ impl AmdBackend {
             metrics: GpuMetrics::default(),
             device_path,
             hwmon_path,
+            cached_temp_path: None,
+            cached_power_path: None,
+            cached_fan_method: None,
         })
     }
 
@@ -103,14 +112,25 @@ impl AmdBackend {
         Some(format!("AMD Radeon {}", name))
     }
 
-    /// Try to read temperature from hwmon
-    fn read_temperature(&self) -> Option<f32> {
+    /// Try to read temperature from hwmon (caches successful path)
+    fn read_temperature(&mut self) -> Option<f32> {
         let hwmon = self.hwmon_path.as_ref()?;
 
-        // Try different temperature input files
+        // Use cached path if available
+        if let Some(ref cached_path) = self.cached_temp_path {
+            if let Ok(value) = Self::read_int_file(cached_path) {
+                return Some(value as f32 / 1000.0);
+            }
+            // Cached path no longer works, clear it and rediscover
+            self.cached_temp_path = None;
+        }
+
+        // Try different temperature input files and cache the working one
         for temp_file in &["temp1_input", "temp2_input", "temp3_input"] {
             let path = hwmon.join(temp_file);
             if let Ok(value) = Self::read_int_file(&path) {
+                // Cache the successful path for future reads
+                self.cached_temp_path = Some(path);
                 // Temperature is in millidegrees Celsius
                 return Some(value as f32 / 1000.0);
             }
@@ -141,14 +161,25 @@ impl AmdBackend {
         Ok(())
     }
 
-    /// Try to read power usage
-    fn read_power_usage(&self) -> Option<f32> {
+    /// Try to read power usage (caches successful path)
+    fn read_power_usage(&mut self) -> Option<f32> {
         let hwmon = self.hwmon_path.as_ref()?;
 
-        // Try different power input files
+        // Use cached path if available
+        if let Some(ref cached_path) = self.cached_power_path {
+            if let Ok(value) = Self::read_int_file(cached_path) {
+                return Some(value as f32 / 1_000_000.0);
+            }
+            // Cached path no longer works, clear it and rediscover
+            self.cached_power_path = None;
+        }
+
+        // Try different power input files and cache the working one
         for power_file in &["power1_average", "power1_input"] {
             let path = hwmon.join(power_file);
             if let Ok(value) = Self::read_int_file(&path) {
+                // Cache the successful path for future reads
+                self.cached_power_path = Some(path);
                 // Power is in microwatts
                 return Some(value as f32 / 1_000_000.0);
             }
@@ -156,13 +187,37 @@ impl AmdBackend {
         None
     }
 
-    /// Try to read fan speed
-    fn read_fan_speed(&self) -> Option<u32> {
+    /// Try to read fan speed (caches successful method)
+    fn read_fan_speed(&mut self) -> Option<u32> {
         let hwmon = self.hwmon_path.as_ref()?;
+
+        // Use cached method if available
+        if let Some(use_pwm) = self.cached_fan_method {
+            if use_pwm {
+                let pwm_path = hwmon.join("pwm1");
+                if let Ok(pwm) = Self::read_int_file(&pwm_path) {
+                    return Some((pwm as f32 / 255.0 * 100.0) as u32);
+                }
+            } else {
+                let fan_path = hwmon.join("fan1_input");
+                let fan_max_path = hwmon.join("fan1_max");
+                if let Ok(rpm) = Self::read_int_file(&fan_path) {
+                    if let Ok(max_rpm) = Self::read_int_file(&fan_max_path) {
+                        if max_rpm > 0 {
+                            return Some(((rpm as f64 / max_rpm as f64) * 100.0).clamp(0.0, 100.0) as u32);
+                        }
+                    }
+                }
+            }
+            // Cached method no longer works, clear it and rediscover
+            self.cached_fan_method = None;
+        }
 
         // Try to read PWM value (0-255)
         let pwm_path = hwmon.join("pwm1");
         if let Ok(pwm) = Self::read_int_file(&pwm_path) {
+            // Cache the successful method
+            self.cached_fan_method = Some(true);
             // Convert 0-255 range to 0-100 percentage
             return Some((pwm as f32 / 255.0 * 100.0) as u32);
         }
@@ -174,6 +229,8 @@ impl AmdBackend {
             // Try to get max RPM for proper percentage calculation
             if let Ok(max_rpm) = Self::read_int_file(&fan_max_path) {
                 if max_rpm > 0 {
+                    // Cache the successful method
+                    self.cached_fan_method = Some(false);
                     return Some(((rpm as f64 / max_rpm as f64) * 100.0).clamp(0.0, 100.0) as u32);
                 }
             }
