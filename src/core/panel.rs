@@ -11,6 +11,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use crate::ui::{BackgroundConfig, Color};
 
+/// Keys to sync from source values to panel.config for UI access
+/// Used by alarm/timer displayers to persist state
+const SYNC_KEYS: &[&str] = &[
+    "alarms", "timers", "triggered_alarm_ids",
+    "timer_state", "alarm_triggered", "alarm_enabled",
+];
+
 /// Position and size of a panel in the grid
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct PanelGeometry {
@@ -251,33 +258,24 @@ impl Panel {
             values_owned.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
             values_owned.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
             self.displayer.update_data(&values_owned);
-
-            // Sync certain live values into panel.config for UI access
-            const SYNC_KEYS: &[&str] = &[
-                "alarms", "timers", "triggered_alarm_ids",
-                "timer_state", "alarm_triggered", "alarm_enabled",
-            ];
-            for key in SYNC_KEYS {
-                if let Some(value) = values_owned.get(*key) {
-                    self.config.insert(key.to_string(), value.clone());
-                }
-            }
+            self.sync_keys_to_config(&values_owned);
         } else {
             self.displayer.update_data(&values);
-
-            // Sync certain live values into panel.config for UI access
-            const SYNC_KEYS: &[&str] = &[
-                "alarms", "timers", "triggered_alarm_ids",
-                "timer_state", "alarm_triggered", "alarm_enabled",
-            ];
-            for key in SYNC_KEYS {
-                if let Some(value) = values.get(*key) {
-                    self.config.insert(key.to_string(), value.clone());
-                }
-            }
+            self.sync_keys_to_config(&values);
         }
 
         Ok(())
+    }
+
+    /// Sync certain live values from source to panel.config for UI access
+    /// Used by alarm/timer displayers to persist state across updates
+    #[inline]
+    fn sync_keys_to_config(&mut self, values: &HashMap<String, serde_json::Value>) {
+        for key in SYNC_KEYS {
+            if let Some(value) = values.get(*key) {
+                self.config.insert(key.to_string(), value.clone());
+            }
+        }
     }
 
     /// Update the displayer with pre-fetched values from a shared source
@@ -303,16 +301,7 @@ impl Panel {
             self.displayer.update_data(values);
         }
 
-        // Sync certain live values into panel.config for UI access
-        const SYNC_KEYS: &[&str] = &[
-            "alarms", "timers", "triggered_alarm_ids",
-            "timer_state", "alarm_triggered", "alarm_enabled",
-        ];
-        for key in SYNC_KEYS {
-            if let Some(value) = values.get(*key) {
-                self.config.insert(key.to_string(), value.clone());
-            }
-        }
+        self.sync_keys_to_config(values);
     }
 
     /// Apply configuration to the source and displayer (legacy method)

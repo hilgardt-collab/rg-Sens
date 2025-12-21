@@ -531,7 +531,6 @@ fn render_rectangle_bar(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    let _padding = config.padding;
     let radius = config.corner_radius;
     let has_taper = config.taper_style != BarTaperStyle::None;
 
