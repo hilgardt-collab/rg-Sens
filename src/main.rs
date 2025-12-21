@@ -663,23 +663,17 @@ fn build_ui(app: &Application) {
     // Set the grid_layout reference for the on_change callback (now that it's wrapped)
     *grid_layout_for_change.borrow_mut() = Some(grid_layout.clone());
 
-    // Mark config as dirty when window is resized
-    let config_dirty_clone2 = config_dirty.clone();
-    window.connect_default_width_notify(move |_| {
-        config_dirty_clone2.store(true, Ordering::Relaxed);
-    });
-
-    let config_dirty_clone3 = config_dirty.clone();
-    window.connect_default_height_notify(move |_| {
-        config_dirty_clone3.store(true, Ordering::Relaxed);
-    });
-
     // Show grid overlay during window resize (with debounced hide)
+    // Also marks config as dirty when window is resized
     let resize_hide_timer: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
 
     let grid_layout_for_resize_w = grid_layout.clone();
     let resize_timer_w = resize_hide_timer.clone();
+    let config_dirty_resize_w = config_dirty.clone();
     window.connect_default_width_notify(move |_| {
+        // Mark config as dirty
+        config_dirty_resize_w.store(true, Ordering::Relaxed);
+
         // Show grid immediately
         grid_layout_for_resize_w.borrow().set_grid_visible(true);
 
@@ -700,7 +694,11 @@ fn build_ui(app: &Application) {
 
     let grid_layout_for_resize_h = grid_layout.clone();
     let resize_timer_h = resize_hide_timer.clone();
+    let config_dirty_resize_h = config_dirty.clone();
     window.connect_default_height_notify(move |_| {
+        // Mark config as dirty
+        config_dirty_resize_h.store(true, Ordering::Relaxed);
+
         // Show grid immediately
         grid_layout_for_resize_h.borrow().set_grid_visible(true);
 
@@ -976,8 +974,12 @@ fn build_ui(app: &Application) {
     let grid_layout_for_close = grid_layout.clone();
     let config_dirty_clone4 = config_dirty.clone();
     let app_config_for_close = app_config.clone();
+    let update_manager_for_close = update_manager.clone();
 
     window.connect_close_request(move |window| {
+        // Stop the update manager gracefully
+        update_manager_for_close.stop();
+
         let is_dirty = config_dirty_clone4.load(Ordering::Relaxed);
 
         if is_dirty {

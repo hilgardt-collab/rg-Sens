@@ -22,7 +22,7 @@ struct DisplayData {
     config: BarDisplayConfig,
     value: f64,
     animated_value: f64,
-    values: HashMap<String, Value>, // All source data for text overlay
+    values: HashMap<String, Value>, // Text overlay field values (extracted, not full clone)
     transform: PanelTransform,
     dirty: bool, // Flag to indicate data has changed and needs redraw
     initialized: bool, // Flag to track if animated_value has been set
@@ -156,8 +156,11 @@ impl Displayer for BarDisplayer {
             }
 
             display_data.value = normalized;
-            // Store all values for text overlay
-            display_data.values = data.clone();
+            // Extract only needed values for text overlay (avoids cloning entire HashMap)
+            display_data.values = super::extract_text_values(
+                data,
+                &display_data.config.text_overlay.text_config,
+            );
             // Extract transform
             display_data.transform = PanelTransform::from_values(data);
             // Mark as dirty to trigger redraw

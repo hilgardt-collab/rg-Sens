@@ -194,7 +194,8 @@ impl Registry {
     pub fn list_sources_with_info(&self) -> Vec<SourceInfo> {
         match self.source_info.read() {
             Ok(info) => {
-                let mut sources: Vec<_> = info.values().cloned().collect();
+                let mut sources = Vec::with_capacity(info.len());
+                sources.extend(info.values().cloned());
                 sources.sort_by(|a, b| a.display_name.cmp(&b.display_name));
                 sources
             }
@@ -209,7 +210,8 @@ impl Registry {
     pub fn list_displayers_with_info(&self) -> Vec<DisplayerInfo> {
         match self.displayer_info.read() {
             Ok(info) => {
-                let mut displayers: Vec<_> = info.values().cloned().collect();
+                let mut displayers = Vec::with_capacity(info.len());
+                displayers.extend(info.values().cloned());
                 displayers.sort_by(|a, b| a.display_name.cmp(&b.display_name));
                 displayers
             }

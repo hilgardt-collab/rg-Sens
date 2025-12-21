@@ -134,10 +134,11 @@ impl Displayer for TextDisplayer {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        // Store the data values and extract transform
+        // Store only needed data values and extract transform
         if let Ok(mut display_data) = self.data.lock() {
             display_data.transform = PanelTransform::from_values(data);
-            display_data.values = data.clone();
+            // Extract only needed values for text lines (avoids cloning entire HashMap)
+            display_data.values = super::extract_text_values(data, &display_data.config);
             display_data.dirty = true;
         }
     }

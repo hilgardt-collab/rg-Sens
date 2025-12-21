@@ -6,6 +6,24 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
+/// Extract only the values needed for text overlay rendering.
+///
+/// Instead of cloning the entire HashMap (which can have 50+ entries for CPU sources),
+/// this extracts only the field_ids used in the TextDisplayerConfig.
+/// Returns a smaller HashMap with just the needed values.
+pub(crate) fn extract_text_values(
+    data: &HashMap<String, Value>,
+    text_config: &TextDisplayerConfig,
+) -> HashMap<String, Value> {
+    let mut result = HashMap::with_capacity(text_config.lines.len());
+    for line in &text_config.lines {
+        if let Some(value) = data.get(&line.field_id) {
+            result.insert(line.field_id.clone(), value.clone());
+        }
+    }
+    result
+}
+
 /// Extract a numeric value from data and normalize it to 0.0-1.0 range.
 ///
 /// This helper looks for common keys like "value", "percent", "usage", "level"

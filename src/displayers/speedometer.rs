@@ -183,7 +183,11 @@ impl Displayer for SpeedometerDisplayer {
                 display_data.initialized = true;
             }
 
-            display_data.values = data.clone();
+            // Extract only needed values for text overlay (avoids cloning entire HashMap)
+            display_data.values = super::extract_text_values(
+                data,
+                &display_data.config.text_overlay.text_config,
+            );
 
             // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);

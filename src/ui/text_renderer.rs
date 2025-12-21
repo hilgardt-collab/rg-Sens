@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::displayers::{TextDisplayerConfig, TextLineConfig, HorizontalPosition, VerticalPosition};
+use crate::ui::render_cache::TEXT_EXTENTS_CACHE;
 
 /// Render text lines using a TextDisplayerConfig
 pub fn render_text_lines(
@@ -106,15 +107,21 @@ fn render_combined_parts(
     let mut max_descent: f64 = 0.0;    // Lowest point below baseline
 
     for (config, text) in parts {
-        cr.save().ok();
-        let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
-        let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-        cr.select_font_face(&config.font_family, font_slant, font_weight);
-        cr.set_font_size(config.font_size);
-
-        let extents = cr.text_extents(text).unwrap_or_else(|_| {
-            cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        });
+        // Use cached text extents to avoid expensive font metric calculations every frame
+        let extents = TEXT_EXTENTS_CACHE
+            .lock()
+            .ok()
+            .and_then(|mut cache| {
+                cache.get_or_compute(
+                    cr,
+                    &config.font_family,
+                    config.font_size,
+                    config.bold,
+                    config.italic,
+                    text,
+                )
+            })
+            .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
         part_widths.push(extents.width());
         total_width += extents.width();
@@ -122,8 +129,6 @@ fn render_combined_parts(
         // Track the combined vertical extent (y_bearing is negative for text above baseline)
         min_y_bearing = min_y_bearing.min(extents.y_bearing());
         max_descent = max_descent.max(extents.y_bearing() + extents.height());
-
-        cr.restore().ok();
     }
 
     // Add spacing between parts
@@ -245,10 +250,14 @@ fn render_text_with_alignment(
     // Set color
     cr.set_source_rgba(color.0, color.1, color.2, color.3);
 
-    // Get text dimensions
-    let extents = cr.text_extents(text).unwrap_or_else(|_| {
-        cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-    });
+    // Get text dimensions using cached extents
+    let extents = TEXT_EXTENTS_CACHE
+        .lock()
+        .ok()
+        .and_then(|mut cache| {
+            cache.get_or_compute(cr, font_family, font_size, bold, italic, text)
+        })
+        .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
     // Calculate text origin position for proper alignment (before offsets)
     let text_x = match h_pos {

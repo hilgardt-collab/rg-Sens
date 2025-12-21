@@ -221,6 +221,8 @@ pub struct UpdateManager {
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<UpdateManagerMessage>>>,
     /// Semaphore to limit concurrent panel update tasks
     update_semaphore: Arc<tokio::sync::Semaphore>,
+    /// Flag to signal graceful shutdown
+    should_stop: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl UpdateManager {
@@ -234,7 +236,18 @@ impl UpdateManager {
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
             update_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_UPDATES)),
+            should_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Signal the update manager to stop
+    pub fn stop(&self) {
+        self.should_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Check if the update manager has been signaled to stop
+    pub fn is_stopped(&self) -> bool {
+        self.should_stop.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Queue a panel to be added (can be called from sync code like GTK main thread)
@@ -327,12 +340,24 @@ impl UpdateManager {
 
     /// Start the update loop
     ///
-    /// This runs indefinitely, updating each panel at its configured interval.
+    /// This runs until stop() is called, updating each panel at its configured interval.
     pub async fn run(&self, base_interval: Duration) {
         let mut interval = tokio::time::interval(base_interval);
 
         loop {
+            // Check if we should stop before waiting for the next tick
+            if self.should_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                info!("Update manager stopping gracefully");
+                break;
+            }
+
             interval.tick().await;
+
+            // Check again after waking up
+            if self.should_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                info!("Update manager stopping gracefully");
+                break;
+            }
 
             // Process any pending add/remove messages first
             self.process_messages().await;
@@ -345,6 +370,8 @@ impl UpdateManager {
             let elapsed = start.elapsed();
             trace!("Update cycle took {:?}", elapsed);
         }
+
+        info!("Update manager stopped");
     }
 
     /// Update all panels that are due for an update
@@ -361,19 +388,27 @@ impl UpdateManager {
         // === PHASE 2: Update panels ===
         let mut panels = self.panels.write().await;
         let panel_count = panels.len();
-        let mut tasks = Vec::with_capacity(panel_count);
+        // Use Arc<str> for tasks to avoid cloning String for each task spawn
+        let mut tasks: Vec<(Arc<str>, tokio::task::JoinHandle<()>)> = Vec::with_capacity(panel_count);
         // Use HashMap for O(1) lookup instead of Vec with O(n) linear search
         let mut config_updates: HashMap<String, (u64, Duration, Option<String>)> = HashMap::new();
 
         // Track panels that had their config checked (for updating last_config_check)
-        let mut config_checked: Vec<String> = Vec::with_capacity(panel_count);
+        // Use Arc<str> to share panel_id with config_updates without extra clones
+        let mut config_checked: Vec<Arc<str>> = Vec::with_capacity(panel_count);
 
         for (panel_id, state) in panels.iter() {
             // Only check config hash if enough time has elapsed (throttle to avoid CPU waste)
             let should_check_config = now.duration_since(state.last_config_check) >= CONFIG_CHECK_INTERVAL;
 
+            // Create Arc<str> lazily when first needed (avoids allocation if not needed)
+            let mut panel_id_arc: Option<Arc<str>> = None;
+            let get_arc = |arc: &mut Option<Arc<str>>| -> Arc<str> {
+                arc.get_or_insert_with(|| Arc::from(panel_id.as_str())).clone()
+            };
+
             let (current_hash, new_interval, new_source_key) = if should_check_config {
-                config_checked.push(panel_id.clone());
+                config_checked.push(get_arc(&mut panel_id_arc));
                 if let Ok(panel_guard) = state.panel.try_read() {
                     if let Some(ref data) = panel_guard.data {
                         let hash = compute_config_hash_from_data(&data.source_config);
@@ -423,8 +458,10 @@ impl UpdateManager {
                 // Clone semaphore for the task - limits concurrent updates
                 let semaphore = self.update_semaphore.clone();
 
-                // Clone panel_id once for the async block (used for error logging)
-                let panel_id_for_task = panel_id.clone();
+                // Get Arc<str> for panel_id (reuses existing Arc if already created, or creates one)
+                // Arc clone is cheap (just atomic increment) compared to String clone
+                let panel_id_arc_for_tasks = get_arc(&mut panel_id_arc);
+                let panel_id_for_task = Arc::clone(&panel_id_arc_for_tasks);
                 let task = tokio::spawn(async move {
                     // Acquire permit to limit concurrent updates (automatically released on drop)
                     let _permit = semaphore.acquire().await;
@@ -437,8 +474,7 @@ impl UpdateManager {
                         error!("Error updating panel {}: {}", panel_id_for_task, e);
                     }
                 });
-                // Clone panel_id for the result tuple (separate from async block)
-                tasks.push((panel_id.clone(), task));
+                tasks.push((panel_id_arc_for_tasks, task));
             }
         }
 
@@ -484,7 +520,8 @@ impl UpdateManager {
 
         // Update last_config_check for all panels that had their config checked
         for panel_id in config_checked {
-            if let Some(state) = panels.get_mut(&panel_id) {
+            // Use &*panel_id to deref Arc<str> to &str for HashMap lookup
+            if let Some(state) = panels.get_mut(&*panel_id) {
                 state.last_config_check = now;
             }
         }
@@ -504,7 +541,8 @@ impl UpdateManager {
 
         // Update last_update times
         for (panel_id, _) in &tasks {
-            if let Some(state) = panels.get_mut(panel_id) {
+            // Use &**panel_id to deref &Arc<str> to &str for HashMap lookup
+            if let Some(state) = panels.get_mut(&**panel_id) {
                 state.last_update = now;
             }
         }

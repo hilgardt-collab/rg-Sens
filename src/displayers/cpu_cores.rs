@@ -77,7 +77,8 @@ impl CpuCoresDisplayer {
 
     /// Extract core usage values from source data
     fn extract_core_values(data: &HashMap<String, Value>) -> Vec<(usize, f64)> {
-        let mut cores: Vec<(usize, f64)> = Vec::new();
+        // Pre-allocate for typical core count (most systems have 8-64 cores)
+        let mut cores: Vec<(usize, f64)> = Vec::with_capacity(32);
 
         for (key, value) in data {
             // Match keys like "core0_usage", "core1_usage", etc.

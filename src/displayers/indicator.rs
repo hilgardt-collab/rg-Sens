@@ -444,7 +444,13 @@ impl Displayer for IndicatorDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
-            display_data.values = data.clone();
+            // Extract only needed values (avoids cloning entire HashMap)
+            let mut values = super::extract_text_values(data, &display_data.config.text_config);
+            // Also include the value_field for indicator rendering
+            if let Some(v) = data.get(&display_data.config.value_field) {
+                values.insert(display_data.config.value_field.clone(), v.clone());
+            }
+            display_data.values = values;
             display_data.transform = PanelTransform::from_values(data);
             display_data.dirty = true;
         }

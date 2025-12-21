@@ -53,39 +53,41 @@ static SHARED_COMPONENTS: Lazy<Mutex<SharedSensors>> = Lazy::new(|| {
 /// temperatures as a Vec of (label, temperature_celsius) pairs.
 /// Uses cached refresh to avoid redundant sensor polling.
 pub fn get_refreshed_temperatures() -> Vec<(String, f32)> {
-    if let Ok(mut sensors) = SHARED_COMPONENTS.lock() {
-        sensors.refresh_if_needed();
-        sensors.components
-            .iter()
-            .map(|c| (c.label().to_string(), c.temperature()))
-            .collect()
-    } else {
-        log::error!("Failed to lock shared components for temperature reading");
-        Vec::new()
-    }
+    // Use unwrap_or_else to recover from poisoned mutex - data may still be valid
+    let mut sensors = SHARED_COMPONENTS.lock().unwrap_or_else(|poisoned| {
+        log::warn!("Shared sensors mutex was poisoned, recovering");
+        poisoned.into_inner()
+    });
+    sensors.refresh_if_needed();
+    sensors.components
+        .iter()
+        .map(|c| (c.label().to_string(), c.temperature()))
+        .collect()
 }
 
 /// Get temperature for a specific sensor label (refreshes if needed)
 pub fn get_temperature_by_label(label: &str) -> Option<f32> {
-    if let Ok(mut sensors) = SHARED_COMPONENTS.lock() {
-        sensors.refresh_if_needed();
-        for component in sensors.components.iter() {
-            if component.label() == label {
-                return Some(component.temperature());
-            }
-        }
-    }
-    None
+    // Use unwrap_or_else to recover from poisoned mutex - data may still be valid
+    let mut sensors = SHARED_COMPONENTS.lock().unwrap_or_else(|poisoned| {
+        log::warn!("Shared sensors mutex was poisoned, recovering");
+        poisoned.into_inner()
+    });
+    sensors.refresh_if_needed();
+    sensors.components
+        .iter()
+        .find(|c| c.label() == label)
+        .map(|c| c.temperature())
 }
 
 /// Get temperature by index (refreshes if needed)
 pub fn get_temperature_by_index(index: usize) -> Option<f32> {
-    if let Ok(mut sensors) = SHARED_COMPONENTS.lock() {
-        sensors.refresh_if_needed();
-        sensors.components.get(index).map(|c| c.temperature())
-    } else {
-        None
-    }
+    // Use unwrap_or_else to recover from poisoned mutex - data may still be valid
+    let mut sensors = SHARED_COMPONENTS.lock().unwrap_or_else(|poisoned| {
+        log::warn!("Shared sensors mutex was poisoned, recovering");
+        poisoned.into_inner()
+    });
+    sensors.refresh_if_needed();
+    sensors.components.get(index).map(|c| c.temperature())
 }
 
 /// Force initialization of the shared components
@@ -100,9 +102,10 @@ pub fn initialize() {
 /// Get the total number of temperature components
 #[allow(dead_code)]
 pub fn component_count() -> usize {
-    if let Ok(sensors) = SHARED_COMPONENTS.lock() {
-        sensors.components.len()
-    } else {
-        0
-    }
+    // Use unwrap_or_else to recover from poisoned mutex - data may still be valid
+    let sensors = SHARED_COMPONENTS.lock().unwrap_or_else(|poisoned| {
+        log::warn!("Shared sensors mutex was poisoned, recovering");
+        poisoned.into_inner()
+    });
+    sensors.components.len()
 }

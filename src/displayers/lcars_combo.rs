@@ -634,7 +634,10 @@ impl Displayer for LcarsComboDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
-            // Store all values
+            // Note: LCARS combo uses dynamic prefixes (group1_1_caption, etc.) and passes
+            // values to multiple rendering functions. Extracting only needed values would
+            // require tracking all prefixes and text configs, with limited benefit since
+            // combo sources already have moderate-sized HashMaps.
             display_data.values = data.clone();
 
             // Copy config values we need

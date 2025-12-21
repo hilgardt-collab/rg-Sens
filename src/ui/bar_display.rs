@@ -409,6 +409,12 @@ fn render_tapered_bar_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
+    // Pre-create the fill source ONCE (avoids recreating gradient 50x)
+    let source = FillSource::from_background(&config.background, width, height);
+    if source.is_none() {
+        return Ok(());
+    }
+
     let is_horizontal = matches!(
         config.fill_direction,
         BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
@@ -428,7 +434,7 @@ fn render_tapered_bar_background(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height); // +0.5 to avoid gaps
             cr.clip();
-            render_background(cr, &config.background, width, height)?;
+            source.apply(cr)?;
             cr.restore()?;
         }
     } else {
@@ -442,7 +448,7 @@ fn render_tapered_bar_background(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
             cr.clip();
-            render_background(cr, &config.background, width, height)?;
+            source.apply(cr)?;
             cr.restore()?;
         }
     }
@@ -464,6 +470,9 @@ fn render_tapered_bar_foreground(
     if value <= 0.0 {
         return Ok(());
     }
+
+    // Pre-create the fill source ONCE (avoids recreating gradient 50x)
+    let source = FillSource::from_foreground(&config.foreground, bar_width, bar_height);
 
     let is_horizontal = matches!(
         config.fill_direction,
@@ -492,7 +501,7 @@ fn render_tapered_bar_foreground(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height);
             cr.clip();
-            render_foreground(cr, &config.foreground, config.fill_direction, bar_width, bar_height)?;
+            source.apply(cr)?;
             cr.restore()?;
         }
     } else {
@@ -514,7 +523,7 @@ fn render_tapered_bar_foreground(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
             cr.clip();
-            render_foreground(cr, &config.foreground, config.fill_direction, bar_width, bar_height)?;
+            source.apply(cr)?;
             cr.restore()?;
         }
     }
@@ -592,6 +601,12 @@ fn render_tapered_rectangle_background(
     bar_width: f64,
     bar_height: f64,
 ) -> Result<(), cairo::Error> {
+    // Pre-create the fill source ONCE (avoids recreating gradient 50x)
+    let source = FillSource::from_background(&config.background, bar_width, bar_height);
+    if source.is_none() {
+        return Ok(());
+    }
+
     let num_segments = 50;
     let is_horizontal = matches!(
         config.fill_direction,
@@ -611,7 +626,7 @@ fn render_tapered_rectangle_background(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height);
             cr.clip();
-            render_background(cr, &config.background, bar_width, bar_height)?;
+            source.apply(cr)?;
             cr.restore()?;
         }
     } else {
@@ -625,7 +640,7 @@ fn render_tapered_rectangle_background(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
             cr.clip();
-            render_background(cr, &config.background, bar_width, bar_height)?;
+            source.apply(cr)?;
             cr.restore()?;
         }
     }
@@ -846,8 +861,22 @@ fn render_gradient(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
+    if let Some(pattern) = create_gradient_pattern(stops, angle, width, height) {
+        cr.set_source(&pattern)?;
+        cr.paint()?;
+    }
+    Ok(())
+}
+
+/// Create a reusable gradient pattern (avoids recreating for each segment)
+fn create_gradient_pattern(
+    stops: &[ColorStop],
+    angle: f64,
+    width: f64,
+    height: f64,
+) -> Option<cairo::LinearGradient> {
     if stops.is_empty() {
-        return Ok(());
+        return None;
     }
 
     // Convert angle to radians (same convention as background.rs)
@@ -872,10 +901,60 @@ fn render_gradient(
         );
     }
 
-    cr.set_source(&pattern)?;
-    cr.paint()?;
+    Some(pattern)
+}
 
-    Ok(())
+/// Pre-created fill source for efficient tapered bar rendering
+enum FillSource {
+    Solid(Color),
+    Gradient(cairo::LinearGradient),
+    None,
+}
+
+impl FillSource {
+    fn from_background(background: &BarBackgroundType, width: f64, height: f64) -> Self {
+        match background {
+            BarBackgroundType::Solid { color } => FillSource::Solid(*color),
+            BarBackgroundType::Gradient { stops, angle } => {
+                match create_gradient_pattern(stops, *angle, width, height) {
+                    Some(pattern) => FillSource::Gradient(pattern),
+                    None => FillSource::None,
+                }
+            }
+            BarBackgroundType::Transparent => FillSource::None,
+        }
+    }
+
+    fn from_foreground(foreground: &BarFillType, width: f64, height: f64) -> Self {
+        match foreground {
+            BarFillType::Solid { color } => FillSource::Solid(*color),
+            BarFillType::Gradient { stops, angle } => {
+                match create_gradient_pattern(stops, *angle, width, height) {
+                    Some(pattern) => FillSource::Gradient(pattern),
+                    None => FillSource::None,
+                }
+            }
+        }
+    }
+
+    fn apply(&self, cr: &cairo::Context) -> Result<(), cairo::Error> {
+        match self {
+            FillSource::Solid(color) => {
+                color.apply_to_cairo(cr);
+                cr.paint()?;
+            }
+            FillSource::Gradient(pattern) => {
+                cr.set_source(pattern)?;
+                cr.paint()?;
+            }
+            FillSource::None => {}
+        }
+        Ok(())
+    }
+
+    fn is_none(&self) -> bool {
+        matches!(self, FillSource::None)
+    }
 }
 
 /// Render border
