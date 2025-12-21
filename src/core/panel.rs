@@ -94,6 +94,12 @@ pub struct Panel {
     /// Content translation Y offset in pixels
     /// **DEPRECATED**: Use `data.appearance.translate_y` instead.
     pub translate_y: f64,
+    /// Z-index for layering (higher = in front, lower = behind)
+    /// **DEPRECATED**: Use `data.appearance.z_index` instead.
+    pub z_index: i32,
+    /// If true, this panel ignores collision detection and can overlap other panels
+    /// **DEPRECATED**: Use `data.appearance.ignore_collision` instead.
+    pub ignore_collision: bool,
     /// Unified panel data - the single source of truth
     ///
     /// When `Some`, this is the authoritative source for all panel configuration.
@@ -122,6 +128,8 @@ impl Panel {
             scale: 1.0,
             translate_x: 0.0,
             translate_y: 0.0,
+            z_index: 0,
+            ignore_collision: false,
             data: None, // Legacy panels don't have PanelData yet
         }
     }
@@ -182,6 +190,8 @@ impl Panel {
             scale: data.appearance.scale,
             translate_x: data.appearance.translate_x,
             translate_y: data.appearance.translate_y,
+            z_index: data.appearance.z_index,
+            ignore_collision: data.appearance.ignore_collision,
             data: Some(data),
         };
 
@@ -364,6 +374,8 @@ impl Panel {
                 scale: self.scale,
                 translate_x: self.translate_x,
                 translate_y: self.translate_y,
+                z_index: self.z_index,
+                ignore_collision: self.ignore_collision,
             },
         }
     }
@@ -607,6 +619,8 @@ impl Panel {
         self.scale = new_data.appearance.scale;
         self.translate_x = new_data.appearance.translate_x;
         self.translate_y = new_data.appearance.translate_y;
+        self.z_index = new_data.appearance.z_index;
+        self.ignore_collision = new_data.appearance.ignore_collision;
         self.config = new_data.combined_config_map();
         self.data = Some(new_data);
 
@@ -628,6 +642,8 @@ impl Panel {
         self.scale = data.appearance.scale;
         self.translate_x = data.appearance.translate_x;
         self.translate_y = data.appearance.translate_y;
+        self.z_index = data.appearance.z_index;
+        self.ignore_collision = data.appearance.ignore_collision;
         self.config = data.combined_config_map();
         self.data = Some(data);
 

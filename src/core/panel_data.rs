@@ -21,6 +21,7 @@ pub use crate::sources::ComboSourceConfig;
 pub use crate::sources::SystemTempConfig;
 pub use crate::sources::FanSpeedConfig;
 pub use crate::sources::TestSourceConfig;
+pub use crate::sources::StaticTextSourceConfig;
 
 // Re-export displayer configs
 pub use crate::displayers::TextDisplayerConfig;
@@ -65,6 +66,9 @@ pub enum SourceConfig {
 
     #[serde(rename = "test")]
     Test(TestSourceConfig),
+
+    #[serde(rename = "static_text")]
+    StaticText(StaticTextSourceConfig),
 }
 
 impl SourceConfig {
@@ -80,6 +84,7 @@ impl SourceConfig {
             SourceConfig::SystemTemp(_) => "system_temp",
             SourceConfig::FanSpeed(_) => "fan_speed",
             SourceConfig::Test(_) => "test",
+            SourceConfig::StaticText(_) => "static_text",
         }
     }
 
@@ -95,6 +100,7 @@ impl SourceConfig {
             SourceConfig::SystemTemp(cfg) => cfg.update_interval_ms,
             SourceConfig::FanSpeed(cfg) => cfg.update_interval_ms,
             SourceConfig::Test(cfg) => cfg.update_interval_ms,
+            SourceConfig::StaticText(cfg) => cfg.update_interval_ms,
         }
     }
 
@@ -147,6 +153,11 @@ impl SourceConfig {
                     map.insert("test_config".to_string(), val);
                 }
             }
+            SourceConfig::StaticText(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("static_text_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -163,6 +174,7 @@ impl SourceConfig {
             "system_temp" => Some(SourceConfig::SystemTemp(SystemTempConfig::default())),
             "fan_speed" => Some(SourceConfig::FanSpeed(FanSpeedConfig::default())),
             "test" => Some(SourceConfig::Test(TestSourceConfig::default())),
+            "static_text" => Some(SourceConfig::StaticText(StaticTextSourceConfig::default())),
             _ => None,
         }
     }
@@ -182,6 +194,7 @@ impl SourceConfig {
             "system_temp" => "system_temp_config",
             "fan_speed" => "fan_speed_config",
             "test" => "test_config",
+            "static_text" => "static_text_config",
             _ => return None,
         };
 
@@ -205,6 +218,8 @@ impl SourceConfig {
                     .ok().map(SourceConfig::FanSpeed),
                 "test" => serde_json::from_value::<TestSourceConfig>(value.clone())
                     .ok().map(SourceConfig::Test),
+                "static_text" => serde_json::from_value::<StaticTextSourceConfig>(value.clone())
+                    .ok().map(SourceConfig::StaticText),
                 _ => None,
             }
         })
@@ -367,6 +382,12 @@ pub struct PanelAppearance {
     /// Translation Y offset in pixels
     #[serde(default)]
     pub translate_y: f64,
+    /// Z-index for layering (higher = in front, lower = behind, default 0)
+    #[serde(default)]
+    pub z_index: i32,
+    /// If true, this panel ignores collision detection and can overlap other panels
+    #[serde(default)]
+    pub ignore_collision: bool,
 }
 
 fn default_scale() -> f64 {
@@ -382,6 +403,8 @@ impl Default for PanelAppearance {
             scale: 1.0,
             translate_x: 0.0,
             translate_y: 0.0,
+            z_index: 0,
+            ignore_collision: false,
         }
     }
 }

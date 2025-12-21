@@ -450,6 +450,8 @@ impl PanelConfig {
             scale: 1.0,
             translate_x: 0.0,
             translate_y: 0.0,
+            z_index: 0,
+            ignore_collision: false,
         };
 
         PanelData {

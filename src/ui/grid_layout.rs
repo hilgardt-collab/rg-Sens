@@ -821,12 +821,15 @@ impl GridLayout {
         // Add to container
         self.container.put(&frame, x as f64, y as f64);
 
-        // Mark cells as occupied
-        for dx in 0..geometry.width {
-            for dy in 0..geometry.height {
-                self.occupied_cells
-                    .borrow_mut()
-                    .insert((geometry.x + dx, geometry.y + dy));
+        // Mark cells as occupied (only if panel participates in collision detection)
+        let ignore_collision = panel.blocking_read().ignore_collision;
+        if !ignore_collision {
+            for dx in 0..geometry.width {
+                for dy in 0..geometry.height {
+                    self.occupied_cells
+                        .borrow_mut()
+                        .insert((geometry.x + dx, geometry.y + dy));
+                }
             }
         }
 
@@ -846,6 +849,40 @@ impl GridLayout {
 
         // Update container size to fit all content (enables scrolling for off-screen panels)
         self.update_content_bounds();
+    }
+
+    /// Reorder all panel widgets in the container based on their z_index.
+    /// Panels with lower z_index are placed first (behind), higher z_index on top.
+    pub fn reorder_panels_by_z_index(&self) {
+        // Collect panel IDs with their z_index and current positions
+        let mut panel_info: Vec<(String, i32, f64, f64)> = Vec::new();
+        let states = self.panel_states.borrow();
+        let config = self.config.borrow();
+
+        for (panel_id, state) in states.iter() {
+            let z_index = state.panel.blocking_read().z_index;
+            // Get current position from geometry
+            let panel_guard = state.panel.blocking_read();
+            let x = panel_guard.geometry.x as f64 * (config.cell_width + config.spacing) as f64;
+            let y = panel_guard.geometry.y as f64 * (config.cell_height + config.spacing) as f64;
+            panel_info.push((panel_id.clone(), z_index, x, y));
+        }
+
+        // Sort by z_index (ascending - lower z_index first means behind)
+        panel_info.sort_by_key(|(_, z, _, _)| *z);
+
+        drop(config);
+        drop(states);
+
+        // Re-add frames in z-order (removing and re-adding changes stacking order)
+        let states = self.panel_states.borrow();
+        for (panel_id, _, x, y) in panel_info {
+            if let Some(state) = states.get(&panel_id) {
+                // Remove and re-add at same position to change stacking order
+                self.container.remove(&state.frame);
+                self.container.put(&state.frame, x, y);
+            }
+        }
     }
 
     /// Setup panel interaction (selection and drag)
@@ -1433,13 +1470,17 @@ impl GridLayout {
             let is_copy_mode = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
 
             // Phase 1: Clear current occupied cells for ALL selected panels (only if moving, not copying)
+            // Panels with ignore_collision don't participate in collision detection
             if !is_copy_mode {
                 for id in selected.iter() {
                     if let Some(state) = states.get(id) {
-                        let geom = state.panel.blocking_read().geometry;
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.remove(&(geom.x + dx, geom.y + dy));
+                        let panel_guard = state.panel.blocking_read();
+                        if !panel_guard.ignore_collision {
+                            let geom = panel_guard.geometry;
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.remove(&(geom.x + dx, geom.y + dy));
+                                }
                             }
                         }
                     }
@@ -1489,18 +1530,21 @@ impl GridLayout {
                     let grid_y = grid_y.min(available_rows.saturating_sub(1));
 
 
-                    // Check if this panel would collide
-                    let geom = state.panel.blocking_read().geometry;
-                    for dx in 0..geom.width {
-                        for dy in 0..geom.height {
-                            let cell = (grid_x + dx, grid_y + dy);
-                            if occupied.contains(&cell) {
-                                group_has_collision = true;
+                    // Check if this panel would collide (skip for panels with ignore_collision)
+                    let panel_guard = state.panel.blocking_read();
+                    let geom = panel_guard.geometry;
+                    if !panel_guard.ignore_collision {
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                let cell = (grid_x + dx, grid_y + dy);
+                                if occupied.contains(&cell) {
+                                    group_has_collision = true;
+                                    break;
+                                }
+                            }
+                            if group_has_collision {
                                 break;
                             }
-                        }
-                        if group_has_collision {
-                            break;
                         }
                     }
 
@@ -1515,15 +1559,18 @@ impl GridLayout {
             // Phase 3: Apply movement/copy based on collision check
             if group_has_collision {
                 // Restore ALL panels to original positions (only needed in move mode)
+                // Only restore cells for panels that participate in collision detection
                 if !is_copy_mode {
                     for id in selected.iter() {
                         if let Some(state) = states.get(id) {
-                            let geom = state.panel.blocking_read().geometry;
-
-                            // Restore occupied cells
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    occupied.insert((geom.x + dx, geom.y + dy));
+                            let panel_guard = state.panel.blocking_read();
+                            if !panel_guard.ignore_collision {
+                                let geom = panel_guard.geometry;
+                                // Restore occupied cells
+                                for dx in 0..geom.width {
+                                    for dy in 0..geom.height {
+                                        occupied.insert((geom.x + dx, geom.y + dy));
+                                    }
                                 }
                             }
                         }
@@ -1545,7 +1592,7 @@ impl GridLayout {
                         drop(panel_states_read);
 
                         // Read original panel data
-                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, panel_data) = {
+                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
                             let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
@@ -1558,6 +1605,8 @@ impl GridLayout {
                                 panel_guard.scale,
                                 panel_guard.translate_x,
                                 panel_guard.translate_y,
+                                panel_guard.z_index,
+                                panel_guard.ignore_collision,
                                 panel_guard.data.clone(),
                             )
                         };
@@ -1584,13 +1633,15 @@ impl GridLayout {
                                     new_displayer,
                                 );
 
-                                // Set the background, corner radius, border, scale and offset
+                                // Set the background, corner radius, border, scale, offset, z_index, and ignore_collision
                                 new_panel.background = background;
                                 new_panel.corner_radius = corner_radius;
                                 new_panel.border = border;
                                 new_panel.scale = scale;
                                 new_panel.translate_x = translate_x;
                                 new_panel.translate_y = translate_y;
+                                new_panel.z_index = z_index;
+                                new_panel.ignore_collision = ignore_collision;
                                 new_panel.data = panel_data;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
@@ -1610,14 +1661,16 @@ impl GridLayout {
                                     update_manager.queue_add_panel(new_panel.clone());
                                 }
 
-                                // Mark new cells as occupied
-                                let mut occupied_write = occupied_cells_end.borrow_mut();
-                                for dx in 0..geometry_size.0 {
-                                    for dy in 0..geometry_size.1 {
-                                        occupied_write.insert((grid_x + dx, grid_y + dy));
+                                // Mark new cells as occupied (only if panel participates in collision detection)
+                                if !ignore_collision {
+                                    let mut occupied_write = occupied_cells_end.borrow_mut();
+                                    for dx in 0..geometry_size.0 {
+                                        for dy in 0..geometry_size.1 {
+                                            occupied_write.insert((grid_x + dx, grid_y + dy));
+                                        }
                                     }
+                                    drop(occupied_write);
                                 }
-                                drop(occupied_write);
 
                                 // Create UI for the copied panel
                                 let config_read = config_for_end.borrow();
@@ -2263,13 +2316,17 @@ impl GridLayout {
                                     let is_copy_mode = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
 
                                     // Phase 1: Clear occupied cells (only if moving, not copying)
+                                    // Panels with ignore_collision don't participate in collision detection
                                     if !is_copy_mode {
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                let geom = state.panel.blocking_read().geometry;
-                                                for dx in 0..geom.width {
-                                                    for dy in 0..geom.height {
-                                                        occupied.remove(&(geom.x + dx, geom.y + dy));
+                                                let panel_guard = state.panel.blocking_read();
+                                                if !panel_guard.ignore_collision {
+                                                    let geom = panel_guard.geometry;
+                                                    for dx in 0..geom.width {
+                                                        for dy in 0..geom.height {
+                                                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2298,17 +2355,21 @@ impl GridLayout {
                                                 let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
                                                 let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
 
-                                                let geom = state.panel.blocking_read().geometry;
-                                                for dx in 0..geom.width {
-                                                    for dy in 0..geom.height {
-                                                        let cell = (grid_x + dx, grid_y + dy);
-                                                        if occupied.contains(&cell) {
-                                                            group_has_collision = true;
+                                                // Check collision (skip for panels with ignore_collision)
+                                                let panel_guard = state.panel.blocking_read();
+                                                let geom = panel_guard.geometry;
+                                                if !panel_guard.ignore_collision {
+                                                    for dx in 0..geom.width {
+                                                        for dy in 0..geom.height {
+                                                            let cell = (grid_x + dx, grid_y + dy);
+                                                            if occupied.contains(&cell) {
+                                                                group_has_collision = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                        if group_has_collision {
                                                             break;
                                                         }
-                                                    }
-                                                    if group_has_collision {
-                                                        break;
                                                     }
                                                 }
 
@@ -2319,13 +2380,16 @@ impl GridLayout {
 
                                     // Phase 3: Apply changes
                                     if group_has_collision && !is_copy_mode {
-                                        // Restore original positions
+                                        // Restore original positions (only for panels that participate in collision)
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                let geom = state.panel.blocking_read().geometry;
-                                                for dx in 0..geom.width {
-                                                    for dy in 0..geom.height {
-                                                        occupied.insert((geom.x + dx, geom.y + dy));
+                                                let panel_guard = state.panel.blocking_read();
+                                                if !panel_guard.ignore_collision {
+                                                    let geom = panel_guard.geometry;
+                                                    for dx in 0..geom.width {
+                                                        for dy in 0..geom.height {
+                                                            occupied.insert((geom.x + dx, geom.y + dy));
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2349,7 +2413,7 @@ impl GridLayout {
                                                     drop(panel_states_read);
 
                                                     // Read original panel configuration
-                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, panel_data) = {
+                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
                                                         let panel_guard = original_panel.blocking_read();
                                                         (
                                                             panel_guard.source.metadata().clone(),
@@ -2362,6 +2426,8 @@ impl GridLayout {
                                                             panel_guard.scale,
                                                             panel_guard.translate_x,
                                                             panel_guard.translate_y,
+                                                            panel_guard.z_index,
+                                                            panel_guard.ignore_collision,
                                                             panel_guard.data.clone(),
                                                         )
                                                     };
@@ -2388,13 +2454,15 @@ impl GridLayout {
                                                                 new_displayer,
                                                             );
 
-                                                            // Copy all settings including scale and offset
+                                                            // Copy all settings including scale, offset, z_index, and ignore_collision
                                                             new_panel.background = background;
                                                             new_panel.corner_radius = corner_radius;
                                                             new_panel.border = border;
                                                             new_panel.scale = scale;
                                                             new_panel.translate_x = translate_x;
                                                             new_panel.translate_y = translate_y;
+                                                            new_panel.z_index = z_index;
+                                                            new_panel.ignore_collision = ignore_collision;
                                                             new_panel.data = panel_data;
 
                                                             let new_panel = Arc::new(RwLock::new(new_panel));
@@ -2408,14 +2476,16 @@ impl GridLayout {
                                                             // Add to panels list
                                                             panels_drag_end.borrow_mut().push(new_panel.clone());
 
-                                                            // Mark cells as occupied
-                                                            let mut occupied_write = occupied_cells_drag_end.borrow_mut();
-                                                            for dx in 0..geometry_size.0 {
-                                                                for dy in 0..geometry_size.1 {
-                                                                    occupied_write.insert((grid_x + dx, grid_y + dy));
+                                                            // Mark cells as occupied (only if panel participates in collision detection)
+                                                            if !ignore_collision {
+                                                                let mut occupied_write = occupied_cells_drag_end.borrow_mut();
+                                                                for dx in 0..geometry_size.0 {
+                                                                    for dy in 0..geometry_size.1 {
+                                                                        occupied_write.insert((grid_x + dx, grid_y + dy));
+                                                                    }
                                                                 }
+                                                                drop(occupied_write);
                                                             }
-                                                            drop(occupied_write);
 
                                                             // Create UI for the nested copy (similar to add_panel)
                                                             let config_read = config_for_nested.borrow();
@@ -2595,10 +2665,14 @@ impl GridLayout {
                                                         panel_guard.geometry.y = grid_y;
                                                     }
 
-                                                    let geom = state.panel.blocking_read().geometry;
-                                                    for dx in 0..geom.width {
-                                                        for dy in 0..geom.height {
-                                                            occupied.insert((grid_x + dx, grid_y + dy));
+                                                    // Mark new cells as occupied (only if panel participates in collision)
+                                                    let panel_guard = state.panel.blocking_read();
+                                                    if !panel_guard.ignore_collision {
+                                                        let geom = panel_guard.geometry;
+                                                        for dx in 0..geom.width {
+                                                            for dy in 0..geom.height {
+                                                                occupied.insert((grid_x + dx, grid_y + dy));
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2650,11 +2724,14 @@ impl GridLayout {
                             panel_guard.geometry.y = grid_y;
                         }
 
-                        // Mark new cells as occupied
-                        let geom = state.panel.blocking_read().geometry;
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.insert((grid_x + dx, grid_y + dy));
+                        // Mark new cells as occupied (only if panel participates in collision)
+                        let panel_guard = state.panel.blocking_read();
+                        if !panel_guard.ignore_collision {
+                            let geom = panel_guard.geometry;
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.insert((grid_x + dx, grid_y + dy));
+                                }
                             }
                         }
                     }
@@ -2722,12 +2799,16 @@ impl GridLayout {
             if let Some(state) = self.panel_states.borrow_mut().remove(panel_id) {
                 self.container.remove(&state.frame);
 
-                // Clear occupied cells
-                let geom = state.panel.blocking_read().geometry;
-                let mut occupied = self.occupied_cells.borrow_mut();
-                for dx in 0..geom.width {
-                    for dy in 0..geom.height {
-                        occupied.remove(&(geom.x + dx, geom.y + dy));
+                // Clear occupied cells (only if panel participated in collision detection)
+                let panel_guard = state.panel.blocking_read();
+                if !panel_guard.ignore_collision {
+                    let geom = panel_guard.geometry;
+                    drop(panel_guard); // Release lock before borrowing occupied_cells
+                    let mut occupied = self.occupied_cells.borrow_mut();
+                    for dx in 0..geom.width {
+                        for dy in 0..geom.height {
+                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                        }
                     }
                 }
             }
@@ -3333,14 +3414,17 @@ fn setup_copied_panel_interaction(
         let modifiers = gesture.current_event_state();
         let is_copy_mode = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
 
-        // Clear occupied cells only if moving
+        // Clear occupied cells only if moving (skip panels with ignore_collision)
         if !is_copy_mode {
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    let geom = state.panel.blocking_read().geometry;
-                    for dx in 0..geom.width {
-                        for dy in 0..geom.height {
-                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                    let panel_guard = state.panel.blocking_read();
+                    if !panel_guard.ignore_collision {
+                        let geom = panel_guard.geometry;
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.remove(&(geom.x + dx, geom.y + dy));
+                            }
                         }
                     }
                 }
@@ -3371,23 +3455,26 @@ fn setup_copied_panel_interaction(
 
                 for id in selected.iter() {
                     if let Some(state) = states.get(id) {
-                        let geom = state.panel.blocking_read().geometry;
+                        let panel_guard = state.panel.blocking_read();
+                        let geom = panel_guard.geometry;
                         let grid_x = (geom.x as i32 + delta_grid_x).max(0) as u32;
                         let grid_y = (geom.y as i32 + delta_grid_y).max(0) as u32;
 
                         let snapped_x = grid_x as f64 * (cfg.cell_width + cfg.spacing) as f64;
                         let snapped_y = grid_y as f64 * (cfg.cell_height + cfg.spacing) as f64;
 
-                        // Check collision
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                let cell = (grid_x + dx, grid_y + dy);
-                                if occupied.contains(&cell) {
-                                    group_has_collision = true;
-                                    break;
+                        // Check collision (skip for panels with ignore_collision)
+                        if !panel_guard.ignore_collision {
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    let cell = (grid_x + dx, grid_y + dy);
+                                    if occupied.contains(&cell) {
+                                        group_has_collision = true;
+                                        break;
+                                    }
                                 }
+                                if group_has_collision { break; }
                             }
-                            if group_has_collision { break; }
                         }
 
                         new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
@@ -3398,13 +3485,16 @@ fn setup_copied_panel_interaction(
 
         // Apply changes
         if group_has_collision && !is_copy_mode {
-            // Restore original positions
+            // Restore original positions (only for panels that participate in collision)
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    let geom = state.panel.blocking_read().geometry;
-                    for dx in 0..geom.width {
-                        for dy in 0..geom.height {
-                            occupied.insert((geom.x + dx, geom.y + dy));
+                    let panel_guard = state.panel.blocking_read();
+                    if !panel_guard.ignore_collision {
+                        let geom = panel_guard.geometry;
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.insert((geom.x + dx, geom.y + dy));
+                            }
                         }
                     }
                 }
@@ -3427,7 +3517,7 @@ fn setup_copied_panel_interaction(
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        let (source_meta, displayer_id, panel_config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, panel_data) = {
+                        let (source_meta, displayer_id, panel_config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
                             let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
@@ -3440,6 +3530,8 @@ fn setup_copied_panel_interaction(
                                 panel_guard.scale,
                                 panel_guard.translate_x,
                                 panel_guard.translate_y,
+                                panel_guard.z_index,
+                                panel_guard.ignore_collision,
                                 panel_guard.data.clone(),
                             )
                         };
@@ -3464,6 +3556,8 @@ fn setup_copied_panel_interaction(
                                 new_panel.scale = scale;
                                 new_panel.translate_x = translate_x;
                                 new_panel.translate_y = translate_y;
+                                new_panel.z_index = z_index;
+                                new_panel.ignore_collision = ignore_collision;
                                 new_panel.data = panel_data;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
@@ -3478,13 +3572,16 @@ fn setup_copied_panel_interaction(
                                     update_manager.queue_add_panel(new_panel.clone());
                                 }
 
-                                let mut occupied_write = occupied_cells_end.borrow_mut();
-                                for dx in 0..geometry_size.0 {
-                                    for dy in 0..geometry_size.1 {
-                                        occupied_write.insert((grid_x + dx, grid_y + dy));
+                                // Mark cells as occupied (only if panel participates in collision)
+                                if !ignore_collision {
+                                    let mut occupied_write = occupied_cells_end.borrow_mut();
+                                    for dx in 0..geometry_size.0 {
+                                        for dy in 0..geometry_size.1 {
+                                            occupied_write.insert((grid_x + dx, grid_y + dy));
+                                        }
                                     }
+                                    drop(occupied_write);
                                 }
-                                drop(occupied_write);
 
                                 // Create UI
                                 let cfg = config_end.borrow();
@@ -3621,10 +3718,14 @@ fn setup_copied_panel_interaction(
                             panel_guard.geometry.y = grid_y;
                         }
 
-                        let geom = state.panel.blocking_read().geometry;
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.insert((grid_x + dx, grid_y + dy));
+                        // Mark new cells as occupied (only if panel participates in collision)
+                        let panel_guard = state.panel.blocking_read();
+                        if !panel_guard.ignore_collision {
+                            let geom = panel_guard.geometry;
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.insert((grid_x + dx, grid_y + dy));
+                                }
                             }
                         }
                     }
@@ -3666,13 +3767,15 @@ fn delete_selected_panels(
         if let Some(state) = panel_states.borrow_mut().remove(panel_id) {
             container.remove(&state.frame);
 
-            // Clear occupied cells
+            // Clear occupied cells (only if panel participated in collision detection)
             if let Ok(panel_guard) = state.panel.try_read() {
-                let geom = panel_guard.geometry;
-                let mut occupied = occupied_cells.borrow_mut();
-                for dx in 0..geom.width {
-                    for dy in 0..geom.height {
-                        occupied.remove(&(geom.x + dx, geom.y + dy));
+                if !panel_guard.ignore_collision {
+                    let geom = panel_guard.geometry;
+                    let mut occupied = occupied_cells.borrow_mut();
+                    for dx in 0..geom.width {
+                        for dy in 0..geom.height {
+                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                        }
                     }
                 }
             }
@@ -3833,6 +3936,33 @@ fn show_panel_properties_dialog(
     translate_box.append(&translate_y_label);
     translate_box.append(&translate_y_spin);
     panel_props_box.append(&translate_box);
+
+    // Panel Layering section
+    let layering_label = Label::new(Some("Panel Layering"));
+    layering_label.add_css_class("heading");
+    layering_label.set_margin_top(12);
+    panel_props_box.append(&layering_label);
+
+    // Z-Index control
+    let z_index_box = GtkBox::new(Orientation::Horizontal, 6);
+    z_index_box.set_margin_start(12);
+    let z_index_label = Label::new(Some("Z-Index:"));
+    let z_index_spin = SpinButton::with_range(-100.0, 100.0, 1.0);
+    z_index_spin.set_value(panel_guard.z_index as f64);
+    z_index_spin.set_hexpand(true);
+    z_index_spin.set_tooltip_text(Some("Higher values bring the panel in front of others"));
+    z_index_box.append(&z_index_label);
+    z_index_box.append(&z_index_spin);
+    panel_props_box.append(&z_index_box);
+
+    // Ignore Collision control
+    let collision_box = GtkBox::new(Orientation::Horizontal, 6);
+    collision_box.set_margin_start(12);
+    let ignore_collision_check = gtk4::CheckButton::with_label("Ignore collision (allow overlap)");
+    ignore_collision_check.set_active(panel_guard.ignore_collision);
+    ignore_collision_check.set_tooltip_text(Some("When enabled, this panel can overlap with other panels"));
+    collision_box.append(&ignore_collision_check);
+    panel_props_box.append(&collision_box);
 
     notebook.append_page(&panel_props_box, Some(&Label::new(Some("Size"))));
 
@@ -4048,6 +4178,24 @@ fn show_panel_properties_dialog(
     // Wrap test_config_widget in Rc for sharing
     let test_config_widget = Rc::new(test_config_widget);
 
+    // === Static Text Source Config ===
+    let static_text_config_widget = crate::ui::StaticTextConfigWidget::new();
+    static_text_config_widget.widget().set_visible(old_source_id == "static_text");
+
+    // Load existing Static Text config if source is static_text
+    if old_source_id == "static_text" {
+        if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
+            if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
+                static_text_config_widget.set_config(&static_text_config);
+            }
+        }
+    }
+
+    source_tab_box.append(static_text_config_widget.widget());
+
+    // Wrap static_text_config_widget in Rc for sharing
+    let static_text_config_widget = Rc::new(static_text_config_widget);
+
     // Show/hide source config widgets based on source selection
     {
         let cpu_widget_clone = cpu_config_widget.clone();
@@ -4059,6 +4207,7 @@ fn show_panel_properties_dialog(
         let clock_widget_clone = clock_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let test_widget_clone = test_config_widget.clone();
+        let static_text_widget_clone = static_text_config_widget.clone();
         let sources_clone = sources.clone();
         let panel_clone = panel.clone();
 
@@ -4074,6 +4223,7 @@ fn show_panel_properties_dialog(
                 clock_widget_clone.widget().set_visible(source_id == "clock");
                 combo_widget_clone.borrow().widget().set_visible(source_id == "combination");
                 test_widget_clone.widget().set_visible(source_id == "test");
+                static_text_widget_clone.widget().set_visible(source_id == "static_text");
 
                 // Reload config for the selected source
                 {
@@ -4147,6 +4297,13 @@ fn show_panel_properties_dialog(
                             };
                             // Only sets update_interval_ms, doesn't touch global state
                             test_widget_clone.set_config(&test_config);
+                        }
+                        "static_text" => {
+                            if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
+                                if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
+                                    static_text_widget_clone.set_config(&static_text_config);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -4856,6 +5013,7 @@ fn show_panel_properties_dialog(
     let clock_config_widget_clone = clock_config_widget.clone();
     let combo_config_widget_clone = combo_config_widget.clone();
     let test_config_widget_clone = test_config_widget.clone();
+    let static_text_config_widget_clone = static_text_config_widget.clone();
     let clock_analog_config_widget_clone = clock_analog_config_widget.clone();
     let clock_digital_config_widget_clone = clock_digital_config_widget.clone();
     let lcars_config_widget_clone = lcars_config_widget.clone();
@@ -4867,6 +5025,8 @@ fn show_panel_properties_dialog(
     let scale_spin_clone = scale_spin.clone();
     let translate_x_spin_clone = translate_x_spin.clone();
     let translate_y_spin_clone = translate_y_spin.clone();
+    let z_index_spin_clone = z_index_spin.clone();
+    let ignore_collision_check_clone = ignore_collision_check.clone();
     let corner_radius_spin_clone = corner_radius_spin.clone();
     let border_enabled_check_clone = border_enabled_check.clone();
     let border_width_spin_clone = border_width_spin.clone();
@@ -4927,27 +5087,33 @@ fn show_panel_properties_dialog(
 
         // Handle size change (collision check)
         if size_changed {
+            // Check if panel has ignore_collision
+            let panel_ignore_collision = panel_clone.blocking_read().ignore_collision;
             let mut occupied = occupied_cells.borrow_mut();
 
-            // Clear old occupied cells
-            for dx in 0..current_geometry.width {
-                for dy in 0..current_geometry.height {
-                    occupied.remove(&(current_geometry.x + dx, current_geometry.y + dy));
+            // Clear old occupied cells (only if panel participates in collision)
+            if !panel_ignore_collision {
+                for dx in 0..current_geometry.width {
+                    for dy in 0..current_geometry.height {
+                        occupied.remove(&(current_geometry.x + dx, current_geometry.y + dy));
+                    }
                 }
             }
 
-            // Check if new size would cause collision
+            // Check if new size would cause collision (skip for ignore_collision panels)
             let mut has_collision = false;
-            for dx in 0..new_width {
-                for dy in 0..new_height {
-                    let cell = (current_geometry.x + dx, current_geometry.y + dy);
-                    if occupied.contains(&cell) {
-                        has_collision = true;
+            if !panel_ignore_collision {
+                for dx in 0..new_width {
+                    for dy in 0..new_height {
+                        let cell = (current_geometry.x + dx, current_geometry.y + dy);
+                        if occupied.contains(&cell) {
+                            has_collision = true;
+                            break;
+                        }
+                    }
+                    if has_collision {
                         break;
                     }
-                }
-                if has_collision {
-                    break;
                 }
             }
 
@@ -4978,10 +5144,12 @@ fn show_panel_properties_dialog(
                 return;
             }
 
-            // Mark new cells as occupied
-            for dx in 0..new_width {
-                for dy in 0..new_height {
-                    occupied.insert((current_geometry.x + dx, current_geometry.y + dy));
+            // Mark new cells as occupied (only if panel participates in collision)
+            if !panel_ignore_collision {
+                for dx in 0..new_width {
+                    for dy in 0..new_height {
+                        occupied.insert((current_geometry.x + dx, current_geometry.y + dy));
+                    }
                 }
             }
         }
@@ -5019,6 +5187,40 @@ fn show_panel_properties_dialog(
             panel_guard.translate_x = translate_x_spin_clone.value();
             panel_guard.translate_y = translate_y_spin_clone.value();
 
+            // Get old values for comparison
+            let old_z_index = panel_guard.z_index;
+            let old_ignore_collision = panel_guard.ignore_collision;
+
+            // Update z_index and ignore_collision
+            let new_z_index = z_index_spin_clone.value() as i32;
+            let new_ignore_collision = ignore_collision_check_clone.is_active();
+            panel_guard.z_index = new_z_index;
+            panel_guard.ignore_collision = new_ignore_collision;
+
+            // Handle ignore_collision changes
+            if old_ignore_collision != new_ignore_collision {
+                let geom = panel_guard.geometry;
+                let mut occupied = occupied_cells_for_apply.borrow_mut();
+                if new_ignore_collision {
+                    // Now ignoring collision - remove cells from occupied
+                    for dx in 0..geom.width {
+                        for dy in 0..geom.height {
+                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                        }
+                    }
+                } else {
+                    // Now participating in collision - add cells to occupied
+                    for dx in 0..geom.width {
+                        for dy in 0..geom.height {
+                            occupied.insert((geom.x + dx, geom.y + dy));
+                        }
+                    }
+                }
+            }
+
+            // Reorder panels if z_index changed
+            let z_index_changed = old_z_index != new_z_index;
+
             // Update source if changed
             if source_changed {
                 // Release old shared source if present
@@ -5045,6 +5247,7 @@ fn show_panel_properties_dialog(
                             "clock" => Some(crate::core::SourceConfig::Clock(clock_config_widget_clone.get_config())),
                             "combination" => Some(crate::core::SourceConfig::Combo(combo_config_widget_clone.borrow().get_config())),
                             "test" => Some(crate::core::SourceConfig::Test(test_config_widget_clone.get_config())),
+                            "static_text" => Some(crate::core::SourceConfig::StaticText(static_text_config_widget_clone.get_config())),
                             _ => crate::core::SourceConfig::default_for_type(&new_source_id),
                         };
 
@@ -5816,8 +6019,60 @@ fn show_panel_properties_dialog(
                 }
             }
 
+            // Apply Static Text source configuration if static_text source is active
+            if new_source_id == "static_text" {
+                let static_text_config = static_text_config_widget_clone.get_config();
+                if let Ok(static_text_config_json) = serde_json::to_value(&static_text_config) {
+                    panel_guard.config.insert("static_text_config".to_string(), static_text_config_json);
+
+                    // Clone config before applying to avoid borrow checker issues
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the source
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply static_text config to source: {}", e);
+                    }
+
+                    // Update the source with new configuration
+                    if let Err(e) = panel_guard.update() {
+                        log::warn!("Failed to update panel after config change: {}", e);
+                    }
+                }
+            }
+
             // Drop the write lock BEFORE triggering any redraws to avoid deadlock
             drop(panel_guard);
+
+            // Reorder panels by z-index if z_index changed
+            if z_index_changed {
+                // Collect panel IDs with their z_index and current positions
+                let mut panel_info: Vec<(String, i32, f64, f64)> = Vec::new();
+                let states = panel_states_for_apply.borrow();
+                let config = config_for_apply.borrow();
+
+                for (panel_id, state) in states.iter() {
+                    let z_idx = state.panel.blocking_read().z_index;
+                    let panel_guard = state.panel.blocking_read();
+                    let x = panel_guard.geometry.x as f64 * (config.cell_width + config.spacing) as f64;
+                    let y = panel_guard.geometry.y as f64 * (config.cell_height + config.spacing) as f64;
+                    panel_info.push((panel_id.clone(), z_idx, x, y));
+                }
+
+                // Sort by z_index (ascending - lower z_index first means behind)
+                panel_info.sort_by_key(|(_, z, _, _)| *z);
+
+                drop(config);
+                drop(states);
+
+                // Re-add frames in z-order
+                let states = panel_states_for_apply.borrow();
+                for (panel_id, _, x, y) in panel_info {
+                    if let Some(state) = states.get(&panel_id) {
+                        container_for_apply.remove(&state.frame);
+                        container_for_apply.put(&state.frame, x, y);
+                    }
+                }
+            }
         }
 
         // Queue redraws AFTER releasing the panel write lock to avoid deadlock with draw callbacks

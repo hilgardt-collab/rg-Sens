@@ -319,6 +319,9 @@ fn build_ui(app: &Application) {
         }
     }
 
+    // Ensure proper z-ordering after all panels are loaded
+    grid_layout.reorder_panels_by_z_index();
+
     // Debug: Print shared source statistics to verify source sharing
     if let Some(manager) = rg_sens::core::global_shared_source_manager() {
         manager.debug_print_sources();
@@ -2365,6 +2368,8 @@ fn create_panel_from_config(
             scale: 1.0,
             translate_x: 0.0,
             translate_y: 0.0,
+            z_index: 0,
+            ignore_collision: false,
         },
     };
 

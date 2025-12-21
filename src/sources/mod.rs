@@ -13,6 +13,7 @@ mod clock;
 mod shared_sensors;
 mod combo;
 mod test;
+mod static_text;
 // mod network;
 
 pub use cpu::{CpuSensor, CpuSource};
@@ -26,6 +27,7 @@ pub use crate::audio::AlarmSoundConfig;
 pub use crate::core::{TimerMode, TimerState, TimerDisplayConfig};
 pub use combo::{ComboSource, ComboSourceConfig, SlotConfig, GroupConfig};
 pub use test::{TestSource, TestSourceConfig, TestMode, TEST_SOURCE_STATE};
+pub use static_text::{StaticTextSource, StaticTextSourceConfig, StaticTextLine};
 // pub use network::NetworkSource;
 
 /// Initialize shared sensor caches (call once at startup)
@@ -110,6 +112,14 @@ pub fn register_all() {
         "Test",
         general_displayers,
         || Box::new(TestSource::new()),
+    );
+
+    // Register Static Text source - for custom text overlays
+    global_registry().register_source_with_info(
+        "static_text",
+        "Static Text",
+        &["text"],  // Only compatible with text displayer
+        || Box::new(StaticTextSource::new()),
     );
 
     // TODO: Register more sources

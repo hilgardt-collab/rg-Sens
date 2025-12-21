@@ -44,6 +44,7 @@ mod core_bars_config_widget;
 mod indicator_config_widget;
 mod test_source_dialog;
 mod test_source_config_widget;
+mod static_text_config_widget;
 
 pub use main_window::MainWindow;
 pub use test_source_dialog::{show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback};
@@ -90,3 +91,4 @@ pub use core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
 pub use core_bars_config_widget::CoreBarsConfigWidget;
 pub use indicator_config_widget::IndicatorConfigWidget;
 pub use test_source_config_widget::TestSourceConfigWidget;
+pub use static_text_config_widget::StaticTextConfigWidget;
