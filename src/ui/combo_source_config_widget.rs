@@ -8,7 +8,7 @@ use crate::sources::ComboSourceConfig;
 use crate::ui::{
     CpuSourceConfigWidget, GpuSourceConfigWidget, MemorySourceConfigWidget,
     SystemTempConfigWidget, FanSpeedConfigWidget, DiskSourceConfigWidget,
-    ClockSourceConfigWidget,
+    ClockSourceConfigWidget, StaticTextConfigWidget,
 };
 use gtk4::prelude::*;
 use gtk4::{
@@ -29,6 +29,7 @@ enum SourceConfigWidgetType {
     FanSpeed(FanSpeedConfigWidget),
     Disk(DiskSourceConfigWidget),
     Clock(ClockSourceConfigWidget),
+    StaticText(StaticTextConfigWidget),
 }
 
 impl SourceConfigWidgetType {
@@ -41,6 +42,7 @@ impl SourceConfigWidgetType {
             SourceConfigWidgetType::FanSpeed(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::Disk(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::Clock(w) => w.widget().clone().upcast(),
+            SourceConfigWidgetType::StaticText(w) => w.widget().clone().upcast(),
         }
     }
 
@@ -53,6 +55,7 @@ impl SourceConfigWidgetType {
             SourceConfigWidgetType::FanSpeed(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::Disk(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::Clock(w) => serde_json::to_value(w.get_config()).ok(),
+            SourceConfigWidgetType::StaticText(w) => serde_json::to_value(w.get_config()).ok(),
         }
     }
 
@@ -127,6 +130,15 @@ impl SourceConfigWidgetType {
                         w.set_config(&cfg);
                     }
                     Err(e) => log::warn!("Failed to deserialize Clock config: {}", e),
+                }
+            }
+            SourceConfigWidgetType::StaticText(w) => {
+                match serde_json::from_value(json_value) {
+                    Ok(cfg) => {
+                        log::info!("Successfully loaded StaticText config");
+                        w.set_config(&cfg);
+                    }
+                    Err(e) => log::warn!("Failed to deserialize StaticText config: {}", e),
                 }
             }
         }
@@ -623,6 +635,7 @@ impl ComboSourceConfigWidget {
             "fan_speed" => Some(SourceConfigWidgetType::FanSpeed(FanSpeedConfigWidget::new())),
             "disk" => Some(SourceConfigWidgetType::Disk(DiskSourceConfigWidget::new())),
             "clock" => Some(SourceConfigWidgetType::Clock(ClockSourceConfigWidget::new())),
+            "static_text" => Some(SourceConfigWidgetType::StaticText(StaticTextConfigWidget::new())),
             _ => None,
         }
     }
