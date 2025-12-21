@@ -757,17 +757,32 @@ impl GridLayout {
 
         // Set up periodic redraw for indicator backgrounds
         // This ensures the background color updates when source values change
+        // Only redraws when the indicator value actually changes to avoid wasting CPU
         let panel_for_bg_timer = panel.clone();
         let background_area_weak_timer = background_area.downgrade();
+        let last_indicator_value: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
         gtk4::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
             // Stop if background area is gone (panel deleted)
             let Some(bg_area) = background_area_weak_timer.upgrade() else {
                 return gtk4::glib::ControlFlow::Break;
             };
-            // Check if panel background is indicator type
+            // Check if panel background is indicator type and value changed
             if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
-                if matches!(panel_guard.background.background, crate::ui::BackgroundType::Indicator(_)) {
-                    bg_area.queue_draw();
+                if let crate::ui::BackgroundType::Indicator(ref indicator) = panel_guard.background.background {
+                    // Get current value from config (the displayer syncs this via update)
+                    let current_value = if !indicator.value_field.is_empty() {
+                        panel_guard.config.get(&indicator.value_field)
+                            .and_then(|v| v.as_f64())
+                    } else {
+                        Some(indicator.static_value)
+                    };
+
+                    // Only redraw if value changed
+                    let mut last_val = last_indicator_value.borrow_mut();
+                    if *last_val != current_value {
+                        *last_val = current_value;
+                        bg_area.queue_draw();
+                    }
                 }
             }
             gtk4::glib::ControlFlow::Continue

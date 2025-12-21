@@ -1270,7 +1270,7 @@ fn build_ui(app: &Application) {
             popover_for_save.popdown();
             info!("Save layout requested");
             let current_panels = grid_layout_for_save.borrow().get_panels();
-            save_config_with_app_config(&app_config_for_save.borrow(), &window_for_save, &current_panels);
+            save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, &current_panels);
             *config_dirty_for_save.borrow_mut() = false;
         });
 
@@ -1338,12 +1338,15 @@ fn build_ui(app: &Application) {
                                 })
                                 .collect();
 
-                            let mut config = app_config.borrow().clone();
-                            config.window.width = width;
-                            config.window.height = height;
-                            config.set_panels(panel_data_list);
+                            // Update config in place instead of cloning
+                            {
+                                let mut config = app_config.borrow_mut();
+                                config.window.width = width;
+                                config.window.height = height;
+                                config.set_panels(panel_data_list);
+                            }
 
-                            match config.save_to_path(&path) {
+                            match app_config.borrow().save_to_path(&path) {
                                 Ok(()) => {
                                     info!("Layout saved successfully to {:?}", path);
                                     *config_dirty.borrow_mut() = false;
@@ -1591,7 +1594,7 @@ fn show_save_dialog(window: &ApplicationWindow, grid_layout: &Rc<RefCell<GridLay
                 info!("User chose to save configuration");
                 // Get current panels from GridLayout (not a stale clone)
                 let current_panels = grid_layout_clone.borrow().get_panels();
-                save_config_with_app_config(&app_config_clone.borrow(), &window_clone, &current_panels);
+                save_config_with_app_config(&mut app_config_clone.borrow_mut(), &window_clone, &current_panels);
                 window_clone.destroy(); // Use destroy to bypass close handler
             }
             Ok(0) => {
@@ -1661,7 +1664,9 @@ fn find_monitor_by_connector(connector: &str) -> Option<u32> {
 }
 
 /// Save current configuration to disk
-fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>]) {
+///
+/// Updates the config in place and saves it, avoiding an extra clone.
+fn save_config_with_app_config(app_config: &mut AppConfig, window: &ApplicationWindow, panels: &[Arc<RwLock<Panel>>]) {
     // Get window dimensions
     let (width, height) = (window.default_width(), window.default_height());
 
@@ -1682,27 +1687,26 @@ fn save_config_with_app_config(app_config: &AppConfig, window: &ApplicationWindo
         })
         .collect();
 
-    // Create config with all settings using new PanelData format
-    let mut config = app_config.clone();
-    config.window.width = width;
-    config.window.height = height;
-    config.window.x = None; // GTK4 doesn't provide window position reliably
-    config.window.y = None;
-    config.window.maximized = is_maximized;
-    config.window.fullscreen_enabled = is_fullscreen;
-    config.window.monitor_connector = monitor_connector;
-    config.set_panels(panel_data_list);
+    // Update config in place instead of cloning
+    app_config.window.width = width;
+    app_config.window.height = height;
+    app_config.window.x = None; // GTK4 doesn't provide window position reliably
+    app_config.window.y = None;
+    app_config.window.maximized = is_maximized;
+    app_config.window.fullscreen_enabled = is_fullscreen;
+    app_config.window.monitor_connector = monitor_connector;
+    app_config.set_panels(panel_data_list);
 
     // Save global timers, alarms, and timer sound
     if let Ok(manager) = rg_sens::core::global_timer_manager().read() {
         let (timers, alarms, global_sound) = manager.get_full_config();
-        config.set_timers(timers);
-        config.set_alarms(alarms);
-        config.set_global_timer_sound(global_sound);
+        app_config.set_timers(timers);
+        app_config.set_alarms(alarms);
+        app_config.set_global_timer_sound(global_sound);
     }
 
     // Save to disk
-    match config.save() {
+    match app_config.save() {
         Ok(()) => {
             info!("Configuration saved successfully");
         }

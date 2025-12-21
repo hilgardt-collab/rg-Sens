@@ -64,7 +64,7 @@ impl AppConfig {
 
     /// Load configuration from a JSON string with auto-migration
     pub fn load_from_string(content: &str) -> Result<Self> {
-        // First, try to parse as raw JSON to check version
+        // Parse JSON once, then use from_value to deserialize into the correct struct
         let raw: serde_json::Value = serde_json::from_str(content)?;
         let version = raw.get("version")
             .and_then(|v| v.as_u64())
@@ -72,7 +72,8 @@ impl AppConfig {
 
         if version >= 2 {
             // V2 format - use AppConfigLoad which has the correct "panels" field
-            let loaded: AppConfigLoad = serde_json::from_str(content)?;
+            // Use from_value to avoid parsing the JSON string twice
+            let loaded: AppConfigLoad = serde_json::from_value(raw)?;
             Ok(AppConfig {
                 version: loaded.version,
                 window: loaded.window,
@@ -86,7 +87,8 @@ impl AppConfig {
         } else {
             // V1 format - load and migrate
             info!("Migrating config from v1 to v2 format");
-            let v1_config: AppConfigV1 = serde_json::from_str(content)?;
+            // Use from_value to avoid parsing the JSON string twice
+            let v1_config: AppConfigV1 = serde_json::from_value(raw)?;
             Ok(v1_config.migrate_to_v2())
         }
     }
@@ -465,11 +467,29 @@ impl PanelConfig {
 
     /// Migrate source settings to typed SourceConfig
     fn migrate_source_config(&self) -> SourceConfig {
+        // Helper to try migration with logging on failure
+        fn try_migrate<T: serde::de::DeserializeOwned>(
+            val: &serde_json::Value,
+            source_type: &str,
+            panel_id: &str,
+        ) -> Option<T> {
+            match serde_json::from_value(val.clone()) {
+                Ok(cfg) => Some(cfg),
+                Err(e) => {
+                    warn!(
+                        "Failed to migrate {} config for panel '{}': {}. Using defaults.",
+                        source_type, panel_id, e
+                    );
+                    None
+                }
+            }
+        }
+
         // Try to extract typed config from settings based on source type
         match self.source.as_str() {
             "cpu" => {
                 if let Some(val) = self.settings.get("cpu_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "cpu", &self.id) {
                         return SourceConfig::Cpu(cfg);
                     }
                 }
@@ -477,7 +497,7 @@ impl PanelConfig {
             }
             "gpu" => {
                 if let Some(val) = self.settings.get("gpu_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "gpu", &self.id) {
                         return SourceConfig::Gpu(cfg);
                     }
                 }
@@ -485,7 +505,7 @@ impl PanelConfig {
             }
             "memory" => {
                 if let Some(val) = self.settings.get("memory_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "memory", &self.id) {
                         return SourceConfig::Memory(cfg);
                     }
                 }
@@ -493,7 +513,7 @@ impl PanelConfig {
             }
             "disk" => {
                 if let Some(val) = self.settings.get("disk_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "disk", &self.id) {
                         return SourceConfig::Disk(cfg);
                     }
                 }
@@ -501,7 +521,7 @@ impl PanelConfig {
             }
             "clock" => {
                 if let Some(val) = self.settings.get("clock_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "clock", &self.id) {
                         return SourceConfig::Clock(cfg);
                     }
                 }
@@ -509,7 +529,7 @@ impl PanelConfig {
             }
             "combination" => {
                 if let Some(val) = self.settings.get("combo_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "combination", &self.id) {
                         return SourceConfig::Combo(cfg);
                     }
                 }
@@ -517,7 +537,7 @@ impl PanelConfig {
             }
             "system_temp" => {
                 if let Some(val) = self.settings.get("system_temp_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "system_temp", &self.id) {
                         return SourceConfig::SystemTemp(cfg);
                     }
                 }
@@ -525,7 +545,7 @@ impl PanelConfig {
             }
             "fan_speed" => {
                 if let Some(val) = self.settings.get("fan_speed_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "fan_speed", &self.id) {
                         return SourceConfig::FanSpeed(cfg);
                     }
                 }
@@ -533,7 +553,7 @@ impl PanelConfig {
             }
             "test" => {
                 if let Some(val) = self.settings.get("test_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "test", &self.id) {
                         return SourceConfig::Test(cfg);
                     }
                 }
@@ -541,7 +561,7 @@ impl PanelConfig {
             }
             "static_text" => {
                 if let Some(val) = self.settings.get("static_text_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "static_text", &self.id) {
                         return SourceConfig::StaticText(cfg);
                     }
                 }
@@ -556,11 +576,29 @@ impl PanelConfig {
 
     /// Migrate displayer settings to typed DisplayerConfig
     fn migrate_displayer_config(&self) -> DisplayerConfig {
+        // Helper to try migration with logging on failure
+        fn try_migrate<T: serde::de::DeserializeOwned>(
+            val: &serde_json::Value,
+            displayer_type: &str,
+            panel_id: &str,
+        ) -> Option<T> {
+            match serde_json::from_value(val.clone()) {
+                Ok(cfg) => Some(cfg),
+                Err(e) => {
+                    warn!(
+                        "Failed to migrate {} displayer config for panel '{}': {}. Using defaults.",
+                        displayer_type, panel_id, e
+                    );
+                    None
+                }
+            }
+        }
+
         // Try to extract typed config from settings based on displayer type
         match self.displayer.as_str() {
             "text" => {
                 if let Some(val) = self.settings.get("text_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "text", &self.id) {
                         return DisplayerConfig::Text(cfg);
                     }
                 }
@@ -568,7 +606,7 @@ impl PanelConfig {
             }
             "bar" => {
                 if let Some(val) = self.settings.get("bar_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "bar", &self.id) {
                         return DisplayerConfig::Bar(cfg);
                     }
                 }
@@ -576,7 +614,7 @@ impl PanelConfig {
             }
             "arc" => {
                 if let Some(val) = self.settings.get("arc_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "arc", &self.id) {
                         return DisplayerConfig::Arc(cfg);
                     }
                 }
@@ -584,7 +622,7 @@ impl PanelConfig {
             }
             "speedometer" => {
                 if let Some(val) = self.settings.get("speedometer_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "speedometer", &self.id) {
                         return DisplayerConfig::Speedometer(cfg);
                     }
                 }
@@ -592,7 +630,7 @@ impl PanelConfig {
             }
             "graph" => {
                 if let Some(val) = self.settings.get("graph_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "graph", &self.id) {
                         return DisplayerConfig::Graph(cfg);
                     }
                 }
@@ -600,7 +638,7 @@ impl PanelConfig {
             }
             "clock_analog" => {
                 if let Some(val) = self.settings.get("clock_analog_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "clock_analog", &self.id) {
                         return DisplayerConfig::ClockAnalog(cfg);
                     }
                 }
@@ -608,7 +646,7 @@ impl PanelConfig {
             }
             "clock_digital" => {
                 if let Some(val) = self.settings.get("clock_digital_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "clock_digital", &self.id) {
                         return DisplayerConfig::ClockDigital(cfg);
                     }
                 }
@@ -616,7 +654,7 @@ impl PanelConfig {
             }
             "lcars" => {
                 if let Some(val) = self.settings.get("lcars_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "lcars", &self.id) {
                         return DisplayerConfig::Lcars(cfg);
                     }
                 }
@@ -624,7 +662,7 @@ impl PanelConfig {
             }
             "cpu_cores" => {
                 if let Some(val) = self.settings.get("core_bars_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "cpu_cores", &self.id) {
                         return DisplayerConfig::CpuCores(cfg);
                     }
                 }
@@ -632,7 +670,7 @@ impl PanelConfig {
             }
             "indicator" => {
                 if let Some(val) = self.settings.get("indicator_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
+                    if let Some(cfg) = try_migrate(val, "indicator", &self.id) {
                         return DisplayerConfig::Indicator(cfg);
                     }
                 }

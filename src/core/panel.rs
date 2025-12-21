@@ -6,6 +6,7 @@ use super::panel_data::{PanelData, PanelAppearance, SourceConfig, DisplayerConfi
 use super::shared_source_manager::{SharedSourceManager, global_shared_source_manager};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::ui::{BackgroundConfig, Color};
@@ -207,27 +208,33 @@ impl Panel {
     /// cached values from the SharedSourceManager. Otherwise, it polls directly.
     pub fn update(&mut self) -> Result<()> {
         // Get values - either from shared source or by polling directly
-        // SharedSourceManager returns Arc<HashMap> for cheap cloning between manager operations
-        // We convert to owned HashMap here since we may need to add transform values
-        let values = if let Some(ref key) = self.source_key {
+        // Use Cow to avoid cloning when transforms aren't needed (common case)
+        // SharedSourceManager returns Arc<HashMap>, we store it to keep the borrow alive
+        // The _arc_values variable keeps the Arc alive so Cow can borrow from it
+        let _arc_values: Option<Arc<HashMap<String, serde_json::Value>>>;
+        let values: Cow<'_, HashMap<String, serde_json::Value>> = if let Some(ref key) = self.source_key {
             // Use shared source - values are already updated by UpdateManager
             if let Some(manager) = global_shared_source_manager() {
-                manager.get_values(key)
-                    .map(|arc| (*arc).clone())
-                    .unwrap_or_else(|| {
-                        log::warn!("Shared source {} not found, falling back to direct poll", key);
-                        self.source.update().ok();
-                        self.source.get_values()
-                    })
+                _arc_values = manager.get_values(key);
+                if let Some(ref arc) = _arc_values {
+                    // Borrow from Arc - no clone needed
+                    Cow::Borrowed(arc.as_ref())
+                } else {
+                    log::warn!("Shared source {} not found, falling back to direct poll", key);
+                    self.source.update().ok();
+                    Cow::Owned(self.source.get_values())
+                }
             } else {
                 // No manager available, fall back to direct poll
+                _arc_values = None;
                 self.source.update()?;
-                self.source.get_values()
+                Cow::Owned(self.source.get_values())
             }
         } else {
             // No shared source, poll directly (legacy behavior)
+            _arc_values = None;
             self.source.update()?;
-            self.source.get_values()
+            Cow::Owned(self.source.get_values())
         };
 
         // Only add transform values if panel has non-default transforms
@@ -237,25 +244,36 @@ impl Panel {
             || self.translate_y.abs() > TRANSFORM_THRESHOLD;
 
         // Add transform values if needed, then update displayer
-        let values = if has_transform {
-            let mut values = values;
-            values.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
-            values.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
-            values.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
-            values
-        } else {
-            values
-        };
-        self.displayer.update_data(&values);
+        // Only clone when we actually need to modify the HashMap
+        if has_transform {
+            let mut values_owned = values.into_owned();
+            values_owned.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
+            values_owned.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
+            values_owned.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+            self.displayer.update_data(&values_owned);
 
-        // Sync certain live values into panel.config for UI access
-        const SYNC_KEYS: &[&str] = &[
-            "alarms", "timers", "triggered_alarm_ids",
-            "timer_state", "alarm_triggered", "alarm_enabled",
-        ];
-        for key in SYNC_KEYS {
-            if let Some(value) = values.get(*key) {
-                self.config.insert(key.to_string(), value.clone());
+            // Sync certain live values into panel.config for UI access
+            const SYNC_KEYS: &[&str] = &[
+                "alarms", "timers", "triggered_alarm_ids",
+                "timer_state", "alarm_triggered", "alarm_enabled",
+            ];
+            for key in SYNC_KEYS {
+                if let Some(value) = values_owned.get(*key) {
+                    self.config.insert(key.to_string(), value.clone());
+                }
+            }
+        } else {
+            self.displayer.update_data(&values);
+
+            // Sync certain live values into panel.config for UI access
+            const SYNC_KEYS: &[&str] = &[
+                "alarms", "timers", "triggered_alarm_ids",
+                "timer_state", "alarm_triggered", "alarm_enabled",
+            ];
+            for key in SYNC_KEYS {
+                if let Some(value) = values.get(*key) {
+                    self.config.insert(key.to_string(), value.clone());
+                }
             }
         }
 
