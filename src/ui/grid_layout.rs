@@ -11,6 +11,61 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Source-specific config keys that should be filtered out when copying panel styles.
+/// These keys contain data source configuration, not visual styling.
+const SOURCE_CONFIG_KEYS: &[&str] = &[
+    "cpu_config",
+    "gpu_config",
+    "memory_config",
+    "disk_config",
+    "clock_config",
+    "combo_config",
+    "system_temp_config",
+    "fan_speed_config",
+    "test_config",
+    "static_text_config",
+];
+
+/// Filter out source-specific config keys from a panel config.
+/// Used when copying/pasting panel styles to preserve only visual settings.
+fn filter_source_config_keys(config: &mut HashMap<String, serde_json::Value>) {
+    for key in SOURCE_CONFIG_KEYS {
+        config.remove(*key);
+    }
+}
+
+/// Create the standard panel context menu model.
+/// Returns a Menu with Properties, Copy/Paste Style, Save to File, and Delete sections.
+fn create_panel_context_menu() -> gtk4::gio::Menu {
+    use gtk4::gio;
+
+    let menu = gio::Menu::new();
+
+    // Section 1: Properties
+    let section1 = gio::Menu::new();
+    section1.append(Some("Properties..."), Some("panel.properties"));
+    menu.append_section(None, &section1);
+
+    // Section 2: Copy/Paste Style
+    let section2 = gio::Menu::new();
+    section2.append(Some("Copy Style"), Some("panel.copy_style"));
+    section2.append(Some("Paste Style"), Some("panel.paste_style"));
+    section2.append(Some("Set as Default Style"), Some("panel.set_default_style"));
+    menu.append_section(None, &section2);
+
+    // Section 3: Save to File
+    let section3 = gio::Menu::new();
+    section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
+    menu.append_section(None, &section3);
+
+    // Section 4: Delete
+    let section4 = gio::Menu::new();
+    section4.append(Some("Delete"), Some("panel.delete"));
+    menu.append_section(None, &section4);
+
+    menu
+}
+
 thread_local! {
     static PANEL_PROPERTIES_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
 }
@@ -974,30 +1029,7 @@ impl GridLayout {
     fn setup_context_menu(&self, widget: &Widget, panel: Arc<RwLock<Panel>>, panel_id: String) {
         use gtk4::gio;
 
-        let menu = gio::Menu::new();
-
-        // Section 1: Properties
-        let section1 = gio::Menu::new();
-        section1.append(Some("Properties..."), Some("panel.properties"));
-        menu.append_section(None, &section1);
-
-        // Section 2: Copy/Paste Style
-        let section2 = gio::Menu::new();
-        section2.append(Some("Copy Style"), Some("panel.copy_style"));
-        section2.append(Some("Paste Style"), Some("panel.paste_style"));
-        section2.append(Some("Set as Default Style"), Some("panel.set_default_style"));
-        menu.append_section(None, &section2);
-
-        // Section 3: Save to File
-        let section3 = gio::Menu::new();
-        section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
-        menu.append_section(None, &section3);
-
-        // Section 4: Delete
-        let section4 = gio::Menu::new();
-        section4.append(Some("Delete"), Some("panel.delete"));
-        menu.append_section(None, &section4);
-
+        let menu = create_panel_context_menu();
         let popover = PopoverMenu::from_model(Some(&menu));
         popover.set_parent(widget);
         popover.set_has_arrow(false);
@@ -1046,15 +1078,7 @@ impl GridLayout {
 
             // Filter out source-specific config keys
             let mut displayer_config = panel_guard.config.clone();
-            displayer_config.remove("cpu_config");
-            displayer_config.remove("gpu_config");
-            displayer_config.remove("memory_config");
-            displayer_config.remove("disk_config");
-            displayer_config.remove("clock_config");
-            displayer_config.remove("combo_config");
-            displayer_config.remove("system_temp_config");
-            displayer_config.remove("fan_speed_config");
-            displayer_config.remove("test_config");
+            filter_source_config_keys(&mut displayer_config);
 
             let style = PanelStyle {
                 background: panel_guard.background.clone(),
@@ -1142,15 +1166,7 @@ impl GridLayout {
             } else {
                 // Fall back to HashMap config (filter out source-specific keys)
                 let mut config = panel_guard.config.clone();
-                config.remove("cpu_config");
-                config.remove("gpu_config");
-                config.remove("memory_config");
-                config.remove("disk_config");
-                config.remove("clock_config");
-                config.remove("combo_config");
-                config.remove("system_temp_config");
-                config.remove("fan_speed_config");
-                config.remove("test_config");
+                filter_source_config_keys(&mut config);
                 serde_json::to_value(&config).ok()
             };
 
@@ -3203,16 +3219,7 @@ fn setup_copied_panel_interaction(
         use crate::ui::{PanelStyle, CLIPBOARD};
 
         let mut displayer_config = panel_guard.config.clone();
-        displayer_config.remove("cpu_config");
-        displayer_config.remove("gpu_config");
-        displayer_config.remove("memory_config");
-        displayer_config.remove("disk_config");
-        displayer_config.remove("clock_config");
-        displayer_config.remove("combo_config");
-        displayer_config.remove("system_temp_config");
-        displayer_config.remove("fan_speed_config");
-        displayer_config.remove("test_config");
-        displayer_config.remove("static_text_config");
+        filter_source_config_keys(&mut displayer_config);
 
         let style = PanelStyle {
             background: panel_guard.background.clone(),
@@ -3266,6 +3273,37 @@ fn setup_copied_panel_interaction(
         }
     });
     action_group.add_action(&paste_style_action);
+
+    // Set as Default Style action
+    let set_default_style_action = gio::SimpleAction::new("set_default_style", None);
+    let panel_set_default = panel.clone();
+    set_default_style_action.connect_activate(move |_, _| {
+        use crate::config::DefaultsConfig;
+
+        log::info!("Setting panel style as default");
+        let panel_guard = panel_set_default.blocking_read();
+
+        let displayer_id = panel_guard.displayer.id().to_string();
+
+        let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
+            serde_json::to_value(&typed_config).ok()
+        } else {
+            let mut config = panel_guard.config.clone();
+            filter_source_config_keys(&mut config);
+            serde_json::to_value(&config).ok()
+        };
+
+        drop(panel_guard);
+
+        if let Some(config_value) = displayer_config {
+            let mut defaults = DefaultsConfig::load();
+            defaults.set_displayer_default(&displayer_id, config_value);
+            if let Err(e) = defaults.save() {
+                log::warn!("Failed to save default style: {}", e);
+            }
+        }
+    });
+    action_group.add_action(&set_default_style_action);
 
     // Save to File action
     let save_to_file_action = gio::SimpleAction::new("save_to_file", None);
@@ -3326,25 +3364,7 @@ fn setup_copied_panel_interaction(
     let gesture_secondary = GestureClick::new();
     gesture_secondary.set_button(3);
 
-    let menu = gio::Menu::new();
-
-    let section1 = gio::Menu::new();
-    section1.append(Some("Properties..."), Some("panel.properties"));
-    menu.append_section(None, &section1);
-
-    let section2 = gio::Menu::new();
-    section2.append(Some("Copy Style"), Some("panel.copy_style"));
-    section2.append(Some("Paste Style"), Some("panel.paste_style"));
-    menu.append_section(None, &section2);
-
-    let section3 = gio::Menu::new();
-    section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
-    menu.append_section(None, &section3);
-
-    let section4 = gio::Menu::new();
-    section4.append(Some("Delete"), Some("panel.delete"));
-    menu.append_section(None, &section4);
-
+    let menu = create_panel_context_menu();
     let popover = PopoverMenu::from_model(Some(&menu));
     popover.set_parent(widget);
     popover.set_has_arrow(false);
