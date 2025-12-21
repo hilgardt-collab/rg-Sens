@@ -3,7 +3,7 @@
 //! Displays a color based on a value mapped to a gradient (0% -> 100%).
 //! Can show full panel fill, circles, squares, or polygons.
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, STATIC_POLL_INTERVAL};
 use crate::displayers::TextDisplayerConfig;
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::render_cache::get_cached_color_at;
@@ -369,8 +369,8 @@ impl Displayer for IndicatorDisplayer {
             }
         });
 
-        // Periodic redraw when dirty
-        glib::timeout_add_local(std::time::Duration::from_millis(100), {
+        // Periodic redraw when dirty (uses longer interval since indicator doesn't animate)
+        glib::timeout_add_local(STATIC_POLL_INTERVAL, {
             let drawing_area_weak = drawing_area.downgrade();
             let data_for_timer = self.data.clone();
             move || {

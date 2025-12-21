@@ -331,19 +331,19 @@ impl TextExtentsCache {
 
         // Cache the result (evict LRU entries if needed)
         if self.cache.len() >= self.max_entries {
-            // LRU eviction: find median access time and remove older entries
-            // This avoids cloning all keys and full sorting
+            // LRU eviction: use select_nth_unstable for O(n) median finding instead of O(n log n) sort
             let now = Instant::now();
             let mut access_times: Vec<_> = self.cache.values()
                 .map(|v| now.duration_since(v.last_access))
                 .collect();
-            access_times.sort_unstable();
 
-            // Find median age threshold (entries older than this will be removed)
-            let threshold = access_times.get(access_times.len() / 2).copied();
-            if let Some(threshold) = threshold {
-                self.cache.retain(|_, v| now.duration_since(v.last_access) <= threshold);
-            }
+            // Find median age threshold using partial selection (O(n) instead of O(n log n))
+            let median_idx = access_times.len() / 2;
+            let (_, median, _) = access_times.select_nth_unstable(median_idx);
+            let threshold = *median;
+
+            // Remove entries older than median
+            self.cache.retain(|_, v| now.duration_since(v.last_access) <= threshold);
         }
 
         self.cache.insert(key, CachedTextExtents {

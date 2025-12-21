@@ -25,4 +25,4 @@ pub use timer_manager::{
     TimerConfig, TimerDisplayConfig, TimerMode, TimerState,
 };
 pub use update_manager::{UpdateManager, init_global_update_manager, global_update_manager};
-pub use constants::{ANIMATION_FRAME_INTERVAL, ANIMATION_FRAME_MS, ANIMATION_SNAP_THRESHOLD};
+pub use constants::{ANIMATION_FRAME_INTERVAL, ANIMATION_FRAME_MS, ANIMATION_SNAP_THRESHOLD, STATIC_POLL_INTERVAL};

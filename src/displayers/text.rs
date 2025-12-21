@@ -1,6 +1,6 @@
 //! Text displayer implementation
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, STATIC_POLL_INTERVAL};
 use crate::displayers::TextDisplayerConfig;
 use anyhow::Result;
 use cairo::Context;
@@ -95,8 +95,9 @@ impl Displayer for TextDisplayer {
             }
         });
 
-        // Set up periodic redraw using timeout - only redraw when data has changed
-        glib::timeout_add_local(std::time::Duration::from_millis(100), {
+        // Set up periodic redraw - only redraw when data has changed
+        // Uses longer interval since text display doesn't animate
+        glib::timeout_add_local(STATIC_POLL_INTERVAL, {
             let drawing_area_weak = drawing_area.downgrade();
             let data_for_timer = self.data.clone();
             move || {

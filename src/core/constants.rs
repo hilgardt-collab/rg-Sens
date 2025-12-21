@@ -8,6 +8,11 @@ pub const ANIMATION_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 /// Animation frame interval in milliseconds (useful for calculations)
 pub const ANIMATION_FRAME_MS: u64 = 16;
 
+/// Polling interval for static (non-animated) displayers to check dirty flag (250ms)
+/// This is less frequent than animation frames since data sources typically update
+/// every 1 second, so checking 4 times per second is sufficient while reducing CPU usage.
+pub const STATIC_POLL_INTERVAL: Duration = Duration::from_millis(250);
+
 /// Threshold for snapping animation values to their target.
 /// When the difference between animated and target values is less than this,
 /// the animation is considered complete and snaps to the target.
