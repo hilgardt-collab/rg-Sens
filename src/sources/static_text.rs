@@ -160,7 +160,7 @@ impl DataSource for StaticTextSource {
             fields.push(FieldMetadata::new(
                 &line.field_id,
                 &line.label,
-                &format!("Static text: {}", line.label),
+                format!("Static text: {}", line.label),
                 FieldType::Text,
                 FieldPurpose::Value,
             ));

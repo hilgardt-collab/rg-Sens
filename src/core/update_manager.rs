@@ -272,7 +272,8 @@ impl UpdateManager {
         let mut panels = self.panels.write().await;
         let panel_count = panels.len();
         let mut tasks = Vec::with_capacity(panel_count);
-        let mut config_updates: Vec<(String, u64, Duration, Option<String>)> = Vec::new();
+        // Use HashMap for O(1) lookup instead of Vec with O(n) linear search
+        let mut config_updates: HashMap<String, (u64, Duration, Option<String>)> = HashMap::new();
 
         // Track panels that had their config checked (for updating last_config_check)
         let mut config_checked: Vec<String> = Vec::with_capacity(panel_count);
@@ -308,21 +309,20 @@ impl UpdateManager {
                         state.cached_interval
                     }
                 });
-                config_updates.push((panel_id.clone(), current_hash, interval, new_source_key.clone()));
+                config_updates.insert(panel_id.clone(), (current_hash, interval, new_source_key.clone()));
             }
 
-            // Check if update is due
+            // Check if update is due - O(1) HashMap lookup instead of O(n) Vec search
             let effective_interval = config_updates
-                .iter()
-                .find(|(id, _, _, _)| id == panel_id)
-                .map(|(_, _, interval, _)| *interval)
+                .get(panel_id)
+                .map(|(_, interval, _)| *interval)
                 .unwrap_or(state.cached_interval);
 
             let elapsed = now.duration_since(state.last_update);
             if elapsed >= effective_interval {
                 let panel = state.panel.clone();
+                // Clone once for the tasks Vec, move into async block for error logging
                 let panel_id_owned = panel_id.clone();
-                let panel_id_for_task = panel_id_owned.clone();
                 let source_key = state.source_key.clone();
 
                 // Check if this panel's source was updated in phase 1
@@ -335,6 +335,8 @@ impl UpdateManager {
                 // Clone semaphore for the task - limits concurrent updates
                 let semaphore = self.update_semaphore.clone();
 
+                // Clone panel_id for use inside the async block
+                let panel_id_for_task = panel_id_owned.clone();
                 let task = tokio::spawn(async move {
                     // Acquire permit to limit concurrent updates (automatically released on drop)
                     let _permit = semaphore.acquire().await;
@@ -354,7 +356,7 @@ impl UpdateManager {
         // Update cached state for panels with config changes
         // Also track old source keys for cleanup
         let mut old_source_keys: Vec<String> = Vec::new();
-        for (panel_id, new_hash, new_interval, new_source_key) in config_updates {
+        for (panel_id, (new_hash, new_interval, new_source_key)) in config_updates {
             if let Some(state) = panels.get_mut(&panel_id) {
                 // Check if source_key changed and register new shared source if needed
                 if state.source_key != new_source_key {

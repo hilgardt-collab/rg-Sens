@@ -1297,6 +1297,9 @@ impl GridLayout {
         // Cache panel geometries at drag begin to avoid blocking reads during drag
         let cached_geometries: Rc<RefCell<HashMap<String, crate::core::PanelGeometry>>> =
             Rc::new(RefCell::new(HashMap::new()));
+        // Cache ignore_collision flags to avoid blocking reads during drag_end
+        let cached_ignore_collision: Rc<RefCell<HashMap<String, bool>>> =
+            Rc::new(RefCell::new(HashMap::new()));
 
         // Clone for drag_begin closure
         let selected_panels_begin = selected_panels.clone();
@@ -1306,6 +1309,7 @@ impl GridLayout {
         let panel_id_for_drag_begin = panel_id.clone();
         let dragged_panel_id_begin = dragged_panel_id.clone();
         let cached_geometries_begin = cached_geometries.clone();
+        let cached_ignore_collision_begin = cached_ignore_collision.clone();
 
         drag_gesture.connect_drag_begin(move |gesture, _, _| {
             // Enable grid visualization
@@ -1355,8 +1359,10 @@ impl GridLayout {
             // Store initial positions and cache geometries of all selected panels
             let mut positions = initial_positions_clone.borrow_mut();
             let mut geometries = cached_geometries_begin.borrow_mut();
+            let mut ignore_collision_cache = cached_ignore_collision_begin.borrow_mut();
             positions.clear();
             geometries.clear();
+            ignore_collision_cache.clear();
 
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
@@ -1366,10 +1372,11 @@ impl GridLayout {
                             positions.insert(id.clone(), pos);
                         }
                     }
-                    // Cache the geometry at drag begin to avoid blocking reads during drag
+                    // Cache the geometry and ignore_collision at drag begin to avoid blocking reads during drag
                     // Use blocking_read here since drag_begin only happens once (not at 60fps)
                     let panel_guard = state.panel.blocking_read();
                     geometries.insert(id.clone(), panel_guard.geometry);
+                    ignore_collision_cache.insert(id.clone(), panel_guard.ignore_collision);
                 }
             }
         });
@@ -1457,6 +1464,8 @@ impl GridLayout {
         let on_change_end = self.on_change.clone();
         let container_for_copy = self.container.clone();
         let panels_for_copy = self.panels.clone();
+        let cached_geometries_end = cached_geometries.clone();
+        let cached_ignore_collision_end = cached_ignore_collision.clone();
 
         drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
             let config = config_for_end.borrow();
@@ -1464,6 +1473,8 @@ impl GridLayout {
             let states = panel_states_end.borrow();
             let mut occupied = occupied_cells_end.borrow_mut();
             let positions = initial_positions.borrow();
+            let cached_geoms = cached_geometries_end.borrow();
+            let cached_ignore = cached_ignore_collision_end.borrow();
 
             // Check if Ctrl key is held (copy mode)
             let modifiers = gesture.current_event_state();
@@ -1471,15 +1482,18 @@ impl GridLayout {
 
             // Phase 1: Clear current occupied cells for ALL selected panels (only if moving, not copying)
             // Panels with ignore_collision don't participate in collision detection
+            // Use cached values from drag_begin to avoid blocking reads
             if !is_copy_mode {
                 for id in selected.iter() {
-                    if let Some(state) = states.get(id) {
-                        let panel_guard = state.panel.blocking_read();
-                        if !panel_guard.ignore_collision {
-                            let geom = panel_guard.geometry;
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    occupied.remove(&(geom.x + dx, geom.y + dy));
+                    if states.contains_key(id) {
+                        // Use cached ignore_collision and geometry from drag_begin
+                        let ignore_collision = cached_ignore.get(id).copied().unwrap_or(false);
+                        if !ignore_collision {
+                            if let Some(geom) = cached_geoms.get(id) {
+                                for dx in 0..geom.width {
+                                    for dy in 0..geom.height {
+                                        occupied.remove(&(geom.x + dx, geom.y + dy));
+                                    }
                                 }
                             }
                         }
@@ -1513,7 +1527,7 @@ impl GridLayout {
 
             // Calculate new positions and check collisions
             for id in selected.iter() {
-                if let Some(state) = states.get(id) {
+                if states.contains_key(id) {
                     let (orig_x, orig_y) = positions.get(id).unwrap_or(&(0.0, 0.0));
                     let final_x = orig_x + offset_x;
                     let final_y = orig_y + offset_y;
@@ -1531,28 +1545,30 @@ impl GridLayout {
 
 
                     // Check if this panel would collide (skip for panels with ignore_collision)
-                    let panel_guard = state.panel.blocking_read();
-                    let geom = panel_guard.geometry;
-                    if !panel_guard.ignore_collision {
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                let cell = (grid_x + dx, grid_y + dy);
-                                if occupied.contains(&cell) {
-                                    group_has_collision = true;
+                    // Use cached values from drag_begin to avoid blocking reads
+                    let ignore_collision = cached_ignore.get(id).copied().unwrap_or(false);
+                    if let Some(geom) = cached_geoms.get(id) {
+                        if !ignore_collision {
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    let cell = (grid_x + dx, grid_y + dy);
+                                    if occupied.contains(&cell) {
+                                        group_has_collision = true;
+                                        break;
+                                    }
+                                }
+                                if group_has_collision {
                                     break;
                                 }
                             }
-                            if group_has_collision {
-                                break;
-                            }
                         }
+
+                        // Calculate snapped pixel position
+                        let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
+                        let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
+
+                        new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
                     }
-
-                    // Calculate snapped pixel position
-                    let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
-                    let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
-
-                    new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
                 }
             }
 
@@ -1560,16 +1576,18 @@ impl GridLayout {
             if group_has_collision {
                 // Restore ALL panels to original positions (only needed in move mode)
                 // Only restore cells for panels that participate in collision detection
+                // Use cached values from drag_begin to avoid blocking reads
                 if !is_copy_mode {
                     for id in selected.iter() {
-                        if let Some(state) = states.get(id) {
-                            let panel_guard = state.panel.blocking_read();
-                            if !panel_guard.ignore_collision {
-                                let geom = panel_guard.geometry;
-                                // Restore occupied cells
-                                for dx in 0..geom.width {
-                                    for dy in 0..geom.height {
-                                        occupied.insert((geom.x + dx, geom.y + dy));
+                        if states.contains_key(id) {
+                            let ignore_collision = cached_ignore.get(id).copied().unwrap_or(false);
+                            if !ignore_collision {
+                                if let Some(geom) = cached_geoms.get(id) {
+                                    // Restore occupied cells
+                                    for dx in 0..geom.width {
+                                        for dy in 0..geom.height {
+                                            occupied.insert((geom.x + dx, geom.y + dy));
+                                        }
                                     }
                                 }
                             }

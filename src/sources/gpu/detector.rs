@@ -106,16 +106,6 @@ fn detect_amd_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInfo>)
     }
 }
 
-/// Get cached GPU information for UI display
-#[allow(dead_code)]
-pub fn get_gpu_names() -> Vec<String> {
-    let detected = detect_gpus();
-    detected.info.iter().map(|info| info.name.clone()).collect()
-}
-
-/// Get number of detected GPUs
-#[allow(dead_code)]
-pub fn get_gpu_count() -> u32 {
-    let detected = detect_gpus();
-    detected.gpus.len() as u32
-}
+// Note: GPU name/count queries should use GpuSource::get_cached_gpu_names() and
+// GpuSource::get_cached_gpu_count() which use the cached GPU_MANAGER instead of
+// performing a full hardware scan.

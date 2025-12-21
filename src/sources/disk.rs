@@ -6,8 +6,12 @@ use crate::ui::{DiskField, DiskSourceConfig, DiskUnit};
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::Duration;
 use sysinfo::Disks;
+
+/// Cached disk list for UI dropdowns (avoids expensive filesystem scan on each call)
+static CACHED_DISKS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
 /// Disk usage data source
 ///
@@ -64,17 +68,23 @@ impl DiskSource {
         &self.config
     }
 
-    /// Get list of available disks with their mount points and names
+    /// Get list of available disks with their mount points and names.
+    ///
+    /// This is cached on first call to avoid expensive filesystem scans on every
+    /// UI interaction. The cache is populated once and reused for the lifetime
+    /// of the application. Restart the app to detect newly mounted disks.
     pub fn get_available_disks() -> Vec<(String, String)> {
-        let disks = Disks::new_with_refreshed_list();
-        disks
-            .iter()
-            .map(|disk| {
-                let mount_point = disk.mount_point().to_string_lossy().to_string();
-                let name = disk.name().to_string_lossy().to_string();
-                (mount_point, name)
-            })
-            .collect()
+        CACHED_DISKS.get_or_init(|| {
+            let disks = Disks::new_with_refreshed_list();
+            disks
+                .iter()
+                .map(|disk| {
+                    let mount_point = disk.mount_point().to_string_lossy().to_string();
+                    let name = disk.name().to_string_lossy().to_string();
+                    (mount_point, name)
+                })
+                .collect()
+        }).clone()
     }
 
     /// Convert disk space from bytes to configured unit
