@@ -440,57 +440,73 @@ impl UpdateManager {
             None => return updated,
         };
 
-        let mut shared_sources = self.shared_sources.write().await;
+        // Phase 1: Collect sources that need updating (read lock only)
+        let sources_to_update: Vec<(String, Duration)> = {
+            let shared_sources = self.shared_sources.read().await;
+            shared_sources
+                .iter()
+                .filter(|(_, state)| now.duration_since(state.last_update) >= state.interval)
+                .map(|(key, state)| (key.clone(), state.interval))
+                .collect()
+        };
+        // Lock released here before I/O
 
-        // Collect sources that need updating
-        let sources_to_update: Vec<String> = shared_sources
-            .iter()
-            .filter(|(_, state)| now.duration_since(state.last_update) >= state.interval)
-            .map(|(key, _)| key.clone())
-            .collect();
+        // Phase 2: Perform I/O WITHOUT holding the lock
+        // This prevents blocking readers during hardware polling
+        let mut update_results: Vec<(String, Result<(), String>, Option<Duration>)> = Vec::with_capacity(sources_to_update.len());
 
-        // Track sources that should be removed (no longer exist in SharedSourceManager)
-        let mut sources_to_remove: Vec<String> = Vec::new();
+        for (key, _interval) in sources_to_update {
+            let result = manager.update_source(&key);
+            let new_interval = manager.get_interval(&key);
 
-        // Update each source
-        for key in sources_to_update {
-            match manager.update_source(&key) {
+            match &result {
                 Ok(_) => {
                     trace!("Updated shared source {}", key);
                     updated.insert(key.clone());
-
-                    // Update last_update time
-                    if let Some(state) = shared_sources.get_mut(&key) {
-                        state.last_update = now;
-
-                        // Also refresh interval from manager in case it changed
-                        if let Some(new_interval) = manager.get_interval(&key) {
-                            if new_interval != state.interval {
-                                debug!(
-                                    "Shared source {} interval changed from {:?} to {:?}",
-                                    key, state.interval, new_interval
-                                );
-                                state.interval = new_interval;
-                            }
-                        }
-                    }
+                    update_results.push((key, Ok(()), new_interval));
                 }
                 Err(e) => {
-                    // Source not found means it was released (e.g., panel changed source)
-                    // Remove it from our tracking to prevent repeated errors
-                    if e.to_string().contains("Source not found") {
+                    let err_str = e.to_string();
+                    if err_str.contains("Source not found") {
                         debug!("Shared source {} no longer exists, removing from update tracking", key);
-                        sources_to_remove.push(key);
                     } else {
                         error!("Error updating shared source {}: {}", key, e);
                     }
+                    update_results.push((key, Err(err_str), None));
                 }
             }
         }
 
-        // Remove stale sources from tracking
-        for key in sources_to_remove {
-            shared_sources.remove(&key);
+        // Phase 3: Update state with results (write lock)
+        {
+            let mut shared_sources = self.shared_sources.write().await;
+
+            for (key, result, new_interval) in update_results {
+                match result {
+                    Ok(()) => {
+                        if let Some(state) = shared_sources.get_mut(&key) {
+                            state.last_update = now;
+
+                            // Also refresh interval from manager in case it changed
+                            if let Some(new_int) = new_interval {
+                                if new_int != state.interval {
+                                    debug!(
+                                        "Shared source {} interval changed from {:?} to {:?}",
+                                        key, state.interval, new_int
+                                    );
+                                    state.interval = new_int;
+                                }
+                            }
+                        }
+                    }
+                    Err(ref err_str) if err_str.contains("Source not found") => {
+                        shared_sources.remove(&key);
+                    }
+                    Err(_) => {
+                        // Other errors: just log, don't remove
+                    }
+                }
+            }
         }
 
         updated

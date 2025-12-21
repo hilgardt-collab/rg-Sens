@@ -9,10 +9,13 @@ use super::panel_data::SourceConfig;
 use anyhow::{Result, anyhow};
 use log::{info, debug, warn};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::time::Duration;
 
 /// Represents a shared source with its cached values and update tracking
+///
+/// Wrapped in Arc<Mutex<>> to allow updating individual sources without
+/// holding the collection lock during I/O operations.
 pub struct SharedSource {
     /// The actual data source instance
     pub source: BoxedDataSource,
@@ -61,13 +64,19 @@ impl SharedSource {
     }
 }
 
+/// Thread-safe wrapper for SharedSource
+type SharedSourceHandle = Arc<Mutex<SharedSource>>;
+
 /// Manages shared data source instances
 ///
 /// Sources are keyed by a hash of their configuration, ensuring that
 /// panels with identical source configs share the same source instance.
+///
+/// Each SharedSource is wrapped in Arc<Mutex<>> to allow updating individual
+/// sources without holding the collection lock during I/O operations.
 pub struct SharedSourceManager {
-    /// Map from source key to shared source
-    sources: RwLock<HashMap<String, SharedSource>>,
+    /// Map from source key to shared source handle
+    sources: RwLock<HashMap<String, SharedSourceHandle>>,
 }
 
 impl SharedSourceManager {
@@ -127,15 +136,17 @@ impl SharedSourceManager {
 
         let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
-        if let Some(shared) = sources.get_mut(&key) {
+        if let Some(handle) = sources.get(&key) {
             // Source already exists, increment ref count and track panel interval
-            shared.ref_count += 1;
-            shared.panel_intervals.insert(panel_id.to_string(), interval);
-            shared.recalculate_min_interval();
-            debug!(
-                "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
-                key, panel_id, shared.ref_count, shared.min_interval
-            );
+            if let Ok(mut shared) = handle.lock() {
+                shared.ref_count += 1;
+                shared.panel_intervals.insert(panel_id.to_string(), interval);
+                shared.recalculate_min_interval();
+                debug!(
+                    "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                    key, panel_id, shared.ref_count, shared.min_interval
+                );
+            }
         } else {
             // Create new source
             let mut source = registry.create_source(source_config.source_type())?;
@@ -153,7 +164,7 @@ impl SharedSourceManager {
             if let Err(e) = shared.update() {
                 warn!("Initial update failed for source {}: {}", key, e);
             }
-            sources.insert(key.clone(), shared);
+            sources.insert(key.clone(), Arc::new(Mutex::new(shared)));
         }
 
         Ok(key)
@@ -165,29 +176,47 @@ impl SharedSourceManager {
     /// When a panel is removed, the min_interval is recalculated.
     pub fn release_source(&self, key: &str, panel_id: &str) {
         if let Ok(mut sources) = self.sources.write() {
-            if let Some(shared) = sources.get_mut(key) {
-                shared.ref_count = shared.ref_count.saturating_sub(1);
-                shared.panel_intervals.remove(panel_id);
-                shared.recalculate_min_interval();
+            let should_remove = if let Some(handle) = sources.get(key) {
+                if let Ok(mut shared) = handle.lock() {
+                    shared.ref_count = shared.ref_count.saturating_sub(1);
+                    shared.panel_intervals.remove(panel_id);
+                    shared.recalculate_min_interval();
 
-                debug!(
-                    "Released source {} for panel {} (ref_count: {}, min_interval: {:?})",
-                    key, panel_id, shared.ref_count, shared.min_interval
-                );
+                    debug!(
+                        "Released source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                        key, panel_id, shared.ref_count, shared.min_interval
+                    );
 
-                if shared.ref_count == 0 {
-                    info!("Removing unused shared source {}", key);
-                    sources.remove(key);
+                    shared.ref_count == 0
+                } else {
+                    false
                 }
+            } else {
+                false
+            };
+
+            if should_remove {
+                info!("Removing unused shared source {}", key);
+                sources.remove(key);
             }
         }
     }
 
     /// Update a specific source and return its values (cheap Arc clone)
+    ///
+    /// This method is optimized to release the collection lock before performing
+    /// I/O operations. Only the individual source mutex is held during hardware polling.
     pub fn update_source(&self, key: &str) -> Result<Arc<HashMap<String, serde_json::Value>>> {
-        let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        // Phase 1: Get the handle with a quick read lock
+        let handle = {
+            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            sources.get(key).cloned()
+        };
+        // Collection lock released here before I/O
 
-        if let Some(shared) = sources.get_mut(key) {
+        // Phase 2: Update the source (only source mutex held, not collection lock)
+        if let Some(handle) = handle {
+            let mut shared = handle.lock().map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
             shared.update()?;
             Ok(Arc::clone(&shared.cached_values))
         } else {
@@ -197,12 +226,18 @@ impl SharedSourceManager {
 
     /// Get cached values for a source (without updating) - cheap Arc clone
     pub fn get_values(&self, key: &str) -> Option<Arc<HashMap<String, serde_json::Value>>> {
-        self.sources.read().ok()?.get(key).map(|s| Arc::clone(&s.cached_values))
+        let sources = self.sources.read().ok()?;
+        let handle = sources.get(key)?;
+        let shared = handle.lock().ok()?;
+        Some(Arc::clone(&shared.cached_values))
     }
 
     /// Get the minimum update interval for a source
     pub fn get_interval(&self, key: &str) -> Option<Duration> {
-        self.sources.read().ok()?.get(key).map(|s| s.min_interval)
+        let sources = self.sources.read().ok()?;
+        let handle = sources.get(key)?;
+        let shared = handle.lock().ok()?;
+        Some(shared.min_interval)
     }
 
     /// Get all source keys and their intervals for the update loop
@@ -212,7 +247,9 @@ impl SharedSourceManager {
             .map(|sources| {
                 sources
                     .iter()
-                    .map(|(key, shared)| (key.clone(), shared.min_interval))
+                    .filter_map(|(key, handle)| {
+                        handle.lock().ok().map(|shared| (key.clone(), shared.min_interval))
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -220,28 +257,36 @@ impl SharedSourceManager {
 
     /// Update the interval for a source (e.g., when a panel's config changes)
     pub fn update_interval(&self, key: &str, panel_id: &str, new_interval: Duration) {
-        if let Ok(mut sources) = self.sources.write() {
-            if let Some(shared) = sources.get_mut(key) {
-                // Update this panel's interval and recalculate minimum
-                let old_min = shared.min_interval;
-                shared.panel_intervals.insert(panel_id.to_string(), new_interval);
-                shared.recalculate_min_interval();
+        if let Ok(sources) = self.sources.read() {
+            if let Some(handle) = sources.get(key) {
+                if let Ok(mut shared) = handle.lock() {
+                    // Update this panel's interval and recalculate minimum
+                    let old_min = shared.min_interval;
+                    shared.panel_intervals.insert(panel_id.to_string(), new_interval);
+                    shared.recalculate_min_interval();
 
-                if shared.min_interval != old_min {
-                    info!(
-                        "Panel {} updated interval for source {} from {:?} to {:?}",
-                        panel_id, key, old_min, shared.min_interval
-                    );
+                    if shared.min_interval != old_min {
+                        info!(
+                            "Panel {} updated interval for source {} from {:?} to {:?}",
+                            panel_id, key, old_min, shared.min_interval
+                        );
+                    }
                 }
             }
         }
     }
 
-    /// Get a mutable reference to the source for configuration updates
+    /// Configure a source (e.g., when a panel's config changes)
     pub fn configure_source(&self, key: &str, config: &SourceConfig) -> Result<()> {
-        let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        // Get handle with read lock (quick)
+        let handle = {
+            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            sources.get(key).cloned()
+        };
 
-        if let Some(shared) = sources.get_mut(key) {
+        // Configure with only source lock held
+        if let Some(handle) = handle {
+            let mut shared = handle.lock().map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
             shared.source.configure_typed(config)?;
             Ok(())
         } else {
@@ -251,24 +296,32 @@ impl SharedSourceManager {
 
     /// Get source metadata for UI purposes
     pub fn get_source_metadata(&self, key: &str) -> Option<super::SourceMetadata> {
-        self.sources.read().ok()?.get(key).map(|s| s.source.metadata().clone())
+        let sources = self.sources.read().ok()?;
+        let handle = sources.get(key)?;
+        let shared = handle.lock().ok()?;
+        Some(shared.source.metadata().clone())
     }
 
     /// Get the field list for a source
     pub fn get_source_fields(&self, key: &str) -> Option<Vec<super::FieldMetadata>> {
-        self.sources.read().ok()?.get(key).map(|s| s.source.fields())
+        let sources = self.sources.read().ok()?;
+        let handle = sources.get(key)?;
+        let shared = handle.lock().ok()?;
+        Some(shared.source.fields())
     }
 
     /// Debug: print all sources and their ref counts
     pub fn debug_print_sources(&self) {
         if let Ok(sources) = self.sources.read() {
             info!("=== Shared Sources ({} total) ===", sources.len());
-            for (key, shared) in sources.iter() {
-                let panel_ids: Vec<_> = shared.panel_intervals.keys().collect();
-                info!(
-                    "  {} : ref_count={}, interval={:?}, panels={:?}",
-                    key, shared.ref_count, shared.min_interval, panel_ids
-                );
+            for (key, handle) in sources.iter() {
+                if let Ok(shared) = handle.lock() {
+                    let panel_ids: Vec<_> = shared.panel_intervals.keys().collect();
+                    info!(
+                        "  {} : ref_count={}, interval={:?}, panels={:?}",
+                        key, shared.ref_count, shared.min_interval, panel_ids
+                    );
+                }
             }
         }
     }
