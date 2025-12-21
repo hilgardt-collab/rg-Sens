@@ -117,15 +117,6 @@ impl StaticTextSource {
     pub fn get_config(&self) -> &StaticTextSourceConfig {
         &self.config
     }
-
-    /// Generate automatic caption
-    fn generate_auto_caption(&self) -> String {
-        if let Some(first_line) = self.config.lines.first() {
-            first_line.label.clone()
-        } else {
-            "Static Text".to_string()
-        }
-    }
 }
 
 impl Default for StaticTextSource {
