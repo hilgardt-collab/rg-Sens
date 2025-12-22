@@ -1624,22 +1624,22 @@ fn get_window_monitor_connector(window: &ApplicationWindow) -> Option<String> {
     // Get the display
     let display = surface.display();
 
-    // Get the monitor at the window's position
-    // For GTK4, we use the surface to find which monitor it's on
-    let monitors = display.monitors();
-    let n_monitors = monitors.n_items();
-
-    if n_monitors == 0 {
-        return None;
+    // Use monitor_at_surface to get the monitor the window is on
+    // This works on both X11 and Wayland
+    if let Some(monitor) = display.monitor_at_surface(&surface) {
+        if let Some(connector) = monitor.connector() {
+            log::debug!("Window is on monitor: {}", connector);
+            return Some(connector.to_string());
+        }
     }
 
-    // GTK4 doesn't have a direct "get monitor for window" API
-    // On Wayland, window positions are not exposed to applications
-    // We return the first monitor's connector as a fallback
-    // The monitor will be properly detected when fullscreen is used
-    if let Some(mon) = monitors.item(0) {
-        if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
-            return monitor.connector().map(|s| s.to_string());
+    // Fallback: return first monitor if monitor_at_surface fails
+    let monitors = display.monitors();
+    if monitors.n_items() > 0 {
+        if let Some(mon) = monitors.item(0) {
+            if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
+                return monitor.connector().map(|s| s.to_string());
+            }
         }
     }
 
@@ -1697,7 +1697,12 @@ fn save_config_with_app_config(app_config: &mut AppConfig, window: &ApplicationW
     app_config.window.y = None;
     app_config.window.maximized = is_maximized;
     app_config.window.fullscreen_enabled = is_fullscreen;
-    app_config.window.monitor_connector = monitor_connector;
+    app_config.window.monitor_connector = monitor_connector.clone();
+    // Also update fullscreen_monitor index for backward compatibility
+    app_config.window.fullscreen_monitor = monitor_connector
+        .as_ref()
+        .and_then(|c| find_monitor_by_connector(c))
+        .map(|i| i as i32);
     app_config.set_panels(panel_data_list);
 
     // Save global timers, alarms, and timer sound
