@@ -309,14 +309,35 @@ impl Panel {
         // Configure the data source (local copy for metadata)
         self.source.configure(&config)?;
 
-        // Also configure the shared source if we're using one
-        if let Some(ref key) = self.source_key {
+        // Handle shared source re-registration when config changes
+        // Each panel should have its own source instance when configs differ
+        if let Some(typed_config) = SourceConfig::extract_from_hashmap(&config, self.source.metadata().id.as_str()) {
+            use super::shared_source_manager::SharedSourceManager;
+
+            let new_key = SharedSourceManager::generate_source_key(&typed_config);
+
             if let Some(manager) = global_shared_source_manager() {
-                // Try to extract typed config from the HashMap
-                let source_config = SourceConfig::extract_from_hashmap(&config, self.source.metadata().id.as_str());
-                if let Some(typed_config) = source_config {
-                    if let Err(e) = manager.configure_source(key, &typed_config) {
-                        log::warn!("Failed to configure shared source {}: {}", key, e);
+                // Check if the source key has changed (config is now different)
+                let key_changed = self.source_key.as_ref().map(|k| k != &new_key).unwrap_or(true);
+
+                if key_changed {
+                    // Release the old source reference if we had one
+                    if let Some(ref old_key) = self.source_key {
+                        manager.release_source(old_key, &self.id);
+                        log::debug!("Panel {} released old source {}", self.id, old_key);
+                    }
+
+                    // Get or create a new source with the new configuration
+                    let registry = global_registry();
+                    match manager.get_or_create_source(&typed_config, &self.id, registry) {
+                        Ok(key) => {
+                            log::debug!("Panel {} now using source {}", self.id, key);
+                            self.source_key = Some(key);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to create shared source for panel {}: {}", self.id, e);
+                            self.source_key = None;
+                        }
                     }
                 }
             }
@@ -341,11 +362,32 @@ impl Panel {
             self.source.configure_typed(&data.source_config)?;
             self.displayer.apply_config_typed(&data.displayer_config)?;
 
-            // Also configure the shared source if we're using one
-            if let Some(ref key) = self.source_key {
-                if let Some(manager) = global_shared_source_manager() {
-                    if let Err(e) = manager.configure_source(key, &data.source_config) {
-                        log::warn!("Failed to configure shared source {}: {}", key, e);
+            // Handle shared source re-registration when config changes
+            use super::shared_source_manager::SharedSourceManager;
+
+            let new_key = SharedSourceManager::generate_source_key(&data.source_config);
+
+            if let Some(manager) = global_shared_source_manager() {
+                let key_changed = self.source_key.as_ref().map(|k| k != &new_key).unwrap_or(true);
+
+                if key_changed {
+                    // Release the old source reference if we had one
+                    if let Some(ref old_key) = self.source_key {
+                        manager.release_source(old_key, &self.id);
+                        log::debug!("Panel {} released old source {}", self.id, old_key);
+                    }
+
+                    // Get or create a new source with the new configuration
+                    let registry = global_registry();
+                    match manager.get_or_create_source(&data.source_config, &self.id, registry) {
+                        Ok(key) => {
+                            log::debug!("Panel {} now using source {}", self.id, key);
+                            self.source_key = Some(key);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to create shared source for panel {}: {}", self.id, e);
+                            self.source_key = None;
+                        }
                     }
                 }
             }
