@@ -18,9 +18,11 @@ use crate::ui::cyberpunk_display::{
 use crate::ui::graph_config_widget::GraphConfigWidget;
 use crate::ui::bar_config_widget::BarConfigWidget;
 use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
-use crate::ui::lcars_display::{ContentDisplayType, SplitOrientation};
+use crate::ui::background_config_widget::BackgroundConfigWidget;
+use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::lcars_display::{ContentDisplayType, SplitOrientation, StaticDisplayConfig};
 use crate::displayers::CyberpunkDisplayConfig;
-use crate::core::FieldMetadata;
+use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {
@@ -891,248 +893,499 @@ impl CyberpunkConfigWidget {
         }
 
         let summaries = source_summaries.borrow();
+
+        log::info!(
+            "=== Cyberpunk rebuild_content_tabs: source_summaries has {} entries ===",
+            summaries.len()
+        );
+
         if summaries.is_empty() {
             // No sources configured yet - show placeholder
-            let placeholder = Label::new(Some("No content sources configured.\nAdd sources in the combo source settings."));
-            placeholder.set_halign(gtk4::Align::Center);
-            placeholder.set_valign(gtk4::Align::Center);
+            log::warn!("rebuild_content_tabs: summaries is EMPTY, showing placeholder");
+            let placeholder = GtkBox::new(Orientation::Vertical, 8);
+            placeholder.set_margin_start(12);
+            placeholder.set_margin_end(12);
+            placeholder.set_margin_top(12);
+            let label = Label::new(Some("No sources configured.\nGo to 'Data Source' tab and select 'Combination' source to configure content."));
+            label.set_halign(gtk4::Align::Start);
+            placeholder.append(&label);
             notebook.append_page(&placeholder, Some(&Label::new(Some("No Sources"))));
             return;
         }
 
-        // Create a tab for each slot
-        for (slot_name, summary, _group_num, _item_idx) in summaries.iter() {
-            let tab_content = Self::create_slot_config_tab(
-                config,
-                on_change,
-                preview,
-                slot_name,
-                available_fields,
-            );
+        // Group summaries by group number
+        let mut groups: std::collections::HashMap<usize, Vec<(String, String, u32)>> = std::collections::HashMap::new();
+        for (slot_name, summary, group_num, item_idx) in summaries.iter() {
+            groups.entry(*group_num)
+                .or_default()
+                .push((slot_name.clone(), summary.clone(), *item_idx));
+        }
 
-            let tab_label = if summary.is_empty() {
-                slot_name.clone()
-            } else {
-                format!("{}\n{}", slot_name, summary)
-            };
-            notebook.append_page(&tab_content, Some(&Label::new(Some(&tab_label))));
+        // Sort groups by group number
+        let mut group_nums: Vec<usize> = groups.keys().cloned().collect();
+        group_nums.sort();
+
+        // Create a tab for each group (with nested notebook for items)
+        for group_num in group_nums {
+            if let Some(items) = groups.get(&group_num) {
+                let group_box = GtkBox::new(Orientation::Vertical, 4);
+                group_box.set_margin_start(4);
+                group_box.set_margin_end(4);
+                group_box.set_margin_top(4);
+
+                // Nested notebook for items in this group
+                let items_notebook = Notebook::new();
+                items_notebook.set_scrollable(true);
+                items_notebook.set_vexpand(true);
+
+                // Sort items by item index
+                let mut sorted_items = items.clone();
+                sorted_items.sort_by_key(|(_, _, idx)| *idx);
+
+                for (slot_name, summary, item_idx) in sorted_items {
+                    let tab_label = format!("Item {} : {}", item_idx, summary);
+                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
+                }
+
+                group_box.append(&items_notebook);
+                notebook.append_page(&group_box, Some(&Label::new(Some(&format!("Group {}", group_num)))));
+            }
         }
     }
 
     fn create_slot_config_tab(
+        slot_name: &str,
         config: &Rc<RefCell<CyberpunkDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-        slot_name: &str,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        page.set_margin_start(8);
-        page.set_margin_end(8);
-        page.set_margin_top(8);
-        page.set_margin_bottom(8);
+        log::info!("=== Cyberpunk create_slot_config_tab() called for slot '{}' ===", slot_name);
+        let tab = GtkBox::new(Orientation::Vertical, 8);
+        tab.set_margin_start(12);
+        tab.set_margin_end(12);
+        tab.set_margin_top(12);
+        tab.set_margin_bottom(12);
 
-        let slot_name_owned = slot_name.to_string();
+        // Make it scrollable for small screens
+        let scroll = ScrolledWindow::new();
+        scroll.set_vexpand(true);
+        scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+
+        let inner_box = GtkBox::new(Orientation::Vertical, 8);
 
         // Display type dropdown
         let type_box = GtkBox::new(Orientation::Horizontal, 6);
         type_box.append(&Label::new(Some("Display As:")));
         let type_list = StringList::new(&["Bar", "Text", "Graph", "Core Bars", "Static"]);
         let type_dropdown = DropDown::new(Some(type_list), None::<gtk4::Expression>);
+        type_dropdown.set_hexpand(true);
 
-        // Get current display type
+        // Get current display type for this slot
         let current_type = {
             let cfg = config.borrow();
-            cfg.frame.content_items.get(&slot_name_owned)
-                .map(|item| match item.display_as {
-                    ContentDisplayType::Bar => 0,
-                    ContentDisplayType::Text => 1,
-                    ContentDisplayType::Graph => 2,
-                    ContentDisplayType::CoreBars => 3,
-                    ContentDisplayType::Static => 4,
-                    ContentDisplayType::LevelBar => 0, // Fallback to Bar
-                })
-                .unwrap_or(0)
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.display_as)
+                .unwrap_or_default()
         };
-        type_dropdown.set_selected(current_type);
-        type_dropdown.set_hexpand(true);
+        let type_idx = match current_type {
+            ContentDisplayType::Bar | ContentDisplayType::LevelBar => 0,
+            ContentDisplayType::Text => 1,
+            ContentDisplayType::Graph => 2,
+            ContentDisplayType::CoreBars => 3,
+            ContentDisplayType::Static => 4,
+        };
+        type_dropdown.set_selected(type_idx);
         type_box.append(&type_dropdown);
-        page.append(&type_box);
+        inner_box.append(&type_box);
 
-        // Config container that will hold type-specific widgets
-        let config_container = GtkBox::new(Orientation::Vertical, 8);
-        page.append(&config_container);
+        // Item height
+        let height_box = GtkBox::new(Orientation::Horizontal, 6);
+        height_box.append(&Label::new(Some("Item Height:")));
+        let height_spin = SpinButton::with_range(20.0, 300.0, 5.0);
+        let current_height = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.item_height)
+                .unwrap_or(60.0)
+        };
+        height_spin.set_value(current_height);
+        height_spin.set_hexpand(true);
+        height_box.append(&height_spin);
+        inner_box.append(&height_box);
 
-        // Build initial config widgets
-        Self::build_content_type_config(
-            config,
-            on_change,
-            preview,
-            &slot_name_owned,
-            &config_container,
-            current_type,
-            available_fields,
-        );
+        // Get available fields - filter to fields relevant to this slot
+        let slot_prefix = format!("{}_", slot_name);
+        let source_fields = available_fields.borrow();
+        let mut slot_fields: Vec<FieldMetadata> = source_fields.iter()
+            .filter(|f| f.id.starts_with(&slot_prefix))
+            .map(|f| {
+                // Remove the slot prefix for display in the dropdown
+                let short_id = f.id.strip_prefix(&slot_prefix).unwrap_or(&f.id);
+                FieldMetadata::new(
+                    short_id,
+                    &f.name,
+                    &f.description,
+                    f.field_type.clone(),
+                    f.purpose.clone(),
+                )
+            })
+            .collect();
 
-        // Handle type change
+        // If no slot-specific fields found, add generic fallback fields
+        if slot_fields.is_empty() {
+            slot_fields = vec![
+                FieldMetadata::new("caption", "Caption", "Label text for the item", FieldType::Text, FieldPurpose::Caption),
+                FieldMetadata::new("value", "Value", "Current value with formatting", FieldType::Text, FieldPurpose::Value),
+                FieldMetadata::new("unit", "Unit", "Unit of measurement", FieldType::Text, FieldPurpose::Unit),
+                FieldMetadata::new("numerical_value", "Numeric Value", "Raw numeric value", FieldType::Numerical, FieldPurpose::Value),
+                FieldMetadata::new("min_value", "Minimum", "Minimum value for range", FieldType::Numerical, FieldPurpose::Other),
+                FieldMetadata::new("max_value", "Maximum", "Maximum value for range", FieldType::Numerical, FieldPurpose::Other),
+            ];
+        }
+        drop(source_fields);
+
+        // === Bar Configuration Section ===
+        let bar_config_frame = gtk4::Frame::new(Some("Bar Configuration"));
+        bar_config_frame.set_margin_top(12);
+
+        let bar_widget = BarConfigWidget::new(slot_fields.clone());
+
+        // Initialize with current config
+        let current_bar_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.bar_config.clone())
+                .unwrap_or_else(|| Self::default_bar_config_cyberpunk())
+        };
+        bar_widget.set_config(current_bar_config);
+
+        // Set up change callback to sync config back
+        let slot_name_clone = slot_name.to_string();
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let slot_name_clone = slot_name_owned.clone();
-        let container_clone = config_container.clone();
-        let fields_clone = available_fields.clone();
-        type_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-
-            // Update config
-            {
-                let mut cfg = config_clone.borrow_mut();
-                let item = cfg.frame.content_items.entry(slot_name_clone.clone()).or_default();
-                item.display_as = match selected {
-                    0 => ContentDisplayType::Bar,
-                    1 => ContentDisplayType::Text,
-                    2 => ContentDisplayType::Graph,
-                    3 => ContentDisplayType::CoreBars,
-                    4 => ContentDisplayType::Static,
-                    _ => ContentDisplayType::Bar,
-                };
-            }
-
-            // Rebuild config widgets
-            Self::build_content_type_config(
-                &config_clone,
-                &on_change_clone,
-                &preview_clone,
-                &slot_name_clone,
-                &container_clone,
-                selected,
-                &fields_clone,
-            );
-
+        let bar_widget_rc = Rc::new(bar_widget);
+        let bar_widget_for_callback = bar_widget_rc.clone();
+        bar_widget_rc.set_on_change(move || {
+            let bar_config = bar_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.bar_config = bar_config;
+            drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        page
+        bar_config_frame.set_child(Some(bar_widget_rc.widget()));
+        inner_box.append(&bar_config_frame);
+
+        // === Graph Configuration Section ===
+        let graph_config_frame = gtk4::Frame::new(Some("Graph Configuration"));
+        graph_config_frame.set_margin_top(12);
+
+        let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+
+        // Initialize with current config
+        let current_graph_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.graph_config.clone())
+                .unwrap_or_else(|| Self::default_graph_config_cyberpunk())
+        };
+        graph_widget.set_config(current_graph_config);
+
+        // Set up change callback
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let graph_widget_rc = Rc::new(graph_widget);
+        let graph_widget_for_callback = graph_widget_rc.clone();
+        graph_widget_rc.set_on_change(move || {
+            let graph_config = graph_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.graph_config = graph_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        graph_config_frame.set_child(Some(graph_widget_rc.widget()));
+        inner_box.append(&graph_config_frame);
+
+        // === Text Configuration Section ===
+        let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
+        text_config_frame.set_margin_top(12);
+
+        let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+
+        // Initialize with current config
+        let current_text_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.bar_config.text_overlay.text_config.clone())
+                .unwrap_or_default()
+        };
+        text_widget.set_config(current_text_config);
+
+        // Set up change callback
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let text_widget_rc = Rc::new(text_widget);
+        let text_widget_for_callback = text_widget_rc.clone();
+        text_widget_rc.set_on_change(move || {
+            let text_config = text_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.bar_config.text_overlay.enabled = true;
+            item.bar_config.text_overlay.text_config = text_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        text_config_frame.set_child(Some(text_widget_rc.widget()));
+        inner_box.append(&text_config_frame);
+
+        // === Core Bars Configuration Section ===
+        let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
+        core_bars_config_frame.set_margin_top(12);
+
+        let core_bars_widget = CoreBarsConfigWidget::new();
+
+        // Initialize with current config
+        let current_core_bars_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.core_bars_config.clone())
+                .unwrap_or_else(|| Self::default_core_bars_config_cyberpunk())
+        };
+        core_bars_widget.set_config(current_core_bars_config);
+
+        // Set up change callback
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let core_bars_widget_rc = Rc::new(core_bars_widget);
+        let core_bars_widget_for_callback = core_bars_widget_rc.clone();
+        core_bars_widget_rc.set_on_change(move || {
+            let core_bars_config = core_bars_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.core_bars_config = core_bars_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
+        inner_box.append(&core_bars_config_frame);
+
+        // === Static Configuration Section ===
+        let static_config_frame = gtk4::Frame::new(Some("Static Background Configuration"));
+        static_config_frame.set_margin_top(12);
+
+        let static_bg_widget = BackgroundConfigWidget::new();
+
+        // Initialize with current config
+        let current_static_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.static_config.background.clone())
+                .unwrap_or_default()
+        };
+        static_bg_widget.set_config(current_static_config);
+
+        // Set up change callback
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let static_bg_widget_rc = Rc::new(static_bg_widget);
+        let static_bg_widget_for_callback = static_bg_widget_rc.clone();
+        static_bg_widget_rc.set_on_change(move || {
+            let bg_config = static_bg_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.static_config = StaticDisplayConfig { background: bg_config };
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        static_config_frame.set_child(Some(static_bg_widget_rc.widget()));
+        inner_box.append(&static_config_frame);
+
+        // Show/hide config sections based on display type
+        let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
+        let show_text = matches!(current_type, ContentDisplayType::Text | ContentDisplayType::Static);
+        bar_config_frame.set_visible(show_bar);
+        text_config_frame.set_visible(show_text);
+        graph_config_frame.set_visible(current_type == ContentDisplayType::Graph);
+        core_bars_config_frame.set_visible(current_type == ContentDisplayType::CoreBars);
+        static_config_frame.set_visible(current_type == ContentDisplayType::Static);
+
+        scroll.set_child(Some(&inner_box));
+        tab.append(&scroll);
+
+        // === Connect change handlers ===
+
+        // Display type change handler (toggles config section visibility)
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let bar_config_frame_clone = bar_config_frame.clone();
+        let text_config_frame_clone = text_config_frame.clone();
+        let graph_config_frame_clone = graph_config_frame.clone();
+        let core_bars_config_frame_clone = core_bars_config_frame.clone();
+        let static_config_frame_clone = static_config_frame.clone();
+        type_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let display_type = match selected {
+                0 => ContentDisplayType::Bar,
+                1 => ContentDisplayType::Text,
+                2 => ContentDisplayType::Graph,
+                3 => ContentDisplayType::CoreBars,
+                _ => ContentDisplayType::Static,
+            };
+            // Show appropriate config for each display type
+            let show_bar = matches!(display_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
+            let show_text = matches!(display_type, ContentDisplayType::Text | ContentDisplayType::Static);
+            bar_config_frame_clone.set_visible(show_bar);
+            text_config_frame_clone.set_visible(show_text);
+            graph_config_frame_clone.set_visible(display_type == ContentDisplayType::Graph);
+            core_bars_config_frame_clone.set_visible(display_type == ContentDisplayType::CoreBars);
+            static_config_frame_clone.set_visible(display_type == ContentDisplayType::Static);
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.display_as = display_type;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Item height change handler
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        height_spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.item_height = spin.value();
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        tab
     }
 
-    fn build_content_type_config(
-        config: &Rc<RefCell<CyberpunkDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        slot_name: &str,
-        container: &GtkBox,
-        display_type: u32,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-    ) {
-        // Clear existing widgets
-        while let Some(child) = container.first_child() {
-            container.remove(&child);
-        }
+    /// Default bar config with cyberpunk colors (cyan/magenta gradient)
+    fn default_bar_config_cyberpunk() -> crate::ui::BarDisplayConfig {
+        use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
+        use crate::ui::background::{Color, ColorStop};
 
-        let slot_name = slot_name.to_string();
+        let mut config = BarDisplayConfig::default();
+        config.style = BarStyle::Full;
+        config.orientation = BarOrientation::Horizontal;
+        config.fill_direction = BarFillDirection::LeftToRight;
 
-        match display_type {
-            0 | 1 => {
-                // Bar or Text - use BarConfigWidget
-                let bar_config = {
-                    let cfg = config.borrow();
-                    cfg.frame.content_items.get(&slot_name)
-                        .map(|item| item.bar_config.clone())
-                        .unwrap_or_default()
-                };
+        // Cyberpunk cyan to magenta gradient
+        config.foreground = BarFillType::Gradient {
+            stops: vec![
+                ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },  // Cyan
+                ColorStop { position: 1.0, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },  // Magenta
+            ],
+            angle: 0.0,
+        };
+        config.background = BarBackgroundType::Solid {
+            color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.8 }  // Dark background
+        };
+        config.border = BorderConfig {
+            enabled: true,
+            color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.5 },  // Cyan border
+            width: 1.0,
+        };
 
-                let fields = available_fields.borrow().clone();
-                let bar_widget = BarConfigWidget::new(fields);
-                bar_widget.set_config(bar_config);
+        config
+    }
 
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                bar_widget.set_on_change(move || {
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
-                });
+    /// Default graph config with cyberpunk colors
+    fn default_graph_config_cyberpunk() -> crate::ui::GraphDisplayConfig {
+        use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
+        use crate::ui::background::Color;
 
-                container.append(bar_widget.widget());
+        let mut config = GraphDisplayConfig::default();
+        config.graph_type = GraphType::Line;
+        config.line_style = LineStyle::Solid;
+        config.line_width = 2.0;
+        config.line_color = Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 };  // Cyan
+        config.fill_mode = FillMode::Gradient;
+        config.fill_gradient_start = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 };  // Cyan start
+        config.fill_gradient_end = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.0 };    // Transparent end
+        config.background_color = Color { r: 0.04, g: 0.06, b: 0.1, a: 0.8 };
+        config.plot_background_color = Color { r: 0.04, g: 0.06, b: 0.1, a: 0.6 };
+        config.x_axis.show_grid = true;
+        config.x_axis.grid_color = Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 };  // Cyan grid
+        config.y_axis.show_grid = true;
+        config.y_axis.grid_color = Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 };  // Cyan grid
 
-                // Note: Config is retrieved from widget when saving via get_config()
-            }
-            2 => {
-                // Graph - use GraphConfigWidget
-                let graph_config = {
-                    let cfg = config.borrow();
-                    cfg.frame.content_items.get(&slot_name)
-                        .map(|item| item.graph_config.clone())
-                        .unwrap_or_default()
-                };
+        config
+    }
 
-                let fields = available_fields.borrow().clone();
-                let graph_widget = GraphConfigWidget::new(fields);
-                graph_widget.set_config(graph_config);
+    /// Default core bars config with cyberpunk colors
+    fn default_core_bars_config_cyberpunk() -> crate::ui::CoreBarsConfig {
+        use crate::ui::core_bars_display::CoreBarsConfig;
+        use crate::ui::bar_display::{BarStyle, BarFillType, BarBackgroundType, BorderConfig};
+        use crate::ui::background::{Color, ColorStop};
 
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                graph_widget.set_on_change(move || {
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
-                });
+        let mut config = CoreBarsConfig::default();
+        config.bar_style = BarStyle::Full;
 
-                container.append(graph_widget.widget());
+        // Cyberpunk cyan to yellow to magenta gradient
+        config.foreground = BarFillType::Gradient {
+            stops: vec![
+                ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },  // Cyan (low)
+                ColorStop { position: 0.5, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },  // Yellow (mid)
+                ColorStop { position: 1.0, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },  // Magenta (high)
+            ],
+            angle: 90.0,
+        };
+        config.background = BarBackgroundType::Solid {
+            color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 }
+        };
+        config.border = BorderConfig {
+            enabled: true,
+            color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.3 },
+            width: 1.0,
+        };
 
-                // Item height spinner
-                let height_box = GtkBox::new(Orientation::Horizontal, 6);
-                height_box.append(&Label::new(Some("Item Height:")));
-                let height_spin = SpinButton::with_range(50.0, 300.0, 10.0);
-                let current_height = {
-                    let cfg = config.borrow();
-                    cfg.frame.content_items.get(&slot_name)
-                        .map(|item| item.item_height)
-                        .unwrap_or(100.0)
-                };
-                height_spin.set_value(current_height);
-                height_spin.set_hexpand(true);
-                height_box.append(&height_spin);
-
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                let slot_clone = slot_name.clone();
-                height_spin.connect_value_changed(move |spin| {
-                    let mut cfg = config_clone.borrow_mut();
-                    let item = cfg.frame.content_items.entry(slot_clone.clone()).or_default();
-                    item.item_height = spin.value();
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
-                });
-                container.append(&height_box);
-            }
-            3 => {
-                // Core Bars - use CoreBarsConfigWidget
-                let core_bars_config = {
-                    let cfg = config.borrow();
-                    cfg.frame.content_items.get(&slot_name)
-                        .map(|item| item.core_bars_config.clone())
-                        .unwrap_or_default()
-                };
-
-                let core_bars_widget = CoreBarsConfigWidget::new();
-                core_bars_widget.set_config(core_bars_config);
-
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                core_bars_widget.set_on_change(move || {
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
-                });
-
-                container.append(core_bars_widget.widget());
-            }
-            4 => {
-                // Static - use BackgroundConfigWidget
-                let info = Label::new(Some("Static display shows a fixed background/image."));
-                info.set_halign(gtk4::Align::Start);
-                info.add_css_class("dim-label");
-                container.append(&info);
-
-                // Could add BackgroundConfigWidget here for static config
-            }
-            _ => {}
-        }
+        config
     }
 
     fn create_animation_page(
