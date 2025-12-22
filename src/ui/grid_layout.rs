@@ -4767,57 +4767,103 @@ fn show_panel_properties_dialog(
     // Wrap indicator_config_widget in Rc for sharing
     let indicator_config_widget = Rc::new(indicator_config_widget);
 
-    // Connect combo_config_widget to update lcars_config_widget when sources change
+    // === Cyberpunk Configuration ===
+    let cyberpunk_config_label = Label::new(Some("Cyberpunk HUD Configuration:"));
+    cyberpunk_config_label.set_halign(gtk4::Align::Start);
+    cyberpunk_config_label.add_css_class("heading");
+    cyberpunk_config_label.set_visible(old_displayer_id == "cyberpunk");
+
+    let cyberpunk_config_widget = crate::ui::CyberpunkConfigWidget::new(available_fields.clone());
+    cyberpunk_config_widget.widget().set_visible(old_displayer_id == "cyberpunk");
+
+    // Load existing Cyberpunk config if displayer is cyberpunk
+    if old_displayer_id == "cyberpunk" {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Cyberpunk(cyberpunk_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Cyberpunk config from displayer.get_typed_config() ===");
+            cyberpunk_config_widget.set_config(&cyberpunk_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("cyberpunk_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::CyberpunkDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Cyberpunk config from panel config hashmap ===");
+                    cyberpunk_config_widget.set_config(&config);
+                }
+            }
+        }
+    }
+
+    displayer_tab_box.append(&cyberpunk_config_label);
+    displayer_tab_box.append(cyberpunk_config_widget.widget());
+
+    // Set up change callback
+    cyberpunk_config_widget.set_on_change(|| {});
+
+    // Wrap cyberpunk_config_widget in Rc for sharing
+    let cyberpunk_config_widget = Rc::new(cyberpunk_config_widget);
+
+    // Connect combo_config_widget to update lcars_config_widget and cyberpunk_config_widget when sources change
     {
         let lcars_widget_clone = lcars_config_widget.clone();
+        let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
-            // Get source summaries from combo config and update LCARS display config
+            // Get source summaries from combo config and update LCARS and Cyberpunk display configs
             let widget = combo_widget_for_lcars.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
-            lcars_widget_clone.set_available_fields(fields);
-            lcars_widget_clone.set_source_summaries(summaries);
+            lcars_widget_clone.set_available_fields(fields.clone());
+            lcars_widget_clone.set_source_summaries(summaries.clone());
+            cyberpunk_widget_clone.set_available_fields(fields);
+            cyberpunk_widget_clone.set_source_summaries(summaries);
         });
 
-        // Initialize LCARS with current source summaries if combo source is selected
+        // Initialize LCARS and Cyberpunk with current source summaries if combo source is selected
         if old_source_id == "combination" {
             let widget = combo_config_widget.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
-            log::info!("=== Initializing LCARS at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
-            lcars_config_widget.set_available_fields(fields);
-            lcars_config_widget.set_source_summaries(summaries);
+            log::info!("=== Initializing LCARS and Cyberpunk at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
+            lcars_config_widget.set_available_fields(fields.clone());
+            lcars_config_widget.set_source_summaries(summaries.clone());
+            cyberpunk_config_widget.set_available_fields(fields);
+            cyberpunk_config_widget.set_source_summaries(summaries);
         } else {
-            log::info!("=== Skipping LCARS init: old_source_id='{}' (need 'combination') ===", old_source_id);
+            log::info!("=== Skipping LCARS/Cyberpunk init: old_source_id='{}' (need 'combination') ===", old_source_id);
         }
     }
 
-    // Update LCARS widget when source dropdown changes to "combination"
+    // Update LCARS and Cyberpunk widgets when source dropdown changes to "combination"
     {
         let lcars_widget_clone = lcars_config_widget.clone();
+        let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected_idx) {
                 if source_id == "combination" {
-                    // Update LCARS with source summaries from combo config
+                    // Update LCARS and Cyberpunk with source summaries from combo config
                     let widget = combo_widget_clone.borrow();
                     let summaries = widget.get_source_summaries();
                     let fields = widget.get_available_fields();
                     drop(widget);
-                    log::info!("=== Source changed to 'combination': updating LCARS with {} source summaries ===", summaries.len());
-                    lcars_widget_clone.set_available_fields(fields);
-                    lcars_widget_clone.set_source_summaries(summaries);
+                    log::info!("=== Source changed to 'combination': updating LCARS and Cyberpunk with {} source summaries ===", summaries.len());
+                    lcars_widget_clone.set_available_fields(fields.clone());
+                    lcars_widget_clone.set_source_summaries(summaries.clone());
+                    cyberpunk_widget_clone.set_available_fields(fields);
+                    cyberpunk_widget_clone.set_source_summaries(summaries);
                 }
             }
         });
     }
 
-    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, and cpu_cores config based on displayer selection
+    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, cpu_cores, indicator, and cyberpunk config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -4839,6 +4885,8 @@ fn show_panel_properties_dialog(
         let cpu_cores_label_clone = cpu_cores_config_label.clone();
         let indicator_widget_clone = indicator_config_widget.clone();
         let indicator_label_clone = indicator_config_label.clone();
+        let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
+        let cyberpunk_label_clone = cyberpunk_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -4853,6 +4901,7 @@ fn show_panel_properties_dialog(
                 let is_lcars = displayer_id == "lcars";
                 let is_cpu_cores = displayer_id == "cpu_cores";
                 let is_indicator = displayer_id == "indicator";
+                let is_cyberpunk = displayer_id == "cyberpunk";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -4873,6 +4922,8 @@ fn show_panel_properties_dialog(
                 cpu_cores_label_clone.set_visible(is_cpu_cores);
                 indicator_widget_clone.widget().set_visible(is_indicator);
                 indicator_label_clone.set_visible(is_indicator);
+                cyberpunk_widget_clone.widget().set_visible(is_cyberpunk);
+                cyberpunk_label_clone.set_visible(is_cyberpunk);
             }
         });
     }
@@ -4900,6 +4951,36 @@ fn show_panel_properties_dialog(
                             log::info!("=== Displayer changed to 'lcars' with 'combination' source: updating LCARS with {} source summaries ===", summaries.len());
                             lcars_widget_clone.set_available_fields(fields);
                             lcars_widget_clone.set_source_summaries(summaries);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Update Cyberpunk widget when displayer changes to "cyberpunk" and source is "combination"
+    {
+        let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+                if displayer_id == "cyberpunk" {
+                    // Check if current source is "combination"
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            // Update Cyberpunk with source summaries from combo config
+                            let widget = combo_widget_clone.borrow();
+                            let summaries = widget.get_source_summaries();
+                            let fields = widget.get_available_fields();
+                            drop(widget);
+                            log::info!("=== Displayer changed to 'cyberpunk' with 'combination' source: updating Cyberpunk with {} source summaries ===", summaries.len());
+                            cyberpunk_widget_clone.set_available_fields(fields);
+                            cyberpunk_widget_clone.set_source_summaries(summaries);
                         }
                     }
                 }
@@ -5129,6 +5210,7 @@ fn show_panel_properties_dialog(
     let lcars_config_widget_clone = lcars_config_widget.clone();
     let cpu_cores_config_widget_clone = cpu_cores_config_widget.clone();
     let indicator_config_widget_clone = indicator_config_widget.clone();
+    let cyberpunk_config_widget_clone = cyberpunk_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -5936,6 +6018,22 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the displayer
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply Indicator config: {}", e);
+                    }
+                }
+            }
+
+            // Apply Cyberpunk configuration if cyberpunk displayer is active
+            if new_displayer_id == "cyberpunk" {
+                let cyberpunk_config = cyberpunk_config_widget_clone.get_config();
+                if let Ok(cyberpunk_config_json) = serde_json::to_value(&cyberpunk_config) {
+                    panel_guard.config.insert("cyberpunk_config".to_string(), cyberpunk_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply Cyberpunk config: {}", e);
                     }
                 }
             }

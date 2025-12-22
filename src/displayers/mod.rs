@@ -78,6 +78,7 @@ mod clock_digital;
 mod lcars_combo;
 mod cpu_cores;
 mod indicator;
+mod cyberpunk;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -91,6 +92,7 @@ pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle}
 pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
 pub use cpu_cores::CpuCoresDisplayer;
 pub use indicator::{IndicatorDisplayer, IndicatorConfig, IndicatorShape, interpolate_gradient, render_indicator};
+pub use cyberpunk::{CyberpunkDisplayer, CyberpunkDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -168,6 +170,13 @@ pub fn register_all() {
         "indicator",
         "Indicator",
         || Box::new(IndicatorDisplayer::new()),
+    );
+
+    // Register Cyberpunk HUD displayer
+    global_registry().register_displayer_with_info(
+        "cyberpunk",
+        "Cyberpunk HUD",
+        || Box::new(CyberpunkDisplayer::new()),
     );
 
     // TODO: Register more displayers
