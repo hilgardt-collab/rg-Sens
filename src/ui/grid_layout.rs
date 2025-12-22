@@ -1160,9 +1160,10 @@ impl GridLayout {
             let displayer_id = panel_guard.displayer.id().to_string();
 
             // Get the displayer's typed config and convert to JSON Value
+            // Use to_inner_value() to save just the config, not the enum wrapper
             let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
-                // Use the typed config for accurate serialization
-                serde_json::to_value(&typed_config).ok()
+                // Use to_inner_value() for consistent serialization format
+                typed_config.to_inner_value()
             } else {
                 // Fall back to HashMap config (filter out source-specific keys)
                 let mut config = panel_guard.config.clone();
@@ -3285,8 +3286,9 @@ fn setup_copied_panel_interaction(
 
         let displayer_id = panel_guard.displayer.id().to_string();
 
+        // Use to_inner_value() to save just the config, not the enum wrapper
         let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
-            serde_json::to_value(&typed_config).ok()
+            typed_config.to_inner_value()
         } else {
             let mut config = panel_guard.config.clone();
             filter_source_config_keys(&mut config);

@@ -362,7 +362,14 @@ impl DisplayerConfig {
 
     /// Create a DisplayerConfig from a JSON value for a given displayer type ID
     /// This is used to restore saved default configurations
+    /// Handles both wrapped format ({"lcars": {...}}) and direct format ({...})
     pub fn from_value_for_type(displayer_type: &str, value: serde_json::Value) -> Option<Self> {
+        // First try to parse as the wrapped DisplayerConfig enum (handles old format)
+        if let Ok(config) = serde_json::from_value::<DisplayerConfig>(value.clone()) {
+            return Some(config);
+        }
+
+        // Fall back to parsing as the inner config type directly
         match displayer_type {
             "text" => serde_json::from_value(value).ok().map(DisplayerConfig::Text),
             "bar" => serde_json::from_value(value).ok().map(DisplayerConfig::Bar),
@@ -371,10 +378,27 @@ impl DisplayerConfig {
             "graph" => serde_json::from_value(value).ok().map(DisplayerConfig::Graph),
             "clock_analog" => serde_json::from_value(value).ok().map(DisplayerConfig::ClockAnalog),
             "clock_digital" => serde_json::from_value(value).ok().map(DisplayerConfig::ClockDigital),
-            "lcars" => serde_json::from_value(value).ok().map(DisplayerConfig::Lcars),
+            "lcars" | "lcars_combo" => serde_json::from_value(value).ok().map(DisplayerConfig::Lcars),
             "cpu_cores" => serde_json::from_value(value).ok().map(DisplayerConfig::CpuCores),
             "indicator" => serde_json::from_value(value).ok().map(DisplayerConfig::Indicator),
             _ => None,
+        }
+    }
+
+    /// Get the inner config as a JSON value (without the enum wrapper)
+    /// This is used when saving defaults to ensure consistent format
+    pub fn to_inner_value(&self) -> Option<serde_json::Value> {
+        match self {
+            DisplayerConfig::Text(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Bar(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Arc(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Speedometer(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Graph(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::ClockAnalog(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::ClockDigital(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Lcars(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::CpuCores(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Indicator(c) => serde_json::to_value(c).ok(),
         }
     }
 }
