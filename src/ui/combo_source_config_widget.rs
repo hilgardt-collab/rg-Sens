@@ -8,7 +8,7 @@ use crate::sources::ComboSourceConfig;
 use crate::ui::{
     CpuSourceConfigWidget, GpuSourceConfigWidget, MemorySourceConfigWidget,
     SystemTempConfigWidget, FanSpeedConfigWidget, DiskSourceConfigWidget,
-    ClockSourceConfigWidget, StaticTextConfigWidget,
+    ClockSourceConfigWidget, StaticTextConfigWidget, TestSourceConfigWidget,
 };
 use gtk4::prelude::*;
 use gtk4::{
@@ -30,6 +30,7 @@ enum SourceConfigWidgetType {
     Disk(DiskSourceConfigWidget),
     Clock(ClockSourceConfigWidget),
     StaticText(StaticTextConfigWidget),
+    Test(TestSourceConfigWidget),
 }
 
 impl SourceConfigWidgetType {
@@ -43,6 +44,7 @@ impl SourceConfigWidgetType {
             SourceConfigWidgetType::Disk(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::Clock(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::StaticText(w) => w.widget().clone().upcast(),
+            SourceConfigWidgetType::Test(w) => w.widget().clone().upcast(),
         }
     }
 
@@ -56,6 +58,7 @@ impl SourceConfigWidgetType {
             SourceConfigWidgetType::Disk(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::Clock(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::StaticText(w) => serde_json::to_value(w.get_config()).ok(),
+            SourceConfigWidgetType::Test(w) => serde_json::to_value(w.get_config()).ok(),
         }
     }
 
@@ -139,6 +142,15 @@ impl SourceConfigWidgetType {
                         w.set_config(&cfg);
                     }
                     Err(e) => log::warn!("Failed to deserialize StaticText config: {}", e),
+                }
+            }
+            SourceConfigWidgetType::Test(w) => {
+                match serde_json::from_value(json_value) {
+                    Ok(cfg) => {
+                        log::info!("Successfully loaded Test config");
+                        w.set_config(&cfg);
+                    }
+                    Err(e) => log::warn!("Failed to deserialize Test config: {}", e),
                 }
             }
         }
@@ -636,6 +648,7 @@ impl ComboSourceConfigWidget {
             "disk" => Some(SourceConfigWidgetType::Disk(DiskSourceConfigWidget::new())),
             "clock" => Some(SourceConfigWidgetType::Clock(ClockSourceConfigWidget::new())),
             "static_text" => Some(SourceConfigWidgetType::StaticText(StaticTextConfigWidget::new())),
+            "test" => Some(SourceConfigWidgetType::Test(TestSourceConfigWidget::new())),
             _ => None,
         }
     }

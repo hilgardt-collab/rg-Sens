@@ -264,6 +264,14 @@ impl DataSource for TestSource {
         values
     }
 
+    fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {
+        if let Ok(state) = TEST_SOURCE_STATE.lock() {
+            Some(crate::core::SourceConfig::Test(state.config.clone()))
+        } else {
+            None
+        }
+    }
+
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
         // Use blocking lock - handlers only hold the lock briefly
         let Ok(mut state) = TEST_SOURCE_STATE.lock() else {

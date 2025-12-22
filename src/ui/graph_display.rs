@@ -332,6 +332,7 @@ pub fn render_graph(
     cr.restore()?;
 
     // Determine value range
+    // Priority: 1) auto_scale from data, 2) source limits, 3) config values
     let (min_val, max_val) = if config.auto_scale && !data.is_empty() {
         let data_min = data.iter().map(|p| p.value).fold(f64::INFINITY, f64::min);
         let data_max = data.iter().map(|p| p.value).fold(f64::NEG_INFINITY, f64::max);
@@ -339,7 +340,13 @@ pub fn render_graph(
         let padding = range * (config.value_padding / 100.0);
         (data_min - padding, data_max + padding)
     } else {
-        (config.min_value, config.max_value)
+        // Use source limits if available, otherwise fall back to config values
+        let source_min = source_values.get("min_limit").and_then(|v| v.as_f64());
+        let source_max = source_values.get("max_limit").and_then(|v| v.as_f64());
+        (
+            source_min.unwrap_or(config.min_value),
+            source_max.unwrap_or(config.max_value),
+        )
     };
 
     let value_range = max_val - min_val;
