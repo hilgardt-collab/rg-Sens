@@ -174,23 +174,38 @@ impl AlarmTimerDialog {
 
         // Set up periodic refresh only for running timer countdown display (1 second)
         // This is less aggressive and only needed to update running timer displays
-        let timer_list_box_for_refresh = timer_list_box.clone();
-        let alarm_list_box_for_refresh = alarm_list_box.clone();
+        // Use weak references so the timer stops when widgets are destroyed
+        let timer_list_box_weak = timer_list_box.downgrade();
+        let alarm_list_box_weak = alarm_list_box.downgrade();
         let refresh_id = gtk4::glib::timeout_add_local(
             std::time::Duration::from_secs(1),
             move || {
-                // Only refresh if there are running/paused timers or triggered alarms
-                let needs_refresh = if let Ok(manager) = global_timer_manager().read() {
+                // Check if widgets are still alive - stop timer if not
+                let Some(timer_list_box) = timer_list_box_weak.upgrade() else {
+                    return gtk4::glib::ControlFlow::Break;
+                };
+                let Some(alarm_list_box) = alarm_list_box_weak.upgrade() else {
+                    return gtk4::glib::ControlFlow::Break;
+                };
+
+                // Skip if widgets are not visible (window minimized or hidden)
+                if !timer_list_box.is_mapped() {
+                    return gtk4::glib::ControlFlow::Continue;
+                }
+
+                // Use try_read to avoid blocking GTK main thread
+                // If lock is held, skip this refresh cycle
+                let needs_refresh = if let Ok(manager) = global_timer_manager().try_read() {
                     manager.timers.iter().any(|t| {
                         t.state == TimerState::Running || t.state == TimerState::Paused || t.state == TimerState::Finished
                     }) || !manager.triggered_alarms.is_empty()
                 } else {
-                    false
+                    false // Lock is busy, skip this cycle
                 };
 
                 if needs_refresh {
-                    Self::refresh_timer_list_static(&timer_list_box_for_refresh);
-                    Self::refresh_alarm_list_static(&alarm_list_box_for_refresh);
+                    Self::refresh_timer_list_static(&timer_list_box);
+                    Self::refresh_alarm_list_static(&alarm_list_box);
                 }
                 gtk4::glib::ControlFlow::Continue
             },
@@ -285,16 +300,21 @@ impl AlarmTimerDialog {
             window_clone.close();
         });
 
-        // Stop refresh when window closes and clear singleton reference
+        // Clear singleton reference on close-request (before destroy)
+        // This prevents the "window shown after destroyed" warning
+        window.connect_close_request(move |_| {
+            ALARM_TIMER_DIALOG.with(|dialog_ref| {
+                *dialog_ref.borrow_mut() = None;
+            });
+            gtk4::glib::Propagation::Proceed
+        });
+
+        // Stop refresh timer when window is destroyed
         let refresh_id_for_destroy = dialog.refresh_source_id.clone();
         window.connect_destroy(move |_| {
             if let Some(id) = refresh_id_for_destroy.borrow_mut().take() {
                 id.remove();
             }
-            // Clear the singleton reference
-            ALARM_TIMER_DIALOG.with(|dialog_ref| {
-                *dialog_ref.borrow_mut() = None;
-            });
         });
 
         dialog
@@ -305,13 +325,19 @@ impl AlarmTimerDialog {
         ALARM_TIMER_DIALOG.with(|dialog_ref| {
             let mut dialog_opt = dialog_ref.borrow_mut();
 
-            // Check if dialog already exists and is still alive
+            // Check if dialog already exists and is still alive and visible
             if let Some(weak) = dialog_opt.as_ref() {
                 if let Some(window) = weak.upgrade() {
-                    window.present();  // Bring to front
-                    return;
+                    // Only reuse if window is still mapped (not being destroyed)
+                    if window.is_mapped() {
+                        window.present();  // Bring to front
+                        return;
+                    }
                 }
             }
+
+            // Clear any stale reference
+            *dialog_opt = None;
 
             // Create new dialog
             let dialog = Self::new(parent);
