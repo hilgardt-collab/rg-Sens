@@ -340,4 +340,12 @@ impl Displayer for CpuCoresDisplayer {
     fn needs_redraw(&self) -> bool {
         self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(crate::core::DisplayerConfig::CpuCores(data.config.clone()))
+        } else {
+            None
+        }
+    }
 }

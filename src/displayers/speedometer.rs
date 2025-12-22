@@ -243,4 +243,12 @@ impl Displayer for SpeedometerDisplayer {
         }
         Ok(())
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(crate::core::DisplayerConfig::Speedometer(data.config.clone()))
+        } else {
+            None
+        }
+    }
 }

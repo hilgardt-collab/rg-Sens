@@ -247,4 +247,12 @@ impl Displayer for ArcDisplayer {
     fn needs_redraw(&self) -> bool {
         self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(crate::core::DisplayerConfig::Arc(data.config.clone()))
+        } else {
+            None
+        }
+    }
 }

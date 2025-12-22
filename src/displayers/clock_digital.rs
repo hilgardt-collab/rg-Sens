@@ -553,6 +553,14 @@ impl Displayer for ClockDigitalDisplayer {
         }
         Ok(())
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(crate::core::DisplayerConfig::ClockDigital(data.config.clone()))
+        } else {
+            None
+        }
+    }
 }
 
 fn render_digital_clock(

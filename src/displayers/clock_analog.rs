@@ -444,4 +444,12 @@ impl Displayer for ClockAnalogDisplayer {
         }
         Ok(())
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(crate::core::DisplayerConfig::ClockAnalog(data.config.clone()))
+        } else {
+            None
+        }
+    }
 }

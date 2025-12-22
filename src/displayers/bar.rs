@@ -241,4 +241,12 @@ impl Displayer for BarDisplayer {
     fn needs_redraw(&self) -> bool {
         self.data.lock().map(|data| data.dirty).unwrap_or(false)
     }
+
+    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
+        if let Ok(data) = self.data.lock() {
+            Some(crate::core::DisplayerConfig::Bar(data.config.clone()))
+        } else {
+            None
+        }
+    }
 }
