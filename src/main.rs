@@ -2770,9 +2770,29 @@ fn show_new_panel_dialog(
         let width = width_spin.value() as u32;
         let height = height_spin.value() as u32;
 
-        let source_id = &source_ids[source_combo.selected() as usize];
+        // Safely get selected indices with bounds checking
+        let source_selected = source_combo.selected();
+        let displayer_selected = displayer_combo.selected();
+
+        // GTK returns GTK_INVALID_LIST_POSITION (u32::MAX) when nothing is selected
+        if source_selected == gtk4::INVALID_LIST_POSITION {
+            log::warn!("No source selected, cannot create panel");
+            return;
+        }
+        let Some(source_id) = source_ids.get(source_selected as usize) else {
+            log::warn!("Invalid source selection index: {}", source_selected);
+            return;
+        };
+
         let displayer_ids_borrowed = displayer_ids_for_ok.borrow();
-        let displayer_id = &displayer_ids_borrowed[displayer_combo.selected() as usize];
+        if displayer_selected == gtk4::INVALID_LIST_POSITION {
+            log::warn!("No displayer selected, cannot create panel");
+            return;
+        }
+        let Some(displayer_id) = displayer_ids_borrowed.get(displayer_selected as usize) else {
+            log::warn!("Invalid displayer selection index: {}", displayer_selected);
+            return;
+        };
 
         // Generate unique ID
         let id = format!("panel_{}", uuid::Uuid::new_v4());

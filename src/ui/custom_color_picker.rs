@@ -10,6 +10,42 @@ use std::rc::Rc;
 
 use crate::ui::background::Color;
 
+/// Draw a checkerboard pattern efficiently using Cairo's pattern system.
+/// This is much faster than drawing individual rectangles.
+fn draw_checkerboard(cr: &cairo::Context, width: i32, height: i32, checker_size: f64) {
+    // Create a small surface for the checkerboard tile (2x2 cells)
+    let tile_size = (checker_size * 2.0) as i32;
+    let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, tile_size, tile_size)
+        .expect("Failed to create checkerboard surface");
+
+    {
+        let tile_cr = cairo::Context::new(&surface).expect("Failed to create cairo context");
+        let cs = checker_size;
+
+        // Draw the 2x2 checkerboard tile
+        // Top-left and bottom-right: light
+        tile_cr.set_source_rgb(0.8, 0.8, 0.8);
+        tile_cr.rectangle(0.0, 0.0, cs, cs);
+        tile_cr.rectangle(cs, cs, cs, cs);
+        let _ = tile_cr.fill();
+
+        // Top-right and bottom-left: dark
+        tile_cr.set_source_rgb(0.6, 0.6, 0.6);
+        tile_cr.rectangle(cs, 0.0, cs, cs);
+        tile_cr.rectangle(0.0, cs, cs, cs);
+        let _ = tile_cr.fill();
+    }
+
+    // Create a pattern from the tile and set it to repeat
+    let pattern = cairo::SurfacePattern::create(&surface);
+    pattern.set_extend(cairo::Extend::Repeat);
+
+    // Draw the pattern
+    cr.set_source(&pattern).ok();
+    cr.rectangle(0.0, 0.0, width as f64, height as f64);
+    cr.fill().ok();
+}
+
 const PRESET_COLORS: [[Color; 8]; 8] = [
     // Row 0: Very Light variations
     [
@@ -165,23 +201,7 @@ impl CustomColorPicker {
             let color = *current_color_clone.borrow();
 
             // Draw checkerboard for transparency
-            let checker_size = 16.0;
-            for y in 0..(height / checker_size as i32 + 1) {
-                for x in 0..(width / checker_size as i32 + 1) {
-                    if (x + y) % 2 == 0 {
-                        cr.set_source_rgb(0.8, 0.8, 0.8);
-                    } else {
-                        cr.set_source_rgb(0.6, 0.6, 0.6);
-                    }
-                    cr.rectangle(
-                        x as f64 * checker_size,
-                        y as f64 * checker_size,
-                        checker_size,
-                        checker_size,
-                    );
-                    cr.fill().ok();
-                }
-            }
+            draw_checkerboard(cr, width, height, 16.0);
 
             // Draw color with alpha
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -500,23 +520,7 @@ impl CustomColorPicker {
 
         color_box.set_draw_func(move |_, cr, width, height| {
             // Draw checkerboard pattern for transparency
-            let checker_size = 8.0;
-            for y in 0..(height / checker_size as i32 + 1) {
-                for x in 0..(width / checker_size as i32 + 1) {
-                    if (x + y) % 2 == 0 {
-                        cr.set_source_rgb(0.8, 0.8, 0.8);
-                    } else {
-                        cr.set_source_rgb(0.6, 0.6, 0.6);
-                    }
-                    cr.rectangle(
-                        x as f64 * checker_size,
-                        y as f64 * checker_size,
-                        checker_size,
-                        checker_size,
-                    );
-                    cr.fill().ok();
-                }
-            }
+            draw_checkerboard(cr, width, height, 8.0);
 
             // Draw color with alpha
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -718,23 +722,7 @@ impl CustomColorPicker {
             let b = blue.value();
 
             // Draw checkerboard
-            let checker_size = 8.0;
-            for y in 0..(height / checker_size as i32 + 1) {
-                for x in 0..(width / checker_size as i32 + 1) {
-                    if (x + y) % 2 == 0 {
-                        cr.set_source_rgb(0.8, 0.8, 0.8);
-                    } else {
-                        cr.set_source_rgb(0.6, 0.6, 0.6);
-                    }
-                    let _ = cr.rectangle(
-                        x as f64 * checker_size,
-                        y as f64 * checker_size,
-                        checker_size,
-                        checker_size,
-                    );
-                    let _ = cr.fill();
-                }
-            }
+            draw_checkerboard(cr, width, height, 8.0);
 
             // Draw alpha gradient from bottom (0.0) to top (1.0)
             let gradient = cairo::LinearGradient::new(0.0, height as f64, 0.0, 0.0);
@@ -1218,23 +1206,7 @@ impl CustomColorPicker {
             let b = blue.value();
 
             // Draw checkerboard
-            let checker_size = 8.0;
-            for y in 0..(height / checker_size as i32 + 1) {
-                for x in 0..(width / checker_size as i32 + 1) {
-                    if (x + y) % 2 == 0 {
-                        cr.set_source_rgb(0.8, 0.8, 0.8);
-                    } else {
-                        cr.set_source_rgb(0.6, 0.6, 0.6);
-                    }
-                    let _ = cr.rectangle(
-                        x as f64 * checker_size,
-                        y as f64 * checker_size,
-                        checker_size,
-                        checker_size,
-                    );
-                    let _ = cr.fill();
-                }
-            }
+            draw_checkerboard(cr, width, height, 8.0);
 
             // Draw alpha gradient horizontally
             let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);

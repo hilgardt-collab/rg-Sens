@@ -48,7 +48,9 @@ impl MemorySource {
             default_interval: Duration::from_millis(1000),
         };
 
-        let system = System::new_all();
+        // Use empty System - we only need memory info, not CPU/disk/etc.
+        // refresh_memory() will be called in update() to populate memory data
+        let system = System::new();
 
         Self {
             metadata,

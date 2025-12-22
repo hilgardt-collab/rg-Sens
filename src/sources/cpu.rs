@@ -22,6 +22,8 @@ pub struct CpuSensor {
 struct CpuHardwareInfo {
     sensors: Vec<CpuSensor>,
     core_count: usize,
+    /// Pre-computed per-core usage key names (avoids format! allocation in hot path)
+    core_usage_keys: Vec<String>,
 }
 
 /// Global cache for CPU hardware info (discovered once at startup)
@@ -38,11 +40,17 @@ static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
     );
     let core_count = system.cpus().len();
 
+    // Pre-compute per-core usage key names to avoid format! allocation in hot path
+    let core_usage_keys: Vec<String> = (0..core_count)
+        .map(|i| format!("core{}_usage", i))
+        .collect();
+
     log::warn!("CPU hardware discovery complete: {} sensors, {} cores", sensors.len(), core_count);
 
     CpuHardwareInfo {
         sensors,
         core_count,
+        core_usage_keys,
     }
 });
 
@@ -475,9 +483,11 @@ impl DataSource for CpuSource {
 
         values.insert("raw_frequency".to_string(), Value::from(self.cpu_frequency));
 
-        // Per-core data (always available)
+        // Per-core data (always available) - use cached key names to avoid allocation
         for (i, usage) in self.per_core_usage.iter().enumerate() {
-            values.insert(format!("core{}_usage", i), Value::from(*usage));
+            if let Some(key) = CPU_HARDWARE_INFO.core_usage_keys.get(i) {
+                values.insert(key.clone(), Value::from(*usage));
+            }
         }
 
         // Add limits (either manual or auto-detected)
