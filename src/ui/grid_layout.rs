@@ -4919,7 +4919,8 @@ fn show_panel_properties_dialog(
     // Wrap retro_terminal_config_widget in Rc for sharing
     let retro_terminal_config_widget = Rc::new(retro_terminal_config_widget);
 
-    // Connect combo_config_widget to update lcars_config_widget, cyberpunk_config_widget, material_config_widget, industrial_config_widget and retro_terminal_config_widget when sources change
+    // Connect combo_config_widget to update ONLY the active displayer's config widget when sources change
+    // Other widgets are updated lazily when the user switches to them (see displayer_combo handlers below)
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
@@ -4929,80 +4930,81 @@ fn show_panel_properties_dialog(
         let combo_widget_for_lcars = combo_config_widget.clone();
         let panel_for_combo_change = panel.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
-            // Get source summaries from combo config and update LCARS, Cyberpunk, Material, Industrial and Retro Terminal display configs
+            // Get source summaries from combo config
             let widget = combo_widget_for_lcars.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
-            lcars_widget_clone.set_available_fields(fields.clone());
-            lcars_widget_clone.set_source_summaries(summaries.clone());
-            cyberpunk_widget_clone.set_available_fields(fields.clone());
-            cyberpunk_widget_clone.set_source_summaries(summaries.clone());
-            material_widget_clone.set_available_fields(fields.clone());
-            material_widget_clone.set_source_summaries(summaries.clone());
-            industrial_widget_clone.set_available_fields(fields.clone());
-            industrial_widget_clone.set_source_summaries(summaries.clone());
-            retro_terminal_widget_clone.set_available_fields(fields);
-            retro_terminal_widget_clone.set_source_summaries(summaries);
 
-            // Apply updated config to the active displayer so it uses the new group/item structure
-            // This prevents the displayer from looking for wrong data keys after source config changes
+            // Only update the ACTIVE displayer's config widget to avoid expensive rebuilds
+            // Other widgets will be updated when the user switches to them
             if let Ok(mut panel_guard) = panel_for_combo_change.try_write() {
                 let displayer_id = panel_guard.displayer.id().to_string();
 
-                // Apply Industrial config if active
-                if displayer_id == "industrial" {
-                    let industrial_config = industrial_widget_clone.get_config();
-                    if let Ok(config_json) = serde_json::to_value(&industrial_config) {
-                        panel_guard.config.insert("industrial_config".to_string(), config_json);
-                        let config_clone = panel_guard.config.clone();
-                        if let Err(e) = panel_guard.apply_config(config_clone) {
-                            log::warn!("Failed to apply Industrial config on source change: {}", e);
+                // Update and apply config for the active displayer only
+                match displayer_id.as_str() {
+                    "industrial" => {
+                        industrial_widget_clone.set_available_fields(fields);
+                        industrial_widget_clone.set_source_summaries(summaries);
+                        let config = industrial_widget_clone.get_config();
+                        if let Ok(config_json) = serde_json::to_value(&config) {
+                            panel_guard.config.insert("industrial_config".to_string(), config_json);
+                            let config_clone = panel_guard.config.clone();
+                            if let Err(e) = panel_guard.apply_config(config_clone) {
+                                log::warn!("Failed to apply Industrial config on source change: {}", e);
+                            }
                         }
                     }
-                }
-                // Apply LCARS config if active
-                else if displayer_id == "lcars" {
-                    let lcars_config = lcars_widget_clone.get_config();
-                    if let Ok(config_json) = serde_json::to_value(&lcars_config) {
-                        panel_guard.config.insert("lcars_config".to_string(), config_json);
-                        let config_clone = panel_guard.config.clone();
-                        if let Err(e) = panel_guard.apply_config(config_clone) {
-                            log::warn!("Failed to apply LCARS config on source change: {}", e);
+                    "lcars" => {
+                        lcars_widget_clone.set_available_fields(fields);
+                        lcars_widget_clone.set_source_summaries(summaries);
+                        let config = lcars_widget_clone.get_config();
+                        if let Ok(config_json) = serde_json::to_value(&config) {
+                            panel_guard.config.insert("lcars_config".to_string(), config_json);
+                            let config_clone = panel_guard.config.clone();
+                            if let Err(e) = panel_guard.apply_config(config_clone) {
+                                log::warn!("Failed to apply LCARS config on source change: {}", e);
+                            }
                         }
                     }
-                }
-                // Apply Cyberpunk config if active
-                else if displayer_id == "cyberpunk" {
-                    let cyberpunk_config = cyberpunk_widget_clone.get_config();
-                    if let Ok(config_json) = serde_json::to_value(&cyberpunk_config) {
-                        panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
-                        let config_clone = panel_guard.config.clone();
-                        if let Err(e) = panel_guard.apply_config(config_clone) {
-                            log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
+                    "cyberpunk" => {
+                        cyberpunk_widget_clone.set_available_fields(fields);
+                        cyberpunk_widget_clone.set_source_summaries(summaries);
+                        let config = cyberpunk_widget_clone.get_config();
+                        if let Ok(config_json) = serde_json::to_value(&config) {
+                            panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
+                            let config_clone = panel_guard.config.clone();
+                            if let Err(e) = panel_guard.apply_config(config_clone) {
+                                log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
+                            }
                         }
                     }
-                }
-                // Apply Material config if active
-                else if displayer_id == "material" {
-                    let material_config = material_widget_clone.get_config();
-                    if let Ok(config_json) = serde_json::to_value(&material_config) {
-                        panel_guard.config.insert("material_config".to_string(), config_json);
-                        let config_clone = panel_guard.config.clone();
-                        if let Err(e) = panel_guard.apply_config(config_clone) {
-                            log::warn!("Failed to apply Material config on source change: {}", e);
+                    "material" => {
+                        material_widget_clone.set_available_fields(fields);
+                        material_widget_clone.set_source_summaries(summaries);
+                        let config = material_widget_clone.get_config();
+                        if let Ok(config_json) = serde_json::to_value(&config) {
+                            panel_guard.config.insert("material_config".to_string(), config_json);
+                            let config_clone = panel_guard.config.clone();
+                            if let Err(e) = panel_guard.apply_config(config_clone) {
+                                log::warn!("Failed to apply Material config on source change: {}", e);
+                            }
                         }
                     }
-                }
-                // Apply Retro Terminal config if active
-                else if displayer_id == "retro_terminal" {
-                    let retro_terminal_config = retro_terminal_widget_clone.get_config();
-                    if let Ok(config_json) = serde_json::to_value(&retro_terminal_config) {
-                        panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
-                        let config_clone = panel_guard.config.clone();
-                        if let Err(e) = panel_guard.apply_config(config_clone) {
-                            log::warn!("Failed to apply Retro Terminal config on source change: {}", e);
+                    "retro_terminal" => {
+                        retro_terminal_widget_clone.set_available_fields(fields);
+                        retro_terminal_widget_clone.set_source_summaries(summaries);
+                        let config = retro_terminal_widget_clone.get_config();
+                        if let Ok(config_json) = serde_json::to_value(&config) {
+                            panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
+                            let config_clone = panel_guard.config.clone();
+                            if let Err(e) = panel_guard.apply_config(config_clone) {
+                                log::warn!("Failed to apply Retro Terminal config on source change: {}", e);
+                            }
                         }
+                    }
+                    _ => {
+                        // For non-combo displayers, no update needed
                     }
                 }
             }
