@@ -104,7 +104,7 @@ pub struct IndustrialDisplayer {
 impl IndustrialDisplayer {
     pub fn new() -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: "industrial".to_string(),
             name: "Industrial".to_string(),
             data: Arc::new(Mutex::new(DisplayData {
                 config: IndustrialDisplayConfig::default(),
@@ -122,30 +122,46 @@ impl IndustrialDisplayer {
 
     /// Get item data from values for a given prefix
     fn get_item_data(values: &HashMap<String, Value>, prefix: &str) -> ContentItemData {
-        let caption = values.get(&format!("{}_label", prefix))
+        let caption = values
+            .get(&format!("{}_caption", prefix))
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let value = values.get(&format!("{}_value", prefix))
+        let value = values
+            .get(&format!("{}_value", prefix))
+            .map(|v| match v {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => {
+                    if let Some(f) = n.as_f64() {
+                        format!("{:.1}", f)
+                    } else {
+                        n.to_string()
+                    }
+                }
+                _ => v.to_string(),
+            })
+            .unwrap_or_default();
+
+        let unit = values
+            .get(&format!("{}_unit", prefix))
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let unit = values.get(&format!("{}_unit", prefix))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let numerical_value = values.get(&format!("{}_numerical_value", prefix))
+        let numerical_value = values
+            .get(&format!("{}_numerical_value", prefix))
+            .or_else(|| values.get(&format!("{}_value", prefix)))
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
 
-        let min_value = values.get(&format!("{}_min_limit", prefix))
+        let min_value = values
+            .get(&format!("{}_min_limit", prefix))
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
 
-        let max_value = values.get(&format!("{}_max_limit", prefix))
+        let max_value = values
+            .get(&format!("{}_max_limit", prefix))
             .and_then(|v| v.as_f64())
             .unwrap_or(100.0);
 
@@ -421,16 +437,11 @@ impl Displayer for IndustrialDisplayer {
                 }
 
                 // Draw content items for each group
-                for (group_x, group_y, group_w, group_h, group_idx) in &group_layouts {
+                for (group_idx, (group_x, group_y, group_w, group_h, item_count)) in group_layouts.iter().enumerate() {
                     // Draw subtle group panel
                     if let Err(e) = draw_group_panel(cr, *group_x, *group_y, *group_w, *group_h, &data.config.frame) {
                         log::debug!("Failed to draw group panel: {}", e);
                     }
-
-                    let item_count = data.config.frame.group_item_counts
-                        .get(*group_idx)
-                        .copied()
-                        .unwrap_or(0) as u32;
 
                     let base_prefix = format!("group{}_", group_idx + 1);
 
@@ -441,7 +452,7 @@ impl Displayer for IndustrialDisplayer {
                         *group_w,
                         *group_h,
                         &base_prefix,
-                        item_count,
+                        *item_count as u32,
                         &data.config,
                         &data.values,
                         &data.bar_values,
