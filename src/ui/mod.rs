@@ -47,6 +47,8 @@ mod test_source_config_widget;
 mod static_text_config_widget;
 pub mod cyberpunk_display;
 mod cyberpunk_config_widget;
+pub mod material_display;
+mod material_config_widget;
 
 pub use main_window::MainWindow;
 pub use test_source_dialog::{show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback};
@@ -99,3 +101,9 @@ pub use cyberpunk_display::{
     DividerStyle as CyberpunkDividerStyle, render_cyberpunk_frame, calculate_group_layouts, draw_group_dividers,
 };
 pub use cyberpunk_config_widget::CyberpunkConfigWidget;
+pub use material_display::{
+    MaterialFrameConfig, CardElevation, HeaderStyle as MaterialHeaderStyle,
+    DividerStyle as MaterialDividerStyle, ThemeVariant, render_material_frame,
+    calculate_group_layouts as material_calculate_group_layouts, draw_group_dividers as material_draw_group_dividers,
+};
+pub use material_config_widget::MaterialConfigWidget;

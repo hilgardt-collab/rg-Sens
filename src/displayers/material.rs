@@ -1,9 +1,10 @@
-//! Cyberpunk/Neon HUD Displayer
+//! Material Design Cards Displayer
 //!
-//! A futuristic heads-up display with:
-//! - Angular chamfered corners with neon glow effects
-//! - Dark translucent backgrounds with grid patterns
-//! - Scanline overlay for CRT/hologram effect
+//! A clean, modern Material Design-inspired interface with:
+//! - Clean white/dark cards with subtle shadows
+//! - Large rounded corners
+//! - Generous whitespace and padding
+//! - Color-coded category headers
 //! - Support for multiple data source groups
 
 use anyhow::Result;
@@ -17,9 +18,9 @@ use std::time::Instant;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::graph_display::DataPoint;
-use crate::ui::cyberpunk_display::{
-    render_cyberpunk_frame, calculate_group_layouts, draw_group_dividers, draw_item_frame,
-    CyberpunkFrameConfig,
+use crate::ui::material_display::{
+    render_material_frame, calculate_group_layouts, draw_group_dividers, draw_group_card,
+    MaterialFrameConfig,
 };
 use crate::ui::lcars_display::{
     render_content_bar, render_content_text, render_content_graph,
@@ -47,12 +48,12 @@ impl Default for AnimatedValue {
     }
 }
 
-/// Full Cyberpunk display configuration
+/// Full Material display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CyberpunkDisplayConfig {
+pub struct MaterialDisplayConfig {
     /// Frame configuration
     #[serde(default)]
-    pub frame: CyberpunkFrameConfig,
+    pub frame: MaterialFrameConfig,
 
     /// Animation settings
     #[serde(default = "default_animation_enabled")]
@@ -69,10 +70,10 @@ fn default_animation_speed() -> f64 {
     8.0
 }
 
-impl Default for CyberpunkDisplayConfig {
+impl Default for MaterialDisplayConfig {
     fn default() -> Self {
         Self {
-            frame: CyberpunkFrameConfig::default(),
+            frame: MaterialFrameConfig::default(),
             animation_enabled: default_animation_enabled(),
             animation_speed: default_animation_speed(),
         }
@@ -82,7 +83,7 @@ impl Default for CyberpunkDisplayConfig {
 /// Internal display data
 #[derive(Clone)]
 struct DisplayData {
-    config: CyberpunkDisplayConfig,
+    config: MaterialDisplayConfig,
     values: HashMap<String, Value>,
     bar_values: HashMap<String, AnimatedValue>,
     core_bar_values: HashMap<String, Vec<AnimatedValue>>,
@@ -96,7 +97,7 @@ struct DisplayData {
 impl Default for DisplayData {
     fn default() -> Self {
         Self {
-            config: CyberpunkDisplayConfig::default(),
+            config: MaterialDisplayConfig::default(),
             values: HashMap::new(),
             bar_values: HashMap::new(),
             core_bar_values: HashMap::new(),
@@ -109,18 +110,18 @@ impl Default for DisplayData {
     }
 }
 
-/// Cyberpunk/Neon HUD Displayer
-pub struct CyberpunkDisplayer {
+/// Material Design Cards Displayer
+pub struct MaterialDisplayer {
     id: String,
     name: String,
     data: Arc<Mutex<DisplayData>>,
 }
 
-impl CyberpunkDisplayer {
+impl MaterialDisplayer {
     pub fn new() -> Self {
         Self {
-            id: "cyberpunk".to_string(),
-            name: "Cyberpunk HUD".to_string(),
+            id: "material".to_string(),
+            name: "Material Cards".to_string(),
             data: Arc::new(Mutex::new(DisplayData::default())),
         }
     }
@@ -202,7 +203,7 @@ impl CyberpunkDisplayer {
         h: f64,
         base_prefix: &str,
         count: u32,
-        config: &CyberpunkDisplayConfig,
+        config: &MaterialDisplayConfig,
         values: &HashMap<String, Value>,
         bar_values: &HashMap<String, AnimatedValue>,
         core_bar_values: &HashMap<String, Vec<AnimatedValue>>,
@@ -213,21 +214,19 @@ impl CyberpunkDisplayer {
         }
 
         // Determine fixed heights for items that need them
-        // Items with auto_height=false or Graph display type get fixed heights
         let mut fixed_heights: HashMap<usize, f64> = HashMap::new();
         for i in 0..count as usize {
             let prefix = format!("{}{}", base_prefix, i + 1);
             let item_config = config.frame.content_items.get(&prefix);
             if let Some(cfg) = item_config {
-                // Use fixed height if auto_height is disabled or for Graph display type
                 if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
                     fixed_heights.insert(i, cfg.item_height);
                 }
             }
         }
 
-        // Calculate layouts (item spacing of 4.0)
-        let layouts = calculate_item_layouts(x, y, w, h, count, 4.0, &fixed_heights);
+        // Calculate layouts with generous spacing
+        let layouts = calculate_item_layouts(x, y, w, h, count, config.frame.item_spacing, &fixed_heights);
 
         // Draw each item
         for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
@@ -239,9 +238,6 @@ impl CyberpunkDisplayer {
             let item_config = config.frame.content_items.get(&prefix)
                 .cloned()
                 .unwrap_or_default();
-
-            // Draw item frame if enabled
-            draw_item_frame(cr, &config.frame, item_x, item_y, item_w, item_h);
 
             // Get animated percent
             let bar_key = format!("{}_bar", prefix);
@@ -401,13 +397,13 @@ impl CyberpunkDisplayer {
     }
 }
 
-impl Default for CyberpunkDisplayer {
+impl Default for MaterialDisplayer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Displayer for CyberpunkDisplayer {
+impl Displayer for MaterialDisplayer {
     fn id(&self) -> &str {
         &self.id
     }
@@ -432,11 +428,11 @@ impl Displayer for CyberpunkDisplayer {
                 let h = height as f64;
                 data.transform.apply(cr, w, h);
 
-                // Draw the Cyberpunk frame and get content bounds
-                let content_bounds = match render_cyberpunk_frame(cr, &data.config.frame, w, h) {
+                // Draw the Material frame and get content bounds
+                let content_bounds = match render_material_frame(cr, &data.config.frame, w, h) {
                     Ok(bounds) => bounds,
                     Err(e) => {
-                        log::debug!("Cyberpunk frame render error (usually harmless during layout): {}", e);
+                        log::debug!("Material frame render error: {}", e);
                         return;
                     }
                 };
@@ -466,12 +462,19 @@ impl Displayer for CyberpunkDisplayer {
                     let group_num = group_idx + 1;
                     let item_count = group_item_counts.get(group_idx).copied().unwrap_or(1) as u32;
 
+                    // Draw group card/header if configured
+                    let header_h = draw_group_card(cr, &data.config.frame, gx, gy, gw, gh, group_idx);
+
+                    // Adjust content area for header
+                    let content_gy = gy + header_h;
+                    let content_gh = gh - header_h;
+
                     let _ = Self::draw_content_items(
                         cr,
                         gx,
-                        gy,
+                        content_gy,
                         gw,
-                        gh,
+                        content_gh,
                         &format!("group{}_", group_num),
                         item_count,
                         &data.config,
@@ -696,13 +699,12 @@ impl Displayer for CyberpunkDisplayer {
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
-        // Skip rendering if dimensions are too small
         if width < 10.0 || height < 10.0 {
             return Ok(());
         }
         if let Ok(data) = self.data.lock() {
             data.transform.apply(cr, width, height);
-            render_cyberpunk_frame(cr, &data.config.frame, width, height)?;
+            render_material_frame(cr, &data.config.frame, width, height)?;
             data.transform.restore(cr);
         }
         Ok(())
@@ -712,25 +714,25 @@ impl Displayer for CyberpunkDisplayer {
         ConfigSchema {
             options: vec![
                 ConfigOption {
-                    key: "border_color".to_string(),
-                    name: "Border Color".to_string(),
-                    description: "Neon border color".to_string(),
+                    key: "theme".to_string(),
+                    name: "Theme".to_string(),
+                    description: "Light or dark theme".to_string(),
+                    value_type: "string".to_string(),
+                    default: serde_json::json!("light"),
+                },
+                ConfigOption {
+                    key: "accent_color".to_string(),
+                    name: "Accent Color".to_string(),
+                    description: "Primary accent color".to_string(),
                     value_type: "color".to_string(),
-                    default: serde_json::json!([0.0, 1.0, 1.0, 1.0]),
+                    default: serde_json::json!([0.24, 0.47, 0.96, 1.0]),
                 },
                 ConfigOption {
-                    key: "glow_intensity".to_string(),
-                    name: "Glow Intensity".to_string(),
-                    description: "Intensity of the neon glow effect".to_string(),
-                    value_type: "number".to_string(),
-                    default: serde_json::json!(0.6),
-                },
-                ConfigOption {
-                    key: "show_scanlines".to_string(),
-                    name: "Show Scanlines".to_string(),
-                    description: "Enable CRT scanline effect".to_string(),
-                    value_type: "boolean".to_string(),
-                    default: serde_json::json!(true),
+                    key: "elevation".to_string(),
+                    name: "Card Elevation".to_string(),
+                    description: "Shadow depth of cards".to_string(),
+                    value_type: "string".to_string(),
+                    default: serde_json::json!("low"),
                 },
                 ConfigOption {
                     key: "animation_enabled".to_string(),
@@ -744,11 +746,11 @@ impl Displayer for CyberpunkDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        // Check for full cyberpunk_config first
-        if let Some(cyberpunk_config_value) = config.get("cyberpunk_config") {
-            if let Ok(cyberpunk_config) = serde_json::from_value::<CyberpunkDisplayConfig>(cyberpunk_config_value.clone()) {
+        // Check for full material_config first
+        if let Some(material_config_value) = config.get("material_config") {
+            if let Ok(material_config) = serde_json::from_value::<MaterialDisplayConfig>(material_config_value.clone()) {
                 if let Ok(mut display_data) = self.data.lock() {
-                    display_data.config = cyberpunk_config;
+                    display_data.config = material_config;
                 }
                 return Ok(());
             }
@@ -756,14 +758,6 @@ impl Displayer for CyberpunkDisplayer {
 
         // Apply individual settings for backward compatibility
         if let Ok(mut display_data) = self.data.lock() {
-            if let Some(glow) = config.get("glow_intensity").and_then(|v| v.as_f64()) {
-                display_data.config.frame.glow_intensity = glow;
-            }
-
-            if let Some(scanlines) = config.get("show_scanlines").and_then(|v| v.as_bool()) {
-                display_data.config.frame.show_scanlines = scanlines;
-            }
-
             if let Some(animation) = config.get("animation_enabled").and_then(|v| v.as_bool()) {
                 display_data.config.animation_enabled = animation;
             }
@@ -778,7 +772,7 @@ impl Displayer for CyberpunkDisplayer {
 
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         if let Ok(display_data) = self.data.lock() {
-            Some(crate::core::DisplayerConfig::Cyberpunk(display_data.config.clone()))
+            Some(crate::core::DisplayerConfig::Material(display_data.config.clone()))
         } else {
             None
         }

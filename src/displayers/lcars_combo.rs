@@ -22,7 +22,7 @@ use crate::ui::lcars_display::{
     get_content_bounds, render_content_background, render_content_bar, render_content_text,
     render_content_graph, render_content_core_bars, render_content_static, render_divider,
     render_lcars_frame, calculate_item_layouts,
-    ContentDisplayType, ContentItemData, LcarsFrameConfig, SplitOrientation,
+    ContentDisplayType, ContentItemData, ContentItemConfig, LcarsFrameConfig, SplitOrientation,
 };
 use crate::ui::arc_display::render_arc;
 use crate::ui::speedometer_display::render_speedometer;
@@ -704,8 +704,10 @@ impl Displayer for LcarsComboDisplayer {
                     anim.first_update = false;
                 }
 
-                // Check if this item is configured as a graph or core bars
-                if let Some(item_config) = content_items.get(prefix) {
+                // Check if this item is configured as a graph or core bars - use default config if not present
+                let default_item_config = ContentItemConfig::default();
+                let item_config = content_items.get(prefix).unwrap_or(&default_item_config);
+                {
                     if matches!(item_config.display_as, ContentDisplayType::Graph) {
                         let graph_key = format!("{}_graph", prefix);
                         let history = display_data.graph_history.entry(graph_key).or_insert_with(VecDeque::new);

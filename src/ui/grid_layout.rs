@@ -4805,65 +4805,111 @@ fn show_panel_properties_dialog(
     // Wrap cyberpunk_config_widget in Rc for sharing
     let cyberpunk_config_widget = Rc::new(cyberpunk_config_widget);
 
-    // Connect combo_config_widget to update lcars_config_widget and cyberpunk_config_widget when sources change
+    // === Material Cards Configuration ===
+    let material_config_label = Label::new(Some("Material Cards Configuration:"));
+    material_config_label.set_halign(gtk4::Align::Start);
+    material_config_label.add_css_class("heading");
+    material_config_label.set_visible(old_displayer_id == "material");
+
+    let material_config_widget = crate::ui::MaterialConfigWidget::new(available_fields.clone());
+    material_config_widget.widget().set_visible(old_displayer_id == "material");
+
+    // Load existing Material config if displayer is material
+    if old_displayer_id == "material" {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Material(material_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Material config from displayer.get_typed_config() ===");
+            material_config_widget.set_config(&material_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("material_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::MaterialDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Material config from panel config hashmap ===");
+                    material_config_widget.set_config(&config);
+                }
+            }
+        }
+    }
+
+    displayer_tab_box.append(&material_config_label);
+    displayer_tab_box.append(material_config_widget.widget());
+
+    // Set up change callback
+    material_config_widget.set_on_change(|| {});
+
+    // Wrap material_config_widget in Rc for sharing
+    let material_config_widget = Rc::new(material_config_widget);
+
+    // Connect combo_config_widget to update lcars_config_widget, cyberpunk_config_widget and material_config_widget when sources change
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
+        let material_widget_clone = material_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
-            // Get source summaries from combo config and update LCARS and Cyberpunk display configs
+            // Get source summaries from combo config and update LCARS, Cyberpunk and Material display configs
             let widget = combo_widget_for_lcars.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
             lcars_widget_clone.set_available_fields(fields.clone());
             lcars_widget_clone.set_source_summaries(summaries.clone());
-            cyberpunk_widget_clone.set_available_fields(fields);
-            cyberpunk_widget_clone.set_source_summaries(summaries);
+            cyberpunk_widget_clone.set_available_fields(fields.clone());
+            cyberpunk_widget_clone.set_source_summaries(summaries.clone());
+            material_widget_clone.set_available_fields(fields);
+            material_widget_clone.set_source_summaries(summaries);
         });
 
-        // Initialize LCARS and Cyberpunk with current source summaries if combo source is selected
+        // Initialize LCARS, Cyberpunk and Material with current source summaries if combo source is selected
         if old_source_id == "combination" {
             let widget = combo_config_widget.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
-            log::info!("=== Initializing LCARS and Cyberpunk at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
+            log::info!("=== Initializing LCARS, Cyberpunk and Material at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
             lcars_config_widget.set_available_fields(fields.clone());
             lcars_config_widget.set_source_summaries(summaries.clone());
-            cyberpunk_config_widget.set_available_fields(fields);
-            cyberpunk_config_widget.set_source_summaries(summaries);
+            cyberpunk_config_widget.set_available_fields(fields.clone());
+            cyberpunk_config_widget.set_source_summaries(summaries.clone());
+            material_config_widget.set_available_fields(fields);
+            material_config_widget.set_source_summaries(summaries);
         } else {
-            log::info!("=== Skipping LCARS/Cyberpunk init: old_source_id='{}' (need 'combination') ===", old_source_id);
+            log::info!("=== Skipping LCARS/Cyberpunk/Material init: old_source_id='{}' (need 'combination') ===", old_source_id);
         }
     }
 
-    // Update LCARS and Cyberpunk widgets when source dropdown changes to "combination"
+    // Update LCARS, Cyberpunk and Material widgets when source dropdown changes to "combination"
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
+        let material_widget_clone = material_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected_idx) {
                 if source_id == "combination" {
-                    // Update LCARS and Cyberpunk with source summaries from combo config
+                    // Update LCARS, Cyberpunk and Material with source summaries from combo config
                     let widget = combo_widget_clone.borrow();
                     let summaries = widget.get_source_summaries();
                     let fields = widget.get_available_fields();
                     drop(widget);
-                    log::info!("=== Source changed to 'combination': updating LCARS and Cyberpunk with {} source summaries ===", summaries.len());
+                    log::info!("=== Source changed to 'combination': updating LCARS, Cyberpunk and Material with {} source summaries ===", summaries.len());
                     lcars_widget_clone.set_available_fields(fields.clone());
                     lcars_widget_clone.set_source_summaries(summaries.clone());
-                    cyberpunk_widget_clone.set_available_fields(fields);
-                    cyberpunk_widget_clone.set_source_summaries(summaries);
+                    cyberpunk_widget_clone.set_available_fields(fields.clone());
+                    cyberpunk_widget_clone.set_source_summaries(summaries.clone());
+                    material_widget_clone.set_available_fields(fields);
+                    material_widget_clone.set_source_summaries(summaries);
                 }
             }
         });
     }
 
-    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, cpu_cores, indicator, and cyberpunk config based on displayer selection
+    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, cpu_cores, indicator, cyberpunk and material config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -4887,6 +4933,8 @@ fn show_panel_properties_dialog(
         let indicator_label_clone = indicator_config_label.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
         let cyberpunk_label_clone = cyberpunk_config_label.clone();
+        let material_widget_clone = material_config_widget.clone();
+        let material_label_clone = material_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -4902,6 +4950,7 @@ fn show_panel_properties_dialog(
                 let is_cpu_cores = displayer_id == "cpu_cores";
                 let is_indicator = displayer_id == "indicator";
                 let is_cyberpunk = displayer_id == "cyberpunk";
+                let is_material = displayer_id == "material";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -4924,6 +4973,8 @@ fn show_panel_properties_dialog(
                 indicator_label_clone.set_visible(is_indicator);
                 cyberpunk_widget_clone.widget().set_visible(is_cyberpunk);
                 cyberpunk_label_clone.set_visible(is_cyberpunk);
+                material_widget_clone.widget().set_visible(is_material);
+                material_label_clone.set_visible(is_material);
             }
         });
     }
@@ -4981,6 +5032,36 @@ fn show_panel_properties_dialog(
                             log::info!("=== Displayer changed to 'cyberpunk' with 'combination' source: updating Cyberpunk with {} source summaries ===", summaries.len());
                             cyberpunk_widget_clone.set_available_fields(fields);
                             cyberpunk_widget_clone.set_source_summaries(summaries);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Update Material widget when displayer changes to "material" and source is "combination"
+    {
+        let material_widget_clone = material_config_widget.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+                if displayer_id == "material" {
+                    // Check if current source is "combination"
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            // Update Material with source summaries from combo config
+                            let widget = combo_widget_clone.borrow();
+                            let summaries = widget.get_source_summaries();
+                            let fields = widget.get_available_fields();
+                            drop(widget);
+                            log::info!("=== Displayer changed to 'material' with 'combination' source: updating Material with {} source summaries ===", summaries.len());
+                            material_widget_clone.set_available_fields(fields);
+                            material_widget_clone.set_source_summaries(summaries);
                         }
                     }
                 }
@@ -5211,6 +5292,7 @@ fn show_panel_properties_dialog(
     let cpu_cores_config_widget_clone = cpu_cores_config_widget.clone();
     let indicator_config_widget_clone = indicator_config_widget.clone();
     let cyberpunk_config_widget_clone = cyberpunk_config_widget.clone();
+    let material_config_widget_clone = material_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -6034,6 +6116,22 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the displayer
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply Cyberpunk config: {}", e);
+                    }
+                }
+            }
+
+            // Apply Material configuration if material displayer is active
+            if new_displayer_id == "material" {
+                let material_config = material_config_widget_clone.get_config();
+                if let Ok(material_config_json) = serde_json::to_value(&material_config) {
+                    panel_guard.config.insert("material_config".to_string(), material_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply Material config: {}", e);
                     }
                 }
             }

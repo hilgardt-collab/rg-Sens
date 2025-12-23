@@ -35,6 +35,7 @@ pub use crate::displayers::LcarsDisplayConfig;
 pub use crate::ui::CoreBarsConfig;
 pub use crate::displayers::IndicatorConfig;
 pub use crate::displayers::CyberpunkDisplayConfig;
+pub use crate::displayers::MaterialDisplayConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -270,6 +271,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "cyberpunk")]
     Cyberpunk(CyberpunkDisplayConfig),
+
+    #[serde(rename = "material")]
+    Material(MaterialDisplayConfig),
 }
 
 impl DisplayerConfig {
@@ -287,6 +291,7 @@ impl DisplayerConfig {
             DisplayerConfig::CpuCores(_) => "cpu_cores",
             DisplayerConfig::Indicator(_) => "indicator",
             DisplayerConfig::Cyberpunk(_) => "cyberpunk",
+            DisplayerConfig::Material(_) => "material",
         }
     }
 
@@ -349,6 +354,11 @@ impl DisplayerConfig {
                     map.insert("cyberpunk_config".to_string(), val);
                 }
             }
+            DisplayerConfig::Material(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("material_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -367,6 +377,7 @@ impl DisplayerConfig {
             "cpu_cores" => Some(DisplayerConfig::CpuCores(CoreBarsConfig::default())),
             "indicator" => Some(DisplayerConfig::Indicator(IndicatorConfig::default())),
             "cyberpunk" => Some(DisplayerConfig::Cyberpunk(CyberpunkDisplayConfig::default())),
+            "material" => Some(DisplayerConfig::Material(MaterialDisplayConfig::default())),
             _ => None,
         }
     }
@@ -393,6 +404,7 @@ impl DisplayerConfig {
             "cpu_cores" => serde_json::from_value(value).ok().map(DisplayerConfig::CpuCores),
             "indicator" => serde_json::from_value(value).ok().map(DisplayerConfig::Indicator),
             "cyberpunk" => serde_json::from_value(value).ok().map(DisplayerConfig::Cyberpunk),
+            "material" => serde_json::from_value(value).ok().map(DisplayerConfig::Material),
             _ => None,
         }
     }
@@ -412,6 +424,7 @@ impl DisplayerConfig {
             DisplayerConfig::CpuCores(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Indicator(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Cyberpunk(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Material(c) => serde_json::to_value(c).ok(),
         }
     }
 }

@@ -79,6 +79,7 @@ mod lcars_combo;
 mod cpu_cores;
 mod indicator;
 mod cyberpunk;
+mod material;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -93,6 +94,7 @@ pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
 pub use cpu_cores::CpuCoresDisplayer;
 pub use indicator::{IndicatorDisplayer, IndicatorConfig, IndicatorShape, interpolate_gradient, render_indicator};
 pub use cyberpunk::{CyberpunkDisplayer, CyberpunkDisplayConfig};
+pub use material::{MaterialDisplayer, MaterialDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -177,6 +179,13 @@ pub fn register_all() {
         "cyberpunk",
         "Cyberpunk HUD",
         || Box::new(CyberpunkDisplayer::new()),
+    );
+
+    // Register Material Cards displayer
+    global_registry().register_displayer_with_info(
+        "material",
+        "Material Cards",
+        || Box::new(MaterialDisplayer::new()),
     );
 
     // TODO: Register more displayers
