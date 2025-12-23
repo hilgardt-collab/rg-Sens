@@ -903,21 +903,17 @@ impl ComboSourceConfigWidget {
         }
 
         // Connect caption entry change handler
+        // NOTE: We update config but do NOT trigger on_change to avoid expensive rebuilds on every keystroke.
+        // The caption value is read when needed (get_source_summaries, get_config, save).
         {
-            let on_change_clone = on_change.clone();
             let config_clone = config.clone();
             let slot_name_clone = slot_name.to_string();
 
             caption_entry.connect_changed(move |entry| {
                 let text = entry.text().to_string();
-                {
-                    let mut cfg = config_clone.borrow_mut();
-                    let slot_config = cfg.slots.entry(slot_name_clone.clone()).or_default();
-                    slot_config.caption_override = text;
-                }
-                if let Some(cb) = on_change_clone.borrow().as_ref() {
-                    cb();
-                }
+                let mut cfg = config_clone.borrow_mut();
+                let slot_config = cfg.slots.entry(slot_name_clone.clone()).or_default();
+                slot_config.caption_override = text;
             });
         }
 
