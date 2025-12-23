@@ -747,17 +747,17 @@ impl BarConfigWidget {
                     }
                 }
 
-                // Rectangle options
-                rect_width_spin_paste.set_value(cfg.rectangle_width);
-                rect_height_spin_paste.set_value(cfg.rectangle_height);
+                // Rectangle options (values stored as 0.0-1.0, displayed as percentages)
+                rect_width_spin_paste.set_value(cfg.rectangle_width * 100.0);
+                rect_height_spin_paste.set_value(cfg.rectangle_height * 100.0);
                 corner_radius_spin_paste.set_value(cfg.corner_radius);
                 padding_spin_paste.set_value(cfg.padding);
 
-                // Segmented options
+                // Segmented options (values stored as 0.0-1.0, displayed as percentages)
                 segment_count_spin_paste.set_value(cfg.segment_count as f64);
                 segment_spacing_spin_paste.set_value(cfg.segment_spacing);
-                segment_width_spin_paste.set_value(cfg.segment_width);
-                segment_height_spin_paste.set_value(cfg.segment_height);
+                segment_width_spin_paste.set_value(cfg.segment_width * 100.0);
+                segment_height_spin_paste.set_value(cfg.segment_height * 100.0);
 
                 // Taper options
                 taper_style_dropdown_paste.set_selected(match cfg.taper_style {
