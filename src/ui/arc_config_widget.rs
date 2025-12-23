@@ -677,12 +677,25 @@ impl ArcConfigWidget {
         let text_widget = TextLineConfigWidget::new(available_fields);
         text_widget.set_config(config.borrow().text_overlay.text_config.clone());
 
-        // Note: TextLineConfigWidget doesn't have a set_on_change callback
-        // Configuration will be retrieved via get_config() when needed
+        // Connect text widget on_change to update config and trigger parent callback
+        let config_for_text = config.clone();
+        let on_change_for_text = on_change.clone();
+        let text_widget_rc = Rc::new(text_widget);
+        let text_widget_for_callback = text_widget_rc.clone();
+        text_widget_rc.set_on_change(move || {
+            // Update config with new text settings
+            config_for_text.borrow_mut().text_overlay.text_config = text_widget_for_callback.get_config();
+            // Trigger parent on_change
+            if let Some(cb) = on_change_for_text.borrow().as_ref() {
+                cb();
+            }
+        });
 
-        page.append(text_widget.widget());
+        page.append(text_widget_rc.widget());
 
-        (page, Some(text_widget))
+        // Note: We return None for text_config_widget since we handle updates via callback now
+        // The config is updated directly in the callback above
+        (page, None)
     }
 
     pub fn widget(&self) -> &GtkBox {

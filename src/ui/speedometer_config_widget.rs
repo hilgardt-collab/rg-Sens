@@ -1215,12 +1215,24 @@ impl SpeedometerConfigWidget {
 
         // Text configuration widget
         let text_config_widget = TextLineConfigWidget::new(available_fields);
-        page.append(text_config_widget.widget());
 
-        // Note: TextLineConfigWidget doesn't have a set_on_change callback
-        // Configuration will be retrieved via get_config() when needed
+        // Connect text widget on_change to update config and trigger parent callback
+        let config_for_text = config.clone();
+        let on_change_for_text = on_change.clone();
+        let preview_for_text = preview.clone();
+        let text_widget_rc = Rc::new(text_config_widget);
+        let text_widget_for_callback = text_widget_rc.clone();
+        text_widget_rc.set_on_change(move || {
+            // Update config with new text settings
+            config_for_text.borrow_mut().text_overlay.text_config = text_widget_for_callback.get_config();
+            // Trigger parent on_change
+            Self::queue_preview_redraw(&preview_for_text, &on_change_for_text);
+        });
 
-        (page, Some(text_config_widget))
+        page.append(text_widget_rc.widget());
+
+        // Note: We return None since we handle updates via callback now
+        (page, None)
     }
 
     pub fn widget(&self) -> &GtkBox {
