@@ -4667,43 +4667,48 @@ fn show_panel_properties_dialog(
     // Wrap clock_digital_config_widget in Rc for sharing
     let clock_digital_config_widget = Rc::new(clock_digital_config_widget);
 
-    // === LCARS Configuration ===
+    // === LCARS Configuration (Lazy Initialization) ===
     let lcars_config_label = Label::new(Some("LCARS Configuration:"));
     lcars_config_label.set_halign(gtk4::Align::Start);
     lcars_config_label.add_css_class("heading");
     lcars_config_label.set_visible(old_displayer_id == "lcars");
 
-    log::info!("=== Creating LcarsConfigWidget, old_displayer='{}', old_source='{}' ===", old_displayer_id, old_source_id);
-    let lcars_config_widget = crate::ui::LcarsConfigWidget::new(available_fields.clone());
-    lcars_config_widget.widget().set_visible(old_displayer_id == "lcars");
+    // Create placeholder box for lazy widget creation
+    let lcars_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    lcars_placeholder.set_visible(old_displayer_id == "lcars");
 
-    // Load existing LCARS config if displayer is lcars
-    // Prefer getting config directly from displayer (most up-to-date), fall back to panel config
+    // Use Option for lazy initialization - only create widget when needed
+    let lcars_config_widget: Rc<RefCell<Option<crate::ui::LcarsConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create LCARS widget if this is the active displayer (lazy init)
     if old_displayer_id == "lcars" {
+        log::info!("=== Creating LcarsConfigWidget (lazy init), old_displayer='{}', old_source='{}' ===", old_displayer_id, old_source_id);
+        let widget = crate::ui::LcarsConfigWidget::new(available_fields.clone());
+
+        // Load existing LCARS config
         let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading LCARS config from displayer.get_typed_config() ===");
-            lcars_config_widget.set_config(lcars_config);
+            widget.set_config(lcars_config);
             true
         } else {
             false
         };
 
-        // Fall back to panel config hashmap if get_typed_config didn't work
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("lcars_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading LCARS config from panel config hashmap ===");
-                    lcars_config_widget.set_config(config);
+                    widget.set_config(config);
                 }
             }
         }
+
+        lcars_placeholder.append(widget.widget());
+        *lcars_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&lcars_config_label);
-    displayer_tab_box.append(lcars_config_widget.widget());
-
-    // Wrap lcars_config_widget in Rc for sharing
-    let lcars_config_widget = Rc::new(lcars_config_widget);
+    displayer_tab_box.append(&lcars_placeholder);
 
     // === CPU Cores Configuration ===
     let cpu_cores_config_label = Label::new(Some("CPU Cores Configuration:"));
@@ -4767,20 +4772,28 @@ fn show_panel_properties_dialog(
     // Wrap indicator_config_widget in Rc for sharing
     let indicator_config_widget = Rc::new(indicator_config_widget);
 
-    // === Cyberpunk Configuration ===
+    // === Cyberpunk Configuration (Lazy Initialization) ===
     let cyberpunk_config_label = Label::new(Some("Cyberpunk HUD Configuration:"));
     cyberpunk_config_label.set_halign(gtk4::Align::Start);
     cyberpunk_config_label.add_css_class("heading");
     cyberpunk_config_label.set_visible(old_displayer_id == "cyberpunk");
 
-    let cyberpunk_config_widget = crate::ui::CyberpunkConfigWidget::new(available_fields.clone());
-    cyberpunk_config_widget.widget().set_visible(old_displayer_id == "cyberpunk");
+    // Create placeholder box for lazy widget creation
+    let cyberpunk_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    cyberpunk_placeholder.set_visible(old_displayer_id == "cyberpunk");
 
-    // Load existing Cyberpunk config if displayer is cyberpunk
+    // Use Option for lazy initialization - only create widget when needed
+    let cyberpunk_config_widget: Rc<RefCell<Option<crate::ui::CyberpunkConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Cyberpunk widget if this is the active displayer (lazy init)
     if old_displayer_id == "cyberpunk" {
+        log::info!("=== Creating CyberpunkConfigWidget (lazy init) ===");
+        let widget = crate::ui::CyberpunkConfigWidget::new(available_fields.clone());
+
+        // Load existing Cyberpunk config
         let config_loaded = if let Some(crate::core::DisplayerConfig::Cyberpunk(cyberpunk_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Cyberpunk config from displayer.get_typed_config() ===");
-            cyberpunk_config_widget.set_config(&cyberpunk_config);
+            widget.set_config(&cyberpunk_config);
             true
         } else {
             false
@@ -4790,35 +4803,41 @@ fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("cyberpunk_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::CyberpunkDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Cyberpunk config from panel config hashmap ===");
-                    cyberpunk_config_widget.set_config(&config);
+                    widget.set_config(&config);
                 }
             }
         }
+
+        widget.set_on_change(|| {});
+        cyberpunk_placeholder.append(widget.widget());
+        *cyberpunk_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&cyberpunk_config_label);
-    displayer_tab_box.append(cyberpunk_config_widget.widget());
+    displayer_tab_box.append(&cyberpunk_placeholder);
 
-    // Set up change callback
-    cyberpunk_config_widget.set_on_change(|| {});
-
-    // Wrap cyberpunk_config_widget in Rc for sharing
-    let cyberpunk_config_widget = Rc::new(cyberpunk_config_widget);
-
-    // === Material Cards Configuration ===
+    // === Material Cards Configuration (Lazy Initialization) ===
     let material_config_label = Label::new(Some("Material Cards Configuration:"));
     material_config_label.set_halign(gtk4::Align::Start);
     material_config_label.add_css_class("heading");
     material_config_label.set_visible(old_displayer_id == "material");
 
-    let material_config_widget = crate::ui::MaterialConfigWidget::new(available_fields.clone());
-    material_config_widget.widget().set_visible(old_displayer_id == "material");
+    // Create placeholder box for lazy widget creation
+    let material_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    material_placeholder.set_visible(old_displayer_id == "material");
 
-    // Load existing Material config if displayer is material
+    // Use Option for lazy initialization - only create widget when needed
+    let material_config_widget: Rc<RefCell<Option<crate::ui::MaterialConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Material widget if this is the active displayer (lazy init)
     if old_displayer_id == "material" {
+        log::info!("=== Creating MaterialConfigWidget (lazy init) ===");
+        let widget = crate::ui::MaterialConfigWidget::new(available_fields.clone());
+
+        // Load existing Material config
         let config_loaded = if let Some(crate::core::DisplayerConfig::Material(material_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Material config from displayer.get_typed_config() ===");
-            material_config_widget.set_config(&material_config);
+            widget.set_config(&material_config);
             true
         } else {
             false
@@ -4828,35 +4847,41 @@ fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("material_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::MaterialDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Material config from panel config hashmap ===");
-                    material_config_widget.set_config(&config);
+                    widget.set_config(&config);
                 }
             }
         }
+
+        widget.set_on_change(|| {});
+        material_placeholder.append(widget.widget());
+        *material_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&material_config_label);
-    displayer_tab_box.append(material_config_widget.widget());
+    displayer_tab_box.append(&material_placeholder);
 
-    // Set up change callback
-    material_config_widget.set_on_change(|| {});
-
-    // Wrap material_config_widget in Rc for sharing
-    let material_config_widget = Rc::new(material_config_widget);
-
-    // === Industrial Gauge Configuration ===
+    // === Industrial Gauge Configuration (Lazy Initialization) ===
     let industrial_config_label = Label::new(Some("Industrial Gauge Configuration:"));
     industrial_config_label.set_halign(gtk4::Align::Start);
     industrial_config_label.add_css_class("heading");
     industrial_config_label.set_visible(old_displayer_id == "industrial");
 
-    let industrial_config_widget = crate::ui::IndustrialConfigWidget::new(available_fields.clone());
-    industrial_config_widget.widget().set_visible(old_displayer_id == "industrial");
+    // Create placeholder box for lazy widget creation
+    let industrial_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    industrial_placeholder.set_visible(old_displayer_id == "industrial");
 
-    // Load existing Industrial config if displayer is industrial
+    // Use Option for lazy initialization - only create widget when needed
+    let industrial_config_widget: Rc<RefCell<Option<crate::ui::IndustrialConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Industrial widget if this is the active displayer (lazy init)
     if old_displayer_id == "industrial" {
+        log::info!("=== Creating IndustrialConfigWidget (lazy init) ===");
+        let widget = crate::ui::IndustrialConfigWidget::new(available_fields.clone());
+
+        // Load existing Industrial config
         let config_loaded = if let Some(crate::core::DisplayerConfig::Industrial(industrial_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Industrial config from displayer.get_typed_config() ===");
-            industrial_config_widget.set_config(&industrial_config);
+            widget.set_config(&industrial_config);
             true
         } else {
             false
@@ -4866,35 +4891,41 @@ fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("industrial_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::IndustrialDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Industrial config from panel config hashmap ===");
-                    industrial_config_widget.set_config(&config);
+                    widget.set_config(&config);
                 }
             }
         }
+
+        widget.set_on_change(|| {});
+        industrial_placeholder.append(widget.widget());
+        *industrial_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&industrial_config_label);
-    displayer_tab_box.append(industrial_config_widget.widget());
+    displayer_tab_box.append(&industrial_placeholder);
 
-    // Set up change callback
-    industrial_config_widget.set_on_change(|| {});
-
-    // Wrap industrial_config_widget in Rc for sharing
-    let industrial_config_widget = Rc::new(industrial_config_widget);
-
-    // === Retro Terminal Configuration ===
+    // === Retro Terminal Configuration (Lazy Initialization) ===
     let retro_terminal_config_label = Label::new(Some("Retro Terminal Configuration:"));
     retro_terminal_config_label.set_halign(gtk4::Align::Start);
     retro_terminal_config_label.add_css_class("heading");
     retro_terminal_config_label.set_visible(old_displayer_id == "retro_terminal");
 
-    let retro_terminal_config_widget = crate::ui::RetroTerminalConfigWidget::new(available_fields.clone());
-    retro_terminal_config_widget.widget().set_visible(old_displayer_id == "retro_terminal");
+    // Create placeholder box for lazy widget creation
+    let retro_terminal_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    retro_terminal_placeholder.set_visible(old_displayer_id == "retro_terminal");
 
-    // Load existing Retro Terminal config if displayer is retro_terminal
+    // Use Option for lazy initialization - only create widget when needed
+    let retro_terminal_config_widget: Rc<RefCell<Option<crate::ui::RetroTerminalConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Retro Terminal widget if this is the active displayer (lazy init)
     if old_displayer_id == "retro_terminal" {
+        log::info!("=== Creating RetroTerminalConfigWidget (lazy init) ===");
+        let widget = crate::ui::RetroTerminalConfigWidget::new(available_fields.clone());
+
+        // Load existing Retro Terminal config
         let config_loaded = if let Some(crate::core::DisplayerConfig::RetroTerminal(retro_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Retro Terminal config from displayer.get_typed_config() ===");
-            retro_terminal_config_widget.set_config(&retro_config);
+            widget.set_config(&retro_config);
             true
         } else {
             false
@@ -4904,20 +4935,18 @@ fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("retro_terminal_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::RetroTerminalDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Retro Terminal config from panel config hashmap ===");
-                    retro_terminal_config_widget.set_config(&config);
+                    widget.set_config(&config);
                 }
             }
         }
+
+        widget.set_on_change(|| {});
+        retro_terminal_placeholder.append(widget.widget());
+        *retro_terminal_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&retro_terminal_config_label);
-    displayer_tab_box.append(retro_terminal_config_widget.widget());
-
-    // Set up change callback
-    retro_terminal_config_widget.set_on_change(|| {});
-
-    // Wrap retro_terminal_config_widget in Rc for sharing
-    let retro_terminal_config_widget = Rc::new(retro_terminal_config_widget);
+    displayer_tab_box.append(&retro_terminal_placeholder);
 
     // Connect combo_config_widget to update ONLY the active displayer's config widget when sources change
     // Other widgets are updated lazily when the user switches to them (see displayer_combo handlers below)
@@ -4941,65 +4970,75 @@ fn show_panel_properties_dialog(
             if let Ok(mut panel_guard) = panel_for_combo_change.try_write() {
                 let displayer_id = panel_guard.displayer.id().to_string();
 
-                // Update and apply config for the active displayer only
+                // Update and apply config for the active displayer only (if widget exists)
                 match displayer_id.as_str() {
                     "industrial" => {
-                        industrial_widget_clone.set_available_fields(fields);
-                        industrial_widget_clone.set_source_summaries(summaries);
-                        let config = industrial_widget_clone.get_config();
-                        if let Ok(config_json) = serde_json::to_value(&config) {
-                            panel_guard.config.insert("industrial_config".to_string(), config_json);
-                            let config_clone = panel_guard.config.clone();
-                            if let Err(e) = panel_guard.apply_config(config_clone) {
-                                log::warn!("Failed to apply Industrial config on source change: {}", e);
+                        if let Some(ref widget) = *industrial_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("industrial_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Industrial config on source change: {}", e);
+                                }
                             }
                         }
                     }
                     "lcars" => {
-                        lcars_widget_clone.set_available_fields(fields);
-                        lcars_widget_clone.set_source_summaries(summaries);
-                        let config = lcars_widget_clone.get_config();
-                        if let Ok(config_json) = serde_json::to_value(&config) {
-                            panel_guard.config.insert("lcars_config".to_string(), config_json);
-                            let config_clone = panel_guard.config.clone();
-                            if let Err(e) = panel_guard.apply_config(config_clone) {
-                                log::warn!("Failed to apply LCARS config on source change: {}", e);
+                        if let Some(ref widget) = *lcars_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("lcars_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply LCARS config on source change: {}", e);
+                                }
                             }
                         }
                     }
                     "cyberpunk" => {
-                        cyberpunk_widget_clone.set_available_fields(fields);
-                        cyberpunk_widget_clone.set_source_summaries(summaries);
-                        let config = cyberpunk_widget_clone.get_config();
-                        if let Ok(config_json) = serde_json::to_value(&config) {
-                            panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
-                            let config_clone = panel_guard.config.clone();
-                            if let Err(e) = panel_guard.apply_config(config_clone) {
-                                log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
+                        if let Some(ref widget) = *cyberpunk_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
+                                }
                             }
                         }
                     }
                     "material" => {
-                        material_widget_clone.set_available_fields(fields);
-                        material_widget_clone.set_source_summaries(summaries);
-                        let config = material_widget_clone.get_config();
-                        if let Ok(config_json) = serde_json::to_value(&config) {
-                            panel_guard.config.insert("material_config".to_string(), config_json);
-                            let config_clone = panel_guard.config.clone();
-                            if let Err(e) = panel_guard.apply_config(config_clone) {
-                                log::warn!("Failed to apply Material config on source change: {}", e);
+                        if let Some(ref widget) = *material_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("material_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Material config on source change: {}", e);
+                                }
                             }
                         }
                     }
                     "retro_terminal" => {
-                        retro_terminal_widget_clone.set_available_fields(fields);
-                        retro_terminal_widget_clone.set_source_summaries(summaries);
-                        let config = retro_terminal_widget_clone.get_config();
-                        if let Ok(config_json) = serde_json::to_value(&config) {
-                            panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
-                            let config_clone = panel_guard.config.clone();
-                            if let Err(e) = panel_guard.apply_config(config_clone) {
-                                log::warn!("Failed to apply Retro Terminal config on source change: {}", e);
+                        if let Some(ref widget) = *retro_terminal_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Retro Terminal config on source change: {}", e);
+                                }
                             }
                         }
                     }
@@ -5010,29 +5049,43 @@ fn show_panel_properties_dialog(
             }
         });
 
-        // Initialize LCARS, Cyberpunk, Material, Industrial and Retro Terminal with current source summaries if combo source is selected
+        // Initialize the ACTIVE combo config widget with current source summaries if combo source is selected
+        // (Other widgets are created lazily and will be initialized when switched to)
         if old_source_id == "combination" {
             let widget = combo_config_widget.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
-            log::info!("=== Initializing LCARS, Cyberpunk, Material, Industrial and Retro Terminal at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
-            lcars_config_widget.set_available_fields(fields.clone());
-            lcars_config_widget.set_source_summaries(summaries.clone());
-            cyberpunk_config_widget.set_available_fields(fields.clone());
-            cyberpunk_config_widget.set_source_summaries(summaries.clone());
-            material_config_widget.set_available_fields(fields.clone());
-            material_config_widget.set_source_summaries(summaries.clone());
-            industrial_config_widget.set_available_fields(fields.clone());
-            industrial_config_widget.set_source_summaries(summaries.clone());
-            retro_terminal_config_widget.set_available_fields(fields);
-            retro_terminal_config_widget.set_source_summaries(summaries);
+            log::info!("=== Initializing active combo widget at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
+
+            // Only initialize the widget that exists (the active one)
+            if let Some(ref widget) = *lcars_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *cyberpunk_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *material_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *industrial_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *retro_terminal_config_widget.borrow() {
+                widget.set_available_fields(fields);
+                widget.set_source_summaries(summaries);
+            }
         } else {
-            log::info!("=== Skipping LCARS/Cyberpunk/Material/Industrial/RetroTerminal init: old_source_id='{}' (need 'combination') ===", old_source_id);
+            log::info!("=== Skipping combo widget init: old_source_id='{}' (need 'combination') ===", old_source_id);
         }
     }
 
-    // Update LCARS, Cyberpunk, Material, Industrial and Retro Terminal widgets when source dropdown changes to "combination"
+    // Update combo config widgets when source dropdown changes to "combination"
+    // Only updates widgets that exist (lazy init means only active one is created)
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
@@ -5045,28 +5098,40 @@ fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected_idx) {
                 if source_id == "combination" {
-                    // Update LCARS, Cyberpunk, Material, Industrial and Retro Terminal with source summaries from combo config
+                    // Update existing combo widgets with source summaries
                     let widget = combo_widget_clone.borrow();
                     let summaries = widget.get_source_summaries();
                     let fields = widget.get_available_fields();
                     drop(widget);
-                    log::info!("=== Source changed to 'combination': updating LCARS, Cyberpunk, Material, Industrial and Retro Terminal with {} source summaries ===", summaries.len());
-                    lcars_widget_clone.set_available_fields(fields.clone());
-                    lcars_widget_clone.set_source_summaries(summaries.clone());
-                    cyberpunk_widget_clone.set_available_fields(fields.clone());
-                    cyberpunk_widget_clone.set_source_summaries(summaries.clone());
-                    material_widget_clone.set_available_fields(fields.clone());
-                    material_widget_clone.set_source_summaries(summaries.clone());
-                    industrial_widget_clone.set_available_fields(fields.clone());
-                    industrial_widget_clone.set_source_summaries(summaries.clone());
-                    retro_terminal_widget_clone.set_available_fields(fields);
-                    retro_terminal_widget_clone.set_source_summaries(summaries);
+                    log::info!("=== Source changed to 'combination': updating existing combo widgets with {} source summaries ===", summaries.len());
+
+                    if let Some(ref widget) = *lcars_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *cyberpunk_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *material_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *industrial_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *retro_terminal_widget_clone.borrow() {
+                        widget.set_available_fields(fields);
+                        widget.set_source_summaries(summaries);
+                    }
                 }
             }
         });
     }
 
-    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, cpu_cores, indicator, cyberpunk, material, industrial and retro_terminal config based on displayer selection
+    // Show/hide config widgets based on displayer selection
+    // For combo widgets, use placeholder boxes (they contain the lazily-created widgets)
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -5082,19 +5147,19 @@ fn show_panel_properties_dialog(
         let clock_analog_label_clone = clock_analog_config_label.clone();
         let clock_digital_widget_clone = clock_digital_config_widget.clone();
         let clock_digital_label_clone = clock_digital_config_label.clone();
-        let lcars_widget_clone = lcars_config_widget.clone();
+        let lcars_placeholder_clone = lcars_placeholder.clone();
         let lcars_label_clone = lcars_config_label.clone();
         let cpu_cores_widget_clone = cpu_cores_config_widget.clone();
         let cpu_cores_label_clone = cpu_cores_config_label.clone();
         let indicator_widget_clone = indicator_config_widget.clone();
         let indicator_label_clone = indicator_config_label.clone();
-        let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
+        let cyberpunk_placeholder_clone = cyberpunk_placeholder.clone();
         let cyberpunk_label_clone = cyberpunk_config_label.clone();
-        let material_widget_clone = material_config_widget.clone();
+        let material_placeholder_clone = material_placeholder.clone();
         let material_label_clone = material_config_label.clone();
-        let industrial_widget_clone = industrial_config_widget.clone();
+        let industrial_placeholder_clone = industrial_placeholder.clone();
         let industrial_label_clone = industrial_config_label.clone();
-        let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
+        let retro_terminal_placeholder_clone = retro_terminal_placeholder.clone();
         let retro_terminal_label_clone = retro_terminal_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
@@ -5128,27 +5193,28 @@ fn show_panel_properties_dialog(
                 clock_analog_label_clone.set_visible(is_clock_analog);
                 clock_digital_widget_clone.widget().set_visible(is_clock_digital);
                 clock_digital_label_clone.set_visible(is_clock_digital);
-                lcars_widget_clone.widget().set_visible(is_lcars);
+                lcars_placeholder_clone.set_visible(is_lcars);
                 lcars_label_clone.set_visible(is_lcars);
                 cpu_cores_widget_clone.widget().set_visible(is_cpu_cores);
                 cpu_cores_label_clone.set_visible(is_cpu_cores);
                 indicator_widget_clone.widget().set_visible(is_indicator);
                 indicator_label_clone.set_visible(is_indicator);
-                cyberpunk_widget_clone.widget().set_visible(is_cyberpunk);
+                cyberpunk_placeholder_clone.set_visible(is_cyberpunk);
                 cyberpunk_label_clone.set_visible(is_cyberpunk);
-                material_widget_clone.widget().set_visible(is_material);
+                material_placeholder_clone.set_visible(is_material);
                 material_label_clone.set_visible(is_material);
-                industrial_widget_clone.widget().set_visible(is_industrial);
+                industrial_placeholder_clone.set_visible(is_industrial);
                 industrial_label_clone.set_visible(is_industrial);
-                retro_terminal_widget_clone.widget().set_visible(is_retro_terminal);
+                retro_terminal_placeholder_clone.set_visible(is_retro_terminal);
                 retro_terminal_label_clone.set_visible(is_retro_terminal);
             }
         });
     }
 
-    // Update LCARS widget when displayer changes to "lcars" and source is "combination"
+    // Lazily create and update LCARS widget when displayer changes to "lcars" and source is "combination"
     {
         let lcars_widget_clone = lcars_config_widget.clone();
+        let lcars_placeholder_clone = lcars_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
@@ -5157,18 +5223,28 @@ fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 if displayer_id == "lcars" {
-                    // Check if current source is "combination"
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
                         if source_id == "combination" {
-                            // Update LCARS with source summaries from combo config
-                            let widget = combo_widget_clone.borrow();
-                            let summaries = widget.get_source_summaries();
-                            let fields = widget.get_available_fields();
-                            drop(widget);
-                            log::info!("=== Displayer changed to 'lcars' with 'combination' source: updating LCARS with {} source summaries ===", summaries.len());
-                            lcars_widget_clone.set_available_fields(fields);
-                            lcars_widget_clone.set_source_summaries(summaries);
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = lcars_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating LcarsConfigWidget on displayer switch ===");
+                                let widget = crate::ui::LcarsConfigWidget::new(fields.clone());
+                                lcars_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'lcars': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
                         }
                     }
                 }
@@ -5176,9 +5252,10 @@ fn show_panel_properties_dialog(
         });
     }
 
-    // Update Cyberpunk widget when displayer changes to "cyberpunk" and source is "combination"
+    // Lazily create and update Cyberpunk widget when displayer changes to "cyberpunk" and source is "combination"
     {
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
+        let cyberpunk_placeholder_clone = cyberpunk_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
@@ -5187,18 +5264,29 @@ fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 if displayer_id == "cyberpunk" {
-                    // Check if current source is "combination"
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
                         if source_id == "combination" {
-                            // Update Cyberpunk with source summaries from combo config
-                            let widget = combo_widget_clone.borrow();
-                            let summaries = widget.get_source_summaries();
-                            let fields = widget.get_available_fields();
-                            drop(widget);
-                            log::info!("=== Displayer changed to 'cyberpunk' with 'combination' source: updating Cyberpunk with {} source summaries ===", summaries.len());
-                            cyberpunk_widget_clone.set_available_fields(fields);
-                            cyberpunk_widget_clone.set_source_summaries(summaries);
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = cyberpunk_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating CyberpunkConfigWidget on displayer switch ===");
+                                let widget = crate::ui::CyberpunkConfigWidget::new(fields.clone());
+                                widget.set_on_change(|| {});
+                                cyberpunk_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'cyberpunk': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
                         }
                     }
                 }
@@ -5206,9 +5294,10 @@ fn show_panel_properties_dialog(
         });
     }
 
-    // Update Material widget when displayer changes to "material" and source is "combination"
+    // Lazily create and update Material widget when displayer changes to "material" and source is "combination"
     {
         let material_widget_clone = material_config_widget.clone();
+        let material_placeholder_clone = material_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
@@ -5217,18 +5306,29 @@ fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 if displayer_id == "material" {
-                    // Check if current source is "combination"
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
                         if source_id == "combination" {
-                            // Update Material with source summaries from combo config
-                            let widget = combo_widget_clone.borrow();
-                            let summaries = widget.get_source_summaries();
-                            let fields = widget.get_available_fields();
-                            drop(widget);
-                            log::info!("=== Displayer changed to 'material' with 'combination' source: updating Material with {} source summaries ===", summaries.len());
-                            material_widget_clone.set_available_fields(fields);
-                            material_widget_clone.set_source_summaries(summaries);
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = material_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating MaterialConfigWidget on displayer switch ===");
+                                let widget = crate::ui::MaterialConfigWidget::new(fields.clone());
+                                widget.set_on_change(|| {});
+                                material_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'material': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
                         }
                     }
                 }
@@ -5236,9 +5336,10 @@ fn show_panel_properties_dialog(
         });
     }
 
-    // Update Industrial widget when displayer changes to "industrial" and source is "combination"
+    // Lazily create and update Industrial widget when displayer changes to "industrial" and source is "combination"
     {
         let industrial_widget_clone = industrial_config_widget.clone();
+        let industrial_placeholder_clone = industrial_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
@@ -5247,18 +5348,29 @@ fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 if displayer_id == "industrial" {
-                    // Check if current source is "combination"
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
                         if source_id == "combination" {
-                            // Update Industrial with source summaries from combo config
-                            let widget = combo_widget_clone.borrow();
-                            let summaries = widget.get_source_summaries();
-                            let fields = widget.get_available_fields();
-                            drop(widget);
-                            log::info!("=== Displayer changed to 'industrial' with 'combination' source: updating Industrial with {} source summaries ===", summaries.len());
-                            industrial_widget_clone.set_available_fields(fields);
-                            industrial_widget_clone.set_source_summaries(summaries);
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = industrial_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating IndustrialConfigWidget on displayer switch ===");
+                                let widget = crate::ui::IndustrialConfigWidget::new(fields.clone());
+                                widget.set_on_change(|| {});
+                                industrial_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'industrial': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
                         }
                     }
                 }
@@ -5266,9 +5378,10 @@ fn show_panel_properties_dialog(
         });
     }
 
-    // Update Retro Terminal widget when displayer changes to "retro_terminal" and source is "combination"
+    // Lazily create and update Retro Terminal widget when displayer changes to "retro_terminal" and source is "combination"
     {
         let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
+        let retro_terminal_placeholder_clone = retro_terminal_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
@@ -5277,18 +5390,29 @@ fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.get(selected_idx) {
                 if displayer_id == "retro_terminal" {
-                    // Check if current source is "combination"
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
                         if source_id == "combination" {
-                            // Update Retro Terminal with source summaries from combo config
-                            let widget = combo_widget_clone.borrow();
-                            let summaries = widget.get_source_summaries();
-                            let fields = widget.get_available_fields();
-                            drop(widget);
-                            log::info!("=== Displayer changed to 'retro_terminal' with 'combination' source: updating Retro Terminal with {} source summaries ===", summaries.len());
-                            retro_terminal_widget_clone.set_available_fields(fields);
-                            retro_terminal_widget_clone.set_source_summaries(summaries);
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = retro_terminal_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating RetroTerminalConfigWidget on displayer switch ===");
+                                let widget = crate::ui::RetroTerminalConfigWidget::new(fields.clone());
+                                widget.set_on_change(|| {});
+                                retro_terminal_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'retro_terminal': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
                         }
                     }
                 }
@@ -6287,16 +6411,18 @@ fn show_panel_properties_dialog(
 
             // Apply LCARS configuration if lcars displayer is active
             if new_displayer_id == "lcars" {
-                let lcars_config = lcars_config_widget_clone.get_config();
-                if let Ok(lcars_config_json) = serde_json::to_value(&lcars_config) {
-                    panel_guard.config.insert("lcars_config".to_string(), lcars_config_json);
+                if let Some(ref widget) = *lcars_config_widget_clone.borrow() {
+                    let lcars_config = widget.get_config();
+                    if let Ok(lcars_config_json) = serde_json::to_value(&lcars_config) {
+                        panel_guard.config.insert("lcars_config".to_string(), lcars_config_json);
 
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply LCARS config: {}", e);
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply LCARS config: {}", e);
+                        }
                     }
                 }
             }
@@ -6335,64 +6461,72 @@ fn show_panel_properties_dialog(
 
             // Apply Cyberpunk configuration if cyberpunk displayer is active
             if new_displayer_id == "cyberpunk" {
-                let cyberpunk_config = cyberpunk_config_widget_clone.get_config();
-                if let Ok(cyberpunk_config_json) = serde_json::to_value(&cyberpunk_config) {
-                    panel_guard.config.insert("cyberpunk_config".to_string(), cyberpunk_config_json);
+                if let Some(ref widget) = *cyberpunk_config_widget_clone.borrow() {
+                    let cyberpunk_config = widget.get_config();
+                    if let Ok(cyberpunk_config_json) = serde_json::to_value(&cyberpunk_config) {
+                        panel_guard.config.insert("cyberpunk_config".to_string(), cyberpunk_config_json);
 
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Cyberpunk config: {}", e);
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Cyberpunk config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Material configuration if material displayer is active
             if new_displayer_id == "material" {
-                let material_config = material_config_widget_clone.get_config();
-                if let Ok(material_config_json) = serde_json::to_value(&material_config) {
-                    panel_guard.config.insert("material_config".to_string(), material_config_json);
+                if let Some(ref widget) = *material_config_widget_clone.borrow() {
+                    let material_config = widget.get_config();
+                    if let Ok(material_config_json) = serde_json::to_value(&material_config) {
+                        panel_guard.config.insert("material_config".to_string(), material_config_json);
 
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Material config: {}", e);
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Material config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Industrial configuration if industrial displayer is active
             if new_displayer_id == "industrial" {
-                let industrial_config = industrial_config_widget_clone.get_config();
-                if let Ok(industrial_config_json) = serde_json::to_value(&industrial_config) {
-                    panel_guard.config.insert("industrial_config".to_string(), industrial_config_json);
+                if let Some(ref widget) = *industrial_config_widget_clone.borrow() {
+                    let industrial_config = widget.get_config();
+                    if let Ok(industrial_config_json) = serde_json::to_value(&industrial_config) {
+                        panel_guard.config.insert("industrial_config".to_string(), industrial_config_json);
 
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Industrial config: {}", e);
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Industrial config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Retro Terminal configuration if retro_terminal displayer is active
             if new_displayer_id == "retro_terminal" {
-                let retro_terminal_config = retro_terminal_config_widget_clone.get_config();
-                if let Ok(retro_terminal_config_json) = serde_json::to_value(&retro_terminal_config) {
-                    panel_guard.config.insert("retro_terminal_config".to_string(), retro_terminal_config_json);
+                if let Some(ref widget) = *retro_terminal_config_widget_clone.borrow() {
+                    let retro_terminal_config = widget.get_config();
+                    if let Ok(retro_terminal_config_json) = serde_json::to_value(&retro_terminal_config) {
+                        panel_guard.config.insert("retro_terminal_config".to_string(), retro_terminal_config_json);
 
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Retro Terminal config: {}", e);
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Retro Terminal config: {}", e);
+                        }
                     }
                 }
             }
