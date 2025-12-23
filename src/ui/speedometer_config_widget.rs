@@ -351,6 +351,52 @@ impl SpeedometerConfigWidget {
 
         // Gradient editor for track color zones
         let gradient_editor = Rc::new(GradientEditor::new());
+
+        // Copy/Paste gradient buttons (above the gradient editor)
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_gradient_btn = Button::with_label("Copy Gradient");
+        let paste_gradient_btn = Button::with_label("Paste Gradient");
+
+        let config_for_copy = config.clone();
+        copy_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            let cfg = config_for_copy.borrow();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_gradient_stops(cfg.track_color_stops.clone());
+                log::info!("Speedometer track gradient color stops copied to clipboard");
+            }
+        });
+
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        let gradient_editor_for_paste = gradient_editor.clone();
+        paste_gradient_btn.connect_clicked(move |_| {
+            use crate::ui::CLIPBOARD;
+
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(stops) = clipboard.paste_gradient_stops() {
+                    config_for_paste.borrow_mut().track_color_stops = stops.clone();
+
+                    // Update the gradient editor widget
+                    let gradient_config = crate::ui::LinearGradientConfig {
+                        angle: 0.0,
+                        stops,
+                    };
+                    gradient_editor_for_paste.set_gradient(&gradient_config);
+
+                    Self::queue_preview_redraw(&preview_for_paste, &on_change_for_paste);
+                    log::info!("Speedometer track gradient color stops pasted from clipboard");
+                }
+            }
+        });
+
+        copy_paste_box.append(&copy_gradient_btn);
+        copy_paste_box.append(&paste_gradient_btn);
+        page.append(&copy_paste_box);
+
+        // Append gradient editor after copy/paste buttons
         page.append(gradient_editor.widget());
 
         let config_clone = config.clone();
