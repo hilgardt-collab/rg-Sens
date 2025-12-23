@@ -699,6 +699,11 @@ impl Displayer for IndustrialDisplayer {
             if let Ok(industrial_config) = serde_json::from_value::<IndustrialDisplayConfig>(industrial_config_value.clone()) {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = industrial_config;
+                    // Clear stale animation data when config changes
+                    display_data.bar_values.clear();
+                    display_data.core_bar_values.clear();
+                    display_data.graph_history.clear();
+                    display_data.dirty = true;
                 }
                 return Ok(());
             }
@@ -709,6 +714,7 @@ impl Displayer for IndustrialDisplayer {
             if let Some(animation) = config.get("animation_enabled").and_then(|v| v.as_bool()) {
                 display_data.config.animation_enabled = animation;
             }
+            display_data.dirty = true;
         }
 
         Ok(())
