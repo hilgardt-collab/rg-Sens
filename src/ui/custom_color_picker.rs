@@ -138,9 +138,9 @@ const PRESET_COLORS: [[Color; 8]; 8] = [
 ];
 
 // Global saved colors storage (persistent across dialog instances)
-// 16 slots in 2 rows of 8
+// 32 slots in 4 rows of 8
 thread_local! {
-    static SAVED_COLORS: Rc<RefCell<Vec<Color>>> = Rc::new(RefCell::new(vec![Color::default(); 16]));
+    static SAVED_COLORS: Rc<RefCell<Vec<Color>>> = Rc::new(RefCell::new(vec![Color::default(); 32]));
 }
 
 #[allow(dead_code)]
@@ -174,7 +174,7 @@ impl CustomColorPicker {
             .title("Select Color")
             .modal(false)
             .default_width(850)
-            .default_height(550)
+            .default_height(620)
             .resizable(true)
             .build();
 
@@ -297,7 +297,7 @@ impl CustomColorPicker {
         content_box.append(&sliders_box);
         main_box.append(&content_box);
 
-        // === Saved Colors (16 slots in 2x8 grid) ===
+        // === Saved Colors (32 slots in 4x8 grid) ===
         let saved_label = Label::new(Some("User Colors"));
         saved_label.add_css_class("heading");
         saved_label.set_halign(gtk4::Align::Start);
@@ -309,10 +309,10 @@ impl CustomColorPicker {
         saved_colors_grid.set_column_spacing(2);
         saved_colors_grid.set_margin_bottom(6);
 
-        // Initialize saved colors grid (2 rows of 8)
+        // Initialize saved colors grid (4 rows of 8)
         SAVED_COLORS.with(|saved| {
             let colors = saved.borrow();
-            for i in 0..16 {
+            for i in 0..32 {
                 let row = i / 8;
                 let col = i % 8;
                 let color = colors[i];
@@ -348,7 +348,7 @@ impl CustomColorPicker {
                 let mut colors = saved.borrow_mut();
 
                 // Shift all colors to the right by one position
-                for i in (1..16).rev() {
+                for i in (1..32).rev() {
                     colors[i] = colors[i - 1];
                 }
 
@@ -362,7 +362,7 @@ impl CustomColorPicker {
             }
 
             // Update all button appearances
-            for i in 0..16 {
+            for i in 0..32 {
                 let row = i / 8;
                 let col = i % 8;
                 if let Some(child) = saved_colors_grid_clone.child_at(col as i32, row as i32) {
@@ -1742,13 +1742,13 @@ impl CustomColorPicker {
         let content = std::fs::read_to_string(config_path)?;
         let colors: Vec<Color> = serde_json::from_str(&content)?;
 
-        // Ensure we have exactly 16 colors
-        let colors = if colors.len() < 16 {
+        // Ensure we have exactly 32 colors
+        let colors = if colors.len() < 32 {
             let mut padded = colors;
-            padded.resize(16, Color::default());
+            padded.resize(32, Color::default());
             padded
-        } else if colors.len() > 16 {
-            colors[..16].to_vec()
+        } else if colors.len() > 32 {
+            colors[..32].to_vec()
         } else {
             colors
         };
