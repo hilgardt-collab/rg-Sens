@@ -2710,6 +2710,11 @@ impl LcarsConfigWidget {
 
         // Queue preview redraw
         self.preview.queue_draw();
+
+        // Notify that config has changed so displayer gets updated
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
     }
 
     /// Update the available fields and rebuild the content notebook tabs

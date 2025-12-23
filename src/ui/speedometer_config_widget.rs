@@ -720,7 +720,11 @@ impl SpeedometerConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         major_tick_style_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => TickStyle::Line,
                 1 => TickStyle::Wedge,
                 2 => TickStyle::Dot,
@@ -826,7 +830,11 @@ impl SpeedometerConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         minor_tick_style_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => TickStyle::Line,
                 1 => TickStyle::Wedge,
                 2 => TickStyle::Dot,
@@ -1099,7 +1107,11 @@ impl SpeedometerConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         needle_style_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => NeedleStyle::Arrow,
                 1 => NeedleStyle::Line,
                 2 => NeedleStyle::Tapered,
@@ -1123,7 +1135,11 @@ impl SpeedometerConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         needle_tail_style_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => NeedleTailStyle::None,
                 1 => NeedleTailStyle::Short,
                 2 => NeedleTailStyle::Balanced,

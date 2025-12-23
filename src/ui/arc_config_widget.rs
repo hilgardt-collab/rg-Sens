@@ -429,7 +429,11 @@ impl ArcConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         cap_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => ArcCapStyle::Butt,
                 1 => ArcCapStyle::Round,
                 2 => ArcCapStyle::Pointed,
@@ -464,7 +468,11 @@ impl ArcConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         taper_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => ArcTaperStyle::None,
                 1 => ArcTaperStyle::Start,
                 2 => ArcTaperStyle::End,
@@ -627,7 +635,11 @@ impl ArcConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         transition_dropdown.connect_selected_notify(move |dropdown| {
-            let style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => ColorTransitionStyle::Smooth,
                 1 => ColorTransitionStyle::Abrupt,
                 _ => ColorTransitionStyle::Abrupt,
@@ -657,7 +669,11 @@ impl ArcConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         mode_dropdown.connect_selected_notify(move |dropdown| {
-            let mode = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let mode = match selected {
                 0 => ColorApplicationMode::Progressive,
                 1 => ColorApplicationMode::Segments,
                 _ => ColorApplicationMode::Progressive,

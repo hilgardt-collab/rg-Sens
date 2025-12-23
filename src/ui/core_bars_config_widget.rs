@@ -401,7 +401,11 @@ impl CoreBarsConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         style_dropdown.connect_selected_notify(move |dd| {
-            let style = match dd.selected() {
+            let selected = dd.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let style = match selected {
                 0 => BarStyle::Full,
                 1 => BarStyle::Rectangle,
                 _ => BarStyle::Segmented,
@@ -416,7 +420,11 @@ impl CoreBarsConfigWidget {
         let on_change_clone = on_change.clone();
         let fill_direction_dropdown_clone = fill_direction_dropdown.clone();
         orientation_dropdown.connect_selected_notify(move |dd| {
-            let orientation = match dd.selected() {
+            let selected = dd.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let orientation = match selected {
                 0 => BarOrientation::Horizontal,
                 _ => BarOrientation::Vertical,
             };
@@ -448,14 +456,22 @@ impl CoreBarsConfigWidget {
         let on_change_clone = on_change.clone();
         let orientation_dropdown_clone = orientation_dropdown.clone();
         fill_direction_dropdown.connect_selected_notify(move |dd| {
-            let is_horizontal = orientation_dropdown_clone.selected() == 0;
+            let selected = dd.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let orient_selected = orientation_dropdown_clone.selected();
+            if orient_selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let is_horizontal = orient_selected == 0;
             let direction = if is_horizontal {
-                match dd.selected() {
+                match selected {
                     0 => BarFillDirection::LeftToRight,
                     _ => BarFillDirection::RightToLeft,
                 }
             } else {
-                match dd.selected() {
+                match selected {
                     0 => BarFillDirection::BottomToTop,
                     _ => BarFillDirection::TopToBottom,
                 }
@@ -960,7 +976,11 @@ impl CoreBarsConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         label_position_dropdown.connect_selected_notify(move |dd| {
-            let pos = match dd.selected() {
+            let selected = dd.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let pos = match selected {
                 0 => LabelPosition::Start,
                 1 => LabelPosition::End,
                 _ => LabelPosition::Inside,

@@ -1630,6 +1630,11 @@ impl MaterialConfigWidget {
             &self.source_summaries,
             &self.available_fields,
         );
+
+        // Notify that config has changed so displayer gets updated
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
     }
 
     pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {

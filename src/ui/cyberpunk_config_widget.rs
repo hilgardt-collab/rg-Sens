@@ -275,7 +275,11 @@ impl CyberpunkConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         corner_style_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.corner_style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.corner_style = match selected {
                 0 => CornerStyle::Chamfer,
                 1 => CornerStyle::Bracket,
                 _ => CornerStyle::Angular,
@@ -566,7 +570,11 @@ impl CyberpunkConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         header_style_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.header_style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.header_style = match selected {
                 0 => HeaderStyle::Brackets,
                 1 => HeaderStyle::Underline,
                 2 => HeaderStyle::Box,
@@ -692,7 +700,11 @@ impl CyberpunkConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         orientation_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.split_orientation = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.split_orientation = match selected {
                 0 => SplitOrientation::Vertical,
                 _ => SplitOrientation::Horizontal,
             };
@@ -742,7 +754,11 @@ impl CyberpunkConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         divider_style_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.divider_style = match dropdown.selected() {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.divider_style = match selected {
                 0 => DividerStyle::Line,
                 1 => DividerStyle::Dashed,
                 2 => DividerStyle::Glow,
@@ -1791,6 +1807,11 @@ impl CyberpunkConfigWidget {
             &self.source_summaries,
             &self.available_fields,
         );
+
+        // Notify that config has changed so displayer gets updated
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
     }
 
     pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
