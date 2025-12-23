@@ -17,33 +17,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     get_content_bounds, render_content_background, render_content_bar, render_content_text,
     render_content_graph, render_content_core_bars, render_content_static, render_divider,
     render_lcars_frame, calculate_item_layouts,
-    ContentDisplayType, ContentItemData, ContentItemConfig, LcarsFrameConfig, SplitOrientation,
+    ContentDisplayType, ContentItemConfig, LcarsFrameConfig, SplitOrientation,
 };
 use crate::ui::arc_display::render_arc;
 use crate::ui::speedometer_display::render_speedometer;
-
-/// Animation state for a single bar value
-#[derive(Debug, Clone)]
-struct AnimatedValue {
-    current: f64,
-    target: f64,
-    first_update: bool,
-}
-
-impl Default for AnimatedValue {
-    fn default() -> Self {
-        Self {
-            current: 0.0,
-            target: 0.0,
-            first_update: true,
-        }
-    }
-}
 
 /// Full LCARS display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,74 +107,6 @@ impl LcarsComboDisplayer {
         }
     }
 
-    /// Get all values for a slot with the prefix stripped
-    /// This extracts all values with keys like "group1_1_hour" -> "hour"
-    fn get_slot_values(values: &HashMap<String, Value>, prefix: &str) -> HashMap<String, Value> {
-        let prefix_with_underscore = format!("{}_", prefix);
-        values.iter()
-            .filter(|(k, _)| k.starts_with(&prefix_with_underscore))
-            .map(|(k, v)| {
-                let short_key = k.strip_prefix(&prefix_with_underscore).unwrap_or(k);
-                (short_key.to_string(), v.clone())
-            })
-            .collect()
-    }
-
-    /// Get content item data from values with a given prefix
-    fn get_item_data(values: &HashMap<String, Value>, prefix: &str) -> ContentItemData {
-        let caption = values
-            .get(&format!("{}_caption", prefix))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let value = values
-            .get(&format!("{}_value", prefix))
-            .map(|v| match v {
-                Value::String(s) => s.clone(),
-                Value::Number(n) => {
-                    if let Some(f) = n.as_f64() {
-                        format!("{:.1}", f)
-                    } else {
-                        n.to_string()
-                    }
-                }
-                _ => v.to_string(),
-            })
-            .unwrap_or_default();
-
-        let unit = values
-            .get(&format!("{}_unit", prefix))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let numerical_value = values
-            .get(&format!("{}_numerical_value", prefix))
-            .or_else(|| values.get(&format!("{}_value", prefix)))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-
-        let min_value = values
-            .get(&format!("{}_min_limit", prefix))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-
-        let max_value = values
-            .get(&format!("{}_max_limit", prefix))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(100.0);
-
-        ContentItemData {
-            caption,
-            value,
-            unit,
-            numerical_value,
-            min_value,
-            max_value,
-        }
-    }
-
     /// Draw content items in a given area
     #[allow(clippy::too_many_arguments)]
     fn draw_content_items(
@@ -232,8 +147,8 @@ impl LcarsComboDisplayer {
         // Draw each item
         for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
             let prefix = format!("{}{}", base_prefix, i + 1);
-            let item_data = Self::get_item_data(values, &prefix);
-            let slot_values = Self::get_slot_values(values, &prefix);
+            let item_data = combo_utils::get_item_data(values, &prefix);
+            let slot_values = combo_utils::get_slot_values(values, &prefix);
 
             // Get item config (or use default)
             let item_config = config.frame.content_items.get(&prefix)
@@ -666,154 +581,52 @@ impl Displayer for LcarsComboDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
-            // Copy config values we need
             let animation_enabled = display_data.config.animation_enabled;
-            let group_item_counts = display_data.config.frame.group_item_counts.clone();
-            let content_items = display_data.config.frame.content_items.clone();
-
-            // Calculate timestamp for graph data points
             let timestamp = display_data.graph_start_time.elapsed().as_secs_f64();
 
-            // Collect all prefixes to update (group{N}_{M} format)
-            let mut prefixes = Vec::new();
-            for (group_idx, &item_count) in group_item_counts.iter().enumerate() {
-                let group_num = group_idx + 1;
-                for item_idx in 1..=item_count {
-                    prefixes.push(format!("group{}_{}", group_num, item_idx));
-                }
-            }
+            // Clone config data to avoid borrow conflicts (convert u32 to usize)
+            let group_item_counts: Vec<usize> = display_data.config.frame.group_item_counts.iter().map(|&x| x as usize).collect();
+            let content_items = display_data.config.frame.content_items.clone();
 
-            // Extract only values matching known prefixes (avoids cloning entire HashMap)
-            // This is more efficient when source has many extra values we don't need
-            display_data.values = data.iter()
-                .filter(|(k, _)| prefixes.iter().any(|prefix| k.starts_with(prefix)))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            // Generate prefixes and filter values using optimized utils
+            let prefixes = combo_utils::generate_prefixes(&group_item_counts);
+            display_data.values = combo_utils::filter_values_by_prefixes(data, &prefixes);
 
             // Update each item
             for prefix in &prefixes {
-                let item_data = Self::get_item_data(data, prefix);
-                let bar_key = format!("{}_bar", prefix);
-                let target = item_data.percent();
+                let item_data = combo_utils::get_item_data(data, prefix);
+                combo_utils::update_bar_animation(&mut display_data.bar_values, prefix, item_data.percent(), animation_enabled);
 
-                // Update bar animation
-                let anim = display_data.bar_values.entry(bar_key).or_default();
-                anim.target = target;
-                if anim.first_update || !animation_enabled {
-                    anim.current = target;
-                    anim.first_update = false;
-                }
+                let default_config = ContentItemConfig::default();
+                let item_config = content_items.get(prefix).unwrap_or(&default_config);
 
-                // Check if this item is configured as a graph or core bars - use default config if not present
-                let default_item_config = ContentItemConfig::default();
-                let item_config = content_items.get(prefix).unwrap_or(&default_item_config);
-                {
-                    if matches!(item_config.display_as, ContentDisplayType::Graph) {
-                        let graph_key = format!("{}_graph", prefix);
-                        let history = display_data.graph_history.entry(graph_key).or_insert_with(VecDeque::new);
-
-                        // Add new data point
-                        history.push_back(DataPoint {
-                            value: item_data.numerical_value,
+                match item_config.display_as {
+                    ContentDisplayType::Graph => {
+                        combo_utils::update_graph_history(
+                            &mut display_data.graph_history,
+                            prefix,
+                            item_data.numerical_value,
                             timestamp,
-                        });
-
-                        // Keep only max_data_points
-                        let max_points = item_config.graph_config.max_data_points;
-                        while history.len() > max_points {
-                            history.pop_front();
-                        }
-                    } else if matches!(item_config.display_as, ContentDisplayType::CoreBars) {
-                        // Update core bar animated values
-                        let core_bars_config = &item_config.core_bars_config;
-
-                        // Collect core values from source data (pre-allocate for expected size)
-                        let capacity = core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
-                        let mut core_targets: Vec<f64> = Vec::with_capacity(capacity);
-                        for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                            let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            let value = data.get(&core_key)
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.0) / 100.0; // Normalize to 0.0-1.0
-                            core_targets.push(value);
-                        }
-
-                        // If no specific core values found, try to find any core values
-                        if core_targets.is_empty() {
-                            for core_idx in 0..128 {
-                                let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                                if let Some(v) = data.get(&core_key).and_then(|v| v.as_f64()) {
-                                    core_targets.push(v / 100.0);
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Get or create animated values for this prefix
-                        let anims = display_data.core_bar_values.entry(prefix.clone()).or_insert_with(Vec::new);
-
-                        // Ensure we have enough AnimatedValue entries
-                        while anims.len() < core_targets.len() {
-                            anims.push(AnimatedValue::default());
-                        }
-                        // Truncate if we have too many
-                        anims.truncate(core_targets.len());
-
-                        // Update targets
-                        for (i, &target) in core_targets.iter().enumerate() {
-                            if let Some(anim) = anims.get_mut(i) {
-                                anim.target = target;
-                                if anim.first_update || !animation_enabled {
-                                    anim.current = target;
-                                    anim.first_update = false;
-                                }
-                            }
-                        }
+                            item_config.graph_config.max_data_points,
+                        );
                     }
+                    ContentDisplayType::CoreBars => {
+                        combo_utils::update_core_bars(
+                            data,
+                            &mut display_data.core_bar_values,
+                            prefix,
+                            &item_config.core_bars_config,
+                            animation_enabled,
+                        );
+                    }
+                    _ => {}
                 }
             }
 
-            // Clean up stale animation entries that no longer match active prefixes
-            // This prevents memory leaks when config changes remove content items
-            {
-                // Collect keys to remove (can't modify while iterating)
-                let bar_keys_to_remove: Vec<String> = display_data.bar_values.keys()
-                    .filter(|k| {
-                        // Extract prefix from key (e.g., "group1_1_bar" -> "group1_1")
-                        k.strip_suffix("_bar")
-                            .map(|prefix| !prefixes.iter().any(|p| p == prefix))
-                            .unwrap_or(true)
-                    })
-                    .cloned()
-                    .collect();
-
-                let core_keys_to_remove: Vec<String> = display_data.core_bar_values.keys()
-                    .filter(|k| !prefixes.iter().any(|p| p == *k))
-                    .cloned()
-                    .collect();
-
-                let graph_keys_to_remove: Vec<String> = display_data.graph_history.keys()
-                    .filter(|k| {
-                        // Extract prefix from key (e.g., "group1_1_graph" -> "group1_1")
-                        k.strip_suffix("_graph")
-                            .map(|prefix| !prefixes.iter().any(|p| p == prefix))
-                            .unwrap_or(true)
-                    })
-                    .cloned()
-                    .collect();
-
-                // Remove stale entries
-                for key in bar_keys_to_remove {
-                    display_data.bar_values.remove(&key);
-                }
-                for key in core_keys_to_remove {
-                    display_data.core_bar_values.remove(&key);
-                }
-                for key in graph_keys_to_remove {
-                    display_data.graph_history.remove(&key);
-                }
-            }
+            // Use optimized cleanup with retain() - separate calls to avoid borrow conflicts
+            combo_utils::cleanup_bar_values(&mut display_data.bar_values, &prefixes);
+            combo_utils::cleanup_core_bar_values(&mut display_data.core_bar_values, &prefixes);
+            combo_utils::cleanup_graph_history(&mut display_data.graph_history, &prefixes);
 
             // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);

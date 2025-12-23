@@ -81,6 +81,7 @@ mod indicator;
 mod cyberpunk;
 mod material;
 mod industrial;
+pub mod combo_utils;
 // mod level_bar;
 
 pub use text::TextDisplayer;
