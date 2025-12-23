@@ -293,20 +293,22 @@ impl IndustrialDisplayer {
                         // Fallback to raw values
                         let core_bars_config = &item_config.core_bars_config;
                         let mut raw_values: Vec<f64> = Vec::new();
+
+                        // Try configured range first
                         for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            let value = values.get(&core_key)
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.0);
-                            raw_values.push(value / 100.0);
+                            if let Some(v) = values.get(&core_key).and_then(|v| v.as_f64()) {
+                                raw_values.push(v / 100.0);
+                            }
                         }
 
+                        // Fallback: scan for any core keys
                         if raw_values.is_empty() {
                             for core_idx in 0..128 {
                                 let core_key = format!("{}_core{}_usage", prefix, core_idx);
                                 if let Some(v) = values.get(&core_key).and_then(|v| v.as_f64()) {
                                     raw_values.push(v / 100.0);
-                                } else {
+                                } else if core_idx > 0 {
                                     break;
                                 }
                             }
@@ -593,23 +595,24 @@ impl Displayer for IndustrialDisplayer {
                         }
                     } else if matches!(item_config.display_as, ContentDisplayType::CoreBars) {
                         let core_bars_config = &item_config.core_bars_config;
-                        let capacity = core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
-                        let mut core_targets: Vec<f64> = Vec::with_capacity(capacity);
+                        let mut core_targets: Vec<f64> = Vec::new();
 
+                        // First try to find core keys using the configured range
                         for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            let value = data.get(&core_key)
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.0) / 100.0;
-                            core_targets.push(value);
+                            if let Some(v) = data.get(&core_key).and_then(|v| v.as_f64()) {
+                                core_targets.push(v / 100.0);
+                            }
                         }
 
+                        // Fallback: scan for any core keys if configured range found nothing
                         if core_targets.is_empty() {
                             for core_idx in 0..128 {
                                 let core_key = format!("{}_core{}_usage", prefix, core_idx);
                                 if let Some(v) = data.get(&core_key).and_then(|v| v.as_f64()) {
                                     core_targets.push(v / 100.0);
-                                } else {
+                                } else if core_idx > 0 {
+                                    // Only break after trying at least core0
                                     break;
                                 }
                             }
