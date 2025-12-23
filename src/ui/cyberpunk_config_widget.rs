@@ -1253,7 +1253,7 @@ impl CyberpunkConfigWidget {
         let arc_config_frame = gtk4::Frame::new(Some("Arc Gauge Configuration"));
         arc_config_frame.set_margin_top(12);
 
-        let arc_widget = ArcConfigWidget::new(vec![]);
+        let arc_widget = ArcConfigWidget::new(slot_fields.clone());
 
         // Initialize with current config
         let current_arc_config = {
@@ -1290,7 +1290,7 @@ impl CyberpunkConfigWidget {
         let speedometer_config_frame = gtk4::Frame::new(Some("Speedometer Configuration"));
         speedometer_config_frame.set_margin_top(12);
 
-        let speedometer_widget = SpeedometerConfigWidget::new(vec![]);
+        let speedometer_widget = SpeedometerConfigWidget::new(slot_fields.clone());
 
         // Initialize with current config
         let current_speedometer_config = {
