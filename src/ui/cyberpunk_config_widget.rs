@@ -1752,6 +1752,17 @@ impl CyberpunkConfigWidget {
         }
 
         *self.source_summaries.borrow_mut() = summaries;
+
+        // Rebuild group weight spinners in Layout tab
+        if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
+            Self::rebuild_group_spinners(
+                &self.config,
+                &self.on_change,
+                &self.preview,
+                &widgets.group_weights_box,
+            );
+        }
+
         Self::rebuild_content_tabs(
             &self.config,
             &self.on_change,
