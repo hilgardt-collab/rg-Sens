@@ -1923,10 +1923,25 @@ impl IndustrialConfigWidget {
             &self.source_summaries,
             &self.available_fields,
         );
+
+        // Notify that config has changed so displayer gets updated
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
     }
 
     pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
         *self.available_fields.borrow_mut() = fields;
+
+        // Rebuild content tabs to reflect new field options
+        Self::rebuild_content_tabs(
+            &self.config,
+            &self.on_change,
+            &self.preview,
+            &self.content_notebook,
+            &self.source_summaries,
+            &self.available_fields,
+        );
     }
 }
 
