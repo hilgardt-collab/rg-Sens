@@ -37,6 +37,7 @@ pub use crate::displayers::IndicatorConfig;
 pub use crate::displayers::CyberpunkDisplayConfig;
 pub use crate::displayers::MaterialDisplayConfig;
 pub use crate::displayers::IndustrialDisplayConfig;
+pub use crate::displayers::RetroTerminalDisplayConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -278,6 +279,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "industrial")]
     Industrial(IndustrialDisplayConfig),
+
+    #[serde(rename = "retro_terminal")]
+    RetroTerminal(RetroTerminalDisplayConfig),
 }
 
 impl DisplayerConfig {
@@ -297,6 +301,7 @@ impl DisplayerConfig {
             DisplayerConfig::Cyberpunk(_) => "cyberpunk",
             DisplayerConfig::Material(_) => "material",
             DisplayerConfig::Industrial(_) => "industrial",
+            DisplayerConfig::RetroTerminal(_) => "retro_terminal",
         }
     }
 
@@ -369,6 +374,11 @@ impl DisplayerConfig {
                     map.insert("industrial_config".to_string(), val);
                 }
             }
+            DisplayerConfig::RetroTerminal(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("retro_terminal_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -389,6 +399,7 @@ impl DisplayerConfig {
             "cyberpunk" => Some(DisplayerConfig::Cyberpunk(CyberpunkDisplayConfig::default())),
             "material" => Some(DisplayerConfig::Material(MaterialDisplayConfig::default())),
             "industrial" => Some(DisplayerConfig::Industrial(IndustrialDisplayConfig::default())),
+            "retro_terminal" => Some(DisplayerConfig::RetroTerminal(RetroTerminalDisplayConfig::default())),
             _ => None,
         }
     }
@@ -417,6 +428,7 @@ impl DisplayerConfig {
             "cyberpunk" => serde_json::from_value(value).ok().map(DisplayerConfig::Cyberpunk),
             "material" => serde_json::from_value(value).ok().map(DisplayerConfig::Material),
             "industrial" => serde_json::from_value(value).ok().map(DisplayerConfig::Industrial),
+            "retro_terminal" => serde_json::from_value(value).ok().map(DisplayerConfig::RetroTerminal),
             _ => None,
         }
     }
@@ -438,6 +450,7 @@ impl DisplayerConfig {
             DisplayerConfig::Cyberpunk(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Material(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Industrial(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::RetroTerminal(c) => serde_json::to_value(c).ok(),
         }
     }
 }

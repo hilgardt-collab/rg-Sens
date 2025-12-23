@@ -1,0 +1,1771 @@
+//! Retro Terminal (CRT) configuration widget
+//!
+//! Provides a tabbed interface for configuring all aspects of the Retro Terminal display.
+
+use gtk4::prelude::*;
+use gtk4::{
+    Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
+    Scale, SpinButton, StringList, ScrolledWindow,
+};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::retro_terminal_display::{
+    render_retro_terminal_frame, PhosphorColor, BezelStyle,
+    TerminalHeaderStyle, TerminalDividerStyle,
+};
+use crate::ui::graph_config_widget::GraphConfigWidget;
+use crate::ui::bar_config_widget::BarConfigWidget;
+use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
+use crate::ui::background_config_widget::BackgroundConfigWidget;
+use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::arc_config_widget::ArcConfigWidget;
+use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
+use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, StaticDisplayConfig, SplitOrientation};
+use crate::ui::background::Color;
+use crate::displayers::RetroTerminalDisplayConfig;
+use crate::core::{FieldMetadata, FieldType, FieldPurpose};
+
+/// Holds references to Colors tab widgets
+struct ColorsWidgets {
+    phosphor_dropdown: DropDown,
+    custom_phosphor_widget: Rc<ColorButtonWidget>,
+    custom_phosphor_box: GtkBox,
+    background_widget: Rc<ColorButtonWidget>,
+    brightness_scale: Scale,
+}
+
+/// Holds references to CRT Effects tab widgets
+struct EffectsWidgets {
+    scanline_intensity_scale: Scale,
+    scanline_spacing_spin: SpinButton,
+    curvature_scale: Scale,
+    vignette_scale: Scale,
+    glow_scale: Scale,
+    flicker_check: CheckButton,
+}
+
+/// Holds references to Bezel tab widgets
+struct BezelWidgets {
+    style_dropdown: DropDown,
+    color_widget: Rc<ColorButtonWidget>,
+    width_spin: SpinButton,
+    show_led_check: CheckButton,
+    led_color_widget: Rc<ColorButtonWidget>,
+}
+
+/// Holds references to Header tab widgets
+struct HeaderWidgets {
+    show_header_check: CheckButton,
+    header_text_entry: Entry,
+    header_style_dropdown: DropDown,
+    header_height_spin: SpinButton,
+    header_font_btn: Button,
+    header_font_size_spin: SpinButton,
+}
+
+/// Holds references to Layout tab widgets
+struct LayoutWidgets {
+    split_orientation_dropdown: DropDown,
+    content_padding_spin: SpinButton,
+    divider_style_dropdown: DropDown,
+    divider_padding_spin: SpinButton,
+    group_weights_box: GtkBox,
+}
+
+/// Holds references to Animation tab widgets
+struct AnimationWidgets {
+    enable_check: CheckButton,
+    cursor_blink_check: CheckButton,
+    typewriter_check: CheckButton,
+}
+
+/// Retro Terminal configuration widget
+pub struct RetroTerminalConfigWidget {
+    container: GtkBox,
+    config: Rc<RefCell<RetroTerminalDisplayConfig>>,
+    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    preview: DrawingArea,
+    content_notebook: Rc<RefCell<Notebook>>,
+    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
+    colors_widgets: Rc<RefCell<Option<ColorsWidgets>>>,
+    effects_widgets: Rc<RefCell<Option<EffectsWidgets>>>,
+    bezel_widgets: Rc<RefCell<Option<BezelWidgets>>>,
+    header_widgets: Rc<RefCell<Option<HeaderWidgets>>>,
+    layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
+    animation_widgets: Rc<RefCell<Option<AnimationWidgets>>>,
+}
+
+impl RetroTerminalConfigWidget {
+    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        let container = GtkBox::new(Orientation::Vertical, 12);
+        let config = Rc::new(RefCell::new(RetroTerminalDisplayConfig::default()));
+        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let colors_widgets: Rc<RefCell<Option<ColorsWidgets>>> = Rc::new(RefCell::new(None));
+        let effects_widgets: Rc<RefCell<Option<EffectsWidgets>>> = Rc::new(RefCell::new(None));
+        let bezel_widgets: Rc<RefCell<Option<BezelWidgets>>> = Rc::new(RefCell::new(None));
+        let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
+        let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
+        let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
+
+        // Preview at the top
+        let preview = DrawingArea::new();
+        preview.set_content_height(200);
+        preview.set_vexpand(false);
+
+        let config_clone = config.clone();
+        preview.set_draw_func(move |_, cr, width, height| {
+            if width < 10 || height < 10 {
+                return;
+            }
+
+            let cfg = config_clone.borrow();
+            let _ = render_retro_terminal_frame(cr, &cfg.frame, width as f64, height as f64);
+        });
+
+        // Create notebook for tabbed interface
+        let notebook = Notebook::new();
+        notebook.set_vexpand(true);
+
+        // Tab 1: Colors
+        let colors_page = Self::create_colors_page(&config, &on_change, &preview, &colors_widgets);
+        notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
+
+        // Tab 2: CRT Effects
+        let effects_page = Self::create_effects_page(&config, &on_change, &preview, &effects_widgets);
+        notebook.append_page(&effects_page, Some(&Label::new(Some("CRT Effects"))));
+
+        // Tab 3: Bezel
+        let bezel_page = Self::create_bezel_page(&config, &on_change, &preview, &bezel_widgets);
+        notebook.append_page(&bezel_page, Some(&Label::new(Some("Bezel"))));
+
+        // Tab 4: Header
+        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets);
+        notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
+
+        // Tab 5: Layout
+        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
+        notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
+
+        // Tab 6: Content
+        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
+        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields);
+        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
+
+        // Tab 7: Animation
+        let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
+        notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
+
+        container.append(&preview);
+        container.append(&notebook);
+
+        Self {
+            container,
+            config,
+            on_change,
+            preview,
+            content_notebook,
+            source_summaries,
+            available_fields,
+            colors_widgets,
+            effects_widgets,
+            bezel_widgets,
+            header_widgets,
+            layout_widgets,
+            animation_widgets,
+        }
+    }
+
+    fn set_page_margins(page: &GtkBox) {
+        page.set_margin_start(12);
+        page.set_margin_end(12);
+        page.set_margin_top(12);
+        page.set_margin_bottom(12);
+    }
+
+    fn queue_redraw(
+        preview: &DrawingArea,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    ) {
+        preview.queue_draw();
+        if let Some(cb) = on_change.borrow().as_ref() {
+            cb();
+        }
+    }
+
+    fn create_colors_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Phosphor color preset
+        let phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
+        phosphor_box.append(&Label::new(Some("Phosphor Color:")));
+        let phosphor_list = StringList::new(&["Green (P1)", "Amber (P3)", "White (P4)", "Blue", "Custom"]);
+        let phosphor_dropdown = DropDown::new(Some(phosphor_list), None::<gtk4::Expression>);
+        let phosphor_idx = match &config.borrow().frame.phosphor_color {
+            PhosphorColor::Green => 0,
+            PhosphorColor::Amber => 1,
+            PhosphorColor::White => 2,
+            PhosphorColor::Blue => 3,
+            PhosphorColor::Custom(_) => 4,
+        };
+        phosphor_dropdown.set_selected(phosphor_idx);
+        phosphor_dropdown.set_hexpand(true);
+        phosphor_box.append(&phosphor_dropdown);
+        page.append(&phosphor_box);
+
+        // Custom phosphor color (shown only when Custom is selected)
+        let custom_phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
+        custom_phosphor_box.append(&Label::new(Some("Custom Color:")));
+        let custom_color = if let PhosphorColor::Custom(c) = &config.borrow().frame.phosphor_color {
+            c.clone()
+        } else {
+            Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
+        };
+        let custom_phosphor_widget = Rc::new(ColorButtonWidget::new(custom_color));
+        custom_phosphor_box.append(custom_phosphor_widget.widget());
+        custom_phosphor_box.set_visible(phosphor_idx == 4);
+        page.append(&custom_phosphor_box);
+
+        // Connect phosphor dropdown
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let custom_box_clone = custom_phosphor_box.clone();
+        let custom_widget_clone = custom_phosphor_widget.clone();
+        phosphor_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            custom_box_clone.set_visible(selected == 4);
+            config_clone.borrow_mut().frame.phosphor_color = match selected {
+                0 => PhosphorColor::Green,
+                1 => PhosphorColor::Amber,
+                2 => PhosphorColor::White,
+                3 => PhosphorColor::Blue,
+                _ => PhosphorColor::Custom(custom_widget_clone.color()),
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Connect custom color widget
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        custom_phosphor_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.phosphor_color = PhosphorColor::Custom(color);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Background color
+        let bg_label = Label::new(Some("Screen Background"));
+        bg_label.set_halign(gtk4::Align::Start);
+        bg_label.add_css_class("heading");
+        bg_label.set_margin_top(12);
+        page.append(&bg_label);
+
+        let bg_box = GtkBox::new(Orientation::Horizontal, 6);
+        bg_box.append(&Label::new(Some("Background:")));
+        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
+        bg_box.append(background_widget.widget());
+        page.append(&bg_box);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        background_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.background_color = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Text brightness
+        let brightness_box = GtkBox::new(Orientation::Horizontal, 6);
+        brightness_box.append(&Label::new(Some("Text Brightness:")));
+        let brightness_scale = Scale::with_range(Orientation::Horizontal, 0.3, 1.0, 0.05);
+        brightness_scale.set_value(config.borrow().frame.text_brightness);
+        brightness_scale.set_hexpand(true);
+        brightness_scale.set_draw_value(true);
+        brightness_box.append(&brightness_scale);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        brightness_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.text_brightness = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&brightness_box);
+
+        // Store widget refs
+        *colors_widgets_out.borrow_mut() = Some(ColorsWidgets {
+            phosphor_dropdown,
+            custom_phosphor_widget,
+            custom_phosphor_box,
+            background_widget,
+            brightness_scale,
+        });
+
+        page
+    }
+
+    fn create_effects_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        effects_widgets_out: &Rc<RefCell<Option<EffectsWidgets>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Scanlines section
+        let scanline_label = Label::new(Some("Scanlines"));
+        scanline_label.set_halign(gtk4::Align::Start);
+        scanline_label.add_css_class("heading");
+        page.append(&scanline_label);
+
+        // Scanline intensity
+        let intensity_box = GtkBox::new(Orientation::Horizontal, 6);
+        intensity_box.append(&Label::new(Some("Intensity:")));
+        let scanline_intensity_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
+        scanline_intensity_scale.set_value(config.borrow().frame.scanline_intensity);
+        scanline_intensity_scale.set_hexpand(true);
+        scanline_intensity_scale.set_draw_value(true);
+        intensity_box.append(&scanline_intensity_scale);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        scanline_intensity_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.scanline_intensity = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&intensity_box);
+
+        // Scanline spacing
+        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
+        spacing_box.append(&Label::new(Some("Spacing:")));
+        let scanline_spacing_spin = SpinButton::with_range(1.0, 8.0, 0.5);
+        scanline_spacing_spin.set_value(config.borrow().frame.scanline_spacing);
+        scanline_spacing_spin.set_hexpand(true);
+        spacing_box.append(&scanline_spacing_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        scanline_spacing_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.scanline_spacing = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&spacing_box);
+
+        // CRT Effects section
+        let crt_label = Label::new(Some("CRT Effects"));
+        crt_label.set_halign(gtk4::Align::Start);
+        crt_label.add_css_class("heading");
+        crt_label.set_margin_top(12);
+        page.append(&crt_label);
+
+        // Curvature
+        let curvature_box = GtkBox::new(Orientation::Horizontal, 6);
+        curvature_box.append(&Label::new(Some("Curvature:")));
+        let curvature_scale = Scale::with_range(Orientation::Horizontal, 0.0, 0.1, 0.01);
+        curvature_scale.set_value(config.borrow().frame.curvature_amount);
+        curvature_scale.set_hexpand(true);
+        curvature_scale.set_draw_value(true);
+        curvature_box.append(&curvature_scale);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        curvature_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.curvature_amount = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&curvature_box);
+
+        // Vignette
+        let vignette_box = GtkBox::new(Orientation::Horizontal, 6);
+        vignette_box.append(&Label::new(Some("Vignette:")));
+        let vignette_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
+        vignette_scale.set_value(config.borrow().frame.vignette_intensity);
+        vignette_scale.set_hexpand(true);
+        vignette_scale.set_draw_value(true);
+        vignette_box.append(&vignette_scale);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        vignette_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.vignette_intensity = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&vignette_box);
+
+        // Screen glow
+        let glow_box = GtkBox::new(Orientation::Horizontal, 6);
+        glow_box.append(&Label::new(Some("Screen Glow:")));
+        let glow_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
+        glow_scale.set_value(config.borrow().frame.screen_glow);
+        glow_scale.set_hexpand(true);
+        glow_scale.set_draw_value(true);
+        glow_box.append(&glow_scale);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        glow_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.screen_glow = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&glow_box);
+
+        // Flicker
+        let flicker_check = CheckButton::with_label("Enable Screen Flicker");
+        flicker_check.set_active(config.borrow().frame.flicker_enabled);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        flicker_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.flicker_enabled = check.is_active();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&flicker_check);
+
+        // Store widget refs
+        *effects_widgets_out.borrow_mut() = Some(EffectsWidgets {
+            scanline_intensity_scale,
+            scanline_spacing_spin,
+            curvature_scale,
+            vignette_scale,
+            glow_scale,
+            flicker_check,
+        });
+
+        page
+    }
+
+    fn create_bezel_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        bezel_widgets_out: &Rc<RefCell<Option<BezelWidgets>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Bezel style
+        let style_box = GtkBox::new(Orientation::Horizontal, 6);
+        style_box.append(&Label::new(Some("Bezel Style:")));
+        let style_list = StringList::new(&["Classic CRT", "Slim", "Industrial", "None"]);
+        let style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
+        let style_idx = match config.borrow().frame.bezel_style {
+            BezelStyle::Classic => 0,
+            BezelStyle::Slim => 1,
+            BezelStyle::Industrial => 2,
+            BezelStyle::None => 3,
+        };
+        style_dropdown.set_selected(style_idx);
+        style_dropdown.set_hexpand(true);
+        style_box.append(&style_dropdown);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        style_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.bezel_style = match selected {
+                0 => BezelStyle::Classic,
+                1 => BezelStyle::Slim,
+                2 => BezelStyle::Industrial,
+                _ => BezelStyle::None,
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&style_box);
+
+        // Bezel color
+        let color_box = GtkBox::new(Orientation::Horizontal, 6);
+        color_box.append(&Label::new(Some("Bezel Color:")));
+        let color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.bezel_color));
+        color_box.append(color_widget.widget());
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.bezel_color = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&color_box);
+
+        // Bezel width
+        let width_box = GtkBox::new(Orientation::Horizontal, 6);
+        width_box.append(&Label::new(Some("Bezel Width:")));
+        let width_spin = SpinButton::with_range(4.0, 48.0, 2.0);
+        width_spin.set_value(config.borrow().frame.bezel_width);
+        width_spin.set_hexpand(true);
+        width_box.append(&width_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        width_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.bezel_width = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&width_box);
+
+        // Power LED section
+        let led_label = Label::new(Some("Power LED"));
+        led_label.set_halign(gtk4::Align::Start);
+        led_label.add_css_class("heading");
+        led_label.set_margin_top(12);
+        page.append(&led_label);
+
+        // Show LED
+        let show_led_check = CheckButton::with_label("Show Power LED");
+        show_led_check.set_active(config.borrow().frame.show_power_led);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        show_led_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.show_power_led = check.is_active();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&show_led_check);
+
+        // LED color
+        let led_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        led_color_box.append(&Label::new(Some("LED Color:")));
+        let led_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.power_led_color));
+        led_color_box.append(led_color_widget.widget());
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        led_color_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.power_led_color = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&led_color_box);
+
+        // Store widget refs
+        *bezel_widgets_out.borrow_mut() = Some(BezelWidgets {
+            style_dropdown,
+            color_widget,
+            width_spin,
+            show_led_check,
+            led_color_widget,
+        });
+
+        page
+    }
+
+    fn create_header_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Show header
+        let show_header_check = CheckButton::with_label("Show Header");
+        show_header_check.set_active(config.borrow().frame.show_header);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        show_header_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.show_header = check.is_active();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&show_header_check);
+
+        // Header text
+        let text_box = GtkBox::new(Orientation::Horizontal, 6);
+        text_box.append(&Label::new(Some("Header Text:")));
+        let header_text_entry = Entry::new();
+        header_text_entry.set_text(&config.borrow().frame.header_text);
+        header_text_entry.set_hexpand(true);
+        text_box.append(&header_text_entry);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        header_text_entry.connect_changed(move |entry| {
+            config_clone.borrow_mut().frame.header_text = entry.text().to_string();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&text_box);
+
+        // Header style
+        let style_box = GtkBox::new(Orientation::Horizontal, 6);
+        style_box.append(&Label::new(Some("Style:")));
+        let style_list = StringList::new(&["Title Bar", "Status Line", "Prompt", "None"]);
+        let header_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
+        let style_idx = match config.borrow().frame.header_style {
+            TerminalHeaderStyle::TitleBar => 0,
+            TerminalHeaderStyle::StatusLine => 1,
+            TerminalHeaderStyle::Prompt => 2,
+            TerminalHeaderStyle::None => 3,
+        };
+        header_style_dropdown.set_selected(style_idx);
+        header_style_dropdown.set_hexpand(true);
+        style_box.append(&header_style_dropdown);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        header_style_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.header_style = match selected {
+                0 => TerminalHeaderStyle::TitleBar,
+                1 => TerminalHeaderStyle::StatusLine,
+                2 => TerminalHeaderStyle::Prompt,
+                _ => TerminalHeaderStyle::None,
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&style_box);
+
+        // Header height
+        let height_box = GtkBox::new(Orientation::Horizontal, 6);
+        height_box.append(&Label::new(Some("Header Height:")));
+        let header_height_spin = SpinButton::with_range(20.0, 60.0, 2.0);
+        header_height_spin.set_value(config.borrow().frame.header_height);
+        header_height_spin.set_hexpand(true);
+        height_box.append(&header_height_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        header_height_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.header_height = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&height_box);
+
+        // Typography section
+        let font_label = Label::new(Some("Typography"));
+        font_label.set_halign(gtk4::Align::Start);
+        font_label.add_css_class("heading");
+        font_label.set_margin_top(12);
+        page.append(&font_label);
+
+        // Header font
+        let font_box = GtkBox::new(Orientation::Horizontal, 6);
+        font_box.append(&Label::new(Some("Font:")));
+        let header_font_btn = Button::with_label(&config.borrow().frame.header_font);
+        header_font_btn.set_hexpand(true);
+        font_box.append(&header_font_btn);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let font_btn_clone = header_font_btn.clone();
+        header_font_btn.connect_clicked(move |btn| {
+            let root = btn.root();
+            let window = root.as_ref().and_then(|r| r.downcast_ref::<gtk4::Window>());
+            let current_font = config_clone.borrow().frame.header_font.clone();
+            let config_for_cb = config_clone.clone();
+            let on_change_for_cb = on_change_clone.clone();
+            let preview_for_cb = preview_clone.clone();
+            let font_btn_for_cb = font_btn_clone.clone();
+
+            let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+
+            shared_font_dialog().choose_font(
+                window,
+                Some(&font_desc),
+                gtk4::gio::Cancellable::NONE,
+                move |result| {
+                    if let Ok(font_desc) = result {
+                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "monospace".to_string());
+                        config_for_cb.borrow_mut().frame.header_font = family.clone();
+                        font_btn_for_cb.set_label(&family);
+                        Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                    }
+                },
+            );
+        });
+        page.append(&font_box);
+
+        // Header font size
+        let size_box = GtkBox::new(Orientation::Horizontal, 6);
+        size_box.append(&Label::new(Some("Font Size:")));
+        let header_font_size_spin = SpinButton::with_range(8.0, 24.0, 1.0);
+        header_font_size_spin.set_value(config.borrow().frame.header_font_size);
+        header_font_size_spin.set_hexpand(true);
+        size_box.append(&header_font_size_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        header_font_size_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.header_font_size = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&size_box);
+
+        // Store widget refs
+        *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
+            show_header_check,
+            header_text_entry,
+            header_style_dropdown,
+            header_height_spin,
+            header_font_btn,
+            header_font_size_spin,
+        });
+
+        page
+    }
+
+    fn create_layout_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Split orientation
+        let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
+        orientation_box.append(&Label::new(Some("Group Direction:")));
+        let orientation_list = StringList::new(&["Horizontal (side by side)", "Vertical (stacked)"]);
+        let split_orientation_dropdown = DropDown::new(Some(orientation_list), None::<gtk4::Expression>);
+        let orient_idx = match config.borrow().frame.split_orientation {
+            SplitOrientation::Horizontal => 0,
+            SplitOrientation::Vertical => 1,
+        };
+        split_orientation_dropdown.set_selected(orient_idx);
+        split_orientation_dropdown.set_hexpand(true);
+        orientation_box.append(&split_orientation_dropdown);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        split_orientation_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.split_orientation = match selected {
+                0 => SplitOrientation::Horizontal,
+                _ => SplitOrientation::Vertical,
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&orientation_box);
+
+        // Content padding
+        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
+        padding_box.append(&Label::new(Some("Content Padding:")));
+        let content_padding_spin = SpinButton::with_range(4.0, 32.0, 2.0);
+        content_padding_spin.set_value(config.borrow().frame.content_padding);
+        content_padding_spin.set_hexpand(true);
+        padding_box.append(&content_padding_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        content_padding_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.content_padding = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&padding_box);
+
+        // Dividers section
+        let dividers_label = Label::new(Some("Dividers"));
+        dividers_label.set_halign(gtk4::Align::Start);
+        dividers_label.add_css_class("heading");
+        dividers_label.set_margin_top(12);
+        page.append(&dividers_label);
+
+        // Divider style
+        let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
+        div_style_box.append(&Label::new(Some("Style:")));
+        let div_style_list = StringList::new(&["Dashed ------", "Solid ======", "Box Drawing", "Pipe |||", "ASCII ====", "None"]);
+        let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
+        let div_style_idx = match config.borrow().frame.divider_style {
+            TerminalDividerStyle::Dashed => 0,
+            TerminalDividerStyle::Solid => 1,
+            TerminalDividerStyle::BoxDrawing => 2,
+            TerminalDividerStyle::Pipe => 3,
+            TerminalDividerStyle::Ascii => 4,
+            TerminalDividerStyle::None => 5,
+        };
+        divider_style_dropdown.set_selected(div_style_idx);
+        divider_style_dropdown.set_hexpand(true);
+        div_style_box.append(&divider_style_dropdown);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        divider_style_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.divider_style = match selected {
+                0 => TerminalDividerStyle::Dashed,
+                1 => TerminalDividerStyle::Solid,
+                2 => TerminalDividerStyle::BoxDrawing,
+                3 => TerminalDividerStyle::Pipe,
+                4 => TerminalDividerStyle::Ascii,
+                _ => TerminalDividerStyle::None,
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&div_style_box);
+
+        // Divider padding
+        let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
+        div_padding_box.append(&Label::new(Some("Divider Padding:")));
+        let divider_padding_spin = SpinButton::with_range(0.0, 16.0, 1.0);
+        divider_padding_spin.set_value(config.borrow().frame.divider_padding);
+        divider_padding_spin.set_hexpand(true);
+        div_padding_box.append(&divider_padding_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        divider_padding_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.divider_padding = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&div_padding_box);
+
+        // Group weights section
+        let weights_label = Label::new(Some("Group Size Weights"));
+        weights_label.set_halign(gtk4::Align::Start);
+        weights_label.add_css_class("heading");
+        weights_label.set_margin_top(12);
+        page.append(&weights_label);
+
+        let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
+        page.append(&group_weights_box);
+
+        Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
+
+        // Store widget refs
+        *layout_widgets_out.borrow_mut() = Some(LayoutWidgets {
+            split_orientation_dropdown,
+            content_padding_spin,
+            divider_style_dropdown,
+            divider_padding_spin,
+            group_weights_box,
+        });
+
+        page
+    }
+
+    fn rebuild_group_spinners(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        weights_box: &GtkBox,
+    ) {
+        while let Some(child) = weights_box.first_child() {
+            weights_box.remove(&child);
+        }
+
+        let cfg = config.borrow();
+        let count = cfg.frame.group_count;
+
+        if count == 0 {
+            let placeholder = Label::new(Some("No groups configured."));
+            placeholder.set_halign(gtk4::Align::Start);
+            placeholder.add_css_class("dim-label");
+            weights_box.append(&placeholder);
+            return;
+        }
+
+        for i in 0..count {
+            let row = GtkBox::new(Orientation::Horizontal, 6);
+            row.append(&Label::new(Some(&format!("Group {}:", i + 1))));
+
+            let weight_spin = SpinButton::with_range(0.1, 10.0, 0.1);
+            weight_spin.set_digits(1);
+            weight_spin.set_value(cfg.frame.group_size_weights.get(i).copied().unwrap_or(1.0));
+            weight_spin.set_hexpand(true);
+            row.append(&weight_spin);
+
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            let preview_clone = preview.clone();
+            weight_spin.connect_value_changed(move |spin| {
+                let mut cfg = config_clone.borrow_mut();
+                if i < cfg.frame.group_size_weights.len() {
+                    cfg.frame.group_size_weights[i] = spin.value();
+                }
+                Self::queue_redraw(&preview_clone, &on_change_clone);
+            });
+
+            weights_box.append(&row);
+        }
+    }
+
+    fn create_content_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        content_notebook: &Rc<RefCell<Notebook>>,
+        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        let info_label = Label::new(Some("Configure content items for each slot."));
+        info_label.set_halign(gtk4::Align::Start);
+        info_label.add_css_class("dim-label");
+        page.append(&info_label);
+
+        let scrolled = ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        scrolled.set_hexpand(true);
+        scrolled.set_min_content_height(300);
+
+        let notebook = content_notebook.borrow();
+        scrolled.set_child(Some(&*notebook));
+        page.append(&scrolled);
+
+        drop(notebook);
+        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields);
+
+        page
+    }
+
+    fn rebuild_content_tabs(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        content_notebook: &Rc<RefCell<Notebook>>,
+        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+    ) {
+        let notebook = content_notebook.borrow();
+
+        while notebook.n_pages() > 0 {
+            notebook.remove_page(Some(0));
+        }
+
+        let summaries = source_summaries.borrow();
+
+        if summaries.is_empty() {
+            let placeholder = GtkBox::new(Orientation::Vertical, 8);
+            placeholder.set_margin_start(12);
+            placeholder.set_margin_end(12);
+            placeholder.set_margin_top(12);
+            let label = Label::new(Some("No sources configured.\nGo to 'Data Source' tab and select 'Combination' source to configure content."));
+            label.set_halign(gtk4::Align::Start);
+            placeholder.append(&label);
+            notebook.append_page(&placeholder, Some(&Label::new(Some("No Sources"))));
+            return;
+        }
+
+        // Group summaries by group number
+        let mut groups: std::collections::HashMap<usize, Vec<(String, String, u32)>> = std::collections::HashMap::new();
+        for (slot_name, summary, group_num, item_idx) in summaries.iter() {
+            groups.entry(*group_num)
+                .or_default()
+                .push((slot_name.clone(), summary.clone(), *item_idx));
+        }
+
+        let mut group_nums: Vec<usize> = groups.keys().cloned().collect();
+        group_nums.sort();
+
+        for group_num in group_nums {
+            if let Some(items) = groups.get(&group_num) {
+                let group_box = GtkBox::new(Orientation::Vertical, 4);
+                group_box.set_margin_start(4);
+                group_box.set_margin_end(4);
+                group_box.set_margin_top(4);
+
+                let items_notebook = Notebook::new();
+                items_notebook.set_scrollable(true);
+                items_notebook.set_vexpand(true);
+
+                let mut sorted_items = items.clone();
+                sorted_items.sort_by_key(|(_, _, idx)| *idx);
+
+                for (slot_name, summary, item_idx) in sorted_items {
+                    let tab_label = format!("Item {} : {}", item_idx, summary);
+                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
+                }
+
+                group_box.append(&items_notebook);
+                notebook.append_page(&group_box, Some(&Label::new(Some(&format!("Group {}", group_num)))));
+            }
+        }
+    }
+
+    fn create_slot_config_tab(
+        slot_name: &str,
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+    ) -> GtkBox {
+        // Ensure this slot exists in content_items
+        {
+            let mut cfg = config.borrow_mut();
+            if !cfg.frame.content_items.contains_key(slot_name) {
+                cfg.frame.content_items.insert(slot_name.to_string(), ContentItemConfig::default());
+            }
+        }
+
+        let tab = GtkBox::new(Orientation::Vertical, 8);
+        tab.set_margin_start(12);
+        tab.set_margin_end(12);
+        tab.set_margin_top(12);
+        tab.set_margin_bottom(12);
+
+        let scroll = ScrolledWindow::new();
+        scroll.set_vexpand(true);
+        scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+
+        let inner_box = GtkBox::new(Orientation::Vertical, 8);
+
+        // Display type dropdown
+        let type_box = GtkBox::new(Orientation::Horizontal, 6);
+        type_box.append(&Label::new(Some("Display As:")));
+        let type_list = StringList::new(&["Bar", "Text", "Graph", "Core Bars", "Static", "Arc", "Speedometer"]);
+        let type_dropdown = DropDown::new(Some(type_list), None::<gtk4::Expression>);
+        type_dropdown.set_hexpand(true);
+
+        let current_type = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.display_as)
+                .unwrap_or_default()
+        };
+        let type_idx = match current_type {
+            ContentDisplayType::Bar | ContentDisplayType::LevelBar => 0,
+            ContentDisplayType::Text => 1,
+            ContentDisplayType::Graph => 2,
+            ContentDisplayType::CoreBars => 3,
+            ContentDisplayType::Static => 4,
+            ContentDisplayType::Arc => 5,
+            ContentDisplayType::Speedometer => 6,
+        };
+        type_dropdown.set_selected(type_idx);
+        type_box.append(&type_dropdown);
+        inner_box.append(&type_box);
+
+        // Auto height checkbox
+        let auto_height_check = CheckButton::with_label("Auto-adjust height");
+        let current_auto_height = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.auto_height)
+                .unwrap_or(true)
+        };
+        auto_height_check.set_active(current_auto_height);
+        inner_box.append(&auto_height_check);
+
+        // Item height
+        let height_box = GtkBox::new(Orientation::Horizontal, 6);
+        height_box.append(&Label::new(Some("Item Height:")));
+        let height_spin = SpinButton::with_range(20.0, 300.0, 5.0);
+        let current_height = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.item_height)
+                .unwrap_or(60.0)
+        };
+        height_spin.set_value(current_height);
+        height_spin.set_hexpand(true);
+        height_spin.set_sensitive(!current_auto_height);
+        height_box.append(&height_spin);
+        inner_box.append(&height_box);
+
+        // Connect auto-height checkbox
+        let height_spin_clone = height_spin.clone();
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        auto_height_check.connect_toggled(move |check| {
+            let is_auto = check.is_active();
+            height_spin_clone.set_sensitive(!is_auto);
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.auto_height = is_auto;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Get available fields
+        let slot_prefix = format!("{}_", slot_name);
+        let source_fields = available_fields.borrow();
+        let mut slot_fields: Vec<FieldMetadata> = source_fields.iter()
+            .filter(|f| f.id.starts_with(&slot_prefix))
+            .map(|f| {
+                let short_id = f.id.strip_prefix(&slot_prefix).unwrap_or(&f.id);
+                FieldMetadata::new(
+                    short_id,
+                    &f.name,
+                    &f.description,
+                    f.field_type.clone(),
+                    f.purpose.clone(),
+                )
+            })
+            .collect();
+
+        if slot_fields.is_empty() {
+            slot_fields = vec![
+                FieldMetadata::new("caption", "Caption", "Label text", FieldType::Text, FieldPurpose::Caption),
+                FieldMetadata::new("value", "Value", "Current value", FieldType::Text, FieldPurpose::Value),
+                FieldMetadata::new("unit", "Unit", "Unit of measurement", FieldType::Text, FieldPurpose::Unit),
+                FieldMetadata::new("numerical_value", "Numeric Value", "Raw numeric value", FieldType::Numerical, FieldPurpose::Value),
+            ];
+        }
+        drop(source_fields);
+
+        // === Bar Configuration Section ===
+        let bar_config_frame = gtk4::Frame::new(Some("Bar Configuration"));
+        bar_config_frame.set_margin_top(12);
+
+        let bar_widget = BarConfigWidget::new(slot_fields.clone());
+        let current_bar_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.bar_config.clone())
+                .unwrap_or_else(Self::default_bar_config_terminal)
+        };
+        bar_widget.set_config(current_bar_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let bar_widget_rc = Rc::new(bar_widget);
+        let bar_widget_for_callback = bar_widget_rc.clone();
+        bar_widget_rc.set_on_change(move || {
+            let bar_config = bar_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.bar_config = bar_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        bar_config_frame.set_child(Some(bar_widget_rc.widget()));
+        inner_box.append(&bar_config_frame);
+
+        // === Graph Configuration Section ===
+        let graph_config_frame = gtk4::Frame::new(Some("Graph Configuration"));
+        graph_config_frame.set_margin_top(12);
+
+        let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+        let current_graph_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.graph_config.clone())
+                .unwrap_or_else(Self::default_graph_config_terminal)
+        };
+        graph_widget.set_config(current_graph_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let graph_widget_rc = Rc::new(graph_widget);
+        let graph_widget_for_callback = graph_widget_rc.clone();
+        graph_widget_rc.set_on_change(move || {
+            let graph_config = graph_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.graph_config = graph_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        graph_config_frame.set_child(Some(graph_widget_rc.widget()));
+        inner_box.append(&graph_config_frame);
+
+        // === Text Configuration Section ===
+        let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
+        text_config_frame.set_margin_top(12);
+
+        let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+        let current_text_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.bar_config.text_overlay.text_config.clone())
+                .unwrap_or_default()
+        };
+        text_widget.set_config(current_text_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let text_widget_rc = Rc::new(text_widget);
+        let text_widget_for_callback = text_widget_rc.clone();
+        text_widget_rc.set_on_change(move || {
+            let text_config = text_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.bar_config.text_overlay.enabled = true;
+            item.bar_config.text_overlay.text_config = text_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        text_config_frame.set_child(Some(text_widget_rc.widget()));
+        inner_box.append(&text_config_frame);
+
+        // === Core Bars Configuration Section ===
+        let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
+        core_bars_config_frame.set_margin_top(12);
+
+        let core_bars_widget = CoreBarsConfigWidget::new();
+        let current_core_bars_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.core_bars_config.clone())
+                .unwrap_or_default()
+        };
+        core_bars_widget.set_config(current_core_bars_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let core_bars_widget_rc = Rc::new(core_bars_widget);
+        let core_bars_widget_for_callback = core_bars_widget_rc.clone();
+        core_bars_widget_rc.set_on_change(move || {
+            let core_bars_config = core_bars_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.core_bars_config = core_bars_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
+        inner_box.append(&core_bars_config_frame);
+
+        // === Static Configuration Section ===
+        let static_config_frame = gtk4::Frame::new(Some("Static Background Configuration"));
+        static_config_frame.set_margin_top(12);
+
+        let static_bg_widget = BackgroundConfigWidget::new();
+        let current_static_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.static_config.background.clone())
+                .unwrap_or_default()
+        };
+        static_bg_widget.set_config(current_static_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let static_bg_widget_rc = Rc::new(static_bg_widget);
+        let static_bg_widget_for_callback = static_bg_widget_rc.clone();
+        static_bg_widget_rc.set_on_change(move || {
+            let bg_config = static_bg_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.static_config = StaticDisplayConfig { background: bg_config };
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        static_config_frame.set_child(Some(static_bg_widget_rc.widget()));
+        inner_box.append(&static_config_frame);
+
+        // === Arc Configuration Section ===
+        let arc_config_frame = gtk4::Frame::new(Some("Arc Gauge Configuration"));
+        arc_config_frame.set_margin_top(12);
+
+        let arc_widget = ArcConfigWidget::new(slot_fields.clone());
+        let current_arc_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.arc_config.clone())
+                .unwrap_or_default()
+        };
+        arc_widget.set_config(current_arc_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let arc_widget_rc = Rc::new(arc_widget);
+        let arc_widget_for_callback = arc_widget_rc.clone();
+        arc_widget_rc.set_on_change(move || {
+            let arc_config = arc_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.arc_config = arc_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        arc_config_frame.set_child(Some(arc_widget_rc.widget()));
+        inner_box.append(&arc_config_frame);
+
+        // === Speedometer Configuration Section ===
+        let speedometer_config_frame = gtk4::Frame::new(Some("Speedometer Configuration"));
+        speedometer_config_frame.set_margin_top(12);
+
+        let speedometer_widget = SpeedometerConfigWidget::new(slot_fields.clone());
+        let current_speedometer_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.speedometer_config.clone())
+                .unwrap_or_default()
+        };
+        speedometer_widget.set_config(&current_speedometer_config);
+
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let speedometer_widget_rc = Rc::new(speedometer_widget);
+        let speedometer_widget_for_callback = speedometer_widget_rc.clone();
+        speedometer_widget_rc.set_on_change(Box::new(move || {
+            let speedometer_config = speedometer_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.speedometer_config = speedometer_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        }));
+
+        speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
+        inner_box.append(&speedometer_config_frame);
+
+        // Show/hide sections based on display type
+        let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
+        let show_text = matches!(current_type, ContentDisplayType::Text | ContentDisplayType::Static);
+        bar_config_frame.set_visible(show_bar);
+        text_config_frame.set_visible(show_text);
+        graph_config_frame.set_visible(current_type == ContentDisplayType::Graph);
+        core_bars_config_frame.set_visible(current_type == ContentDisplayType::CoreBars);
+        static_config_frame.set_visible(current_type == ContentDisplayType::Static);
+        arc_config_frame.set_visible(current_type == ContentDisplayType::Arc);
+        speedometer_config_frame.set_visible(current_type == ContentDisplayType::Speedometer);
+
+        scroll.set_child(Some(&inner_box));
+        tab.append(&scroll);
+
+        // Display type change handler
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let bar_config_frame_clone = bar_config_frame.clone();
+        let text_config_frame_clone = text_config_frame.clone();
+        let graph_config_frame_clone = graph_config_frame.clone();
+        let core_bars_config_frame_clone = core_bars_config_frame.clone();
+        let static_config_frame_clone = static_config_frame.clone();
+        let arc_config_frame_clone = arc_config_frame.clone();
+        let speedometer_config_frame_clone = speedometer_config_frame.clone();
+        type_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            let display_type = match selected {
+                0 => ContentDisplayType::Bar,
+                1 => ContentDisplayType::Text,
+                2 => ContentDisplayType::Graph,
+                3 => ContentDisplayType::CoreBars,
+                4 => ContentDisplayType::Static,
+                5 => ContentDisplayType::Arc,
+                _ => ContentDisplayType::Speedometer,
+            };
+            let show_bar = matches!(display_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
+            let show_text = matches!(display_type, ContentDisplayType::Text | ContentDisplayType::Static);
+            bar_config_frame_clone.set_visible(show_bar);
+            text_config_frame_clone.set_visible(show_text);
+            graph_config_frame_clone.set_visible(display_type == ContentDisplayType::Graph);
+            core_bars_config_frame_clone.set_visible(display_type == ContentDisplayType::CoreBars);
+            static_config_frame_clone.set_visible(display_type == ContentDisplayType::Static);
+            arc_config_frame_clone.set_visible(display_type == ContentDisplayType::Arc);
+            speedometer_config_frame_clone.set_visible(display_type == ContentDisplayType::Speedometer);
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.display_as = display_type;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Item height change handler
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        height_spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.item_height = spin.value();
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        tab
+    }
+
+    /// Default bar config with terminal/phosphor colors
+    fn default_bar_config_terminal() -> crate::ui::BarDisplayConfig {
+        use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
+
+        let mut config = BarDisplayConfig::default();
+        config.style = BarStyle::Full;
+        config.orientation = BarOrientation::Horizontal;
+        config.fill_direction = BarFillDirection::LeftToRight;
+
+        // Terminal green phosphor
+        config.foreground = BarFillType::Solid {
+            color: Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
+        };
+        config.background = BarBackgroundType::Solid {
+            color: Color { r: 0.05, g: 0.1, b: 0.05, a: 1.0 }
+        };
+        config.border = BorderConfig {
+            enabled: true,
+            color: Color { r: 0.1, g: 0.5, b: 0.1, a: 1.0 },
+            width: 1.0,
+        };
+        config.corner_radius = 0.0;
+
+        config
+    }
+
+    /// Default graph config with terminal colors
+    fn default_graph_config_terminal() -> crate::ui::GraphDisplayConfig {
+        use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
+
+        let mut config = GraphDisplayConfig::default();
+        config.graph_type = GraphType::Line;
+        config.line_style = LineStyle::Solid;
+        config.line_width = 1.5;
+        config.line_color = Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 };  // Phosphor green
+        config.fill_mode = FillMode::Gradient;
+        config.fill_gradient_start = Color { r: 0.1, g: 0.5, b: 0.1, a: 0.3 };
+        config.fill_gradient_end = Color { r: 0.05, g: 0.2, b: 0.05, a: 0.0 };
+        config.background_color = Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 };
+        config.plot_background_color = Color { r: 0.02, g: 0.05, b: 0.02, a: 1.0 };
+        config.x_axis.show_grid = true;
+        config.x_axis.grid_color = Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 };
+        config.y_axis.show_grid = true;
+        config.y_axis.grid_color = Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 };
+
+        config
+    }
+
+    fn create_animation_page(
+        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
+    ) -> GtkBox {
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Enable animation
+        let enable_check = CheckButton::with_label("Enable Animation");
+        enable_check.set_active(config.borrow().animation_enabled);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        enable_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().animation_enabled = check.is_active();
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
+        });
+        page.append(&enable_check);
+
+        // Cursor blink
+        let cursor_blink_check = CheckButton::with_label("Cursor Blink");
+        cursor_blink_check.set_active(config.borrow().frame.cursor_blink);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        cursor_blink_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.cursor_blink = check.is_active();
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
+        });
+        page.append(&cursor_blink_check);
+
+        // Typewriter effect
+        let typewriter_check = CheckButton::with_label("Typewriter Text Effect");
+        typewriter_check.set_active(config.borrow().frame.typewriter_effect);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        typewriter_check.connect_toggled(move |check| {
+            config_clone.borrow_mut().frame.typewriter_effect = check.is_active();
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
+        });
+        page.append(&typewriter_check);
+
+        // Store widget refs
+        *animation_widgets_out.borrow_mut() = Some(AnimationWidgets {
+            enable_check,
+            cursor_blink_check,
+            typewriter_check,
+        });
+
+        page
+    }
+
+    // Public API
+
+    pub fn widget(&self) -> &GtkBox {
+        &self.container
+    }
+
+    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    pub fn get_config(&self) -> RetroTerminalDisplayConfig {
+        self.config.borrow().clone()
+    }
+
+    pub fn set_config(&self, config: &RetroTerminalDisplayConfig) {
+        *self.config.borrow_mut() = config.clone();
+
+        // Update Colors widgets
+        if let Some(widgets) = self.colors_widgets.borrow().as_ref() {
+            let phosphor_idx = match &config.frame.phosphor_color {
+                PhosphorColor::Green => 0,
+                PhosphorColor::Amber => 1,
+                PhosphorColor::White => 2,
+                PhosphorColor::Blue => 3,
+                PhosphorColor::Custom(_) => 4,
+            };
+            widgets.phosphor_dropdown.set_selected(phosphor_idx);
+            widgets.custom_phosphor_box.set_visible(phosphor_idx == 4);
+            if let PhosphorColor::Custom(c) = &config.frame.phosphor_color {
+                widgets.custom_phosphor_widget.set_color(*c);
+            }
+            widgets.background_widget.set_color(config.frame.background_color);
+            widgets.brightness_scale.set_value(config.frame.text_brightness);
+        }
+
+        // Update Effects widgets
+        if let Some(widgets) = self.effects_widgets.borrow().as_ref() {
+            widgets.scanline_intensity_scale.set_value(config.frame.scanline_intensity);
+            widgets.scanline_spacing_spin.set_value(config.frame.scanline_spacing);
+            widgets.curvature_scale.set_value(config.frame.curvature_amount);
+            widgets.vignette_scale.set_value(config.frame.vignette_intensity);
+            widgets.glow_scale.set_value(config.frame.screen_glow);
+            widgets.flicker_check.set_active(config.frame.flicker_enabled);
+        }
+
+        // Update Bezel widgets
+        if let Some(widgets) = self.bezel_widgets.borrow().as_ref() {
+            widgets.style_dropdown.set_selected(match config.frame.bezel_style {
+                BezelStyle::Classic => 0,
+                BezelStyle::Slim => 1,
+                BezelStyle::Industrial => 2,
+                BezelStyle::None => 3,
+            });
+            widgets.color_widget.set_color(config.frame.bezel_color);
+            widgets.width_spin.set_value(config.frame.bezel_width);
+            widgets.show_led_check.set_active(config.frame.show_power_led);
+            widgets.led_color_widget.set_color(config.frame.power_led_color);
+        }
+
+        // Update Header widgets
+        if let Some(widgets) = self.header_widgets.borrow().as_ref() {
+            widgets.show_header_check.set_active(config.frame.show_header);
+            widgets.header_text_entry.set_text(&config.frame.header_text);
+            widgets.header_style_dropdown.set_selected(match config.frame.header_style {
+                TerminalHeaderStyle::TitleBar => 0,
+                TerminalHeaderStyle::StatusLine => 1,
+                TerminalHeaderStyle::Prompt => 2,
+                TerminalHeaderStyle::None => 3,
+            });
+            widgets.header_height_spin.set_value(config.frame.header_height);
+            widgets.header_font_btn.set_label(&config.frame.header_font);
+            widgets.header_font_size_spin.set_value(config.frame.header_font_size);
+        }
+
+        // Update Layout widgets
+        if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
+            widgets.split_orientation_dropdown.set_selected(match config.frame.split_orientation {
+                SplitOrientation::Horizontal => 0,
+                SplitOrientation::Vertical => 1,
+            });
+            widgets.content_padding_spin.set_value(config.frame.content_padding);
+            widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
+                TerminalDividerStyle::Dashed => 0,
+                TerminalDividerStyle::Solid => 1,
+                TerminalDividerStyle::BoxDrawing => 2,
+                TerminalDividerStyle::Pipe => 3,
+                TerminalDividerStyle::Ascii => 4,
+                TerminalDividerStyle::None => 5,
+            });
+            widgets.divider_padding_spin.set_value(config.frame.divider_padding);
+
+            Self::rebuild_group_spinners(
+                &self.config,
+                &self.on_change,
+                &self.preview,
+                &widgets.group_weights_box,
+            );
+        }
+
+        // Update Animation widgets
+        if let Some(widgets) = self.animation_widgets.borrow().as_ref() {
+            widgets.enable_check.set_active(config.animation_enabled);
+            widgets.cursor_blink_check.set_active(config.frame.cursor_blink);
+            widgets.typewriter_check.set_active(config.frame.typewriter_effect);
+        }
+
+        // Rebuild content tabs
+        Self::rebuild_content_tabs(
+            &self.config,
+            &self.on_change,
+            &self.preview,
+            &self.content_notebook,
+            &self.source_summaries,
+            &self.available_fields,
+        );
+
+        self.preview.queue_draw();
+    }
+
+    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
+        // Extract group configuration from summaries
+        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        for (_, _, group_num, item_idx) in &summaries {
+            let current_max = group_item_counts.entry(*group_num).or_insert(0);
+            if *item_idx > *current_max {
+                *current_max = *item_idx;
+            }
+        }
+
+        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
+        group_nums.sort();
+        let group_counts: Vec<usize> = group_nums.iter()
+            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
+            .collect();
+
+        // Update the frame config with group information
+        {
+            let mut cfg = self.config.borrow_mut();
+            let new_group_count = group_nums.len();
+            cfg.frame.group_count = new_group_count;
+            cfg.frame.group_item_counts = group_counts;
+
+            while cfg.frame.group_size_weights.len() < new_group_count {
+                cfg.frame.group_size_weights.push(1.0);
+            }
+            cfg.frame.group_size_weights.truncate(new_group_count);
+        }
+
+        *self.source_summaries.borrow_mut() = summaries;
+
+        // Rebuild group weight spinners in Layout tab
+        if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
+            Self::rebuild_group_spinners(
+                &self.config,
+                &self.on_change,
+                &self.preview,
+                &widgets.group_weights_box,
+            );
+        }
+
+        Self::rebuild_content_tabs(
+            &self.config,
+            &self.on_change,
+            &self.preview,
+            &self.content_notebook,
+            &self.source_summaries,
+            &self.available_fields,
+        );
+
+        // Notify that config has changed so displayer gets updated
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
+    }
+
+    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
+        *self.available_fields.borrow_mut() = fields;
+
+        // Rebuild content tabs to reflect new field options
+        Self::rebuild_content_tabs(
+            &self.config,
+            &self.on_change,
+            &self.preview,
+            &self.content_notebook,
+            &self.source_summaries,
+            &self.available_fields,
+        );
+    }
+}
+
+impl Default for RetroTerminalConfigWidget {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}

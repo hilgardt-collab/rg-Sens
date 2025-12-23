@@ -81,6 +81,7 @@ mod indicator;
 mod cyberpunk;
 mod material;
 mod industrial;
+mod retro_terminal;
 pub mod combo_utils;
 // mod level_bar;
 
@@ -98,6 +99,7 @@ pub use indicator::{IndicatorDisplayer, IndicatorConfig, IndicatorShape, interpo
 pub use cyberpunk::{CyberpunkDisplayer, CyberpunkDisplayConfig};
 pub use material::{MaterialDisplayer, MaterialDisplayConfig};
 pub use industrial::{IndustrialDisplayer, IndustrialDisplayConfig};
+pub use retro_terminal::{RetroTerminalDisplayer, RetroTerminalDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -196,6 +198,13 @@ pub fn register_all() {
         "industrial",
         "Industrial Gauge",
         || Box::new(IndustrialDisplayer::new()),
+    );
+
+    // Register Retro Terminal CRT displayer
+    global_registry().register_displayer_with_info(
+        "retro_terminal",
+        "Retro Terminal",
+        || Box::new(RetroTerminalDisplayer::new()),
     );
 
     // TODO: Register more displayers

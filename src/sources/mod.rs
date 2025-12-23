@@ -98,11 +98,11 @@ pub fn register_all() {
         || Box::new(ClockSource::new()),
     );
 
-    // Register Combination source - compatible with LCARS, Cyberpunk, Material and Industrial displayers
+    // Register Combination source - compatible with LCARS, Cyberpunk, Material, Industrial and Retro Terminal displayers
     global_registry().register_source_with_info(
         "combination",
         "Combination",
-        &["lcars", "cyberpunk", "material", "industrial"],
+        &["lcars", "cyberpunk", "material", "industrial", "retro_terminal"],
         || Box::new(ComboSource::new()),
     );
 

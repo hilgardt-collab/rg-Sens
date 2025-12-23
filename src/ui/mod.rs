@@ -51,6 +51,8 @@ pub mod material_display;
 mod material_config_widget;
 pub mod industrial_display;
 mod industrial_config_widget;
+pub mod retro_terminal_display;
+mod retro_terminal_config_widget;
 pub mod theme;
 pub mod window_settings_dialog;
 pub mod new_panel_dialog;
@@ -122,3 +124,10 @@ pub use industrial_display::{
     draw_group_dividers as industrial_draw_group_dividers, draw_group_panel as industrial_draw_group_panel,
 };
 pub use industrial_config_widget::IndustrialConfigWidget;
+pub use retro_terminal_display::{
+    RetroTerminalFrameConfig, PhosphorColor, BezelStyle as RetroBezelStyle,
+    TerminalHeaderStyle, TerminalDividerStyle, render_retro_terminal_frame,
+    calculate_group_layouts as retro_calculate_group_layouts,
+    draw_group_dividers as retro_draw_group_dividers,
+};
+pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
