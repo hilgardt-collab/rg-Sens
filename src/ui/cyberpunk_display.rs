@@ -72,6 +72,7 @@ fn default_header_font() -> String { "Rajdhani".to_string() }
 fn default_header_font_size() -> f64 { 18.0 }
 fn default_content_padding() -> f64 { 10.0 }
 fn default_divider_width() -> f64 { 1.0 }
+fn default_divider_padding() -> f64 { 4.0 }
 fn default_group_count() -> usize { 2 }
 
 fn default_border_color() -> Color {
@@ -162,6 +163,9 @@ pub struct CyberpunkFrameConfig {
     pub divider_color: Color,
     #[serde(default = "default_divider_width")]
     pub divider_width: f64,
+    /// Padding above and below dividers (in pixels)
+    #[serde(default = "default_divider_padding")]
+    pub divider_padding: f64,
 
     // Content item framing
     #[serde(default)]
@@ -206,6 +210,7 @@ impl Default for CyberpunkFrameConfig {
             divider_style: DividerStyle::default(),
             divider_color: default_divider_color(),
             divider_width: default_divider_width(),
+            divider_padding: default_divider_padding(),
             item_frame_enabled: false,
             item_frame_color: default_item_frame_color(),
             item_glow_enabled: false,
@@ -765,7 +770,7 @@ pub fn calculate_group_layouts(
 
     let total_weight: f64 = weights.iter().sum();
     let divider_count = group_count.saturating_sub(1);
-    let divider_space = divider_count as f64 * (config.divider_width + 8.0);
+    let divider_space = divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
 
     match config.split_orientation {
         SplitOrientation::Vertical => {
@@ -778,7 +783,7 @@ pub fn calculate_group_layouts(
                 current_y += group_h;
 
                 if i < divider_count {
-                    current_y += config.divider_width + 8.0;
+                    current_y += config.divider_width + config.divider_padding * 2.0;
                 }
             }
         }
@@ -792,7 +797,7 @@ pub fn calculate_group_layouts(
                 current_x += group_w;
 
                 if i < divider_count {
-                    current_x += config.divider_width + 8.0;
+                    current_x += config.divider_width + config.divider_padding * 2.0;
                 }
             }
         }
@@ -816,11 +821,11 @@ pub fn draw_group_dividers(
 
         match config.split_orientation {
             SplitOrientation::Vertical => {
-                let divider_y = y1 + h1 + 4.0;
+                let divider_y = y1 + h1 + config.divider_padding;
                 draw_divider(cr, config, x1, divider_y, w1, true);
             }
             SplitOrientation::Horizontal => {
-                let divider_x = x1 + w1 + 4.0;
+                let divider_x = x1 + w1 + config.divider_padding;
                 draw_divider(cr, config, divider_x, y1, h1, false);
             }
         }

@@ -65,6 +65,7 @@ struct LayoutWidgets {
     divider_style_dropdown: DropDown,
     divider_color_widget: Rc<ColorButtonWidget>,
     divider_width_spin: SpinButton,
+    divider_padding_spin: SpinButton,
     group_weights_box: GtkBox,
 }
 
@@ -784,6 +785,23 @@ impl CyberpunkConfigWidget {
         });
         page.append(&div_width_box);
 
+        // Divider padding
+        let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
+        div_padding_box.append(&Label::new(Some("Padding:")));
+        let divider_padding_spin = SpinButton::with_range(0.0, 20.0, 1.0);
+        divider_padding_spin.set_value(config.borrow().frame.divider_padding);
+        divider_padding_spin.set_hexpand(true);
+        div_padding_box.append(&divider_padding_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        divider_padding_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().frame.divider_padding = spin.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&div_padding_box);
+
         // Initial build of group weight spinners
         Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
 
@@ -793,6 +811,7 @@ impl CyberpunkConfigWidget {
             divider_style_dropdown,
             divider_color_widget,
             divider_width_spin,
+            divider_padding_spin,
             group_weights_box,
         });
 
@@ -1690,6 +1709,7 @@ impl CyberpunkConfigWidget {
             });
             widgets.divider_color_widget.set_color(config.frame.divider_color);
             widgets.divider_width_spin.set_value(config.frame.divider_width);
+            widgets.divider_padding_spin.set_value(config.frame.divider_padding);
 
             // Rebuild group weight spinners
             Self::rebuild_group_spinners(
