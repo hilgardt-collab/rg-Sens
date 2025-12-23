@@ -12,6 +12,7 @@ use crate::ui::arc_display::{
     render_arc, ArcCapStyle, ArcDisplayConfig, ArcTaperStyle, ColorApplicationMode,
     ColorTransitionStyle,
 };
+use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::{GradientEditor, LinearGradientConfig};
@@ -108,7 +109,113 @@ impl ArcConfigWidget {
         notebook.append_page(&text_page, Some(&Label::new(Some("Text"))));
 
         container.append(&preview);
+
+        // Copy/Paste buttons for the entire arc config
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        copy_paste_box.set_halign(gtk4::Align::End);
+        copy_paste_box.set_margin_bottom(6);
+
+        let copy_btn = Button::with_label("Copy Arc Config");
+        let paste_btn = Button::with_label("Paste Arc Config");
+
+        copy_paste_box.append(&copy_btn);
+        copy_paste_box.append(&paste_btn);
+        container.append(&copy_paste_box);
+
         container.append(&notebook);
+
+        // Connect copy button
+        let config_for_copy = config.clone();
+        copy_btn.connect_clicked(move |_| {
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_arc_display(config_for_copy.borrow().clone());
+            }
+        });
+
+        // Connect paste button - needs to update all UI widgets
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        let start_angle_spin_paste = start_angle_spin.clone();
+        let end_angle_spin_paste = end_angle_spin.clone();
+        let arc_width_scale_paste = arc_width_scale.clone();
+        let radius_scale_paste = radius_scale.clone();
+        let segmented_check_paste = segmented_check.clone();
+        let segment_count_spin_paste = segment_count_spin.clone();
+        let segment_spacing_spin_paste = segment_spacing_spin.clone();
+        let cap_style_dropdown_paste = cap_style_dropdown.clone();
+        let taper_style_dropdown_paste = taper_style_dropdown.clone();
+        let taper_amount_spin_paste = taper_amount_spin.clone();
+        let color_transition_dropdown_paste = color_transition_dropdown.clone();
+        let color_mode_dropdown_paste = color_mode_dropdown.clone();
+        let gradient_editor_paste = gradient_editor.clone();
+        let show_bg_arc_check_paste = show_bg_arc_check.clone();
+        let overlay_bg_check_paste = overlay_bg_check.clone();
+        let animate_check_paste = animate_check.clone();
+        let animation_duration_spin_paste = animation_duration_spin.clone();
+
+        paste_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(new_config) = clipboard.paste_arc_display() {
+                    *config_for_paste.borrow_mut() = new_config.clone();
+
+                    // Update all UI controls
+                    start_angle_spin_paste.set_value(new_config.start_angle);
+                    end_angle_spin_paste.set_value(new_config.end_angle);
+                    arc_width_scale_paste.set_value(new_config.arc_width);
+                    radius_scale_paste.set_value(new_config.radius_percent);
+                    segmented_check_paste.set_active(new_config.segmented);
+                    segment_count_spin_paste.set_value(new_config.segment_count as f64);
+                    segment_spacing_spin_paste.set_value(new_config.segment_spacing);
+
+                    let cap_index = match new_config.cap_style {
+                        ArcCapStyle::Butt => 0,
+                        ArcCapStyle::Round => 1,
+                        ArcCapStyle::Pointed => 2,
+                    };
+                    cap_style_dropdown_paste.set_selected(cap_index);
+
+                    let taper_index = match new_config.taper_style {
+                        ArcTaperStyle::None => 0,
+                        ArcTaperStyle::Start => 1,
+                        ArcTaperStyle::End => 2,
+                        ArcTaperStyle::Both => 3,
+                    };
+                    taper_style_dropdown_paste.set_selected(taper_index);
+
+                    taper_amount_spin_paste.set_value(new_config.taper_amount * 100.0);
+
+                    let trans_index = match new_config.color_transition {
+                        ColorTransitionStyle::Smooth => 0,
+                        ColorTransitionStyle::Abrupt => 1,
+                    };
+                    color_transition_dropdown_paste.set_selected(trans_index);
+
+                    let mode_index = match new_config.color_mode {
+                        ColorApplicationMode::Progressive => 0,
+                        ColorApplicationMode::Segments => 1,
+                    };
+                    color_mode_dropdown_paste.set_selected(mode_index);
+
+                    show_bg_arc_check_paste.set_active(new_config.show_background_arc);
+                    overlay_bg_check_paste.set_active(new_config.overlay_background);
+                    animate_check_paste.set_active(new_config.animate);
+                    animation_duration_spin_paste.set_value(new_config.animation_duration * 1000.0);
+
+                    // Update gradient editor
+                    let gradient = LinearGradientConfig {
+                        angle: 0.0,
+                        stops: new_config.color_stops,
+                    };
+                    gradient_editor_paste.set_gradient(&gradient);
+
+                    preview_for_paste.queue_draw();
+                    if let Some(cb) = on_change_for_paste.borrow().as_ref() {
+                        cb();
+                    }
+                }
+            }
+        });
 
         Self {
             container,

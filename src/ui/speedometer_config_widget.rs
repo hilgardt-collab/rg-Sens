@@ -11,6 +11,7 @@ use std::rc::Rc;
 use crate::ui::speedometer_display::{
     render_speedometer, NeedleStyle, NeedleTailStyle, SpeedometerConfig, TickStyle,
 };
+use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
@@ -162,7 +163,184 @@ impl SpeedometerConfigWidget {
         notebook.append_page(&text_page, Some(&Label::new(Some("Text Overlay"))));
 
         container.append(&preview);
+
+        // Copy/Paste buttons for the entire speedometer config
+        let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
+        copy_paste_box.set_halign(gtk4::Align::End);
+        copy_paste_box.set_margin_bottom(6);
+
+        let copy_btn = Button::with_label("Copy Speedometer Config");
+        let paste_btn = Button::with_label("Paste Speedometer Config");
+
+        copy_paste_box.append(&copy_btn);
+        copy_paste_box.append(&paste_btn);
+        container.append(&copy_paste_box);
+
         container.append(&notebook);
+
+        // Connect copy button
+        let config_for_copy = config.clone();
+        copy_btn.connect_clicked(move |_| {
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_speedometer_display(config_for_copy.borrow().clone());
+            }
+        });
+
+        // Connect paste button - needs to update all UI widgets
+        let config_for_paste = config.clone();
+        let preview_for_paste = preview.clone();
+        let on_change_for_paste = on_change.clone();
+        let start_angle_spin_paste = start_angle_spin.clone();
+        let end_angle_spin_paste = end_angle_spin.clone();
+        let arc_width_scale_paste = arc_width_scale.clone();
+        let radius_scale_paste = radius_scale.clone();
+        let show_track_check_paste = show_track_check.clone();
+        let track_color_widget_paste = track_color_widget.clone();
+        let gradient_editor_paste = gradient_editor.clone();
+        let show_major_ticks_check_paste = show_major_ticks_check.clone();
+        let major_tick_count_spin_paste = major_tick_count_spin.clone();
+        let major_tick_length_scale_paste = major_tick_length_scale.clone();
+        let major_tick_width_spin_paste = major_tick_width_spin.clone();
+        let major_tick_color_button_paste = major_tick_color_button.clone();
+        let major_tick_style_dropdown_paste = major_tick_style_dropdown.clone();
+        let show_minor_ticks_check_paste = show_minor_ticks_check.clone();
+        let minor_ticks_per_major_spin_paste = minor_ticks_per_major_spin.clone();
+        let minor_tick_length_scale_paste = minor_tick_length_scale.clone();
+        let minor_tick_width_spin_paste = minor_tick_width_spin.clone();
+        let minor_tick_color_button_paste = minor_tick_color_button.clone();
+        let minor_tick_style_dropdown_paste = minor_tick_style_dropdown.clone();
+        let show_tick_labels_check_paste = show_tick_labels_check.clone();
+        let tick_label_font_button_paste = tick_label_font_button.clone();
+        let tick_label_font_size_spin_paste = tick_label_font_size_spin.clone();
+        let tick_label_color_button_paste = tick_label_color_button.clone();
+        let tick_label_bold_check_paste = tick_label_bold_check.clone();
+        let tick_label_italic_check_paste = tick_label_italic_check.clone();
+        let tick_label_use_percentage_check_paste = tick_label_use_percentage_check.clone();
+        let show_needle_check_paste = show_needle_check.clone();
+        let needle_style_dropdown_paste = needle_style_dropdown.clone();
+        let needle_tail_style_dropdown_paste = needle_tail_style_dropdown.clone();
+        let needle_length_scale_paste = needle_length_scale.clone();
+        let needle_width_spin_paste = needle_width_spin.clone();
+        let needle_color_button_paste = needle_color_button.clone();
+        let needle_shadow_check_paste = needle_shadow_check.clone();
+        let show_center_hub_check_paste = show_center_hub_check.clone();
+        let center_hub_radius_scale_paste = center_hub_radius_scale.clone();
+        let center_hub_color_button_paste = center_hub_color_button.clone();
+        let center_hub_3d_check_paste = center_hub_3d_check.clone();
+        let show_bezel_check_paste = show_bezel_check.clone();
+        let bezel_width_scale_paste = bezel_width_scale.clone();
+        let bezel_background_widget_paste = bezel_background_widget.clone();
+        let animate_check_paste = animate_check.clone();
+        let animation_duration_spin_paste = animation_duration_spin.clone();
+        let bounce_animation_check_paste = bounce_animation_check.clone();
+        let enable_text_overlay_check_paste = enable_text_overlay_check.clone();
+        let text_config_widget_paste = text_config_widget.clone();
+
+        paste_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some(new_config) = clipboard.paste_speedometer_display() {
+                    *config_for_paste.borrow_mut() = new_config.clone();
+
+                    // Update geometry
+                    start_angle_spin_paste.set_value(new_config.start_angle);
+                    end_angle_spin_paste.set_value(new_config.end_angle);
+                    arc_width_scale_paste.set_value(new_config.arc_width);
+                    radius_scale_paste.set_value(new_config.radius_percent);
+
+                    // Update track
+                    show_track_check_paste.set_active(new_config.show_track);
+                    track_color_widget_paste.set_color(new_config.track_color);
+                    let gradient_config = crate::ui::LinearGradientConfig {
+                        angle: 0.0,
+                        stops: new_config.track_color_stops.clone(),
+                    };
+                    gradient_editor_paste.set_gradient(&gradient_config);
+
+                    // Update major ticks
+                    show_major_ticks_check_paste.set_active(new_config.show_major_ticks);
+                    major_tick_count_spin_paste.set_value(new_config.major_tick_count as f64);
+                    major_tick_length_scale_paste.set_value(new_config.major_tick_length);
+                    major_tick_width_spin_paste.set_value(new_config.major_tick_width);
+                    major_tick_color_button_paste.set_color(new_config.major_tick_color);
+                    let major_style_idx = match new_config.major_tick_style {
+                        TickStyle::Line => 0,
+                        TickStyle::Wedge => 1,
+                        TickStyle::Dot => 2,
+                    };
+                    major_tick_style_dropdown_paste.set_selected(major_style_idx);
+
+                    // Update minor ticks
+                    show_minor_ticks_check_paste.set_active(new_config.show_minor_ticks);
+                    minor_ticks_per_major_spin_paste.set_value(new_config.minor_ticks_per_major as f64);
+                    minor_tick_length_scale_paste.set_value(new_config.minor_tick_length);
+                    minor_tick_width_spin_paste.set_value(new_config.minor_tick_width);
+                    minor_tick_color_button_paste.set_color(new_config.minor_tick_color);
+                    let minor_style_idx = match new_config.minor_tick_style {
+                        TickStyle::Line => 0,
+                        TickStyle::Wedge => 1,
+                        TickStyle::Dot => 2,
+                    };
+                    minor_tick_style_dropdown_paste.set_selected(minor_style_idx);
+
+                    // Update tick labels
+                    show_tick_labels_check_paste.set_active(new_config.show_tick_labels);
+                    tick_label_font_button_paste.set_label(&format!("{} {:.0}",
+                        new_config.tick_label_config.font_family,
+                        new_config.tick_label_config.font_size
+                    ));
+                    tick_label_font_size_spin_paste.set_value(new_config.tick_label_config.font_size);
+                    tick_label_color_button_paste.set_color(new_config.tick_label_config.color);
+                    tick_label_bold_check_paste.set_active(new_config.tick_label_config.bold);
+                    tick_label_italic_check_paste.set_active(new_config.tick_label_config.italic);
+                    tick_label_use_percentage_check_paste.set_active(new_config.tick_label_config.use_percentage);
+
+                    // Update needle
+                    show_needle_check_paste.set_active(new_config.show_needle);
+                    let needle_style_idx = match new_config.needle_style {
+                        NeedleStyle::Arrow => 0,
+                        NeedleStyle::Line => 1,
+                        NeedleStyle::Tapered => 2,
+                        NeedleStyle::Triangle => 3,
+                    };
+                    needle_style_dropdown_paste.set_selected(needle_style_idx);
+                    let needle_tail_idx = match new_config.needle_tail_style {
+                        NeedleTailStyle::None => 0,
+                        NeedleTailStyle::Short => 1,
+                        NeedleTailStyle::Balanced => 2,
+                    };
+                    needle_tail_style_dropdown_paste.set_selected(needle_tail_idx);
+                    needle_length_scale_paste.set_value(new_config.needle_length);
+                    needle_width_spin_paste.set_value(new_config.needle_width);
+                    needle_color_button_paste.set_color(new_config.needle_color);
+                    needle_shadow_check_paste.set_active(new_config.needle_shadow);
+
+                    // Update center hub
+                    show_center_hub_check_paste.set_active(new_config.show_center_hub);
+                    center_hub_radius_scale_paste.set_value(new_config.center_hub_radius);
+                    center_hub_color_button_paste.set_color(new_config.center_hub_color);
+                    center_hub_3d_check_paste.set_active(new_config.center_hub_3d);
+
+                    // Update bezel
+                    show_bezel_check_paste.set_active(new_config.show_bezel);
+                    bezel_width_scale_paste.set_value(new_config.bezel_width);
+                    bezel_background_widget_paste.set_config(new_config.bezel_background.clone());
+
+                    // Update animation
+                    animate_check_paste.set_active(new_config.animate);
+                    animation_duration_spin_paste.set_value(new_config.animation_duration);
+                    bounce_animation_check_paste.set_active(new_config.bounce_animation);
+
+                    // Update text overlay
+                    enable_text_overlay_check_paste.set_active(new_config.text_overlay.enabled);
+                    text_config_widget_paste.set_config(new_config.text_overlay.text_config.clone());
+
+                    preview_for_paste.queue_draw();
+                    if let Some(cb) = on_change_for_paste.borrow().as_ref() {
+                        cb();
+                    }
+                }
+            }
+        });
 
         Self {
             container,

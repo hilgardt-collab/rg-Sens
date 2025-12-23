@@ -7,6 +7,8 @@ use crate::displayers::{TextLineConfig, TextDisplayerConfig};
 use crate::ui::{BackgroundConfig, ColorStop, CpuSourceConfig, GpuSourceConfig};
 use crate::ui::bar_display::BarDisplayConfig;
 use crate::ui::graph_display::GraphDisplayConfig;
+use crate::ui::arc_display::ArcDisplayConfig;
+use crate::ui::speedometer_display::SpeedometerConfig;
 use crate::core::PanelBorderConfig;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -52,6 +54,10 @@ pub struct Clipboard {
     pub graph_display: Option<GraphDisplayConfig>,
     /// Copied text displayer configuration (all lines)
     pub text_display: Option<TextDisplayerConfig>,
+    /// Copied arc display configuration
+    pub arc_display: Option<ArcDisplayConfig>,
+    /// Copied speedometer display configuration
+    pub speedometer_display: Option<SpeedometerConfig>,
     /// Copied generic source configuration as JSON (for combo slots)
     pub source_config: Option<(String, Value)>, // (source_type, config_json)
 }
@@ -177,6 +183,26 @@ impl Clipboard {
         self.text_display.clone()
     }
 
+    /// Copy arc display configuration to clipboard
+    pub fn copy_arc_display(&mut self, config: ArcDisplayConfig) {
+        self.arc_display = Some(config);
+    }
+
+    /// Paste arc display configuration from clipboard
+    pub fn paste_arc_display(&self) -> Option<ArcDisplayConfig> {
+        self.arc_display.clone()
+    }
+
+    /// Copy speedometer display configuration to clipboard
+    pub fn copy_speedometer_display(&mut self, config: SpeedometerConfig) {
+        self.speedometer_display = Some(config);
+    }
+
+    /// Paste speedometer display configuration from clipboard
+    pub fn paste_speedometer_display(&self) -> Option<SpeedometerConfig> {
+        self.speedometer_display.clone()
+    }
+
     /// Copy generic source configuration to clipboard (for combo slots)
     pub fn copy_source_config(&mut self, source_type: String, config: Value) {
         self.source_config = Some((source_type, config));
@@ -202,6 +228,8 @@ impl Clipboard {
         self.bar_display = None;
         self.graph_display = None;
         self.text_display = None;
+        self.arc_display = None;
+        self.speedometer_display = None;
         self.source_config = None;
     }
 }
