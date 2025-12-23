@@ -28,6 +28,12 @@ pub struct CoreBarsConfigWidget {
     start_core_spin: SpinButton,
     end_core_spin: SpinButton,
 
+    // Padding
+    padding_top_spin: SpinButton,
+    padding_bottom_spin: SpinButton,
+    padding_left_spin: SpinButton,
+    padding_right_spin: SpinButton,
+
     // Bar style
     style_dropdown: DropDown,
     orientation_dropdown: DropDown,
@@ -87,7 +93,7 @@ impl CoreBarsConfigWidget {
         notebook.set_vexpand(true);
 
         // === Tab 1: Cores ===
-        let (cores_page, start_core_spin, end_core_spin) =
+        let (cores_page, start_core_spin, end_core_spin, padding_top_spin, padding_bottom_spin, padding_left_spin, padding_right_spin) =
             Self::create_cores_page(&config, &on_change);
         notebook.append_page(&cores_page, Some(&Label::new(Some("Cores"))));
 
@@ -146,6 +152,10 @@ impl CoreBarsConfigWidget {
             on_change,
             start_core_spin,
             end_core_spin,
+            padding_top_spin,
+            padding_bottom_spin,
+            padding_left_spin,
+            padding_right_spin,
             style_dropdown,
             orientation_dropdown,
             fill_direction_dropdown,
@@ -180,7 +190,7 @@ impl CoreBarsConfigWidget {
     fn create_cores_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, SpinButton, SpinButton) {
+    ) -> (GtkBox, SpinButton, SpinButton, SpinButton, SpinButton, SpinButton, SpinButton) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -211,6 +221,41 @@ impl CoreBarsConfigWidget {
         info_label.add_css_class("dim-label");
         page.append(&info_label);
 
+        // Padding section
+        let padding_label = Label::new(Some("Padding"));
+        padding_label.set_xalign(0.0);
+        padding_label.add_css_class("heading");
+        padding_label.set_margin_top(12);
+        page.append(&padding_label);
+
+        // Top/Bottom padding row
+        let tb_row = GtkBox::new(Orientation::Horizontal, 8);
+        tb_row.append(&Label::new(Some("Top:")));
+        let padding_top_adj = Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
+        let padding_top_spin = SpinButton::new(Some(&padding_top_adj), 1.0, 0);
+        padding_top_spin.set_hexpand(true);
+        tb_row.append(&padding_top_spin);
+        tb_row.append(&Label::new(Some("Bottom:")));
+        let padding_bottom_adj = Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
+        let padding_bottom_spin = SpinButton::new(Some(&padding_bottom_adj), 1.0, 0);
+        padding_bottom_spin.set_hexpand(true);
+        tb_row.append(&padding_bottom_spin);
+        page.append(&tb_row);
+
+        // Left/Right padding row
+        let lr_row = GtkBox::new(Orientation::Horizontal, 8);
+        lr_row.append(&Label::new(Some("Left:")));
+        let padding_left_adj = Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
+        let padding_left_spin = SpinButton::new(Some(&padding_left_adj), 1.0, 0);
+        padding_left_spin.set_hexpand(true);
+        lr_row.append(&padding_left_spin);
+        lr_row.append(&Label::new(Some("Right:")));
+        let padding_right_adj = Adjustment::new(0.0, 0.0, 100.0, 1.0, 5.0, 0.0);
+        let padding_right_spin = SpinButton::new(Some(&padding_right_adj), 1.0, 0);
+        padding_right_spin.set_hexpand(true);
+        lr_row.append(&padding_right_spin);
+        page.append(&lr_row);
+
         // Connect signals
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -230,7 +275,43 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        (page, start_core_spin, end_core_spin)
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        padding_top_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().padding_top = spin.value();
+            if let Some(ref cb) = *on_change_clone.borrow() {
+                cb();
+            }
+        });
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        padding_bottom_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().padding_bottom = spin.value();
+            if let Some(ref cb) = *on_change_clone.borrow() {
+                cb();
+            }
+        });
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        padding_left_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().padding_left = spin.value();
+            if let Some(ref cb) = *on_change_clone.borrow() {
+                cb();
+            }
+        });
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        padding_right_spin.connect_value_changed(move |spin| {
+            config_clone.borrow_mut().padding_right = spin.value();
+            if let Some(ref cb) = *on_change_clone.borrow() {
+                cb();
+            }
+        });
+
+        (page, start_core_spin, end_core_spin, padding_top_spin, padding_bottom_spin, padding_left_spin, padding_right_spin)
     }
 
     fn create_style_page(
@@ -1025,6 +1106,12 @@ impl CoreBarsConfigWidget {
         // Update UI elements
         self.start_core_spin.set_value(config.start_core as f64);
         self.end_core_spin.set_value(config.end_core as f64);
+
+        // Padding
+        self.padding_top_spin.set_value(config.padding_top);
+        self.padding_bottom_spin.set_value(config.padding_bottom);
+        self.padding_left_spin.set_value(config.padding_left);
+        self.padding_right_spin.set_value(config.padding_right);
 
         self.style_dropdown.set_selected(match config.bar_style {
             BarStyle::Full => 0,

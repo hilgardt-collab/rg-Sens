@@ -31,6 +31,16 @@ pub struct CoreBarsConfig {
     #[serde(default = "default_end_core")]
     pub end_core: usize,
 
+    // Padding
+    #[serde(default)]
+    pub padding_top: f64,
+    #[serde(default)]
+    pub padding_bottom: f64,
+    #[serde(default)]
+    pub padding_left: f64,
+    #[serde(default)]
+    pub padding_right: f64,
+
     // Bar styling (unified for all bars)
     #[serde(default)]
     pub bar_style: BarStyle,
@@ -129,6 +139,10 @@ impl Default for CoreBarsConfig {
         Self {
             start_core: 0,
             end_core: default_end_core(),
+            padding_top: 0.0,
+            padding_bottom: 0.0,
+            padding_left: 0.0,
+            padding_right: 0.0,
             bar_style: BarStyle::default(),
             orientation: BarOrientation::default(),
             fill_direction: BarFillDirection::default(),
@@ -183,6 +197,16 @@ pub fn render_core_bars(
         return Ok(());
     }
 
+    // Apply padding
+    let padded_x = config.padding_left;
+    let padded_y = config.padding_top;
+    let padded_width = (width - config.padding_left - config.padding_right).max(1.0);
+    let padded_height = (height - config.padding_top - config.padding_bottom).max(1.0);
+
+    // Translate to padded origin
+    cr.save()?;
+    cr.translate(padded_x, padded_y);
+
     // Calculate label space if labels are shown
     let label_space = if config.show_labels {
         calculate_label_space(cr, config, num_bars)
@@ -194,13 +218,14 @@ pub fn render_core_bars(
     // For vertical bars (arranged horizontally), we divide width
     match config.orientation {
         BarOrientation::Horizontal => {
-            render_horizontal_bars(cr, config, core_values, width, height, label_space)?;
+            render_horizontal_bars(cr, config, core_values, padded_width, padded_height, label_space)?;
         }
         BarOrientation::Vertical => {
-            render_vertical_bars(cr, config, core_values, width, height, label_space)?;
+            render_vertical_bars(cr, config, core_values, padded_width, padded_height, label_space)?;
         }
     }
 
+    cr.restore()?;
     Ok(())
 }
 
