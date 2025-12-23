@@ -260,6 +260,85 @@ for (group_idx, (group_x, group_y, group_w, group_h, item_count)) in group_layou
 
 ---
 
+## 12. Config Widget Must Call on_change After set_source_summaries
+
+**Bug**: Industrial combo stopped updating after editing source settings.
+
+**Root Cause**: `set_source_summaries()` updated the config widget's internal config but didn't call the `on_change` callback to notify the parent.
+
+**Fix**: Add `on_change` callback call at the end of `set_source_summaries`:
+```rust
+pub fn set_source_summaries(&self, summaries: ...) {
+    // ... update config and rebuild UI ...
+
+    // Notify that config has changed so displayer gets updated
+    if let Some(cb) = self.on_change.borrow().as_ref() {
+        cb();
+    }
+}
+```
+
+**Prevention**: Any method that modifies the config widget's internal state should call `on_change` to notify listeners.
+
+---
+
+## 13. Combo Source Changes Must Apply Config to Displayer
+
+**Bug**: Combo panel displayers stopped updating when editing source config (adding/removing sources).
+
+**Root Cause**: The `combo_config_widget.on_change()` callback updated displayer config widgets via `set_source_summaries()`, but never applied the updated config to the actual running displayer. The displayer kept using old `group_item_counts` and looked for wrong data keys.
+
+**Fix**: In the combo source config's `on_change` callback, also apply the updated config to the panel's displayer:
+```rust
+combo_config_widget.borrow_mut().set_on_change(move || {
+    // Update config widgets (existing code)
+    industrial_widget.set_source_summaries(summaries);
+
+    // NEW: Apply updated config to the actual displayer
+    if let Ok(mut panel_guard) = panel.try_write() {
+        let displayer_id = panel_guard.displayer.id().to_string();
+        if displayer_id == "industrial" {
+            let config = industrial_widget.get_config();
+            if let Ok(config_json) = serde_json::to_value(&config) {
+                panel_guard.config.insert("industrial_config".to_string(), config_json);
+                let config_clone = panel_guard.config.clone();
+                panel_guard.apply_config(config_clone).ok();
+            }
+        }
+        // ... handle other displayer types ...
+    }
+});
+```
+
+**Prevention**: When source configuration changes affect how data is structured (group counts, item counts), the displayer must be notified immediately, not just when Apply is clicked.
+
+---
+
+## 14. apply_config Must Clear Stale Animation Data
+
+**Bug**: Industrial combo randomly stopped animating after config changes.
+
+**Root Cause**: `apply_config()` updated the config but didn't clear stale animation data (`bar_values`, `core_bar_values`, `graph_history`) or set `dirty = true`.
+
+**Fix**:
+```rust
+fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+    if let Ok(mut display_data) = self.data.lock() {
+        display_data.config = new_config;
+        // Clear stale animation data when config changes
+        display_data.bar_values.clear();
+        display_data.core_bar_values.clear();
+        display_data.graph_history.clear();
+        display_data.dirty = true;
+    }
+    Ok(())
+}
+```
+
+**Prevention**: When config changes, always clear cached/animated values and set `dirty = true` to force a redraw.
+
+---
+
 ## Checklist for New Combo Panels
 
 When creating a new combo panel, verify:
@@ -276,3 +355,6 @@ When creating a new combo panel, verify:
 - [ ] Paste callbacks scale percentage values correctly (match `set_config()` scaling)
 - [ ] No hardcoded magic numbers for layout - use config fields with defaults
 - [ ] Default impl includes all new config fields
+- [ ] `set_source_summaries()` calls `on_change` callback after updating config
+- [ ] Combo source `on_change` applies updated config to the actual displayer (not just config widget)
+- [ ] `apply_config()` clears stale animation data and sets `dirty = true`
