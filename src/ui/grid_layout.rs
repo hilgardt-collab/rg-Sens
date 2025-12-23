@@ -4843,14 +4843,53 @@ fn show_panel_properties_dialog(
     // Wrap material_config_widget in Rc for sharing
     let material_config_widget = Rc::new(material_config_widget);
 
-    // Connect combo_config_widget to update lcars_config_widget, cyberpunk_config_widget and material_config_widget when sources change
+    // === Industrial Gauge Configuration ===
+    let industrial_config_label = Label::new(Some("Industrial Gauge Configuration:"));
+    industrial_config_label.set_halign(gtk4::Align::Start);
+    industrial_config_label.add_css_class("heading");
+    industrial_config_label.set_visible(old_displayer_id == "industrial");
+
+    let industrial_config_widget = crate::ui::IndustrialConfigWidget::new(available_fields.clone());
+    industrial_config_widget.widget().set_visible(old_displayer_id == "industrial");
+
+    // Load existing Industrial config if displayer is industrial
+    if old_displayer_id == "industrial" {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Industrial(industrial_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Industrial config from displayer.get_typed_config() ===");
+            industrial_config_widget.set_config(&industrial_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("industrial_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::IndustrialDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Industrial config from panel config hashmap ===");
+                    industrial_config_widget.set_config(&config);
+                }
+            }
+        }
+    }
+
+    displayer_tab_box.append(&industrial_config_label);
+    displayer_tab_box.append(industrial_config_widget.widget());
+
+    // Set up change callback
+    industrial_config_widget.set_on_change(|| {});
+
+    // Wrap industrial_config_widget in Rc for sharing
+    let industrial_config_widget = Rc::new(industrial_config_widget);
+
+    // Connect combo_config_widget to update lcars_config_widget, cyberpunk_config_widget, material_config_widget and industrial_config_widget when sources change
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
         let material_widget_clone = material_config_widget.clone();
+        let industrial_widget_clone = industrial_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
-            // Get source summaries from combo config and update LCARS, Cyberpunk and Material display configs
+            // Get source summaries from combo config and update LCARS, Cyberpunk, Material and Industrial display configs
             let widget = combo_widget_for_lcars.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
@@ -4859,57 +4898,64 @@ fn show_panel_properties_dialog(
             lcars_widget_clone.set_source_summaries(summaries.clone());
             cyberpunk_widget_clone.set_available_fields(fields.clone());
             cyberpunk_widget_clone.set_source_summaries(summaries.clone());
-            material_widget_clone.set_available_fields(fields);
-            material_widget_clone.set_source_summaries(summaries);
+            material_widget_clone.set_available_fields(fields.clone());
+            material_widget_clone.set_source_summaries(summaries.clone());
+            industrial_widget_clone.set_available_fields(fields);
+            industrial_widget_clone.set_source_summaries(summaries);
         });
 
-        // Initialize LCARS, Cyberpunk and Material with current source summaries if combo source is selected
+        // Initialize LCARS, Cyberpunk, Material and Industrial with current source summaries if combo source is selected
         if old_source_id == "combination" {
             let widget = combo_config_widget.borrow();
             let summaries = widget.get_source_summaries();
             let fields = widget.get_available_fields();
             drop(widget);
-            log::info!("=== Initializing LCARS, Cyberpunk and Material at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
+            log::info!("=== Initializing LCARS, Cyberpunk, Material and Industrial at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
             lcars_config_widget.set_available_fields(fields.clone());
             lcars_config_widget.set_source_summaries(summaries.clone());
             cyberpunk_config_widget.set_available_fields(fields.clone());
             cyberpunk_config_widget.set_source_summaries(summaries.clone());
-            material_config_widget.set_available_fields(fields);
-            material_config_widget.set_source_summaries(summaries);
+            material_config_widget.set_available_fields(fields.clone());
+            material_config_widget.set_source_summaries(summaries.clone());
+            industrial_config_widget.set_available_fields(fields);
+            industrial_config_widget.set_source_summaries(summaries);
         } else {
-            log::info!("=== Skipping LCARS/Cyberpunk/Material init: old_source_id='{}' (need 'combination') ===", old_source_id);
+            log::info!("=== Skipping LCARS/Cyberpunk/Material/Industrial init: old_source_id='{}' (need 'combination') ===", old_source_id);
         }
     }
 
-    // Update LCARS, Cyberpunk and Material widgets when source dropdown changes to "combination"
+    // Update LCARS, Cyberpunk, Material and Industrial widgets when source dropdown changes to "combination"
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
         let material_widget_clone = material_config_widget.clone();
+        let industrial_widget_clone = industrial_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected_idx) {
                 if source_id == "combination" {
-                    // Update LCARS, Cyberpunk and Material with source summaries from combo config
+                    // Update LCARS, Cyberpunk, Material and Industrial with source summaries from combo config
                     let widget = combo_widget_clone.borrow();
                     let summaries = widget.get_source_summaries();
                     let fields = widget.get_available_fields();
                     drop(widget);
-                    log::info!("=== Source changed to 'combination': updating LCARS, Cyberpunk and Material with {} source summaries ===", summaries.len());
+                    log::info!("=== Source changed to 'combination': updating LCARS, Cyberpunk, Material and Industrial with {} source summaries ===", summaries.len());
                     lcars_widget_clone.set_available_fields(fields.clone());
                     lcars_widget_clone.set_source_summaries(summaries.clone());
                     cyberpunk_widget_clone.set_available_fields(fields.clone());
                     cyberpunk_widget_clone.set_source_summaries(summaries.clone());
-                    material_widget_clone.set_available_fields(fields);
-                    material_widget_clone.set_source_summaries(summaries);
+                    material_widget_clone.set_available_fields(fields.clone());
+                    material_widget_clone.set_source_summaries(summaries.clone());
+                    industrial_widget_clone.set_available_fields(fields);
+                    industrial_widget_clone.set_source_summaries(summaries);
                 }
             }
         });
     }
 
-    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, cpu_cores, indicator, cyberpunk and material config based on displayer selection
+    // Show/hide text, bar, arc, speedometer, graph, clock, lcars, cpu_cores, indicator, cyberpunk, material and industrial config based on displayer selection
     {
         let text_widget_clone = text_config_widget.clone();
         let text_label_clone = text_config_label.clone();
@@ -4935,6 +4981,8 @@ fn show_panel_properties_dialog(
         let cyberpunk_label_clone = cyberpunk_config_label.clone();
         let material_widget_clone = material_config_widget.clone();
         let material_label_clone = material_config_label.clone();
+        let industrial_widget_clone = industrial_config_widget.clone();
+        let industrial_label_clone = industrial_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -4951,6 +4999,7 @@ fn show_panel_properties_dialog(
                 let is_indicator = displayer_id == "indicator";
                 let is_cyberpunk = displayer_id == "cyberpunk";
                 let is_material = displayer_id == "material";
+                let is_industrial = displayer_id == "industrial";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -4975,6 +5024,8 @@ fn show_panel_properties_dialog(
                 cyberpunk_label_clone.set_visible(is_cyberpunk);
                 material_widget_clone.widget().set_visible(is_material);
                 material_label_clone.set_visible(is_material);
+                industrial_widget_clone.widget().set_visible(is_industrial);
+                industrial_label_clone.set_visible(is_industrial);
             }
         });
     }
@@ -5062,6 +5113,36 @@ fn show_panel_properties_dialog(
                             log::info!("=== Displayer changed to 'material' with 'combination' source: updating Material with {} source summaries ===", summaries.len());
                             material_widget_clone.set_available_fields(fields);
                             material_widget_clone.set_source_summaries(summaries);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Update Industrial widget when displayer changes to "industrial" and source is "combination"
+    {
+        let industrial_widget_clone = industrial_config_widget.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+                if displayer_id == "industrial" {
+                    // Check if current source is "combination"
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            // Update Industrial with source summaries from combo config
+                            let widget = combo_widget_clone.borrow();
+                            let summaries = widget.get_source_summaries();
+                            let fields = widget.get_available_fields();
+                            drop(widget);
+                            log::info!("=== Displayer changed to 'industrial' with 'combination' source: updating Industrial with {} source summaries ===", summaries.len());
+                            industrial_widget_clone.set_available_fields(fields);
+                            industrial_widget_clone.set_source_summaries(summaries);
                         }
                     }
                 }
@@ -5293,6 +5374,7 @@ fn show_panel_properties_dialog(
     let indicator_config_widget_clone = indicator_config_widget.clone();
     let cyberpunk_config_widget_clone = cyberpunk_config_widget.clone();
     let material_config_widget_clone = material_config_widget.clone();
+    let industrial_config_widget_clone = industrial_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -6132,6 +6214,22 @@ fn show_panel_properties_dialog(
                     // Apply the configuration to the displayer
                     if let Err(e) = panel_guard.apply_config(config_clone) {
                         log::warn!("Failed to apply Material config: {}", e);
+                    }
+                }
+            }
+
+            // Apply Industrial configuration if industrial displayer is active
+            if new_displayer_id == "industrial" {
+                let industrial_config = industrial_config_widget_clone.get_config();
+                if let Ok(industrial_config_json) = serde_json::to_value(&industrial_config) {
+                    panel_guard.config.insert("industrial_config".to_string(), industrial_config_json);
+
+                    // Clone config before applying
+                    let config_clone = panel_guard.config.clone();
+
+                    // Apply the configuration to the displayer
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply Industrial config: {}", e);
                     }
                 }
             }

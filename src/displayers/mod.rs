@@ -80,6 +80,7 @@ mod cpu_cores;
 mod indicator;
 mod cyberpunk;
 mod material;
+mod industrial;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -95,6 +96,7 @@ pub use cpu_cores::CpuCoresDisplayer;
 pub use indicator::{IndicatorDisplayer, IndicatorConfig, IndicatorShape, interpolate_gradient, render_indicator};
 pub use cyberpunk::{CyberpunkDisplayer, CyberpunkDisplayConfig};
 pub use material::{MaterialDisplayer, MaterialDisplayConfig};
+pub use industrial::{IndustrialDisplayer, IndustrialDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -186,6 +188,13 @@ pub fn register_all() {
         "material",
         "Material Cards",
         || Box::new(MaterialDisplayer::new()),
+    );
+
+    // Register Industrial/Gauge Panel displayer
+    global_registry().register_displayer_with_info(
+        "industrial",
+        "Industrial Gauge",
+        || Box::new(IndustrialDisplayer::new()),
     );
 
     // TODO: Register more displayers

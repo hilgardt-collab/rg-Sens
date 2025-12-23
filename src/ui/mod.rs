@@ -49,6 +49,8 @@ pub mod cyberpunk_display;
 mod cyberpunk_config_widget;
 pub mod material_display;
 mod material_config_widget;
+pub mod industrial_display;
+mod industrial_config_widget;
 
 pub use main_window::MainWindow;
 pub use test_source_dialog::{show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback};
@@ -107,3 +109,10 @@ pub use material_display::{
     calculate_group_layouts as material_calculate_group_layouts, draw_group_dividers as material_draw_group_dividers,
 };
 pub use material_config_widget::MaterialConfigWidget;
+pub use industrial_display::{
+    IndustrialFrameConfig, SurfaceTexture, RivetStyle, WarningStripePosition,
+    HeaderStyle as IndustrialHeaderStyle, DividerStyle as IndustrialDividerStyle,
+    render_industrial_frame, calculate_group_layouts as industrial_calculate_group_layouts,
+    draw_group_dividers as industrial_draw_group_dividers, draw_group_panel as industrial_draw_group_panel,
+};
+pub use industrial_config_widget::IndustrialConfigWidget;
