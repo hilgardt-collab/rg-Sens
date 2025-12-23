@@ -479,6 +479,7 @@ fn draw_zone(
     zone: &ValueZone,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
+    cr.new_path();  // Clear any existing path to prevent spurious lines
 
     let zone_start = start_rad + sweep * zone.start_percent;
     let zone_end = start_rad + sweep * zone.end_percent;
@@ -508,6 +509,7 @@ fn draw_track(
     config: &SpeedometerConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
+    cr.new_path();  // Clear any existing path to prevent spurious lines
 
     let arc_width_pixels = radius * config.arc_width;
 
@@ -553,6 +555,7 @@ fn draw_ticks(
     values: &HashMap<String, Value>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
+    cr.new_path();  // Clear any existing path
 
     let arc_width_pixels = radius * config.arc_width;
     let tick_base_radius = radius + arc_width_pixels / 2.0;
