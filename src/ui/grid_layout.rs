@@ -4888,6 +4888,7 @@ fn show_panel_properties_dialog(
         let material_widget_clone = material_config_widget.clone();
         let industrial_widget_clone = industrial_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
+        let panel_for_combo_change = panel.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
             // Get source summaries from combo config and update LCARS, Cyberpunk, Material and Industrial display configs
             let widget = combo_widget_for_lcars.borrow();
@@ -4902,6 +4903,57 @@ fn show_panel_properties_dialog(
             material_widget_clone.set_source_summaries(summaries.clone());
             industrial_widget_clone.set_available_fields(fields);
             industrial_widget_clone.set_source_summaries(summaries);
+
+            // Apply updated config to the active displayer so it uses the new group/item structure
+            // This prevents the displayer from looking for wrong data keys after source config changes
+            if let Ok(mut panel_guard) = panel_for_combo_change.try_write() {
+                let displayer_id = panel_guard.displayer.id().to_string();
+
+                // Apply Industrial config if active
+                if displayer_id == "industrial" {
+                    let industrial_config = industrial_widget_clone.get_config();
+                    if let Ok(config_json) = serde_json::to_value(&industrial_config) {
+                        panel_guard.config.insert("industrial_config".to_string(), config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Industrial config on source change: {}", e);
+                        }
+                    }
+                }
+                // Apply LCARS config if active
+                else if displayer_id == "lcars" {
+                    let lcars_config = lcars_widget_clone.get_config();
+                    if let Ok(config_json) = serde_json::to_value(&lcars_config) {
+                        panel_guard.config.insert("lcars_config".to_string(), config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply LCARS config on source change: {}", e);
+                        }
+                    }
+                }
+                // Apply Cyberpunk config if active
+                else if displayer_id == "cyberpunk" {
+                    let cyberpunk_config = cyberpunk_widget_clone.get_config();
+                    if let Ok(config_json) = serde_json::to_value(&cyberpunk_config) {
+                        panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
+                        }
+                    }
+                }
+                // Apply Material config if active
+                else if displayer_id == "material" {
+                    let material_config = material_widget_clone.get_config();
+                    if let Ok(config_json) = serde_json::to_value(&material_config) {
+                        panel_guard.config.insert("material_config".to_string(), config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Material config on source change: {}", e);
+                        }
+                    }
+                }
+            }
         });
 
         // Initialize LCARS, Cyberpunk, Material and Industrial with current source summaries if combo source is selected
