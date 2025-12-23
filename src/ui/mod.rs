@@ -51,6 +51,12 @@ pub mod material_display;
 mod material_config_widget;
 pub mod industrial_display;
 mod industrial_config_widget;
+pub mod theme;
+pub mod window_settings_dialog;
+pub mod new_panel_dialog;
+pub mod config_helpers;
+pub mod context_menu;
+pub mod auto_scroll;
 
 pub use main_window::MainWindow;
 pub use test_source_dialog::{show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback};
