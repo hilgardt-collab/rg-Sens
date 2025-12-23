@@ -88,6 +88,11 @@ pub struct CoreBarsConfig {
     pub animate: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
+
+    // Gradient across bars - when true, gradient colors span across all bars
+    // (each bar is a solid color sampled from gradient position)
+    #[serde(default)]
+    pub gradient_spans_bars: bool,
 }
 
 fn default_end_core() -> usize {
@@ -162,6 +167,7 @@ impl Default for CoreBarsConfig {
             label_bold: false,
             animate: default_true(),
             animation_speed: default_animation_speed(),
+            gradient_spans_bars: false,
         }
     }
 }
@@ -289,6 +295,8 @@ fn render_horizontal_bars(
             bar_width,
             bar_height,
             true, // horizontal
+            i,
+            num_bars,
         )?;
         cr.restore()?;
 
@@ -346,6 +354,8 @@ fn render_vertical_bars(
             bar_width,
             bar_height,
             false, // vertical
+            i,
+            num_bars,
         )?;
         cr.restore()?;
 
@@ -378,6 +388,8 @@ fn render_single_bar(
     width: f64,
     height: f64,
     horizontal: bool,
+    bar_index: usize,
+    total_bars: usize,
 ) -> Result<(), cairo::Error> {
     let radius = config.corner_radius.min(width / 2.0).min(height / 2.0);
 
@@ -408,7 +420,24 @@ fn render_single_bar(
             if fill_w > 0.0 && fill_h > 0.0 {
                 rounded_rectangle(cr, fill_x, fill_y, fill_w, fill_h, radius);
                 cr.clip();
-                render_foreground(cr, &config.foreground, x, y, width, height)?;
+
+                // When gradient_spans_bars is true, sample a single color from gradient
+                if config.gradient_spans_bars {
+                    if let BarFillType::Gradient { stops, .. } = &config.foreground {
+                        let position = if total_bars > 1 {
+                            bar_index as f64 / (total_bars - 1) as f64
+                        } else {
+                            0.5
+                        };
+                        let color = sample_gradient_color(stops, position);
+                        color.apply_to_cairo(cr);
+                        cr.paint()?;
+                    } else {
+                        render_foreground(cr, &config.foreground, x, y, width, height)?;
+                    }
+                } else {
+                    render_foreground(cr, &config.foreground, x, y, width, height)?;
+                }
             }
             cr.restore()?;
 
@@ -421,7 +450,7 @@ fn render_single_bar(
             }
         }
         BarStyle::Segmented => {
-            render_segmented_single_bar(cr, config, value, x, y, width, height, horizontal)?;
+            render_segmented_single_bar(cr, config, value, x, y, width, height, horizontal, bar_index, total_bars)?;
         }
     }
 
@@ -438,6 +467,8 @@ fn render_segmented_single_bar(
     width: f64,
     height: f64,
     horizontal: bool,
+    bar_index: usize,
+    total_bars: usize,
 ) -> Result<(), cairo::Error> {
     let segment_count = config.segment_count.max(1);
     let spacing = config.segment_spacing;
@@ -477,6 +508,8 @@ fn render_segmented_single_bar(
                 y,
                 width,
                 height,
+                bar_index,
+                total_bars,
             )?;
         }
     } else {
@@ -513,6 +546,8 @@ fn render_segmented_single_bar(
                 y,
                 width,
                 height,
+                bar_index,
+                total_bars,
             )?;
         }
     }
@@ -534,13 +569,31 @@ fn render_segment(
     full_y: f64,
     full_width: f64,
     full_height: f64,
+    bar_index: usize,
+    total_bars: usize,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
     rounded_rectangle(cr, seg_x, seg_y, seg_width, seg_height, radius);
 
     if is_filled {
         cr.clip();
-        render_foreground(cr, &config.foreground, full_x, full_y, full_width, full_height)?;
+        // When gradient_spans_bars is true, sample a single color from gradient
+        if config.gradient_spans_bars {
+            if let BarFillType::Gradient { stops, .. } = &config.foreground {
+                let position = if total_bars > 1 {
+                    bar_index as f64 / (total_bars - 1) as f64
+                } else {
+                    0.5
+                };
+                let color = sample_gradient_color(stops, position);
+                color.apply_to_cairo(cr);
+                cr.paint()?;
+            } else {
+                render_foreground(cr, &config.foreground, full_x, full_y, full_width, full_height)?;
+            }
+        } else {
+            render_foreground(cr, &config.foreground, full_x, full_y, full_width, full_height)?;
+        }
     } else {
         cr.clip();
         render_background(cr, &config.background, full_x, full_y, full_width, full_height)?;
@@ -696,6 +749,61 @@ fn render_foreground(
         }
     }
     Ok(())
+}
+
+/// Sample a color from gradient stops at a given position (0.0 to 1.0)
+fn sample_gradient_color(stops: &[ColorStop], position: f64) -> Color {
+    if stops.is_empty() {
+        return Color::new(1.0, 1.0, 1.0, 1.0);
+    }
+
+    if stops.len() == 1 {
+        return stops[0].color;
+    }
+
+    let position = position.clamp(0.0, 1.0);
+
+    // Find the two stops to interpolate between
+    let mut sorted_stops: Vec<ColorStop> = stops.to_vec();
+    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+
+    // Find the stops surrounding our position
+    let mut lower_idx = 0;
+    let mut upper_idx = sorted_stops.len() - 1;
+
+    for i in 0..sorted_stops.len() - 1 {
+        if sorted_stops[i].position <= position && sorted_stops[i + 1].position >= position {
+            lower_idx = i;
+            upper_idx = i + 1;
+            break;
+        }
+    }
+
+    let lower_stop = &sorted_stops[lower_idx];
+    let upper_stop = &sorted_stops[upper_idx];
+
+    // Handle edge cases
+    if position <= lower_stop.position {
+        return lower_stop.color;
+    }
+    if position >= upper_stop.position {
+        return upper_stop.color;
+    }
+
+    // Interpolate between the two stops
+    let range = upper_stop.position - lower_stop.position;
+    if range <= 0.0 {
+        return lower_stop.color;
+    }
+
+    let t = (position - lower_stop.position) / range;
+
+    Color::new(
+        lower_stop.color.r + (upper_stop.color.r - lower_stop.color.r) * t,
+        lower_stop.color.g + (upper_stop.color.g - lower_stop.color.g) * t,
+        lower_stop.color.b + (upper_stop.color.b - lower_stop.color.b) * t,
+        lower_stop.color.a + (upper_stop.color.a - lower_stop.color.a) * t,
+    )
 }
 
 /// Render a gradient

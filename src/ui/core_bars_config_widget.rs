@@ -75,6 +75,9 @@ pub struct CoreBarsConfigWidget {
     // Animation
     animate_check: CheckButton,
     animation_speed_scale: Scale,
+
+    // Gradient spans bars option
+    gradient_spans_bars_check: CheckButton,
 }
 
 impl CoreBarsConfigWidget {
@@ -106,7 +109,7 @@ impl CoreBarsConfigWidget {
         // === Tab 3: Colors ===
         let (colors_page, fg_solid_radio, fg_gradient_radio, fg_color_widget, fg_gradient_editor,
              bg_solid_radio, bg_gradient_radio, bg_transparent_radio, bg_color_widget, bg_gradient_editor,
-             border_check, border_width_spin, border_color_widget) =
+             border_check, border_width_spin, border_color_widget, gradient_spans_bars_check) =
             Self::create_colors_page(&config, &on_change);
         notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
 
@@ -184,6 +187,7 @@ impl CoreBarsConfigWidget {
             label_bold_check,
             animate_check,
             animation_speed_scale,
+            gradient_spans_bars_check,
         }
     }
 
@@ -507,7 +511,7 @@ impl CoreBarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) -> (GtkBox, CheckButton, CheckButton, Rc<ColorButtonWidget>, Rc<GradientEditor>,
           CheckButton, CheckButton, CheckButton, Rc<ColorButtonWidget>, Rc<GradientEditor>,
-          CheckButton, SpinButton, Rc<ColorButtonWidget>) {
+          CheckButton, SpinButton, Rc<ColorButtonWidget>, CheckButton) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -547,6 +551,13 @@ impl CoreBarsConfigWidget {
         fg_copy_paste_box.append(&fg_paste_gradient_btn);
         fg_copy_paste_box.set_visible(false);
         page.append(&fg_copy_paste_box);
+
+        // Gradient spans bars option
+        let gradient_spans_bars_check = CheckButton::with_label("Gradient spans across bars");
+        gradient_spans_bars_check.set_tooltip_text(Some("Each bar shows a single color sampled from the gradient based on its position"));
+        gradient_spans_bars_check.set_active(config.borrow().gradient_spans_bars);
+        gradient_spans_bars_check.set_visible(false); // Only visible when gradient is selected
+        page.append(&gradient_spans_bars_check);
 
         // Background section
         let bg_label = Label::new(Some("Background:"));
@@ -603,6 +614,7 @@ impl CoreBarsConfigWidget {
         let fg_color_widget_vis = fg_color_widget.widget().clone();
         let fg_gradient_editor_vis = fg_gradient_editor.widget().clone();
         let fg_copy_paste_box_vis = fg_copy_paste_box.clone();
+        let gradient_spans_bars_check_vis = gradient_spans_bars_check.clone();
         let config_for_fg_solid = config.clone();
         let on_change_for_fg_solid = on_change.clone();
         let fg_color_widget_for_solid = fg_color_widget.clone();
@@ -610,6 +622,7 @@ impl CoreBarsConfigWidget {
             fg_color_widget_vis.set_visible(radio.is_active());
             fg_gradient_editor_vis.set_visible(!radio.is_active());
             fg_copy_paste_box_vis.set_visible(!radio.is_active());
+            gradient_spans_bars_check_vis.set_visible(!radio.is_active());
             if radio.is_active() {
                 let color = fg_color_widget_for_solid.color();
                 config_for_fg_solid.borrow_mut().foreground = BarFillType::Solid { color };
@@ -622,6 +635,7 @@ impl CoreBarsConfigWidget {
         let fg_color_widget_vis2 = fg_color_widget.widget().clone();
         let fg_gradient_editor_vis2 = fg_gradient_editor.widget().clone();
         let fg_copy_paste_box_vis2 = fg_copy_paste_box.clone();
+        let gradient_spans_bars_check_vis2 = gradient_spans_bars_check.clone();
         let config_for_fg_gradient = config.clone();
         let on_change_for_fg_gradient_radio = on_change.clone();
         let fg_gradient_editor_for_radio = fg_gradient_editor.clone();
@@ -629,6 +643,7 @@ impl CoreBarsConfigWidget {
             fg_color_widget_vis2.set_visible(!radio.is_active());
             fg_gradient_editor_vis2.set_visible(radio.is_active());
             fg_copy_paste_box_vis2.set_visible(radio.is_active());
+            gradient_spans_bars_check_vis2.set_visible(radio.is_active());
             if radio.is_active() {
                 let gradient = fg_gradient_editor_for_radio.get_gradient();
                 config_for_fg_gradient.borrow_mut().foreground = BarFillType::Gradient {
@@ -830,9 +845,19 @@ impl CoreBarsConfigWidget {
             }
         });
 
+        // Connect gradient spans bars checkbox
+        let config_for_gradient_spans = config.clone();
+        let on_change_for_gradient_spans = on_change.clone();
+        gradient_spans_bars_check.connect_toggled(move |check| {
+            config_for_gradient_spans.borrow_mut().gradient_spans_bars = check.is_active();
+            if let Some(ref cb) = *on_change_for_gradient_spans.borrow() {
+                cb();
+            }
+        });
+
         (page, fg_solid_radio, fg_gradient_radio, fg_color_widget, fg_gradient_editor,
          bg_solid_radio, bg_gradient_radio, bg_transparent_radio, bg_color_widget, bg_gradient_editor,
-         border_check, border_width_spin, border_color_widget)
+         border_check, border_width_spin, border_color_widget, gradient_spans_bars_check)
     }
 
     fn create_labels_page(
@@ -1201,6 +1226,12 @@ impl CoreBarsConfigWidget {
         // Animation
         self.animate_check.set_active(config.animate);
         self.animation_speed_scale.set_value(config.animation_speed);
+
+        // Gradient spans bars
+        self.gradient_spans_bars_check.set_active(config.gradient_spans_bars);
+        // Update visibility based on foreground type
+        let is_gradient = matches!(config.foreground, BarFillType::Gradient { .. });
+        self.gradient_spans_bars_check.set_visible(is_gradient);
 
         // Store config
         *self.config.borrow_mut() = config;
