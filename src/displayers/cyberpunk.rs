@@ -213,12 +213,14 @@ impl CyberpunkDisplayer {
         }
 
         // Determine fixed heights for items that need them
+        // Items with auto_height=false or Graph display type get fixed heights
         let mut fixed_heights: HashMap<usize, f64> = HashMap::new();
         for i in 0..count as usize {
             let prefix = format!("{}{}", base_prefix, i + 1);
             let item_config = config.frame.content_items.get(&prefix);
             if let Some(cfg) = item_config {
-                if matches!(cfg.display_as, ContentDisplayType::Graph) {
+                // Use fixed height if auto_height is disabled or for Graph display type
+                if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
                     fixed_heights.insert(i, cfg.item_height);
                 }
             }

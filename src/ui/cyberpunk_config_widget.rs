@@ -1016,6 +1016,18 @@ impl CyberpunkConfigWidget {
         type_box.append(&type_dropdown);
         inner_box.append(&type_box);
 
+        // Auto height checkbox
+        let auto_height_check = CheckButton::with_label("Auto-adjust height");
+        let current_auto_height = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.auto_height)
+                .unwrap_or(true)
+        };
+        auto_height_check.set_active(current_auto_height);
+        inner_box.append(&auto_height_check);
+
         // Item height
         let height_box = GtkBox::new(Orientation::Horizontal, 6);
         height_box.append(&Label::new(Some("Item Height:")));
@@ -1029,8 +1041,27 @@ impl CyberpunkConfigWidget {
         };
         height_spin.set_value(current_height);
         height_spin.set_hexpand(true);
+        height_spin.set_sensitive(!current_auto_height);
         height_box.append(&height_spin);
         inner_box.append(&height_box);
+
+        // Connect auto-height checkbox to control spinner sensitivity
+        let height_spin_clone = height_spin.clone();
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        auto_height_check.connect_toggled(move |check| {
+            let is_auto = check.is_active();
+            height_spin_clone.set_sensitive(!is_auto);
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.auto_height = is_auto;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
 
         // Get available fields - filter to fields relevant to this slot
         let slot_prefix = format!("{}_", slot_name);

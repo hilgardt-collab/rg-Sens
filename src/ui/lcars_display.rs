@@ -327,6 +327,8 @@ pub struct StaticDisplayConfig {
 pub struct ContentItemConfig {
     #[serde(default)]
     pub display_as: ContentDisplayType,
+    #[serde(default = "default_true")]
+    pub auto_height: bool,
     #[serde(default = "default_item_height")]
     pub item_height: f64,
     #[serde(default)]
@@ -343,6 +345,10 @@ pub struct ContentItemConfig {
     pub speedometer_config: SpeedometerConfig,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 fn default_item_height() -> f64 {
     60.0
 }
@@ -351,6 +357,7 @@ impl Default for ContentItemConfig {
     fn default() -> Self {
         Self {
             display_as: ContentDisplayType::default(),
+            auto_height: true,
             item_height: default_item_height(),
             bar_config: BarDisplayConfig::default(),
             graph_config: GraphDisplayConfig::default(),

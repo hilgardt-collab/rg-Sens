@@ -212,13 +212,15 @@ impl LcarsComboDisplayer {
             return Ok(());
         }
 
-        // Determine fixed heights for items that need them (like graphs)
+        // Determine fixed heights for items that need them
+        // Items with auto_height=false, Graph, or LevelBar display type get fixed heights
         let mut fixed_heights: HashMap<usize, f64> = HashMap::new();
         for i in 0..count as usize {
             let prefix = format!("{}{}", base_prefix, i + 1);
             let item_config = config.frame.content_items.get(&prefix);
             if let Some(cfg) = item_config {
-                if matches!(cfg.display_as, ContentDisplayType::Graph | ContentDisplayType::LevelBar) {
+                // Use fixed height if auto_height is disabled or for Graph/LevelBar display types
+                if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph | ContentDisplayType::LevelBar) {
                     fixed_heights.insert(i, cfg.item_height);
                 }
             }
