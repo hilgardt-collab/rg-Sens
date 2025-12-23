@@ -20,7 +20,9 @@ use crate::ui::bar_config_widget::BarConfigWidget;
 use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
 use crate::ui::background_config_widget::BackgroundConfigWidget;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
-use crate::ui::lcars_display::{ContentDisplayType, SplitOrientation, StaticDisplayConfig};
+use crate::ui::arc_config_widget::ArcConfigWidget;
+use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
+use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation, StaticDisplayConfig};
 use crate::displayers::CyberpunkDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
@@ -962,6 +964,17 @@ impl CyberpunkConfigWidget {
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     ) -> GtkBox {
         log::info!("=== Cyberpunk create_slot_config_tab() called for slot '{}' ===", slot_name);
+
+        // Ensure this slot exists in content_items with default config
+        // This is critical for newly added items to be saved properly
+        {
+            let mut cfg = config.borrow_mut();
+            if !cfg.frame.content_items.contains_key(slot_name) {
+                log::info!("Creating default content item for new slot '{}'", slot_name);
+                cfg.frame.content_items.insert(slot_name.to_string(), ContentItemConfig::default());
+            }
+        }
+
         let tab = GtkBox::new(Orientation::Vertical, 8);
         tab.set_margin_start(12);
         tab.set_margin_end(12);
@@ -978,7 +991,7 @@ impl CyberpunkConfigWidget {
         // Display type dropdown
         let type_box = GtkBox::new(Orientation::Horizontal, 6);
         type_box.append(&Label::new(Some("Display As:")));
-        let type_list = StringList::new(&["Bar", "Text", "Graph", "Core Bars", "Static"]);
+        let type_list = StringList::new(&["Bar", "Text", "Graph", "Core Bars", "Static", "Arc", "Speedometer"]);
         let type_dropdown = DropDown::new(Some(type_list), None::<gtk4::Expression>);
         type_dropdown.set_hexpand(true);
 
@@ -996,6 +1009,8 @@ impl CyberpunkConfigWidget {
             ContentDisplayType::Graph => 2,
             ContentDisplayType::CoreBars => 3,
             ContentDisplayType::Static => 4,
+            ContentDisplayType::Arc => 5,
+            ContentDisplayType::Speedometer => 6,
         };
         type_dropdown.set_selected(type_idx);
         type_box.append(&type_dropdown);
@@ -1234,6 +1249,80 @@ impl CyberpunkConfigWidget {
         static_config_frame.set_child(Some(static_bg_widget_rc.widget()));
         inner_box.append(&static_config_frame);
 
+        // === Arc Configuration Section ===
+        let arc_config_frame = gtk4::Frame::new(Some("Arc Gauge Configuration"));
+        arc_config_frame.set_margin_top(12);
+
+        let arc_widget = ArcConfigWidget::new(vec![]);
+
+        // Initialize with current config
+        let current_arc_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.arc_config.clone())
+                .unwrap_or_else(|| Self::default_arc_config_cyberpunk())
+        };
+        arc_widget.set_config(current_arc_config);
+
+        // Set up change callback
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let arc_widget_rc = Rc::new(arc_widget);
+        let arc_widget_for_callback = arc_widget_rc.clone();
+        arc_widget_rc.set_on_change(move || {
+            let arc_config = arc_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.arc_config = arc_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        arc_config_frame.set_child(Some(arc_widget_rc.widget()));
+        inner_box.append(&arc_config_frame);
+
+        // === Speedometer Configuration Section ===
+        let speedometer_config_frame = gtk4::Frame::new(Some("Speedometer Configuration"));
+        speedometer_config_frame.set_margin_top(12);
+
+        let speedometer_widget = SpeedometerConfigWidget::new(vec![]);
+
+        // Initialize with current config
+        let current_speedometer_config = {
+            let cfg = config.borrow();
+            cfg.frame.content_items
+                .get(slot_name)
+                .map(|item| item.speedometer_config.clone())
+                .unwrap_or_else(|| Self::default_speedometer_config_cyberpunk())
+        };
+        speedometer_widget.set_config(&current_speedometer_config);
+
+        // Set up change callback
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let speedometer_widget_rc = Rc::new(speedometer_widget);
+        let speedometer_widget_for_callback = speedometer_widget_rc.clone();
+        speedometer_widget_rc.set_on_change(Box::new(move || {
+            let speedometer_config = speedometer_widget_for_callback.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let item = cfg.frame.content_items
+                .entry(slot_name_clone.clone())
+                .or_default();
+            item.speedometer_config = speedometer_config;
+            drop(cfg);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        }));
+
+        speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
+        inner_box.append(&speedometer_config_frame);
+
         // Show/hide config sections based on display type
         let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
         let show_text = matches!(current_type, ContentDisplayType::Text | ContentDisplayType::Static);
@@ -1242,6 +1331,8 @@ impl CyberpunkConfigWidget {
         graph_config_frame.set_visible(current_type == ContentDisplayType::Graph);
         core_bars_config_frame.set_visible(current_type == ContentDisplayType::CoreBars);
         static_config_frame.set_visible(current_type == ContentDisplayType::Static);
+        arc_config_frame.set_visible(current_type == ContentDisplayType::Arc);
+        speedometer_config_frame.set_visible(current_type == ContentDisplayType::Speedometer);
 
         scroll.set_child(Some(&inner_box));
         tab.append(&scroll);
@@ -1258,6 +1349,8 @@ impl CyberpunkConfigWidget {
         let graph_config_frame_clone = graph_config_frame.clone();
         let core_bars_config_frame_clone = core_bars_config_frame.clone();
         let static_config_frame_clone = static_config_frame.clone();
+        let arc_config_frame_clone = arc_config_frame.clone();
+        let speedometer_config_frame_clone = speedometer_config_frame.clone();
         type_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
@@ -1268,7 +1361,9 @@ impl CyberpunkConfigWidget {
                 1 => ContentDisplayType::Text,
                 2 => ContentDisplayType::Graph,
                 3 => ContentDisplayType::CoreBars,
-                _ => ContentDisplayType::Static,
+                4 => ContentDisplayType::Static,
+                5 => ContentDisplayType::Arc,
+                _ => ContentDisplayType::Speedometer,
             };
             // Show appropriate config for each display type
             let show_bar = matches!(display_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
@@ -1278,6 +1373,8 @@ impl CyberpunkConfigWidget {
             graph_config_frame_clone.set_visible(display_type == ContentDisplayType::Graph);
             core_bars_config_frame_clone.set_visible(display_type == ContentDisplayType::CoreBars);
             static_config_frame_clone.set_visible(display_type == ContentDisplayType::Static);
+            arc_config_frame_clone.set_visible(display_type == ContentDisplayType::Arc);
+            speedometer_config_frame_clone.set_visible(display_type == ContentDisplayType::Speedometer);
             let mut cfg = config_clone.borrow_mut();
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())
@@ -1384,6 +1481,55 @@ impl CyberpunkConfigWidget {
             color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.3 },
             width: 1.0,
         };
+
+        config
+    }
+
+    /// Default arc config with cyberpunk colors
+    fn default_arc_config_cyberpunk() -> crate::ui::ArcDisplayConfig {
+        use crate::ui::arc_display::ArcDisplayConfig;
+        use crate::ui::background::{Color, ColorStop};
+
+        let mut config = ArcDisplayConfig::default();
+
+        // Cyberpunk cyan to magenta gradient
+        config.color_stops = vec![
+            ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },   // Cyan
+            ColorStop { position: 0.5, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },   // Magenta
+            ColorStop { position: 1.0, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },   // Yellow
+        ];
+        config.show_background_arc = true;
+        config.background_color = Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 };
+        config.animate = true;
+
+        config
+    }
+
+    /// Default speedometer config with cyberpunk colors
+    fn default_speedometer_config_cyberpunk() -> crate::ui::SpeedometerConfig {
+        use crate::ui::speedometer_display::SpeedometerConfig;
+        use crate::ui::background::{Color, ColorStop};
+
+        let mut config = SpeedometerConfig::default();
+
+        // Cyberpunk colored track
+        config.track_color = Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 };
+        config.track_color_stops = vec![
+            ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },   // Cyan (low)
+            ColorStop { position: 0.6, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },   // Yellow (mid)
+            ColorStop { position: 1.0, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },   // Magenta (high)
+        ];
+
+        // Cyberpunk tick colors
+        config.major_tick_color = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.8 };  // Cyan
+        config.minor_tick_color = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 };  // Dimmer cyan
+
+        // Cyberpunk needle - magenta with glow effect
+        config.needle_color = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };  // Magenta
+
+        // Center hub - dark with cyan accent
+        config.center_hub_color = Color { r: 0.0, g: 0.4, b: 0.4, a: 1.0 };  // Dark cyan
+        config.center_hub_3d = true;
 
         config
     }
@@ -1543,6 +1689,37 @@ impl CyberpunkConfigWidget {
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
+        // Extract group configuration from summaries
+        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        for (_, _, group_num, item_idx) in &summaries {
+            let current_max = group_item_counts.entry(*group_num).or_insert(0);
+            if *item_idx > *current_max {
+                *current_max = *item_idx;
+            }
+        }
+
+        // Convert to sorted vec
+        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
+        group_nums.sort();
+        let group_counts: Vec<usize> = group_nums.iter()
+            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
+            .collect();
+
+        // Update the frame config with group information
+        {
+            let mut cfg = self.config.borrow_mut();
+            let new_group_count = group_nums.len();
+            cfg.frame.group_count = new_group_count;
+            cfg.frame.group_item_counts = group_counts;
+
+            // Ensure group_size_weights has the right length
+            while cfg.frame.group_size_weights.len() < new_group_count {
+                cfg.frame.group_size_weights.push(1.0);
+            }
+            // Trim if we have fewer groups now
+            cfg.frame.group_size_weights.truncate(new_group_count);
+        }
+
         *self.source_summaries.borrow_mut() = summaries;
         Self::rebuild_content_tabs(
             &self.config,

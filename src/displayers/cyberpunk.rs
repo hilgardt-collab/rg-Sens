@@ -26,6 +26,8 @@ use crate::ui::lcars_display::{
     render_content_core_bars, render_content_static, calculate_item_layouts,
     ContentDisplayType, ContentItemData,
 };
+use crate::ui::arc_display::render_arc;
+use crate::ui::speedometer_display::render_speedometer;
 
 /// Animation state for a single value
 #[derive(Debug, Clone)]
@@ -361,6 +363,34 @@ impl CyberpunkDisplayer {
                         &item_config.bar_config,
                         Some(&slot_values),
                     )?;
+                }
+                ContentDisplayType::Arc => {
+                    cr.save()?;
+                    cr.translate(item_x, item_y);
+                    render_arc(
+                        cr,
+                        &item_config.arc_config,
+                        animated_percent,
+                        &slot_values,
+                        item_w,
+                        item_h,
+                    )?;
+                    cr.restore()?;
+                }
+                ContentDisplayType::Speedometer => {
+                    cr.save()?;
+                    cr.translate(item_x, item_y);
+                    if let Err(e) = render_speedometer(
+                        cr,
+                        &item_config.speedometer_config,
+                        animated_percent,
+                        &slot_values,
+                        item_w,
+                        item_h,
+                    ) {
+                        log::warn!("Failed to render speedometer for {}: {}", prefix, e);
+                    }
+                    cr.restore()?;
                 }
             }
         }

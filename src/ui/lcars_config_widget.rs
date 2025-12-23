@@ -16,7 +16,7 @@ use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::lcars_display::{
     render_lcars_frame, render_content_background, SidebarPosition,
     ExtensionMode, CornerStyle, HeaderPosition, HeaderShape, HeaderAlign, SegmentConfig,
-    DividerCapStyle, SplitOrientation, ContentDisplayType, StaticDisplayConfig,
+    DividerCapStyle, SplitOrientation, ContentDisplayType, ContentItemConfig, StaticDisplayConfig,
 };
 use crate::ui::background::Color;
 use crate::ui::graph_config_widget::GraphConfigWidget;
@@ -1664,6 +1664,17 @@ impl LcarsConfigWidget {
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     ) -> GtkBox {
         log::info!("=== create_slot_config_tab() called for slot '{}' ===", slot_name);
+
+        // Ensure this slot exists in content_items with default config
+        // This is critical for newly added items to be saved properly
+        {
+            let mut cfg = config.borrow_mut();
+            if !cfg.frame.content_items.contains_key(slot_name) {
+                log::info!("Creating default content item for new slot '{}'", slot_name);
+                cfg.frame.content_items.insert(slot_name.to_string(), ContentItemConfig::default());
+            }
+        }
+
         let tab = GtkBox::new(Orientation::Vertical, 8);
         tab.set_margin_start(12);
         tab.set_margin_end(12);
@@ -1698,6 +1709,8 @@ impl LcarsConfigWidget {
             ContentDisplayType::Graph => 2,
             ContentDisplayType::CoreBars => 3,
             ContentDisplayType::Static => 4,
+            ContentDisplayType::Arc => 0, // Arc not in LCARS dropdown, fall back to Bar
+            ContentDisplayType::Speedometer => 0, // Speedometer not in LCARS dropdown, fall back to Bar
         };
         type_dropdown.set_selected(type_idx);
         type_box.append(&type_dropdown);

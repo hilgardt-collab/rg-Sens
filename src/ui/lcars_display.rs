@@ -14,6 +14,8 @@ use crate::ui::background::{BackgroundConfig, Color, render_background};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
+use crate::ui::arc_display::ArcDisplayConfig;
+use crate::ui::speedometer_display::SpeedometerConfig;
 
 /// Sidebar position (left or right)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -134,6 +136,10 @@ pub enum ContentDisplayType {
     CoreBars,
     #[serde(rename = "static")]
     Static,
+    #[serde(rename = "arc")]
+    Arc,
+    #[serde(rename = "speedometer")]
+    Speedometer,
 }
 
 /// Configuration for a sidebar segment
@@ -331,6 +337,10 @@ pub struct ContentItemConfig {
     pub core_bars_config: CoreBarsConfig,
     #[serde(default)]
     pub static_config: StaticDisplayConfig,
+    #[serde(default)]
+    pub arc_config: ArcDisplayConfig,
+    #[serde(default)]
+    pub speedometer_config: SpeedometerConfig,
 }
 
 fn default_item_height() -> f64 {
@@ -346,6 +356,8 @@ impl Default for ContentItemConfig {
             graph_config: GraphDisplayConfig::default(),
             core_bars_config: CoreBarsConfig::default(),
             static_config: StaticDisplayConfig::default(),
+            arc_config: ArcDisplayConfig::default(),
+            speedometer_config: SpeedometerConfig::default(),
         }
     }
 }
