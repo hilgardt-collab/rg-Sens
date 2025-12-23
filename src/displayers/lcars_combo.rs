@@ -823,7 +823,8 @@ impl Displayer for LcarsComboDisplayer {
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
-        if let Ok(data) = self.data.lock() {
+        // Use try_lock to avoid blocking the GTK main thread
+        if let Ok(data) = self.data.try_lock() {
             data.transform.apply(cr, width, height);
             render_lcars_frame(cr, &data.config.frame, width, height)?;
             render_content_background(cr, &data.config.frame, width, height)?;
@@ -899,11 +900,13 @@ impl Displayer for LcarsComboDisplayer {
     }
 
     fn needs_redraw(&self) -> bool {
-        self.data.lock().map(|data| data.dirty).unwrap_or(false)
+        // Use try_lock to avoid blocking the GTK main thread
+        self.data.try_lock().map(|data| data.dirty).unwrap_or(true)
     }
 
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
-        if let Ok(display_data) = self.data.lock() {
+        // Use try_lock to avoid blocking the GTK main thread
+        if let Ok(display_data) = self.data.try_lock() {
             Some(crate::core::DisplayerConfig::Lcars(display_data.config.clone()))
         } else {
             None

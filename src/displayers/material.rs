@@ -702,7 +702,8 @@ impl Displayer for MaterialDisplayer {
         if width < 10.0 || height < 10.0 {
             return Ok(());
         }
-        if let Ok(data) = self.data.lock() {
+        // Use try_lock to avoid blocking the GTK main thread
+        if let Ok(data) = self.data.try_lock() {
             data.transform.apply(cr, width, height);
             render_material_frame(cr, &data.config.frame, width, height)?;
             data.transform.restore(cr);
@@ -767,11 +768,13 @@ impl Displayer for MaterialDisplayer {
     }
 
     fn needs_redraw(&self) -> bool {
-        self.data.lock().map(|data| data.dirty).unwrap_or(false)
+        // Use try_lock to avoid blocking the GTK main thread
+        self.data.try_lock().map(|data| data.dirty).unwrap_or(true)
     }
 
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
-        if let Ok(display_data) = self.data.lock() {
+        // Use try_lock to avoid blocking the GTK main thread
+        if let Ok(display_data) = self.data.try_lock() {
             Some(crate::core::DisplayerConfig::Material(display_data.config.clone()))
         } else {
             None
