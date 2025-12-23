@@ -2467,10 +2467,18 @@ fn show_window_settings_dialog<F>(
         grid_layout_clone.borrow().set_viewport_size(vp_width, vp_height);
 
         // Apply borderless state to parent window
-        log::info!("Setting window decorated: {} (borderless: {})", !borderless, borderless);
-        parent_window_clone.set_decorated(!borderless);
-        // Force layout update after decoration change
-        parent_window_clone.queue_resize();
+        // Note: On some compositors (especially Wayland), decoration changes require
+        // hiding and showing the window for them to take effect
+        let current_decorated = parent_window_clone.is_decorated();
+        let target_decorated = !borderless;
+        log::info!("Setting window decorated: {} -> {} (borderless: {})", current_decorated, target_decorated, borderless);
+
+        if current_decorated != target_decorated {
+            parent_window_clone.set_decorated(target_decorated);
+            // On Wayland/some compositors, we need to hide/show for decoration change to apply
+            parent_window_clone.set_visible(false);
+            parent_window_clone.set_visible(true);
+        }
 
         // Apply fullscreen state to parent window
         if fullscreen_enabled {
