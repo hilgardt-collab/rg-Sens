@@ -3,6 +3,7 @@
 mod render_utils;
 mod main_window;
 mod grid_layout;
+mod grid_properties_dialog;
 mod config_dialog;
 mod color_picker;
 pub mod custom_color_picker;
