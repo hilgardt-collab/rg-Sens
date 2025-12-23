@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
 use crate::ui::background::Color;
+use crate::ui::lcars_display::SplitOrientation;
 
 /// Surface texture style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -134,6 +135,7 @@ pub struct IndustrialFrameConfig {
     pub group_count: usize,
     pub group_item_counts: Vec<usize>,
     pub group_size_weights: Vec<f64>,
+    pub split_orientation: SplitOrientation,
 
     // Dividers
     pub divider_style: DividerStyle,
@@ -191,6 +193,7 @@ impl Default for IndustrialFrameConfig {
             group_count: 1,
             group_item_counts: vec![3],
             group_size_weights: vec![1.0],
+            split_orientation: SplitOrientation::Horizontal,
 
             // Dividers
             divider_style: DividerStyle::Groove,
@@ -870,17 +873,36 @@ pub fn calculate_group_layouts(
     let divider_count = group_count.saturating_sub(1);
     let divider_space = divider_count as f64 * (config.divider_width + 8.0);
 
-    // Horizontal layout (groups side by side)
-    let available_width = content_w - divider_space;
-    let mut current_x = content_x;
+    match config.split_orientation {
+        SplitOrientation::Horizontal => {
+            // Horizontal layout (groups side by side)
+            let available_width = content_w - divider_space;
+            let mut current_x = content_x;
 
-    for (i, weight) in weights.iter().enumerate() {
-        let group_w = available_width * (weight / total_weight);
-        let item_count = config.group_item_counts.get(i).copied().unwrap_or(3);
-        layouts.push((current_x, content_y, group_w, content_h, item_count));
-        current_x += group_w;
-        if i < divider_count {
-            current_x += config.divider_width + 8.0;
+            for (i, weight) in weights.iter().enumerate() {
+                let group_w = available_width * (weight / total_weight);
+                let item_count = config.group_item_counts.get(i).copied().unwrap_or(3);
+                layouts.push((current_x, content_y, group_w, content_h, item_count));
+                current_x += group_w;
+                if i < divider_count {
+                    current_x += config.divider_width + 8.0;
+                }
+            }
+        }
+        SplitOrientation::Vertical => {
+            // Vertical layout (groups stacked)
+            let available_height = content_h - divider_space;
+            let mut current_y = content_y;
+
+            for (i, weight) in weights.iter().enumerate() {
+                let group_h = available_height * (weight / total_weight);
+                let item_count = config.group_item_counts.get(i).copied().unwrap_or(3);
+                layouts.push((content_x, current_y, content_w, group_h, item_count));
+                current_y += group_h;
+                if i < divider_count {
+                    current_y += config.divider_width + 8.0;
+                }
+            }
         }
     }
 
@@ -899,72 +921,124 @@ pub fn draw_group_dividers(
 
     cr.save()?;
 
-    for i in 0..layouts.len() - 1 {
-        let (_, _, _w1, _, _) = layouts[i];
-        let (x2, y2, _, h2, _) = layouts[i + 1];
+    let is_horizontal = matches!(config.split_orientation, SplitOrientation::Horizontal);
 
-        let div_x = x2 - config.divider_width / 2.0 - 2.0;
-        let div_y = y2;
-        let div_h = h2;
+    for i in 0..layouts.len() - 1 {
+        let (_x1, _y1, _w1, _h1, _) = layouts[i];
+        let (x2, y2, w2, h2, _) = layouts[i + 1];
+
+        // Calculate divider position based on orientation
+        let (div_x, div_y, div_w, div_h) = if is_horizontal {
+            // Vertical divider between horizontal groups
+            let dx = x2 - config.divider_width / 2.0 - 2.0;
+            (dx, y2, config.divider_width, h2)
+        } else {
+            // Horizontal divider between vertical groups
+            let dy = y2 - config.divider_width / 2.0 - 2.0;
+            (x2, dy, w2, config.divider_width)
+        };
 
         match config.divider_style {
             DividerStyle::Groove => {
-                // Grooved divider
                 cr.set_line_width(1.0);
 
-                // Dark line (groove)
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
-                cr.move_to(div_x, div_y);
-                cr.line_to(div_x, div_y + div_h);
-                cr.stroke()?;
+                if is_horizontal {
+                    // Vertical groove
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+                    cr.move_to(div_x, div_y);
+                    cr.line_to(div_x, div_y + div_h);
+                    cr.stroke()?;
 
-                // Light line (highlight)
-                cr.set_source_rgba(1.0, 1.0, 1.0, 0.3);
-                cr.move_to(div_x + 2.0, div_y);
-                cr.line_to(div_x + 2.0, div_y + div_h);
-                cr.stroke()?;
+                    cr.set_source_rgba(1.0, 1.0, 1.0, 0.3);
+                    cr.move_to(div_x + 2.0, div_y);
+                    cr.line_to(div_x + 2.0, div_y + div_h);
+                    cr.stroke()?;
+                } else {
+                    // Horizontal groove
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+                    cr.move_to(div_x, div_y);
+                    cr.line_to(div_x + div_w, div_y);
+                    cr.stroke()?;
+
+                    cr.set_source_rgba(1.0, 1.0, 1.0, 0.3);
+                    cr.move_to(div_x, div_y + 2.0);
+                    cr.line_to(div_x + div_w, div_y + 2.0);
+                    cr.stroke()?;
+                }
             }
             DividerStyle::Raised => {
-                // Raised bar divider
                 let c = &config.divider_color;
                 cr.set_source_rgba(c.r, c.g, c.b, c.a);
-                cr.rectangle(div_x, div_y, config.divider_width, div_h);
-                cr.fill()?;
 
-                // Highlight on left
-                cr.set_source_rgba(1.0, 1.0, 1.0, 0.3);
-                cr.move_to(div_x, div_y);
-                cr.line_to(div_x, div_y + div_h);
-                cr.stroke()?;
+                if is_horizontal {
+                    cr.rectangle(div_x, div_y, config.divider_width, div_h);
+                    cr.fill()?;
 
-                // Shadow on right
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-                cr.move_to(div_x + config.divider_width, div_y);
-                cr.line_to(div_x + config.divider_width, div_y + div_h);
-                cr.stroke()?;
+                    cr.set_source_rgba(1.0, 1.0, 1.0, 0.3);
+                    cr.move_to(div_x, div_y);
+                    cr.line_to(div_x, div_y + div_h);
+                    cr.stroke()?;
+
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+                    cr.move_to(div_x + config.divider_width, div_y);
+                    cr.line_to(div_x + config.divider_width, div_y + div_h);
+                    cr.stroke()?;
+                } else {
+                    cr.rectangle(div_x, div_y, div_w, config.divider_width);
+                    cr.fill()?;
+
+                    cr.set_source_rgba(1.0, 1.0, 1.0, 0.3);
+                    cr.move_to(div_x, div_y);
+                    cr.line_to(div_x + div_w, div_y);
+                    cr.stroke()?;
+
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
+                    cr.move_to(div_x, div_y + config.divider_width);
+                    cr.line_to(div_x + div_w, div_y + config.divider_width);
+                    cr.stroke()?;
+                }
             }
             DividerStyle::Warning => {
-                // Warning stripe divider
                 let c1 = &config.warning_color_1;
                 let c2 = &config.warning_color_2;
-                let stripe_h = 8.0;
+                let stripe_size = 8.0;
 
                 cr.save()?;
-                cr.rectangle(div_x - 2.0, div_y, config.divider_width + 4.0, div_h);
-                cr.clip();
 
-                let mut sy = div_y;
-                let mut stripe_idx = 0;
-                while sy < div_y + div_h {
-                    if stripe_idx % 2 == 0 {
-                        cr.set_source_rgba(c1.r, c1.g, c1.b, c1.a);
-                    } else {
-                        cr.set_source_rgba(c2.r, c2.g, c2.b, c2.a);
+                if is_horizontal {
+                    cr.rectangle(div_x - 2.0, div_y, config.divider_width + 4.0, div_h);
+                    cr.clip();
+
+                    let mut sy = div_y;
+                    let mut stripe_idx = 0;
+                    while sy < div_y + div_h {
+                        if stripe_idx % 2 == 0 {
+                            cr.set_source_rgba(c1.r, c1.g, c1.b, c1.a);
+                        } else {
+                            cr.set_source_rgba(c2.r, c2.g, c2.b, c2.a);
+                        }
+                        cr.rectangle(div_x - 2.0, sy, config.divider_width + 4.0, stripe_size);
+                        cr.fill()?;
+                        sy += stripe_size;
+                        stripe_idx += 1;
                     }
-                    cr.rectangle(div_x - 2.0, sy, config.divider_width + 4.0, stripe_h);
-                    cr.fill()?;
-                    sy += stripe_h;
-                    stripe_idx += 1;
+                } else {
+                    cr.rectangle(div_x, div_y - 2.0, div_w, config.divider_width + 4.0);
+                    cr.clip();
+
+                    let mut sx = div_x;
+                    let mut stripe_idx = 0;
+                    while sx < div_x + div_w {
+                        if stripe_idx % 2 == 0 {
+                            cr.set_source_rgba(c1.r, c1.g, c1.b, c1.a);
+                        } else {
+                            cr.set_source_rgba(c2.r, c2.g, c2.b, c2.a);
+                        }
+                        cr.rectangle(sx, div_y - 2.0, stripe_size, config.divider_width + 4.0);
+                        cr.fill()?;
+                        sx += stripe_size;
+                        stripe_idx += 1;
+                    }
                 }
 
                 cr.restore()?;

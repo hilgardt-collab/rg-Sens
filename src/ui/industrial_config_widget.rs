@@ -23,7 +23,7 @@ use crate::ui::background_config_widget::BackgroundConfigWidget;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 use crate::ui::arc_config_widget::ArcConfigWidget;
 use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
-use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, StaticDisplayConfig};
+use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, StaticDisplayConfig, SplitOrientation};
 use crate::displayers::IndustrialDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
@@ -77,6 +77,7 @@ struct HeaderWidgets {
 
 /// Holds references to Layout tab widgets
 struct LayoutWidgets {
+    split_orientation_dropdown: DropDown,
     content_padding_spin: SpinButton,
     item_spacing_spin: SpinButton,
     divider_style_dropdown: DropDown,
@@ -895,6 +896,35 @@ impl IndustrialConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
 
+        // Split orientation (horizontal vs vertical group layout)
+        let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
+        orientation_box.append(&Label::new(Some("Group Direction:")));
+        let orientation_list = StringList::new(&["Horizontal (side by side)", "Vertical (stacked)"]);
+        let split_orientation_dropdown = DropDown::new(Some(orientation_list), None::<gtk4::Expression>);
+        let orient_idx = match config.borrow().frame.split_orientation {
+            SplitOrientation::Horizontal => 0,
+            SplitOrientation::Vertical => 1,
+        };
+        split_orientation_dropdown.set_selected(orient_idx);
+        split_orientation_dropdown.set_hexpand(true);
+        orientation_box.append(&split_orientation_dropdown);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        split_orientation_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.split_orientation = match selected {
+                0 => SplitOrientation::Horizontal,
+                _ => SplitOrientation::Vertical,
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&orientation_box);
+
         // Content padding
         let content_padding_box = GtkBox::new(Orientation::Horizontal, 6);
         content_padding_box.append(&Label::new(Some("Content Padding:")));
@@ -1015,6 +1045,7 @@ impl IndustrialConfigWidget {
 
         // Store widget refs
         *layout_widgets_out.borrow_mut() = Some(LayoutWidgets {
+            split_orientation_dropdown,
             content_padding_spin,
             item_spacing_spin,
             divider_style_dropdown,
@@ -1801,6 +1832,10 @@ impl IndustrialConfigWidget {
 
         // Update Layout widgets
         if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
+            widgets.split_orientation_dropdown.set_selected(match config.frame.split_orientation {
+                SplitOrientation::Horizontal => 0,
+                SplitOrientation::Vertical => 1,
+            });
             widgets.content_padding_spin.set_value(config.frame.content_padding);
             widgets.item_spacing_spin.set_value(config.frame.item_spacing);
             widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
