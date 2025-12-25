@@ -379,16 +379,23 @@ pub(crate) fn show_panel_properties_dialog(
     let test_config_widget = crate::ui::TestSourceConfigWidget::new();
     test_config_widget.widget().set_visible(old_source_id == "test");
 
-    // Load existing Test config if source is test (only loads update_interval_ms)
-    // Other test source settings come from global TEST_SOURCE_STATE
+    // Load existing Test config if source is test
+    // Priority: saved panel config > global TEST_SOURCE_STATE > defaults
     if old_source_id == "test" {
         let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
             serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
-                .unwrap_or_default()
+                .unwrap_or_else(|_| {
+                    // Fallback to global state if parsing fails
+                    crate::sources::TEST_SOURCE_STATE.lock()
+                        .map(|state| state.config.clone())
+                        .unwrap_or_default()
+                })
         } else {
-            crate::sources::TestSourceConfig::default()
+            // No saved config - use current global state to avoid resetting
+            crate::sources::TEST_SOURCE_STATE.lock()
+                .map(|state| state.config.clone())
+                .unwrap_or_default()
         };
-        // Only sets update_interval_ms, doesn't touch global state
         test_config_widget.set_config(&test_config);
     }
 
@@ -505,16 +512,20 @@ pub(crate) fn show_panel_properties_dialog(
                             }
                         }
                         "test" => {
-                            // Load existing config (for update_interval_ms) or use default interval
-                            // Don't read other settings from panel - they come from global TEST_SOURCE_STATE
+                            // Load existing config or use current global state to avoid resetting
                             let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
                                 serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
-                                    .unwrap_or_default()
+                                    .unwrap_or_else(|_| {
+                                        crate::sources::TEST_SOURCE_STATE.lock()
+                                            .map(|state| state.config.clone())
+                                            .unwrap_or_default()
+                                    })
                             } else {
-                                // No existing config - just use default interval
-                                crate::sources::TestSourceConfig::default()
+                                // No saved config - use current global state
+                                crate::sources::TEST_SOURCE_STATE.lock()
+                                    .map(|state| state.config.clone())
+                                    .unwrap_or_default()
                             };
-                            // Only sets update_interval_ms, doesn't touch global state
                             test_widget_clone.set_config(&test_config);
                         }
                         "static_text" => {
@@ -1560,6 +1571,9 @@ pub(crate) fn show_panel_properties_dialog(
 
     let background_widget = crate::ui::BackgroundConfigWidget::new();
     background_widget.set_config(panel_guard.background.clone());
+    // Set source fields for indicator background configuration
+    background_widget.set_source_fields(available_fields.clone());
+    background_widget.set_is_combo_source(old_source_id == "combination");
     background_tab_box.append(background_widget.widget());
 
     // Wrap background_widget in Rc so we can share it with the closure

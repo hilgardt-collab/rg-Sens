@@ -5,6 +5,7 @@ use gtk4::{Box as GtkBox, Button, DropDown, DrawingArea, Entry, Label, Orientati
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::core::FieldMetadata;
 use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig, IndicatorBackgroundConfig};
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
@@ -23,6 +24,14 @@ pub struct BackgroundConfigWidget {
     linear_gradient_editor: Rc<GradientEditor>,
     radial_gradient_editor: Rc<GradientEditor>,
     indicator_gradient_editor: Rc<GradientEditor>,
+    // Source fields for indicator configuration
+    source_fields: Rc<RefCell<Vec<FieldMetadata>>>,
+    is_combo_source: Rc<RefCell<bool>>,
+    indicator_field_dropdown: DropDown,
+    indicator_field_list: StringList,
+    indicator_field_entry: Entry,
+    indicator_field_dropdown_box: GtkBox,
+    indicator_field_entry_box: GtkBox,
 }
 
 impl BackgroundConfigWidget {
@@ -97,8 +106,13 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&polygon_page, Some("polygons"));
 
         // Indicator configuration
-        let (indicator_page, indicator_gradient_editor) = Self::create_indicator_config(&config, &preview, &on_change);
+        let (indicator_page, indicator_gradient_editor, indicator_field_dropdown, indicator_field_list, indicator_field_entry, indicator_field_dropdown_box, indicator_field_entry_box) =
+            Self::create_indicator_config(&config, &preview, &on_change);
         config_stack.add_named(&indicator_page, Some("indicator"));
+
+        // Initialize source fields storage
+        let source_fields = Rc::new(RefCell::new(Vec::new()));
+        let is_combo_source = Rc::new(RefCell::new(false));
 
         container.append(&config_stack);
 
@@ -178,6 +192,13 @@ impl BackgroundConfigWidget {
             linear_gradient_editor,
             radial_gradient_editor,
             indicator_gradient_editor,
+            source_fields,
+            is_combo_source,
+            indicator_field_dropdown,
+            indicator_field_list,
+            indicator_field_entry,
+            indicator_field_dropdown_box,
+            indicator_field_entry_box,
         }
     }
 
@@ -707,11 +728,12 @@ impl BackgroundConfigWidget {
     }
 
     /// Create indicator configuration page
+    /// Returns (page, gradient_editor, field_dropdown, field_list, field_entry, dropdown_box, entry_box)
     fn create_indicator_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> (GtkBox, Rc<GradientEditor>) {
+    ) -> (GtkBox, Rc<GradientEditor>, DropDown, StringList, Entry, GtkBox, GtkBox) {
         use crate::ui::background::IndicatorBackgroundShape;
 
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -746,12 +768,21 @@ impl BackgroundConfigWidget {
         rotation_box.append(&rotation_spin);
         page.append(&rotation_box);
 
-        // Value field (from panel's source)
-        let field_box = GtkBox::new(Orientation::Horizontal, 6);
-        field_box.append(&Label::new(Some("Value Field:")));
-        let field_entry = gtk4::Entry::new();
+        // Value field - Dropdown for single sources (shown by default)
+        let field_dropdown_box = GtkBox::new(Orientation::Horizontal, 6);
+        field_dropdown_box.append(&Label::new(Some("Value Field:")));
+        let field_list = StringList::new(&["(none)"]);
+        let field_dropdown = DropDown::new(Some(field_list.clone()), gtk4::Expression::NONE);
+        field_dropdown.set_hexpand(true);
+        field_dropdown_box.append(&field_dropdown);
+        page.append(&field_dropdown_box);
+
+        // Value field - Entry for combo sources (hidden by default)
+        let field_entry_box = GtkBox::new(Orientation::Horizontal, 6);
+        field_entry_box.append(&Label::new(Some("Value Field:")));
+        let field_entry = Entry::new();
         field_entry.set_hexpand(true);
-        field_entry.set_placeholder_text(Some("e.g., usage, temperature"));
+        field_entry.set_placeholder_text(Some("e.g., cpu_0_usage, gpu_0_temperature"));
         // Initialize from config
         {
             let cfg = config.borrow();
@@ -759,11 +790,12 @@ impl BackgroundConfigWidget {
                 field_entry.set_text(&ind.value_field);
             }
         }
-        field_box.append(&field_entry);
-        page.append(&field_box);
+        field_entry_box.append(&field_entry);
+        field_entry_box.set_visible(false); // Hidden by default, shown for combo sources
+        page.append(&field_entry_box);
 
-        // Info label
-        let info_label = Label::new(Some("Uses the panel's data source field (leave empty for static value)"));
+        // Info label (changes based on source type)
+        let info_label = Label::new(Some("Select the source field to use for indicator value"));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
         page.append(&info_label);
@@ -890,7 +922,35 @@ impl BackgroundConfigWidget {
             }
         });
 
-        // Value field change handler
+        // Value field dropdown change handler (for single sources)
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let field_list_clone = field_list.clone();
+        field_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            // Get the field name from the StringList
+            let field_name = if selected == 0 {
+                String::new() // "(none)" selected
+            } else if let Some(item) = field_list_clone.string(selected) {
+                item.to_string()
+            } else {
+                return;
+            };
+
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Indicator(ref mut ind) = cfg.background {
+                ind.value_field = field_name;
+            }
+            drop(cfg);
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        // Value field entry change handler (for combo sources)
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         field_entry.connect_changed(move |entry| {
@@ -937,7 +997,7 @@ impl BackgroundConfigWidget {
             }
         });
 
-        (page, gradient_editor)
+        (page, gradient_editor, field_dropdown, field_list, field_entry, field_dropdown_box, field_entry_box)
     }
 
     /// Get the container widget
@@ -1005,6 +1065,75 @@ impl BackgroundConfigWidget {
     /// Set callback for when configuration changes
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
         *self.on_change.borrow_mut() = Some(std::boxed::Box::new(callback));
+    }
+
+    /// Set whether this is a combo source (affects indicator config UI)
+    pub fn set_is_combo_source(&self, is_combo: bool) {
+        *self.is_combo_source.borrow_mut() = is_combo;
+
+        // Show/hide appropriate field input widgets
+        self.indicator_field_dropdown_box.set_visible(!is_combo);
+        self.indicator_field_entry_box.set_visible(is_combo);
+
+        // If switching to combo mode, copy current dropdown selection to entry
+        if is_combo {
+            let current_value = {
+                let cfg = self.config.borrow();
+                if let BackgroundType::Indicator(ref ind) = cfg.background {
+                    ind.value_field.clone()
+                } else {
+                    String::new()
+                }
+            };
+            self.indicator_field_entry.set_text(&current_value);
+        }
+    }
+
+    /// Set available source fields for indicator configuration
+    pub fn set_source_fields(&self, fields: Vec<FieldMetadata>) {
+        use crate::core::{FieldPurpose, FieldType};
+
+        *self.source_fields.borrow_mut() = fields.clone();
+
+        // Rebuild the dropdown list with field names
+        // Clear existing items
+        while self.indicator_field_list.n_items() > 0 {
+            self.indicator_field_list.remove(0);
+        }
+
+        // Add "(none)" as first option
+        self.indicator_field_list.append("(none)");
+
+        // Filter and add fields that are suitable for indicator values (numerical/percentage values)
+        let current_value = {
+            let cfg = self.config.borrow();
+            if let BackgroundType::Indicator(ref ind) = cfg.background {
+                ind.value_field.clone()
+            } else {
+                String::new()
+            }
+        };
+
+        let mut selected_index: u32 = 0;
+        let mut index: u32 = 1;
+
+        for field in &fields {
+            // Only show fields that can provide numerical values for the indicator
+            // Filter by FieldType (Numerical or Percentage) and FieldPurpose (Value or SecondaryValue)
+            let is_numerical = matches!(field.field_type, FieldType::Numerical | FieldType::Percentage);
+            let is_value_field = matches!(field.purpose, FieldPurpose::Value | FieldPurpose::SecondaryValue);
+
+            if is_numerical && is_value_field {
+                self.indicator_field_list.append(&field.id);
+                if field.id == current_value {
+                    selected_index = index;
+                }
+                index += 1;
+            }
+        }
+
+        // Set the dropdown to the current value
+        self.indicator_field_dropdown.set_selected(selected_index);
     }
 }
 
