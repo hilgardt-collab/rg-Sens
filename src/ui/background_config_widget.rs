@@ -32,6 +32,7 @@ pub struct BackgroundConfigWidget {
     indicator_field_entry: Entry,
     indicator_field_dropdown_box: GtkBox,
     indicator_field_entry_box: GtkBox,
+    indicator_field_dropdown_handler_id: gtk4::glib::SignalHandlerId,
 }
 
 impl BackgroundConfigWidget {
@@ -106,7 +107,7 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&polygon_page, Some("polygons"));
 
         // Indicator configuration
-        let (indicator_page, indicator_gradient_editor, indicator_field_dropdown, indicator_field_list, indicator_field_entry, indicator_field_dropdown_box, indicator_field_entry_box) =
+        let (indicator_page, indicator_gradient_editor, indicator_field_dropdown, indicator_field_list, indicator_field_entry, indicator_field_dropdown_box, indicator_field_entry_box, indicator_field_dropdown_handler_id) =
             Self::create_indicator_config(&config, &preview, &on_change);
         config_stack.add_named(&indicator_page, Some("indicator"));
 
@@ -199,6 +200,7 @@ impl BackgroundConfigWidget {
             indicator_field_entry,
             indicator_field_dropdown_box,
             indicator_field_entry_box,
+            indicator_field_dropdown_handler_id,
         }
     }
 
@@ -728,12 +730,12 @@ impl BackgroundConfigWidget {
     }
 
     /// Create indicator configuration page
-    /// Returns (page, gradient_editor, field_dropdown, field_list, field_entry, dropdown_box, entry_box)
+    /// Returns (page, gradient_editor, field_dropdown, field_list, field_entry, dropdown_box, entry_box, dropdown_handler_id)
     fn create_indicator_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> (GtkBox, Rc<GradientEditor>, DropDown, StringList, Entry, GtkBox, GtkBox) {
+    ) -> (GtkBox, Rc<GradientEditor>, DropDown, StringList, Entry, GtkBox, GtkBox, gtk4::glib::SignalHandlerId) {
         use crate::ui::background::IndicatorBackgroundShape;
 
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -926,7 +928,7 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let field_list_clone = field_list.clone();
-        field_dropdown.connect_selected_notify(move |dropdown| {
+        let field_dropdown_handler_id = field_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
                 return;
@@ -997,7 +999,7 @@ impl BackgroundConfigWidget {
             }
         });
 
-        (page, gradient_editor, field_dropdown, field_list, field_entry, field_dropdown_box, field_entry_box)
+        (page, gradient_editor, field_dropdown, field_list, field_entry, field_dropdown_box, field_entry_box, field_dropdown_handler_id)
     }
 
     /// Get the container widget
@@ -1029,6 +1031,8 @@ impl BackgroundConfigWidget {
         }
         if let BackgroundType::Indicator(ref ind) = new_config.background {
             self.indicator_gradient_editor.set_stops(ind.gradient_stops.clone());
+            // Update the field entry with saved value (for combo sources)
+            self.indicator_field_entry.set_text(&ind.value_field);
         }
 
         *self.config.borrow_mut() = new_config;
@@ -1132,8 +1136,14 @@ impl BackgroundConfigWidget {
             }
         }
 
+        // Block the handler to prevent it from overwriting the config value
+        self.indicator_field_dropdown.block_signal(&self.indicator_field_dropdown_handler_id);
+
         // Set the dropdown to the current value
         self.indicator_field_dropdown.set_selected(selected_index);
+
+        // Unblock the handler
+        self.indicator_field_dropdown.unblock_signal(&self.indicator_field_dropdown_handler_id);
     }
 }
 
