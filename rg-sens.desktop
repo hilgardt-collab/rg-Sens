@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=rg-Sens
+Comment=A fast, customizable system monitoring dashboard for Linux
+Exec=rg-sens
+Icon=rg-sens
+Terminal=false
+Type=Application
+Categories=System;Monitor;Utility;
+Keywords=system;monitor;cpu;gpu;memory;temperature;sensors;
+StartupWMClass=rg-sens

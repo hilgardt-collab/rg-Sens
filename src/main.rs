@@ -65,6 +65,40 @@ fn parse_coordinates(s: &str) -> Result<(i32, i32), String> {
 /// Global CLI options accessible from build_ui
 static CLI_OPTIONS: std::sync::OnceLock<Cli> = std::sync::OnceLock::new();
 
+/// Set the application icon by adding icon search paths
+fn set_app_icon() {
+    let Some(display) = gtk4::gdk::Display::default() else {
+        warn!("No display available for icon theme");
+        return;
+    };
+
+    let icon_theme = gtk4::IconTheme::for_display(&display);
+
+    // Add search paths for the icon (directory containing rg-sens.png)
+    // The icon file should be named "rg-sens.png" for icon name "rg-sens"
+    let search_paths = [
+        concat!(env!("CARGO_MANIFEST_DIR")),  // Development: project root
+        "/usr/share/icons/hicolor/256x256/apps",
+        "/usr/local/share/icons/hicolor/256x256/apps",
+        ".",  // Current directory
+    ];
+
+    for path in &search_paths {
+        icon_theme.add_search_path(path);
+    }
+
+    // Set the default icon name for all windows
+    // GTK will look for "rg-sens.png" or "rg-sens.svg" in the search paths
+    gtk4::Window::set_default_icon_name("rg-sens");
+
+    // Check if icon is available
+    if icon_theme.has_icon("rg-sens") {
+        info!("Application icon 'rg-sens' found in icon theme");
+    } else {
+        warn!("Application icon 'rg-sens' not found in icon theme search paths");
+    }
+}
+
 fn main() {
     // Parse command line arguments
     let cli = Cli::parse();
@@ -156,6 +190,9 @@ fn list_available_monitors() {
 
 fn build_ui(app: &Application) {
     info!("Building UI");
+
+    // Set application icon (must be done after GTK is initialized)
+    set_app_icon();
 
     // Get CLI options
     let cli = CLI_OPTIONS.get().cloned().unwrap_or(Cli {
