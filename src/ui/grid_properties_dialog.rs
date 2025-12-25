@@ -2865,6 +2865,10 @@ pub(crate) fn show_panel_properties_dialog(
                 }
             }
 
+            // Sync panel.data with the newly applied configs so UpdateManager uses the updated interval
+            // This is critical because UpdateManager prefers panel.data.source_config over legacy config
+            panel_guard.data = Some(panel_guard.to_data());
+
             // Drop the write lock BEFORE triggering any redraws to avoid deadlock
             drop(panel_guard);
 
