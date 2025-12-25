@@ -1069,6 +1069,50 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&retro_terminal_config_label);
     displayer_tab_box.append(&retro_terminal_placeholder);
 
+    // === Fighter HUD Configuration (Lazy Initialization) ===
+    let fighter_hud_config_label = Label::new(Some("Fighter HUD Configuration:"));
+    fighter_hud_config_label.set_halign(gtk4::Align::Start);
+    fighter_hud_config_label.add_css_class("heading");
+    fighter_hud_config_label.set_visible(old_displayer_id == "fighter_hud");
+
+    // Create placeholder box for lazy widget creation
+    let fighter_hud_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    fighter_hud_placeholder.set_visible(old_displayer_id == "fighter_hud");
+
+    // Use Option for lazy initialization - only create widget when needed
+    let fighter_hud_config_widget: Rc<RefCell<Option<crate::ui::FighterHudConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Fighter HUD widget if this is the active displayer (lazy init)
+    if old_displayer_id == "fighter_hud" {
+        log::info!("=== Creating FighterHudConfigWidget (lazy init) ===");
+        let widget = crate::ui::FighterHudConfigWidget::new(available_fields.clone());
+
+        // Load existing Fighter HUD config
+        let config_loaded = if let Some(crate::core::DisplayerConfig::FighterHud(hud_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Fighter HUD config from displayer.get_typed_config() ===");
+            widget.set_config(hud_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("fighter_hud_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::FighterHudDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Fighter HUD config from panel config hashmap ===");
+                    widget.set_config(config);
+                }
+            }
+        }
+
+        widget.set_on_change(|| {});
+        fighter_hud_placeholder.append(widget.widget());
+        *fighter_hud_config_widget.borrow_mut() = Some(widget);
+    }
+
+    displayer_tab_box.append(&fighter_hud_config_label);
+    displayer_tab_box.append(&fighter_hud_placeholder);
+
     // Connect combo_config_widget to update ONLY the active displayer's config widget when sources change
     // Other widgets are updated lazily when the user switches to them (see displayer_combo handlers below)
     {
@@ -1077,6 +1121,7 @@ pub(crate) fn show_panel_properties_dialog(
         let material_widget_clone = material_config_widget.clone();
         let industrial_widget_clone = industrial_config_widget.clone();
         let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
+        let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
         let panel_for_combo_change = panel.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
@@ -1163,6 +1208,20 @@ pub(crate) fn show_panel_properties_dialog(
                             }
                         }
                     }
+                    "fighter_hud" => {
+                        if let Some(ref widget) = *fighter_hud_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("fighter_hud_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Fighter HUD config on source change: {}", e);
+                                }
+                            }
+                        }
+                    }
                     _ => {
                         // For non-combo displayers, no update needed
                     }
@@ -1197,6 +1256,10 @@ pub(crate) fn show_panel_properties_dialog(
                 widget.set_source_summaries(summaries.clone());
             }
             if let Some(ref widget) = *retro_terminal_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *fighter_hud_config_widget.borrow() {
                 widget.set_available_fields(fields);
                 widget.set_source_summaries(summaries);
             }
@@ -1213,6 +1276,7 @@ pub(crate) fn show_panel_properties_dialog(
         let material_widget_clone = material_config_widget.clone();
         let industrial_widget_clone = industrial_config_widget.clone();
         let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
+        let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
@@ -1243,6 +1307,10 @@ pub(crate) fn show_panel_properties_dialog(
                         widget.set_source_summaries(summaries.clone());
                     }
                     if let Some(ref widget) = *retro_terminal_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *fighter_hud_widget_clone.borrow() {
                         widget.set_available_fields(fields);
                         widget.set_source_summaries(summaries);
                     }
@@ -1282,6 +1350,8 @@ pub(crate) fn show_panel_properties_dialog(
         let industrial_label_clone = industrial_config_label.clone();
         let retro_terminal_placeholder_clone = retro_terminal_placeholder.clone();
         let retro_terminal_label_clone = retro_terminal_config_label.clone();
+        let fighter_hud_placeholder_clone = fighter_hud_placeholder.clone();
+        let fighter_hud_label_clone = fighter_hud_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -1300,6 +1370,7 @@ pub(crate) fn show_panel_properties_dialog(
                 let is_material = displayer_id == "material";
                 let is_industrial = displayer_id == "industrial";
                 let is_retro_terminal = displayer_id == "retro_terminal";
+                let is_fighter_hud = displayer_id == "fighter_hud";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -1328,6 +1399,8 @@ pub(crate) fn show_panel_properties_dialog(
                 industrial_label_clone.set_visible(is_industrial);
                 retro_terminal_placeholder_clone.set_visible(is_retro_terminal);
                 retro_terminal_label_clone.set_visible(is_retro_terminal);
+                fighter_hud_placeholder_clone.set_visible(is_fighter_hud);
+                fighter_hud_label_clone.set_visible(is_fighter_hud);
             }
         });
     }
@@ -1531,6 +1604,48 @@ pub(crate) fn show_panel_properties_dialog(
 
                             if let Some(ref widget) = *widget_ref {
                                 log::info!("=== Displayer changed to 'retro_terminal': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Lazily create and update Fighter HUD widget when displayer changes to "fighter_hud" and source is "combination"
+    {
+        let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
+        let fighter_hud_placeholder_clone = fighter_hud_placeholder.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+                if displayer_id == "fighter_hud" {
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = fighter_hud_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating FighterHudConfigWidget on displayer switch ===");
+                                let widget = crate::ui::FighterHudConfigWidget::new(fields.clone());
+                                widget.set_on_change(|| {});
+                                fighter_hud_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'fighter_hud': updating with {} source summaries ===", summaries.len());
                                 widget.set_available_fields(fields);
                                 widget.set_source_summaries(summaries);
                             }
@@ -1770,6 +1885,7 @@ pub(crate) fn show_panel_properties_dialog(
     let material_config_widget_clone = material_config_widget.clone();
     let industrial_config_widget_clone = industrial_config_widget.clone();
     let retro_terminal_config_widget_clone = retro_terminal_config_widget.clone();
+    let fighter_hud_config_widget_clone = fighter_hud_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -2650,6 +2766,24 @@ pub(crate) fn show_panel_properties_dialog(
                         // Apply the configuration to the displayer
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply Retro Terminal config: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Apply Fighter HUD configuration if fighter_hud displayer is active
+            if new_displayer_id == "fighter_hud" {
+                if let Some(ref widget) = *fighter_hud_config_widget_clone.borrow() {
+                    let fighter_hud_config = widget.get_config();
+                    if let Ok(fighter_hud_config_json) = serde_json::to_value(&fighter_hud_config) {
+                        panel_guard.config.insert("fighter_hud_config".to_string(), fighter_hud_config_json);
+
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Fighter HUD config: {}", e);
                         }
                     }
                 }

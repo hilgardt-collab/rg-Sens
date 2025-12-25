@@ -82,6 +82,7 @@ mod cyberpunk;
 mod material;
 mod industrial;
 mod retro_terminal;
+mod fighter_hud;
 pub mod combo_utils;
 // mod level_bar;
 
@@ -100,6 +101,7 @@ pub use cyberpunk::{CyberpunkDisplayer, CyberpunkDisplayConfig};
 pub use material::{MaterialDisplayer, MaterialDisplayConfig};
 pub use industrial::{IndustrialDisplayer, IndustrialDisplayConfig};
 pub use retro_terminal::{RetroTerminalDisplayer, RetroTerminalDisplayConfig};
+pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -205,6 +207,13 @@ pub fn register_all() {
         "retro_terminal",
         "Retro Terminal",
         || Box::new(RetroTerminalDisplayer::new()),
+    );
+
+    // Register Fighter Jet HUD displayer
+    global_registry().register_displayer_with_info(
+        "fighter_hud",
+        "Fighter HUD",
+        || Box::new(FighterHudDisplayer::new()),
     );
 
     // TODO: Register more displayers

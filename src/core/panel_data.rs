@@ -38,6 +38,7 @@ pub use crate::displayers::CyberpunkDisplayConfig;
 pub use crate::displayers::MaterialDisplayConfig;
 pub use crate::displayers::IndustrialDisplayConfig;
 pub use crate::displayers::RetroTerminalDisplayConfig;
+pub use crate::displayers::FighterHudDisplayConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -282,6 +283,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "retro_terminal")]
     RetroTerminal(RetroTerminalDisplayConfig),
+
+    #[serde(rename = "fighter_hud")]
+    FighterHud(FighterHudDisplayConfig),
 }
 
 impl DisplayerConfig {
@@ -302,6 +306,7 @@ impl DisplayerConfig {
             DisplayerConfig::Material(_) => "material",
             DisplayerConfig::Industrial(_) => "industrial",
             DisplayerConfig::RetroTerminal(_) => "retro_terminal",
+            DisplayerConfig::FighterHud(_) => "fighter_hud",
         }
     }
 
@@ -379,6 +384,11 @@ impl DisplayerConfig {
                     map.insert("retro_terminal_config".to_string(), val);
                 }
             }
+            DisplayerConfig::FighterHud(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("fighter_hud_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -400,6 +410,7 @@ impl DisplayerConfig {
             "material" => Some(DisplayerConfig::Material(MaterialDisplayConfig::default())),
             "industrial" => Some(DisplayerConfig::Industrial(IndustrialDisplayConfig::default())),
             "retro_terminal" => Some(DisplayerConfig::RetroTerminal(RetroTerminalDisplayConfig::default())),
+            "fighter_hud" => Some(DisplayerConfig::FighterHud(FighterHudDisplayConfig::default())),
             _ => None,
         }
     }
@@ -429,6 +440,7 @@ impl DisplayerConfig {
             "material" => serde_json::from_value(value).ok().map(DisplayerConfig::Material),
             "industrial" => serde_json::from_value(value).ok().map(DisplayerConfig::Industrial),
             "retro_terminal" => serde_json::from_value(value).ok().map(DisplayerConfig::RetroTerminal),
+            "fighter_hud" => serde_json::from_value(value).ok().map(DisplayerConfig::FighterHud),
             _ => None,
         }
     }
@@ -451,6 +463,7 @@ impl DisplayerConfig {
             DisplayerConfig::Material(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Industrial(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::RetroTerminal(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::FighterHud(c) => serde_json::to_value(c).ok(),
         }
     }
 }

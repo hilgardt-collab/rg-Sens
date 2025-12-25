@@ -54,6 +54,8 @@ pub mod industrial_display;
 mod industrial_config_widget;
 pub mod retro_terminal_display;
 mod retro_terminal_config_widget;
+pub mod fighter_hud_display;
+mod fighter_hud_config_widget;
 pub mod theme;
 pub mod window_settings_dialog;
 pub mod new_panel_dialog;
@@ -132,3 +134,10 @@ pub use retro_terminal_display::{
     draw_group_dividers as retro_draw_group_dividers,
 };
 pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
+pub use fighter_hud_display::{
+    FighterHudFrameConfig, HudColorPreset, HudFrameStyle,
+    HudHeaderStyle, HudDividerStyle, render_fighter_hud_frame,
+    calculate_group_layouts as fighter_hud_calculate_group_layouts,
+    draw_group_dividers as fighter_hud_draw_group_dividers,
+};
+pub use fighter_hud_config_widget::FighterHudConfigWidget;
