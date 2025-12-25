@@ -139,33 +139,44 @@ fn render_combined_parts(
     // Calculate combined text height from extents
     let combined_height = max_descent - min_y_bearing;
 
-    // Calculate starting X position based on horizontal alignment
+    // For rotated text, calculate the rotated bounding box dimensions
+    let angle_rad = rotation_angle.to_radians();
+    let cos_a = angle_rad.cos().abs();
+    let sin_a = angle_rad.sin().abs();
+    let rotated_w = total_width * cos_a + combined_height * sin_a;
+    let rotated_h = total_width * sin_a + combined_height * cos_a;
+
+    // Use rotated dimensions for positioning when text is rotated
+    let effective_w = if rotation_angle != 0.0 { rotated_w } else { total_width };
+    let effective_h = if rotation_angle != 0.0 { rotated_h } else { combined_height };
+
+    // Calculate starting X position based on horizontal alignment using effective dimensions
     let base_x = match h_pos {
         HorizontalPosition::Left => 10.0,
-        HorizontalPosition::Center => (width - total_width) / 2.0,
-        HorizontalPosition::Right => width - total_width - 10.0,
+        HorizontalPosition::Center => (width - effective_w) / 2.0,
+        HorizontalPosition::Right => width - effective_w - 10.0,
     };
 
-    // Calculate Y position using actual text extents for proper centering
+    // Calculate Y position using effective dimensions for proper centering
     let base_y = match v_pos {
-        VerticalPosition::Top => 10.0 - min_y_bearing,
-        VerticalPosition::Center => (height - combined_height) / 2.0 - min_y_bearing,
-        VerticalPosition::Bottom => height - 10.0 - combined_height - min_y_bearing,
+        VerticalPosition::Top => 10.0,
+        VerticalPosition::Center => (height - effective_h) / 2.0,
+        VerticalPosition::Bottom => height - 10.0 - effective_h,
     };
 
     // Apply rotation if needed
     cr.save().ok();
     if rotation_angle != 0.0 {
-        // Calculate center point for rotation (visual center of combined text)
-        let center_x = base_x + total_width / 2.0 + offset_x;
-        let center_y = base_y + min_y_bearing + combined_height / 2.0 + offset_y;
+        // Position the center of the rotated bounding box
+        let center_x = base_x + effective_w / 2.0 + offset_x;
+        let center_y = base_y + effective_h / 2.0 + offset_y;
         cr.translate(center_x, center_y);
-        cr.rotate(rotation_angle.to_radians());
-        // Move to draw position relative to center
+        cr.rotate(angle_rad);
+        // Move to draw position relative to center (use original dimensions)
         cr.translate(-total_width / 2.0, -min_y_bearing - combined_height / 2.0);
     } else {
-        // Just apply offset without rotation
-        cr.translate(base_x + offset_x, base_y + offset_y);
+        // Just apply offset without rotation, with baseline adjustment
+        cr.translate(base_x + offset_x, base_y - min_y_bearing + offset_y);
     }
 
     // Render each part sequentially
@@ -259,33 +270,49 @@ fn render_text_with_alignment(
         })
         .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
+    // For rotated text, we need to account for the rotated bounding box dimensions
+    let text_w = extents.width();
+    let text_h = extents.height();
+
+    // Calculate rotated bounding box dimensions
+    let angle_rad = rotation_angle.to_radians();
+    let cos_a = angle_rad.cos().abs();
+    let sin_a = angle_rad.sin().abs();
+    let rotated_w = text_w * cos_a + text_h * sin_a;
+    let rotated_h = text_w * sin_a + text_h * cos_a;
+
+    // Use rotated dimensions for positioning when text is rotated
+    let effective_w = if rotation_angle != 0.0 { rotated_w } else { text_w };
+    let effective_h = if rotation_angle != 0.0 { rotated_h } else { text_h };
+
     // Calculate text origin position for proper alignment (before offsets)
+    // Use effective (rotated) dimensions for left/right/center alignment
     let text_x = match h_pos {
         HorizontalPosition::Left => 10.0,
-        HorizontalPosition::Center => (width - extents.width()) / 2.0,
-        HorizontalPosition::Right => width - extents.width() - 10.0,
+        HorizontalPosition::Center => (width - effective_w) / 2.0,
+        HorizontalPosition::Right => width - effective_w - 10.0,
     };
 
-    // Calculate Y position using actual text extents for proper centering
-    // y_bearing is negative (distance from baseline to top of text)
-    // For center: place text so its visual center is at height/2
+    // Calculate Y position using effective (rotated) dimensions for proper centering
     let text_y = match v_pos {
-        VerticalPosition::Top => 10.0 - extents.y_bearing(),
-        VerticalPosition::Center => (height - extents.height()) / 2.0 - extents.y_bearing(),
-        VerticalPosition::Bottom => height - 10.0 - extents.height() - extents.y_bearing(),
+        VerticalPosition::Top => 10.0,
+        VerticalPosition::Center => (height - effective_h) / 2.0,
+        VerticalPosition::Bottom => height - 10.0 - effective_h,
     };
 
     // Apply offset and rotation
     if rotation_angle != 0.0 {
-        // Rotate around the visual center of the text
-        let center_x = text_x + extents.width() / 2.0 + offset_x;
-        let center_y = text_y + extents.y_bearing() + extents.height() / 2.0 + offset_y;
+        // Position the center of the rotated bounding box
+        let center_x = text_x + effective_w / 2.0 + offset_x;
+        let center_y = text_y + effective_h / 2.0 + offset_y;
         cr.translate(center_x, center_y);
-        cr.rotate(rotation_angle.to_radians());
-        // Move to draw position relative to center
-        cr.move_to(-extents.width() / 2.0, -extents.y_bearing() - extents.height() / 2.0);
+        cr.rotate(angle_rad);
+        // Move to draw position relative to center (use original text dimensions)
+        cr.move_to(-text_w / 2.0, -extents.y_bearing() - text_h / 2.0);
     } else {
-        cr.move_to(text_x + offset_x, text_y + offset_y);
+        // No rotation - use original y calculation with baseline adjustment
+        let adjusted_y = text_y - extents.y_bearing();
+        cr.move_to(text_x + offset_x, adjusted_y + offset_y);
     }
 
     cr.show_text(text).ok();
