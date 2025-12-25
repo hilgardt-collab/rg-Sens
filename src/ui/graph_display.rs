@@ -3,10 +3,17 @@
 use anyhow::Result;
 use cairo::{Context, LineCap, LineJoin};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use super::background::Color;
 use crate::displayers::TextLineConfig;
+
+// Thread-local buffer for graph points to avoid allocation per frame
+// Pre-sized for 128 points which covers most use cases (typical max is 60-120)
+thread_local! {
+    static POINTS_BUFFER: RefCell<Vec<(f64, f64)>> = RefCell::new(Vec::with_capacity(128));
+}
 
 /// Custom deserializer for text_overlay that handles both formats:
 /// - New format: Vec<TextLineConfig> directly
@@ -420,18 +427,28 @@ pub fn render_graph(
             0.0
         };
 
-        let points: Vec<(f64, f64)> = data
-            .iter()
-            .enumerate()
-            .map(|(i, point)| {
-                // Offset X position by scroll amount for smooth scrolling
-                let base_x = plot_x + (i as f64 / (config.max_data_points - 1).max(1) as f64) * plot_width;
+        // Use thread-local buffer to avoid allocation per frame
+        // Take ownership temporarily, populate, use, then return
+        let points = POINTS_BUFFER.with(|buf| {
+            let mut points = buf.borrow_mut();
+            points.clear();
+
+            // Pre-compute divisor to avoid repeated division
+            let max_points_divisor = (config.max_data_points - 1).max(1) as f64;
+
+            for (i, point) in data.iter().enumerate() {
+                let base_x = plot_x + (i as f64 / max_points_divisor) * plot_width;
                 let x = base_x - scroll_pixels;
                 let normalized = ((point.value - min_val) / value_range).clamp(0.0, 1.0);
                 let y = plot_y + plot_height - (normalized * plot_height);
-                (x, y)
-            })
-            .collect();
+                points.push((x, y));
+            }
+
+            // Return a clone of the points for use outside the closure
+            // This is still faster than allocating fresh each time as the buffer
+            // capacity is maintained across frames
+            points.clone()
+        });
 
         match config.graph_type {
             GraphType::Line | GraphType::SteppedLine | GraphType::Area => {

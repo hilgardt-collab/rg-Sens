@@ -135,40 +135,46 @@ struct SharedSourceUpdateState {
 }
 
 /// Compute a hash from PanelData's source config (preferred method)
+///
+/// OPTIMIZATION: Only hash fields that affect update scheduling:
+/// - source_type: determines which source to poll
+/// - update_interval_ms: determines polling frequency
+///
+/// Other config fields (colors, field selections, etc.) are applied directly
+/// when config is saved and don't need to be detected by the update manager.
+/// This avoids expensive serde serialization every 500ms.
 fn compute_config_hash_from_data(source_config: &SourceConfig) -> u64 {
     use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
 
     let mut hasher = DefaultHasher::new();
 
-    // Hash the source type and update interval (fast path for common checks)
+    // Hash only the fields that affect scheduling (fast - no serde)
     source_config.source_type().hash(&mut hasher);
     source_config.update_interval_ms().hash(&mut hasher);
-
-    // Hash the serialized config for a complete picture
-    // Use to_vec instead of to_string - avoids UTF-8 validation overhead
-    if let Ok(bytes) = serde_json::to_vec(source_config) {
-        bytes.hash(&mut hasher);
-    }
 
     hasher.finish()
 }
 
 /// Compute a simple hash of the config keys that affect update interval (legacy fallback)
+///
+/// OPTIMIZATION: Only extract and hash update_interval_ms from config structs.
+/// Avoids full JSON serialization.
 fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
     use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
 
     let mut hasher = DefaultHasher::new();
 
-    // Hash the relevant config keys (the ones that contain update_interval_ms)
+    // Hash only the update_interval_ms from each config type (no full serialization)
     for key in ["cpu_config", "gpu_config", "memory_config", "system_temp_config",
-                "fan_speed_config", "disk_config", "clock_config"] {
+                "fan_speed_config", "disk_config", "clock_config", "combo_config",
+                "static_text_config", "test_config"] {
         if let Some(value) = config.get(key) {
             key.hash(&mut hasher);
-            // Use to_vec() instead of to_string() - avoids UTF-8 validation overhead
-            if let Ok(bytes) = serde_json::to_vec(value) {
-                bytes.hash(&mut hasher);
+            // Only hash the update_interval_ms field, not the entire config
+            if let Some(interval) = value.get("update_interval_ms").and_then(|v| v.as_u64()) {
+                interval.hash(&mut hasher);
             }
         }
     }

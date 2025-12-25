@@ -60,6 +60,42 @@ impl KeyBuffer {
         let _ = write!(self.buffer, "group{}_{}", group_num, item_idx);
         &self.buffer
     }
+
+    /// Build a bar key like "group1_2_bar" without allocating
+    #[inline]
+    pub fn build_bar_key(&mut self, prefix: &str) -> &str {
+        self.buffer.clear();
+        self.buffer.push_str(prefix);
+        self.buffer.push_str("_bar");
+        &self.buffer
+    }
+
+    /// Build a graph key like "group1_2_graph" without allocating
+    #[inline]
+    pub fn build_graph_key(&mut self, prefix: &str) -> &str {
+        self.buffer.clear();
+        self.buffer.push_str(prefix);
+        self.buffer.push_str("_graph");
+        &self.buffer
+    }
+
+    /// Build a core usage key like "group1_2_core0_usage" without allocating
+    #[inline]
+    pub fn build_core_key(&mut self, prefix: &str, core_idx: usize) -> &str {
+        self.buffer.clear();
+        use std::fmt::Write;
+        let _ = write!(self.buffer, "{}_core{}_usage", prefix, core_idx);
+        &self.buffer
+    }
+
+    /// Build a prefix with underscore like "group1_2_" for filtering
+    #[inline]
+    pub fn build_prefix_underscore(&mut self, prefix: &str) -> &str {
+        self.buffer.clear();
+        self.buffer.push_str(prefix);
+        self.buffer.push('_');
+        &self.buffer
+    }
 }
 
 impl Default for KeyBuffer {
@@ -68,18 +104,35 @@ impl Default for KeyBuffer {
     }
 }
 
+// Thread-local KeyBuffer to avoid allocations in hot paths
+thread_local! {
+    static KEY_BUFFER: std::cell::RefCell<KeyBuffer> = std::cell::RefCell::new(KeyBuffer::new());
+}
+
+/// Access the thread-local KeyBuffer for zero-allocation key building
+#[inline]
+pub fn with_key_buffer<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut KeyBuffer) -> R,
+{
+    KEY_BUFFER.with(|buf| f(&mut buf.borrow_mut()))
+}
+
 /// Generate all prefixes for the given group item counts
 /// Returns owned Strings since they're stored in collections
 pub fn generate_prefixes(group_item_counts: &[usize]) -> Vec<String> {
     let total_items: usize = group_item_counts.iter().sum();
     let mut prefixes = Vec::with_capacity(total_items);
 
-    for (group_idx, &item_count) in group_item_counts.iter().enumerate() {
-        let group_num = group_idx + 1;
-        for item_idx in 1..=item_count {
-            prefixes.push(format!("group{}_{}", group_num, item_idx));
+    KEY_BUFFER.with(|buf| {
+        let mut key_buf = buf.borrow_mut();
+        for (group_idx, &item_count) in group_item_counts.iter().enumerate() {
+            let group_num = group_idx + 1;
+            for item_idx in 1..=item_count {
+                prefixes.push(key_buf.build_prefix(group_num, item_idx).to_string());
+            }
         }
-    }
+    });
 
     prefixes
 }
@@ -91,18 +144,32 @@ pub fn prefix_set(prefixes: &[String]) -> HashSet<&str> {
 }
 
 /// Filter values to only those matching any of the given prefixes
-/// Uses HashSet for efficient prefix matching
+/// Optimized single-pass algorithm: O(n) where n = data.len()
 pub fn filter_values_by_prefixes(
     data: &HashMap<String, Value>,
     prefixes: &[String],
 ) -> HashMap<String, Value> {
-    let mut result = HashMap::with_capacity(prefixes.len() * 8); // Estimate ~8 fields per prefix
+    // Build prefix set once for O(1) lookups
+    let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
 
-    for prefix in prefixes {
-        let prefix_underscore = format!("{}_", prefix);
-        for (k, v) in data.iter() {
-            if k.starts_with(&prefix_underscore) || k == prefix {
-                result.insert(k.clone(), v.clone());
+    let mut result = HashMap::with_capacity(prefixes.len() * 8);
+
+    // Single pass through data - O(n)
+    for (k, v) in data.iter() {
+        // Check if key matches any prefix exactly
+        if prefix_set.contains(k.as_str()) {
+            result.insert(k.clone(), v.clone());
+            continue;
+        }
+
+        // Check if key starts with any prefix followed by underscore
+        // Extract potential prefix from key (everything before first underscore after "group")
+        if let Some(underscore_pos) = k.find('_') {
+            if let Some(second_underscore) = k[underscore_pos + 1..].find('_') {
+                let potential_prefix = &k[..underscore_pos + 1 + second_underscore];
+                if prefix_set.contains(potential_prefix) {
+                    result.insert(k.clone(), v.clone());
+                }
             }
         }
     }
@@ -182,20 +249,25 @@ pub fn get_item_data(values: &HashMap<String, Value>, prefix: &str) -> ContentIt
 }
 
 /// Get all values for a slot with the prefix stripped
+/// Optimized to avoid format! allocation
 pub fn get_slot_values(values: &HashMap<String, Value>, prefix: &str) -> HashMap<String, Value> {
     let prefix_len = prefix.len() + 1; // +1 for underscore
-    let prefix_with_underscore = format!("{}_", prefix);
 
-    values.iter()
-        .filter(|(k, _)| k.starts_with(&prefix_with_underscore))
-        .map(|(k, v)| {
-            let short_key = &k[prefix_len..];
-            (short_key.to_string(), v.clone())
-        })
-        .collect()
+    KEY_BUFFER.with(|buf| {
+        let mut key_buf = buf.borrow_mut();
+        let prefix_with_underscore = key_buf.build_prefix_underscore(prefix);
+
+        values.iter()
+            .filter(|(k, _)| k.starts_with(prefix_with_underscore))
+            .map(|(k, v)| {
+                let short_key = &k[prefix_len..];
+                (short_key.to_string(), v.clone())
+            })
+            .collect()
+    })
 }
 
-/// Update bar animation state
+/// Update bar animation state - optimized version using thread-local KeyBuffer
 #[inline]
 pub fn update_bar_animation(
     bar_values: &mut HashMap<String, AnimatedValue>,
@@ -203,8 +275,29 @@ pub fn update_bar_animation(
     target_percent: f64,
     animation_enabled: bool,
 ) {
-    let bar_key = format!("{}_bar", prefix);
-    let anim = bar_values.entry(bar_key).or_default();
+    // Build key using thread-local buffer, then convert to owned String only if needed
+    let bar_key = KEY_BUFFER.with(|buf| {
+        let mut key_buf = buf.borrow_mut();
+        let key = key_buf.build_bar_key(prefix);
+        // Only allocate if key doesn't exist
+        if bar_values.contains_key(key) {
+            None
+        } else {
+            Some(key.to_string())
+        }
+    });
+
+    let anim = if let Some(new_key) = bar_key {
+        bar_values.entry(new_key).or_default()
+    } else {
+        // Key exists - look it up again (cheap compared to allocation)
+        KEY_BUFFER.with(|buf| {
+            let mut key_buf = buf.borrow_mut();
+            let key = key_buf.build_bar_key(prefix);
+            bar_values.get_mut(key).unwrap()
+        })
+    };
+
     anim.target = target_percent;
     if anim.first_update || !animation_enabled {
         anim.current = target_percent;
@@ -212,7 +305,7 @@ pub fn update_bar_animation(
     }
 }
 
-/// Update graph history
+/// Update graph history - optimized version using thread-local KeyBuffer
 pub fn update_graph_history(
     graph_history: &mut HashMap<String, VecDeque<DataPoint>>,
     prefix: &str,
@@ -220,8 +313,26 @@ pub fn update_graph_history(
     timestamp: f64,
     max_points: usize,
 ) {
-    let graph_key = format!("{}_graph", prefix);
-    let history = graph_history.entry(graph_key).or_default();
+    // Build key using thread-local buffer
+    let graph_key = KEY_BUFFER.with(|buf| {
+        let mut key_buf = buf.borrow_mut();
+        let key = key_buf.build_graph_key(prefix);
+        if graph_history.contains_key(key) {
+            None
+        } else {
+            Some(key.to_string())
+        }
+    });
+
+    let history = if let Some(new_key) = graph_key {
+        graph_history.entry(new_key).or_default()
+    } else {
+        KEY_BUFFER.with(|buf| {
+            let mut key_buf = buf.borrow_mut();
+            let key = key_buf.build_graph_key(prefix);
+            graph_history.get_mut(key).unwrap()
+        })
+    };
 
     history.push_back(DataPoint {
         value: numerical_value,
@@ -233,7 +344,7 @@ pub fn update_graph_history(
     }
 }
 
-/// Update core bars animation state
+/// Update core bars animation state - optimized to reduce allocations
 pub fn update_core_bars(
     data: &HashMap<String, Value>,
     core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>,
@@ -244,27 +355,32 @@ pub fn update_core_bars(
     let capacity = config.end_core.saturating_sub(config.start_core) + 1;
     let mut core_targets: Vec<f64> = Vec::with_capacity(capacity);
 
-    // Try configured core range first
-    for core_idx in config.start_core..=config.end_core {
-        let core_key = format!("{}_core{}_usage", prefix, core_idx);
-        let value = data.get(&core_key)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) / 100.0;
-        core_targets.push(value);
-    }
+    // Try configured core range first - use KeyBuffer for core keys
+    KEY_BUFFER.with(|buf| {
+        let mut key_buf = buf.borrow_mut();
+        for core_idx in config.start_core..=config.end_core {
+            let core_key = key_buf.build_core_key(prefix, core_idx);
+            let value = data.get(core_key)
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) / 100.0;
+            core_targets.push(value);
+        }
+    });
 
     // Auto-detect cores if configured range found nothing
     if core_targets.is_empty() || core_targets.iter().all(|&v| v == 0.0) {
         core_targets.clear();
-        for core_idx in 0..128 {
-            let core_key = format!("{}_core{}_usage", prefix, core_idx);
-            if let Some(v) = data.get(&core_key).and_then(|v| v.as_f64()) {
-                core_targets.push(v / 100.0);
-            } else if core_idx > 0 {
-                // Only break after first core - allows for sparse numbering
-                break;
+        KEY_BUFFER.with(|buf| {
+            let mut key_buf = buf.borrow_mut();
+            for core_idx in 0..128 {
+                let core_key = key_buf.build_core_key(prefix, core_idx);
+                if let Some(v) = data.get(core_key).and_then(|v| v.as_f64()) {
+                    core_targets.push(v / 100.0);
+                } else if core_idx > 0 {
+                    break;
+                }
             }
-        }
+        });
     }
 
     let anims = core_bar_values.entry(prefix.to_string()).or_default();
@@ -287,7 +403,38 @@ pub fn update_core_bars(
     }
 }
 
+/// Clean up all stale animation entries in one pass
+/// Builds the prefix HashSet once and cleans up all collections
+#[inline]
+pub fn cleanup_all_animation_state(
+    bar_values: &mut HashMap<String, AnimatedValue>,
+    core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>,
+    graph_history: &mut HashMap<String, VecDeque<DataPoint>>,
+    prefixes: &[String],
+) {
+    // Build prefix set once - O(n) where n = prefixes.len()
+    let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
+
+    // Clean up bar values
+    bar_values.retain(|k, _| {
+        k.strip_suffix("_bar")
+            .map(|p| prefix_set.contains(p))
+            .unwrap_or(false)
+    });
+
+    // Clean up core bar values
+    core_bar_values.retain(|k, _| prefix_set.contains(k.as_str()));
+
+    // Clean up graph history
+    graph_history.retain(|k, _| {
+        k.strip_suffix("_graph")
+            .map(|p| prefix_set.contains(p))
+            .unwrap_or(false)
+    });
+}
+
 /// Clean up stale bar animation entries using retain
+/// Prefer cleanup_all_animation_state when cleaning multiple collections
 #[inline]
 pub fn cleanup_bar_values(bar_values: &mut HashMap<String, AnimatedValue>, prefixes: &[String]) {
     let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
@@ -299,6 +446,7 @@ pub fn cleanup_bar_values(bar_values: &mut HashMap<String, AnimatedValue>, prefi
 }
 
 /// Clean up stale core bar animation entries using retain
+/// Prefer cleanup_all_animation_state when cleaning multiple collections
 #[inline]
 pub fn cleanup_core_bar_values(core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>, prefixes: &[String]) {
     let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
@@ -306,6 +454,7 @@ pub fn cleanup_core_bar_values(core_bar_values: &mut HashMap<String, Vec<Animate
 }
 
 /// Clean up stale graph history entries using retain
+/// Prefer cleanup_all_animation_state when cleaning multiple collections
 #[inline]
 pub fn cleanup_graph_history(graph_history: &mut HashMap<String, VecDeque<DataPoint>>, prefixes: &[String]) {
     let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
