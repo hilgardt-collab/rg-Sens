@@ -125,6 +125,11 @@ impl SharedSourceManager {
     /// Get or create a shared source for the given configuration
     ///
     /// Returns the source key that can be used to retrieve values later.
+    ///
+    /// # Performance Note
+    /// This method is optimized to minimize lock contention. Source creation
+    /// and initial updates happen outside the write lock to avoid blocking
+    /// the update loop.
     pub fn get_or_create_source(
         &self,
         source_config: &SourceConfig,
@@ -134,36 +139,55 @@ impl SharedSourceManager {
         let key = Self::generate_source_key(source_config);
         let interval = Duration::from_millis(source_config.update_interval_ms());
 
-        let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        // Phase 1: Check if source exists (quick read lock)
+        {
+            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            if let Some(handle) = sources.get(&key) {
+                // Source already exists, increment ref count and track panel interval
+                if let Ok(mut shared) = handle.lock() {
+                    shared.ref_count += 1;
+                    shared.panel_intervals.insert(panel_id.to_string(), interval);
+                    shared.recalculate_min_interval();
+                    debug!(
+                        "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                        key, panel_id, shared.ref_count, shared.min_interval
+                    );
+                }
+                return Ok(key);
+            }
+        }
+        // Read lock released here
 
+        // Phase 2: Create new source OUTSIDE the lock (slow I/O)
+        let mut source = registry.create_source(source_config.source_type())?;
+        source.configure_typed(source_config)?;
+
+        info!(
+            "Created new shared source {} for panel {} (interval: {:?})",
+            key, panel_id, interval
+        );
+
+        // Create the shared source and do initial update BEFORE acquiring write lock
+        let mut shared = SharedSource::new(source, interval, panel_id.to_string());
+        if let Err(e) = shared.update() {
+            warn!("Initial update failed for source {}: {}", key, e);
+        }
+
+        // Phase 3: Insert into map (quick write lock)
+        // Re-check in case another thread created it while we were doing I/O
+        let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
         if let Some(handle) = sources.get(&key) {
-            // Source already exists, increment ref count and track panel interval
-            if let Ok(mut shared) = handle.lock() {
-                shared.ref_count += 1;
-                shared.panel_intervals.insert(panel_id.to_string(), interval);
-                shared.recalculate_min_interval();
+            // Another thread created it - just increment ref count and discard ours
+            if let Ok(mut existing) = handle.lock() {
+                existing.ref_count += 1;
+                existing.panel_intervals.insert(panel_id.to_string(), interval);
+                existing.recalculate_min_interval();
                 debug!(
-                    "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
-                    key, panel_id, shared.ref_count, shared.min_interval
+                    "Source {} was created by another thread, reusing (ref_count: {})",
+                    key, existing.ref_count
                 );
             }
         } else {
-            // Create new source
-            let mut source = registry.create_source(source_config.source_type())?;
-
-            // Apply configuration to the source
-            source.configure_typed(source_config)?;
-
-            info!(
-                "Created new shared source {} for panel {} (interval: {:?})",
-                key, panel_id, interval
-            );
-
-            // Create the shared source and do an initial update so values are immediately available
-            let mut shared = SharedSource::new(source, interval, panel_id.to_string());
-            if let Err(e) = shared.update() {
-                warn!("Initial update failed for source {}: {}", key, e);
-            }
             sources.insert(key.clone(), Arc::new(Mutex::new(shared)));
         }
 
@@ -174,9 +198,19 @@ impl SharedSourceManager {
     ///
     /// When ref_count reaches 0, the source is removed.
     /// When a panel is removed, the min_interval is recalculated.
+    ///
+    /// # Performance Note
+    /// Uses read lock for the common case (decrementing ref count) and only
+    /// acquires write lock when the source needs to be removed.
     pub fn release_source(&self, key: &str, panel_id: &str) {
-        if let Ok(mut sources) = self.sources.write() {
-            let should_remove = if let Some(handle) = sources.get(key) {
+        // Phase 1: Update ref count with read lock
+        let should_remove = {
+            let sources = match self.sources.read() {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            if let Some(handle) = sources.get(key) {
                 if let Ok(mut shared) = handle.lock() {
                     shared.ref_count = shared.ref_count.saturating_sub(1);
                     shared.panel_intervals.remove(panel_id);
@@ -193,11 +227,23 @@ impl SharedSourceManager {
                 }
             } else {
                 false
-            };
+            }
+        };
+        // Read lock released here
 
-            if should_remove {
-                info!("Removing unused shared source {}", key);
-                sources.remove(key);
+        // Phase 2: Remove with write lock only if needed
+        if should_remove {
+            if let Ok(mut sources) = self.sources.write() {
+                // Re-check ref_count in case another thread incremented it
+                let still_empty = sources.get(key)
+                    .and_then(|h| h.lock().ok())
+                    .map(|s| s.ref_count == 0)
+                    .unwrap_or(false);
+
+                if still_empty {
+                    info!("Removing unused shared source {}", key);
+                    sources.remove(key);
+                }
             }
         }
     }

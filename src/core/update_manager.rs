@@ -421,8 +421,9 @@ impl UpdateManager {
                         let interval = Duration::from_millis(data.source_config.update_interval_ms());
                         (hash, Some(interval), panel_guard.source_key.clone())
                     } else {
+                        // Legacy config - still need to track source_key for shared source updates
                         let hash = compute_config_hash(&panel_guard.config);
-                        (hash, None, None)
+                        (hash, None, panel_guard.source_key.clone())
                     }
                 } else {
                     (state.config_hash, None, state.source_key.clone())
@@ -432,7 +433,10 @@ impl UpdateManager {
                 (state.config_hash, None, state.source_key.clone())
             };
 
-            if current_hash != state.config_hash {
+            // Check if config hash changed OR source_key changed
+            // Source_key can change without hash changing (e.g., combo source slot config changes)
+            let source_key_changed = new_source_key != state.source_key;
+            if current_hash != state.config_hash || source_key_changed {
                 let interval = new_interval.unwrap_or_else(|| {
                     if let Ok(panel_guard) = state.panel.try_read() {
                         extract_update_interval(&panel_guard.config, panel_id)
@@ -441,6 +445,9 @@ impl UpdateManager {
                     }
                 });
                 config_updates.insert(panel_id.clone(), (current_hash, interval, new_source_key.clone()));
+                if source_key_changed {
+                    debug!("Panel {} source_key changed from {:?} to {:?}", panel_id, state.source_key, new_source_key);
+                }
             }
 
             // Check if update is due - O(1) HashMap lookup instead of O(n) Vec search
