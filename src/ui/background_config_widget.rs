@@ -32,7 +32,7 @@ pub struct BackgroundConfigWidget {
     indicator_field_entry: Entry,
     indicator_field_dropdown_box: GtkBox,
     indicator_field_entry_box: GtkBox,
-    indicator_field_dropdown_handler_id: gtk4::glib::SignalHandlerId,
+    indicator_field_dropdown_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
 }
 
 impl BackgroundConfigWidget {
@@ -122,6 +122,12 @@ impl BackgroundConfigWidget {
         let stack_clone = config_stack.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
+        // Clone indicator widgets for syncing when switching to Indicator type
+        let indicator_field_dropdown_clone = indicator_field_dropdown.clone();
+        let indicator_field_list_clone = indicator_field_list.clone();
+        let indicator_field_entry_clone = indicator_field_entry.clone();
+        let indicator_field_dropdown_handler_id_cell: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> = Rc::new(RefCell::new(None));
+        let indicator_field_dropdown_handler_id_for_type = indicator_field_dropdown_handler_id_cell.clone();
 
         let type_dropdown_handler_id = type_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
@@ -173,6 +179,40 @@ impl BackgroundConfigWidget {
                 cfg.background = background_type;
                 drop(cfg);
 
+                // If switching to Indicator, sync the field dropdown to show the default value
+                if selected == 5 {
+                    // Get the default value_field from the new config
+                    let value_field = {
+                        let cfg = config_clone.borrow();
+                        if let BackgroundType::Indicator(ref ind) = cfg.background {
+                            ind.value_field.clone()
+                        } else {
+                            "value".to_string()
+                        }
+                    };
+
+                    // Find and select the matching item in dropdown
+                    let mut selected_index: u32 = 0;
+                    for i in 0..indicator_field_list_clone.n_items() {
+                        if let Some(item) = indicator_field_list_clone.string(i) {
+                            if item == value_field {
+                                selected_index = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Block handler, set selection, unblock
+                    if let Some(ref handler_id) = *indicator_field_dropdown_handler_id_for_type.borrow() {
+                        indicator_field_dropdown_clone.block_signal(handler_id);
+                        indicator_field_dropdown_clone.set_selected(selected_index);
+                        indicator_field_dropdown_clone.unblock_signal(handler_id);
+                    }
+
+                    // Also update entry
+                    indicator_field_entry_clone.set_text(&value_field);
+                }
+
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
                 }
@@ -180,6 +220,9 @@ impl BackgroundConfigWidget {
 
             preview_clone.queue_draw();
         });
+
+        // Store the indicator field dropdown handler ID for the type dropdown handler to use
+        *indicator_field_dropdown_handler_id_cell.borrow_mut() = Some(indicator_field_dropdown_handler_id);
 
         Self {
             container,
@@ -200,7 +243,7 @@ impl BackgroundConfigWidget {
             indicator_field_entry,
             indicator_field_dropdown_box,
             indicator_field_entry_box,
-            indicator_field_dropdown_handler_id,
+            indicator_field_dropdown_handler_id: indicator_field_dropdown_handler_id_cell,
         }
     }
 
@@ -1109,18 +1152,6 @@ impl BackgroundConfigWidget {
         self.indicator_field_list.append("(none)");
 
         // Filter and add fields that are suitable for indicator values (numerical/percentage values)
-        let current_value = {
-            let cfg = self.config.borrow();
-            if let BackgroundType::Indicator(ref ind) = cfg.background {
-                ind.value_field.clone()
-            } else {
-                String::new()
-            }
-        };
-
-        let mut selected_index: u32 = 0;
-        let mut index: u32 = 1;
-
         for field in &fields {
             // Only show fields that can provide numerical values for the indicator
             // Filter by FieldType (Numerical or Percentage) and FieldPurpose (Value or SecondaryValue)
@@ -1129,21 +1160,45 @@ impl BackgroundConfigWidget {
 
             if is_numerical && is_value_field {
                 self.indicator_field_list.append(&field.id);
-                if field.id == current_value {
-                    selected_index = index;
+            }
+        }
+
+        // Sync the dropdown selection to match current config
+        self.sync_indicator_field_dropdown();
+    }
+
+    /// Sync the indicator field dropdown to match the current config
+    fn sync_indicator_field_dropdown(&self) {
+        let current_value = {
+            let cfg = self.config.borrow();
+            if let BackgroundType::Indicator(ref ind) = cfg.background {
+                ind.value_field.clone()
+            } else {
+                // If not indicator, use the default value_field so dropdown is ready
+                "value".to_string()
+            }
+        };
+
+        // Find the index of the current value in the dropdown
+        let mut selected_index: u32 = 0;
+        for i in 0..self.indicator_field_list.n_items() {
+            if let Some(item) = self.indicator_field_list.string(i) {
+                if item == current_value {
+                    selected_index = i;
+                    break;
                 }
-                index += 1;
             }
         }
 
         // Block the handler to prevent it from overwriting the config value
-        self.indicator_field_dropdown.block_signal(&self.indicator_field_dropdown_handler_id);
+        if let Some(ref handler_id) = *self.indicator_field_dropdown_handler_id.borrow() {
+            self.indicator_field_dropdown.block_signal(handler_id);
+            self.indicator_field_dropdown.set_selected(selected_index);
+            self.indicator_field_dropdown.unblock_signal(handler_id);
+        }
 
-        // Set the dropdown to the current value
-        self.indicator_field_dropdown.set_selected(selected_index);
-
-        // Unblock the handler
-        self.indicator_field_dropdown.unblock_signal(&self.indicator_field_dropdown_handler_id);
+        // Also update the entry for combo sources
+        self.indicator_field_entry.set_text(&current_value);
     }
 }
 

@@ -824,9 +824,10 @@ impl GridLayout {
             // Check if panel background is indicator type and value changed
             if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
                 if let crate::ui::BackgroundType::Indicator(ref indicator) = panel_guard.background.background {
-                    // Get current value from config (the displayer syncs this via update)
+                    // Get current value from source (not config - config stores source settings, not values)
+                    let source_values = panel_guard.source.get_values();
                     let current_value = if !indicator.value_field.is_empty() {
-                        panel_guard.config.get(&indicator.value_field)
+                        source_values.get(&indicator.value_field)
                             .and_then(|v| v.as_f64())
                     } else {
                         Some(indicator.static_value)
