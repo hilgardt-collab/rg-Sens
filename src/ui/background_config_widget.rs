@@ -32,7 +32,8 @@ pub struct BackgroundConfigWidget {
     indicator_field_entry: Entry,
     indicator_field_dropdown_box: GtkBox,
     indicator_field_entry_box: GtkBox,
-    indicator_field_dropdown_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
+    // Flag to prevent dropdown handler from overwriting value_field during sync
+    syncing_indicator_dropdown: Rc<RefCell<bool>>,
 }
 
 impl BackgroundConfigWidget {
@@ -106,14 +107,15 @@ impl BackgroundConfigWidget {
         let polygon_page = Self::create_polygon_config(&config, &preview, &on_change);
         config_stack.add_named(&polygon_page, Some("polygons"));
 
-        // Indicator configuration
-        let (indicator_page, indicator_gradient_editor, indicator_field_dropdown, indicator_field_list, indicator_field_entry, indicator_field_dropdown_box, indicator_field_entry_box, indicator_field_dropdown_handler_id) =
-            Self::create_indicator_config(&config, &preview, &on_change);
-        config_stack.add_named(&indicator_page, Some("indicator"));
-
-        // Initialize source fields storage
+        // Initialize source fields storage and syncing flag
         let source_fields = Rc::new(RefCell::new(Vec::new()));
         let is_combo_source = Rc::new(RefCell::new(false));
+        let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
+
+        // Indicator configuration
+        let (indicator_page, indicator_gradient_editor, indicator_field_dropdown, indicator_field_list, indicator_field_entry, indicator_field_dropdown_box, indicator_field_entry_box, indicator_field_dropdown_handler_id) =
+            Self::create_indicator_config(&config, &preview, &on_change, &syncing_indicator_dropdown);
+        config_stack.add_named(&indicator_page, Some("indicator"));
 
         container.append(&config_stack);
 
@@ -126,8 +128,7 @@ impl BackgroundConfigWidget {
         let indicator_field_dropdown_clone = indicator_field_dropdown.clone();
         let indicator_field_list_clone = indicator_field_list.clone();
         let indicator_field_entry_clone = indicator_field_entry.clone();
-        let indicator_field_dropdown_handler_id_cell: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> = Rc::new(RefCell::new(None));
-        let indicator_field_dropdown_handler_id_for_type = indicator_field_dropdown_handler_id_cell.clone();
+        let syncing_flag_for_type = syncing_indicator_dropdown.clone();
 
         let type_dropdown_handler_id = type_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
@@ -193,7 +194,8 @@ impl BackgroundConfigWidget {
 
                     // Find and select the matching item in dropdown
                     let mut selected_index: u32 = 0;
-                    for i in 0..indicator_field_list_clone.n_items() {
+                    let list_count = indicator_field_list_clone.n_items();
+                    for i in 0..list_count {
                         if let Some(item) = indicator_field_list_clone.string(i) {
                             if item == value_field {
                                 selected_index = i;
@@ -202,12 +204,10 @@ impl BackgroundConfigWidget {
                         }
                     }
 
-                    // Block handler, set selection, unblock
-                    if let Some(ref handler_id) = *indicator_field_dropdown_handler_id_for_type.borrow() {
-                        indicator_field_dropdown_clone.block_signal(handler_id);
-                        indicator_field_dropdown_clone.set_selected(selected_index);
-                        indicator_field_dropdown_clone.unblock_signal(handler_id);
-                    }
+                    // Set syncing flag and update selection
+                    *syncing_flag_for_type.borrow_mut() = true;
+                    indicator_field_dropdown_clone.set_selected(selected_index);
+                    *syncing_flag_for_type.borrow_mut() = false;
 
                     // Also update entry
                     indicator_field_entry_clone.set_text(&value_field);
@@ -221,8 +221,9 @@ impl BackgroundConfigWidget {
             preview_clone.queue_draw();
         });
 
-        // Store the indicator field dropdown handler ID for the type dropdown handler to use
-        *indicator_field_dropdown_handler_id_cell.borrow_mut() = Some(indicator_field_dropdown_handler_id);
+        // Note: indicator_field_dropdown_handler_id is captured in the handler closure
+        // We don't need to store it since we use syncing_indicator_dropdown flag instead
+        let _ = indicator_field_dropdown_handler_id;
 
         Self {
             container,
@@ -243,7 +244,7 @@ impl BackgroundConfigWidget {
             indicator_field_entry,
             indicator_field_dropdown_box,
             indicator_field_entry_box,
-            indicator_field_dropdown_handler_id: indicator_field_dropdown_handler_id_cell,
+            syncing_indicator_dropdown,
         }
     }
 
@@ -778,6 +779,7 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+        syncing_flag: &Rc<RefCell<bool>>,
     ) -> (GtkBox, Rc<GradientEditor>, DropDown, StringList, Entry, GtkBox, GtkBox, gtk4::glib::SignalHandlerId) {
         use crate::ui::background::IndicatorBackgroundShape;
 
@@ -971,7 +973,13 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let field_list_clone = field_list.clone();
+        let syncing_flag_clone = syncing_flag.clone();
         let field_dropdown_handler_id = field_dropdown.connect_selected_notify(move |dropdown| {
+            // Skip if we're in the middle of programmatic sync
+            if *syncing_flag_clone.borrow() {
+                return;
+            }
+
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
                 return;
@@ -1190,12 +1198,10 @@ impl BackgroundConfigWidget {
             }
         }
 
-        // Block the handler to prevent it from overwriting the config value
-        if let Some(ref handler_id) = *self.indicator_field_dropdown_handler_id.borrow() {
-            self.indicator_field_dropdown.block_signal(handler_id);
-            self.indicator_field_dropdown.set_selected(selected_index);
-            self.indicator_field_dropdown.unblock_signal(handler_id);
-        }
+        // Set syncing flag and update selection
+        *self.syncing_indicator_dropdown.borrow_mut() = true;
+        self.indicator_field_dropdown.set_selected(selected_index);
+        *self.syncing_indicator_dropdown.borrow_mut() = false;
 
         // Also update the entry for combo sources
         self.indicator_field_entry.set_text(&current_value);
