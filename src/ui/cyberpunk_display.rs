@@ -816,9 +816,7 @@ pub fn draw_group_dividers(
         return;
     }
 
-    for i in 0..group_layouts.len() - 1 {
-        let (x1, y1, w1, h1) = group_layouts[i];
-
+    for &(x1, y1, w1, h1) in group_layouts.iter().take(group_layouts.len() - 1) {
         match config.split_orientation {
             SplitOrientation::Vertical => {
                 let divider_y = y1 + h1 + config.divider_padding;

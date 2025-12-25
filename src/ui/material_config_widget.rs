@@ -460,7 +460,7 @@ impl MaterialConfigWidget {
             corner_radius_spin,
             card_padding_spin,
             shadow_blur_spin,
-            shadow_offset_spin: shadow_offset_spin,
+            shadow_offset_spin,
             shadow_color_widget,
         });
 

@@ -71,7 +71,7 @@ impl Clone for DisplayData {
             graph_history: self.graph_history.clone(),
             graph_start_time: self.graph_start_time,
             last_update: Instant::now(),
-            transform: self.transform.clone(),
+            transform: self.transform,
             dirty: self.dirty,
         }
     }
@@ -460,7 +460,7 @@ impl Displayer for IndustrialDisplayer {
             let timestamp = display_data.graph_start_time.elapsed().as_secs_f64();
 
             // Clone config data to avoid borrow conflicts
-            let group_item_counts: Vec<usize> = display_data.config.frame.group_item_counts.iter().map(|&x| x).collect();
+            let group_item_counts: Vec<usize> = display_data.config.frame.group_item_counts.to_vec();
             let content_items = display_data.config.frame.content_items.clone();
 
             // Generate prefixes and filter values using optimized utils

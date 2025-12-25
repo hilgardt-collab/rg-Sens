@@ -44,7 +44,7 @@ impl PhosphorColor {
             PhosphorColor::Amber => Color { r: 1.0, g: 0.69, b: 0.0, a: 1.0 },
             PhosphorColor::White => Color { r: 0.9, g: 0.9, b: 0.85, a: 1.0 },
             PhosphorColor::Blue => Color { r: 0.4, g: 0.6, b: 1.0, a: 1.0 },
-            PhosphorColor::Custom(c) => c.clone(),
+            PhosphorColor::Custom(c) => *c,
         }
     }
 
@@ -905,9 +905,7 @@ pub fn draw_group_dividers(
         return;
     }
 
-    for i in 0..group_layouts.len() - 1 {
-        let (x1, y1, w1, h1) = group_layouts[i];
-
+    for &(x1, y1, w1, h1) in group_layouts.iter().take(group_layouts.len() - 1) {
         match config.split_orientation {
             SplitOrientation::Vertical => {
                 let divider_y = y1 + h1 + config.divider_padding;

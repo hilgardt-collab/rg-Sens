@@ -221,7 +221,7 @@ pub fn update_graph_history(
     max_points: usize,
 ) {
     let graph_key = format!("{}_graph", prefix);
-    let history = graph_history.entry(graph_key).or_insert_with(VecDeque::new);
+    let history = graph_history.entry(graph_key).or_default();
 
     history.push_back(DataPoint {
         value: numerical_value,

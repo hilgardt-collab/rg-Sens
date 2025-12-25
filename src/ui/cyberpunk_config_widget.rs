@@ -1141,7 +1141,7 @@ impl CyberpunkConfigWidget {
             cfg.frame.content_items
                 .get(slot_name)
                 .map(|item| item.bar_config.clone())
-                .unwrap_or_else(|| Self::default_bar_config_cyberpunk())
+                .unwrap_or_else(Self::default_bar_config_cyberpunk)
         };
         bar_widget.set_config(current_bar_config);
 
@@ -1178,7 +1178,7 @@ impl CyberpunkConfigWidget {
             cfg.frame.content_items
                 .get(slot_name)
                 .map(|item| item.graph_config.clone())
-                .unwrap_or_else(|| Self::default_graph_config_cyberpunk())
+                .unwrap_or_else(Self::default_graph_config_cyberpunk)
         };
         graph_widget.set_config(current_graph_config);
 
@@ -1253,7 +1253,7 @@ impl CyberpunkConfigWidget {
             cfg.frame.content_items
                 .get(slot_name)
                 .map(|item| item.core_bars_config.clone())
-                .unwrap_or_else(|| Self::default_core_bars_config_cyberpunk())
+                .unwrap_or_else(Self::default_core_bars_config_cyberpunk)
         };
         core_bars_widget.set_config(current_core_bars_config);
 
@@ -1327,7 +1327,7 @@ impl CyberpunkConfigWidget {
             cfg.frame.content_items
                 .get(slot_name)
                 .map(|item| item.arc_config.clone())
-                .unwrap_or_else(|| Self::default_arc_config_cyberpunk())
+                .unwrap_or_else(Self::default_arc_config_cyberpunk)
         };
         arc_widget.set_config(current_arc_config);
 
@@ -1364,7 +1364,7 @@ impl CyberpunkConfigWidget {
             cfg.frame.content_items
                 .get(slot_name)
                 .map(|item| item.speedometer_config.clone())
-                .unwrap_or_else(|| Self::default_speedometer_config_cyberpunk())
+                .unwrap_or_else(Self::default_speedometer_config_cyberpunk)
         };
         speedometer_widget.set_config(&current_speedometer_config);
 

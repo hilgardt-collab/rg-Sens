@@ -765,7 +765,7 @@ fn sample_gradient_color(stops: &[ColorStop], position: f64) -> Color {
 
     // Find the two stops to interpolate between
     let mut sorted_stops: Vec<ColorStop> = stops.to_vec();
-    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
 
     // Find the stops surrounding our position
     let mut lower_idx = 0;

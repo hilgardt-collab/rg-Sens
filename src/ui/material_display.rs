@@ -402,7 +402,7 @@ fn draw_group_header(
                 return bar_h + config.header_font_size + 16.0;
             }
 
-            return bar_h;
+            bar_h
         }
         HeaderStyle::Filled => {
             // Draw filled header background
@@ -424,7 +424,7 @@ fn draw_group_header(
             cr.show_text(header_text).ok();
 
             cr.restore().ok();
-            return header_h;
+            header_h
         }
         HeaderStyle::TextOnly => {
             if header_text.is_empty() {
@@ -442,11 +442,11 @@ fn draw_group_header(
             cr.show_text(header_text).ok();
 
             cr.restore().ok();
-            return config.header_font_size + config.card_padding * 2.0;
+            config.header_font_size + config.card_padding * 2.0
         }
         HeaderStyle::None => {
             cr.restore().ok();
-            return 0.0;
+            0.0
         }
     }
 }
@@ -606,7 +606,7 @@ fn draw_main_header(
             cr.show_text(&config.header_text).ok();
             cr.restore().ok();
 
-            return bar_h + config.header_font_size + 24.0;
+            bar_h + config.header_font_size + 24.0
         }
         HeaderStyle::Filled => {
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
@@ -625,7 +625,7 @@ fn draw_main_header(
             cr.show_text(&config.header_text).ok();
 
             cr.restore().ok();
-            return header_h;
+            header_h
         }
         HeaderStyle::TextOnly => {
             let text_color = config.text_color();
@@ -638,11 +638,11 @@ fn draw_main_header(
             cr.show_text(&config.header_text).ok();
 
             cr.restore().ok();
-            return config.header_font_size + config.card_padding * 2.0;
+            config.header_font_size + config.card_padding * 2.0
         }
         HeaderStyle::None => {
             cr.restore().ok();
-            return 0.0;
+            0.0
         }
     }
 }
@@ -715,9 +715,7 @@ pub fn draw_group_dividers(
         return;
     }
 
-    for i in 0..group_layouts.len() - 1 {
-        let (x1, y1, w1, h1) = group_layouts[i];
-
+    for &(x1, y1, w1, h1) in group_layouts.iter().take(group_layouts.len() - 1) {
         match config.split_orientation {
             SplitOrientation::Vertical => {
                 let divider_y = y1 + h1 + config.divider_spacing / 2.0;

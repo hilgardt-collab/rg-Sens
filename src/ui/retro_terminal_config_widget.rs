@@ -228,7 +228,7 @@ impl RetroTerminalConfigWidget {
         let custom_phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
         custom_phosphor_box.append(&Label::new(Some("Custom Color:")));
         let custom_color = if let PhosphorColor::Custom(c) = &config.borrow().frame.phosphor_color {
-            c.clone()
+            *c
         } else {
             Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
         };
