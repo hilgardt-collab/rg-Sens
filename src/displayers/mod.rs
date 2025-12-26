@@ -83,6 +83,7 @@ mod material;
 mod industrial;
 mod retro_terminal;
 mod fighter_hud;
+mod synthwave;
 pub mod combo_utils;
 // mod level_bar;
 
@@ -102,6 +103,7 @@ pub use material::{MaterialDisplayer, MaterialDisplayConfig};
 pub use industrial::{IndustrialDisplayer, IndustrialDisplayConfig};
 pub use retro_terminal::{RetroTerminalDisplayer, RetroTerminalDisplayConfig};
 pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
+pub use synthwave::{SynthwaveDisplayer, SynthwaveDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -214,6 +216,13 @@ pub fn register_all() {
         "fighter_hud",
         "Fighter HUD",
         || Box::new(FighterHudDisplayer::new()),
+    );
+
+    // Register Synthwave/Outrun displayer
+    global_registry().register_displayer_with_info(
+        "synthwave",
+        "Synthwave",
+        || Box::new(SynthwaveDisplayer::new()),
     );
 
     // TODO: Register more displayers

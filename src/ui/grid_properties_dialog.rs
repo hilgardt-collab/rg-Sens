@@ -1113,6 +1113,50 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&fighter_hud_config_label);
     displayer_tab_box.append(&fighter_hud_placeholder);
 
+    // === Synthwave Configuration (Lazy Initialization) ===
+    let synthwave_config_label = Label::new(Some("Synthwave Configuration:"));
+    synthwave_config_label.set_halign(gtk4::Align::Start);
+    synthwave_config_label.add_css_class("heading");
+    synthwave_config_label.set_visible(old_displayer_id == "synthwave");
+
+    // Create placeholder box for lazy widget creation
+    let synthwave_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    synthwave_placeholder.set_visible(old_displayer_id == "synthwave");
+
+    // Use Option for lazy initialization - only create widget when needed
+    let synthwave_config_widget: Rc<RefCell<Option<crate::ui::SynthwaveConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Synthwave widget if this is the active displayer (lazy init)
+    if old_displayer_id == "synthwave" {
+        log::info!("=== Creating SynthwaveConfigWidget (lazy init) ===");
+        let widget = crate::ui::SynthwaveConfigWidget::new(available_fields.clone());
+
+        // Load existing Synthwave config
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Synthwave(sw_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Synthwave config from displayer.get_typed_config() ===");
+            widget.set_config(sw_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("synthwave_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::SynthwaveDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Synthwave config from panel config hashmap ===");
+                    widget.set_config(config);
+                }
+            }
+        }
+
+        widget.set_on_change(|| {});
+        synthwave_placeholder.append(widget.widget());
+        *synthwave_config_widget.borrow_mut() = Some(widget);
+    }
+
+    displayer_tab_box.append(&synthwave_config_label);
+    displayer_tab_box.append(&synthwave_placeholder);
+
     // Connect combo_config_widget to update ONLY the active displayer's config widget when sources change
     // Other widgets are updated lazily when the user switches to them (see displayer_combo handlers below)
     {
@@ -1122,6 +1166,7 @@ pub(crate) fn show_panel_properties_dialog(
         let industrial_widget_clone = industrial_config_widget.clone();
         let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
         let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
+        let synthwave_widget_clone = synthwave_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
         let panel_for_combo_change = panel.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
@@ -1222,6 +1267,20 @@ pub(crate) fn show_panel_properties_dialog(
                             }
                         }
                     }
+                    "synthwave" => {
+                        if let Some(ref widget) = *synthwave_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("synthwave_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Synthwave config on source change: {}", e);
+                                }
+                            }
+                        }
+                    }
                     _ => {
                         // For non-combo displayers, no update needed
                     }
@@ -1260,6 +1319,10 @@ pub(crate) fn show_panel_properties_dialog(
                 widget.set_source_summaries(summaries.clone());
             }
             if let Some(ref widget) = *fighter_hud_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *synthwave_config_widget.borrow() {
                 widget.set_available_fields(fields);
                 widget.set_source_summaries(summaries);
             }
@@ -1352,6 +1415,8 @@ pub(crate) fn show_panel_properties_dialog(
         let retro_terminal_label_clone = retro_terminal_config_label.clone();
         let fighter_hud_placeholder_clone = fighter_hud_placeholder.clone();
         let fighter_hud_label_clone = fighter_hud_config_label.clone();
+        let synthwave_placeholder_clone = synthwave_placeholder.clone();
+        let synthwave_label_clone = synthwave_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -1371,6 +1436,7 @@ pub(crate) fn show_panel_properties_dialog(
                 let is_industrial = displayer_id == "industrial";
                 let is_retro_terminal = displayer_id == "retro_terminal";
                 let is_fighter_hud = displayer_id == "fighter_hud";
+                let is_synthwave = displayer_id == "synthwave";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -1401,6 +1467,8 @@ pub(crate) fn show_panel_properties_dialog(
                 retro_terminal_label_clone.set_visible(is_retro_terminal);
                 fighter_hud_placeholder_clone.set_visible(is_fighter_hud);
                 fighter_hud_label_clone.set_visible(is_fighter_hud);
+                synthwave_placeholder_clone.set_visible(is_synthwave);
+                synthwave_label_clone.set_visible(is_synthwave);
             }
         });
     }
@@ -1656,6 +1724,48 @@ pub(crate) fn show_panel_properties_dialog(
         });
     }
 
+    // Lazily create and update Synthwave widget when displayer changes to "synthwave" and source is "combination"
+    {
+        let synthwave_widget_clone = synthwave_config_widget.clone();
+        let synthwave_placeholder_clone = synthwave_placeholder.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+                if displayer_id == "synthwave" {
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = synthwave_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating SynthwaveConfigWidget on displayer switch ===");
+                                let widget = crate::ui::SynthwaveConfigWidget::new(fields.clone());
+                                widget.set_on_change(|| {});
+                                synthwave_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'synthwave': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Update text config fields when data source changes
     {
         let _text_widget_clone = text_config_widget.clone();
@@ -1886,6 +1996,7 @@ pub(crate) fn show_panel_properties_dialog(
     let industrial_config_widget_clone = industrial_config_widget.clone();
     let retro_terminal_config_widget_clone = retro_terminal_config_widget.clone();
     let fighter_hud_config_widget_clone = fighter_hud_config_widget.clone();
+    let synthwave_config_widget_clone = synthwave_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -2784,6 +2895,24 @@ pub(crate) fn show_panel_properties_dialog(
                         // Apply the configuration to the displayer
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply Fighter HUD config: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Apply Synthwave configuration if synthwave displayer is active
+            if new_displayer_id == "synthwave" {
+                if let Some(ref widget) = *synthwave_config_widget_clone.borrow() {
+                    let synthwave_config = widget.get_config();
+                    if let Ok(synthwave_config_json) = serde_json::to_value(&synthwave_config) {
+                        panel_guard.config.insert("synthwave_config".to_string(), synthwave_config_json);
+
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Synthwave config: {}", e);
                         }
                     }
                 }

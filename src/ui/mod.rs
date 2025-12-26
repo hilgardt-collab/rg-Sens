@@ -56,6 +56,8 @@ pub mod retro_terminal_display;
 mod retro_terminal_config_widget;
 pub mod fighter_hud_display;
 mod fighter_hud_config_widget;
+pub mod synthwave_display;
+mod synthwave_config_widget;
 pub mod theme;
 pub mod window_settings_dialog;
 pub mod new_panel_dialog;
@@ -141,3 +143,10 @@ pub use fighter_hud_display::{
     draw_group_dividers as fighter_hud_draw_group_dividers,
 };
 pub use fighter_hud_config_widget::FighterHudConfigWidget;
+pub use synthwave_display::{
+    SynthwaveFrameConfig, SynthwaveColorScheme, SynthwaveFrameStyle,
+    GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle, render_synthwave_frame,
+    calculate_group_layouts as synthwave_calculate_group_layouts,
+    draw_group_dividers as synthwave_draw_group_dividers,
+};
+pub use synthwave_config_widget::SynthwaveConfigWidget;
