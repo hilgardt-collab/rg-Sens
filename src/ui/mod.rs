@@ -12,6 +12,7 @@ mod gradient_editor;
 mod background_config_widget;
 mod image_picker;
 mod text_line_config_widget;
+mod position_grid_widget;
 mod cpu_source_config_widget;
 mod gpu_source_config_widget;
 mod memory_source_config_widget;

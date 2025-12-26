@@ -88,7 +88,11 @@ pub mod combo_utils;
 // mod level_bar;
 
 pub use text::TextDisplayer;
-pub use text_config::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
+pub use text_config::{
+    CombineAlignment, CombineDirection, HorizontalPosition, TextBackgroundConfig,
+    TextBackgroundType, TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition,
+    VerticalPosition,
+};
 pub use bar::BarDisplayer;
 pub use arc::ArcDisplayer;
 pub use speedometer::SpeedometerDisplayer;

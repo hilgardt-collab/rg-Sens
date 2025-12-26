@@ -1,5 +1,6 @@
 //! Configuration for text displayer
 
+use crate::ui::background::{Color, ColorStop};
 use serde::{Deserialize, Serialize};
 
 /// Vertical position of text
@@ -18,6 +19,177 @@ pub enum HorizontalPosition {
     #[default]
     Center,
     Right,
+}
+
+/// Combined position for 3x3 grid selection
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum TextPosition {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    CenterLeft,
+    #[default]
+    Center,
+    CenterRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+}
+
+impl TextPosition {
+    /// Convert to (VerticalPosition, HorizontalPosition) tuple
+    pub fn to_positions(&self) -> (VerticalPosition, HorizontalPosition) {
+        match self {
+            TextPosition::TopLeft => (VerticalPosition::Top, HorizontalPosition::Left),
+            TextPosition::TopCenter => (VerticalPosition::Top, HorizontalPosition::Center),
+            TextPosition::TopRight => (VerticalPosition::Top, HorizontalPosition::Right),
+            TextPosition::CenterLeft => (VerticalPosition::Center, HorizontalPosition::Left),
+            TextPosition::Center => (VerticalPosition::Center, HorizontalPosition::Center),
+            TextPosition::CenterRight => (VerticalPosition::Center, HorizontalPosition::Right),
+            TextPosition::BottomLeft => (VerticalPosition::Bottom, HorizontalPosition::Left),
+            TextPosition::BottomCenter => (VerticalPosition::Bottom, HorizontalPosition::Center),
+            TextPosition::BottomRight => (VerticalPosition::Bottom, HorizontalPosition::Right),
+        }
+    }
+
+    /// Create from (VerticalPosition, HorizontalPosition)
+    pub fn from_positions(v: VerticalPosition, h: HorizontalPosition) -> Self {
+        match (v, h) {
+            (VerticalPosition::Top, HorizontalPosition::Left) => TextPosition::TopLeft,
+            (VerticalPosition::Top, HorizontalPosition::Center) => TextPosition::TopCenter,
+            (VerticalPosition::Top, HorizontalPosition::Right) => TextPosition::TopRight,
+            (VerticalPosition::Center, HorizontalPosition::Left) => TextPosition::CenterLeft,
+            (VerticalPosition::Center, HorizontalPosition::Center) => TextPosition::Center,
+            (VerticalPosition::Center, HorizontalPosition::Right) => TextPosition::CenterRight,
+            (VerticalPosition::Bottom, HorizontalPosition::Left) => TextPosition::BottomLeft,
+            (VerticalPosition::Bottom, HorizontalPosition::Center) => TextPosition::BottomCenter,
+            (VerticalPosition::Bottom, HorizontalPosition::Right) => TextPosition::BottomRight,
+        }
+    }
+}
+
+/// Direction for combining text lines
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum CombineDirection {
+    #[default]
+    Horizontal, // Lines flow left-to-right (existing behavior)
+    Vertical,   // Lines stack top-to-bottom
+}
+
+/// Legacy alignment for combined text groups (kept for backward compatibility)
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum CombineAlignment {
+    Start,  // Left for horizontal, Top for vertical
+    #[default]
+    Center, // Center alignment
+    End,    // Right for horizontal, Bottom for vertical
+}
+
+impl CombineAlignment {
+    /// Convert to TextPosition (centered on the relevant axis)
+    pub fn to_text_position(&self, direction: CombineDirection) -> TextPosition {
+        match direction {
+            CombineDirection::Horizontal => {
+                // For horizontal, alignment is vertical (top/center/bottom)
+                match self {
+                    CombineAlignment::Start => TextPosition::TopCenter,
+                    CombineAlignment::Center => TextPosition::Center,
+                    CombineAlignment::End => TextPosition::BottomCenter,
+                }
+            }
+            CombineDirection::Vertical => {
+                // For vertical, alignment is horizontal (left/center/right)
+                match self {
+                    CombineAlignment::Start => TextPosition::CenterLeft,
+                    CombineAlignment::Center => TextPosition::Center,
+                    CombineAlignment::End => TextPosition::CenterRight,
+                }
+            }
+        }
+    }
+}
+
+/// Text fill type (solid color or gradient)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+pub enum TextFillType {
+    #[serde(rename = "solid")]
+    Solid { color: Color },
+    #[serde(rename = "linear_gradient")]
+    LinearGradient {
+        stops: Vec<ColorStop>,
+        angle: f64, // Angle in degrees, relative to text baseline
+    },
+}
+
+impl Default for TextFillType {
+    fn default() -> Self {
+        TextFillType::Solid {
+            color: Color::new(1.0, 1.0, 1.0, 1.0),
+        }
+    }
+}
+
+impl TextFillType {
+    /// Get the primary color (for compatibility or fallback)
+    pub fn primary_color(&self) -> Color {
+        match self {
+            TextFillType::Solid { color } => *color,
+            TextFillType::LinearGradient { stops, .. } => {
+                stops.first().map(|s| s.color).unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0))
+            }
+        }
+    }
+
+    /// Create from legacy color tuple
+    pub fn from_color_tuple(r: f64, g: f64, b: f64, a: f64) -> Self {
+        TextFillType::Solid {
+            color: Color::new(r, g, b, a),
+        }
+    }
+}
+
+/// Text background type (simplified from BackgroundType)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(tag = "type")]
+pub enum TextBackgroundType {
+    #[serde(rename = "none")]
+    #[default]
+    None,
+    #[serde(rename = "solid")]
+    Solid { color: Color },
+    #[serde(rename = "linear_gradient")]
+    LinearGradient {
+        stops: Vec<ColorStop>,
+        angle: f64,
+    },
+}
+
+fn default_bg_padding() -> f64 {
+    4.0
+}
+fn default_bg_corner_radius() -> f64 {
+    0.0
+}
+
+/// Background configuration for text
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TextBackgroundConfig {
+    pub background: TextBackgroundType,
+    #[serde(default = "default_bg_padding")]
+    pub padding: f64, // Padding around text in pixels
+    #[serde(default = "default_bg_corner_radius")]
+    pub corner_radius: f64, // Corner radius for rounded background
+}
+
+impl Default for TextBackgroundConfig {
+    fn default() -> Self {
+        Self {
+            background: TextBackgroundType::None,
+            padding: default_bg_padding(),
+            corner_radius: default_bg_corner_radius(),
+        }
+    }
 }
 
 /// Configuration for a single line of text
@@ -40,32 +212,103 @@ pub struct TextLineConfig {
     #[serde(default)]
     pub italic: bool,
 
-    /// Text color (RGBA, 0.0-1.0)
-    pub color: (f64, f64, f64, f64),
+    /// Text fill (solid color or gradient)
+    #[serde(default)]
+    pub fill: TextFillType,
 
-    /// Vertical position on panel
-    pub vertical_position: VerticalPosition,
+    /// Legacy color field - kept for backward compatibility during deserialization
+    #[serde(default, skip_serializing, rename = "color")]
+    legacy_color: Option<(f64, f64, f64, f64)>,
 
-    /// Horizontal position on panel
-    pub horizontal_position: HorizontalPosition,
+    /// Text background configuration
+    #[serde(default)]
+    pub text_background: TextBackgroundConfig,
+
+    /// Combined position (replaces vertical_position + horizontal_position)
+    #[serde(default)]
+    pub position: TextPosition,
+
+    /// Legacy vertical position - for backward compatibility
+    #[serde(default, skip_serializing, rename = "vertical_position")]
+    legacy_vertical_position: Option<VerticalPosition>,
+
+    /// Legacy horizontal position - for backward compatibility
+    #[serde(default, skip_serializing, rename = "horizontal_position")]
+    legacy_horizontal_position: Option<HorizontalPosition>,
 
     /// Rotation angle in degrees (0-360)
+    #[serde(default)]
     pub rotation_angle: f64,
 
     /// Whether this line is combined with others
-    /// (when true, respects L/C/R positions within the combined line)
+    #[serde(default)]
     pub is_combined: bool,
 
-    /// Group ID for combined lines (lines with same group_id are combined)
+    /// Group ID for combined lines
+    #[serde(default)]
     pub group_id: Option<String>,
 
-    /// Horizontal offset in pixels for fine-tuning position
+    /// Direction for combining (horizontal or vertical) - used from first line in group
+    #[serde(default)]
+    pub combine_direction: CombineDirection,
+
+    /// Alignment within combined group (as TextPosition) - used from first line in group
+    #[serde(default)]
+    pub combine_alignment: TextPosition,
+
+    /// Legacy alignment field for backward compatibility
+    #[serde(default, skip_serializing, rename = "legacy_combine_alignment")]
+    legacy_combine_alignment: Option<CombineAlignment>,
+
+    /// Horizontal offset in pixels
     #[serde(default)]
     pub offset_x: f64,
 
-    /// Vertical offset in pixels for fine-tuning position
+    /// Vertical offset in pixels
     #[serde(default)]
     pub offset_y: f64,
+}
+
+impl TextLineConfig {
+    /// Apply post-deserialization migrations for legacy fields
+    pub fn migrate(&mut self) {
+        // Migrate legacy color to fill
+        if let Some((r, g, b, a)) = self.legacy_color.take() {
+            // Only override if fill is still default white
+            if self.fill == TextFillType::default() {
+                self.fill = TextFillType::from_color_tuple(r, g, b, a);
+            }
+        }
+
+        // Migrate legacy positions to combined position
+        if let (Some(v), Some(h)) = (
+            self.legacy_vertical_position.take(),
+            self.legacy_horizontal_position.take(),
+        ) {
+            self.position = TextPosition::from_positions(v, h);
+        }
+
+        // Migrate legacy combine_alignment to TextPosition
+        if let Some(legacy_align) = self.legacy_combine_alignment.take() {
+            self.combine_alignment = legacy_align.to_text_position(self.combine_direction);
+        }
+    }
+
+    /// Get vertical position (for compatibility with existing code)
+    pub fn vertical_position(&self) -> VerticalPosition {
+        self.position.to_positions().0
+    }
+
+    /// Get horizontal position (for compatibility with existing code)
+    pub fn horizontal_position(&self) -> HorizontalPosition {
+        self.position.to_positions().1
+    }
+
+    /// Get color as tuple (for compatibility with existing code)
+    pub fn color(&self) -> (f64, f64, f64, f64) {
+        let c = self.fill.primary_color();
+        (c.r, c.g, c.b, c.a)
+    }
 }
 
 impl Default for TextLineConfig {
@@ -76,12 +319,18 @@ impl Default for TextLineConfig {
             font_size: 12.0,
             bold: false,
             italic: false,
-            color: (1.0, 1.0, 1.0, 1.0), // White
-            vertical_position: VerticalPosition::Center,
-            horizontal_position: HorizontalPosition::Center,
+            fill: TextFillType::default(),
+            legacy_color: None,
+            text_background: TextBackgroundConfig::default(),
+            position: TextPosition::Center,
+            legacy_vertical_position: None,
+            legacy_horizontal_position: None,
             rotation_angle: 0.0,
             is_combined: false,
             group_id: None,
+            combine_direction: CombineDirection::default(),
+            combine_alignment: TextPosition::Center,
+            legacy_combine_alignment: None,
             offset_x: 0.0,
             offset_y: 0.0,
         }
@@ -93,6 +342,15 @@ impl Default for TextLineConfig {
 pub struct TextDisplayerConfig {
     /// List of text lines to display
     pub lines: Vec<TextLineConfig>,
+}
+
+impl TextDisplayerConfig {
+    /// Apply migrations to all lines after deserialization
+    pub fn migrate(&mut self) {
+        for line in &mut self.lines {
+            line.migrate();
+        }
+    }
 }
 
 impl Default for TextDisplayerConfig {
@@ -107,12 +365,20 @@ impl Default for TextDisplayerConfig {
                     font_size: 14.0,
                     bold: false,
                     italic: false,
-                    color: (1.0, 1.0, 1.0, 1.0),
-                    vertical_position: VerticalPosition::Center,
-                    horizontal_position: HorizontalPosition::Left,
+                    fill: TextFillType::Solid {
+                        color: Color::new(1.0, 1.0, 1.0, 1.0),
+                    },
+                    legacy_color: None,
+                    text_background: TextBackgroundConfig::default(),
+                    position: TextPosition::CenterLeft,
+                    legacy_vertical_position: None,
+                    legacy_horizontal_position: None,
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    combine_direction: CombineDirection::Horizontal,
+                    combine_alignment: TextPosition::Center,
+                    legacy_combine_alignment: None,
                     offset_x: 0.0,
                     offset_y: 0.0,
                 },
@@ -122,12 +388,20 @@ impl Default for TextDisplayerConfig {
                     font_size: 14.0,
                     bold: false,
                     italic: false,
-                    color: (0.5, 1.0, 0.5, 1.0), // Light green
-                    vertical_position: VerticalPosition::Center,
-                    horizontal_position: HorizontalPosition::Center,
+                    fill: TextFillType::Solid {
+                        color: Color::new(0.5, 1.0, 0.5, 1.0), // Light green
+                    },
+                    legacy_color: None,
+                    text_background: TextBackgroundConfig::default(),
+                    position: TextPosition::Center,
+                    legacy_vertical_position: None,
+                    legacy_horizontal_position: None,
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    combine_direction: CombineDirection::Horizontal,
+                    combine_alignment: TextPosition::Center,
+                    legacy_combine_alignment: None,
                     offset_x: 0.0,
                     offset_y: 0.0,
                 },
@@ -137,12 +411,20 @@ impl Default for TextDisplayerConfig {
                     font_size: 14.0,
                     bold: false,
                     italic: false,
-                    color: (1.0, 1.0, 1.0, 1.0),
-                    vertical_position: VerticalPosition::Center,
-                    horizontal_position: HorizontalPosition::Right,
+                    fill: TextFillType::Solid {
+                        color: Color::new(1.0, 1.0, 1.0, 1.0),
+                    },
+                    legacy_color: None,
+                    text_background: TextBackgroundConfig::default(),
+                    position: TextPosition::CenterRight,
+                    legacy_vertical_position: None,
+                    legacy_horizontal_position: None,
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    combine_direction: CombineDirection::Horizontal,
+                    combine_alignment: TextPosition::Center,
+                    legacy_combine_alignment: None,
                     offset_x: 0.0,
                     offset_y: 0.0,
                 },

@@ -4,7 +4,10 @@ use cairo::Context;
 use std::collections::HashMap;
 use serde_json::Value;
 
-use crate::displayers::{TextDisplayerConfig, TextLineConfig, HorizontalPosition, VerticalPosition};
+use crate::displayers::{
+    CombineDirection, HorizontalPosition, TextBackgroundConfig, TextBackgroundType,
+    TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition, VerticalPosition,
+};
 use crate::ui::render_cache::TEXT_EXTENTS_CACHE;
 
 /// Render text lines using a TextDisplayerConfig
@@ -51,12 +54,14 @@ fn render_line_group(
         return;
     }
 
-    // All lines in a group share the same vertical position and rotation from the first line
+    // All lines in a group share settings from the first line
     let first_line = lines[0];
-    let shared_v_pos = &first_line.vertical_position;
+    let shared_v_pos = first_line.vertical_position();
     let shared_rotation = first_line.rotation_angle;
     let shared_offset_x = first_line.offset_x;
     let shared_offset_y = first_line.offset_y;
+    let shared_direction = first_line.combine_direction;
+    let shared_alignment = first_line.combine_alignment;
 
     // Group lines by horizontal position
     let mut left_parts: Vec<(&TextLineConfig, String)> = Vec::new();
@@ -65,7 +70,7 @@ fn render_line_group(
 
     for line in lines {
         if let Some(text) = get_field_value(&line.field_id, values) {
-            match line.horizontal_position {
+            match line.horizontal_position() {
                 HorizontalPosition::Left => left_parts.push((line, text)),
                 HorizontalPosition::Center => center_parts.push((line, text)),
                 HorizontalPosition::Right => right_parts.push((line, text)),
@@ -73,15 +78,24 @@ fn render_line_group(
         }
     }
 
-    // Render each group of parts with shared rotation and offset
+    // Render each group of parts with shared settings
     if !left_parts.is_empty() {
-        render_combined_parts(cr, width, height, &left_parts, shared_v_pos, &HorizontalPosition::Left, shared_rotation, shared_offset_x, shared_offset_y);
+        render_combined_parts(
+            cr, width, height, &left_parts, &shared_v_pos, &HorizontalPosition::Left,
+            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment,
+        );
     }
     if !center_parts.is_empty() {
-        render_combined_parts(cr, width, height, &center_parts, shared_v_pos, &HorizontalPosition::Center, shared_rotation, shared_offset_x, shared_offset_y);
+        render_combined_parts(
+            cr, width, height, &center_parts, &shared_v_pos, &HorizontalPosition::Center,
+            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment,
+        );
     }
     if !right_parts.is_empty() {
-        render_combined_parts(cr, width, height, &right_parts, shared_v_pos, &HorizontalPosition::Right, shared_rotation, shared_offset_x, shared_offset_y);
+        render_combined_parts(
+            cr, width, height, &right_parts, &shared_v_pos, &HorizontalPosition::Right,
+            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment,
+        );
     }
 }
 
@@ -95,19 +109,18 @@ fn render_combined_parts(
     rotation_angle: f64,
     offset_x: f64,
     offset_y: f64,
+    direction: CombineDirection,
+    alignment: TextPosition,
 ) {
     if parts.is_empty() {
         return;
     }
 
-    // Calculate total width and combined bounding box of all parts
-    let mut total_width = 0.0;
-    let mut part_widths = Vec::new();
-    let mut min_y_bearing: f64 = 0.0;  // Most negative (highest point above baseline)
-    let mut max_descent: f64 = 0.0;    // Lowest point below baseline
+    const SPACING: f64 = 5.0;
 
+    // Calculate dimensions for each part
+    let mut part_extents: Vec<cairo::TextExtents> = Vec::new();
     for (config, text) in parts {
-        // Use cached text extents to avoid expensive font metric calculations every frame
         let extents = TEXT_EXTENTS_CACHE
             .lock()
             .ok()
@@ -122,89 +135,257 @@ fn render_combined_parts(
                 )
             })
             .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-
-        part_widths.push(extents.width());
-        total_width += extents.width();
-
-        // Track the combined vertical extent (y_bearing is negative for text above baseline)
-        min_y_bearing = min_y_bearing.min(extents.y_bearing());
-        max_descent = max_descent.max(extents.y_bearing() + extents.height());
+        part_extents.push(extents);
     }
 
-    // Add spacing between parts
-    if parts.len() > 1 {
-        total_width += 5.0 * (parts.len() - 1) as f64;
-    }
-
-    // Calculate combined text height from extents
-    let combined_height = max_descent - min_y_bearing;
+    // Calculate combined dimensions based on direction
+    let (combined_width, combined_height, min_y_bearing) = match direction {
+        CombineDirection::Horizontal => {
+            let mut total_width = 0.0;
+            let mut min_y_bearing: f64 = 0.0;
+            let mut max_descent: f64 = 0.0;
+            for ext in &part_extents {
+                total_width += ext.width();
+                min_y_bearing = min_y_bearing.min(ext.y_bearing());
+                max_descent = max_descent.max(ext.y_bearing() + ext.height());
+            }
+            if parts.len() > 1 {
+                total_width += SPACING * (parts.len() - 1) as f64;
+            }
+            (total_width, max_descent - min_y_bearing, min_y_bearing)
+        }
+        CombineDirection::Vertical => {
+            let mut max_width: f64 = 0.0;
+            let mut total_height = 0.0;
+            let mut min_y_bearing: f64 = 0.0;
+            for ext in &part_extents {
+                max_width = max_width.max(ext.width());
+                total_height += ext.height();
+                min_y_bearing = min_y_bearing.min(ext.y_bearing());
+            }
+            if parts.len() > 1 {
+                total_height += SPACING * (parts.len() - 1) as f64;
+            }
+            (max_width, total_height, min_y_bearing)
+        }
+    };
 
     // For rotated text, calculate the rotated bounding box dimensions
     let angle_rad = rotation_angle.to_radians();
     let cos_a = angle_rad.cos().abs();
     let sin_a = angle_rad.sin().abs();
-    let rotated_w = total_width * cos_a + combined_height * sin_a;
-    let rotated_h = total_width * sin_a + combined_height * cos_a;
+    let rotated_w = combined_width * cos_a + combined_height * sin_a;
+    let rotated_h = combined_width * sin_a + combined_height * cos_a;
 
-    // Use rotated dimensions for positioning when text is rotated
-    let effective_w = if rotation_angle != 0.0 { rotated_w } else { total_width };
+    let effective_w = if rotation_angle != 0.0 { rotated_w } else { combined_width };
     let effective_h = if rotation_angle != 0.0 { rotated_h } else { combined_height };
 
-    // Calculate starting X position based on horizontal alignment using effective dimensions
+    // Calculate starting position
     let base_x = match h_pos {
         HorizontalPosition::Left => 10.0,
         HorizontalPosition::Center => (width - effective_w) / 2.0,
         HorizontalPosition::Right => width - effective_w - 10.0,
     };
 
-    // Calculate Y position using effective dimensions for proper centering
     let base_y = match v_pos {
         VerticalPosition::Top => 10.0,
         VerticalPosition::Center => (height - effective_h) / 2.0,
         VerticalPosition::Bottom => height - 10.0 - effective_h,
     };
 
-    // Apply rotation if needed
     cr.save().ok();
     if rotation_angle != 0.0 {
-        // Position the center of the rotated bounding box
         let center_x = base_x + effective_w / 2.0 + offset_x;
         let center_y = base_y + effective_h / 2.0 + offset_y;
         cr.translate(center_x, center_y);
         cr.rotate(angle_rad);
-        // Move to draw position relative to center (use original dimensions)
-        cr.translate(-total_width / 2.0, -min_y_bearing - combined_height / 2.0);
+        cr.translate(-combined_width / 2.0, -min_y_bearing - combined_height / 2.0);
     } else {
-        // Just apply offset without rotation, with baseline adjustment
         cr.translate(base_x + offset_x, base_y - min_y_bearing + offset_y);
     }
 
-    // Render each part sequentially
-    let mut current_x = 0.0;
-    for (i, (config, text)) in parts.iter().enumerate() {
-        cr.save().ok();
+    // Extract alignment components from TextPosition
+    let (align_v, align_h) = alignment.to_positions();
 
-        // Set font and color for this part
-        let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
-        let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-        cr.select_font_face(&config.font_family, font_slant, font_weight);
-        cr.set_font_size(config.font_size);
-        cr.set_source_rgba(config.color.0, config.color.1, config.color.2, config.color.3);
+    // Render each part based on direction and alignment
+    match direction {
+        CombineDirection::Horizontal => {
+            let mut current_x = 0.0;
+            for (i, ((config, text), ext)) in parts.iter().zip(&part_extents).enumerate() {
+                // Calculate y offset based on vertical alignment
+                let part_height = ext.height();
+                let y_offset = match align_v {
+                    VerticalPosition::Top => 0.0,
+                    VerticalPosition::Center => (combined_height - part_height) / 2.0,
+                    VerticalPosition::Bottom => combined_height - part_height,
+                };
 
-        // Position and draw this part
-        cr.move_to(current_x, 0.0);
-        cr.show_text(text).ok();
+                render_text_part(cr, config, text, current_x, y_offset, ext);
 
-        cr.restore().ok();
+                current_x += ext.width();
+                if i < parts.len() - 1 {
+                    current_x += SPACING;
+                }
+            }
+        }
+        CombineDirection::Vertical => {
+            let mut current_y = 0.0;
+            for (i, ((config, text), ext)) in parts.iter().zip(&part_extents).enumerate() {
+                // Calculate x offset based on horizontal alignment
+                let part_width = ext.width();
+                let x_offset = match align_h {
+                    HorizontalPosition::Left => 0.0,
+                    HorizontalPosition::Center => (combined_width - part_width) / 2.0,
+                    HorizontalPosition::Right => combined_width - part_width,
+                };
 
-        // Move to next position (add part width + spacing)
-        current_x += part_widths[i];
-        if i < parts.len() - 1 {
-            current_x += 5.0; // spacing between parts
+                render_text_part(cr, config, text, x_offset, current_y, ext);
+
+                current_y += ext.height();
+                if i < parts.len() - 1 {
+                    current_y += SPACING;
+                }
+            }
         }
     }
 
     cr.restore().ok();
+}
+
+/// Render a single text part with background and fill support
+fn render_text_part(
+    cr: &Context,
+    config: &TextLineConfig,
+    text: &str,
+    x: f64,
+    y: f64,
+    extents: &cairo::TextExtents,
+) {
+    cr.save().ok();
+
+    // Set font
+    let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
+    let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+    cr.select_font_face(&config.font_family, font_slant, font_weight);
+    cr.set_font_size(config.font_size);
+
+    // Render background if configured
+    render_text_background(cr, &config.text_background, x, y + extents.y_bearing(), extents.width(), extents.height());
+
+    // Position for text
+    cr.move_to(x, y);
+
+    // Render text with fill
+    render_text_fill(cr, config, text, x, y, extents);
+
+    cr.restore().ok();
+}
+
+/// Render text background (solid or gradient)
+fn render_text_background(
+    cr: &Context,
+    bg_config: &TextBackgroundConfig,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) {
+    match &bg_config.background {
+        TextBackgroundType::None => {}
+        TextBackgroundType::Solid { color } => {
+            cr.save().ok();
+            let padding = bg_config.padding;
+            let radius = bg_config.corner_radius;
+
+            // Draw rounded rectangle
+            draw_rounded_rect(cr, x - padding, y - padding, width + padding * 2.0, height + padding * 2.0, radius);
+            cr.set_source_rgba(color.r, color.g, color.b, color.a);
+            cr.fill().ok();
+            cr.restore().ok();
+        }
+        TextBackgroundType::LinearGradient { stops, angle } => {
+            cr.save().ok();
+            let padding = bg_config.padding;
+            let radius = bg_config.corner_radius;
+            let bg_x = x - padding;
+            let bg_y = y - padding;
+            let bg_w = width + padding * 2.0;
+            let bg_h = height + padding * 2.0;
+
+            // Create gradient
+            let angle_rad = angle.to_radians();
+            let cx = bg_x + bg_w / 2.0;
+            let cy = bg_y + bg_h / 2.0;
+            let length = (bg_w * bg_w + bg_h * bg_h).sqrt() / 2.0;
+            let dx = angle_rad.cos() * length;
+            let dy = angle_rad.sin() * length;
+
+            let gradient = cairo::LinearGradient::new(cx - dx, cy - dy, cx + dx, cy + dy);
+            for stop in stops {
+                gradient.add_color_stop_rgba(stop.position, stop.color.r, stop.color.g, stop.color.b, stop.color.a);
+            }
+
+            draw_rounded_rect(cr, bg_x, bg_y, bg_w, bg_h, radius);
+            cr.set_source(&gradient).ok();
+            cr.fill().ok();
+            cr.restore().ok();
+        }
+    }
+}
+
+/// Render text with fill (solid or gradient)
+fn render_text_fill(
+    cr: &Context,
+    config: &TextLineConfig,
+    text: &str,
+    x: f64,
+    y: f64,
+    extents: &cairo::TextExtents,
+) {
+    match &config.fill {
+        TextFillType::Solid { color } => {
+            cr.set_source_rgba(color.r, color.g, color.b, color.a);
+            cr.move_to(x, y);
+            cr.show_text(text).ok();
+        }
+        TextFillType::LinearGradient { stops, angle } => {
+            // Create text path
+            cr.move_to(x, y);
+            cr.text_path(text);
+
+            // Create gradient covering the text bounds
+            let angle_rad = angle.to_radians();
+            let cx = x + extents.width() / 2.0;
+            let cy = y + extents.y_bearing() + extents.height() / 2.0;
+            let length = (extents.width() * extents.width() + extents.height() * extents.height()).sqrt() / 2.0;
+            let dx = angle_rad.cos() * length;
+            let dy = angle_rad.sin() * length;
+
+            let gradient = cairo::LinearGradient::new(cx - dx, cy - dy, cx + dx, cy + dy);
+            for stop in stops {
+                gradient.add_color_stop_rgba(stop.position, stop.color.r, stop.color.g, stop.color.b, stop.color.a);
+            }
+
+            cr.set_source(&gradient).ok();
+            cr.fill().ok();
+        }
+    }
+}
+
+/// Draw a rounded rectangle path
+fn draw_rounded_rect(cr: &Context, x: f64, y: f64, width: f64, height: f64, radius: f64) {
+    if radius <= 0.0 {
+        cr.rectangle(x, y, width, height);
+        return;
+    }
+
+    let r = radius.min(width / 2.0).min(height / 2.0);
+    cr.new_sub_path();
+    cr.arc(x + width - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
+    cr.arc(x + width - r, y + height - r, r, 0.0, std::f64::consts::FRAC_PI_2);
+    cr.arc(x + r, y + height - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
+    cr.close_path();
 }
 
 fn render_single_line(
@@ -215,62 +396,41 @@ fn render_single_line(
     values: &HashMap<String, Value>,
 ) {
     if let Some(text) = get_field_value(&line.field_id, values) {
-        render_text_with_alignment(
-            cr,
-            width,
-            height,
-            &text,
-            &line.font_family,
-            line.font_size,
-            line.bold,
-            line.italic,
-            &line.color,
-            &line.vertical_position,
-            &line.horizontal_position,
-            line.rotation_angle,
-            line.offset_x,
-            line.offset_y,
-        );
+        render_text_with_config(cr, width, height, &text, line);
     }
 }
 
-fn render_text_with_alignment(
+/// Render a single text line with full config support (background, gradient fill, rotation)
+fn render_text_with_config(
     cr: &Context,
     width: f64,
     height: f64,
     text: &str,
-    font_family: &str,
-    font_size: f64,
-    bold: bool,
-    italic: bool,
-    color: &(f64, f64, f64, f64),
-    v_pos: &VerticalPosition,
-    h_pos: &HorizontalPosition,
-    rotation_angle: f64,
-    offset_x: f64,
-    offset_y: f64,
+    config: &TextLineConfig,
 ) {
     cr.save().ok();
 
-    // Set font with bold/italic support
-    let font_slant = if italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
-    let font_weight = if bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    cr.select_font_face(font_family, font_slant, font_weight);
-    cr.set_font_size(font_size);
+    let v_pos = config.vertical_position();
+    let h_pos = config.horizontal_position();
+    let rotation_angle = config.rotation_angle;
+    let offset_x = config.offset_x;
+    let offset_y = config.offset_y;
 
-    // Set color
-    cr.set_source_rgba(color.0, color.1, color.2, color.3);
+    // Set font
+    let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
+    let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+    cr.select_font_face(&config.font_family, font_slant, font_weight);
+    cr.set_font_size(config.font_size);
 
-    // Get text dimensions using cached extents
+    // Get text dimensions
     let extents = TEXT_EXTENTS_CACHE
         .lock()
         .ok()
         .and_then(|mut cache| {
-            cache.get_or_compute(cr, font_family, font_size, bold, italic, text)
+            cache.get_or_compute(cr, &config.font_family, config.font_size, config.bold, config.italic, text)
         })
         .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
-    // For rotated text, we need to account for the rotated bounding box dimensions
     let text_w = extents.width();
     let text_h = extents.height();
 
@@ -281,41 +441,49 @@ fn render_text_with_alignment(
     let rotated_w = text_w * cos_a + text_h * sin_a;
     let rotated_h = text_w * sin_a + text_h * cos_a;
 
-    // Use rotated dimensions for positioning when text is rotated
     let effective_w = if rotation_angle != 0.0 { rotated_w } else { text_w };
     let effective_h = if rotation_angle != 0.0 { rotated_h } else { text_h };
 
-    // Calculate text origin position for proper alignment (before offsets)
-    // Use effective (rotated) dimensions for left/right/center alignment
+    // Calculate position
     let text_x = match h_pos {
         HorizontalPosition::Left => 10.0,
         HorizontalPosition::Center => (width - effective_w) / 2.0,
         HorizontalPosition::Right => width - effective_w - 10.0,
     };
 
-    // Calculate Y position using effective (rotated) dimensions for proper centering
     let text_y = match v_pos {
         VerticalPosition::Top => 10.0,
         VerticalPosition::Center => (height - effective_h) / 2.0,
         VerticalPosition::Bottom => height - 10.0 - effective_h,
     };
 
-    // Apply offset and rotation
+    // Apply rotation and offset
     if rotation_angle != 0.0 {
-        // Position the center of the rotated bounding box
         let center_x = text_x + effective_w / 2.0 + offset_x;
         let center_y = text_y + effective_h / 2.0 + offset_y;
         cr.translate(center_x, center_y);
         cr.rotate(angle_rad);
-        // Move to draw position relative to center (use original text dimensions)
-        cr.move_to(-text_w / 2.0, -extents.y_bearing() - text_h / 2.0);
+        // Position for drawing (relative to center)
+        let draw_x = -text_w / 2.0;
+        let draw_y = -extents.y_bearing() - text_h / 2.0;
+
+        // Render background
+        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
+
+        // Render text with fill
+        render_text_fill(cr, config, text, draw_x, draw_y, &extents);
     } else {
-        // No rotation - use original y calculation with baseline adjustment
         let adjusted_y = text_y - extents.y_bearing();
-        cr.move_to(text_x + offset_x, adjusted_y + offset_y);
+        let draw_x = text_x + offset_x;
+        let draw_y = adjusted_y + offset_y;
+
+        // Render background
+        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
+
+        // Render text with fill
+        render_text_fill(cr, config, text, draw_x, draw_y, &extents);
     }
 
-    cr.show_text(text).ok();
     cr.restore().ok();
 }
 

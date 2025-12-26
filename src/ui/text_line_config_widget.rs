@@ -1,14 +1,19 @@
 //! Widget for configuring text displayer lines
 
 use crate::core::FieldMetadata;
-use crate::displayers::{HorizontalPosition, TextDisplayerConfig, TextLineConfig, VerticalPosition};
+use crate::displayers::{
+    CombineDirection, TextBackgroundConfig, TextBackgroundType, TextDisplayerConfig,
+    TextFillType, TextLineConfig,
+};
+use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::background::Color;
+use crate::ui::gradient_editor::GradientEditor;
+use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, ListBox,
-    Orientation, ScrolledWindow, SpinButton, StringList, Widget,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, ListBox, Orientation,
+    ScrolledWindow, SpinButton, StringList, Widget,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -224,32 +229,151 @@ impl TextLineConfigWidget {
         }
 
         field_box.append(&field_combo);
+
+        // Add spacer to push reorder buttons to the right
+        let spacer = GtkBox::new(Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+        field_box.append(&spacer);
+
+        // Move up button
+        let move_up_btn = Button::with_label("↑");
+        move_up_btn.set_tooltip_text(Some("Move line up"));
+        move_up_btn.set_sensitive(list_index > 0);
+        field_box.append(&move_up_btn);
+
+        // Move down button
+        let move_down_btn = Button::with_label("↓");
+        move_down_btn.set_tooltip_text(Some("Move line down"));
+        // We'll update sensitivity after we know total line count
+        field_box.append(&move_down_btn);
+
+        // Update move down button sensitivity based on total lines
+        {
+            let lines_count = lines.borrow().len();
+            move_down_btn.set_sensitive(list_index < lines_count.saturating_sub(1));
+        }
+
+        // Move up handler
+        {
+            let lines_clone = lines.clone();
+            let rebuild = rebuild_callback.clone();
+            let on_change_up = on_change.clone();
+            move_up_btn.connect_clicked(move |_| {
+                if list_index > 0 {
+                    let mut lines_ref = lines_clone.borrow_mut();
+                    if list_index < lines_ref.len() {
+                        lines_ref.swap(list_index, list_index - 1);
+                    }
+                    drop(lines_ref);
+                    if let Some(ref rebuild_fn) = rebuild {
+                        rebuild_fn();
+                    }
+                    if let Some(ref callback) = *on_change_up.borrow() {
+                        callback();
+                    }
+                }
+            });
+        }
+
+        // Move down handler
+        {
+            let lines_clone = lines.clone();
+            let rebuild = rebuild_callback.clone();
+            let on_change_down = on_change.clone();
+            move_down_btn.connect_clicked(move |_| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if list_index + 1 < lines_ref.len() {
+                    lines_ref.swap(list_index, list_index + 1);
+                }
+                drop(lines_ref);
+                if let Some(ref rebuild_fn) = rebuild {
+                    rebuild_fn();
+                }
+                if let Some(ref callback) = *on_change_down.borrow() {
+                    callback();
+                }
+            });
+        }
+
         row_box.append(&field_box);
 
-        // Position controls
+        // Position controls - 3x3 grid
         let pos_box = GtkBox::new(Orientation::Horizontal, 6);
         pos_box.append(&Label::new(Some("Position:")));
 
-        // Vertical position
-        let v_pos_list = StringList::new(&["Top", "Center", "Bottom"]);
-        let v_pos_combo = DropDown::new(Some(v_pos_list), Option::<gtk4::Expression>::None);
-        v_pos_combo.set_selected(match line_config.vertical_position {
-            VerticalPosition::Top => 0,
-            VerticalPosition::Center => 1,
-            VerticalPosition::Bottom => 2,
-        });
-        pos_box.append(&v_pos_combo);
+        let position_grid = Rc::new(PositionGridWidget::new(line_config.position));
+        pos_box.append(position_grid.widget());
 
-        // Horizontal position
-        let h_pos_list = StringList::new(&["Left", "Center", "Right"]);
-        let h_pos_combo = DropDown::new(Some(h_pos_list), Option::<gtk4::Expression>::None);
-        h_pos_combo.set_selected(match line_config.horizontal_position {
-            HorizontalPosition::Left => 0,
-            HorizontalPosition::Center => 1,
-            HorizontalPosition::Right => 2,
+        // Connect position grid change handler
+        let lines_clone_pos = lines.clone();
+        let on_change_pos = on_change.clone();
+        position_grid.set_on_change(move |new_pos| {
+            let mut lines_ref = lines_clone_pos.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.position = new_pos;
+            }
+            drop(lines_ref);
+            if let Some(ref callback) = *on_change_pos.borrow() {
+                callback();
+            }
         });
-        pos_box.append(&h_pos_combo);
+
         row_box.append(&pos_box);
+
+        // Combine direction and alignment (only visible when is_combined=true and this is first in group)
+        let direction_align_box = GtkBox::new(Orientation::Vertical, 6);
+
+        let direction_row = GtkBox::new(Orientation::Horizontal, 6);
+        direction_row.append(&Label::new(Some("Direction:")));
+
+        let direction_list = StringList::new(&["Horizontal", "Vertical"]);
+        let direction_combo = DropDown::new(Some(direction_list), Option::<gtk4::Expression>::None);
+        direction_combo.set_selected(match line_config.combine_direction {
+            CombineDirection::Horizontal => 0,
+            CombineDirection::Vertical => 1,
+        });
+        direction_row.append(&direction_combo);
+        direction_align_box.append(&direction_row);
+
+        // Alignment using 3x3 position grid
+        let alignment_row = GtkBox::new(Orientation::Horizontal, 6);
+        alignment_row.append(&Label::new(Some("Align:")));
+        let alignment_grid = Rc::new(PositionGridWidget::new(line_config.combine_alignment));
+        alignment_row.append(alignment_grid.widget());
+        direction_align_box.append(&alignment_row);
+
+        // Helper to check if direction/alignment should be visible:
+        // 1. This line must be combined with a group_id
+        // 2. Must be the FIRST line in the group
+        // 3. There must be 2+ lines in the group
+        let should_show_dir_align = {
+            let all_lines = lines.borrow();
+            if !line_config.is_combined || line_config.group_id.is_none() {
+                false
+            } else {
+                let group_id = line_config.group_id.as_ref().unwrap();
+
+                // Find first line in group and count lines in group
+                let mut first_index_in_group: Option<usize> = None;
+                let mut group_count = 0;
+
+                for (i, line) in all_lines.iter().enumerate() {
+                    if line.is_combined && line.group_id.as_ref() == Some(group_id) {
+                        // Track first line in group
+                        if first_index_in_group.is_none() {
+                            first_index_in_group = Some(i);
+                        }
+                        group_count += 1;
+                    }
+                }
+
+                // Show only if this is the first line in group AND there are 2+ lines in the group
+                first_index_in_group == Some(list_index) && group_count >= 2
+            }
+        };
+
+        direction_align_box.set_visible(should_show_dir_align);
+        row_box.append(&direction_align_box);
 
         // Font controls
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -374,39 +498,359 @@ impl TextLineConfigWidget {
 
         row_box.append(&font_box);
 
-        // Color and rotation
-        let extras_box = GtkBox::new(Orientation::Horizontal, 6);
-        extras_box.append(&Label::new(Some("Color:")));
+        // Fill type selector (Solid/Gradient)
+        let fill_frame = Frame::new(Some("Text Fill"));
+        let fill_box = GtkBox::new(Orientation::Vertical, 6);
+        fill_box.set_margin_start(6);
+        fill_box.set_margin_end(6);
+        fill_box.set_margin_top(6);
+        fill_box.set_margin_bottom(6);
 
-        // Color widget using ColorButtonWidget
-        let initial_color = Color::new(
-            line_config.color.0,
-            line_config.color.1,
-            line_config.color.2,
-            line_config.color.3,
-        );
-        let color_widget = ColorButtonWidget::new(initial_color);
-        extras_box.append(color_widget.widget());
+        let fill_type_row = GtkBox::new(Orientation::Horizontal, 6);
+        fill_type_row.append(&Label::new(Some("Type:")));
 
-        // Connect color widget change handler
-        let lines_clone = lines.clone();
-        let on_change_color = on_change.clone();
-        color_widget.set_on_change(move |new_color| {
-            let mut lines_ref = lines_clone.borrow_mut();
-            if let Some(line) = lines_ref.get_mut(list_index) {
-                line.color = (new_color.r, new_color.g, new_color.b, new_color.a);
+        let fill_type_list = StringList::new(&["Solid Color", "Gradient"]);
+        let fill_type_combo = DropDown::new(Some(fill_type_list), Option::<gtk4::Expression>::None);
+        let initial_fill_type_index = match &line_config.fill {
+            TextFillType::Solid { .. } => 0,
+            TextFillType::LinearGradient { .. } => 1,
+        };
+        fill_type_combo.set_selected(initial_fill_type_index);
+        fill_type_row.append(&fill_type_combo);
+        fill_box.append(&fill_type_row);
+
+        // Solid color container
+        let solid_fill_box = GtkBox::new(Orientation::Horizontal, 6);
+        solid_fill_box.append(&Label::new(Some("Color:")));
+        let line_color = line_config.color();
+        let initial_color = Color::new(line_color.0, line_color.1, line_color.2, line_color.3);
+        let fill_color_widget = Rc::new(ColorButtonWidget::new(initial_color));
+        solid_fill_box.append(fill_color_widget.widget());
+        solid_fill_box.set_visible(initial_fill_type_index == 0);
+        fill_box.append(&solid_fill_box);
+
+        // Gradient fill container
+        let gradient_fill_box = GtkBox::new(Orientation::Vertical, 6);
+        let fill_gradient_editor = Rc::new(GradientEditor::new());
+        // Initialize gradient editor with current value or defaults
+        match &line_config.fill {
+            TextFillType::LinearGradient { stops, angle } => {
+                fill_gradient_editor.set_gradient(&LinearGradientConfig {
+                    stops: stops.clone(),
+                    angle: *angle,
+                });
             }
-            drop(lines_ref);
-            if let Some(ref callback) = *on_change_color.borrow() {
-                callback();
+            TextFillType::Solid { color } => {
+                // Default 2-stop gradient using the solid color
+                fill_gradient_editor.set_gradient(&LinearGradientConfig {
+                    stops: vec![
+                        ColorStop::new(0.0, *color),
+                        ColorStop::new(1.0, Color::new(color.r * 0.5, color.g * 0.5, color.b * 0.5, color.a)),
+                    ],
+                    angle: 0.0,
+                });
             }
-        });
+        }
+        gradient_fill_box.append(fill_gradient_editor.widget());
+        gradient_fill_box.set_visible(initial_fill_type_index == 1);
+        fill_box.append(&gradient_fill_box);
 
-        extras_box.append(&Label::new(Some("Angle:")));
+        fill_frame.set_child(Some(&fill_box));
+        row_box.append(&fill_frame);
+
+        // Connect fill type combo change handler
+        {
+            let solid_fill_box_clone = solid_fill_box.clone();
+            let gradient_fill_box_clone = gradient_fill_box.clone();
+            let lines_clone = lines.clone();
+            let fill_color_widget_clone = fill_color_widget.clone();
+            let fill_gradient_editor_clone = fill_gradient_editor.clone();
+            let on_change_fill_type = on_change.clone();
+            fill_type_combo.connect_selected_notify(move |combo| {
+                let selected = combo.selected();
+                solid_fill_box_clone.set_visible(selected == 0);
+                gradient_fill_box_clone.set_visible(selected == 1);
+
+                // Update fill type in config
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    match selected {
+                        0 => {
+                            // Switch to Solid - use current color widget color
+                            let color = fill_color_widget_clone.color();
+                            line.fill = TextFillType::Solid { color };
+                        }
+                        1 => {
+                            // Switch to Gradient - use current gradient editor values
+                            let grad = fill_gradient_editor_clone.get_gradient();
+                            line.fill = TextFillType::LinearGradient {
+                                stops: grad.stops,
+                                angle: grad.angle,
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_fill_type.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Connect solid fill color change handler
+        {
+            let lines_clone = lines.clone();
+            let on_change_color = on_change.clone();
+            fill_color_widget.set_on_change(move |new_color| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.fill = TextFillType::Solid { color: new_color };
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_color.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Connect gradient editor change handler
+        {
+            let lines_clone = lines.clone();
+            let fill_gradient_editor_clone = fill_gradient_editor.clone();
+            let on_change_grad = on_change.clone();
+            fill_gradient_editor.set_on_change(move || {
+                let grad = fill_gradient_editor_clone.get_gradient();
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.fill = TextFillType::LinearGradient {
+                        stops: grad.stops,
+                        angle: grad.angle,
+                    };
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_grad.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Text background section
+        let bg_frame = Frame::new(Some("Text Background"));
+        let bg_box = GtkBox::new(Orientation::Vertical, 6);
+        bg_box.set_margin_start(6);
+        bg_box.set_margin_end(6);
+        bg_box.set_margin_top(6);
+        bg_box.set_margin_bottom(6);
+
+        let bg_type_row = GtkBox::new(Orientation::Horizontal, 6);
+        bg_type_row.append(&Label::new(Some("Type:")));
+
+        let bg_type_list = StringList::new(&["None", "Solid Color", "Gradient"]);
+        let bg_type_combo = DropDown::new(Some(bg_type_list), Option::<gtk4::Expression>::None);
+        let initial_bg_type_index = match &line_config.text_background.background {
+            TextBackgroundType::None => 0,
+            TextBackgroundType::Solid { .. } => 1,
+            TextBackgroundType::LinearGradient { .. } => 2,
+        };
+        bg_type_combo.set_selected(initial_bg_type_index);
+        bg_type_row.append(&bg_type_combo);
+        bg_box.append(&bg_type_row);
+
+        // Background padding and corner radius (visible except for None)
+        let bg_params_box = GtkBox::new(Orientation::Horizontal, 6);
+        bg_params_box.append(&Label::new(Some("Padding:")));
+        let bg_padding_spin = SpinButton::with_range(0.0, 50.0, 1.0);
+        bg_padding_spin.set_value(line_config.text_background.padding);
+        bg_padding_spin.set_width_chars(4);
+        bg_params_box.append(&bg_padding_spin);
+        bg_params_box.append(&Label::new(Some("Radius:")));
+        let bg_radius_spin = SpinButton::with_range(0.0, 50.0, 1.0);
+        bg_radius_spin.set_value(line_config.text_background.corner_radius);
+        bg_radius_spin.set_width_chars(4);
+        bg_params_box.append(&bg_radius_spin);
+        bg_params_box.set_visible(initial_bg_type_index != 0);
+        bg_box.append(&bg_params_box);
+
+        // Background solid color container
+        let bg_solid_box = GtkBox::new(Orientation::Horizontal, 6);
+        bg_solid_box.append(&Label::new(Some("Color:")));
+        let bg_solid_color = match &line_config.text_background.background {
+            TextBackgroundType::Solid { color } => *color,
+            _ => Color::new(0.0, 0.0, 0.0, 0.5),
+        };
+        let bg_color_widget = Rc::new(ColorButtonWidget::new(bg_solid_color));
+        bg_solid_box.append(bg_color_widget.widget());
+        bg_solid_box.set_visible(initial_bg_type_index == 1);
+        bg_box.append(&bg_solid_box);
+
+        // Background gradient container
+        let bg_gradient_box = GtkBox::new(Orientation::Vertical, 6);
+        let bg_gradient_editor = Rc::new(GradientEditor::new());
+        match &line_config.text_background.background {
+            TextBackgroundType::LinearGradient { stops, angle } => {
+                bg_gradient_editor.set_gradient(&LinearGradientConfig {
+                    stops: stops.clone(),
+                    angle: *angle,
+                });
+            }
+            _ => {
+                bg_gradient_editor.set_gradient(&LinearGradientConfig {
+                    stops: vec![
+                        ColorStop::new(0.0, Color::new(0.0, 0.0, 0.0, 0.7)),
+                        ColorStop::new(1.0, Color::new(0.2, 0.2, 0.2, 0.7)),
+                    ],
+                    angle: 0.0,
+                });
+            }
+        }
+        bg_gradient_box.append(bg_gradient_editor.widget());
+        bg_gradient_box.set_visible(initial_bg_type_index == 2);
+        bg_box.append(&bg_gradient_box);
+
+        bg_frame.set_child(Some(&bg_box));
+        row_box.append(&bg_frame);
+
+        // Connect background type combo change handler
+        {
+            let bg_params_box_clone = bg_params_box.clone();
+            let bg_solid_box_clone = bg_solid_box.clone();
+            let bg_gradient_box_clone = bg_gradient_box.clone();
+            let lines_clone = lines.clone();
+            let bg_color_widget_clone = bg_color_widget.clone();
+            let bg_gradient_editor_clone = bg_gradient_editor.clone();
+            let bg_padding_spin_clone = bg_padding_spin.clone();
+            let bg_radius_spin_clone = bg_radius_spin.clone();
+            let on_change_bg_type = on_change.clone();
+            bg_type_combo.connect_selected_notify(move |combo| {
+                let selected = combo.selected();
+                bg_params_box_clone.set_visible(selected != 0);
+                bg_solid_box_clone.set_visible(selected == 1);
+                bg_gradient_box_clone.set_visible(selected == 2);
+
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    let bg_type = match selected {
+                        0 => TextBackgroundType::None,
+                        1 => TextBackgroundType::Solid {
+                            color: bg_color_widget_clone.color(),
+                        },
+                        2 => {
+                            let grad = bg_gradient_editor_clone.get_gradient();
+                            TextBackgroundType::LinearGradient {
+                                stops: grad.stops,
+                                angle: grad.angle,
+                            }
+                        }
+                        _ => TextBackgroundType::None,
+                    };
+                    line.text_background = TextBackgroundConfig {
+                        background: bg_type,
+                        padding: bg_padding_spin_clone.value(),
+                        corner_radius: bg_radius_spin_clone.value(),
+                    };
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_bg_type.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Connect background color change handler
+        {
+            let lines_clone = lines.clone();
+            let bg_padding_spin_clone = bg_padding_spin.clone();
+            let bg_radius_spin_clone = bg_radius_spin.clone();
+            let on_change_bg_color = on_change.clone();
+            bg_color_widget.set_on_change(move |new_color| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.text_background = TextBackgroundConfig {
+                        background: TextBackgroundType::Solid { color: new_color },
+                        padding: bg_padding_spin_clone.value(),
+                        corner_radius: bg_radius_spin_clone.value(),
+                    };
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_bg_color.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Connect background gradient editor change handler
+        {
+            let lines_clone = lines.clone();
+            let bg_gradient_editor_clone = bg_gradient_editor.clone();
+            let bg_padding_spin_clone = bg_padding_spin.clone();
+            let bg_radius_spin_clone = bg_radius_spin.clone();
+            let on_change_bg_grad = on_change.clone();
+            bg_gradient_editor.set_on_change(move || {
+                let grad = bg_gradient_editor_clone.get_gradient();
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.text_background = TextBackgroundConfig {
+                        background: TextBackgroundType::LinearGradient {
+                            stops: grad.stops,
+                            angle: grad.angle,
+                        },
+                        padding: bg_padding_spin_clone.value(),
+                        corner_radius: bg_radius_spin_clone.value(),
+                    };
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_bg_grad.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Connect background padding change handler
+        {
+            let lines_clone = lines.clone();
+            let bg_radius_spin_clone = bg_radius_spin.clone();
+            let on_change_padding = on_change.clone();
+            bg_padding_spin.connect_value_changed(move |spin| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.text_background.padding = spin.value();
+                    // Keep corner radius in sync
+                    line.text_background.corner_radius = bg_radius_spin_clone.value();
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_padding.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Connect background corner radius change handler
+        {
+            let lines_clone = lines.clone();
+            let bg_padding_spin_clone = bg_padding_spin.clone();
+            let on_change_radius = on_change.clone();
+            bg_radius_spin.connect_value_changed(move |spin| {
+                let mut lines_ref = lines_clone.borrow_mut();
+                if let Some(line) = lines_ref.get_mut(list_index) {
+                    line.text_background.corner_radius = spin.value();
+                    // Keep padding in sync
+                    line.text_background.padding = bg_padding_spin_clone.value();
+                }
+                drop(lines_ref);
+                if let Some(ref callback) = *on_change_radius.borrow() {
+                    callback();
+                }
+            });
+        }
+
+        // Rotation angle row
+        let rotation_box = GtkBox::new(Orientation::Horizontal, 6);
+        rotation_box.append(&Label::new(Some("Rotation Angle:")));
         let angle_spin = SpinButton::with_range(-360.0, 360.0, 5.0);
         angle_spin.set_value(line_config.rotation_angle);
-        extras_box.append(&angle_spin);
-        row_box.append(&extras_box);
+        rotation_box.append(&angle_spin);
+        row_box.append(&rotation_box);
 
         // Position offset controls
         let offset_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -551,45 +995,38 @@ impl TextLineConfigWidget {
             });
         }
 
-        // Vertical position handler
+        // Combine direction handler
         {
             let lines_clone = lines.clone();
-            let on_change_vpos = on_change.clone();
-            v_pos_combo.connect_selected_notify(move |combo| {
-                let vpos = match combo.selected() {
-                    0 => VerticalPosition::Top,
-                    1 => VerticalPosition::Center,
-                    2 => VerticalPosition::Bottom,
-                    _ => VerticalPosition::Center,
+            let on_change_dir = on_change.clone();
+            direction_combo.connect_selected_notify(move |combo| {
+                let dir = match combo.selected() {
+                    0 => CombineDirection::Horizontal,
+                    1 => CombineDirection::Vertical,
+                    _ => CombineDirection::Horizontal,
                 };
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.vertical_position = vpos;
+                    line.combine_direction = dir;
                 }
                 drop(lines_ref);
-                if let Some(ref callback) = *on_change_vpos.borrow() {
+                if let Some(ref callback) = *on_change_dir.borrow() {
                     callback();
                 }
             });
         }
 
-        // Horizontal position handler
+        // Combine alignment handler
         {
             let lines_clone = lines.clone();
-            let on_change_hpos = on_change.clone();
-            h_pos_combo.connect_selected_notify(move |combo| {
-                let hpos = match combo.selected() {
-                    0 => HorizontalPosition::Left,
-                    1 => HorizontalPosition::Center,
-                    2 => HorizontalPosition::Right,
-                    _ => HorizontalPosition::Center,
-                };
+            let on_change_align = on_change.clone();
+            alignment_grid.set_on_change(move |new_align| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
-                    line.horizontal_position = hpos;
+                    line.combine_alignment = new_align;
                 }
                 drop(lines_ref);
-                if let Some(ref callback) = *on_change_hpos.borrow() {
+                if let Some(ref callback) = *on_change_align.borrow() {
                     callback();
                 }
             });
