@@ -152,3 +152,18 @@ pub use synthwave_display::{
     draw_group_dividers as synthwave_draw_group_dividers,
 };
 pub use synthwave_config_widget::SynthwaveConfigWidget;
+
+// Dialog close functions
+pub use grid_properties_dialog::close_panel_properties_dialog;
+pub use alarm_timer_dialog::close_alarm_timer_dialog;
+pub use image_picker::close_image_picker_dialog;
+pub use timezone_dialog::close_timezone_dialog;
+
+/// Close all open singleton dialogs
+/// Call this when the main window is closing to clean up
+pub fn close_all_dialogs() {
+    close_panel_properties_dialog();
+    close_alarm_timer_dialog();
+    close_image_picker_dialog();
+    close_timezone_dialog();
+}

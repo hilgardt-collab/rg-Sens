@@ -815,6 +815,9 @@ fn build_ui(app: &Application) {
     let update_manager_for_close = update_manager.clone();
 
     window.connect_close_request(move |window| {
+        // Close all open dialogs first
+        rg_sens::ui::close_all_dialogs();
+
         // Stop the update manager gracefully
         update_manager_for_close.stop();
 

@@ -20,6 +20,18 @@ thread_local! {
     pub(crate) static PANEL_PROPERTIES_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
 }
 
+/// Close the panel properties dialog if it's open
+pub fn close_panel_properties_dialog() {
+    PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
+        let mut dialog_opt = dialog_ref.borrow_mut();
+        if let Some(weak) = dialog_opt.take() {
+            if let Some(dialog) = weak.upgrade() {
+                dialog.close();
+            }
+        }
+    });
+}
+
 /// Show panel properties dialog
 pub(crate) fn show_panel_properties_dialog(
     panel: &Arc<RwLock<Panel>>,

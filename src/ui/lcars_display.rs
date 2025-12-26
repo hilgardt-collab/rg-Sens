@@ -1565,12 +1565,17 @@ pub fn render_content_core_bars(
     h: f64,
     config: &CoreBarsConfig,
     core_values: &[f64],
+    slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
     cr.translate(x, y);
 
-    // Call the core_bars_display render function
-    render_core_bars(cr, config, core_values, w, h)?;
+    // Call the core_bars_display render function with source values for text overlay
+    if let Some(values) = slot_values {
+        crate::ui::core_bars_display::render_core_bars_with_values(cr, config, core_values, w, h, values)?;
+    } else {
+        render_core_bars(cr, config, core_values, w, h)?;
+    }
 
     cr.restore()?;
     Ok(())

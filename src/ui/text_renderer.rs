@@ -139,7 +139,7 @@ fn render_combined_parts(
     }
 
     // Calculate combined dimensions based on direction
-    let (combined_width, combined_height, min_y_bearing) = match direction {
+    let (combined_width, combined_height, _min_y_bearing) = match direction {
         CombineDirection::Horizontal => {
             let mut total_width = 0.0;
             let mut min_y_bearing: f64 = 0.0;
@@ -199,9 +199,11 @@ fn render_combined_parts(
         let center_y = base_y + effective_h / 2.0 + offset_y;
         cr.translate(center_x, center_y);
         cr.rotate(angle_rad);
-        cr.translate(-combined_width / 2.0, -min_y_bearing - combined_height / 2.0);
+        cr.translate(-combined_width / 2.0, -combined_height / 2.0);
     } else {
-        cr.translate(base_x + offset_x, base_y - min_y_bearing + offset_y);
+        // Translate to top-left of bounding box (y=0 is at top of combined area)
+        // Each part will add its own baseline offset via baseline_y calculation
+        cr.translate(base_x + offset_x, base_y + offset_y);
     }
 
     // Extract alignment components from TextPosition
@@ -443,6 +445,16 @@ fn render_text_with_config(
     let text_w = extents.width();
     let text_h = extents.height();
 
+    // Get font metrics for consistent vertical positioning
+    // Using font ascent ensures all text at same font size aligns consistently,
+    // regardless of whether specific characters have descenders
+    let (font_height, font_ascent) = if let Ok(font_extents) = cr.font_extents() {
+        (font_extents.ascent() + font_extents.descent(), font_extents.ascent())
+    } else {
+        // Fallback to text extents if font_extents fails
+        (text_h, -extents.y_bearing())
+    };
+
     // Calculate rotated bounding box dimensions
     let angle_rad = rotation_angle.to_radians();
     let cos_a = angle_rad.cos().abs();
@@ -451,7 +463,8 @@ fn render_text_with_config(
     let rotated_h = text_w * sin_a + text_h * cos_a;
 
     let effective_w = if rotation_angle != 0.0 { rotated_w } else { text_w };
-    let effective_h = if rotation_angle != 0.0 { rotated_h } else { text_h };
+    // Use font_height for vertical positioning to ensure consistent alignment
+    let effective_h = if rotation_angle != 0.0 { rotated_h } else { font_height };
 
     // Calculate position
     let text_x = match h_pos {
@@ -460,6 +473,7 @@ fn render_text_with_config(
         HorizontalPosition::Right => width - effective_w - 10.0,
     };
 
+    // Use font metrics for vertical positioning (consistent across all text at same font size)
     let text_y = match v_pos {
         VerticalPosition::Top => 10.0,
         VerticalPosition::Center => (height - effective_h) / 2.0,
@@ -482,11 +496,12 @@ fn render_text_with_config(
         // Render text with fill
         render_text_fill(cr, config, text, draw_x, draw_y, &extents);
     } else {
-        let adjusted_y = text_y - extents.y_bearing();
+        // Position baseline: text_y is top of font box, add ascent to get baseline
+        let baseline_y = text_y + font_ascent;
         let draw_x = text_x + offset_x;
-        let draw_y = adjusted_y + offset_y;
+        let draw_y = baseline_y + offset_y;
 
-        // Render background
+        // Render background (use actual text extents for background sizing)
         render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
 
         // Render text with fill

@@ -17,6 +17,18 @@ thread_local! {
     static ALARM_TIMER_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
 }
 
+/// Close the alarm/timer dialog if it's open
+pub fn close_alarm_timer_dialog() {
+    ALARM_TIMER_DIALOG.with(|dialog_ref| {
+        let mut dialog_opt = dialog_ref.borrow_mut();
+        if let Some(weak) = dialog_opt.take() {
+            if let Some(dialog) = weak.upgrade() {
+                dialog.close();
+            }
+        }
+    });
+}
+
 /// Timer control actions
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TimerAction {

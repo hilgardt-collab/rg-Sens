@@ -238,6 +238,7 @@ impl IndustrialDisplayer {
                         item_h,
                         &item_config.core_bars_config,
                         &core_values,
+                        Some(&slot_values),
                     )?;
                 }
                 ContentDisplayType::LevelBar => {

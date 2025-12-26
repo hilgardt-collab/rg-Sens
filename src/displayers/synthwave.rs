@@ -291,6 +291,7 @@ impl SynthwaveDisplayer {
                         item_h,
                         core_bars_config,
                         &core_values,
+                        Some(&slot_values),
                     )?;
                 }
                 ContentDisplayType::Static => {

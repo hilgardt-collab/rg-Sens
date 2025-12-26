@@ -29,6 +29,18 @@ thread_local! {
     static IMAGE_PICKER_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
 }
 
+/// Close the image picker dialog if it's open
+pub fn close_image_picker_dialog() {
+    IMAGE_PICKER_DIALOG.with(|dialog_ref| {
+        let mut dialog_opt = dialog_ref.borrow_mut();
+        if let Some(weak) = dialog_opt.take() {
+            if let Some(dialog) = weak.upgrade() {
+                dialog.close();
+            }
+        }
+    });
+}
+
 /// Image picker for selecting image files
 pub struct ImagePicker {
     title: String,

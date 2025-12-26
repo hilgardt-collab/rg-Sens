@@ -12,6 +12,18 @@ thread_local! {
     static TIMEZONE_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
 }
 
+/// Close the timezone dialog if it's open
+pub fn close_timezone_dialog() {
+    TIMEZONE_DIALOG.with(|dialog_ref| {
+        let mut dialog_opt = dialog_ref.borrow_mut();
+        if let Some(weak) = dialog_opt.take() {
+            if let Some(dialog) = weak.upgrade() {
+                dialog.close();
+            }
+        }
+    });
+}
+
 /// Result state for the async dialog
 #[derive(Clone, Debug)]
 enum DialogResult {
