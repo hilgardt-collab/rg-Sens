@@ -56,7 +56,7 @@ pub struct ArcConfigWidget {
     animation_duration_spin: SpinButton,
 
     // Text overlay
-    text_config_widget: Option<TextLineConfigWidget>,
+    text_config_widget: Option<Rc<TextLineConfigWidget>>,
 }
 
 impl ArcConfigWidget {
@@ -774,7 +774,7 @@ impl ArcConfigWidget {
         config: &Rc<RefCell<ArcDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         available_fields: Vec<FieldMetadata>,
-    ) -> (GtkBox, Option<TextLineConfigWidget>) {
+    ) -> (GtkBox, Option<Rc<TextLineConfigWidget>>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
         page.set_margin_start(12);
         page.set_margin_end(12);
@@ -816,9 +816,8 @@ impl ArcConfigWidget {
 
         page.append(text_widget_rc.widget());
 
-        // Note: We return None for text_config_widget since we handle updates via callback now
-        // The config is updated directly in the callback above
-        (page, None)
+        // Return the widget so set_config can update it when loading saved configs
+        (page, Some(text_widget_rc))
     }
 
     pub fn widget(&self) -> &GtkBox {
