@@ -65,6 +65,17 @@ pub(crate) fn show_panel_properties_dialog(
     // Get parent window for transient_for
     let parent_window = _container.root().and_then(|r| r.downcast::<Window>().ok());
 
+    // Get the ScrolledWindow from parent to preserve scroll position when dialog opens
+    // The window child hierarchy is: Window -> ScrolledWindow -> Overlay -> ...
+    let scrolled_window = parent_window.as_ref()
+        .and_then(|w| w.child())
+        .and_then(|c| c.downcast::<gtk4::ScrolledWindow>().ok());
+
+    // Save current scroll position before showing dialog
+    let saved_scroll = scrolled_window.as_ref().map(|sw| {
+        (sw.hadjustment().value(), sw.vadjustment().value())
+    });
+
     // Create dialog window
     let dialog = Window::builder()
         .title(format!("Panel Properties - {}", panel_id))
@@ -3241,4 +3252,13 @@ pub(crate) fn show_panel_properties_dialog(
     });
 
     dialog.present();
+
+    // Restore scroll position after dialog is presented
+    // Use idle_add_local_once to ensure this runs after GTK finishes processing the dialog presentation
+    if let (Some(sw), Some((h, v))) = (scrolled_window, saved_scroll) {
+        gtk4::glib::idle_add_local_once(move || {
+            sw.hadjustment().set_value(h);
+            sw.vadjustment().set_value(v);
+        });
+    }
 }
