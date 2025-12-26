@@ -208,19 +208,25 @@ fn render_combined_parts(
     let (align_v, align_h) = alignment.to_positions();
 
     // Render each part based on direction and alignment
+    // Note: y_offset is calculated as position of text TOP, but render_text_part
+    // expects baseline position. We convert by subtracting y_bearing (which is negative).
     match direction {
         CombineDirection::Horizontal => {
             let mut current_x = 0.0;
             for (i, ((config, text), ext)) in parts.iter().zip(&part_extents).enumerate() {
-                // Calculate y offset based on vertical alignment
+                // Calculate y offset for top of text based on vertical alignment
                 let part_height = ext.height();
-                let y_offset = match align_v {
+                let top_offset = match align_v {
                     VerticalPosition::Top => 0.0,
                     VerticalPosition::Center => (combined_height - part_height) / 2.0,
                     VerticalPosition::Bottom => combined_height - part_height,
                 };
 
-                render_text_part(cr, config, text, current_x, y_offset, ext);
+                // Convert top offset to baseline position: baseline = top - y_bearing
+                // (y_bearing is negative, so we subtract it to go down to baseline)
+                let baseline_y = top_offset - ext.y_bearing();
+
+                render_text_part(cr, config, text, current_x, baseline_y, ext);
 
                 current_x += ext.width();
                 if i < parts.len() - 1 {
@@ -229,7 +235,7 @@ fn render_combined_parts(
             }
         }
         CombineDirection::Vertical => {
-            let mut current_y = 0.0;
+            let mut current_top = 0.0;
             for (i, ((config, text), ext)) in parts.iter().zip(&part_extents).enumerate() {
                 // Calculate x offset based on horizontal alignment
                 let part_width = ext.width();
@@ -239,11 +245,14 @@ fn render_combined_parts(
                     HorizontalPosition::Right => combined_width - part_width,
                 };
 
-                render_text_part(cr, config, text, x_offset, current_y, ext);
+                // Convert top position to baseline position
+                let baseline_y = current_top - ext.y_bearing();
 
-                current_y += ext.height();
+                render_text_part(cr, config, text, x_offset, baseline_y, ext);
+
+                current_top += ext.height();
                 if i < parts.len() - 1 {
-                    current_y += SPACING;
+                    current_top += SPACING;
                 }
             }
         }

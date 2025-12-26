@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
-use crate::ui::core_bars_display::{render_core_bars, CoreBarsConfig};
+use crate::ui::core_bars_display::{render_core_bars_with_values, CoreBarsConfig};
 
 /// Animation state for a single value
 #[derive(Debug, Clone)]
@@ -45,6 +45,7 @@ struct DisplayData {
     core_values: Vec<AnimatedValue>, // Animated values per displayed core
     render_cache: Vec<f64>,          // Cached current values for rendering (avoids allocation per frame)
     detected_core_count: usize,      // Total cores detected from source
+    source_values: HashMap<String, Value>, // Source values for text overlay
     last_update: Instant,
     transform: PanelTransform,
     dirty: bool,
@@ -57,6 +58,7 @@ impl Default for DisplayData {
             core_values: Vec::new(),
             render_cache: Vec::new(),
             detected_core_count: 0,
+            source_values: HashMap::new(),
             last_update: Instant::now(),
             transform: PanelTransform::default(),
             dirty: true,
@@ -137,7 +139,14 @@ impl Displayer for CpuCoresDisplayer {
                 data.transform.apply(cr, width as f64, height as f64);
                 // Use cached render values (updated by animation timer)
                 if !data.render_cache.is_empty() {
-                    let _ = render_core_bars(cr, &data.config, &data.render_cache, width as f64, height as f64);
+                    let _ = render_core_bars_with_values(
+                        cr,
+                        &data.config,
+                        &data.render_cache,
+                        width as f64,
+                        height as f64,
+                        &data.source_values,
+                    );
                 }
                 data.transform.restore(cr);
             }
@@ -254,6 +263,12 @@ impl Displayer for CpuCoresDisplayer {
                 display_data.core_values[i].target = *value;
             }
 
+            // Extract source values for text overlay
+            display_data.source_values = super::extract_text_values(
+                data,
+                &display_data.config.text_overlay.text_config,
+            );
+
             // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);
 
@@ -266,7 +281,14 @@ impl Displayer for CpuCoresDisplayer {
             data.transform.apply(cr, width, height);
             // Use cached render values (avoids Vec allocation per frame)
             if !data.render_cache.is_empty() {
-                render_core_bars(cr, &data.config, &data.render_cache, width, height)?;
+                render_core_bars_with_values(
+                    cr,
+                    &data.config,
+                    &data.render_cache,
+                    width,
+                    height,
+                    &data.source_values,
+                )?;
             }
             data.transform.restore(cr);
         }

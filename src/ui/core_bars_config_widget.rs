@@ -8,6 +8,7 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::core::FieldMetadata;
 use crate::ui::background::Color;
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle};
 use crate::ui::render_utils::render_checkerboard;
@@ -16,6 +17,7 @@ use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::GradientEditor;
+use crate::ui::TextLineConfigWidget;
 
 /// Core bars configuration widget
 pub struct CoreBarsConfigWidget {
@@ -78,10 +80,18 @@ pub struct CoreBarsConfigWidget {
 
     // Gradient spans bars option
     gradient_spans_bars_check: CheckButton,
+
+    // Text overlay
+    text_config_widget: Option<Rc<TextLineConfigWidget>>,
 }
 
 impl CoreBarsConfigWidget {
     pub fn new() -> Self {
+        Self::with_fields(&[])
+    }
+
+    /// Create widget with available fields for text overlay
+    pub fn with_fields(available_fields: &[FieldMetadata]) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 8);
         container.set_margin_start(8);
         container.set_margin_end(8);
@@ -124,8 +134,62 @@ impl CoreBarsConfigWidget {
             Self::create_animation_page(&config, &on_change);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
-        // Preview at bottom
+        // Create preview early so it can be used in text overlay tab
         let preview = DrawingArea::new();
+
+        // === Tab 6: Text Overlay ===
+        let text_config_widget = if !available_fields.is_empty() {
+            let text_page = GtkBox::new(Orientation::Vertical, 8);
+            text_page.set_margin_start(8);
+            text_page.set_margin_end(8);
+            text_page.set_margin_top(8);
+            text_page.set_margin_bottom(8);
+
+            // Enable text overlay checkbox
+            let text_check = CheckButton::with_label("Enable Text Overlay");
+            text_check.set_active(config.borrow().text_overlay.enabled);
+            text_page.append(&text_check);
+
+            let text_widget = TextLineConfigWidget::new(available_fields.to_vec());
+            text_widget.widget().set_vexpand(true);
+            text_page.append(text_widget.widget());
+            let text_widget = Rc::new(text_widget);
+
+            // Connect text config change
+            let config_for_text = config.clone();
+            let preview_for_text = preview.clone();
+            let on_change_for_text = on_change.clone();
+            let text_widget_for_change = text_widget.clone();
+            text_widget.set_on_change(move || {
+                config_for_text.borrow_mut().text_overlay.text_config = text_widget_for_change.get_config();
+                preview_for_text.queue_draw();
+                if let Some(callback) = on_change_for_text.borrow().as_ref() {
+                    callback();
+                }
+            });
+
+            // Connect enable checkbox
+            let config_for_check = config.clone();
+            let on_change_for_check = on_change.clone();
+            let preview_for_check = preview.clone();
+            let text_widget_for_check = text_widget.widget().clone();
+            text_check.connect_toggled(move |check| {
+                let enabled = check.is_active();
+                text_widget_for_check.set_sensitive(enabled);
+                config_for_check.borrow_mut().text_overlay.enabled = enabled;
+                preview_for_check.queue_draw();
+                if let Some(callback) = on_change_for_check.borrow().as_ref() {
+                    callback();
+                }
+            });
+
+            notebook.append_page(&text_page, Some(&Label::new(Some("Text"))));
+            Some(text_widget)
+        } else {
+            None
+        };
+
+        // Preview configuration
         preview.set_content_height(150);
         preview.set_vexpand(false);
 
@@ -188,6 +252,7 @@ impl CoreBarsConfigWidget {
             animate_check,
             animation_speed_scale,
             gradient_spans_bars_check,
+            text_config_widget,
         }
     }
 
@@ -1143,7 +1208,14 @@ impl CoreBarsConfigWidget {
 
     /// Get the current configuration
     pub fn get_config(&self) -> CoreBarsConfig {
-        self.config.borrow().clone()
+        let mut config = self.config.borrow().clone();
+
+        // Update text config from widget
+        if let Some(ref text_widget) = self.text_config_widget {
+            config.text_overlay.text_config = text_widget.get_config();
+        }
+
+        config
     }
 
     /// Set the configuration
@@ -1252,6 +1324,11 @@ impl CoreBarsConfigWidget {
         // Update visibility based on foreground type
         let is_gradient = matches!(config.foreground, BarFillType::Gradient { .. });
         self.gradient_spans_bars_check.set_visible(is_gradient);
+
+        // Text overlay
+        if let Some(ref text_widget) = self.text_config_widget {
+            text_widget.set_config(config.text_overlay.text_config.clone());
+        }
 
         // Store config
         *self.config.borrow_mut() = config;

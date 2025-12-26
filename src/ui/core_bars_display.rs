@@ -6,9 +6,12 @@
 
 use gtk4::cairo;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig};
+use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig, TextOverlayConfig};
+use crate::ui::text_renderer::render_text_lines;
 
 /// Label position relative to the bar
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -93,6 +96,10 @@ pub struct CoreBarsConfig {
     // (each bar is a solid color sampled from gradient position)
     #[serde(default)]
     pub gradient_spans_bars: bool,
+
+    // Text overlay
+    #[serde(default)]
+    pub text_overlay: TextOverlayConfig,
 }
 
 fn default_end_core() -> usize {
@@ -168,6 +175,7 @@ impl Default for CoreBarsConfig {
             animate: default_true(),
             animation_speed: default_animation_speed(),
             gradient_spans_bars: false,
+            text_overlay: TextOverlayConfig::default(),
         }
     }
 }
@@ -197,6 +205,26 @@ pub fn render_core_bars(
     core_values: &[f64],
     width: f64,
     height: f64,
+) -> Result<(), cairo::Error> {
+    render_core_bars_with_values(cr, config, core_values, width, height, &HashMap::new())
+}
+
+/// Render multiple CPU core bars with source values for text overlay
+///
+/// # Arguments
+/// * `cr` - Cairo context
+/// * `config` - Core bars configuration
+/// * `core_values` - Slice of normalized values (0.0-1.0) for each core
+/// * `width` - Available width
+/// * `height` - Available height
+/// * `source_values` - Source values for text overlay
+pub fn render_core_bars_with_values(
+    cr: &cairo::Context,
+    config: &CoreBarsConfig,
+    core_values: &[f64],
+    width: f64,
+    height: f64,
+    source_values: &HashMap<String, Value>,
 ) -> Result<(), cairo::Error> {
     let num_bars = core_values.len();
     if num_bars == 0 {
@@ -232,6 +260,18 @@ pub fn render_core_bars(
     }
 
     cr.restore()?;
+
+    // Render text overlay if enabled
+    if config.text_overlay.enabled && !config.text_overlay.text_config.lines.is_empty() {
+        render_text_lines(
+            cr,
+            width,
+            height,
+            &config.text_overlay.text_config,
+            source_values,
+        );
+    }
+
     Ok(())
 }
 
