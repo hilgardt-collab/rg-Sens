@@ -60,6 +60,8 @@ mod fighter_hud_config_widget;
 pub mod synthwave_display;
 mod synthwave_config_widget;
 pub mod theme;
+mod theme_color_selector;
+mod theme_font_selector;
 pub mod window_settings_dialog;
 pub mod new_panel_dialog;
 pub mod config_helpers;
@@ -152,6 +154,8 @@ pub use synthwave_display::{
     draw_group_dividers as synthwave_draw_group_dividers,
 };
 pub use synthwave_config_widget::SynthwaveConfigWidget;
+pub use theme_color_selector::ThemeColorSelector;
+pub use theme_font_selector::ThemeFontSelector;
 
 // Dialog close functions
 pub use grid_properties_dialog::close_panel_properties_dialog;

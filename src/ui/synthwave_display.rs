@@ -276,6 +276,14 @@ pub struct SynthwaveFrameConfig {
     pub animation_enabled: bool,
     #[serde(default)]
     pub scanline_effect: bool,
+
+    // Theme configuration
+    #[serde(default = "default_synthwave_theme")]
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_synthwave_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_synthwave()
 }
 
 impl Default for SynthwaveFrameConfig {
@@ -319,6 +327,8 @@ impl Default for SynthwaveFrameConfig {
 
             animation_enabled: true,
             scanline_effect: false,
+
+            theme: default_synthwave_theme(),
         }
     }
 }

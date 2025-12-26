@@ -13,25 +13,36 @@ use std::rc::Rc;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::synthwave_display::{
-    render_synthwave_frame, SynthwaveColorScheme, SynthwaveFrameStyle,
-    GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle,
+    render_synthwave_frame, SynthwaveFrameStyle,
+    GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle, SynthwaveColorScheme,
 };
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation, StaticDisplayConfig};
-use crate::ui::background::Color;
 use crate::ui::{
     BarConfigWidget, GraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
-    BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget,
+    BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget, GradientEditor,
+    ThemeFontSelector,
 };
+use crate::ui::theme::FontSource;
 use crate::displayers::SynthwaveDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
-/// Holds references to Colors tab widgets
-struct ColorsWidgets {
-    scheme_dropdown: DropDown,
-    custom_primary_widget: Rc<ColorButtonWidget>,
-    custom_secondary_widget: Rc<ColorButtonWidget>,
-    custom_accent_widget: Rc<ColorButtonWidget>,
-    custom_colors_box: GtkBox,
+/// Holds references to Theme tab widgets
+struct ThemeWidgets {
+    // Color scheme preset dropdown
+    color_scheme_dropdown: DropDown,
+    // Theme colors
+    theme_color1_widget: Rc<ColorButtonWidget>,
+    theme_color2_widget: Rc<ColorButtonWidget>,
+    theme_color3_widget: Rc<ColorButtonWidget>,
+    theme_color4_widget: Rc<ColorButtonWidget>,
+    // Theme gradient
+    theme_gradient_editor: Rc<GradientEditor>,
+    // Theme fonts
+    font1_btn: Button,
+    font1_size_spin: SpinButton,
+    font2_btn: Button,
+    font2_size_spin: SpinButton,
+    // Neon glow (keep this for synthwave-specific effect)
     glow_scale: Scale,
 }
 
@@ -60,8 +71,7 @@ struct HeaderWidgets {
     header_text_entry: Entry,
     header_style_dropdown: DropDown,
     header_height_spin: SpinButton,
-    header_font_btn: Button,
-    header_font_size_spin: SpinButton,
+    header_font_selector: Rc<ThemeFontSelector>,
 }
 
 /// Holds references to Layout tab widgets
@@ -90,7 +100,7 @@ pub struct SynthwaveConfigWidget {
     content_notebook: Rc<RefCell<Notebook>>,
     source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
-    colors_widgets: Rc<RefCell<Option<ColorsWidgets>>>,
+    theme_widgets: Rc<RefCell<Option<ThemeWidgets>>>,
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     grid_widgets: Rc<RefCell<Option<GridWidgets>>>,
     header_widgets: Rc<RefCell<Option<HeaderWidgets>>>,
@@ -105,7 +115,7 @@ impl SynthwaveConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
         let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
-        let colors_widgets: Rc<RefCell<Option<ColorsWidgets>>> = Rc::new(RefCell::new(None));
+        let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let grid_widgets: Rc<RefCell<Option<GridWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
@@ -131,9 +141,9 @@ impl SynthwaveConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Colors
-        let colors_page = Self::create_colors_page(&config, &on_change, &preview, &colors_widgets);
-        notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
+        // Tab 1: Theme
+        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets);
+        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Frame
         let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets);
@@ -171,7 +181,7 @@ impl SynthwaveConfigWidget {
             content_notebook,
             source_summaries,
             available_fields,
-            colors_widgets,
+            theme_widgets,
             frame_widgets,
             grid_widgets,
             header_widgets,
@@ -197,20 +207,20 @@ impl SynthwaveConfigWidget {
         }
     }
 
-    fn create_colors_page(
+    fn create_theme_page(
         config: &Rc<RefCell<SynthwaveDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-        colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
+        theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
 
-        // Color scheme preset
+        // Color Scheme Preset dropdown
         let scheme_box = GtkBox::new(Orientation::Horizontal, 6);
         scheme_box.append(&Label::new(Some("Color Scheme:")));
         let scheme_list = StringList::new(&["Classic", "Sunset", "Night Drive", "Miami", "Custom"]);
-        let scheme_dropdown = DropDown::new(Some(scheme_list), None::<gtk4::Expression>);
+        let color_scheme_dropdown = DropDown::new(Some(scheme_list), None::<gtk4::Expression>);
         let scheme_idx = match &config.borrow().frame.color_scheme {
             SynthwaveColorScheme::Classic => 0,
             SynthwaveColorScheme::Sunset => 1,
@@ -218,104 +228,278 @@ impl SynthwaveConfigWidget {
             SynthwaveColorScheme::Miami => 3,
             SynthwaveColorScheme::Custom { .. } => 4,
         };
-        scheme_dropdown.set_selected(scheme_idx);
-        scheme_dropdown.set_hexpand(true);
-        scheme_box.append(&scheme_dropdown);
+        color_scheme_dropdown.set_selected(scheme_idx);
+        color_scheme_dropdown.set_hexpand(true);
+        scheme_box.append(&color_scheme_dropdown);
         page.append(&scheme_box);
 
-        // Custom colors (shown only when Custom is selected)
-        let custom_colors_box = GtkBox::new(Orientation::Vertical, 6);
-        custom_colors_box.set_margin_top(8);
+        // Theme Colors section
+        let colors_label = Label::new(Some("Theme Colors"));
+        colors_label.set_halign(gtk4::Align::Start);
+        colors_label.add_css_class("heading");
+        colors_label.set_margin_top(8);
+        page.append(&colors_label);
 
-        // Primary color
-        let primary_box = GtkBox::new(Orientation::Horizontal, 6);
-        primary_box.append(&Label::new(Some("Primary:")));
-        let custom_primary = if let SynthwaveColorScheme::Custom { primary, .. } = &config.borrow().frame.color_scheme {
-            *primary
-        } else {
-            Color { r: 0.58, g: 0.0, b: 0.83, a: 1.0 }
-        };
-        let custom_primary_widget = Rc::new(ColorButtonWidget::new(custom_primary));
-        primary_box.append(custom_primary_widget.widget());
-        custom_colors_box.append(&primary_box);
+        // Color 1 (Primary)
+        let color1_box = GtkBox::new(Orientation::Horizontal, 6);
+        color1_box.append(&Label::new(Some("Color 1 (Primary):")));
+        let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
+        color1_box.append(theme_color1_widget.widget());
+        page.append(&color1_box);
 
-        // Secondary color
-        let secondary_box = GtkBox::new(Orientation::Horizontal, 6);
-        secondary_box.append(&Label::new(Some("Secondary:")));
-        let custom_secondary = if let SynthwaveColorScheme::Custom { secondary, .. } = &config.borrow().frame.color_scheme {
-            *secondary
-        } else {
-            Color { r: 1.0, g: 0.08, b: 0.58, a: 1.0 }
-        };
-        let custom_secondary_widget = Rc::new(ColorButtonWidget::new(custom_secondary));
-        secondary_box.append(custom_secondary_widget.widget());
-        custom_colors_box.append(&secondary_box);
+        // Color 2 (Secondary)
+        let color2_box = GtkBox::new(Orientation::Horizontal, 6);
+        color2_box.append(&Label::new(Some("Color 2 (Secondary):")));
+        let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
+        color2_box.append(theme_color2_widget.widget());
+        page.append(&color2_box);
 
-        // Accent color
-        let accent_box = GtkBox::new(Orientation::Horizontal, 6);
-        accent_box.append(&Label::new(Some("Accent:")));
-        let custom_accent = if let SynthwaveColorScheme::Custom { accent, .. } = &config.borrow().frame.color_scheme {
-            *accent
-        } else {
-            Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }
-        };
-        let custom_accent_widget = Rc::new(ColorButtonWidget::new(custom_accent));
-        accent_box.append(custom_accent_widget.widget());
-        custom_colors_box.append(&accent_box);
+        // Color 3 (Accent)
+        let color3_box = GtkBox::new(Orientation::Horizontal, 6);
+        color3_box.append(&Label::new(Some("Color 3 (Accent):")));
+        let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
+        color3_box.append(theme_color3_widget.widget());
+        page.append(&color3_box);
 
-        custom_colors_box.set_visible(scheme_idx == 4);
-        page.append(&custom_colors_box);
+        // Color 4 (Highlight)
+        let color4_box = GtkBox::new(Orientation::Horizontal, 6);
+        color4_box.append(&Label::new(Some("Color 4 (Highlight):")));
+        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
+        color4_box.append(theme_color4_widget.widget());
+        page.append(&color4_box);
 
-        // Connect scheme dropdown
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let custom_box_clone = custom_colors_box.clone();
-        let primary_widget_clone = custom_primary_widget.clone();
-        let secondary_widget_clone = custom_secondary_widget.clone();
-        let accent_widget_clone = custom_accent_widget.clone();
-        scheme_dropdown.connect_selected_notify(move |dropdown| {
+        // Connect color widget callbacks
+        let config_c1 = config.clone();
+        let on_change_c1 = on_change.clone();
+        let preview_c1 = preview.clone();
+        theme_color1_widget.set_on_change(move |color| {
+            config_c1.borrow_mut().frame.theme.color1 = color;
+            Self::queue_redraw(&preview_c1, &on_change_c1);
+        });
+
+        let config_c2 = config.clone();
+        let on_change_c2 = on_change.clone();
+        let preview_c2 = preview.clone();
+        theme_color2_widget.set_on_change(move |color| {
+            config_c2.borrow_mut().frame.theme.color2 = color;
+            Self::queue_redraw(&preview_c2, &on_change_c2);
+        });
+
+        let config_c3 = config.clone();
+        let on_change_c3 = on_change.clone();
+        let preview_c3 = preview.clone();
+        theme_color3_widget.set_on_change(move |color| {
+            config_c3.borrow_mut().frame.theme.color3 = color;
+            Self::queue_redraw(&preview_c3, &on_change_c3);
+        });
+
+        let config_c4 = config.clone();
+        let on_change_c4 = on_change.clone();
+        let preview_c4 = preview.clone();
+        theme_color4_widget.set_on_change(move |color| {
+            config_c4.borrow_mut().frame.theme.color4 = color;
+            Self::queue_redraw(&preview_c4, &on_change_c4);
+        });
+
+        // Connect color scheme dropdown - auto-populate theme colors when preset selected
+        let config_scheme = config.clone();
+        let on_change_scheme = on_change.clone();
+        let preview_scheme = preview.clone();
+        let color1_widget_for_scheme = theme_color1_widget.clone();
+        let color2_widget_for_scheme = theme_color2_widget.clone();
+        let color3_widget_for_scheme = theme_color3_widget.clone();
+        let color4_widget_for_scheme = theme_color4_widget.clone();
+        color_scheme_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
                 return;
             }
-            custom_box_clone.set_visible(selected == 4);
-            config_clone.borrow_mut().frame.color_scheme = match selected {
+
+            // Get colors from the selected scheme
+            let scheme = match selected {
                 0 => SynthwaveColorScheme::Classic,
                 1 => SynthwaveColorScheme::Sunset,
                 2 => SynthwaveColorScheme::NightDrive,
                 3 => SynthwaveColorScheme::Miami,
-                _ => SynthwaveColorScheme::Custom {
-                    primary: primary_widget_clone.color(),
-                    secondary: secondary_widget_clone.color(),
-                    accent: accent_widget_clone.color(),
-                },
+                _ => {
+                    // Custom - don't auto-populate, just set the scheme
+                    let current = config_scheme.borrow();
+                    let primary = current.frame.theme.color1;
+                    let secondary = current.frame.theme.color2;
+                    let accent = current.frame.theme.color3;
+                    drop(current);
+                    config_scheme.borrow_mut().frame.color_scheme = SynthwaveColorScheme::Custom {
+                        primary,
+                        secondary,
+                        accent,
+                    };
+                    Self::queue_redraw(&preview_scheme, &on_change_scheme);
+                    return;
+                }
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+
+            // Auto-populate theme colors from the selected scheme
+            let primary = scheme.primary();
+            let secondary = scheme.secondary();
+            let accent = scheme.accent();
+            let (bg_top, _bg_bottom) = scheme.background_gradient();
+
+            // Update the theme colors
+            {
+                let mut cfg = config_scheme.borrow_mut();
+                cfg.frame.color_scheme = scheme;
+                cfg.frame.theme.color1 = primary;
+                cfg.frame.theme.color2 = secondary;
+                cfg.frame.theme.color3 = accent;
+                cfg.frame.theme.color4 = bg_top; // Use background top color as highlight
+            }
+
+            // Update color widget displays
+            color1_widget_for_scheme.set_color(primary);
+            color2_widget_for_scheme.set_color(secondary);
+            color3_widget_for_scheme.set_color(accent);
+            color4_widget_for_scheme.set_color(bg_top);
+
+            Self::queue_redraw(&preview_scheme, &on_change_scheme);
         });
 
-        // Connect custom color widgets
-        let make_color_callback = |config: Rc<RefCell<SynthwaveDisplayConfig>>, on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>, preview: DrawingArea, primary: Rc<ColorButtonWidget>, secondary: Rc<ColorButtonWidget>, accent: Rc<ColorButtonWidget>| {
-            move |_color: Color| {
-                config.borrow_mut().frame.color_scheme = SynthwaveColorScheme::Custom {
-                    primary: primary.color(),
-                    secondary: secondary.color(),
-                    accent: accent.color(),
-                };
-                Self::queue_redraw(&preview, &on_change);
+        // Theme Gradient section
+        let gradient_label = Label::new(Some("Theme Gradient"));
+        gradient_label.set_halign(gtk4::Align::Start);
+        gradient_label.add_css_class("heading");
+        gradient_label.set_margin_top(12);
+        page.append(&gradient_label);
+
+        let theme_gradient_editor = Rc::new(GradientEditor::new());
+        theme_gradient_editor.set_gradient(&config.borrow().frame.theme.gradient);
+        page.append(theme_gradient_editor.widget());
+
+        let config_grad = config.clone();
+        let on_change_grad = on_change.clone();
+        let preview_grad = preview.clone();
+        let gradient_editor_clone = theme_gradient_editor.clone();
+        theme_gradient_editor.set_on_change(move || {
+            config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient();
+            Self::queue_redraw(&preview_grad, &on_change_grad);
+        });
+
+        // Theme Fonts section
+        let fonts_label = Label::new(Some("Theme Fonts"));
+        fonts_label.set_halign(gtk4::Align::Start);
+        fonts_label.add_css_class("heading");
+        fonts_label.set_margin_top(12);
+        page.append(&fonts_label);
+
+        // Font 1
+        let font1_box = GtkBox::new(Orientation::Horizontal, 6);
+        font1_box.append(&Label::new(Some("Font 1:")));
+        let font1_btn = Button::with_label(&config.borrow().frame.theme.font1_family);
+        font1_btn.set_hexpand(true);
+        font1_box.append(&font1_btn);
+        font1_box.append(&Label::new(Some("Size:")));
+        let font1_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
+        font1_size_spin.set_value(config.borrow().frame.theme.font1_size);
+        font1_box.append(&font1_size_spin);
+        page.append(&font1_box);
+
+        // Font 1 button click handler
+        let config_f1 = config.clone();
+        let on_change_f1 = on_change.clone();
+        let preview_f1 = preview.clone();
+        let font1_btn_clone = font1_btn.clone();
+        font1_btn.connect_clicked(move |button| {
+            let config_for_cb = config_f1.clone();
+            let on_change_for_cb = on_change_f1.clone();
+            let preview_for_cb = preview_f1.clone();
+            let font_btn_for_cb = font1_btn_clone.clone();
+            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                let current_font = config_for_cb.borrow().frame.theme.font1_family.clone();
+                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+                shared_font_dialog().choose_font(
+                    Some(&window),
+                    Some(&font_desc),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            let family = font_desc.family()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "sans-serif".to_string());
+                            config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
+                            font_btn_for_cb.set_label(&family);
+                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                        }
+                    },
+                );
             }
-        };
+        });
 
-        custom_primary_widget.set_on_change(make_color_callback(config.clone(), on_change.clone(), preview.clone(), custom_primary_widget.clone(), custom_secondary_widget.clone(), custom_accent_widget.clone()));
-        custom_secondary_widget.set_on_change(make_color_callback(config.clone(), on_change.clone(), preview.clone(), custom_primary_widget.clone(), custom_secondary_widget.clone(), custom_accent_widget.clone()));
-        custom_accent_widget.set_on_change(make_color_callback(config.clone(), on_change.clone(), preview.clone(), custom_primary_widget.clone(), custom_secondary_widget.clone(), custom_accent_widget.clone()));
+        // Font 1 size spin handler
+        let config_f1s = config.clone();
+        let on_change_f1s = on_change.clone();
+        let preview_f1s = preview.clone();
+        font1_size_spin.connect_value_changed(move |spin| {
+            config_f1s.borrow_mut().frame.theme.font1_size = spin.value();
+            Self::queue_redraw(&preview_f1s, &on_change_f1s);
+        });
 
-        // Neon glow intensity
-        let glow_label = Label::new(Some("Effects"));
-        glow_label.set_halign(gtk4::Align::Start);
-        glow_label.add_css_class("heading");
-        glow_label.set_margin_top(12);
-        page.append(&glow_label);
+        // Font 2
+        let font2_box = GtkBox::new(Orientation::Horizontal, 6);
+        font2_box.append(&Label::new(Some("Font 2:")));
+        let font2_btn = Button::with_label(&config.borrow().frame.theme.font2_family);
+        font2_btn.set_hexpand(true);
+        font2_box.append(&font2_btn);
+        font2_box.append(&Label::new(Some("Size:")));
+        let font2_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
+        font2_size_spin.set_value(config.borrow().frame.theme.font2_size);
+        font2_box.append(&font2_size_spin);
+        page.append(&font2_box);
+
+        // Font 2 button click handler
+        let config_f2 = config.clone();
+        let on_change_f2 = on_change.clone();
+        let preview_f2 = preview.clone();
+        let font2_btn_clone = font2_btn.clone();
+        font2_btn.connect_clicked(move |button| {
+            let config_for_cb = config_f2.clone();
+            let on_change_for_cb = on_change_f2.clone();
+            let preview_for_cb = preview_f2.clone();
+            let font_btn_for_cb = font2_btn_clone.clone();
+            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                let current_font = config_for_cb.borrow().frame.theme.font2_family.clone();
+                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+                shared_font_dialog().choose_font(
+                    Some(&window),
+                    Some(&font_desc),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            let family = font_desc.family()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "sans-serif".to_string());
+                            config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
+                            font_btn_for_cb.set_label(&family);
+                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                        }
+                    },
+                );
+            }
+        });
+
+        // Font 2 size spin handler
+        let config_f2s = config.clone();
+        let on_change_f2s = on_change.clone();
+        let preview_f2s = preview.clone();
+        font2_size_spin.connect_value_changed(move |spin| {
+            config_f2s.borrow_mut().frame.theme.font2_size = spin.value();
+            Self::queue_redraw(&preview_f2s, &on_change_f2s);
+        });
+
+        // Effects section (Neon glow - Synthwave-specific)
+        let effects_label = Label::new(Some("Effects"));
+        effects_label.set_halign(gtk4::Align::Start);
+        effects_label.add_css_class("heading");
+        effects_label.set_margin_top(12);
+        page.append(&effects_label);
 
         let glow_box = GtkBox::new(Orientation::Horizontal, 6);
         glow_box.append(&Label::new(Some("Neon Glow:")));
@@ -325,22 +509,27 @@ impl SynthwaveConfigWidget {
         glow_scale.set_draw_value(true);
         glow_box.append(&glow_scale);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
+        let config_glow = config.clone();
+        let on_change_glow = on_change.clone();
+        let preview_glow = preview.clone();
         glow_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.neon_glow_intensity = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            config_glow.borrow_mut().frame.neon_glow_intensity = scale.value();
+            Self::queue_redraw(&preview_glow, &on_change_glow);
         });
         page.append(&glow_box);
 
         // Store widget refs
-        *colors_widgets_out.borrow_mut() = Some(ColorsWidgets {
-            scheme_dropdown,
-            custom_primary_widget,
-            custom_secondary_widget,
-            custom_accent_widget,
-            custom_colors_box,
+        *theme_widgets_out.borrow_mut() = Some(ThemeWidgets {
+            color_scheme_dropdown,
+            theme_color1_widget,
+            theme_color2_widget,
+            theme_color3_widget,
+            theme_color4_widget,
+            theme_gradient_editor,
+            font1_btn,
+            font1_size_spin,
+            font2_btn,
+            font2_size_spin,
             glow_scale,
         });
 
@@ -705,68 +894,46 @@ impl SynthwaveConfigWidget {
         });
         page.append(&height_box);
 
-        // Font section
+        // Font section with theme selector
         let font_label = Label::new(Some("Font"));
         font_label.set_halign(gtk4::Align::Start);
         font_label.add_css_class("heading");
         font_label.set_margin_top(12);
         page.append(&font_label);
 
-        // Font button
+        // Create ThemeFontSelector with current font as custom
+        let current_font = config.borrow().frame.header_font.clone();
+        let current_size = config.borrow().frame.header_font_size;
+        let header_font_selector = Rc::new(ThemeFontSelector::new(
+            FontSource::Custom { family: current_font, size: current_size }
+        ));
+
+        // Set theme config so selector can show theme font names
+        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
-        let header_font_btn = Button::with_label(&config.borrow().frame.header_font);
-        header_font_btn.set_hexpand(true);
-        font_box.append(&header_font_btn);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let btn_clone = header_font_btn.clone();
-        header_font_btn.connect_clicked(move |button| {
-            let config_for_cb = config_clone.clone();
-            let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
-            let font_btn_for_cb = btn_clone.clone();
-            let current_font = config_for_cb.borrow().frame.header_font.clone();
-
-            if let Some(root) = button.root() {
-                if let Some(window) = root.downcast_ref::<gtk4::Window>() {
-                    let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-                    shared_font_dialog().choose_font(
-                        Some(window),
-                        Some(&font_desc),
-                        gtk4::gio::Cancellable::NONE,
-                        move |result| {
-                            if let Ok(font_desc) = result {
-                                let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "sans-serif".to_string());
-                                config_for_cb.borrow_mut().frame.header_font = family.clone();
-                                font_btn_for_cb.set_label(&family);
-                                Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                            }
-                        },
-                    );
-                }
-            }
-        });
+        font_box.append(header_font_selector.widget());
         page.append(&font_box);
 
-        // Font size
-        let size_box = GtkBox::new(Orientation::Horizontal, 6);
-        size_box.append(&Label::new(Some("Font Size:")));
-        let header_font_size_spin = SpinButton::with_range(10.0, 32.0, 1.0);
-        header_font_size_spin.set_value(config.borrow().frame.header_font_size);
-        header_font_size_spin.set_hexpand(true);
-        size_box.append(&header_font_size_spin);
-
+        // Connect font selector callback
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        header_font_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_font_size = spin.value();
+        header_font_selector.set_on_change(move |source| {
+            let (family, size) = match &source {
+                FontSource::Theme { index } => {
+                    let cfg = config_clone.borrow();
+                    cfg.frame.theme.get_font(*index)
+                }
+                FontSource::Custom { family, size } => (family.clone(), *size),
+            };
+            {
+                let mut cfg = config_clone.borrow_mut();
+                cfg.frame.header_font = family;
+                cfg.frame.header_font_size = size;
+            }
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&size_box);
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
@@ -774,8 +941,7 @@ impl SynthwaveConfigWidget {
             header_text_entry,
             header_style_dropdown,
             header_height_spin,
-            header_font_btn,
-            header_font_size_spin,
+            header_font_selector,
         });
 
         page
@@ -1612,18 +1778,24 @@ impl SynthwaveConfigWidget {
 
     pub fn set_config(&self, config: SynthwaveDisplayConfig) {
         // Extract all values we need BEFORE updating the config
-        let scheme_idx = match &config.frame.color_scheme {
+        // Color scheme
+        let color_scheme_idx = match &config.frame.color_scheme {
             SynthwaveColorScheme::Classic => 0,
             SynthwaveColorScheme::Sunset => 1,
             SynthwaveColorScheme::NightDrive => 2,
             SynthwaveColorScheme::Miami => 3,
             SynthwaveColorScheme::Custom { .. } => 4,
         };
-        let (custom_primary, custom_secondary, custom_accent) = if let SynthwaveColorScheme::Custom { primary, secondary, accent } = &config.frame.color_scheme {
-            (Some(*primary), Some(*secondary), Some(*accent))
-        } else {
-            (None, None, None)
-        };
+        // Theme values
+        let theme_color1 = config.frame.theme.color1;
+        let theme_color2 = config.frame.theme.color2;
+        let theme_color3 = config.frame.theme.color3;
+        let theme_color4 = config.frame.theme.color4;
+        let theme_gradient = config.frame.theme.gradient.clone();
+        let theme_font1_family = config.frame.theme.font1_family.clone();
+        let theme_font1_size = config.frame.theme.font1_size;
+        let theme_font2_family = config.frame.theme.font2_family.clone();
+        let theme_font2_size = config.frame.theme.font2_size;
         let neon_glow = config.frame.neon_glow_intensity;
 
         let frame_style_idx = match config.frame.frame_style {
@@ -1687,18 +1859,17 @@ impl SynthwaveConfigWidget {
         *self.config.borrow_mut() = config;
 
         // Update UI widgets
-        if let Some(ref widgets) = *self.colors_widgets.borrow() {
-            widgets.scheme_dropdown.set_selected(scheme_idx);
-            widgets.custom_colors_box.set_visible(scheme_idx == 4);
-            if let Some(c) = custom_primary {
-                widgets.custom_primary_widget.set_color(c);
-            }
-            if let Some(c) = custom_secondary {
-                widgets.custom_secondary_widget.set_color(c);
-            }
-            if let Some(c) = custom_accent {
-                widgets.custom_accent_widget.set_color(c);
-            }
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.color_scheme_dropdown.set_selected(color_scheme_idx);
+            widgets.theme_color1_widget.set_color(theme_color1);
+            widgets.theme_color2_widget.set_color(theme_color2);
+            widgets.theme_color3_widget.set_color(theme_color3);
+            widgets.theme_color4_widget.set_color(theme_color4);
+            widgets.theme_gradient_editor.set_gradient(&theme_gradient);
+            widgets.font1_btn.set_label(&theme_font1_family);
+            widgets.font1_size_spin.set_value(theme_font1_size);
+            widgets.font2_btn.set_label(&theme_font2_family);
+            widgets.font2_size_spin.set_value(theme_font2_size);
             widgets.glow_scale.set_value(neon_glow);
         }
 
@@ -1724,8 +1895,11 @@ impl SynthwaveConfigWidget {
             widgets.header_text_entry.set_text(&header_text);
             widgets.header_style_dropdown.set_selected(header_style_idx);
             widgets.header_height_spin.set_value(header_height);
-            widgets.header_font_btn.set_label(&header_font);
-            widgets.header_font_size_spin.set_value(header_font_size);
+            // Update font selector with current font as custom
+            widgets.header_font_selector.set_source(FontSource::Custom {
+                family: header_font,
+                size: header_font_size,
+            });
         }
 
         if let Some(ref widgets) = *self.layout_widgets.borrow() {
