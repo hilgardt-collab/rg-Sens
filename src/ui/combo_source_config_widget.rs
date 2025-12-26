@@ -645,7 +645,13 @@ impl ComboSourceConfigWidget {
             "memory" => Some(SourceConfigWidgetType::Memory(MemorySourceConfigWidget::new())),
             "system_temp" => Some(SourceConfigWidgetType::SystemTemp(SystemTempConfigWidget::new())),
             "fan_speed" => Some(SourceConfigWidgetType::FanSpeed(FanSpeedConfigWidget::new())),
-            "disk" => Some(SourceConfigWidgetType::Disk(DiskSourceConfigWidget::new())),
+            "disk" => {
+                let disk_widget = DiskSourceConfigWidget::new();
+                // Populate with available disks
+                let disks = crate::sources::DiskSource::get_available_disks();
+                disk_widget.set_available_disks(&disks);
+                Some(SourceConfigWidgetType::Disk(disk_widget))
+            }
             "clock" => Some(SourceConfigWidgetType::Clock(ClockSourceConfigWidget::new())),
             "static_text" => Some(SourceConfigWidgetType::StaticText(StaticTextConfigWidget::new())),
             "test" => Some(SourceConfigWidgetType::Test(TestSourceConfigWidget::new())),
