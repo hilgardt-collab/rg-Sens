@@ -20,7 +20,7 @@ use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATI
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::synthwave_display::{
-    render_synthwave_frame, calculate_group_layouts, draw_group_dividers,
+    render_synthwave_frame, render_scanline_overlay, calculate_group_layouts, draw_group_dividers,
     get_synthwave_colors, SynthwaveFrameConfig,
 };
 use crate::ui::lcars_display::{
@@ -422,6 +422,10 @@ impl Displayer for SynthwaveDisplayer {
                 }
 
                 cr.restore().ok();
+
+                // Render scanline overlay effect (on top of everything)
+                render_scanline_overlay(cr, &data.config.frame, w, h, data.scanline_offset);
+
                 data.transform.restore(cr);
             }
         });

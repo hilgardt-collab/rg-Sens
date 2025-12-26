@@ -146,6 +146,7 @@ pub use fighter_hud_config_widget::FighterHudConfigWidget;
 pub use synthwave_display::{
     SynthwaveFrameConfig, SynthwaveColorScheme, SynthwaveFrameStyle,
     GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle, render_synthwave_frame,
+    render_scanline_overlay,
     calculate_group_layouts as synthwave_calculate_group_layouts,
     draw_group_dividers as synthwave_draw_group_dividers,
 };

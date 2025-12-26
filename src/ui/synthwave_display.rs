@@ -369,24 +369,16 @@ fn draw_sun(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f64
     for i in 0..stripe_count {
         if i % 2 == 0 {
             let y_top = sun_y - sun_radius + i as f64 * stripe_height;
-            let y_bottom = y_top + stripe_height;
 
-            // Calculate intersection with circle for clipping
-            let half_height = sun_radius;
-            let rel_y_top = (y_top - sun_y).abs();
-            let rel_y_bottom = (y_bottom - sun_y).abs();
+            // Draw stripe clipped to sun circle
+            cr.set_source_rgba(secondary.r, secondary.g, secondary.b, 1.0);
+            cr.arc(sun_x, sun_y, sun_radius, 0.0, std::f64::consts::TAU);
+            cr.clip();
 
-            if rel_y_top < half_height {
-                cr.set_source_rgba(secondary.r, secondary.g, secondary.b, 1.0);
-                cr.arc(sun_x, sun_y, sun_radius, 0.0, std::f64::consts::TAU);
-                cr.clip();
+            cr.rectangle(sun_x - sun_radius, y_top, sun_radius * 2.0, stripe_height);
+            cr.fill().ok();
 
-                cr.rectangle(sun_x - sun_radius, y_top, sun_radius * 2.0, stripe_height);
-                cr.fill().ok();
-
-                cr.reset_clip();
-            }
-            let _ = rel_y_bottom; // Avoid warning
+            cr.reset_clip();
         }
     }
 
@@ -407,28 +399,51 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
 
     match config.grid_style {
         GridStyle::Perspective => {
-            // Horizontal grid lines with perspective
-            let line_count = 12;
+            // Calculate aspect ratio to adjust grid proportions
+            let aspect_ratio = width / height;
+            let grid_height = height - horizon_y;
+
+            // For tall panels, use width-based spacing to maintain visual consistency
+            // For wide panels, use height-based spacing
+            let base_spacing = if aspect_ratio < 1.0 {
+                // Tall panel: base spacing on width
+                width * 0.08
+            } else {
+                // Wide panel: base spacing on grid height
+                grid_height * 0.1
+            };
+
+            // Horizontal grid lines with perspective (from horizon to bottom)
+            // Use consistent visual spacing that works for any aspect ratio
+            let min_spacing = base_spacing * 0.15; // Minimum spacing at horizon
+            let max_spacing = base_spacing * 1.5;  // Maximum spacing at bottom
             let perspective = config.grid_perspective;
 
-            for i in 0..line_count {
-                let t = i as f64 / line_count as f64;
-                // Exponential spacing for perspective effect
-                let y = horizon_y + (height - horizon_y) * (t * t * perspective + t * (1.0 - perspective));
-
+            let mut y = horizon_y + min_spacing;
+            let mut spacing = min_spacing;
+            while y < height {
                 // Fade lines closer to horizon
-                let alpha = (1.0 - t * 0.5) * 0.6;
+                let t = (y - horizon_y) / grid_height;
+                let alpha = (0.2 + t * 0.4).min(0.6);
                 cr.set_source_rgba(accent.r, accent.g, accent.b, alpha);
 
                 cr.move_to(0.0, y);
                 cr.line_to(width, y);
                 cr.stroke().ok();
+
+                // Increase spacing as we move away from horizon (perspective effect)
+                spacing = (spacing * (1.0 + 0.15 * perspective)).min(max_spacing);
+                y += spacing;
             }
 
             // Vertical grid lines converging at vanishing point
             let center_x = width / 2.0;
-            let vanishing_y = horizon_y - height * 0.2; // Above horizon
-            let vertical_count = 20;
+            // Place vanishing point at a fixed visual distance above horizon
+            let vanishing_distance = width * 0.3; // Based on width for consistency
+            let vanishing_y = horizon_y - vanishing_distance;
+
+            // Adjust vertical line count based on width
+            let vertical_count = ((width / 25.0) as usize).clamp(8, 30);
 
             for i in 0..vertical_count {
                 let x_bottom = (i as f64 / (vertical_count - 1) as f64) * width;
@@ -436,6 +451,12 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
                 // Line from bottom to vanishing point, clipped at horizon
                 let dx = center_x - x_bottom;
                 let dy = vanishing_y - height;
+
+                // Avoid division issues
+                if dy.abs() < 0.001 {
+                    continue;
+                }
+
                 let t_horizon = (horizon_y - height) / dy;
                 let x_horizon = x_bottom + dx * t_horizon;
 
@@ -862,6 +883,51 @@ fn draw_divider(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, len
 /// Get colors for content rendering
 pub fn get_synthwave_colors(config: &SynthwaveFrameConfig) -> (Color, Color, Color) {
     (config.color_scheme.primary(), config.color_scheme.secondary(), config.color_scheme.accent())
+}
+
+/// Render animated scanline overlay effect (CRT monitor style)
+///
+/// `scanline_offset` should be a value that increases over time (0.0 to 100.0, wrapping)
+/// to create the animated scrolling effect.
+pub fn render_scanline_overlay(
+    cr: &Context,
+    config: &SynthwaveFrameConfig,
+    width: f64,
+    height: f64,
+    scanline_offset: f64,
+) {
+    if !config.scanline_effect {
+        return;
+    }
+
+    cr.save().ok();
+
+    let accent = config.color_scheme.accent();
+
+    // Draw moving scanline band (bright line that moves down the screen)
+    let band_height = 3.0;
+    let band_y = (scanline_offset / 100.0 * height) % height;
+
+    // Create gradient for the scanline band (fades at edges)
+    let gradient = cairo::LinearGradient::new(0.0, band_y - band_height, 0.0, band_y + band_height);
+    gradient.add_color_stop_rgba(0.0, accent.r, accent.g, accent.b, 0.0);
+    gradient.add_color_stop_rgba(0.5, accent.r, accent.g, accent.b, 0.15);
+    gradient.add_color_stop_rgba(1.0, accent.r, accent.g, accent.b, 0.0);
+
+    cr.set_source(&gradient).ok();
+    cr.rectangle(0.0, band_y - band_height, width, band_height * 2.0);
+    cr.fill().ok();
+
+    // Draw subtle static scanlines (every other pixel row)
+    cr.set_source_rgba(0.0, 0.0, 0.0, 0.08);
+    let mut y = 0.0;
+    while y < height {
+        cr.rectangle(0.0, y, width, 1.0);
+        y += 2.0;
+    }
+    cr.fill().ok();
+
+    cr.restore().ok();
 }
 
 /// Render the complete Synthwave frame
