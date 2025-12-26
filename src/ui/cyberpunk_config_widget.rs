@@ -1469,6 +1469,7 @@ impl CyberpunkConfigWidget {
     }
 
     /// Default bar config with cyberpunk colors (cyan/magenta gradient)
+    #[allow(clippy::field_reassign_with_default)]
     fn default_bar_config_cyberpunk() -> crate::ui::BarDisplayConfig {
         use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
         use crate::ui::background::{Color, ColorStop};
@@ -1499,6 +1500,7 @@ impl CyberpunkConfigWidget {
     }
 
     /// Default graph config with cyberpunk colors
+    #[allow(clippy::field_reassign_with_default)]
     fn default_graph_config_cyberpunk() -> crate::ui::GraphDisplayConfig {
         use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
         use crate::ui::background::Color;
@@ -1522,6 +1524,7 @@ impl CyberpunkConfigWidget {
     }
 
     /// Default core bars config with cyberpunk colors
+    #[allow(clippy::field_reassign_with_default)]
     fn default_core_bars_config_cyberpunk() -> crate::ui::CoreBarsConfig {
         use crate::ui::core_bars_display::CoreBarsConfig;
         use crate::ui::bar_display::{BarStyle, BarFillType, BarBackgroundType, BorderConfig};
@@ -1552,6 +1555,7 @@ impl CyberpunkConfigWidget {
     }
 
     /// Default arc config with cyberpunk colors
+    #[allow(clippy::field_reassign_with_default)]
     fn default_arc_config_cyberpunk() -> crate::ui::ArcDisplayConfig {
         use crate::ui::arc_display::ArcDisplayConfig;
         use crate::ui::background::{Color, ColorStop};
@@ -1572,6 +1576,7 @@ impl CyberpunkConfigWidget {
     }
 
     /// Default speedometer config with cyberpunk colors
+    #[allow(clippy::field_reassign_with_default)]
     fn default_speedometer_config_cyberpunk() -> crate::ui::SpeedometerConfig {
         use crate::ui::speedometer_display::SpeedometerConfig;
         use crate::ui::background::{Color, ColorStop};

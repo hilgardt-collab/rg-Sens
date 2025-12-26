@@ -1467,6 +1467,7 @@ impl RetroTerminalConfigWidget {
     }
 
     /// Default bar config with terminal/phosphor colors
+    #[allow(clippy::field_reassign_with_default)]
     fn default_bar_config_terminal() -> crate::ui::BarDisplayConfig {
         use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
 
@@ -1493,6 +1494,7 @@ impl RetroTerminalConfigWidget {
     }
 
     /// Default graph config with terminal colors
+    #[allow(clippy::field_reassign_with_default)]
     fn default_graph_config_terminal() -> crate::ui::GraphDisplayConfig {
         use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
 

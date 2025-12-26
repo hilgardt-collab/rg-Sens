@@ -669,7 +669,7 @@ impl Displayer for SynthwaveDisplayer {
                 display_data.config.frame.group_count,
                 display_data.config.frame.content_items.len()
             );
-            for (slot_name, _item_cfg) in &display_data.config.frame.content_items {
+            for slot_name in display_data.config.frame.content_items.keys() {
                 log::debug!("  saving content_item '{}'", slot_name);
             }
             Some(crate::core::DisplayerConfig::Synthwave(display_data.config.clone()))
