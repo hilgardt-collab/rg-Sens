@@ -1759,25 +1759,26 @@ impl SynthwaveConfigWidget {
             }
         }
 
+        // Convert to sorted vec (same approach as LCARS)
+        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
+        group_nums.sort();
+        let group_counts: Vec<usize> = group_nums.iter()
+            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
+            .collect();
+
         // Update config with group info
         {
             let mut cfg = self.config.borrow_mut();
-            let group_count = group_item_counts.len().max(1);
-            cfg.frame.group_count = group_count;
-
-            // Convert to Vec
-            let mut counts_vec: Vec<usize> = vec![0; group_count];
-            for (group_idx, max_item) in group_item_counts {
-                if group_idx > 0 && group_idx <= group_count {
-                    counts_vec[group_idx - 1] = max_item as usize;
-                }
-            }
-            cfg.frame.group_item_counts = counts_vec;
+            let new_group_count = group_nums.len().max(1);
+            cfg.frame.group_count = new_group_count;
+            cfg.frame.group_item_counts = group_counts;
 
             // Ensure weights are set
-            while cfg.frame.group_size_weights.len() < group_count {
+            while cfg.frame.group_size_weights.len() < new_group_count {
                 cfg.frame.group_size_weights.push(1.0);
             }
+            // Trim if we have fewer groups now
+            cfg.frame.group_size_weights.truncate(new_group_count);
         }
 
         *self.source_summaries.borrow_mut() = summaries;

@@ -1666,6 +1666,14 @@ impl CyberpunkConfigWidget {
     }
 
     pub fn set_config(&self, config: &CyberpunkDisplayConfig) {
+        log::debug!(
+            "CyberpunkConfigWidget::set_config - loading {} groups, {} content_items",
+            config.frame.group_count,
+            config.frame.content_items.len()
+        );
+        for (slot_name, item_cfg) in &config.frame.content_items {
+            log::debug!("  loading content_item '{}': display_as={:?}", slot_name, item_cfg.display_as);
+        }
         *self.config.borrow_mut() = config.clone();
 
         // Update Frame widgets
@@ -1756,6 +1764,13 @@ impl CyberpunkConfigWidget {
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
+        log::debug!(
+            "CyberpunkConfigWidget::set_source_summaries - received {} summaries",
+            summaries.len()
+        );
+        for (slot_name, _, group_num, item_idx) in &summaries {
+            log::debug!("  summary: slot='{}', group={}, item={}", slot_name, group_num, item_idx);
+        }
         // Extract group configuration from summaries
         let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {

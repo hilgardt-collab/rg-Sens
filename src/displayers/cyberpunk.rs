@@ -581,10 +581,20 @@ impl Displayer for CyberpunkDisplayer {
         // Check for full cyberpunk_config first
         if let Some(cyberpunk_config_value) = config.get("cyberpunk_config") {
             if let Ok(cyberpunk_config) = serde_json::from_value::<CyberpunkDisplayConfig>(cyberpunk_config_value.clone()) {
+                log::debug!(
+                    "CyberpunkDisplayer::apply_config - loaded {} groups, {} content_items",
+                    cyberpunk_config.frame.group_count,
+                    cyberpunk_config.frame.content_items.len()
+                );
+                for (slot_name, item_cfg) in &cyberpunk_config.frame.content_items {
+                    log::debug!("  content_item '{}': display_as={:?}", slot_name, item_cfg.display_as);
+                }
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = cyberpunk_config;
                 }
                 return Ok(());
+            } else {
+                log::warn!("CyberpunkDisplayer::apply_config - failed to deserialize cyberpunk_config");
             }
         }
 
@@ -614,6 +624,14 @@ impl Displayer for CyberpunkDisplayer {
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         // Use try_lock to avoid blocking the GTK main thread
         if let Ok(display_data) = self.data.try_lock() {
+            log::debug!(
+                "CyberpunkDisplayer::get_typed_config - saving {} groups, {} content_items",
+                display_data.config.frame.group_count,
+                display_data.config.frame.content_items.len()
+            );
+            for (slot_name, _item_cfg) in &display_data.config.frame.content_items {
+                log::debug!("  saving content_item '{}'", slot_name);
+            }
             Some(crate::core::DisplayerConfig::Cyberpunk(display_data.config.clone()))
         } else {
             None

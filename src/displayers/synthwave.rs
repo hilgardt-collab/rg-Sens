@@ -617,6 +617,14 @@ impl Displayer for SynthwaveDisplayer {
         // Check for full synthwave_config first
         if let Some(config_value) = config.get("synthwave_config") {
             if let Ok(synthwave_config) = serde_json::from_value::<SynthwaveDisplayConfig>(config_value.clone()) {
+                log::debug!(
+                    "SynthwaveDisplayer::apply_config - loaded {} groups, {} content_items",
+                    synthwave_config.frame.group_count,
+                    synthwave_config.frame.content_items.len()
+                );
+                for (slot_name, item_cfg) in &synthwave_config.frame.content_items {
+                    log::debug!("  content_item '{}': display_as={:?}", slot_name, item_cfg.display_as);
+                }
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = synthwave_config;
                     // Clear stale animation data when config changes
@@ -626,6 +634,8 @@ impl Displayer for SynthwaveDisplayer {
                     display_data.dirty = true;
                 }
                 return Ok(());
+            } else {
+                log::warn!("SynthwaveDisplayer::apply_config - failed to deserialize synthwave_config");
             }
         }
 
@@ -654,6 +664,14 @@ impl Displayer for SynthwaveDisplayer {
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         // Use try_lock to avoid blocking the GTK main thread
         if let Ok(display_data) = self.data.try_lock() {
+            log::debug!(
+                "SynthwaveDisplayer::get_typed_config - saving {} groups, {} content_items",
+                display_data.config.frame.group_count,
+                display_data.config.frame.content_items.len()
+            );
+            for (slot_name, _item_cfg) in &display_data.config.frame.content_items {
+                log::debug!("  saving content_item '{}'", slot_name);
+            }
             Some(crate::core::DisplayerConfig::Synthwave(display_data.config.clone()))
         } else {
             None
