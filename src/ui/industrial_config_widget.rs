@@ -124,6 +124,7 @@ pub struct IndustrialConfigWidget {
     animation_widgets: Rc<RefCell<Option<AnimationWidgets>>>,
     #[allow(dead_code)]
     theme_widgets: Rc<RefCell<Option<ThemeWidgets>>>,
+    #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
 }
 
@@ -159,6 +160,10 @@ impl IndustrialConfigWidget {
             let _ = render_industrial_frame(cr, &cfg.frame, width as f64, height as f64);
         });
 
+        // Theme reference section - placed under preview for easy access from all tabs
+        let (theme_ref_section, main_theme_refresh_cb) = Self::create_theme_reference_section(&config);
+        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
@@ -193,7 +198,7 @@ impl IndustrialConfigWidget {
 
         // Tab 8: Content
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 9: Animation
@@ -201,6 +206,7 @@ impl IndustrialConfigWidget {
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
         container.append(&preview);
+        container.append(&theme_ref_section);
         container.append(&notebook);
 
         Self {
@@ -1616,7 +1622,6 @@ impl IndustrialConfigWidget {
         content_notebook: &Rc<RefCell<Notebook>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1636,7 +1641,7 @@ impl IndustrialConfigWidget {
         page.append(&scrolled);
 
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields);
 
         page
     }
@@ -1648,15 +1653,13 @@ impl IndustrialConfigWidget {
         content_notebook: &Rc<RefCell<Notebook>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) {
         let notebook = content_notebook.borrow();
 
-        // Clear existing tabs and theme refreshers
+        // Clear existing tabs
         while notebook.n_pages() > 0 {
             notebook.remove_page(Some(0));
         }
-        theme_ref_refreshers.borrow_mut().clear();
 
         let summaries = source_summaries.borrow();
 
@@ -1699,8 +1702,7 @@ impl IndustrialConfigWidget {
 
                 for (slot_name, summary, item_idx) in sorted_items {
                     let tab_label = format!("Item {} : {}", item_idx, summary);
-                    let (tab_box, theme_refresh_cb) = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
-                    theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
+                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
                     items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
                 }
 
@@ -1716,7 +1718,7 @@ impl IndustrialConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-    ) -> (GtkBox, Rc<dyn Fn()>) {
+    ) -> GtkBox {
         // Ensure this slot exists in content_items
         {
             let mut cfg = config.borrow_mut();
@@ -1763,10 +1765,6 @@ impl IndustrialConfigWidget {
         type_dropdown.set_selected(type_idx);
         type_box.append(&type_dropdown);
         inner_box.append(&type_box);
-
-        // Theme reference section (shows theme colors, gradient, fonts with copy buttons)
-        let (theme_ref_section, theme_refresh_cb) = Self::create_theme_reference_section(config);
-        inner_box.append(&theme_ref_section);
 
         // Auto height checkbox
         let auto_height_check = CheckButton::with_label("Auto-adjust height");
@@ -2154,7 +2152,7 @@ impl IndustrialConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        (tab, theme_refresh_cb)
+        tab
     }
 
     /// Default bar config with industrial/gauge colors
@@ -2386,7 +2384,6 @@ impl IndustrialConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
-            &self.theme_ref_refreshers,
         );
 
         self.preview.queue_draw();
@@ -2440,7 +2437,6 @@ impl IndustrialConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
-            &self.theme_ref_refreshers,
         );
 
         // Notify that config has changed so displayer gets updated
@@ -2460,7 +2456,6 @@ impl IndustrialConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
-            &self.theme_ref_refreshers,
         );
     }
 }
