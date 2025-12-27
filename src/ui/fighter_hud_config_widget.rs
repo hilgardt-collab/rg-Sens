@@ -2060,6 +2060,20 @@ impl FighterHudConfigWidget {
             widgets.scan_line_check.set_active(scan_line_effect);
         }
 
+        // Update Theme widgets (fonts and colors)
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            let cfg = self.config.borrow();
+            widgets.theme_color1_widget.set_color(cfg.frame.theme.color1);
+            widgets.theme_color2_widget.set_color(cfg.frame.theme.color2);
+            widgets.theme_color3_widget.set_color(cfg.frame.theme.color3);
+            widgets.theme_color4_widget.set_color(cfg.frame.theme.color4);
+            widgets.theme_gradient_editor.set_gradient(&cfg.frame.theme.gradient);
+            widgets.font1_btn.set_label(&cfg.frame.theme.font1_family);
+            widgets.font1_size_spin.set_value(cfg.frame.theme.font1_size);
+            widgets.font2_btn.set_label(&cfg.frame.theme.font2_family);
+            widgets.font2_size_spin.set_value(cfg.frame.theme.font2_size);
+        }
+
         // Rebuild content tabs to update theme reference sections
         Self::rebuild_content_tabs(
             &self.config,

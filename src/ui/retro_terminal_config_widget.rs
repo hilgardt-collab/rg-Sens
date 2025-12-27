@@ -2193,6 +2193,19 @@ impl RetroTerminalConfigWidget {
             widgets.typewriter_check.set_active(config.frame.typewriter_effect);
         }
 
+        // Update Theme widgets (fonts and colors)
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.theme_color1_widget.set_color(config.frame.theme.color1);
+            widgets.theme_color2_widget.set_color(config.frame.theme.color2);
+            widgets.theme_color3_widget.set_color(config.frame.theme.color3);
+            widgets.theme_color4_widget.set_color(config.frame.theme.color4);
+            widgets.theme_gradient_editor.set_gradient(&config.frame.theme.gradient);
+            widgets.font1_btn.set_label(&config.frame.theme.font1_family);
+            widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
+            widgets.font2_btn.set_label(&config.frame.theme.font2_family);
+            widgets.font2_size_spin.set_value(config.frame.theme.font2_size);
+        }
+
         // Rebuild content tabs
         Self::rebuild_content_tabs(
             &self.config,

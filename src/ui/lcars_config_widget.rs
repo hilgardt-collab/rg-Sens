@@ -3075,6 +3075,19 @@ impl LcarsConfigWidget {
             widgets.speed_scale.set_value(new_config.animation_speed);
         }
 
+        // Update theme widgets (fonts and colors)
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.theme_color1_widget.set_color(new_config.frame.theme.color1);
+            widgets.theme_color2_widget.set_color(new_config.frame.theme.color2);
+            widgets.theme_color3_widget.set_color(new_config.frame.theme.color3);
+            widgets.theme_color4_widget.set_color(new_config.frame.theme.color4);
+            widgets.theme_gradient_editor.set_gradient(&new_config.frame.theme.gradient);
+            widgets.font1_btn.set_label(&new_config.frame.theme.font1_family);
+            widgets.font1_size_spin.set_value(new_config.frame.theme.font1_size);
+            widgets.font2_btn.set_label(&new_config.frame.theme.font2_family);
+            widgets.font2_size_spin.set_value(new_config.frame.theme.font2_size);
+        }
+
         *self.config.borrow_mut() = new_config;
         self.preview.queue_draw();
     }
