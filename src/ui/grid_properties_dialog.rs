@@ -6,7 +6,7 @@
 use crate::core::Panel;
 use gtk4::glib::WeakRef;
 use gtk4::prelude::*;
-use gtk4::{DrawingArea, Fixed, Window};
+use gtk4::{DrawingArea, Fixed, ScrolledWindow, Window};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -1811,7 +1811,12 @@ pub(crate) fn show_panel_properties_dialog(
         });
     }
 
-    notebook.append_page(&displayer_tab_box, Some(&Label::new(Some("Display Type"))));
+    // Wrap displayer tab in ScrolledWindow so tall config widgets (like Synthwave) can scroll
+    let displayer_scroll = ScrolledWindow::new();
+    displayer_scroll.set_vexpand(true);
+    displayer_scroll.set_hexpand(true);
+    displayer_scroll.set_child(Some(&displayer_tab_box));
+    notebook.append_page(&displayer_scroll, Some(&Label::new(Some("Display Type"))));
 
     // === Tab: Background ===
     let background_tab_box = GtkBox::new(Orientation::Vertical, 12);
