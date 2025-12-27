@@ -12,8 +12,8 @@ use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, ListBox, Orientation,
-    ScrolledWindow, SpinButton, StringList, Widget,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation,
+    ScrolledWindow, SpinButton, Stack, StackSidebar, StringList, Widget,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,7 +22,9 @@ use std::rc::Rc;
 pub struct TextLineConfigWidget {
     widget: GtkBox,
     lines: Rc<RefCell<Vec<TextLineConfig>>>,
-    list_box: ListBox,
+    stack: Stack,
+    #[allow(dead_code)] // Kept alive for GTK widget lifetime
+    sidebar: StackSidebar,
     available_fields: Vec<FieldMetadata>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
 }
@@ -31,6 +33,8 @@ impl TextLineConfigWidget {
     /// Create a new text line configuration widget
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
         log::debug!("TextLineConfigWidget::new() called with {} available fields", available_fields.len());
+
+        // Main vertical container
         let widget = GtkBox::new(Orientation::Vertical, 6);
 
         // Header with add button and copy/paste
@@ -48,22 +52,40 @@ impl TextLineConfigWidget {
         header_box.append(&add_button);
         widget.append(&header_box);
 
-        // Scrolled window for line list
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_vexpand(true);
-        scrolled.set_min_content_height(200);
+        // Horizontal container for sidebar + stack
+        let content_box = GtkBox::new(Orientation::Horizontal, 6);
+        content_box.set_vexpand(true);
 
-        let list_box = ListBox::new();
-        list_box.set_selection_mode(gtk4::SelectionMode::None);
-        scrolled.set_child(Some(&list_box));
-        widget.append(&scrolled);
+        // Create Stack for content pages
+        let stack = Stack::new();
+        stack.set_hexpand(true);
+        stack.set_vexpand(true);
+        stack.set_transition_type(gtk4::StackTransitionType::Crossfade);
+        stack.set_transition_duration(150);
+
+        // Create StackSidebar for navigation
+        let sidebar = StackSidebar::new();
+        sidebar.set_stack(&stack);
+        sidebar.set_size_request(120, -1);
+
+        // Add sidebar (left) and stack (right) to content box
+        content_box.append(&sidebar);
+
+        // Wrap stack in scrolled window for long content
+        let stack_scrolled = ScrolledWindow::new();
+        stack_scrolled.set_hexpand(true);
+        stack_scrolled.set_vexpand(true);
+        stack_scrolled.set_child(Some(&stack));
+        content_box.append(&stack_scrolled);
+
+        widget.append(&content_box);
 
         let lines = Rc::new(RefCell::new(Vec::new()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
-        // Set up add button - uses a self-contained rebuild callback like delete
+        // Set up add button - uses a self-contained rebuild callback
         let lines_for_add = lines.clone();
-        let list_box_for_add = list_box.clone();
+        let stack_for_add = stack.clone();
         let fields_for_add = available_fields.clone();
         let on_change_for_rebuild = on_change.clone();
 
@@ -72,23 +94,23 @@ impl TextLineConfigWidget {
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new({
             let lines_inner = lines_for_add.clone();
-            let list_box_inner = list_box_for_add.clone();
+            let stack_inner = stack_for_add.clone();
             let fields_inner = fields_for_add.clone();
             let rebuild_fn_inner = rebuild_fn.clone();
             let on_change_inner = on_change_for_rebuild.clone();
 
             move || {
-                // Clear list box
-                while let Some(child) = list_box_inner.first_child() {
-                    list_box_inner.remove(&child);
+                // Clear all stack pages
+                while let Some(child) = stack_inner.first_child() {
+                    stack_inner.remove(&child);
                 }
 
-                // Rebuild all rows with the same rebuild callback
+                // Rebuild all pages with the same rebuild callback
                 let lines_data = lines_inner.borrow().clone();
                 let callback_to_pass = rebuild_fn_inner.borrow().clone();
                 for (index, line) in lines_data.into_iter().enumerate() {
-                    Self::add_line_row(
-                        &list_box_inner,
+                    Self::add_line_page(
+                        &stack_inner,
                         line,
                         &fields_inner,
                         lines_inner.clone(),
@@ -96,6 +118,13 @@ impl TextLineConfigWidget {
                         callback_to_pass.clone(),
                         on_change_inner.clone(),
                     );
+                }
+
+                // Select the last page (the newly added one) if there are any
+                let line_count = lines_inner.borrow().len();
+                if line_count > 0 {
+                    let page_name = format!("line_{}", line_count - 1);
+                    stack_inner.set_visible_child_name(&page_name);
                 }
             }
         });
@@ -136,9 +165,9 @@ impl TextLineConfigWidget {
             }
         });
 
-        // Paste button handler - needs to rebuild list
+        // Paste button handler - needs to rebuild stack
         let lines_for_paste = lines.clone();
-        let list_box_for_paste = list_box.clone();
+        let stack_for_paste = stack.clone();
         let fields_for_paste = available_fields.clone();
         let on_change_for_paste = on_change.clone();
         let rebuild_fn_for_paste = rebuild_fn.clone();
@@ -153,15 +182,15 @@ impl TextLineConfigWidget {
                 // Update lines
                 *lines_for_paste.borrow_mut() = config.lines;
 
-                // Rebuild list
-                while let Some(child) = list_box_for_paste.first_child() {
-                    list_box_for_paste.remove(&child);
+                // Rebuild stack
+                while let Some(child) = stack_for_paste.first_child() {
+                    stack_for_paste.remove(&child);
                 }
                 let lines_data = lines_for_paste.borrow().clone();
                 let callback_to_pass = rebuild_fn_for_paste.borrow().clone();
                 for (index, line) in lines_data.into_iter().enumerate() {
-                    Self::add_line_row(
-                        &list_box_for_paste,
+                    Self::add_line_page(
+                        &stack_for_paste,
                         line,
                         &fields_for_paste,
                         lines_for_paste.clone(),
@@ -181,15 +210,16 @@ impl TextLineConfigWidget {
         Self {
             widget,
             lines,
-            list_box,
+            stack,
+            sidebar,
             available_fields,
             on_change,
         }
     }
 
-    /// Add a row for a text line
-    fn add_line_row(
-        list_box: &ListBox,
+    /// Add a page for a text line to the stack
+    fn add_line_page(
+        stack: &Stack,
         line_config: TextLineConfig,
         fields: &[FieldMetadata],
         lines: Rc<RefCell<Vec<TextLineConfig>>>,
@@ -202,9 +232,6 @@ impl TextLineConfigWidget {
         row_box.set_margin_bottom(6);
         row_box.set_margin_start(6);
         row_box.set_margin_end(6);
-
-        let frame = Frame::new(None);
-        frame.set_child(Some(&row_box));
 
         // Field selector
         let field_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1221,7 +1248,7 @@ impl TextLineConfigWidget {
             }
             drop(lines_ref);
 
-            // Call rebuild callback to refresh the entire list with correct indices
+            // Call rebuild callback to refresh the entire stack with correct indices
             if let Some(ref rebuild) = rebuild_callback {
                 rebuild();
             }
@@ -1230,18 +1257,21 @@ impl TextLineConfigWidget {
             }
         });
 
-        list_box.append(&frame);
+        // Add page to stack with unique name and display title
+        let page_name = format!("line_{}", list_index);
+        let page_title = format!("Line {}", list_index + 1);
+        stack.add_titled(&row_box, Some(&page_name), &page_title);
     }
 
-    /// Rebuild the entire list UI from the current lines data
-    fn rebuild_list(&self) {
-        // Clear list box
-        while let Some(child) = self.list_box.first_child() {
-            self.list_box.remove(&child);
+    /// Rebuild the entire stack UI from the current lines data
+    fn rebuild_stack(&self) {
+        // Clear all stack pages
+        while let Some(child) = self.stack.first_child() {
+            self.stack.remove(&child);
         }
 
         // Create rebuild callback for delete buttons
-        let list_box_clone = self.list_box.clone();
+        let stack_clone = self.stack.clone();
         let lines_clone = self.lines.clone();
         let fields_clone = self.available_fields.clone();
         let on_change_clone = self.on_change.clone();
@@ -1252,17 +1282,17 @@ impl TextLineConfigWidget {
         let on_change_for_rebuild = on_change_clone.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
-            // Clear list box
-            while let Some(child) = list_box_clone.first_child() {
-                list_box_clone.remove(&child);
+            // Clear all stack pages
+            while let Some(child) = stack_clone.first_child() {
+                stack_clone.remove(&child);
             }
 
-            // Rebuild all rows with the same rebuild callback
+            // Rebuild all pages with the same rebuild callback
             let lines_data = lines_clone.borrow().clone();
             let callback_to_pass = rebuild_fn_clone.borrow().clone();
             for (index, line) in lines_data.into_iter().enumerate() {
-                Self::add_line_row(
-                    &list_box_clone,
+                Self::add_line_page(
+                    &stack_clone,
                     line,
                     &fields_clone,
                     lines_clone.clone(),
@@ -1276,11 +1306,11 @@ impl TextLineConfigWidget {
         // Store the callback in the RefCell
         *rebuild_fn.borrow_mut() = Some(rebuild_closure.clone());
 
-        // Rebuild all rows with correct indices
+        // Rebuild all pages with correct indices
         let lines = self.lines.borrow().clone();
         for (index, line) in lines.into_iter().enumerate() {
-            Self::add_line_row(
-                &self.list_box,
+            Self::add_line_page(
+                &self.stack,
                 line,
                 &self.available_fields,
                 self.lines.clone(),
@@ -1288,6 +1318,11 @@ impl TextLineConfigWidget {
                 Some(rebuild_closure.clone()),
                 on_change_clone.clone(),
             );
+        }
+
+        // Select first page if available
+        if !self.lines.borrow().is_empty() {
+            self.stack.set_visible_child_name("line_0");
         }
     }
 
@@ -1301,7 +1336,7 @@ impl TextLineConfigWidget {
         *self.lines.borrow_mut() = config.lines;
 
         // Rebuild UI
-        self.rebuild_list();
+        self.rebuild_stack();
     }
 
     /// Get the current configuration
