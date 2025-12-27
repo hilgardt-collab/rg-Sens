@@ -90,15 +90,18 @@ pub(crate) fn show_panel_properties_dialog(
     }
 
     // Close any existing panel properties dialog (singleton pattern)
+    // Note: We must extract the existing dialog BEFORE closing it, because
+    // close() triggers connect_close_request which also borrows PANEL_PROPERTIES_DIALOG
+    let existing_dialog = PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
+        let dialog_opt = dialog_ref.borrow();
+        dialog_opt.as_ref().and_then(|weak| weak.upgrade())
+    });
+    if let Some(existing) = existing_dialog {
+        existing.close();
+    }
+    // Now store the new dialog reference
     PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
-        let mut dialog_opt = dialog_ref.borrow_mut();
-        if let Some(weak) = dialog_opt.as_ref() {
-            if let Some(existing) = weak.upgrade() {
-                existing.close();
-            }
-        }
-        // Store the new dialog
-        *dialog_opt = Some(dialog.downgrade());
+        *dialog_ref.borrow_mut() = Some(dialog.downgrade());
     });
 
     // Main container
