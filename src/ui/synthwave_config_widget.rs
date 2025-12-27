@@ -23,6 +23,7 @@ use crate::ui::{
     ThemeFontSelector,
 };
 use crate::ui::theme::FontSource;
+use crate::ui::combo_config_base;
 use crate::displayers::SynthwaveDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
@@ -142,7 +143,10 @@ impl SynthwaveConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = Self::create_theme_reference_section(&config);
+        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
+            &config,
+            |cfg| cfg.frame.theme.clone(),
+        );
         theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
@@ -171,7 +175,15 @@ impl SynthwaveConfigWidget {
 
         // Tab 6: Content
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields);
+        let content_page = combo_config_base::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &available_fields,
+            |cfg| &cfg.frame.content_items,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 7: Animation
@@ -201,27 +213,19 @@ impl SynthwaveConfigWidget {
     }
 
     fn set_page_margins(page: &GtkBox) {
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        combo_config_base::set_page_margins(page);
     }
 
     fn queue_redraw(
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) {
-        preview.queue_draw();
-        if let Some(cb) = on_change.borrow().as_ref() {
-            cb();
-        }
+        combo_config_base::queue_redraw(preview, on_change);
     }
 
     /// Refresh all theme reference sections
     fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        for refresher in refreshers.borrow().iter() {
-            refresher();
-        }
+        combo_config_base::refresh_theme_refs(refreshers);
     }
 
     fn create_theme_page(
@@ -1142,40 +1146,6 @@ impl SynthwaveConfigWidget {
         page
     }
 
-    fn create_content_page(
-        config: &Rc<RefCell<SynthwaveDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
-
-        let info_label = Label::new(Some("Content items are configured per source slot.\nSelect a slot tab to configure its display type."));
-        info_label.set_halign(gtk4::Align::Start);
-        info_label.add_css_class("dim-label");
-        page.append(&info_label);
-
-        // Create scrolled window for content tabs
-        let scroll = ScrolledWindow::new();
-        scroll.set_vexpand(true);
-        scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
-
-        {
-            let notebook = content_notebook.borrow();
-            scroll.set_child(Some(&*notebook));
-        }
-
-        page.append(&scroll);
-
-        // Build initial content tabs
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields);
-
-        page
-    }
-
     fn create_animation_page(
         config: &Rc<RefCell<SynthwaveDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -1289,80 +1259,9 @@ impl SynthwaveConfigWidget {
         }
     }
 
-    fn rebuild_content_tabs(
-        config: &Rc<RefCell<SynthwaveDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-    ) {
-        let notebook = content_notebook.borrow();
-
-        // Clear existing tabs
-        while notebook.n_pages() > 0 {
-            notebook.remove_page(Some(0));
-        }
-
-        let summaries = source_summaries.borrow();
-
-        if summaries.is_empty() {
-            let placeholder = GtkBox::new(Orientation::Vertical, 8);
-            placeholder.set_margin_start(12);
-            placeholder.set_margin_end(12);
-            placeholder.set_margin_top(12);
-            let label = Label::new(Some("No sources configured.\nGo to 'Data Source' tab and select 'Combination' source to configure content."));
-            label.set_halign(gtk4::Align::Start);
-            placeholder.append(&label);
-            notebook.append_page(&placeholder, Some(&Label::new(Some("No Sources"))));
-            return;
-        }
-
-        // Group summaries by group number
-        let mut groups: std::collections::HashMap<usize, Vec<(String, String, u32)>> = std::collections::HashMap::new();
-        for (slot_name, summary, group_num, item_idx) in summaries.iter() {
-            groups.entry(*group_num)
-                .or_default()
-                .push((slot_name.clone(), summary.clone(), *item_idx));
-        }
-
-        let mut group_nums: Vec<usize> = groups.keys().cloned().collect();
-        group_nums.sort();
-
-        for group_num in group_nums {
-            if let Some(items) = groups.get(&group_num) {
-                let group_box = GtkBox::new(Orientation::Vertical, 4);
-                group_box.set_margin_start(4);
-                group_box.set_margin_end(4);
-                group_box.set_margin_top(4);
-
-                let items_notebook = Notebook::new();
-                items_notebook.set_scrollable(true);
-                items_notebook.set_vexpand(true);
-
-                let mut sorted_items = items.clone();
-                sorted_items.sort_by_key(|(_, _, idx)| *idx);
-
-                for (slot_name, summary, item_idx) in sorted_items {
-                    let tab_label = format!("Item {} : {}", item_idx, summary);
-                    let tab_box = Self::create_content_item_config(
-                        config,
-                        on_change,
-                        preview,
-                        &slot_name,
-                        available_fields.borrow().clone(),
-                    );
-                    items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
-                }
-
-                group_box.append(&items_notebook);
-                notebook.append_page(&group_box, Some(&Label::new(Some(&format!("Group {}", group_num)))));
-            }
-        }
-    }
-
     /// Create a theme reference section showing current theme colors and fonts with copy buttons
     /// Returns the frame and a refresh callback that should be called when theme changes
+    #[allow(dead_code)] // Deprecated: use combo_config_base::create_theme_reference_section
     fn create_theme_reference_section(
         config: &Rc<RefCell<SynthwaveDisplayConfig>>,
     ) -> (gtk4::Frame, Rc<dyn Fn()>) {
@@ -2212,13 +2111,14 @@ impl SynthwaveConfigWidget {
         }
 
         // Rebuild content tabs
-        Self::rebuild_content_tabs(
+        combo_config_base::rebuild_content_tabs(
             &self.config,
             &self.on_change,
             &self.preview,
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
+            |cfg| &cfg.frame.content_items,
         );
 
         // Notify that config changed

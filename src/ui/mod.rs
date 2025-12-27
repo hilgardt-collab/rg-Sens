@@ -59,6 +59,7 @@ pub mod fighter_hud_display;
 mod fighter_hud_config_widget;
 pub mod synthwave_display;
 mod synthwave_config_widget;
+pub mod combo_config_base;
 pub mod theme;
 mod theme_color_selector;
 mod theme_font_selector;

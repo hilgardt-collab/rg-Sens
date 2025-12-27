@@ -26,6 +26,7 @@ use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, StaticDisplayConfig, SplitOrientation};
 use crate::displayers::IndustrialDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
+use crate::ui::combo_config_base;
 
 /// Holds references to Surface tab widgets
 struct SurfaceWidgets {
@@ -161,7 +162,10 @@ impl IndustrialConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = Self::create_theme_reference_section(&config);
+        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
+            &config,
+            |cfg| cfg.frame.theme.clone(),
+        );
         theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
@@ -230,20 +234,14 @@ impl IndustrialConfigWidget {
     }
 
     fn set_page_margins(page: &GtkBox) {
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        combo_config_base::set_page_margins(page);
     }
 
     fn queue_redraw(
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) {
-        preview.queue_draw();
-        if let Some(cb) = on_change.borrow().as_ref() {
-            cb();
-        }
+        combo_config_base::queue_redraw(preview, on_change);
     }
 
     fn create_surface_page(
@@ -1135,9 +1133,7 @@ impl IndustrialConfigWidget {
     }
 
     fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        for refresh_fn in refreshers.borrow().iter() {
-            refresh_fn();
-        }
+        combo_config_base::refresh_theme_refs(refreshers);
     }
 
     /// Create the Theme configuration page
