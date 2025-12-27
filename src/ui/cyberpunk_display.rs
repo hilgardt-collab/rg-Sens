@@ -178,6 +178,14 @@ pub struct CyberpunkFrameConfig {
     // Content items (per slot)
     #[serde(default)]
     pub content_items: HashMap<String, ContentItemConfig>,
+
+    /// Theme configuration
+    #[serde(default = "default_cyberpunk_theme")]
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_cyberpunk_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_cyberpunk()
 }
 
 fn default_true() -> bool { true }
@@ -215,6 +223,7 @@ impl Default for CyberpunkFrameConfig {
             item_frame_color: default_item_frame_color(),
             item_glow_enabled: false,
             content_items: HashMap::new(),
+            theme: default_cyberpunk_theme(),
         }
     }
 }

@@ -460,6 +460,14 @@ pub struct LcarsFrameConfig {
     /// Sync segment heights with group heights (only works when layout is Horizontal and segment_count == group_count)
     #[serde(default)]
     pub sync_segments_to_groups: bool,
+
+    /// Theme configuration
+    #[serde(default = "default_lcars_theme")]
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_lcars_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_lcars()
 }
 
 fn default_sidebar_width() -> f64 {
@@ -563,6 +571,7 @@ impl Default for LcarsFrameConfig {
             divider_config: DividerConfig::default(),
             item_spacing: default_item_spacing(),
             sync_segments_to_groups: false,
+            theme: default_lcars_theme(),
         }
     }
 }

@@ -211,6 +211,14 @@ pub struct RetroTerminalFrameConfig {
     pub cursor_blink: bool,
     #[serde(default)]
     pub typewriter_effect: bool,
+
+    /// Theme configuration
+    #[serde(default = "default_retro_terminal_theme")]
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_retro_terminal_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_retro_terminal()
 }
 
 fn default_true() -> bool { true }
@@ -256,6 +264,8 @@ impl Default for RetroTerminalFrameConfig {
             animation_enabled: true,
             cursor_blink: true,
             typewriter_effect: false,
+
+            theme: default_retro_terminal_theme(),
         }
     }
 }

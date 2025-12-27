@@ -99,6 +99,19 @@ struct AnimationWidgets {
     speed_scale: Scale,
 }
 
+/// Holds references to Theme tab widgets for updating when config changes
+struct ThemeWidgets {
+    theme_color1_widget: Rc<ColorButtonWidget>,
+    theme_color2_widget: Rc<ColorButtonWidget>,
+    theme_color3_widget: Rc<ColorButtonWidget>,
+    theme_color4_widget: Rc<ColorButtonWidget>,
+    theme_gradient_editor: Rc<crate::ui::gradient_editor::GradientEditor>,
+    font1_btn: Button,
+    font1_size_spin: SpinButton,
+    font2_btn: Button,
+    font2_size_spin: SpinButton,
+}
+
 /// LCARS configuration widget
 pub struct LcarsConfigWidget {
     container: GtkBox,
@@ -123,6 +136,10 @@ pub struct LcarsConfigWidget {
     split_widgets: Rc<RefCell<Option<SplitWidgets>>>,
     /// Animation tab widgets
     animation_widgets: Rc<RefCell<Option<AnimationWidgets>>>,
+    /// Theme tab widgets
+    theme_widgets: Rc<RefCell<Option<ThemeWidgets>>>,
+    /// Callbacks to refresh theme reference sections when theme changes
+    theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
 }
 
 impl LcarsConfigWidget {
@@ -139,6 +156,8 @@ impl LcarsConfigWidget {
         let content_widgets: Rc<RefCell<Option<ContentWidgets>>> = Rc::new(RefCell::new(None));
         let split_widgets: Rc<RefCell<Option<SplitWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
+        let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -172,16 +191,20 @@ impl LcarsConfigWidget {
         let segments_page = Self::create_segments_page(&config, &on_change, &preview, &segments_widgets, &split_widgets);
         notebook.append_page(&segments_page, Some(&Label::new(Some("Segments"))));
 
-        // Tab 4: Content - with dynamic per-slot notebook
+        // Tab 4: Theme
+        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
+
+        // Tab 5: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &content_widgets, &available_fields);
+        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &content_widgets, &available_fields, &theme_ref_refreshers);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
-        // Tab 5: Layout
+        // Tab 6: Layout
         let split_page = Self::create_split_page(&config, &on_change, &preview, &split_widgets);
         notebook.append_page(&split_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 6: Animation
+        // Tab 7: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
@@ -202,6 +225,8 @@ impl LcarsConfigWidget {
             content_widgets,
             split_widgets,
             animation_widgets,
+            theme_widgets,
+            theme_ref_refreshers,
         }
     }
 
@@ -220,6 +245,259 @@ impl LcarsConfigWidget {
         if let Some(cb) = on_change.borrow().as_ref() {
             cb();
         }
+    }
+
+    /// Refresh all theme reference sections
+    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
+        for refresher in refreshers.borrow().iter() {
+            refresher();
+        }
+    }
+
+    fn create_theme_page(
+        config: &Rc<RefCell<LcarsDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    ) -> GtkBox {
+        use crate::ui::gradient_editor::GradientEditor;
+
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        Self::set_page_margins(&page);
+
+        // Theme Colors section
+        let colors_label = Label::new(Some("Theme Colors"));
+        colors_label.set_halign(gtk4::Align::Start);
+        colors_label.add_css_class("heading");
+        page.append(&colors_label);
+
+        // Color 1
+        let color1_box = GtkBox::new(Orientation::Horizontal, 6);
+        color1_box.append(&Label::new(Some("Color 1 (Primary):")));
+        let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
+        color1_box.append(theme_color1_widget.widget());
+        page.append(&color1_box);
+
+        // Color 2
+        let color2_box = GtkBox::new(Orientation::Horizontal, 6);
+        color2_box.append(&Label::new(Some("Color 2 (Secondary):")));
+        let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
+        color2_box.append(theme_color2_widget.widget());
+        page.append(&color2_box);
+
+        // Color 3
+        let color3_box = GtkBox::new(Orientation::Horizontal, 6);
+        color3_box.append(&Label::new(Some("Color 3 (Accent):")));
+        let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
+        color3_box.append(theme_color3_widget.widget());
+        page.append(&color3_box);
+
+        // Color 4
+        let color4_box = GtkBox::new(Orientation::Horizontal, 6);
+        color4_box.append(&Label::new(Some("Color 4 (Highlight):")));
+        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
+        color4_box.append(theme_color4_widget.widget());
+        page.append(&color4_box);
+
+        // Connect color widget callbacks
+        let config_c1 = config.clone();
+        let on_change_c1 = on_change.clone();
+        let preview_c1 = preview.clone();
+        let refreshers_c1 = theme_ref_refreshers.clone();
+        theme_color1_widget.set_on_change(move |color| {
+            config_c1.borrow_mut().frame.theme.color1 = color;
+            Self::queue_redraw(&preview_c1, &on_change_c1);
+            Self::refresh_theme_refs(&refreshers_c1);
+        });
+
+        let config_c2 = config.clone();
+        let on_change_c2 = on_change.clone();
+        let preview_c2 = preview.clone();
+        let refreshers_c2 = theme_ref_refreshers.clone();
+        theme_color2_widget.set_on_change(move |color| {
+            config_c2.borrow_mut().frame.theme.color2 = color;
+            Self::queue_redraw(&preview_c2, &on_change_c2);
+            Self::refresh_theme_refs(&refreshers_c2);
+        });
+
+        let config_c3 = config.clone();
+        let on_change_c3 = on_change.clone();
+        let preview_c3 = preview.clone();
+        let refreshers_c3 = theme_ref_refreshers.clone();
+        theme_color3_widget.set_on_change(move |color| {
+            config_c3.borrow_mut().frame.theme.color3 = color;
+            Self::queue_redraw(&preview_c3, &on_change_c3);
+            Self::refresh_theme_refs(&refreshers_c3);
+        });
+
+        let config_c4 = config.clone();
+        let on_change_c4 = on_change.clone();
+        let preview_c4 = preview.clone();
+        let refreshers_c4 = theme_ref_refreshers.clone();
+        theme_color4_widget.set_on_change(move |color| {
+            config_c4.borrow_mut().frame.theme.color4 = color;
+            Self::queue_redraw(&preview_c4, &on_change_c4);
+            Self::refresh_theme_refs(&refreshers_c4);
+        });
+
+        // Theme Gradient section
+        let gradient_label = Label::new(Some("Theme Gradient"));
+        gradient_label.set_halign(gtk4::Align::Start);
+        gradient_label.add_css_class("heading");
+        gradient_label.set_margin_top(12);
+        page.append(&gradient_label);
+
+        let theme_gradient_editor = Rc::new(GradientEditor::new());
+        theme_gradient_editor.set_gradient(&config.borrow().frame.theme.gradient);
+        page.append(theme_gradient_editor.widget());
+
+        let config_grad = config.clone();
+        let on_change_grad = on_change.clone();
+        let preview_grad = preview.clone();
+        let refreshers_grad = theme_ref_refreshers.clone();
+        let gradient_editor_clone = theme_gradient_editor.clone();
+        theme_gradient_editor.set_on_change(move || {
+            config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient();
+            Self::queue_redraw(&preview_grad, &on_change_grad);
+            Self::refresh_theme_refs(&refreshers_grad);
+        });
+
+        // Theme Fonts section
+        let fonts_label = Label::new(Some("Theme Fonts"));
+        fonts_label.set_halign(gtk4::Align::Start);
+        fonts_label.add_css_class("heading");
+        fonts_label.set_margin_top(12);
+        page.append(&fonts_label);
+
+        // Font 1
+        let font1_box = GtkBox::new(Orientation::Horizontal, 6);
+        font1_box.append(&Label::new(Some("Font 1:")));
+        let font1_btn = Button::with_label(&config.borrow().frame.theme.font1_family);
+        font1_btn.set_hexpand(true);
+        font1_box.append(&font1_btn);
+        font1_box.append(&Label::new(Some("Size:")));
+        let font1_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
+        font1_size_spin.set_value(config.borrow().frame.theme.font1_size);
+        font1_box.append(&font1_size_spin);
+        page.append(&font1_box);
+
+        // Font 1 button click handler
+        let config_f1 = config.clone();
+        let on_change_f1 = on_change.clone();
+        let preview_f1 = preview.clone();
+        let refreshers_f1 = theme_ref_refreshers.clone();
+        let font1_btn_clone = font1_btn.clone();
+        font1_btn.connect_clicked(move |button| {
+            let config_for_cb = config_f1.clone();
+            let on_change_for_cb = on_change_f1.clone();
+            let preview_for_cb = preview_f1.clone();
+            let refreshers_for_cb = refreshers_f1.clone();
+            let font_btn_for_cb = font1_btn_clone.clone();
+            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                let current_font = config_for_cb.borrow().frame.theme.font1_family.clone();
+                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+                shared_font_dialog().choose_font(
+                    Some(&window),
+                    Some(&font_desc),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            let family = font_desc.family()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "sans-serif".to_string());
+                            config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
+                            font_btn_for_cb.set_label(&family);
+                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                            Self::refresh_theme_refs(&refreshers_for_cb);
+                        }
+                    },
+                );
+            }
+        });
+
+        // Font 1 size spin handler
+        let config_f1s = config.clone();
+        let on_change_f1s = on_change.clone();
+        let preview_f1s = preview.clone();
+        let refreshers_f1s = theme_ref_refreshers.clone();
+        font1_size_spin.connect_value_changed(move |spin| {
+            config_f1s.borrow_mut().frame.theme.font1_size = spin.value();
+            Self::queue_redraw(&preview_f1s, &on_change_f1s);
+            Self::refresh_theme_refs(&refreshers_f1s);
+        });
+
+        // Font 2
+        let font2_box = GtkBox::new(Orientation::Horizontal, 6);
+        font2_box.append(&Label::new(Some("Font 2:")));
+        let font2_btn = Button::with_label(&config.borrow().frame.theme.font2_family);
+        font2_btn.set_hexpand(true);
+        font2_box.append(&font2_btn);
+        font2_box.append(&Label::new(Some("Size:")));
+        let font2_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
+        font2_size_spin.set_value(config.borrow().frame.theme.font2_size);
+        font2_box.append(&font2_size_spin);
+        page.append(&font2_box);
+
+        // Font 2 button click handler
+        let config_f2 = config.clone();
+        let on_change_f2 = on_change.clone();
+        let preview_f2 = preview.clone();
+        let refreshers_f2 = theme_ref_refreshers.clone();
+        let font2_btn_clone = font2_btn.clone();
+        font2_btn.connect_clicked(move |button| {
+            let config_for_cb = config_f2.clone();
+            let on_change_for_cb = on_change_f2.clone();
+            let preview_for_cb = preview_f2.clone();
+            let refreshers_for_cb = refreshers_f2.clone();
+            let font_btn_for_cb = font2_btn_clone.clone();
+            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                let current_font = config_for_cb.borrow().frame.theme.font2_family.clone();
+                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+                shared_font_dialog().choose_font(
+                    Some(&window),
+                    Some(&font_desc),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            let family = font_desc.family()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "sans-serif".to_string());
+                            config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
+                            font_btn_for_cb.set_label(&family);
+                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                            Self::refresh_theme_refs(&refreshers_for_cb);
+                        }
+                    },
+                );
+            }
+        });
+
+        // Font 2 size spin handler
+        let config_f2s = config.clone();
+        let on_change_f2s = on_change.clone();
+        let preview_f2s = preview.clone();
+        let refreshers_f2s = theme_ref_refreshers.clone();
+        font2_size_spin.connect_value_changed(move |spin| {
+            config_f2s.borrow_mut().frame.theme.font2_size = spin.value();
+            Self::queue_redraw(&preview_f2s, &on_change_f2s);
+            Self::refresh_theme_refs(&refreshers_f2s);
+        });
+
+        // Store widget refs
+        *theme_widgets_out.borrow_mut() = Some(ThemeWidgets {
+            theme_color1_widget,
+            theme_color2_widget,
+            theme_color3_widget,
+            theme_color4_widget,
+            theme_gradient_editor,
+            font1_btn,
+            font1_size_spin,
+            font2_btn,
+            font2_size_spin,
+        });
+
+        page
     }
 
     fn create_frame_page(
@@ -1521,6 +1799,7 @@ impl LcarsConfigWidget {
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         content_widgets_out: &Rc<RefCell<Option<ContentWidgets>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1567,7 +1846,7 @@ impl LcarsConfigWidget {
         drop(nb);
 
         // Build initial tabs based on source summaries
-        Self::rebuild_content_notebook_tabs(content_notebook, source_summaries, config, on_change, preview, available_fields);
+        Self::rebuild_content_notebook_tabs(content_notebook, source_summaries, config, on_change, preview, available_fields, theme_ref_refreshers);
 
         // Store widget references for updating when config changes
         *content_widgets_out.borrow_mut() = Some(ContentWidgets {
@@ -1585,13 +1864,15 @@ impl LcarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) {
         let notebook = content_notebook.borrow();
 
-        // Clear existing tabs
+        // Clear existing tabs and theme refreshers
         while notebook.n_pages() > 0 {
             notebook.remove_page(Some(0));
         }
+        theme_ref_refreshers.borrow_mut().clear();
 
         let summaries = source_summaries.borrow();
 
@@ -1645,7 +1926,8 @@ impl LcarsConfigWidget {
 
                 for (slot_name, summary, item_idx) in sorted_items {
                     let tab_label = format!("Item {} - {}", item_idx, summary);
-                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    let (tab_box, refresh_cb) = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    theme_ref_refreshers.borrow_mut().push(refresh_cb);
                     items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
                 }
 
@@ -1655,6 +1937,171 @@ impl LcarsConfigWidget {
         }
     }
 
+    /// Create a theme reference section showing current theme colors and fonts with copy buttons
+    fn create_theme_reference_section(
+        config: &Rc<RefCell<LcarsDisplayConfig>>,
+    ) -> (gtk4::Frame, Rc<dyn Fn()>) {
+        let frame = gtk4::Frame::new(Some("Theme Reference"));
+        frame.set_margin_top(8);
+
+        let content_box = GtkBox::new(Orientation::Vertical, 6);
+        content_box.set_margin_start(8);
+        content_box.set_margin_end(8);
+        content_box.set_margin_top(8);
+        content_box.set_margin_bottom(8);
+
+        // Colors row
+        let colors_box = GtkBox::new(Orientation::Horizontal, 8);
+        colors_box.append(&Label::new(Some("Colors:")));
+
+        // Store swatches for refresh
+        let color_swatches: Rc<RefCell<Vec<DrawingArea>>> = Rc::new(RefCell::new(Vec::new()));
+
+        let color_indices = [1u8, 2, 3, 4];
+        let color_tooltips = ["Color 1 (Primary)", "Color 2 (Secondary)", "Color 3 (Accent)", "Color 4 (Highlight)"];
+
+        for (idx, tooltip) in color_indices.iter().zip(color_tooltips.iter()) {
+            let item_box = GtkBox::new(Orientation::Horizontal, 2);
+
+            let swatch = DrawingArea::new();
+            swatch.set_size_request(20, 20);
+            let config_for_draw = config.clone();
+            let color_idx = *idx;
+            swatch.set_draw_func(move |_, cr, width, height| {
+                let c = config_for_draw.borrow().frame.theme.get_color(color_idx);
+                let checker_size = 4.0;
+                for y in 0..(height as f64 / checker_size).ceil() as i32 {
+                    for x in 0..(width as f64 / checker_size).ceil() as i32 {
+                        if (x + y) % 2 == 0 {
+                            cr.set_source_rgb(0.8, 0.8, 0.8);
+                        } else {
+                            cr.set_source_rgb(0.6, 0.6, 0.6);
+                        }
+                        cr.rectangle(x as f64 * checker_size, y as f64 * checker_size, checker_size, checker_size);
+                        let _ = cr.fill();
+                    }
+                }
+                cr.set_source_rgba(c.r, c.g, c.b, c.a);
+                cr.rectangle(0.0, 0.0, width as f64, height as f64);
+                let _ = cr.fill();
+                cr.set_source_rgb(0.3, 0.3, 0.3);
+                cr.set_line_width(1.0);
+                cr.rectangle(0.5, 0.5, width as f64 - 1.0, height as f64 - 1.0);
+                let _ = cr.stroke();
+            });
+            color_swatches.borrow_mut().push(swatch.clone());
+            item_box.append(&swatch);
+
+            let copy_btn = Button::from_icon_name("edit-copy-symbolic");
+            copy_btn.set_tooltip_text(Some(&format!("Copy {} to clipboard", tooltip)));
+            let config_for_copy = config.clone();
+            let color_idx_for_copy = *idx;
+            copy_btn.connect_clicked(move |_| {
+                let c = config_for_copy.borrow().frame.theme.get_color(color_idx_for_copy);
+                if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                    clipboard.copy_color(c.r, c.g, c.b, c.a);
+                }
+            });
+            item_box.append(&copy_btn);
+            colors_box.append(&item_box);
+        }
+        content_box.append(&colors_box);
+
+        // Gradient row
+        let gradient_box = GtkBox::new(Orientation::Horizontal, 8);
+        gradient_box.append(&Label::new(Some("Gradient:")));
+
+        let gradient_swatch = DrawingArea::new();
+        gradient_swatch.set_size_request(60, 20);
+        let config_for_gradient = config.clone();
+        gradient_swatch.set_draw_func(move |_, cr, width, height| {
+            let gradient_config = config_for_gradient.borrow().frame.theme.gradient.clone();
+            let w = width as f64;
+            let h = height as f64;
+            let angle_rad = gradient_config.angle.to_radians();
+            let (dx, dy) = (angle_rad.sin(), -angle_rad.cos());
+            let length = (w * dx.abs() + h * dy.abs()) / 2.0;
+            let (cx, cy) = (w / 2.0, h / 2.0);
+            let (x0, y0) = (cx - dx * length, cy - dy * length);
+            let (x1, y1) = (cx + dx * length, cy + dy * length);
+            let gradient = gtk4::cairo::LinearGradient::new(x0, y0, x1, y1);
+            for stop in &gradient_config.stops {
+                gradient.add_color_stop_rgba(stop.position, stop.color.r, stop.color.g, stop.color.b, stop.color.a);
+            }
+            let _ = cr.set_source(&gradient);
+            cr.rectangle(0.0, 0.0, w, h);
+            let _ = cr.fill();
+            cr.set_source_rgb(0.3, 0.3, 0.3);
+            cr.set_line_width(1.0);
+            cr.rectangle(0.5, 0.5, w - 1.0, h - 1.0);
+            let _ = cr.stroke();
+        });
+        gradient_box.append(&gradient_swatch);
+
+        let gradient_copy_btn = Button::from_icon_name("edit-copy-symbolic");
+        gradient_copy_btn.set_tooltip_text(Some("Copy Theme Gradient to clipboard"));
+        let config_for_gradient_copy = config.clone();
+        gradient_copy_btn.connect_clicked(move |_| {
+            let stops = config_for_gradient_copy.borrow().frame.theme.gradient.stops.clone();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_gradient_stops(stops);
+            }
+        });
+        gradient_box.append(&gradient_copy_btn);
+        content_box.append(&gradient_box);
+
+        // Fonts row
+        let fonts_box = GtkBox::new(Orientation::Horizontal, 8);
+        fonts_box.append(&Label::new(Some("Fonts:")));
+
+        let font_labels: Rc<RefCell<Vec<Label>>> = Rc::new(RefCell::new(Vec::new()));
+        let font_indices = [1u8, 2];
+        let font_tooltips = ["Font 1 (Headers)", "Font 2 (Content)"];
+
+        for (idx, tooltip) in font_indices.iter().zip(font_tooltips.iter()) {
+            let item_box = GtkBox::new(Orientation::Horizontal, 4);
+            let (family, size) = config.borrow().frame.theme.get_font(*idx);
+            let info = Label::new(Some(&format!("{} {}pt", family, size as i32)));
+            info.add_css_class("dim-label");
+            font_labels.borrow_mut().push(info.clone());
+            item_box.append(&info);
+
+            let copy_btn = Button::from_icon_name("edit-copy-symbolic");
+            copy_btn.set_tooltip_text(Some(&format!("Copy {} to clipboard", tooltip)));
+            let config_for_copy = config.clone();
+            let font_idx = *idx;
+            copy_btn.connect_clicked(move |_| {
+                let (family, size) = config_for_copy.borrow().frame.theme.get_font(font_idx);
+                if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                    clipboard.copy_font(family, size, false, false);
+                }
+            });
+            item_box.append(&copy_btn);
+            fonts_box.append(&item_box);
+        }
+        content_box.append(&fonts_box);
+        frame.set_child(Some(&content_box));
+
+        let config_for_refresh = config.clone();
+        let gradient_swatch_for_refresh = gradient_swatch.clone();
+        let refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            for swatch in color_swatches.borrow().iter() {
+                swatch.queue_draw();
+            }
+            gradient_swatch_for_refresh.queue_draw();
+            let cfg = config_for_refresh.borrow();
+            let labels = font_labels.borrow();
+            if labels.len() >= 2 {
+                let (family1, size1) = cfg.frame.theme.get_font(1);
+                labels[0].set_text(&format!("{} {}pt", family1, size1 as i32));
+                let (family2, size2) = cfg.frame.theme.get_font(2);
+                labels[1].set_text(&format!("{} {}pt", family2, size2 as i32));
+            }
+        });
+
+        (frame, refresh_callback)
+    }
+
     /// Create configuration tab for a single slot
     fn create_slot_config_tab(
         slot_name: &str,
@@ -1662,7 +2109,7 @@ impl LcarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-    ) -> GtkBox {
+    ) -> (GtkBox, Rc<dyn Fn()>) {
         log::info!("=== create_slot_config_tab() called for slot '{}' ===", slot_name);
 
         // Ensure this slot exists in content_items with default config
@@ -1715,6 +2162,10 @@ impl LcarsConfigWidget {
         type_dropdown.set_selected(type_idx);
         type_box.append(&type_dropdown);
         inner_box.append(&type_box);
+
+        // Theme reference section (shows theme colors, gradient, fonts with copy buttons)
+        let (theme_ref_section, theme_refresh_cb) = Self::create_theme_reference_section(config);
+        inner_box.append(&theme_ref_section);
 
         // Auto height checkbox
         let auto_height_check = CheckButton::with_label("Auto-adjust height");
@@ -2084,7 +2535,7 @@ impl LcarsConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        tab
+        (tab, theme_refresh_cb)
     }
 
     fn create_split_page(
@@ -2695,6 +3146,7 @@ impl LcarsConfigWidget {
             &self.on_change,
             &self.preview,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
 
         // Rebuild group weight spinners and update sync checkbox in Layout tab if available
@@ -2729,6 +3181,7 @@ impl LcarsConfigWidget {
             &self.on_change,
             &self.preview,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
     }
 }

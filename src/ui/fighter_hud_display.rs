@@ -203,6 +203,14 @@ pub struct FighterHudFrameConfig {
     pub animation_enabled: bool,
     #[serde(default)]
     pub scan_line_effect: bool,
+
+    /// Theme configuration
+    #[serde(default = "default_fighter_hud_theme")]
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_fighter_hud_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_fighter_hud()
 }
 
 fn default_true() -> bool { true }
@@ -243,6 +251,8 @@ impl Default for FighterHudFrameConfig {
 
             animation_enabled: true,
             scan_line_effect: false,
+
+            theme: default_fighter_hud_theme(),
         }
     }
 }

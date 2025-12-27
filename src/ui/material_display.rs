@@ -125,9 +125,9 @@ fn default_header_font_size() -> f64 { 14.0 }
 /// Main configuration for the Material Cards frame
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialFrameConfig {
-    // Theme
+    // Theme variant (light/dark)
     #[serde(default)]
-    pub theme: ThemeVariant,
+    pub theme_variant: ThemeVariant,
     #[serde(default = "default_accent_color")]
     pub accent_color: Color,
 
@@ -210,12 +210,20 @@ pub struct MaterialFrameConfig {
     // Content items (per slot)
     #[serde(default)]
     pub content_items: HashMap<String, ContentItemConfig>,
+
+    /// Theme configuration
+    #[serde(default = "default_material_theme")]
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_material_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_material()
 }
 
 impl Default for MaterialFrameConfig {
     fn default() -> Self {
         Self {
-            theme: ThemeVariant::default(),
+            theme_variant: ThemeVariant::default(),
             accent_color: default_accent_color(),
             elevation: CardElevation::default(),
             corner_radius: default_corner_radius(),
@@ -247,30 +255,31 @@ impl Default for MaterialFrameConfig {
             divider_color: default_divider_color(),
             divider_spacing: default_divider_spacing(),
             content_items: HashMap::new(),
+            theme: default_material_theme(),
         }
     }
 }
 
 impl MaterialFrameConfig {
-    /// Get the surface color based on current theme
+    /// Get the surface color based on current theme variant
     pub fn surface_color(&self) -> Color {
-        match self.theme {
+        match self.theme_variant {
             ThemeVariant::Light => self.surface_color_light,
             ThemeVariant::Dark => self.surface_color_dark,
         }
     }
 
-    /// Get the background color based on current theme
+    /// Get the background color based on current theme variant
     pub fn background_color(&self) -> Color {
-        match self.theme {
+        match self.theme_variant {
             ThemeVariant::Light => self.background_color_light,
             ThemeVariant::Dark => self.background_color_dark,
         }
     }
 
-    /// Get the text color based on current theme
+    /// Get the text color based on current theme variant
     pub fn text_color(&self) -> Color {
-        match self.theme {
+        match self.theme_variant {
             ThemeVariant::Light => self.text_color_light,
             ThemeVariant::Dark => self.text_color_dark,
         }

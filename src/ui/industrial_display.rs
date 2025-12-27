@@ -144,6 +144,13 @@ pub struct IndustrialFrameConfig {
 
     // Content items config
     pub content_items: std::collections::HashMap<String, crate::ui::lcars_display::ContentItemConfig>,
+
+    /// Theme configuration
+    pub theme: crate::ui::theme::ComboThemeConfig,
+}
+
+fn default_industrial_theme() -> crate::ui::theme::ComboThemeConfig {
+    crate::ui::theme::ComboThemeConfig::default_for_industrial()
 }
 
 impl Default for IndustrialFrameConfig {
@@ -201,6 +208,7 @@ impl Default for IndustrialFrameConfig {
             divider_color: Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
 
             content_items: std::collections::HashMap::new(),
+            theme: default_industrial_theme(),
         }
     }
 }
