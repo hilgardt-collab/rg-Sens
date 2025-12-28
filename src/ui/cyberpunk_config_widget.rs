@@ -1659,6 +1659,8 @@ impl CyberpunkConfigWidget {
                 .unwrap_or_else(Self::default_bar_config_cyberpunk)
         };
         bar_widget.set_config(current_bar_config);
+        // Set initial theme
+        bar_widget.set_theme(config.borrow().frame.theme.clone());
 
         // Set up change callback to sync config back
         let slot_name_clone = slot_name.to_string();
@@ -1863,6 +1865,8 @@ impl CyberpunkConfigWidget {
                 .unwrap_or_else(Self::default_arc_config_cyberpunk)
         };
         arc_widget.set_config(current_arc_config);
+        // Set initial theme
+        arc_widget.set_theme(config.borrow().frame.theme.clone());
 
         // Set up change callback
         let slot_name_clone = slot_name.to_string();

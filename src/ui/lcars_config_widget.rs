@@ -2262,6 +2262,8 @@ impl LcarsConfigWidget {
                 .unwrap_or_default()
         };
         bar_widget.set_config(current_bar_config);
+        // Set initial theme
+        bar_widget.set_theme(config.borrow().frame.theme.clone());
 
         // Set up change callback to sync config back
         let slot_name_clone = slot_name.to_string();

@@ -1619,6 +1619,8 @@ impl SynthwaveConfigWidget {
                 .unwrap_or_default()
         };
         bar_widget.set_config(current_bar_config);
+        // Set initial theme
+        bar_widget.set_theme(config.borrow().frame.theme.clone());
 
         let slot_name_clone = slot_name.to_string();
         let config_clone = config.clone();
@@ -1808,6 +1810,8 @@ impl SynthwaveConfigWidget {
                 .unwrap_or_default()
         };
         arc_widget.set_config(current_arc_config);
+        // Set initial theme
+        arc_widget.set_theme(config.borrow().frame.theme.clone());
 
         let slot_name_clone = slot_name.to_string();
         let config_clone = config.clone();
