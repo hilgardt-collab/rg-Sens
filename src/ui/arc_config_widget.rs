@@ -176,6 +176,7 @@ impl ArcConfigWidget {
         let overlay_bg_check_paste = overlay_bg_check.clone();
         let animate_check_paste = animate_check.clone();
         let animation_duration_spin_paste = animation_duration_spin.clone();
+        let text_config_widget_paste = text_config_widget.clone();
 
         paste_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -227,6 +228,11 @@ impl ArcConfigWidget {
 
                     // Update gradient editor with theme-aware color stops
                     gradient_editor_paste.set_stops_source(new_config.color_stops.clone());
+
+                    // Update text overlay config widget
+                    if let Some(ref text_widget) = text_config_widget_paste {
+                        text_widget.set_config(new_config.text_overlay.text_config.clone());
+                    }
 
                     preview_for_paste.queue_draw();
                     if let Some(cb) = on_change_for_paste.borrow().as_ref() {
