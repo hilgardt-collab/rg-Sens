@@ -183,6 +183,9 @@ impl SynthwaveConfigWidget {
             &source_summaries,
             &available_fields,
             |cfg| &cfg.frame.content_items,
+            |cfg, slot_name, item| {
+                cfg.frame.content_items.insert(slot_name.to_string(), item);
+            },
         );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
@@ -404,7 +407,7 @@ impl SynthwaveConfigWidget {
         page.append(&gradient_label);
 
         let theme_gradient_editor = Rc::new(GradientEditor::new());
-        theme_gradient_editor.set_gradient(&config.borrow().frame.theme.gradient);
+        theme_gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
         page.append(theme_gradient_editor.widget());
 
         let config_grad = config.clone();
@@ -413,7 +416,7 @@ impl SynthwaveConfigWidget {
         let refreshers_grad = theme_ref_refreshers.clone();
         let gradient_editor_clone = theme_gradient_editor.clone();
         theme_gradient_editor.set_on_change(move || {
-            config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient();
+            config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient_source_config();
             Self::queue_redraw(&preview_grad, &on_change_grad);
             Self::refresh_theme_refs(&refreshers_grad);
         });
@@ -1252,6 +1255,7 @@ impl SynthwaveConfigWidget {
                     cfg.frame.group_size_weights.push(1.0);
                 }
                 cfg.frame.group_size_weights[idx] = spin.value();
+                drop(cfg);
                 Self::queue_redraw(&preview_clone, &on_change_clone);
             });
 
@@ -1356,7 +1360,8 @@ impl SynthwaveConfigWidget {
         gradient_swatch.set_size_request(60, 20);
         let config_for_gradient = config.clone();
         gradient_swatch.set_draw_func(move |_, cr, width, height| {
-            let gradient_config = config_for_gradient.borrow().frame.theme.gradient.clone();
+            let cfg = config_for_gradient.borrow();
+            let gradient_config = cfg.frame.theme.gradient.resolve(&cfg.frame.theme);
             // Render linear gradient
             let w = width as f64;
             let h = height as f64;
@@ -1388,9 +1393,10 @@ impl SynthwaveConfigWidget {
         gradient_copy_btn.set_tooltip_text(Some("Copy Theme Gradient to clipboard"));
         let config_for_gradient_copy = config.clone();
         gradient_copy_btn.connect_clicked(move |_| {
-            let stops = config_for_gradient_copy.borrow().frame.theme.gradient.stops.clone();
+            let cfg = config_for_gradient_copy.borrow();
+            let resolved_gradient = cfg.frame.theme.gradient.resolve(&cfg.frame.theme);
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_gradient_stops(stops);
+                clipboard.copy_gradient_stops(resolved_gradient.stops);
                 log::info!("Theme gradient copied to clipboard");
             }
         });
@@ -1472,11 +1478,30 @@ impl SynthwaveConfigWidget {
         available_fields: Vec<FieldMetadata>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
-        // Ensure this slot exists in content_items
+        // Get available fields for this slot (needed for smart defaults)
+        let slot_prefix = format!("{}_", slot_name);
+        let slot_fields_for_default: Vec<FieldMetadata> = available_fields.iter()
+            .filter(|f| f.id.starts_with(&slot_prefix))
+            .map(|f| {
+                let short_id = f.id.strip_prefix(&slot_prefix).unwrap_or(&f.id);
+                FieldMetadata::new(
+                    short_id,
+                    &f.name,
+                    &f.description,
+                    f.field_type.clone(),
+                    f.purpose.clone(),
+                )
+            })
+            .collect();
+
+        // Ensure this slot exists in content_items with smart default display type
         {
             let mut cfg = config.borrow_mut();
             if !cfg.frame.content_items.contains_key(slot_name) {
-                cfg.frame.content_items.insert(slot_name.to_string(), ContentItemConfig::default());
+                let mut item = ContentItemConfig::default();
+                // Use smart default based on field types
+                item.display_as = ContentDisplayType::suggest_for_fields(&slot_fields_for_default);
+                cfg.frame.content_items.insert(slot_name.to_string(), item);
             }
         }
 
@@ -1952,6 +1977,11 @@ impl SynthwaveConfigWidget {
         self.config.borrow().clone()
     }
 
+    /// Get a reference to the internal config Rc for use in callbacks
+    pub fn get_config_rc(&self) -> Rc<RefCell<SynthwaveDisplayConfig>> {
+        self.config.clone()
+    }
+
     pub fn set_config(&self, config: SynthwaveDisplayConfig) {
         // Extract all values we need BEFORE updating the config
         // Color scheme
@@ -2041,7 +2071,7 @@ impl SynthwaveConfigWidget {
             widgets.theme_color2_widget.set_color(theme_color2);
             widgets.theme_color3_widget.set_color(theme_color3);
             widgets.theme_color4_widget.set_color(theme_color4);
-            widgets.theme_gradient_editor.set_gradient(&theme_gradient);
+            widgets.theme_gradient_editor.set_gradient_source_config(&theme_gradient);
             widgets.font1_btn.set_label(&theme_font1_family);
             widgets.font1_size_spin.set_value(theme_font1_size);
             widgets.font2_btn.set_label(&theme_font2_family);
@@ -2152,6 +2182,9 @@ impl SynthwaveConfigWidget {
             &self.source_summaries,
             &self.available_fields,
             |cfg| &cfg.frame.content_items,
+            |cfg, slot_name, item| {
+                cfg.frame.content_items.insert(slot_name.to_string(), item);
+            },
         );
 
         // Notify that config changed

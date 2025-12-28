@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig, TextOverlayConfig};
-use crate::ui::text_renderer::render_text_lines;
+use crate::ui::text_renderer::render_text_lines_with_theme;
 use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 
 /// Label position relative to the bar
@@ -268,12 +268,13 @@ pub fn render_core_bars_with_values(
 
     // Render text overlay if enabled
     if config.text_overlay.enabled && !config.text_overlay.text_config.lines.is_empty() {
-        render_text_lines(
+        render_text_lines_with_theme(
             cr,
             width,
             height,
             &config.text_overlay.text_config,
             source_values,
+            Some(theme),
         );
     }
 

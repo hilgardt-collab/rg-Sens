@@ -9,7 +9,9 @@ use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::gradient_editor::GradientEditor;
 use crate::ui::position_grid_widget::PositionGridWidget;
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::theme::{ComboThemeConfig, FontSource};
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::theme_font_selector::ThemeFontSelector;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation,
@@ -27,6 +29,9 @@ pub struct TextLineConfigWidget {
     sidebar: StackSidebar,
     available_fields: Vec<FieldMetadata>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    theme: Rc<RefCell<ComboThemeConfig>>,
+    fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>>,
+    font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
 }
 
 impl TextLineConfigWidget {
@@ -82,6 +87,9 @@ impl TextLineConfigWidget {
 
         let lines = Rc::new(RefCell::new(Vec::new()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
+        let fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>> = Rc::new(RefCell::new(Vec::new()));
+        let font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Set up add button - uses a self-contained rebuild callback
         let lines_for_add = lines.clone();
@@ -98,12 +106,17 @@ impl TextLineConfigWidget {
             let fields_inner = fields_for_add.clone();
             let rebuild_fn_inner = rebuild_fn.clone();
             let on_change_inner = on_change_for_rebuild.clone();
+            let theme_inner = theme.clone();
+            let font_selectors_inner = font_selectors.clone();
 
             move || {
                 // Clear all stack pages
                 while let Some(child) = stack_inner.first_child() {
                     stack_inner.remove(&child);
                 }
+
+                // Clear font selectors when rebuilding
+                font_selectors_inner.borrow_mut().clear();
 
                 // Rebuild all pages with the same rebuild callback
                 let lines_data = lines_inner.borrow().clone();
@@ -117,6 +130,8 @@ impl TextLineConfigWidget {
                         index,
                         callback_to_pass.clone(),
                         on_change_inner.clone(),
+                        theme_inner.clone(),
+                        font_selectors_inner.clone(),
                     );
                 }
 
@@ -171,6 +186,8 @@ impl TextLineConfigWidget {
         let fields_for_paste = available_fields.clone();
         let on_change_for_paste = on_change.clone();
         let rebuild_fn_for_paste = rebuild_fn.clone();
+        let theme_for_paste = theme.clone();
+        let font_selectors_for_paste = font_selectors.clone();
         paste_btn.connect_clicked(move |_| {
             let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 clipboard.paste_text_display()
@@ -181,6 +198,9 @@ impl TextLineConfigWidget {
             if let Some(config) = pasted {
                 // Update lines
                 *lines_for_paste.borrow_mut() = config.lines;
+
+                // Clear font selectors when rebuilding
+                font_selectors_for_paste.borrow_mut().clear();
 
                 // Rebuild stack
                 while let Some(child) = stack_for_paste.first_child() {
@@ -197,6 +217,8 @@ impl TextLineConfigWidget {
                         index,
                         callback_to_pass.clone(),
                         on_change_for_paste.clone(),
+                        theme_for_paste.clone(),
+                        font_selectors_for_paste.clone(),
                     );
                 }
 
@@ -214,6 +236,9 @@ impl TextLineConfigWidget {
             sidebar,
             available_fields,
             on_change,
+            theme,
+            fill_color_selectors,
+            font_selectors,
         }
     }
 
@@ -226,6 +251,8 @@ impl TextLineConfigWidget {
         list_index: usize,
         rebuild_callback: Option<Rc<dyn Fn()>>,
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        theme: Rc<RefCell<ComboThemeConfig>>,
+        font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -402,39 +429,43 @@ impl TextLineConfigWidget {
         direction_align_box.set_visible(should_show_dir_align);
         row_box.append(&direction_align_box);
 
-        // Font controls
+        // Font controls using ThemeFontSelector
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
         font_box.append(&Label::new(Some("Font:")));
 
-        // Font selection button
-        let font_button = Button::with_label(&format!("{} {:.0}", line_config.font_family, line_config.font_size));
-        font_button.set_hexpand(true);
+        // Create ThemeFontSelector with current font_source
+        let initial_font_source = line_config.get_font_source();
+        let font_selector = Rc::new(ThemeFontSelector::new(initial_font_source));
 
-        font_box.append(&font_button);
+        // Set theme config if available
+        font_selector.set_theme_config(theme.borrow().clone());
 
-        // Font size spinner
-        let size_label = Label::new(Some("Size:"));
-        font_box.append(&size_label);
+        font_box.append(font_selector.widget());
 
-        let size_spin = SpinButton::with_range(6.0, 200.0, 1.0);
-        size_spin.set_value(line_config.font_size);
-        size_spin.set_width_chars(4);
-        font_box.append(&size_spin);
+        // Store in font_selectors for theme updates
+        font_selectors.borrow_mut().push(font_selector.clone());
 
-        // Update font size when spinner changes
-        let lines_clone_size = lines.clone();
-        let font_button_clone_size = font_button.clone();
-        let on_change_size = on_change.clone();
-        size_spin.connect_value_changed(move |spin| {
-            let new_size = spin.value();
-            let mut lines_ref = lines_clone_size.borrow_mut();
+        // Connect font selector callback to update font_source
+        let lines_clone_font = lines.clone();
+        let on_change_font = on_change.clone();
+        font_selector.set_on_change(move |source| {
+            let mut lines_ref = lines_clone_font.borrow_mut();
             if let Some(line) = lines_ref.get_mut(list_index) {
-                line.font_size = new_size;
-                // Update button label
-                font_button_clone_size.set_label(&format!("{} {:.0}", line.font_family, new_size));
+                // Update font_source
+                line.font_source = Some(source.clone());
+                // Also update legacy fields for backward compatibility
+                match &source {
+                    FontSource::Custom { family, size } => {
+                        line.font_family = family.clone();
+                        line.font_size = *size;
+                    }
+                    FontSource::Theme { .. } => {
+                        // Keep legacy fields as-is for theme fonts
+                    }
+                }
             }
             drop(lines_ref);
-            if let Some(ref callback) = *on_change_size.borrow() {
+            if let Some(ref callback) = *on_change_font.borrow() {
                 callback();
             }
         });
@@ -483,6 +514,7 @@ impl TextLineConfigWidget {
             let lines_ref = lines_clone_copy_font.borrow();
             if let Some(line) = lines_ref.get(list_index) {
                 if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                    // Get resolved font for clipboard (using legacy fields for compatibility)
                     clipboard.copy_font(line.font_family.clone(), line.font_size, line.bold, line.italic);
                 }
             }
@@ -492,26 +524,26 @@ impl TextLineConfigWidget {
         // Paste font button
         let paste_font_btn = Button::with_label("Paste");
         let lines_clone_paste_font = lines.clone();
-        let font_button_clone = font_button.clone();
-        let size_spin_clone = size_spin.clone();
+        let font_selector_clone = font_selector.clone();
         let bold_check_clone = bold_check.clone();
         let italic_check_clone = italic_check.clone();
         let on_change_paste = on_change.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 if let Some((family, size, bold, italic)) = clipboard.paste_font() {
+                    let new_source = FontSource::Custom { family: family.clone(), size };
                     let mut lines_ref = lines_clone_paste_font.borrow_mut();
                     if let Some(line) = lines_ref.get_mut(list_index) {
-                        line.font_family = family.clone();
+                        line.font_source = Some(new_source.clone());
+                        line.font_family = family;
                         line.font_size = size;
                         line.bold = bold;
                         line.italic = italic;
                     }
                     drop(lines_ref);
 
-                    // Update button label, size spinner, and bold/italic checks
-                    font_button_clone.set_label(&format!("{} {:.0}", family, size));
-                    size_spin_clone.set_value(size);
+                    // Update font selector and bold/italic checks
+                    font_selector_clone.set_source(new_source);
                     bold_check_clone.set_active(bold);
                     italic_check_clone.set_active(italic);
 
@@ -549,9 +581,8 @@ impl TextLineConfigWidget {
         // Solid color container
         let solid_fill_box = GtkBox::new(Orientation::Horizontal, 6);
         solid_fill_box.append(&Label::new(Some("Color:")));
-        let line_color = line_config.color();
-        let initial_color = Color::new(line_color.0, line_color.1, line_color.2, line_color.3);
-        let fill_color_widget = Rc::new(ColorButtonWidget::new(initial_color));
+        let initial_color_source = line_config.fill.color_source();
+        let fill_color_widget = Rc::new(ThemeColorSelector::new(initial_color_source.clone()));
         solid_fill_box.append(fill_color_widget.widget());
         solid_fill_box.set_visible(initial_fill_type_index == 0);
         fill_box.append(&solid_fill_box);
@@ -567,12 +598,13 @@ impl TextLineConfigWidget {
                     angle: *angle,
                 });
             }
-            TextFillType::Solid { color } => {
-                // Default 2-stop gradient using the solid color
+            TextFillType::Solid { .. } => {
+                // Default 2-stop gradient using the resolved solid color
+                let resolved_color = line_config.fill.primary_color(None);
                 fill_gradient_editor.set_gradient(&LinearGradientConfig {
                     stops: vec![
-                        ColorStop::new(0.0, *color),
-                        ColorStop::new(1.0, Color::new(color.r * 0.5, color.g * 0.5, color.b * 0.5, color.a)),
+                        ColorStop::new(0.0, resolved_color),
+                        ColorStop::new(1.0, Color::new(resolved_color.r * 0.5, resolved_color.g * 0.5, resolved_color.b * 0.5, resolved_color.a)),
                     ],
                     angle: 0.0,
                 });
@@ -604,7 +636,7 @@ impl TextLineConfigWidget {
                     match selected {
                         0 => {
                             // Switch to Solid - use current color widget color
-                            let color = fill_color_widget_clone.color();
+                            let color = fill_color_widget_clone.source();
                             line.fill = TextFillType::Solid { color };
                         }
                         1 => {
@@ -946,62 +978,6 @@ impl TextLineConfigWidget {
 
         // Wire up change handlers to update the TextLineConfig in the lines Vec
 
-        // Font selection button handler
-        {
-            let lines_clone = lines.clone();
-            let font_button_clone = font_button.clone();
-            let size_spin_clone = size_spin.clone();
-            let on_change_font = on_change.clone();
-            font_button.connect_clicked(move |btn| {
-                let window = btn.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-
-                // Get current font description
-                let current_font = {
-                    let lines_ref = lines_clone.borrow();
-                    if let Some(line) = lines_ref.get(list_index) {
-                        let font_str = format!("{} {}", line.font_family, line.font_size as i32);
-                        gtk4::pango::FontDescription::from_string(&font_str)
-                    } else {
-                        gtk4::pango::FontDescription::from_string("Sans 12")
-                    }
-                };
-
-                let lines_clone2 = lines_clone.clone();
-                let font_button_clone2 = font_button_clone.clone();
-                let size_spin_clone2 = size_spin_clone.clone();
-                let on_change_font2 = on_change_font.clone();
-
-                // Use callback-based API for font selection with shared dialog
-                shared_font_dialog().choose_font(
-                    window.as_ref(),
-                    Some(&current_font),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            // Extract family and size from font description
-                            let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
-                            let size = font_desc.size() as f64 / gtk4::pango::SCALE as f64;
-
-                            let mut lines_ref = lines_clone2.borrow_mut();
-                            if let Some(line) = lines_ref.get_mut(list_index) {
-                                line.font_family = family.clone();
-                                line.font_size = size;
-                            }
-                            drop(lines_ref);
-
-                            // Update button label and size spinner
-                            font_button_clone2.set_label(&format!("{} {:.0}", family, size));
-                            size_spin_clone2.set_value(size);
-
-                            if let Some(ref callback) = *on_change_font2.borrow() {
-                                callback();
-                            }
-                        }
-                    },
-                );
-            });
-        }
-
         // Field selector handler
         {
             let lines_clone = lines.clone();
@@ -1270,22 +1246,32 @@ impl TextLineConfigWidget {
             self.stack.remove(&child);
         }
 
+        // Clear font selectors when rebuilding
+        self.font_selectors.borrow_mut().clear();
+
         // Create rebuild callback for delete buttons
         let stack_clone = self.stack.clone();
         let lines_clone = self.lines.clone();
         let fields_clone = self.available_fields.clone();
         let on_change_clone = self.on_change.clone();
+        let theme_clone = self.theme.clone();
+        let font_selectors_clone = self.font_selectors.clone();
 
         // Create rebuild function as Rc<RefCell> to allow self-reference
         let rebuild_fn: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let rebuild_fn_clone = rebuild_fn.clone();
         let on_change_for_rebuild = on_change_clone.clone();
+        let theme_for_rebuild = theme_clone.clone();
+        let font_selectors_for_rebuild = font_selectors_clone.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
             // Clear all stack pages
             while let Some(child) = stack_clone.first_child() {
                 stack_clone.remove(&child);
             }
+
+            // Clear font selectors when rebuilding
+            font_selectors_for_rebuild.borrow_mut().clear();
 
             // Rebuild all pages with the same rebuild callback
             let lines_data = lines_clone.borrow().clone();
@@ -1299,6 +1285,8 @@ impl TextLineConfigWidget {
                     index,
                     callback_to_pass.clone(),
                     on_change_for_rebuild.clone(),
+                    theme_for_rebuild.clone(),
+                    font_selectors_for_rebuild.clone(),
                 );
             }
         });
@@ -1317,6 +1305,8 @@ impl TextLineConfigWidget {
                 index,
                 Some(rebuild_closure.clone()),
                 on_change_clone.clone(),
+                theme_clone.clone(),
+                font_selectors_clone.clone(),
             );
         }
 
@@ -1357,5 +1347,18 @@ impl TextLineConfigWidget {
     /// Set the on_change callback
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Set the theme config for resolving theme colors and fonts
+    pub fn set_theme(&self, theme: ComboThemeConfig) {
+        *self.theme.borrow_mut() = theme.clone();
+        // Update all fill color selectors
+        for selector in self.fill_color_selectors.borrow().iter() {
+            selector.set_theme_config(theme.clone());
+        }
+        // Update all font selectors
+        for selector in self.font_selectors.borrow().iter() {
+            selector.set_theme_config(theme.clone());
+        }
     }
 }

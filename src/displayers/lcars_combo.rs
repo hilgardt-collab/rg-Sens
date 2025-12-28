@@ -290,6 +290,7 @@ impl LcarsComboDisplayer {
                         item_h,
                         &item_config.static_config,
                         &item_config.bar_config,
+                        &config.frame.theme,
                         Some(&slot_values),
                     )?;
                 }

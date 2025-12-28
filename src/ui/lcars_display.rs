@@ -143,6 +143,50 @@ pub enum ContentDisplayType {
     Speedometer,
 }
 
+impl ContentDisplayType {
+    /// Suggest a display type based on the available fields
+    ///
+    /// This provides smart defaults based on what kind of data the source provides:
+    /// - Text-only sources (like clock) → Text
+    /// - Percentage/numerical sources → Bar (default)
+    pub fn suggest_for_fields(fields: &[crate::core::FieldMetadata]) -> Self {
+        use crate::core::{FieldType, FieldPurpose};
+
+        if fields.is_empty() {
+            return ContentDisplayType::Text;
+        }
+
+        // Count field types
+        let has_percentage = fields.iter().any(|f| f.field_type == FieldType::Percentage);
+        let has_numerical = fields.iter().any(|f| f.field_type == FieldType::Numerical);
+        let all_text = fields.iter().all(|f| f.field_type == FieldType::Text);
+        let has_value_purpose = fields.iter().any(|f| f.purpose == FieldPurpose::Value);
+
+        // If all fields are text (like clock, date), suggest Text displayer
+        if all_text {
+            return ContentDisplayType::Text;
+        }
+
+        // If there are percentage fields with Value purpose, Bar is good
+        if has_percentage && has_value_purpose {
+            return ContentDisplayType::Bar;
+        }
+
+        // If there are numerical values but no percentages, Text might be better
+        // (e.g., temperature values, frequencies)
+        if has_numerical && !has_percentage {
+            // Check if there's also text - could be a mixed source
+            let has_text = fields.iter().any(|f| f.field_type == FieldType::Text);
+            if has_text {
+                return ContentDisplayType::Text;
+            }
+        }
+
+        // Default to Bar for numerical/percentage data
+        ContentDisplayType::Bar
+    }
+}
+
 /// Configuration for a sidebar segment
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SegmentConfig {
@@ -1603,6 +1647,7 @@ pub fn render_content_static(
     h: f64,
     config: &StaticDisplayConfig,
     bar_config: &BarDisplayConfig,
+    theme: &ComboThemeConfig,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
@@ -1614,12 +1659,13 @@ pub fn render_content_static(
     // Render text overlay if enabled
     if bar_config.text_overlay.enabled {
         let values = slot_values.cloned().unwrap_or_default();
-        crate::ui::text_renderer::render_text_lines(
+        crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             w,
             h,
             &bar_config.text_overlay.text_config,
             &values,
+            Some(theme),
         );
     }
 

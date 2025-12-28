@@ -1,6 +1,7 @@
 //! Configuration for text displayer
 
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 use serde::{Deserialize, Serialize};
 
 /// Vertical position of text
@@ -114,7 +115,7 @@ impl CombineAlignment {
 #[serde(tag = "type")]
 pub enum TextFillType {
     #[serde(rename = "solid")]
-    Solid { color: Color },
+    Solid { color: ColorSource },
     #[serde(rename = "linear_gradient")]
     LinearGradient {
         stops: Vec<ColorStop>,
@@ -125,18 +126,49 @@ pub enum TextFillType {
 impl Default for TextFillType {
     fn default() -> Self {
         TextFillType::Solid {
-            color: Color::new(1.0, 1.0, 1.0, 1.0),
+            color: ColorSource::Custom {
+                color: Color::new(1.0, 1.0, 1.0, 1.0),
+            },
         }
     }
 }
 
 impl TextFillType {
-    /// Get the primary color (for compatibility or fallback)
-    pub fn primary_color(&self) -> Color {
+    /// Get the primary color resolved against a theme (for compatibility or fallback)
+    pub fn primary_color(&self, theme: Option<&ComboThemeConfig>) -> Color {
         match self {
-            TextFillType::Solid { color } => *color,
+            TextFillType::Solid { color } => {
+                if let Some(theme) = theme {
+                    color.resolve(theme)
+                } else {
+                    // Fallback for when no theme is available
+                    match color {
+                        ColorSource::Custom { color } => *color,
+                        ColorSource::Theme { index } => {
+                            // Return a default based on theme index
+                            match index {
+                                1 => Color::new(1.0, 0.5, 0.0, 1.0), // Orange
+                                2 => Color::new(0.0, 0.8, 1.0, 1.0), // Cyan
+                                3 => Color::new(1.0, 0.0, 0.5, 1.0), // Pink
+                                _ => Color::new(0.5, 1.0, 0.0, 1.0), // Green
+                            }
+                        }
+                    }
+                }
+            }
             TextFillType::LinearGradient { stops, .. } => {
                 stops.first().map(|s| s.color).unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0))
+            }
+        }
+    }
+
+    /// Get the color source (for UI)
+    pub fn color_source(&self) -> ColorSource {
+        match self {
+            TextFillType::Solid { color } => color.clone(),
+            TextFillType::LinearGradient { stops, .. } => {
+                let c = stops.first().map(|s| s.color).unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0));
+                ColorSource::Custom { color: c }
             }
         }
     }
@@ -144,8 +176,15 @@ impl TextFillType {
     /// Create from legacy color tuple
     pub fn from_color_tuple(r: f64, g: f64, b: f64, a: f64) -> Self {
         TextFillType::Solid {
-            color: Color::new(r, g, b, a),
+            color: ColorSource::Custom {
+                color: Color::new(r, g, b, a),
+            },
         }
+    }
+
+    /// Create from color source
+    pub fn from_color_source(source: ColorSource) -> Self {
+        TextFillType::Solid { color: source }
     }
 }
 
@@ -198,11 +237,15 @@ pub struct TextLineConfig {
     /// ID of the field to display (e.g., "caption", "usage", "unit")
     pub field_id: String,
 
-    /// Font family (e.g., "Sans", "Monospace")
+    /// Font family (e.g., "Sans", "Monospace") - used when font_source is None or Custom
     pub font_family: String,
 
-    /// Font size in points
+    /// Font size in points - used when font_source is None or Custom
     pub font_size: f64,
+
+    /// Font source (theme or custom) - when Some, overrides font_family/font_size
+    #[serde(default)]
+    pub font_source: Option<FontSource>,
 
     /// Whether the font is bold
     #[serde(default)]
@@ -292,6 +335,14 @@ impl TextLineConfig {
         if let Some(legacy_align) = self.legacy_combine_alignment.take() {
             self.combine_alignment = legacy_align.to_text_position(self.combine_direction);
         }
+
+        // Migrate old font_family/font_size to font_source if not already set
+        if self.font_source.is_none() {
+            self.font_source = Some(FontSource::Custom {
+                family: self.font_family.clone(),
+                size: self.font_size,
+            });
+        }
     }
 
     /// Get vertical position (for compatibility with existing code)
@@ -304,10 +355,47 @@ impl TextLineConfig {
         self.position.to_positions().1
     }
 
-    /// Get color as tuple (for compatibility with existing code)
+    /// Get color as tuple resolved against theme (for compatibility with existing code)
     pub fn color(&self) -> (f64, f64, f64, f64) {
-        let c = self.fill.primary_color();
+        let c = self.fill.primary_color(None);
         (c.r, c.g, c.b, c.a)
+    }
+
+    /// Get color resolved against a theme
+    pub fn resolved_color(&self, theme: Option<&ComboThemeConfig>) -> Color {
+        self.fill.primary_color(theme)
+    }
+
+    /// Get the font source (for UI). Returns current font_source or creates Custom from legacy fields.
+    pub fn get_font_source(&self) -> FontSource {
+        self.font_source.clone().unwrap_or_else(|| FontSource::Custom {
+            family: self.font_family.clone(),
+            size: self.font_size,
+        })
+    }
+
+    /// Resolve font against a theme, returning (family, size)
+    pub fn resolved_font(&self, theme: Option<&ComboThemeConfig>) -> (String, f64) {
+        match &self.font_source {
+            Some(source) => {
+                if let Some(theme) = theme {
+                    source.resolve(theme)
+                } else {
+                    // Fallback for when no theme is available
+                    match source {
+                        FontSource::Custom { family, size } => (family.clone(), *size),
+                        FontSource::Theme { index } => {
+                            // Return a default font based on theme index
+                            match index {
+                                1 => ("Sans Bold".to_string(), 16.0),
+                                _ => ("Sans".to_string(), 12.0),
+                            }
+                        }
+                    }
+                }
+            }
+            None => (self.font_family.clone(), self.font_size),
+        }
     }
 }
 
@@ -317,6 +405,10 @@ impl Default for TextLineConfig {
             field_id: String::new(),
             font_family: "Sans".to_string(),
             font_size: 12.0,
+            font_source: Some(FontSource::Custom {
+                family: "Sans".to_string(),
+                size: 12.0,
+            }),
             bold: false,
             italic: false,
             fill: TextFillType::default(),
@@ -363,10 +455,16 @@ impl Default for TextDisplayerConfig {
                     field_id: "caption".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
+                    font_source: Some(FontSource::Custom {
+                        family: "Sans".to_string(),
+                        size: 14.0,
+                    }),
                     bold: false,
                     italic: false,
                     fill: TextFillType::Solid {
-                        color: Color::new(1.0, 1.0, 1.0, 1.0),
+                        color: ColorSource::Custom {
+                            color: Color::new(1.0, 1.0, 1.0, 1.0),
+                        },
                     },
                     legacy_color: None,
                     text_background: TextBackgroundConfig::default(),
@@ -386,10 +484,16 @@ impl Default for TextDisplayerConfig {
                     field_id: "value".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
+                    font_source: Some(FontSource::Custom {
+                        family: "Sans".to_string(),
+                        size: 14.0,
+                    }),
                     bold: false,
                     italic: false,
                     fill: TextFillType::Solid {
-                        color: Color::new(0.5, 1.0, 0.5, 1.0), // Light green
+                        color: ColorSource::Custom {
+                            color: Color::new(0.5, 1.0, 0.5, 1.0), // Light green
+                        },
                     },
                     legacy_color: None,
                     text_background: TextBackgroundConfig::default(),
@@ -409,10 +513,16 @@ impl Default for TextDisplayerConfig {
                     field_id: "unit".to_string(),
                     font_family: "Sans".to_string(),
                     font_size: 14.0,
+                    font_source: Some(FontSource::Custom {
+                        family: "Sans".to_string(),
+                        size: 14.0,
+                    }),
                     bold: false,
                     italic: false,
                     fill: TextFillType::Solid {
-                        color: Color::new(1.0, 1.0, 1.0, 1.0),
+                        color: ColorSource::Custom {
+                            color: Color::new(1.0, 1.0, 1.0, 1.0),
+                        },
                     },
                     legacy_color: None,
                     text_background: TextBackgroundConfig::default(),

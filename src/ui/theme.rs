@@ -367,7 +367,7 @@ impl GradientSource {
     /// Resolve to actual gradient using theme
     pub fn resolve(&self, theme: &ComboThemeConfig) -> LinearGradientConfig {
         match self {
-            GradientSource::Theme => theme.gradient.clone(),
+            GradientSource::Theme => theme.gradient.resolve(theme),
             GradientSource::Custom { gradient } => gradient.clone(),
         }
     }
@@ -383,6 +383,52 @@ impl GradientSource {
 pub struct ColorStopSource {
     pub position: f64,
     pub color: ColorSource,
+}
+
+/// Linear gradient configuration with theme-aware color stops
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LinearGradientSourceConfig {
+    pub angle: f64,
+    pub stops: Vec<ColorStopSource>,
+}
+
+impl LinearGradientSourceConfig {
+    /// Create a new gradient from angle and theme-aware stops
+    pub fn new(angle: f64, stops: Vec<ColorStopSource>) -> Self {
+        Self { angle, stops }
+    }
+
+    /// Create from a concrete LinearGradientConfig (converts stops to Custom)
+    pub fn from_concrete(config: &LinearGradientConfig) -> Self {
+        Self {
+            angle: config.angle,
+            stops: config.stops.iter()
+                .map(|s| ColorStopSource::custom(s.position, s.color))
+                .collect(),
+        }
+    }
+
+    /// Resolve to concrete LinearGradientConfig using theme
+    pub fn resolve(&self, theme: &ComboThemeConfig) -> LinearGradientConfig {
+        LinearGradientConfig {
+            angle: self.angle,
+            stops: self.stops.iter()
+                .map(|s| s.resolve(theme))
+                .collect(),
+        }
+    }
+}
+
+impl Default for LinearGradientSourceConfig {
+    fn default() -> Self {
+        Self {
+            angle: 180.0,
+            stops: vec![
+                ColorStopSource::custom(0.0, Color::new(0.2, 0.2, 0.2, 1.0)),
+                ColorStopSource::custom(1.0, Color::new(0.1, 0.1, 0.1, 1.0)),
+            ],
+        }
+    }
 }
 
 impl ColorStopSource {
@@ -422,8 +468,8 @@ pub struct ComboThemeConfig {
     pub color3: Color,
     /// Theme color 4 (Background/Highlight)
     pub color4: Color,
-    /// Theme gradient
-    pub gradient: LinearGradientConfig,
+    /// Theme gradient (with theme-aware color stops)
+    pub gradient: LinearGradientSourceConfig,
     /// Theme font 1 family
     pub font1_family: String,
     /// Theme font 1 size
@@ -468,11 +514,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.914, 0.118, 0.549, 1.0), // Pink #e91e8c
             color3: Color::new(0.0, 1.0, 0.949, 1.0),     // Cyan #00fff2
             color4: Color::new(0.102, 0.039, 0.180, 1.0), // Dark purple #1a0a2e
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.102, 0.039, 0.180, 1.0)),
-                    ColorStop::new(1.0, Color::new(0.051, 0.020, 0.090, 1.0)),
+                    ColorStopSource::custom(0.0, Color::new(0.102, 0.039, 0.180, 1.0)),
+                    ColorStopSource::custom(1.0, Color::new(0.051, 0.020, 0.090, 1.0)),
                 ],
             },
             font1_family: "sans-serif".to_string(),
@@ -489,11 +535,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.8, 0.6, 1.0, 1.0),       // Purple #cc99ff
             color3: Color::new(0.6, 0.8, 0.8, 1.0),       // Teal #99cccc
             color4: Color::new(1.0, 0.8, 0.6, 1.0),       // Beige #ffcc99
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.05, 0.05, 0.1, 1.0)),
-                    ColorStop::new(1.0, Color::new(0.02, 0.02, 0.05, 1.0)),
+                    ColorStopSource::custom(0.0, Color::new(0.05, 0.05, 0.1, 1.0)),
+                    ColorStopSource::custom(1.0, Color::new(0.02, 0.02, 0.05, 1.0)),
                 ],
             },
             font1_family: "Sans".to_string(),
@@ -510,11 +556,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.0, 0.4, 1.0, 1.0),       // Blue #0066ff
             color3: Color::new(1.0, 1.0, 0.0, 1.0),       // Yellow #ffff00
             color4: Color::new(0.039, 0.039, 0.102, 1.0), // Dark blue #0a0a1a
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.039, 0.039, 0.102, 1.0)),
-                    ColorStop::new(1.0, Color::new(0.020, 0.020, 0.051, 1.0)),
+                    ColorStopSource::custom(0.0, Color::new(0.039, 0.039, 0.102, 1.0)),
+                    ColorStopSource::custom(1.0, Color::new(0.020, 0.020, 0.051, 1.0)),
                 ],
             },
             font1_family: "Rajdhani".to_string(),
@@ -531,11 +577,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.0, 0.588, 0.533, 1.0),   // Teal #009688
             color3: Color::new(1.0, 0.596, 0.0, 1.0),     // Orange #ff9800
             color4: Color::new(0.459, 0.459, 0.459, 1.0), // Gray #757575
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.98, 0.98, 0.98, 1.0)),
-                    ColorStop::new(1.0, Color::new(0.96, 0.96, 0.96, 1.0)),
+                    ColorStopSource::custom(0.0, Color::new(0.98, 0.98, 0.98, 1.0)),
+                    ColorStopSource::custom(1.0, Color::new(0.96, 0.96, 0.96, 1.0)),
                 ],
             },
             font1_family: "Roboto".to_string(),
@@ -552,11 +598,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.290, 0.333, 0.408, 1.0), // Dark steel #4a5568
             color3: Color::new(1.0, 0.757, 0.027, 1.0),   // Warning yellow #ffc107
             color4: Color::new(0.353, 0.353, 0.353, 1.0), // Rivet #5a5a5a
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.35, 0.38, 0.42, 1.0)),
-                    ColorStop::new(1.0, Color::new(0.25, 0.28, 0.32, 1.0)),
+                    ColorStopSource::custom(0.0, Color::new(0.35, 0.38, 0.42, 1.0)),
+                    ColorStopSource::custom(1.0, Color::new(0.25, 0.28, 0.32, 1.0)),
                 ],
             },
             font1_family: "Sans Bold".to_string(),
@@ -573,11 +619,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.102, 0.502, 0.102, 1.0), // Dim green #1a801a
             color3: Color::new(0.898, 0.898, 0.863, 1.0), // White #e5e5dc
             color4: Color::new(0.020, 0.020, 0.020, 1.0), // Black #050505
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.02, 0.02, 0.02, 1.0)),
-                    ColorStop::new(1.0, Color::new(0.01, 0.01, 0.01, 1.0)),
+                    ColorStopSource::custom(0.0, Color::new(0.02, 0.02, 0.02, 1.0)),
+                    ColorStopSource::custom(1.0, Color::new(0.01, 0.01, 0.01, 1.0)),
                 ],
             },
             font1_family: "monospace".to_string(),
@@ -594,11 +640,11 @@ impl ComboThemeConfig {
             color2: Color::new(0.0, 0.451, 0.149, 1.0),   // Dim green #007326
             color3: Color::new(0.0, 1.0, 0.333, 1.0),     // Bright green #00ff55
             color4: Color::new(0.039, 0.039, 0.039, 1.0), // Black #0a0a0a
-            gradient: LinearGradientConfig {
+            gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
-                    ColorStop::new(0.0, Color::new(0.0, 0.0, 0.0, 0.8)),
-                    ColorStop::new(1.0, Color::new(0.0, 0.0, 0.0, 0.9)),
+                    ColorStopSource::custom(0.0, Color::new(0.0, 0.0, 0.0, 0.8)),
+                    ColorStopSource::custom(1.0, Color::new(0.0, 0.0, 0.0, 0.9)),
                 ],
             },
             font1_family: "monospace".to_string(),

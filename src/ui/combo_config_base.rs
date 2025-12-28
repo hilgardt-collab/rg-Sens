@@ -185,7 +185,7 @@ where
     let get_theme_for_gradient = get_theme.clone();
     gradient_swatch.set_draw_func(move |_, cr, width, height| {
         let theme = get_theme_for_gradient(&config_for_gradient.borrow());
-        let gradient_config = theme.gradient.clone();
+        let gradient_config = theme.gradient.resolve(&theme);
         // Render linear gradient
         let w = width as f64;
         let h = height as f64;
@@ -225,9 +225,9 @@ where
     let get_theme_for_gradient_copy = get_theme.clone();
     gradient_copy_btn.connect_clicked(move |_| {
         let theme = get_theme_for_gradient_copy(&config_for_gradient_copy.borrow());
-        let stops = theme.gradient.stops.clone();
+        let resolved_gradient = theme.gradient.resolve(&theme);
         if let Ok(mut clipboard) = CLIPBOARD.lock() {
-            clipboard.copy_gradient_stops(stops);
+            clipboard.copy_gradient_stops(resolved_gradient.stops);
             log::info!("Theme gradient copied to clipboard");
         }
     });
@@ -356,7 +356,7 @@ where
 }
 
 /// Create the content page with tabbed notebook for content items.
-pub fn create_content_page<C, F>(
+pub fn create_content_page<C, F, S>(
     config: &Rc<RefCell<C>>,
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: &DrawingArea,
@@ -364,10 +364,12 @@ pub fn create_content_page<C, F>(
     source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     get_content_items: F,
+    set_content_item: S,
 ) -> GtkBox
 where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
+    S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
 {
     let page = GtkBox::new(Orientation::Vertical, 8);
     set_page_margins(&page);
@@ -400,13 +402,14 @@ where
         source_summaries,
         available_fields,
         get_content_items,
+        set_content_item,
     );
 
     page
 }
 
 /// Rebuild the content tabs based on source summaries.
-pub fn rebuild_content_tabs<C, F>(
+pub fn rebuild_content_tabs<C, F, S>(
     config: &Rc<RefCell<C>>,
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: &DrawingArea,
@@ -414,9 +417,11 @@ pub fn rebuild_content_tabs<C, F>(
     source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     get_content_items: F,
+    set_content_item: S,
 ) where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
+    S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
 {
     let notebook = content_notebook.borrow();
 
@@ -476,6 +481,7 @@ pub fn rebuild_content_tabs<C, F>(
                     &slot_name,
                     available_fields.borrow().clone(),
                     get_content_items.clone(),
+                    set_content_item.clone(),
                 );
                 items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
             }
@@ -490,17 +496,19 @@ pub fn rebuild_content_tabs<C, F>(
 }
 
 /// Create configuration UI for a single content item.
-pub fn create_content_item_config<C, F>(
+pub fn create_content_item_config<C, F, S>(
     config: &Rc<RefCell<C>>,
-    _on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    _preview: &DrawingArea,
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    preview: &DrawingArea,
     slot_name: &str,
     available_fields: Vec<FieldMetadata>,
     get_content_items: F,
+    set_content_item: S,
 ) -> GtkBox
 where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
+    S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
 {
     // Need a way to get mutable access to content_items
     // For now we'll use a trait object approach
@@ -643,7 +651,31 @@ where
             .unwrap_or_default()
     };
     bar_widget.set_config(current_bar_config);
-    bar_config_frame.set_child(Some(bar_widget.widget()));
+
+    // Connect bar widget on_change
+    let bar_widget_rc = Rc::new(bar_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let bar_widget_for_cb = bar_widget_rc.clone();
+        bar_widget_rc.set_on_change(move || {
+            let bar_config = bar_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.bar_config = bar_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+    bar_config_frame.set_child(Some(bar_widget_rc.widget()));
     inner_box.append(&bar_config_frame);
 
     // === Graph Configuration Section ===
@@ -659,7 +691,31 @@ where
             .unwrap_or_default()
     };
     graph_widget.set_config(current_graph_config);
-    graph_config_frame.set_child(Some(graph_widget.widget()));
+
+    // Connect graph widget on_change
+    let graph_widget_rc = Rc::new(graph_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let graph_widget_for_cb = graph_widget_rc.clone();
+        graph_widget_rc.set_on_change(move || {
+            let graph_config = graph_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.graph_config = graph_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+    graph_config_frame.set_child(Some(graph_widget_rc.widget()));
     inner_box.append(&graph_config_frame);
 
     // === Text Configuration Section ===
@@ -675,7 +731,31 @@ where
             .unwrap_or_default()
     };
     text_widget.set_config(current_text_config);
-    text_config_frame.set_child(Some(text_widget.widget()));
+
+    // Connect text widget on_change
+    let text_widget_rc = Rc::new(text_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let text_widget_for_cb = text_widget_rc.clone();
+        text_widget_rc.set_on_change(move || {
+            let text_config = text_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.bar_config.text_overlay.text_config = text_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+    text_config_frame.set_child(Some(text_widget_rc.widget()));
     inner_box.append(&text_config_frame);
 
     // === Core Bars Configuration Section ===
@@ -691,7 +771,31 @@ where
             .unwrap_or_default()
     };
     core_bars_widget.set_config(current_core_bars_config);
-    core_bars_config_frame.set_child(Some(core_bars_widget.widget()));
+
+    // Connect core bars widget on_change
+    let core_bars_widget_rc = Rc::new(core_bars_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let core_bars_widget_for_cb = core_bars_widget_rc.clone();
+        core_bars_widget_rc.set_on_change(move || {
+            let core_bars_config = core_bars_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.core_bars_config = core_bars_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+    core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
     inner_box.append(&core_bars_config_frame);
 
     // === Arc Configuration Section ===
@@ -707,7 +811,31 @@ where
             .unwrap_or_default()
     };
     arc_widget.set_config(current_arc_config);
-    arc_config_frame.set_child(Some(arc_widget.widget()));
+
+    // Connect arc widget on_change
+    let arc_widget_rc = Rc::new(arc_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let arc_widget_for_cb = arc_widget_rc.clone();
+        arc_widget_rc.set_on_change(move || {
+            let arc_config = arc_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.arc_config = arc_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+    arc_config_frame.set_child(Some(arc_widget_rc.widget()));
     inner_box.append(&arc_config_frame);
 
     // === Speedometer Configuration Section ===
@@ -723,7 +851,31 @@ where
             .unwrap_or_default()
     };
     speedometer_widget.set_config(&current_speedometer_config);
-    speedometer_config_frame.set_child(Some(speedometer_widget.widget()));
+
+    // Connect speedometer widget on_change
+    let speedometer_widget_rc = Rc::new(speedometer_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let speedometer_widget_for_cb = speedometer_widget_rc.clone();
+        speedometer_widget_rc.set_on_change(Box::new(move || {
+            let speedometer_config = speedometer_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.speedometer_config = speedometer_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        }));
+    }
+    speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
     inner_box.append(&speedometer_config_frame);
 
     // === Static Display Configuration Section ===
@@ -771,6 +923,12 @@ where
     let arc_config_frame_clone = arc_config_frame.clone();
     let speedometer_config_frame_clone = speedometer_config_frame.clone();
     let static_config_frame_clone = static_config_frame.clone();
+    let config_clone = config.clone();
+    let on_change_clone = on_change.clone();
+    let preview_clone = preview.clone();
+    let slot_name_for_dropdown = slot_name.to_string();
+    let get_content_items_clone = get_content_items.clone();
+    let set_content_item_clone = set_content_item.clone();
     type_dropdown.connect_selected_notify(move |dropdown| {
         let selected = dropdown.selected();
         if selected == gtk4::INVALID_LIST_POSITION {
@@ -786,6 +944,21 @@ where
             6 => ContentDisplayType::Speedometer,
             _ => ContentDisplayType::Bar,
         };
+
+        // Update config
+        {
+            let mut cfg = config_clone.borrow_mut();
+            // Get current item or create default
+            let current_item = get_content_items_clone(&cfg)
+                .get(&slot_name_for_dropdown)
+                .cloned()
+                .unwrap_or_default();
+            let mut new_item = current_item;
+            new_item.display_as = display_type;
+            set_content_item_clone(&mut cfg, &slot_name_for_dropdown, new_item);
+        }
+
+        // Update frame visibility
         bar_config_frame_clone.set_visible(matches!(
             display_type,
             ContentDisplayType::Bar | ContentDisplayType::LevelBar
@@ -798,6 +971,9 @@ where
         speedometer_config_frame_clone
             .set_visible(matches!(display_type, ContentDisplayType::Speedometer));
         static_config_frame_clone.set_visible(matches!(display_type, ContentDisplayType::Static));
+
+        // Trigger redraw and notify change
+        queue_redraw(&preview_clone, &on_change_clone);
     });
 
     scroll.set_child(Some(&inner_box));
@@ -930,7 +1106,7 @@ pub fn create_theme_page_base<C>(
     set_color2: impl Fn(&mut C, crate::ui::background::Color) + 'static,
     set_color3: impl Fn(&mut C, crate::ui::background::Color) + 'static,
     set_color4: impl Fn(&mut C, crate::ui::background::Color) + 'static,
-    set_gradient: impl Fn(&mut C, crate::ui::background::LinearGradientConfig) + 'static,
+    set_gradient: impl Fn(&mut C, crate::ui::theme::LinearGradientSourceConfig) + 'static,
 ) -> (
     GtkBox,
     Rc<crate::ui::ColorButtonWidget>,
@@ -1032,7 +1208,7 @@ where
     page.append(&gradient_label);
 
     let theme_gradient_editor = Rc::new(GradientEditor::new());
-    theme_gradient_editor.set_gradient(&theme.gradient);
+    theme_gradient_editor.set_gradient_source_config(&theme.gradient);
     page.append(theme_gradient_editor.widget());
 
     let config_grad = config.clone();
@@ -1041,7 +1217,7 @@ where
     let refreshers_grad = theme_ref_refreshers.clone();
     let gradient_editor_clone = theme_gradient_editor.clone();
     theme_gradient_editor.set_on_change(move || {
-        set_gradient(&mut config_grad.borrow_mut(), gradient_editor_clone.get_gradient());
+        set_gradient(&mut config_grad.borrow_mut(), gradient_editor_clone.get_gradient_source_config());
         queue_redraw(&preview_grad, &on_change_grad);
         refresh_theme_refs(&refreshers_grad);
     });

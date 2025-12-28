@@ -377,7 +377,7 @@ pub fn render_bar(
 
     // Render text overlay if enabled
     if config.text_overlay.enabled {
-        render_text_overlay(cr, config, value, values, width, height)?;
+        render_text_overlay(cr, config, theme, value, values, width, height)?;
     }
 
     Ok(())
@@ -1079,18 +1079,20 @@ fn render_border_resolved(
 fn render_text_overlay(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    theme: &ComboThemeConfig,
     _value: f64,
     values: &std::collections::HashMap<String, serde_json::Value>,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
     // Use shared text renderer for proper combined field handling
-    crate::ui::text_renderer::render_text_lines(
+    crate::ui::text_renderer::render_text_lines_with_theme(
         cr,
         width,
         height,
         &config.text_overlay.text_config,
         values,
+        Some(theme),
     );
 
     Ok(())

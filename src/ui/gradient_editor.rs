@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::render_utils::render_checkerboard;
-use crate::ui::theme::{ColorStopSource, ComboThemeConfig};
+use crate::ui::theme::{ColorStopSource, ComboThemeConfig, LinearGradientSourceConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 
 /// Gradient editor widget
@@ -581,6 +581,19 @@ impl GradientEditor {
         LinearGradientConfig {
             angle: *self.angle.borrow(),
             stops: self.get_stops(),
+        }
+    }
+
+    /// Set gradient from LinearGradientSourceConfig (preserves theme references)
+    pub fn set_gradient_source_config(&self, config: &LinearGradientSourceConfig) {
+        self.set_gradient_source(config.angle, config.stops.clone());
+    }
+
+    /// Get the current gradient as LinearGradientSourceConfig (preserves theme references)
+    pub fn get_gradient_source_config(&self) -> LinearGradientSourceConfig {
+        LinearGradientSourceConfig {
+            angle: *self.angle.borrow(),
+            stops: self.stops.borrow().clone(),
         }
     }
 

@@ -286,12 +286,13 @@ pub fn render_arc(
 
     // Render text overlay if enabled
     if config.text_overlay.enabled {
-        crate::ui::text_renderer::render_text_lines(
+        crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,
             &config.text_overlay.text_config,
             values,
+            Some(theme),
         );
     }
 

@@ -444,7 +444,7 @@ impl MaterialConfigWidget {
         gradient_box.set_margin_bottom(8);
 
         let gradient_editor = Rc::new(GradientEditor::new());
-        gradient_editor.set_gradient(&config.borrow().frame.theme.gradient);
+        gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -452,7 +452,7 @@ impl MaterialConfigWidget {
         let refreshers_clone = theme_ref_refreshers.clone();
         let gradient_editor_for_cb = gradient_editor.clone();
         gradient_editor.set_on_change(move || {
-            let gradient_config = gradient_editor_for_cb.get_gradient();
+            let gradient_config = gradient_editor_for_cb.get_gradient_source_config();
             config_clone.borrow_mut().frame.theme.gradient = gradient_config;
             Self::refresh_theme_refs(&refreshers_clone);
             Self::queue_redraw(&preview_clone, &on_change_clone);
@@ -634,7 +634,7 @@ impl MaterialConfigWidget {
                 color_widgets_clone[2].set_color(theme.color3);
                 color_widgets_clone[3].set_color(theme.color4);
             }
-            gradient_editor_for_preset.set_gradient(&theme.gradient);
+            gradient_editor_for_preset.set_gradient_source_config(&theme.gradient);
             font1_btn_for_preset.set_label(&theme.font1_family);
             font1_size_spin_for_preset.set_value(theme.font1_size);
             font2_btn_for_preset.set_label(&theme.font2_family);
@@ -747,7 +747,8 @@ impl MaterialConfigWidget {
         gradient_swatch.set_size_request(60, 20);
         let config_for_gradient = config.clone();
         gradient_swatch.set_draw_func(move |_, cr, width, height| {
-            let gradient_config = config_for_gradient.borrow().frame.theme.gradient.clone();
+            let cfg = config_for_gradient.borrow();
+            let gradient_config = cfg.frame.theme.gradient.resolve(&cfg.frame.theme);
             let w = width as f64;
             let h = height as f64;
             let angle_rad = gradient_config.angle.to_radians();
@@ -774,9 +775,10 @@ impl MaterialConfigWidget {
         gradient_copy_btn.set_tooltip_text(Some("Copy Theme Gradient to clipboard"));
         let config_for_gradient_copy = config.clone();
         gradient_copy_btn.connect_clicked(move |_| {
-            let stops = config_for_gradient_copy.borrow().frame.theme.gradient.stops.clone();
+            let cfg = config_for_gradient_copy.borrow();
+            let resolved_gradient = cfg.frame.theme.gradient.resolve(&cfg.frame.theme);
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_gradient_stops(stops);
+                clipboard.copy_gradient_stops(resolved_gradient.stops);
             }
         });
         gradient_box.append(&gradient_copy_btn);
@@ -1343,6 +1345,7 @@ impl MaterialConfigWidget {
                 if i < cfg.frame.group_size_weights.len() {
                     cfg.frame.group_size_weights[i] = spin.value();
                 }
+                drop(cfg);
                 Self::queue_redraw(&preview_clone, &on_change_clone);
             });
 
@@ -1457,11 +1460,30 @@ impl MaterialConfigWidget {
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
-        // Ensure this slot exists in content_items
+        // Get available fields for this slot (needed for smart defaults)
+        let slot_prefix = format!("{}_", slot_name);
+        let slot_fields_for_default: Vec<FieldMetadata> = available_fields.borrow().iter()
+            .filter(|f| f.id.starts_with(&slot_prefix))
+            .map(|f| {
+                let short_id = f.id.strip_prefix(&slot_prefix).unwrap_or(&f.id);
+                FieldMetadata::new(
+                    short_id,
+                    &f.name,
+                    &f.description,
+                    f.field_type.clone(),
+                    f.purpose.clone(),
+                )
+            })
+            .collect();
+
+        // Ensure this slot exists in content_items with smart default display type
         {
             let mut cfg = config.borrow_mut();
             if !cfg.frame.content_items.contains_key(slot_name) {
-                cfg.frame.content_items.insert(slot_name.to_string(), ContentItemConfig::default());
+                let mut item = ContentItemConfig::default();
+                // Use smart default based on field types
+                item.display_as = ContentDisplayType::suggest_for_fields(&slot_fields_for_default);
+                cfg.frame.content_items.insert(slot_name.to_string(), item);
             }
         }
 
@@ -2041,6 +2063,11 @@ impl MaterialConfigWidget {
         self.config.borrow().clone()
     }
 
+    /// Get a reference to the internal config Rc for use in callbacks
+    pub fn get_config_rc(&self) -> Rc<RefCell<MaterialDisplayConfig>> {
+        self.config.clone()
+    }
+
     pub fn set_config(&self, config: &MaterialDisplayConfig) {
         *self.config.borrow_mut() = config.clone();
 
@@ -2063,7 +2090,7 @@ impl MaterialConfigWidget {
             widgets.theme_color2_widget.set_color(config.frame.theme.color2);
             widgets.theme_color3_widget.set_color(config.frame.theme.color3);
             widgets.theme_color4_widget.set_color(config.frame.theme.color4);
-            widgets.theme_gradient_editor.set_gradient(&config.frame.theme.gradient);
+            widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
             widgets.font1_btn.set_label(&config.frame.theme.font1_family);
             widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
             widgets.font2_btn.set_label(&config.frame.theme.font2_family);

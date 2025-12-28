@@ -9,6 +9,7 @@ use crate::displayers::{
     TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition, VerticalPosition,
 };
 use crate::ui::render_cache::TEXT_EXTENTS_CACHE;
+use crate::ui::theme::ComboThemeConfig;
 
 /// Render text lines using a TextDisplayerConfig
 pub fn render_text_lines(
@@ -17,6 +18,18 @@ pub fn render_text_lines(
     height: f64,
     config: &TextDisplayerConfig,
     values: &HashMap<String, Value>,
+) {
+    render_text_lines_with_theme(cr, width, height, config, values, None);
+}
+
+/// Render text lines with theme support for resolving theme colors
+pub fn render_text_lines_with_theme(
+    cr: &Context,
+    width: f64,
+    height: f64,
+    config: &TextDisplayerConfig,
+    values: &HashMap<String, Value>,
+    theme: Option<&ComboThemeConfig>,
 ) {
     // Group lines by group_id for combined rendering
     let mut grouped_lines: HashMap<Option<String>, Vec<&TextLineConfig>> = HashMap::new();
@@ -34,12 +47,12 @@ pub fn render_text_lines(
 
     // Render grouped lines
     for (_, group) in grouped_lines {
-        render_line_group(cr, width, height, &group, values);
+        render_line_group(cr, width, height, &group, values, theme);
     }
 
     // Render standalone lines
     for line in standalone_lines {
-        render_single_line(cr, width, height, line, values);
+        render_single_line(cr, width, height, line, values, theme);
     }
 }
 
@@ -49,6 +62,7 @@ fn render_line_group(
     height: f64,
     lines: &[&TextLineConfig],
     values: &HashMap<String, Value>,
+    theme: Option<&ComboThemeConfig>,
 ) {
     if lines.is_empty() {
         return;
@@ -82,19 +96,19 @@ fn render_line_group(
     if !left_parts.is_empty() {
         render_combined_parts(
             cr, width, height, &left_parts, &shared_v_pos, &HorizontalPosition::Left,
-            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment,
+            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
         );
     }
     if !center_parts.is_empty() {
         render_combined_parts(
             cr, width, height, &center_parts, &shared_v_pos, &HorizontalPosition::Center,
-            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment,
+            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
         );
     }
     if !right_parts.is_empty() {
         render_combined_parts(
             cr, width, height, &right_parts, &shared_v_pos, &HorizontalPosition::Right,
-            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment,
+            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
         );
     }
 }
@@ -111,6 +125,7 @@ fn render_combined_parts(
     offset_y: f64,
     direction: CombineDirection,
     alignment: TextPosition,
+    theme: Option<&ComboThemeConfig>,
 ) {
     if parts.is_empty() {
         return;
@@ -121,14 +136,16 @@ fn render_combined_parts(
     // Calculate dimensions for each part
     let mut part_extents: Vec<cairo::TextExtents> = Vec::new();
     for (config, text) in parts {
+        // Resolve font using theme if available
+        let (font_family, font_size) = config.resolved_font(theme);
         let extents = TEXT_EXTENTS_CACHE
             .lock()
             .ok()
             .and_then(|mut cache| {
                 cache.get_or_compute(
                     cr,
-                    &config.font_family,
-                    config.font_size,
+                    &font_family,
+                    font_size,
                     config.bold,
                     config.italic,
                     text,
@@ -228,7 +245,7 @@ fn render_combined_parts(
                 // (y_bearing is negative, so we subtract it to go down to baseline)
                 let baseline_y = top_offset - ext.y_bearing();
 
-                render_text_part(cr, config, text, current_x, baseline_y, ext);
+                render_text_part(cr, config, text, current_x, baseline_y, ext, theme);
 
                 current_x += ext.width();
                 if i < parts.len() - 1 {
@@ -250,7 +267,7 @@ fn render_combined_parts(
                 // Convert top position to baseline position
                 let baseline_y = current_top - ext.y_bearing();
 
-                render_text_part(cr, config, text, x_offset, baseline_y, ext);
+                render_text_part(cr, config, text, x_offset, baseline_y, ext, theme);
 
                 current_top += ext.height();
                 if i < parts.len() - 1 {
@@ -271,14 +288,18 @@ fn render_text_part(
     x: f64,
     y: f64,
     extents: &cairo::TextExtents,
+    theme: Option<&ComboThemeConfig>,
 ) {
     cr.save().ok();
+
+    // Resolve font using theme if available
+    let (font_family, font_size) = config.resolved_font(theme);
 
     // Set font
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    cr.select_font_face(&config.font_family, font_slant, font_weight);
-    cr.set_font_size(config.font_size);
+    cr.select_font_face(&font_family, font_slant, font_weight);
+    cr.set_font_size(font_size);
 
     // Render background if configured
     render_text_background(cr, &config.text_background, x, y + extents.y_bearing(), extents.width(), extents.height());
@@ -287,7 +308,7 @@ fn render_text_part(
     cr.move_to(x, y);
 
     // Render text with fill
-    render_text_fill(cr, config, text, x, y, extents);
+    render_text_fill(cr, config, text, x, y, extents, theme);
 
     cr.restore().ok();
 }
@@ -352,9 +373,13 @@ fn render_text_fill(
     x: f64,
     y: f64,
     extents: &cairo::TextExtents,
+    theme: Option<&ComboThemeConfig>,
 ) {
+    // Resolve the primary color using theme if available
+    let color = config.fill.primary_color(theme);
+
     match &config.fill {
-        TextFillType::Solid { color } => {
+        TextFillType::Solid { .. } => {
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(x, y);
             cr.show_text(text).ok();
@@ -405,9 +430,10 @@ fn render_single_line(
     height: f64,
     line: &TextLineConfig,
     values: &HashMap<String, Value>,
+    theme: Option<&ComboThemeConfig>,
 ) {
     if let Some(text) = get_field_value(&line.field_id, values) {
-        render_text_with_config(cr, width, height, &text, line);
+        render_text_with_config(cr, width, height, &text, line, theme);
     }
 }
 
@@ -418,6 +444,7 @@ fn render_text_with_config(
     height: f64,
     text: &str,
     config: &TextLineConfig,
+    theme: Option<&ComboThemeConfig>,
 ) {
     cr.save().ok();
 
@@ -427,18 +454,21 @@ fn render_text_with_config(
     let offset_x = config.offset_x;
     let offset_y = config.offset_y;
 
+    // Resolve font using theme if available
+    let (font_family, font_size) = config.resolved_font(theme);
+
     // Set font
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    cr.select_font_face(&config.font_family, font_slant, font_weight);
-    cr.set_font_size(config.font_size);
+    cr.select_font_face(&font_family, font_slant, font_weight);
+    cr.set_font_size(font_size);
 
     // Get text dimensions
     let extents = TEXT_EXTENTS_CACHE
         .lock()
         .ok()
         .and_then(|mut cache| {
-            cache.get_or_compute(cr, &config.font_family, config.font_size, config.bold, config.italic, text)
+            cache.get_or_compute(cr, &font_family, font_size, config.bold, config.italic, text)
         })
         .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
@@ -494,7 +524,7 @@ fn render_text_with_config(
         render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
 
         // Render text with fill
-        render_text_fill(cr, config, text, draw_x, draw_y, &extents);
+        render_text_fill(cr, config, text, draw_x, draw_y, &extents, theme);
     } else {
         // Position baseline: text_y is top of font box, add ascent to get baseline
         let baseline_y = text_y + font_ascent;
@@ -505,7 +535,7 @@ fn render_text_with_config(
         render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
 
         // Render text with fill
-        render_text_fill(cr, config, text, draw_x, draw_y, &extents);
+        render_text_fill(cr, config, text, draw_x, draw_y, &extents, theme);
     }
 
     cr.restore().ok();
