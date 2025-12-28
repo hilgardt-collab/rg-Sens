@@ -897,6 +897,11 @@ where
     arc_config_frame.set_margin_top(12);
 
     let arc_widget = ArcConfigWidget::new(slot_fields.clone());
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        arc_widget.set_theme(get_theme(&cfg));
+    }
     let current_arc_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -929,6 +934,19 @@ where
             queue_redraw(&preview_clone, &on_change_clone);
         });
     }
+
+    // Register theme refresh callback for arc widget
+    {
+        let arc_widget_for_theme = arc_widget_rc.clone();
+        let config_for_arc_theme = config.clone();
+        let get_theme_for_arc = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_arc(&config_for_arc_theme.borrow());
+            arc_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
     arc_config_frame.set_child(Some(arc_widget_rc.widget()));
     inner_box.append(&arc_config_frame);
 
