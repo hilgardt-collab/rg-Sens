@@ -100,14 +100,10 @@ impl TestSourceConfigWidget {
     }
 
     pub fn set_config(&self, config: &TestSourceConfig) {
-        // Update local state
+        // Only update local state (update interval)
+        // Do NOT modify global TEST_SOURCE_STATE - that's controlled by the Test Source Dialog
+        // The global state is the "live" running state and should not be reset by config dialogs
         self.config.borrow_mut().update_interval_ms = config.update_interval_ms;
-
-        // Update global TEST_SOURCE_STATE so saved config is restored on load
-        if let Ok(mut state) = crate::sources::TEST_SOURCE_STATE.lock() {
-            state.config = config.clone();
-            log::debug!("TestSourceConfigWidget::set_config: Restored global state mode={:?}", config.mode);
-        }
 
         // Update UI
         self.update_interval_spin.set_value(config.update_interval_ms as f64);
