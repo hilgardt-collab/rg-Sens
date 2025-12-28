@@ -924,7 +924,11 @@ impl ArcConfigWidget {
         // Update ThemeColorSelector widgets with new theme
         self.bg_color_widget.set_theme_config(new_theme.clone());
         // Update gradient editor with new theme
-        self.gradient_editor.set_theme_config(new_theme);
+        self.gradient_editor.set_theme_config(new_theme.clone());
+        // Update text overlay config widget with new theme
+        if let Some(text_widget) = &self.text_config_widget {
+            text_widget.set_theme(new_theme);
+        }
         self.preview.queue_draw();
     }
 }

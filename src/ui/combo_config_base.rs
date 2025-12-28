@@ -356,7 +356,7 @@ where
 }
 
 /// Create the content page with tabbed notebook for content items.
-pub fn create_content_page<C, F, S>(
+pub fn create_content_page<C, F, S, G>(
     config: &Rc<RefCell<C>>,
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: &DrawingArea,
@@ -365,11 +365,14 @@ pub fn create_content_page<C, F, S>(
     available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     get_content_items: F,
     set_content_item: S,
+    theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    get_theme: G,
 ) -> GtkBox
 where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
     S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
+    G: Fn(&C) -> ComboThemeConfig + Clone + 'static,
 {
     let page = GtkBox::new(Orientation::Vertical, 8);
     set_page_margins(&page);
@@ -403,13 +406,15 @@ where
         available_fields,
         get_content_items,
         set_content_item,
+        theme_ref_refreshers,
+        get_theme,
     );
 
     page
 }
 
 /// Rebuild the content tabs based on source summaries.
-pub fn rebuild_content_tabs<C, F, S>(
+pub fn rebuild_content_tabs<C, F, S, G>(
     config: &Rc<RefCell<C>>,
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: &DrawingArea,
@@ -418,10 +423,13 @@ pub fn rebuild_content_tabs<C, F, S>(
     available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
     get_content_items: F,
     set_content_item: S,
+    theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    get_theme: G,
 ) where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
     S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
+    G: Fn(&C) -> ComboThemeConfig + Clone + 'static,
 {
     let notebook = content_notebook.borrow();
 
@@ -482,6 +490,8 @@ pub fn rebuild_content_tabs<C, F, S>(
                     available_fields.borrow().clone(),
                     get_content_items.clone(),
                     set_content_item.clone(),
+                    theme_ref_refreshers,
+                    get_theme.clone(),
                 );
                 items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
             }
@@ -496,7 +506,7 @@ pub fn rebuild_content_tabs<C, F, S>(
 }
 
 /// Create configuration UI for a single content item.
-pub fn create_content_item_config<C, F, S>(
+pub fn create_content_item_config<C, F, S, G>(
     config: &Rc<RefCell<C>>,
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: &DrawingArea,
@@ -504,11 +514,14 @@ pub fn create_content_item_config<C, F, S>(
     available_fields: Vec<FieldMetadata>,
     get_content_items: F,
     set_content_item: S,
+    theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    get_theme: G,
 ) -> GtkBox
 where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
     S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
+    G: Fn(&C) -> ComboThemeConfig + Clone + 'static,
 {
     // Need a way to get mutable access to content_items
     // For now we'll use a trait object approach
@@ -728,6 +741,11 @@ where
     graph_config_frame.set_margin_top(12);
 
     let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        graph_widget.set_theme(get_theme(&cfg));
+    }
     let current_graph_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -760,6 +778,19 @@ where
             queue_redraw(&preview_clone, &on_change_clone);
         });
     }
+
+    // Register theme refresh callback for graph widget
+    {
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let get_theme_for_graph = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_graph(&config_for_graph_theme.borrow());
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
     graph_config_frame.set_child(Some(graph_widget_rc.widget()));
     inner_box.append(&graph_config_frame);
 
@@ -768,6 +799,11 @@ where
     text_config_frame.set_margin_top(12);
 
     let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        text_widget.set_theme(get_theme(&cfg));
+    }
     let current_text_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -800,6 +836,19 @@ where
             queue_redraw(&preview_clone, &on_change_clone);
         });
     }
+
+    // Register theme refresh callback for text widget
+    {
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let get_theme_for_text = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_text(&config_for_text_theme.borrow());
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
     text_config_frame.set_child(Some(text_widget_rc.widget()));
     inner_box.append(&text_config_frame);
 

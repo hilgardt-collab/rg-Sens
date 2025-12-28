@@ -108,6 +108,7 @@ impl TextLineConfigWidget {
             let on_change_inner = on_change_for_rebuild.clone();
             let theme_inner = theme.clone();
             let font_selectors_inner = font_selectors.clone();
+            let fill_color_selectors_inner = fill_color_selectors.clone();
 
             move || {
                 // Clear all stack pages
@@ -115,8 +116,9 @@ impl TextLineConfigWidget {
                     stack_inner.remove(&child);
                 }
 
-                // Clear font selectors when rebuilding
+                // Clear font and color selectors when rebuilding
                 font_selectors_inner.borrow_mut().clear();
+                fill_color_selectors_inner.borrow_mut().clear();
 
                 // Rebuild all pages with the same rebuild callback
                 let lines_data = lines_inner.borrow().clone();
@@ -132,6 +134,7 @@ impl TextLineConfigWidget {
                         on_change_inner.clone(),
                         theme_inner.clone(),
                         font_selectors_inner.clone(),
+                        fill_color_selectors_inner.clone(),
                     );
                 }
 
@@ -188,6 +191,7 @@ impl TextLineConfigWidget {
         let rebuild_fn_for_paste = rebuild_fn.clone();
         let theme_for_paste = theme.clone();
         let font_selectors_for_paste = font_selectors.clone();
+        let fill_color_selectors_for_paste = fill_color_selectors.clone();
         paste_btn.connect_clicked(move |_| {
             let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 clipboard.paste_text_display()
@@ -199,8 +203,9 @@ impl TextLineConfigWidget {
                 // Update lines
                 *lines_for_paste.borrow_mut() = config.lines;
 
-                // Clear font selectors when rebuilding
+                // Clear font and color selectors when rebuilding
                 font_selectors_for_paste.borrow_mut().clear();
+                fill_color_selectors_for_paste.borrow_mut().clear();
 
                 // Rebuild stack
                 while let Some(child) = stack_for_paste.first_child() {
@@ -219,6 +224,7 @@ impl TextLineConfigWidget {
                         on_change_for_paste.clone(),
                         theme_for_paste.clone(),
                         font_selectors_for_paste.clone(),
+                        fill_color_selectors_for_paste.clone(),
                     );
                 }
 
@@ -253,6 +259,7 @@ impl TextLineConfigWidget {
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
         theme: Rc<RefCell<ComboThemeConfig>>,
         font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
+        fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -583,6 +590,11 @@ impl TextLineConfigWidget {
         solid_fill_box.append(&Label::new(Some("Color:")));
         let initial_color_source = line_config.fill.color_source();
         let fill_color_widget = Rc::new(ThemeColorSelector::new(initial_color_source.clone()));
+
+        // Set theme config and store in fill_color_selectors for theme updates
+        fill_color_widget.set_theme_config(theme.borrow().clone());
+        fill_color_selectors.borrow_mut().push(fill_color_widget.clone());
+
         solid_fill_box.append(fill_color_widget.widget());
         solid_fill_box.set_visible(initial_fill_type_index == 0);
         fill_box.append(&solid_fill_box);
@@ -1246,8 +1258,9 @@ impl TextLineConfigWidget {
             self.stack.remove(&child);
         }
 
-        // Clear font selectors when rebuilding
+        // Clear font and color selectors when rebuilding
         self.font_selectors.borrow_mut().clear();
+        self.fill_color_selectors.borrow_mut().clear();
 
         // Create rebuild callback for delete buttons
         let stack_clone = self.stack.clone();
@@ -1256,6 +1269,7 @@ impl TextLineConfigWidget {
         let on_change_clone = self.on_change.clone();
         let theme_clone = self.theme.clone();
         let font_selectors_clone = self.font_selectors.clone();
+        let fill_color_selectors_clone = self.fill_color_selectors.clone();
 
         // Create rebuild function as Rc<RefCell> to allow self-reference
         let rebuild_fn: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
@@ -1263,6 +1277,7 @@ impl TextLineConfigWidget {
         let on_change_for_rebuild = on_change_clone.clone();
         let theme_for_rebuild = theme_clone.clone();
         let font_selectors_for_rebuild = font_selectors_clone.clone();
+        let fill_color_selectors_for_rebuild = fill_color_selectors_clone.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
             // Clear all stack pages
@@ -1270,8 +1285,9 @@ impl TextLineConfigWidget {
                 stack_clone.remove(&child);
             }
 
-            // Clear font selectors when rebuilding
+            // Clear font and color selectors when rebuilding
             font_selectors_for_rebuild.borrow_mut().clear();
+            fill_color_selectors_for_rebuild.borrow_mut().clear();
 
             // Rebuild all pages with the same rebuild callback
             let lines_data = lines_clone.borrow().clone();
@@ -1287,6 +1303,7 @@ impl TextLineConfigWidget {
                     on_change_for_rebuild.clone(),
                     theme_for_rebuild.clone(),
                     font_selectors_for_rebuild.clone(),
+                    fill_color_selectors_for_rebuild.clone(),
                 );
             }
         });
@@ -1307,6 +1324,7 @@ impl TextLineConfigWidget {
                 on_change_clone.clone(),
                 theme_clone.clone(),
                 font_selectors_clone.clone(),
+                fill_color_selectors_clone.clone(),
             );
         }
 

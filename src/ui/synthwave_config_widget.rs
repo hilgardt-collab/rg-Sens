@@ -186,6 +186,8 @@ impl SynthwaveConfigWidget {
             |cfg, slot_name, item| {
                 cfg.frame.content_items.insert(slot_name.to_string(), item);
             },
+            &theme_ref_refreshers,
+            |cfg| cfg.frame.theme.clone(),
         );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
@@ -1681,6 +1683,8 @@ impl SynthwaveConfigWidget {
         graph_config_frame.set_margin_top(12);
 
         let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        graph_widget.set_theme(config.borrow().frame.theme.clone());
         let current_graph_config = {
             let cfg = config.borrow();
             cfg.frame.content_items
@@ -1707,6 +1711,15 @@ impl SynthwaveConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for graph widget
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_graph_theme.borrow().frame.theme.clone();
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
@@ -1715,6 +1728,8 @@ impl SynthwaveConfigWidget {
         text_config_frame.set_margin_top(12);
 
         let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        text_widget.set_theme(config.borrow().frame.theme.clone());
         let current_text_config = {
             let cfg = config.borrow();
             cfg.frame.content_items
@@ -1741,6 +1756,15 @@ impl SynthwaveConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for text widget
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_text_theme.borrow().frame.theme.clone();
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
@@ -2122,6 +2146,11 @@ impl SynthwaveConfigWidget {
             widgets.scanline_check.set_active(scanline_effect);
         }
 
+        // Trigger all theme refreshers to update child widgets with the new theme
+        for refresher in self.theme_ref_refreshers.borrow().iter() {
+            refresher();
+        }
+
         self.preview.queue_draw();
     }
 
@@ -2185,6 +2214,8 @@ impl SynthwaveConfigWidget {
             |cfg, slot_name, item| {
                 cfg.frame.content_items.insert(slot_name.to_string(), item);
             },
+            &self.theme_ref_refreshers,
+            |cfg| cfg.frame.theme.clone(),
         );
 
         // Notify that config changed
