@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::core_bars_display::{render_core_bars_with_values, CoreBarsConfig};
+use crate::ui::theme::ComboThemeConfig;
 
 /// Animation state for a single value
 #[derive(Debug, Clone)]
@@ -42,6 +43,7 @@ pub struct CpuCoresDisplayer {
 #[derive(Clone)]
 struct DisplayData {
     config: CoreBarsConfig,
+    theme: ComboThemeConfig,
     core_values: Vec<AnimatedValue>, // Animated values per displayed core
     render_cache: Vec<f64>,          // Cached current values for rendering (avoids allocation per frame)
     detected_core_count: usize,      // Total cores detected from source
@@ -55,6 +57,7 @@ impl Default for DisplayData {
     fn default() -> Self {
         Self {
             config: CoreBarsConfig::default(),
+            theme: ComboThemeConfig::default(),
             core_values: Vec::new(),
             render_cache: Vec::new(),
             detected_core_count: 0,
@@ -142,6 +145,7 @@ impl Displayer for CpuCoresDisplayer {
                     let _ = render_core_bars_with_values(
                         cr,
                         &data.config,
+                        &data.theme,
                         &data.render_cache,
                         width as f64,
                         height as f64,
@@ -284,6 +288,7 @@ impl Displayer for CpuCoresDisplayer {
                 render_core_bars_with_values(
                     cr,
                     &data.config,
+                    &data.theme,
                     &data.render_cache,
                     width,
                     height,

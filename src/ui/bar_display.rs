@@ -4,6 +4,10 @@ use gtk4::cairo;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::theme::{
+    ColorSource, ColorStopSource, ComboThemeConfig,
+    deserialize_color_or_source, deserialize_color_stops_vec,
+};
 use crate::displayers::TextDisplayerConfig;
 
 /// Bar display style
@@ -85,10 +89,14 @@ pub enum BarTaperAlignment {
 #[serde(tag = "type")]
 pub enum BarFillType {
     #[serde(rename = "solid")]
-    Solid { color: Color },
+    Solid {
+        #[serde(deserialize_with = "deserialize_color_or_source")]
+        color: ColorSource,
+    },
     #[serde(rename = "gradient")]
     Gradient {
-        stops: Vec<ColorStop>,
+        #[serde(deserialize_with = "deserialize_color_stops_vec")]
+        stops: Vec<ColorStopSource>,
         #[serde(default = "default_gradient_angle")]
         angle: f64,
     },
@@ -98,10 +106,33 @@ fn default_gradient_angle() -> f64 {
     90.0
 }
 
+impl BarFillType {
+    /// Resolve to actual colors using theme
+    pub fn resolve(&self, theme: &ComboThemeConfig) -> ResolvedBarFill {
+        match self {
+            BarFillType::Solid { color } => ResolvedBarFill::Solid {
+                color: color.resolve(theme),
+            },
+            BarFillType::Gradient { stops, angle } => ResolvedBarFill::Gradient {
+                stops: stops.iter().map(|s| s.resolve(theme)).collect(),
+                angle: *angle,
+            },
+        }
+    }
+}
+
+/// Resolved bar fill with actual colors (no theme references)
+#[derive(Debug, Clone)]
+pub enum ResolvedBarFill {
+    Solid { color: Color },
+    Gradient { stops: Vec<ColorStop>, angle: f64 },
+}
+
 impl Default for BarFillType {
     fn default() -> Self {
+        // Default to theme color 1 (primary)
         Self::Solid {
-            color: Color::new(0.2, 0.6, 1.0, 1.0), // Blue
+            color: ColorSource::Theme { index: 1 },
         }
     }
 }
@@ -112,15 +143,43 @@ impl Default for BarFillType {
 #[derive(Default)]
 pub enum BarBackgroundType {
     #[serde(rename = "solid")]
-    Solid { color: Color },
+    Solid {
+        #[serde(deserialize_with = "deserialize_color_or_source")]
+        color: ColorSource,
+    },
     #[serde(rename = "gradient")]
     Gradient {
-        stops: Vec<ColorStop>,
+        #[serde(deserialize_with = "deserialize_color_stops_vec")]
+        stops: Vec<ColorStopSource>,
         #[serde(default = "default_gradient_angle")]
         angle: f64,
     },
     #[serde(rename = "transparent")]
     #[default]
+    Transparent,
+}
+
+impl BarBackgroundType {
+    /// Resolve to actual colors using theme
+    pub fn resolve(&self, theme: &ComboThemeConfig) -> ResolvedBarBackground {
+        match self {
+            BarBackgroundType::Solid { color } => ResolvedBarBackground::Solid {
+                color: color.resolve(theme),
+            },
+            BarBackgroundType::Gradient { stops, angle } => ResolvedBarBackground::Gradient {
+                stops: stops.iter().map(|s| s.resolve(theme)).collect(),
+                angle: *angle,
+            },
+            BarBackgroundType::Transparent => ResolvedBarBackground::Transparent,
+        }
+    }
+}
+
+/// Resolved bar background with actual colors (no theme references)
+#[derive(Debug, Clone)]
+pub enum ResolvedBarBackground {
+    Solid { color: Color },
+    Gradient { stops: Vec<ColorStop>, angle: f64 },
     Transparent,
 }
 
@@ -146,15 +205,23 @@ impl Default for TextOverlayConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BorderConfig {
     pub enabled: bool,
-    pub color: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub color: ColorSource,
     pub width: f64,
+}
+
+impl BorderConfig {
+    /// Resolve to actual color using theme
+    pub fn resolve_color(&self, theme: &ComboThemeConfig) -> Color {
+        self.color.resolve(theme)
+    }
 }
 
 impl Default for BorderConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            color: Color::new(0.5, 0.5, 0.5, 1.0),
+            color: ColorSource::Theme { index: 2 }, // Theme secondary color
             width: 1.0,
         }
     }
@@ -288,18 +355,24 @@ impl Default for BarDisplayConfig {
 pub fn render_bar(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    theme: &ComboThemeConfig,
     value: f64, // 0.0 to 1.0
     values: &std::collections::HashMap<String, serde_json::Value>, // All source data for text overlay
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
+    // Resolve theme references to actual colors
+    let foreground = config.foreground.resolve(theme);
+    let background = config.background.resolve(theme);
+    let border_color = config.border.resolve_color(theme);
+
     // Clamp value
     let value = value.clamp(0.0, 1.0);
 
     match config.style {
-        BarStyle::Full => render_full_bar(cr, config, value, width, height)?,
-        BarStyle::Rectangle => render_rectangle_bar(cr, config, value, width, height)?,
-        BarStyle::Segmented => render_segmented_bar(cr, config, value, width, height)?,
+        BarStyle::Full => render_full_bar(cr, config, &foreground, &background, border_color, value, width, height)?,
+        BarStyle::Rectangle => render_rectangle_bar(cr, config, &foreground, &background, border_color, value, width, height)?,
+        BarStyle::Segmented => render_segmented_bar(cr, config, &foreground, &background, border_color, value, width, height)?,
     }
 
     // Render text overlay if enabled
@@ -348,6 +421,9 @@ fn calculate_taper_offset(base_dim: f64, tapered_dim: f64, alignment: BarTaperAl
 fn render_full_bar(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    foreground: &ResolvedBarFill,
+    background: &ResolvedBarBackground,
+    border_color: Color,
     value: f64,
     width: f64,
     height: f64,
@@ -356,18 +432,18 @@ fn render_full_bar(
 
     // Render background
     if has_taper {
-        render_tapered_bar_background(cr, config, width, height)?;
+        render_tapered_bar_background(cr, config, background, width, height)?;
     } else {
         cr.save()?;
         rounded_rectangle(cr, 0.0, 0.0, width, height, config.corner_radius);
         cr.clip();
-        render_background(cr, &config.background, width, height)?;
+        render_background_resolved(cr, background, width, height)?;
         cr.restore()?;
     }
 
     // Render foreground based on value
     if has_taper {
-        render_tapered_bar_foreground(cr, config, value, 0.0, 0.0, width, height)?;
+        render_tapered_bar_foreground(cr, config, foreground, value, 0.0, 0.0, width, height)?;
     } else {
         cr.save()?;
 
@@ -382,14 +458,14 @@ fn render_full_bar(
         rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, config.corner_radius);
         cr.clip();
 
-        render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
+        render_foreground_resolved(cr, foreground, config.fill_direction, width, height)?;
 
         cr.restore()?;
     }
 
     // Render border with corner radius (only for non-tapered)
     if config.border.enabled && !has_taper {
-        render_border(cr, &config.border, 0.0, 0.0, width, height, config.corner_radius)?;
+        render_border_resolved(cr, border_color, config.border.width, 0.0, 0.0, width, height, config.corner_radius)?;
     }
 
     Ok(())
@@ -406,11 +482,12 @@ fn calculate_tapered_segments(dimension: f64) -> i32 {
 fn render_tapered_bar_background(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    background: &ResolvedBarBackground,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
     // Pre-create the fill source ONCE (avoids recreating gradient 50x)
-    let source = FillSource::from_background(&config.background, width, height);
+    let source = FillSource::from_resolved_background(background, width, height);
     if source.is_none() {
         return Ok(());
     }
@@ -461,6 +538,7 @@ fn render_tapered_bar_background(
 fn render_tapered_bar_foreground(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    foreground: &ResolvedBarFill,
     value: f64,
     bar_x: f64,
     bar_y: f64,
@@ -472,7 +550,7 @@ fn render_tapered_bar_foreground(
     }
 
     // Pre-create the fill source ONCE (avoids recreating gradient 50x)
-    let source = FillSource::from_foreground(&config.foreground, bar_width, bar_height);
+    let source = FillSource::from_resolved_foreground(foreground, bar_width, bar_height);
 
     let is_horizontal = matches!(
         config.fill_direction,
@@ -536,6 +614,9 @@ fn render_tapered_bar_foreground(
 fn render_rectangle_bar(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    foreground: &ResolvedBarFill,
+    background: &ResolvedBarBackground,
+    border_color: Color,
     value: f64,
     width: f64,
     height: f64,
@@ -553,18 +634,18 @@ fn render_rectangle_bar(
 
     // Render background
     if has_taper {
-        render_tapered_rectangle_background(cr, config, bar_x, bar_y, bar_width, bar_height)?;
+        render_tapered_rectangle_background(cr, config, background, bar_x, bar_y, bar_width, bar_height)?;
     } else {
         cr.save()?;
         rounded_rectangle(cr, bar_x, bar_y, bar_width, bar_height, radius);
         cr.clip();
-        render_background(cr, &config.background, width, height)?;
+        render_background_resolved(cr, background, width, height)?;
         cr.restore()?;
     }
 
     // Render foreground based on value
     if has_taper {
-        render_tapered_bar_foreground(cr, config, value, bar_x, bar_y, bar_width, bar_height)?;
+        render_tapered_bar_foreground(cr, config, foreground, value, bar_x, bar_y, bar_width, bar_height)?;
     } else {
         cr.save()?;
 
@@ -578,7 +659,7 @@ fn render_rectangle_bar(
         rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, radius);
         cr.clip();
 
-        render_foreground(cr, &config.foreground, config.fill_direction, width, height)?;
+        render_foreground_resolved(cr, foreground, config.fill_direction, width, height)?;
 
         cr.restore()?;
     }
@@ -586,7 +667,7 @@ fn render_rectangle_bar(
     // Render border (only for non-tapered)
     if config.border.enabled && !has_taper {
         rounded_rectangle(cr, bar_x, bar_y, bar_width, bar_height, radius);
-        render_border(cr, &config.border, bar_x, bar_y, bar_width, bar_height, radius)?;
+        render_border_resolved(cr, border_color, config.border.width, bar_x, bar_y, bar_width, bar_height, radius)?;
     }
 
     Ok(())
@@ -596,13 +677,14 @@ fn render_rectangle_bar(
 fn render_tapered_rectangle_background(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    background: &ResolvedBarBackground,
     bar_x: f64,
     bar_y: f64,
     bar_width: f64,
     bar_height: f64,
 ) -> Result<(), cairo::Error> {
     // Pre-create the fill source ONCE (avoids recreating gradient 50x)
-    let source = FillSource::from_background(&config.background, bar_width, bar_height);
+    let source = FillSource::from_resolved_background(background, bar_width, bar_height);
     if source.is_none() {
         return Ok(());
     }
@@ -653,6 +735,9 @@ fn render_tapered_rectangle_background(
 fn render_segmented_bar(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    foreground: &ResolvedBarFill,
+    background: &ResolvedBarBackground,
+    border_color: Color,
     value: f64,
     width: f64,
     height: f64,
@@ -701,6 +786,9 @@ fn render_segmented_bar(
             render_segment(
                 cr,
                 config,
+                foreground,
+                background,
+                border_color,
                 is_filled,
                 seg_x,
                 seg_y,
@@ -740,6 +828,9 @@ fn render_segmented_bar(
             render_segment(
                 cr,
                 config,
+                foreground,
+                background,
+                border_color,
                 is_filled,
                 seg_x,
                 seg_y,
@@ -760,6 +851,9 @@ fn render_segmented_bar(
 fn render_segment(
     cr: &cairo::Context,
     config: &BarDisplayConfig,
+    foreground: &ResolvedBarFill,
+    background: &ResolvedBarBackground,
+    border_color: Color,
     is_filled: bool,
     x: f64,
     y: f64,
@@ -779,19 +873,19 @@ fn render_segment(
         cr.clip();
         // Translate to align gradient with full bar
         cr.translate(-full_bar_x, -full_bar_y);
-        render_foreground(cr, &config.foreground, config.fill_direction, full_bar_width, full_bar_height)?;
+        render_foreground_resolved(cr, foreground, config.fill_direction, full_bar_width, full_bar_height)?;
     } else {
         cr.clip();
         // Translate to align gradient with full bar
         cr.translate(-full_bar_x, -full_bar_y);
-        render_background(cr, &config.background, full_bar_width, full_bar_height)?;
+        render_background_resolved(cr, background, full_bar_width, full_bar_height)?;
     }
 
     cr.restore()?;
 
     if config.border.enabled {
         rounded_rectangle(cr, x, y, width, height, radius);
-        config.border.color.apply_to_cairo(cr);
+        border_color.apply_to_cairo(cr);
         cr.set_line_width(config.border.width);
         cr.stroke()?;
     }
@@ -811,42 +905,42 @@ fn rounded_rectangle(cr: &cairo::Context, x: f64, y: f64, width: f64, height: f6
     cr.close_path();
 }
 
-/// Render background
-fn render_background(
+/// Render background (resolved)
+fn render_background_resolved(
     cr: &cairo::Context,
-    background: &BarBackgroundType,
+    background: &ResolvedBarBackground,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
     match background {
-        BarBackgroundType::Solid { color } => {
+        ResolvedBarBackground::Solid { color } => {
             color.apply_to_cairo(cr);
             cr.paint()?;
         }
-        BarBackgroundType::Gradient { stops, angle } => {
+        ResolvedBarBackground::Gradient { stops, angle } => {
             render_gradient(cr, stops, *angle, width, height)?;
         }
-        BarBackgroundType::Transparent => {
+        ResolvedBarBackground::Transparent => {
             // Do nothing
         }
     }
     Ok(())
 }
 
-/// Render foreground
-fn render_foreground(
+/// Render foreground (resolved)
+fn render_foreground_resolved(
     cr: &cairo::Context,
-    foreground: &BarFillType,
+    foreground: &ResolvedBarFill,
     _direction: BarFillDirection,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
     match foreground {
-        BarFillType::Solid { color } => {
+        ResolvedBarFill::Solid { color } => {
             color.apply_to_cairo(cr);
             cr.paint()?;
         }
-        BarFillType::Gradient { stops, angle } => {
+        ResolvedBarFill::Gradient { stops, angle } => {
             render_gradient(cr, stops, *angle, width, height)?;
         }
     }
@@ -912,23 +1006,23 @@ enum FillSource {
 }
 
 impl FillSource {
-    fn from_background(background: &BarBackgroundType, width: f64, height: f64) -> Self {
+    fn from_resolved_background(background: &ResolvedBarBackground, width: f64, height: f64) -> Self {
         match background {
-            BarBackgroundType::Solid { color } => FillSource::Solid(*color),
-            BarBackgroundType::Gradient { stops, angle } => {
+            ResolvedBarBackground::Solid { color } => FillSource::Solid(*color),
+            ResolvedBarBackground::Gradient { stops, angle } => {
                 match create_gradient_pattern(stops, *angle, width, height) {
                     Some(pattern) => FillSource::Gradient(pattern),
                     None => FillSource::None,
                 }
             }
-            BarBackgroundType::Transparent => FillSource::None,
+            ResolvedBarBackground::Transparent => FillSource::None,
         }
     }
 
-    fn from_foreground(foreground: &BarFillType, width: f64, height: f64) -> Self {
+    fn from_resolved_foreground(foreground: &ResolvedBarFill, width: f64, height: f64) -> Self {
         match foreground {
-            BarFillType::Solid { color } => FillSource::Solid(*color),
-            BarFillType::Gradient { stops, angle } => {
+            ResolvedBarFill::Solid { color } => FillSource::Solid(*color),
+            ResolvedBarFill::Gradient { stops, angle } => {
                 match create_gradient_pattern(stops, *angle, width, height) {
                     Some(pattern) => FillSource::Gradient(pattern),
                     None => FillSource::None,
@@ -957,10 +1051,11 @@ impl FillSource {
     }
 }
 
-/// Render border
-fn render_border(
+/// Render border with resolved color
+fn render_border_resolved(
     cr: &cairo::Context,
-    border: &BorderConfig,
+    border_color: Color,
+    border_width: f64,
     x: f64,
     y: f64,
     width: f64,
@@ -973,8 +1068,8 @@ fn render_border(
         cr.rectangle(x, y, width, height);
     }
 
-    border.color.apply_to_cairo(cr);
-    cr.set_line_width(border.width);
+    border_color.apply_to_cairo(cr);
+    cr.set_line_width(border_width);
     cr.stroke()?;
 
     Ok(())

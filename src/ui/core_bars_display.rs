@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig, TextOverlayConfig};
 use crate::ui::text_renderer::render_text_lines;
+use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 
 /// Label position relative to the bar
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -81,8 +82,8 @@ pub struct CoreBarsConfig {
     pub label_font: String,
     #[serde(default = "default_label_size")]
     pub label_size: f64,
-    #[serde(default = "default_label_color")]
-    pub label_color: Color,
+    #[serde(default = "default_label_color", deserialize_with = "deserialize_color_or_source")]
+    pub label_color: ColorSource,
     #[serde(default)]
     pub label_bold: bool,
 
@@ -138,8 +139,9 @@ fn default_label_size() -> f64 {
     10.0
 }
 
-fn default_label_color() -> Color {
-    Color::new(1.0, 1.0, 1.0, 0.9)
+fn default_label_color() -> ColorSource {
+    // Default to Theme Color 3 (typically text/accent color)
+    ColorSource::Theme { index: 3 }
 }
 
 fn default_animation_speed() -> f64 {
@@ -202,11 +204,12 @@ impl CoreBarsConfig {
 pub fn render_core_bars(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     core_values: &[f64],
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    render_core_bars_with_values(cr, config, core_values, width, height, &HashMap::new())
+    render_core_bars_with_values(cr, config, theme, core_values, width, height, &HashMap::new())
 }
 
 /// Render multiple CPU core bars with source values for text overlay
@@ -214,6 +217,7 @@ pub fn render_core_bars(
 /// # Arguments
 /// * `cr` - Cairo context
 /// * `config` - Core bars configuration
+/// * `theme` - Theme configuration for color resolution
 /// * `core_values` - Slice of normalized values (0.0-1.0) for each core
 /// * `width` - Available width
 /// * `height` - Available height
@@ -221,6 +225,7 @@ pub fn render_core_bars(
 pub fn render_core_bars_with_values(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     core_values: &[f64],
     width: f64,
     height: f64,
@@ -252,10 +257,10 @@ pub fn render_core_bars_with_values(
     // For vertical bars (arranged horizontally), we divide width
     match config.orientation {
         BarOrientation::Horizontal => {
-            render_horizontal_bars(cr, config, core_values, padded_width, padded_height, label_space)?;
+            render_horizontal_bars(cr, config, theme, core_values, padded_width, padded_height, label_space)?;
         }
         BarOrientation::Vertical => {
-            render_vertical_bars(cr, config, core_values, padded_width, padded_height, label_space)?;
+            render_vertical_bars(cr, config, theme, core_values, padded_width, padded_height, label_space)?;
         }
     }
 
@@ -304,6 +309,7 @@ fn calculate_label_space(cr: &cairo::Context, config: &CoreBarsConfig, num_bars:
 fn render_horizontal_bars(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     core_values: &[f64],
     width: f64,
     height: f64,
@@ -329,6 +335,7 @@ fn render_horizontal_bars(
         render_single_bar(
             cr,
             config,
+            theme,
             value,
             bar_x,
             bar_y,
@@ -345,6 +352,7 @@ fn render_horizontal_bars(
             render_label(
                 cr,
                 config,
+                theme,
                 config.start_core + i,
                 bar_y,
                 bar_height,
@@ -363,6 +371,7 @@ fn render_horizontal_bars(
 fn render_vertical_bars(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     core_values: &[f64],
     width: f64,
     height: f64,
@@ -388,6 +397,7 @@ fn render_vertical_bars(
         render_single_bar(
             cr,
             config,
+            theme,
             value,
             bar_x,
             bar_y,
@@ -404,6 +414,7 @@ fn render_vertical_bars(
             render_label(
                 cr,
                 config,
+                theme,
                 config.start_core + i,
                 bar_x,
                 bar_width,
@@ -422,6 +433,7 @@ fn render_vertical_bars(
 fn render_single_bar(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     value: f64,
     x: f64,
     y: f64,
@@ -439,7 +451,7 @@ fn render_single_bar(
             cr.save()?;
             rounded_rectangle(cr, x, y, width, height, radius);
             cr.clip();
-            render_background(cr, &config.background, x, y, width, height)?;
+            render_background(cr, &config.background, theme, x, y, width, height)?;
             cr.restore()?;
 
             // Render foreground based on value and fill direction
@@ -469,14 +481,16 @@ fn render_single_bar(
                         } else {
                             0.5
                         };
-                        let color = sample_gradient_color(stops, position);
+                        // Resolve color stops and sample
+                        let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+                        let color = sample_gradient_color(&resolved_stops, position);
                         color.apply_to_cairo(cr);
                         cr.paint()?;
                     } else {
-                        render_foreground(cr, &config.foreground, x, y, width, height)?;
+                        render_foreground(cr, &config.foreground, theme, x, y, width, height)?;
                     }
                 } else {
-                    render_foreground(cr, &config.foreground, x, y, width, height)?;
+                    render_foreground(cr, &config.foreground, theme, x, y, width, height)?;
                 }
             }
             cr.restore()?;
@@ -484,13 +498,14 @@ fn render_single_bar(
             // Render border
             if config.border.enabled {
                 rounded_rectangle(cr, x, y, width, height, radius);
-                config.border.color.apply_to_cairo(cr);
+                let border_color = config.border.color.resolve(theme);
+                border_color.apply_to_cairo(cr);
                 cr.set_line_width(config.border.width);
                 cr.stroke()?;
             }
         }
         BarStyle::Segmented => {
-            render_segmented_single_bar(cr, config, value, x, y, width, height, horizontal, bar_index, total_bars)?;
+            render_segmented_single_bar(cr, config, theme, value, x, y, width, height, horizontal, bar_index, total_bars)?;
         }
     }
 
@@ -501,6 +516,7 @@ fn render_single_bar(
 fn render_segmented_single_bar(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     value: f64,
     x: f64,
     y: f64,
@@ -538,6 +554,7 @@ fn render_segmented_single_bar(
             render_segment(
                 cr,
                 config,
+                theme,
                 is_filled,
                 seg_x,
                 y,
@@ -576,6 +593,7 @@ fn render_segmented_single_bar(
             render_segment(
                 cr,
                 config,
+                theme,
                 is_filled,
                 x,
                 seg_y,
@@ -599,6 +617,7 @@ fn render_segmented_single_bar(
 fn render_segment(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     is_filled: bool,
     seg_x: f64,
     seg_y: f64,
@@ -625,25 +644,28 @@ fn render_segment(
                 } else {
                     0.5
                 };
-                let color = sample_gradient_color(stops, position);
+                // Resolve color stops and sample
+                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+                let color = sample_gradient_color(&resolved_stops, position);
                 color.apply_to_cairo(cr);
                 cr.paint()?;
             } else {
-                render_foreground(cr, &config.foreground, full_x, full_y, full_width, full_height)?;
+                render_foreground(cr, &config.foreground, theme, full_x, full_y, full_width, full_height)?;
             }
         } else {
-            render_foreground(cr, &config.foreground, full_x, full_y, full_width, full_height)?;
+            render_foreground(cr, &config.foreground, theme, full_x, full_y, full_width, full_height)?;
         }
     } else {
         cr.clip();
-        render_background(cr, &config.background, full_x, full_y, full_width, full_height)?;
+        render_background(cr, &config.background, theme, full_x, full_y, full_width, full_height)?;
     }
 
     cr.restore()?;
 
     if config.border.enabled {
         rounded_rectangle(cr, seg_x, seg_y, seg_width, seg_height, radius);
-        config.border.color.apply_to_cairo(cr);
+        let border_color = config.border.color.resolve(theme);
+        border_color.apply_to_cairo(cr);
         cr.set_line_width(config.border.width);
         cr.stroke()?;
     }
@@ -655,6 +677,7 @@ fn render_segment(
 fn render_label(
     cr: &cairo::Context,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     core_index: usize,
     bar_pos: f64,     // y for horizontal, x for vertical
     bar_size: f64,    // height for horizontal, width for vertical
@@ -673,7 +696,8 @@ fn render_label(
 
     cr.select_font_face(&config.label_font, cairo::FontSlant::Normal, font_weight);
     cr.set_font_size(config.label_size);
-    config.label_color.apply_to_cairo(cr);
+    let label_color = config.label_color.resolve(theme);
+    label_color.apply_to_cairo(cr);
 
     let (text_width, text_height) = if let Ok(extents) = cr.text_extents(&label) {
         (extents.width(), extents.height())
@@ -750,6 +774,7 @@ fn rounded_rectangle(cr: &cairo::Context, x: f64, y: f64, width: f64, height: f6
 fn render_background(
     cr: &cairo::Context,
     background: &BarBackgroundType,
+    theme: &ComboThemeConfig,
     x: f64,
     y: f64,
     width: f64,
@@ -757,11 +782,13 @@ fn render_background(
 ) -> Result<(), cairo::Error> {
     match background {
         BarBackgroundType::Solid { color } => {
-            color.apply_to_cairo(cr);
+            let resolved = color.resolve(theme);
+            resolved.apply_to_cairo(cr);
             cr.paint()?;
         }
         BarBackgroundType::Gradient { stops, angle } => {
-            render_gradient(cr, stops, *angle, x, y, width, height)?;
+            let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+            render_gradient(cr, &resolved_stops, *angle, x, y, width, height)?;
         }
         BarBackgroundType::Transparent => {
             // Do nothing
@@ -774,6 +801,7 @@ fn render_background(
 fn render_foreground(
     cr: &cairo::Context,
     foreground: &BarFillType,
+    theme: &ComboThemeConfig,
     x: f64,
     y: f64,
     width: f64,
@@ -781,11 +809,13 @@ fn render_foreground(
 ) -> Result<(), cairo::Error> {
     match foreground {
         BarFillType::Solid { color } => {
-            color.apply_to_cairo(cr);
+            let resolved = color.resolve(theme);
+            resolved.apply_to_cairo(cr);
             cr.paint()?;
         }
         BarFillType::Gradient { stops, angle } => {
-            render_gradient(cr, stops, *angle, x, y, width, height)?;
+            let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+            render_gradient(cr, &resolved_stops, *angle, x, y, width, height)?;
         }
     }
     Ok(())

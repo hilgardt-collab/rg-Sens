@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::arc_display::{render_arc, ArcDisplayConfig};
+use crate::ui::theme::ComboThemeConfig;
 
 /// Arc gauge displayer
 pub struct ArcDisplayer {
@@ -83,7 +84,8 @@ impl Displayer for ArcDisplayer {
                 } else {
                     data.value
                 };
-                let _ = render_arc(cr, &data.config, display_value, &data.values, width as f64, height as f64);
+                let default_theme = ComboThemeConfig::default();
+                let _ = render_arc(cr, &data.config, &default_theme, display_value, &data.values, width as f64, height as f64);
                 data.transform.restore(cr);
             }
         });
@@ -181,8 +183,9 @@ impl Displayer for ArcDisplayer {
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
+            let default_theme = ComboThemeConfig::default();
             data.transform.apply(cr, width, height);
-            render_arc(cr, &data.config, data.value, &data.values, width, height)?;
+            render_arc(cr, &data.config, &default_theme, data.value, &data.values, width, height)?;
             data.transform.restore(cr);
         }
         Ok(())

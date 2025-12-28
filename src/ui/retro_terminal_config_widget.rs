@@ -189,7 +189,7 @@ impl RetroTerminalConfigWidget {
 
         // Tab 7: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields);
+        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 8: Animation
@@ -1271,6 +1271,7 @@ impl RetroTerminalConfigWidget {
     }
 
     /// Create a theme reference section showing current theme colors and fonts with copy buttons
+    #[allow(dead_code)]
     fn create_theme_reference_section(
         config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
     ) -> (gtk4::Frame, Rc<dyn Fn()>) {
@@ -1444,6 +1445,7 @@ impl RetroTerminalConfigWidget {
         content_notebook: &Rc<RefCell<Notebook>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1463,7 +1465,7 @@ impl RetroTerminalConfigWidget {
         page.append(&scrolled);
 
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields);
+        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
 
         page
     }
@@ -1475,6 +1477,7 @@ impl RetroTerminalConfigWidget {
         content_notebook: &Rc<RefCell<Notebook>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) {
         let notebook = content_notebook.borrow();
 
@@ -1524,7 +1527,7 @@ impl RetroTerminalConfigWidget {
 
                 for (slot_name, summary, item_idx) in sorted_items {
                     let tab_label = format!("Item {} : {}", item_idx, summary);
-                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields, theme_ref_refreshers);
                     items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
                 }
 
@@ -1540,6 +1543,7 @@ impl RetroTerminalConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         // Ensure this slot exists in content_items
         {
@@ -1693,6 +1697,15 @@ impl RetroTerminalConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for bar widget
+        let bar_widget_for_theme = bar_widget_rc.clone();
+        let config_for_bar_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_bar_theme.borrow().frame.theme.clone();
+            bar_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         bar_config_frame.set_child(Some(bar_widget_rc.widget()));
         inner_box.append(&bar_config_frame);
 
@@ -1796,6 +1809,15 @@ impl RetroTerminalConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for core bars widget
+        let core_bars_widget_for_theme = core_bars_widget_rc.clone();
+        let config_for_core_bars_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_core_bars_theme.borrow().frame.theme.clone();
+            core_bars_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
         inner_box.append(&core_bars_config_frame);
 
@@ -1863,6 +1885,15 @@ impl RetroTerminalConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for arc widget
+        let arc_widget_for_theme = arc_widget_rc.clone();
+        let config_for_arc_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_arc_theme.borrow().frame.theme.clone();
+            arc_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         arc_config_frame.set_child(Some(arc_widget_rc.widget()));
         inner_box.append(&arc_config_frame);
@@ -1989,14 +2020,14 @@ impl RetroTerminalConfigWidget {
 
         // Terminal green phosphor
         config.foreground = BarFillType::Solid {
-            color: Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 })
         };
         config.background = BarBackgroundType::Solid {
-            color: Color { r: 0.05, g: 0.1, b: 0.05, a: 1.0 }
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.05, g: 0.1, b: 0.05, a: 1.0 })
         };
         config.border = BorderConfig {
             enabled: true,
-            color: Color { r: 0.1, g: 0.5, b: 0.1, a: 1.0 },
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.1, g: 0.5, b: 0.1, a: 1.0 }),
             width: 1.0,
         };
         config.corner_radius = 0.0;
@@ -2214,6 +2245,7 @@ impl RetroTerminalConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
 
         self.preview.queue_draw();
@@ -2267,6 +2299,7 @@ impl RetroTerminalConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
 
         // Notify that config has changed so displayer gets updated
@@ -2286,6 +2319,7 @@ impl RetroTerminalConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
     }
 }

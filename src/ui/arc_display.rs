@@ -4,6 +4,10 @@ use gtk4::cairo;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_color_stops_vec,
+    ColorSource, ColorStopSource, ComboThemeConfig,
+};
 use crate::displayers::TextDisplayerConfig;
 
 /// Arc end cap style
@@ -90,8 +94,8 @@ pub struct ArcDisplayConfig {
     pub taper_amount: f64, // 0.0 to 1.0 (how much to taper)
 
     // Colors
-    #[serde(default = "default_color_stops")]
-    pub color_stops: Vec<ColorStop>,
+    #[serde(default = "default_color_stops", deserialize_with = "deserialize_color_stops_vec")]
+    pub color_stops: Vec<ColorStopSource>,
     #[serde(default)]
     pub color_transition: ColorTransitionStyle,
     #[serde(default)]
@@ -100,8 +104,8 @@ pub struct ArcDisplayConfig {
     // Background arc (unfilled portion)
     #[serde(default = "default_show_background_arc")]
     pub show_background_arc: bool,
-    #[serde(default = "default_background_color")]
-    pub background_color: Color,
+    #[serde(default = "default_background_color", deserialize_with = "deserialize_color_or_source")]
+    pub background_color: ColorSource,
     #[serde(default = "default_false")]
     pub overlay_background: bool, // If true, draw full arc then overlay with background color
 
@@ -165,14 +169,14 @@ fn default_taper_amount() -> f64 {
     0.5
 }
 
-fn default_color_stops() -> Vec<ColorStop> {
+fn default_color_stops() -> Vec<ColorStopSource> {
     vec![
-        ColorStop::new(0.0, Color::new(0.0, 0.8, 0.0, 1.0)),   // Green 0-60%
-        ColorStop::new(0.6, Color::new(0.0, 0.8, 0.0, 1.0)),   // Green at 60%
-        ColorStop::new(0.6, Color::new(1.0, 0.8, 0.0, 1.0)),   // Yellow at 60%
-        ColorStop::new(0.8, Color::new(1.0, 0.8, 0.0, 1.0)),   // Yellow at 80%
-        ColorStop::new(0.8, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 80%
-        ColorStop::new(1.0, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 100%
+        ColorStopSource::custom(0.0, Color::new(0.0, 0.8, 0.0, 1.0)),   // Green 0-60%
+        ColorStopSource::custom(0.6, Color::new(0.0, 0.8, 0.0, 1.0)),   // Green at 60%
+        ColorStopSource::custom(0.6, Color::new(1.0, 0.8, 0.0, 1.0)),   // Yellow at 60%
+        ColorStopSource::custom(0.8, Color::new(1.0, 0.8, 0.0, 1.0)),   // Yellow at 80%
+        ColorStopSource::custom(0.8, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 80%
+        ColorStopSource::custom(1.0, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 100%
     ]
 }
 
@@ -180,8 +184,8 @@ fn default_show_background_arc() -> bool {
     true
 }
 
-fn default_background_color() -> Color {
-    Color::new(0.2, 0.2, 0.2, 0.3)
+fn default_background_color() -> ColorSource {
+    ColorSource::Custom { color: Color::new(0.2, 0.2, 0.2, 0.3) }
 }
 
 fn default_animation_duration() -> f64 {
@@ -214,16 +218,37 @@ impl Default for ArcDisplayConfig {
     }
 }
 
+/// Internal helper struct with resolved colors for rendering
+struct ResolvedArcConfig<'a> {
+    config: &'a ArcDisplayConfig,
+    color_stops: Vec<ColorStop>,
+    background_color: Color,
+}
+
 /// Render an arc gauge display
 pub fn render_arc(
     cr: &cairo::Context,
     config: &ArcDisplayConfig,
+    theme: &ComboThemeConfig,
     value: f64, // 0.0 to 1.0
     values: &std::collections::HashMap<String, serde_json::Value>,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
     let value = value.clamp(0.0, 1.0);
+
+    // Resolve theme colors to concrete colors
+    let resolved_stops: Vec<ColorStop> = config.color_stops.iter()
+        .map(|s| s.resolve(theme))
+        .collect();
+    let resolved_bg_color = config.background_color.resolve(theme);
+
+    // Create a resolved config for internal functions
+    let resolved_config = ResolvedArcConfig {
+        config,
+        color_stops: resolved_stops,
+        background_color: resolved_bg_color,
+    };
 
     // Calculate center and radius
     let center_x = width / 2.0;
@@ -233,29 +258,29 @@ pub fn render_arc(
     // Check if we should use overlay mode
     let use_overlay = config.overlay_background
         && config.show_background_arc
-        && config.background_color.a < 1.0; // Only overlay if background has transparency
+        && resolved_bg_color.a < 1.0; // Only overlay if background has transparency
 
     if use_overlay {
         // Draw full arc with colors first
         if config.segmented {
-            render_full_segmented_arc(cr, config, center_x, center_y, max_radius)?;
+            render_full_segmented_arc(cr, &resolved_config, center_x, center_y, max_radius)?;
         } else {
-            render_full_continuous_arc(cr, config, center_x, center_y, max_radius)?;
+            render_full_continuous_arc(cr, &resolved_config, center_x, center_y, max_radius)?;
         }
 
         // Then overlay the background arc over the unfilled portion
-        render_overlay_arc(cr, config, value, center_x, center_y, max_radius)?;
+        render_overlay_arc(cr, &resolved_config, value, center_x, center_y, max_radius)?;
     } else {
         // Standard rendering: background first, then filled arc
         if config.show_background_arc {
-            render_background_arc(cr, config, center_x, center_y, max_radius)?;
+            render_background_arc(cr, &resolved_config, center_x, center_y, max_radius)?;
         }
 
         // Draw filled arc
         if config.segmented {
-            render_segmented_arc(cr, config, value, center_x, center_y, max_radius)?;
+            render_segmented_arc(cr, &resolved_config, value, center_x, center_y, max_radius)?;
         } else {
-            render_continuous_arc(cr, config, value, center_x, center_y, max_radius)?;
+            render_continuous_arc(cr, &resolved_config, value, center_x, center_y, max_radius)?;
         }
     }
 
@@ -276,17 +301,18 @@ pub fn render_arc(
 /// Render the background arc (unfilled portion)
 fn render_background_arc(
     cr: &cairo::Context,
-    config: &ArcDisplayConfig,
+    resolved: &ResolvedArcConfig,
     cx: f64,
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
+    let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let end_rad = config.end_angle.to_radians();
     let width = radius * config.arc_width;
 
     cr.save()?;
-    config.background_color.apply_to_cairo(cr);
+    resolved.background_color.apply_to_cairo(cr);
 
     // Set line cap based on config
     cr.set_line_cap(match config.cap_style {
@@ -360,12 +386,13 @@ fn render_background_arc(
 /// Render continuous arc
 fn render_continuous_arc(
     cr: &cairo::Context,
-    config: &ArcDisplayConfig,
+    resolved: &ResolvedArcConfig,
     value: f64,
     cx: f64,
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
+    let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
     let filled_angle = total_angle * value;
@@ -386,7 +413,7 @@ fn render_continuous_arc(
 
     if !needs_segments {
         // Simple constant-width arc with progressive color
-        let color = get_color_at_value(value, &config.color_stops, config.color_transition);
+        let color = get_color_at_value(value, &resolved.color_stops, config.color_transition);
         color.apply_to_cairo(cr);
         cr.set_line_width(width);
         cr.new_path();
@@ -409,10 +436,10 @@ fn render_continuous_arc(
 
             // Color based on mode
             let seg_color = if config.color_mode == ColorApplicationMode::Progressive {
-                get_color_at_value(value, &config.color_stops, config.color_transition)
+                get_color_at_value(value, &resolved.color_stops, config.color_transition)
             } else {
                 // Segments mode: color based on position in total arc
-                get_color_at_value(t, &config.color_stops, config.color_transition)
+                get_color_at_value(t, &resolved.color_stops, config.color_transition)
             };
 
             seg_color.apply_to_cairo(cr);
@@ -426,14 +453,14 @@ fn render_continuous_arc(
     // Draw pointed caps if needed
     if config.cap_style == ArcCapStyle::Pointed {
         let start_color = if config.color_mode == ColorApplicationMode::Progressive {
-            get_color_at_value(value, &config.color_stops, config.color_transition)
+            get_color_at_value(value, &resolved.color_stops, config.color_transition)
         } else {
-            get_color_at_value(0.0, &config.color_stops, config.color_transition)
+            get_color_at_value(0.0, &resolved.color_stops, config.color_transition)
         };
         let end_color = if config.color_mode == ColorApplicationMode::Progressive {
-            get_color_at_value(value, &config.color_stops, config.color_transition)
+            get_color_at_value(value, &resolved.color_stops, config.color_transition)
         } else {
-            get_color_at_value(value, &config.color_stops, config.color_transition)
+            get_color_at_value(value, &resolved.color_stops, config.color_transition)
         };
         draw_pointed_cap(cr, cx, cy, radius, width, start_rad, true, &start_color)?;
         draw_pointed_cap(cr, cx, cy, radius, width, end_rad, false, &end_color)?;
@@ -446,12 +473,13 @@ fn render_continuous_arc(
 /// Render segmented arc
 fn render_segmented_arc(
     cr: &cairo::Context,
-    config: &ArcDisplayConfig,
+    resolved: &ResolvedArcConfig,
     value: f64,
     cx: f64,
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
+    let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
     let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing) / config.segment_count as f64;
@@ -485,16 +513,16 @@ fn render_segmented_arc(
         let color = match config.color_mode {
             ColorApplicationMode::Progressive => {
                 // All filled segments have the same color based on current value
-                get_color_at_value(value, &config.color_stops, config.color_transition)
+                get_color_at_value(value, &resolved.color_stops, config.color_transition)
             }
             ColorApplicationMode::Segments => {
                 // Each segment has its own color based on position
                 if is_filled {
                     // Filled segments show their position color
-                    get_color_at_value(seg_value, &config.color_stops, config.color_transition)
+                    get_color_at_value(seg_value, &resolved.color_stops, config.color_transition)
                 } else {
                     // Unfilled segments use background arc color
-                    config.background_color
+                    resolved.background_color
                 }
             }
         };
@@ -609,11 +637,12 @@ fn draw_pointed_cap(
 /// Render full segmented arc (all segments with their colors) for overlay mode
 fn render_full_segmented_arc(
     cr: &cairo::Context,
-    config: &ArcDisplayConfig,
+    resolved: &ResolvedArcConfig,
     cx: f64,
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
+    let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
     let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing) / config.segment_count as f64;
@@ -631,7 +660,7 @@ fn render_full_segmented_arc(
         let seg_end = seg_start + segment_angle.to_radians();
         let seg_value = (i as f64 + 0.5) / config.segment_count as f64;
 
-        let color = get_color_at_value(seg_value, &config.color_stops, config.color_transition);
+        let color = get_color_at_value(seg_value, &resolved.color_stops, config.color_transition);
         color.apply_to_cairo(cr);
 
         // Apply tapering if enabled
@@ -665,30 +694,31 @@ fn render_full_segmented_arc(
 /// Render full continuous arc (entire arc with gradient) for overlay mode
 fn render_full_continuous_arc(
     cr: &cairo::Context,
-    config: &ArcDisplayConfig,
+    resolved: &ResolvedArcConfig,
     cx: f64,
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
     // Just render the continuous arc at full value (1.0)
-    render_continuous_arc(cr, config, 1.0, cx, cy, radius)
+    render_continuous_arc(cr, resolved, 1.0, cx, cy, radius)
 }
 
 /// Render overlay arc (background color over unfilled portion) for overlay mode
 fn render_overlay_arc(
     cr: &cairo::Context,
-    config: &ArcDisplayConfig,
+    resolved: &ResolvedArcConfig,
     value: f64,
     cx: f64,
     cy: f64,
     radius: f64,
 ) -> Result<(), cairo::Error> {
+    let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
     let width = radius * config.arc_width;
 
     cr.save()?;
-    config.background_color.apply_to_cairo(cr);
+    resolved.background_color.apply_to_cairo(cr);
 
     cr.set_line_cap(match config.cap_style {
         ArcCapStyle::Butt => cairo::LineCap::Butt,

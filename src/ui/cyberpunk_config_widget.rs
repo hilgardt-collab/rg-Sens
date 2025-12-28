@@ -189,7 +189,7 @@ impl CyberpunkConfigWidget {
 
         // Tab 6: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields);
+        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 7: Animation
@@ -1227,6 +1227,7 @@ impl CyberpunkConfigWidget {
     }
 
     /// Create a theme reference section showing current theme colors and fonts with copy buttons
+    #[allow(dead_code)]
     fn create_theme_reference_section(
         config: &Rc<RefCell<CyberpunkDisplayConfig>>,
     ) -> (gtk4::Frame, Rc<dyn Fn()>) {
@@ -1400,6 +1401,7 @@ impl CyberpunkConfigWidget {
         content_notebook: &Rc<RefCell<Notebook>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1420,7 +1422,7 @@ impl CyberpunkConfigWidget {
 
         // Initial build of content tabs
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields);
+        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
 
         page
     }
@@ -1432,6 +1434,7 @@ impl CyberpunkConfigWidget {
         content_notebook: &Rc<RefCell<Notebook>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) {
         let notebook = content_notebook.borrow();
 
@@ -1492,7 +1495,7 @@ impl CyberpunkConfigWidget {
 
                 for (slot_name, summary, item_idx) in sorted_items {
                     let tab_label = format!("Item {} : {}", item_idx, summary);
-                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields, theme_ref_refreshers);
                     items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
                 }
 
@@ -1508,6 +1511,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         log::info!("=== Cyberpunk create_slot_config_tab() called for slot '{}' ===", slot_name);
 
@@ -1674,6 +1678,15 @@ impl CyberpunkConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for bar widget
+        let bar_widget_for_theme = bar_widget_rc.clone();
+        let config_for_bar_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_bar_theme.borrow().frame.theme.clone();
+            bar_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         bar_config_frame.set_child(Some(bar_widget_rc.widget()));
         inner_box.append(&bar_config_frame);
 
@@ -1786,6 +1799,15 @@ impl CyberpunkConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for core bars widget
+        let core_bars_widget_for_theme = core_bars_widget_rc.clone();
+        let config_for_core_bars_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_core_bars_theme.borrow().frame.theme.clone();
+            core_bars_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
         inner_box.append(&core_bars_config_frame);
 
@@ -1859,6 +1881,15 @@ impl CyberpunkConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for arc widget
+        let arc_widget_for_theme = arc_widget_rc.clone();
+        let config_for_arc_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_arc_theme.borrow().frame.theme.clone();
+            arc_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         arc_config_frame.set_child(Some(arc_widget_rc.widget()));
         inner_box.append(&arc_config_frame);
@@ -1983,7 +2014,7 @@ impl CyberpunkConfigWidget {
     #[allow(clippy::field_reassign_with_default)]
     fn default_bar_config_cyberpunk() -> crate::ui::BarDisplayConfig {
         use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
-        use crate::ui::background::{Color, ColorStop};
+        use crate::ui::background::Color;
 
         let mut config = BarDisplayConfig::default();
         config.style = BarStyle::Full;
@@ -1993,17 +2024,17 @@ impl CyberpunkConfigWidget {
         // Cyberpunk cyan to magenta gradient
         config.foreground = BarFillType::Gradient {
             stops: vec![
-                ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },  // Cyan
-                ColorStop { position: 1.0, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },  // Magenta
+                crate::ui::theme::ColorStopSource::custom(0.0, Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }),  // Cyan
+                crate::ui::theme::ColorStopSource::custom(1.0, Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 }),  // Magenta
             ],
             angle: 0.0,
         };
         config.background = BarBackgroundType::Solid {
-            color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.8 }  // Dark background
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.1, g: 0.1, b: 0.15, a: 0.8 })  // Dark background
         };
         config.border = BorderConfig {
             enabled: true,
-            color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.5 },  // Cyan border
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.5 }),  // Cyan border
             width: 1.0,
         };
 
@@ -2039,7 +2070,7 @@ impl CyberpunkConfigWidget {
     fn default_core_bars_config_cyberpunk() -> crate::ui::CoreBarsConfig {
         use crate::ui::core_bars_display::CoreBarsConfig;
         use crate::ui::bar_display::{BarStyle, BarFillType, BarBackgroundType, BorderConfig};
-        use crate::ui::background::{Color, ColorStop};
+        use crate::ui::background::Color;
 
         let mut config = CoreBarsConfig::default();
         config.bar_style = BarStyle::Full;
@@ -2047,18 +2078,18 @@ impl CyberpunkConfigWidget {
         // Cyberpunk cyan to yellow to magenta gradient
         config.foreground = BarFillType::Gradient {
             stops: vec![
-                ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },  // Cyan (low)
-                ColorStop { position: 0.5, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },  // Yellow (mid)
-                ColorStop { position: 1.0, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },  // Magenta (high)
+                crate::ui::theme::ColorStopSource::custom(0.0, Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }),  // Cyan (low)
+                crate::ui::theme::ColorStopSource::custom(0.5, Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 }),  // Yellow (mid)
+                crate::ui::theme::ColorStopSource::custom(1.0, Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 }),  // Magenta (high)
             ],
             angle: 90.0,
         };
         config.background = BarBackgroundType::Solid {
-            color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 }
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 })
         };
         config.border = BorderConfig {
             enabled: true,
-            color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.3 },
+            color: crate::ui::theme::ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.3 }),
             width: 1.0,
         };
 
@@ -2069,18 +2100,19 @@ impl CyberpunkConfigWidget {
     #[allow(clippy::field_reassign_with_default)]
     fn default_arc_config_cyberpunk() -> crate::ui::ArcDisplayConfig {
         use crate::ui::arc_display::ArcDisplayConfig;
-        use crate::ui::background::{Color, ColorStop};
+        use crate::ui::background::Color;
+        use crate::ui::theme::{ColorSource, ColorStopSource};
 
         let mut config = ArcDisplayConfig::default();
 
         // Cyberpunk cyan to magenta gradient
         config.color_stops = vec![
-            ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },   // Cyan
-            ColorStop { position: 0.5, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },   // Magenta
-            ColorStop { position: 1.0, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },   // Yellow
+            ColorStopSource { position: 0.0, color: ColorSource::Custom { color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } } },   // Cyan
+            ColorStopSource { position: 0.5, color: ColorSource::Custom { color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } } },   // Magenta
+            ColorStopSource { position: 1.0, color: ColorSource::Custom { color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } } },   // Yellow
         ];
         config.show_background_arc = true;
-        config.background_color = Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 };
+        config.background_color = ColorSource::Custom { color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 } };
         config.animate = true;
 
         config
@@ -2287,6 +2319,7 @@ impl CyberpunkConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
 
         self.preview.queue_draw();
@@ -2350,6 +2383,7 @@ impl CyberpunkConfigWidget {
             &self.content_notebook,
             &self.source_summaries,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
 
         // Notify that config has changed so displayer gets updated

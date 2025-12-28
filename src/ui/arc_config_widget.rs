@@ -13,9 +13,11 @@ use crate::ui::arc_display::{
     ColorTransitionStyle,
 };
 use crate::ui::clipboard::CLIPBOARD;
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
-use crate::ui::{GradientEditor, LinearGradientConfig};
+use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::background::ColorStop;
+use crate::ui::GradientEditor;
 use crate::displayers::FieldMetadata;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 
@@ -23,6 +25,7 @@ use crate::ui::text_line_config_widget::TextLineConfigWidget;
 pub struct ArcConfigWidget {
     container: GtkBox,
     config: Rc<RefCell<ArcDisplayConfig>>,
+    theme: Rc<RefCell<ComboThemeConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
 
@@ -50,6 +53,7 @@ pub struct ArcConfigWidget {
     // Background arc controls
     show_bg_arc_check: CheckButton,
     overlay_bg_check: CheckButton,
+    bg_color_widget: Rc<ThemeColorSelector>,
 
     // Animation controls
     animate_check: CheckButton,
@@ -59,10 +63,27 @@ pub struct ArcConfigWidget {
     text_config_widget: Option<Rc<TextLineConfigWidget>>,
 }
 
+/// Convert ColorStopSource to ColorStop for gradient editor display
+fn color_stop_sources_to_stops(sources: &[ColorStopSource]) -> Vec<ColorStop> {
+    // Use a default theme for resolving theme colors in the config widget
+    let theme = ComboThemeConfig::default();
+    sources.iter().map(|s| s.resolve(&theme)).collect()
+}
+
+/// Convert ColorStop back to ColorStopSource (as Custom colors)
+fn stops_to_color_stop_sources(stops: &[ColorStop]) -> Vec<ColorStopSource> {
+    stops.iter().map(|s| ColorStopSource {
+        position: s.position,
+        color: ColorSource::Custom { color: s.color },
+    }).collect()
+}
+
+
 impl ArcConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(ArcDisplayConfig::default()));
+        let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         // Preview at the top
@@ -71,15 +92,17 @@ impl ArcConfigWidget {
         preview.set_vexpand(false);
 
         let config_clone = config.clone();
+        let theme_clone = theme.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             // Render checkerboard pattern to show transparency
             render_checkerboard(cr, width as f64, height as f64);
 
             let cfg = config_clone.borrow();
+            let thm = theme_clone.borrow();
             let mut preview_values = std::collections::HashMap::new();
             preview_values.insert("value".to_string(), serde_json::json!(75.0));
             preview_values.insert("percent".to_string(), serde_json::json!(75.0));
-            let _ = render_arc(cr, &cfg, 0.75, &preview_values, width as f64, height as f64);
+            let _ = render_arc(cr, &cfg, &thm, 0.75, &preview_values, width as f64, height as f64);
         });
 
         // Create notebook for tabbed interface
@@ -94,9 +117,9 @@ impl ArcConfigWidget {
 
         // === Tab 2: Style ===
         let (style_page, cap_style_dropdown, taper_style_dropdown, taper_amount_spin,
-             show_bg_arc_check, overlay_bg_check,
+             show_bg_arc_check, overlay_bg_check, bg_color_widget,
              animate_check, animation_duration_spin) =
-            Self::create_style_page(&config, &on_change, &preview);
+            Self::create_style_page(&config, &theme, &on_change, &preview);
         notebook.append_page(&style_page, Some(&Label::new(Some("Style"))));
 
         // === Tab 3: Colors ===
@@ -202,12 +225,8 @@ impl ArcConfigWidget {
                     animate_check_paste.set_active(new_config.animate);
                     animation_duration_spin_paste.set_value(new_config.animation_duration * 1000.0);
 
-                    // Update gradient editor
-                    let gradient = LinearGradientConfig {
-                        angle: 0.0,
-                        stops: new_config.color_stops,
-                    };
-                    gradient_editor_paste.set_gradient(&gradient);
+                    // Update gradient editor with theme-aware color stops
+                    gradient_editor_paste.set_stops_source(new_config.color_stops.clone());
 
                     preview_for_paste.queue_draw();
                     if let Some(cb) = on_change_for_paste.borrow().as_ref() {
@@ -220,6 +239,7 @@ impl ArcConfigWidget {
         Self {
             container,
             config,
+            theme,
             on_change,
             preview,
             start_angle_spin,
@@ -237,6 +257,7 @@ impl ArcConfigWidget {
             gradient_editor,
             show_bg_arc_check,
             overlay_bg_check,
+            bg_color_widget,
             animate_check,
             animation_duration_spin,
             text_config_widget,
@@ -401,9 +422,10 @@ impl ArcConfigWidget {
 
     fn create_style_page(
         config: &Rc<RefCell<ArcDisplayConfig>>,
+        theme: &Rc<RefCell<ComboThemeConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-    ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, CheckButton, SpinButton) {
+    ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, Rc<ThemeColorSelector>, CheckButton, SpinButton) {
         let page = GtkBox::new(Orientation::Vertical, 12);
         page.set_margin_start(12);
         page.set_margin_end(12);
@@ -546,18 +568,19 @@ impl ArcConfigWidget {
 
         page.append(&overlay_check);
 
-        // Background arc color - using ColorButtonWidget
+        // Background arc color - using ThemeColorSelector
         let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_color_box.append(&Label::new(Some("Background Arc Color:")));
-        let bg_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().background_color));
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().background_color.clone()));
+        bg_color_widget.set_theme_config(theme.borrow().clone());
         bg_color_box.append(bg_color_widget.widget());
         page.append(&bg_color_box);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        bg_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().background_color = color;
+        bg_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().background_color = color_source;
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -603,7 +626,7 @@ impl ArcConfigWidget {
         duration_box.append(&duration_spin);
         page.append(&duration_box);
 
-        (page, cap_dropdown, taper_dropdown, amount_spin, bg_check, overlay_check,
+        (page, cap_dropdown, taper_dropdown, amount_spin, bg_check, overlay_check, bg_color_widget,
          animate_check, duration_spin)
     }
 
@@ -692,12 +715,8 @@ impl ArcConfigWidget {
         // Create gradient editor first so we can reference it in paste handler
         let gradient_editor = GradientEditor::new();
 
-        // Initialize gradient editor with current color stops
-        let initial_gradient = LinearGradientConfig {
-            angle: 0.0, // Angle doesn't matter for arc, we just use the stops
-            stops: config.borrow().color_stops.clone(),
-        };
-        gradient_editor.set_gradient(&initial_gradient);
+        // Initialize gradient editor with current color stops (using ColorStopSource)
+        gradient_editor.set_stops_source(config.borrow().color_stops.clone());
 
         let gradient_editor_ref = Rc::new(gradient_editor);
 
@@ -712,7 +731,7 @@ impl ArcConfigWidget {
 
             let cfg = config_for_copy.borrow();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_gradient_stops(cfg.color_stops.clone());
+                clipboard.copy_gradient_stops(color_stop_sources_to_stops(&cfg.color_stops));
                 log::info!("Arc gradient color stops copied to clipboard");
             }
         });
@@ -726,7 +745,7 @@ impl ArcConfigWidget {
 
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
-                    config_for_paste.borrow_mut().color_stops = stops.clone();
+                    config_for_paste.borrow_mut().color_stops = stops_to_color_stop_sources(&stops);
 
                     // Update the gradient editor widget
                     gradient_editor_for_paste.set_stops(stops);
@@ -755,8 +774,7 @@ impl ArcConfigWidget {
         let gradient_editor_clone = gradient_editor_ref.clone();
 
         gradient_editor_ref.set_on_change(move || {
-            let gradient = gradient_editor_clone.get_gradient();
-            config_clone.borrow_mut().color_stops = gradient.stops;
+            config_clone.borrow_mut().color_stops = gradient_editor_clone.get_stops_source();
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -871,12 +889,8 @@ impl ArcConfigWidget {
         self.animate_check.set_active(new_config.animate);
         self.animation_duration_spin.set_value(new_config.animation_duration * 1000.0);
 
-        // Update gradient editor with color stops
-        let gradient = LinearGradientConfig {
-            angle: 0.0,
-            stops: new_config.color_stops.clone(),
-        };
-        self.gradient_editor.set_gradient(&gradient);
+        // Update gradient editor with theme-aware color stops
+        self.gradient_editor.set_stops_source(new_config.color_stops.clone());
 
         if let Some(text_widget) = &self.text_config_widget {
             text_widget.set_config(new_config.text_overlay.text_config);
@@ -889,9 +903,8 @@ impl ArcConfigWidget {
     pub fn get_config(&self) -> ArcDisplayConfig {
         let mut config = self.config.borrow().clone();
 
-        // Update color stops from gradient editor
-        let gradient = self.gradient_editor.get_gradient();
-        config.color_stops = gradient.stops;
+        // Update color stops from gradient editor (preserves theme references)
+        config.color_stops = self.gradient_editor.get_stops_source();
 
         // Update text config from widget if available
         if let Some(text_widget) = &self.text_config_widget {
@@ -903,6 +916,16 @@ impl ArcConfigWidget {
 
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Update the theme configuration and refresh the preview
+    pub fn set_theme(&self, new_theme: ComboThemeConfig) {
+        *self.theme.borrow_mut() = new_theme.clone();
+        // Update ThemeColorSelector widgets with new theme
+        self.bg_color_widget.set_theme_config(new_theme.clone());
+        // Update gradient editor with new theme
+        self.gradient_editor.set_theme_config(new_theme);
+        self.preview.queue_draw();
     }
 }
 

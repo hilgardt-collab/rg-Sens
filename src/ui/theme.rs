@@ -153,8 +153,96 @@ fn check_gnome_color_scheme() -> Option<bool> {
 // Combo Panel Theme System
 // ============================================================================
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use super::background::{Color, ColorStop, LinearGradientConfig};
+
+// ============================================================================
+// Serde Migration Helpers
+// ============================================================================
+
+/// Deserialize a ColorSource from either:
+/// - New format: { "type": "Theme", "index": 1 } or { "type": "Custom", "color": {...} }
+/// - Legacy format: { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 } (raw Color)
+pub fn deserialize_color_or_source<'de, D>(deserializer: D) -> Result<ColorSource, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+
+    // Check if it's the new ColorSource format (has "type" field)
+    if value.get("type").is_some() {
+        // New format - deserialize as ColorSource
+        ColorSource::deserialize(value).map_err(serde::de::Error::custom)
+    } else if value.get("r").is_some() {
+        // Legacy format - raw Color, wrap in Custom
+        let color: Color = Color::deserialize(value).map_err(serde::de::Error::custom)?;
+        Ok(ColorSource::Custom { color })
+    } else {
+        Err(serde::de::Error::custom("Expected ColorSource or Color"))
+    }
+}
+
+/// Deserialize a ColorStopSource from either:
+/// - New format: { "position": 0.5, "color": { "type": "Theme", "index": 1 } }
+/// - Legacy format: { "position": 0.5, "color": { "r": 1.0, ... } } (raw ColorStop)
+pub fn deserialize_color_stop_or_source<'de, D>(deserializer: D) -> Result<ColorStopSource, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+
+    let position = value.get("position")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| serde::de::Error::custom("Missing position field"))?;
+
+    let color_value = value.get("color")
+        .ok_or_else(|| serde::de::Error::custom("Missing color field"))?;
+
+    // Check if color is new ColorSource format or legacy Color format
+    let color = if color_value.get("type").is_some() {
+        // New format
+        ColorSource::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?
+    } else if color_value.get("r").is_some() {
+        // Legacy format - raw Color
+        let raw_color: Color = Color::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?;
+        ColorSource::Custom { color: raw_color }
+    } else {
+        return Err(serde::de::Error::custom("Invalid color format in ColorStopSource"));
+    };
+
+    Ok(ColorStopSource { position, color })
+}
+
+/// Deserialize a Vec<ColorStopSource> from either format
+pub fn deserialize_color_stops_vec<'de, D>(deserializer: D) -> Result<Vec<ColorStopSource>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let values: Vec<Value> = Vec::deserialize(deserializer)?;
+
+    values.into_iter()
+        .map(|value| {
+            let position = value.get("position")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| serde::de::Error::custom("Missing position field"))?;
+
+            let color_value = value.get("color")
+                .ok_or_else(|| serde::de::Error::custom("Missing color field"))?;
+
+            let color = if color_value.get("type").is_some() {
+                ColorSource::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?
+            } else if color_value.get("r").is_some() {
+                let raw_color: Color = Color::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?;
+                ColorSource::Custom { color: raw_color }
+            } else {
+                return Err(serde::de::Error::custom("Invalid color format"));
+            };
+
+            Ok(ColorStopSource { position, color })
+        })
+        .collect()
+}
 
 /// Reference to a theme color or custom color
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -287,6 +375,39 @@ impl GradientSource {
     /// Check if this is a theme reference
     pub fn is_theme(&self) -> bool {
         matches!(self, GradientSource::Theme)
+    }
+}
+
+/// A color stop that can reference theme colors
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ColorStopSource {
+    pub position: f64,
+    pub color: ColorSource,
+}
+
+impl ColorStopSource {
+    /// Create a new color stop with theme color reference
+    pub fn theme(position: f64, index: u8) -> Self {
+        Self {
+            position,
+            color: ColorSource::theme(index),
+        }
+    }
+
+    /// Create a new color stop with custom color
+    pub fn custom(position: f64, color: Color) -> Self {
+        Self {
+            position,
+            color: ColorSource::custom(color),
+        }
+    }
+
+    /// Resolve to actual ColorStop using theme
+    pub fn resolve(&self, theme: &ComboThemeConfig) -> ColorStop {
+        ColorStop {
+            position: self.position,
+            color: self.color.resolve(theme),
+        }
     }
 }
 
@@ -485,5 +606,106 @@ impl ComboThemeConfig {
             font2_family: "monospace".to_string(),
             font2_size: 10.0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_color_source_new_format_theme() {
+        let json = r#"{"type": "Theme", "index": 2}"#;
+        let result: ColorSource = serde_json::from_str(json).unwrap();
+        assert_eq!(result, ColorSource::Theme { index: 2 });
+    }
+
+    #[test]
+    fn test_deserialize_color_source_new_format_custom() {
+        let json = r#"{"type": "Custom", "color": {"r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0}}"#;
+        let result: ColorSource = serde_json::from_str(json).unwrap();
+        match result {
+            ColorSource::Custom { color } => {
+                assert!((color.r - 1.0).abs() < 0.001);
+                assert!((color.g - 0.5).abs() < 0.001);
+                assert!((color.b - 0.0).abs() < 0.001);
+            }
+            _ => panic!("Expected Custom variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_legacy_color_as_source() {
+        // Legacy format should be auto-converted to ColorSource::Custom
+        #[derive(Deserialize)]
+        struct TestStruct {
+            #[serde(deserialize_with = "deserialize_color_or_source")]
+            color: ColorSource,
+        }
+
+        let json = r#"{"color": {"r": 0.0, "g": 1.0, "b": 0.0, "a": 0.8}}"#;
+        let result: TestStruct = serde_json::from_str(json).unwrap();
+        match result.color {
+            ColorSource::Custom { color } => {
+                assert!((color.r - 0.0).abs() < 0.001);
+                assert!((color.g - 1.0).abs() < 0.001);
+                assert!((color.b - 0.0).abs() < 0.001);
+                assert!((color.a - 0.8).abs() < 0.001);
+            }
+            _ => panic!("Expected Custom variant from legacy format"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_color_stops_vec_legacy() {
+        #[derive(Deserialize)]
+        struct TestStruct {
+            #[serde(deserialize_with = "deserialize_color_stops_vec")]
+            stops: Vec<ColorStopSource>,
+        }
+
+        // Legacy gradient stops with raw colors
+        let json = r#"{
+            "stops": [
+                {"position": 0.0, "color": {"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0}},
+                {"position": 1.0, "color": {"r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0}}
+            ]
+        }"#;
+
+        let result: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(result.stops.len(), 2);
+        assert!((result.stops[0].position - 0.0).abs() < 0.001);
+        assert!((result.stops[1].position - 1.0).abs() < 0.001);
+
+        // Both should be Custom variants from legacy format
+        match &result.stops[0].color {
+            ColorSource::Custom { color } => {
+                assert!((color.r - 1.0).abs() < 0.001);
+                assert!((color.g - 0.0).abs() < 0.001);
+            }
+            _ => panic!("Expected Custom variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_color_stops_vec_new_format() {
+        #[derive(Deserialize)]
+        struct TestStruct {
+            #[serde(deserialize_with = "deserialize_color_stops_vec")]
+            stops: Vec<ColorStopSource>,
+        }
+
+        // New format with theme references
+        let json = r#"{
+            "stops": [
+                {"position": 0.0, "color": {"type": "Theme", "index": 1}},
+                {"position": 1.0, "color": {"type": "Theme", "index": 2}}
+            ]
+        }"#;
+
+        let result: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(result.stops.len(), 2);
+        assert_eq!(result.stops[0].color, ColorSource::Theme { index: 1 });
+        assert_eq!(result.stops[1].color, ColorSource::Theme { index: 2 });
     }
 }

@@ -207,7 +207,7 @@ impl LcarsConfigWidget {
 
         // Tab 5: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &content_widgets, &available_fields);
+        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &content_widgets, &available_fields, &theme_ref_refreshers);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 6: Layout
@@ -1802,6 +1802,7 @@ impl LcarsConfigWidget {
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         content_widgets_out: &Rc<RefCell<Option<ContentWidgets>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1848,7 +1849,7 @@ impl LcarsConfigWidget {
         drop(nb);
 
         // Build initial tabs based on source summaries
-        Self::rebuild_content_notebook_tabs(content_notebook, source_summaries, config, on_change, preview, available_fields);
+        Self::rebuild_content_notebook_tabs(content_notebook, source_summaries, config, on_change, preview, available_fields, theme_ref_refreshers);
 
         // Store widget references for updating when config changes
         *content_widgets_out.borrow_mut() = Some(ContentWidgets {
@@ -1866,6 +1867,7 @@ impl LcarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) {
         let notebook = content_notebook.borrow();
 
@@ -1926,7 +1928,7 @@ impl LcarsConfigWidget {
 
                 for (slot_name, summary, item_idx) in sorted_items {
                     let tab_label = format!("Item {} - {}", item_idx, summary);
-                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields);
+                    let tab_box = Self::create_slot_config_tab(&slot_name, config, on_change, preview, available_fields, theme_ref_refreshers);
                     items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
                 }
 
@@ -1937,6 +1939,7 @@ impl LcarsConfigWidget {
     }
 
     /// Create a theme reference section showing current theme colors and fonts with copy buttons
+    #[allow(dead_code)]
     fn create_theme_reference_section(
         config: &Rc<RefCell<LcarsDisplayConfig>>,
     ) -> (gtk4::Frame, Rc<dyn Fn()>) {
@@ -2108,6 +2111,7 @@ impl LcarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         log::info!("=== create_slot_config_tab() called for slot '{}' ===", slot_name);
 
@@ -2277,6 +2281,15 @@ impl LcarsConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for bar widget
+        let bar_widget_for_theme = bar_widget_rc.clone();
+        let config_for_bar_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_bar_theme.borrow().frame.theme.clone();
+            bar_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         bar_config_frame.set_child(Some(bar_widget_rc.widget()));
         inner_box.append(&bar_config_frame);
 
@@ -2419,6 +2432,15 @@ impl LcarsConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for core bars widget
+        let core_bars_widget_for_theme = core_bars_widget_rc.clone();
+        let config_for_core_bars_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_core_bars_theme.borrow().frame.theme.clone();
+            core_bars_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
         inner_box.append(&core_bars_config_frame);
@@ -3154,6 +3176,7 @@ impl LcarsConfigWidget {
             &self.on_change,
             &self.preview,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
 
         // Rebuild group weight spinners and update sync checkbox in Layout tab if available
@@ -3188,6 +3211,7 @@ impl LcarsConfigWidget {
             &self.on_change,
             &self.preview,
             &self.available_fields,
+            &self.theme_ref_refreshers,
         );
     }
 }

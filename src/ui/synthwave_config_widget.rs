@@ -1463,12 +1463,14 @@ impl SynthwaveConfigWidget {
         (frame, refresh_callback)
     }
 
+    #[allow(dead_code)]
     fn create_content_item_config(
         config: &Rc<RefCell<SynthwaveDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         slot_name: &str,
         available_fields: Vec<FieldMetadata>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         // Ensure this slot exists in content_items
         {
@@ -1635,6 +1637,15 @@ impl SynthwaveConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for bar widget
+        let bar_widget_for_theme = bar_widget_rc.clone();
+        let config_for_bar_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_bar_theme.borrow().frame.theme.clone();
+            bar_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         bar_config_frame.set_child(Some(bar_widget_rc.widget()));
         inner_box.append(&bar_config_frame);
 
@@ -1738,6 +1749,15 @@ impl SynthwaveConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for core bars widget
+        let core_bars_widget_for_theme = core_bars_widget_rc.clone();
+        let config_for_core_bars_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_core_bars_theme.borrow().frame.theme.clone();
+            core_bars_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
         inner_box.append(&core_bars_config_frame);
 
@@ -1805,6 +1825,15 @@ impl SynthwaveConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for arc widget
+        let arc_widget_for_theme = arc_widget_rc.clone();
+        let config_for_arc_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_arc_theme.borrow().frame.theme.clone();
+            arc_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         arc_config_frame.set_child(Some(arc_widget_rc.widget()));
         inner_box.append(&arc_config_frame);

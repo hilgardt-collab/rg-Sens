@@ -198,6 +198,7 @@ impl SynthwaveDisplayer {
                         item_w,
                         item_h,
                         &item_config.bar_config,
+                        &config.frame.theme,
                         &item_data,
                         animated_percent,
                         Some(&slot_values),
@@ -211,6 +212,7 @@ impl SynthwaveDisplayer {
                         item_w,
                         item_h,
                         &item_config.bar_config,
+                        &config.frame.theme,
                         &item_data,
                         Some(&slot_values),
                     )?;
@@ -238,6 +240,7 @@ impl SynthwaveDisplayer {
                             item_w,
                             item_h,
                             &item_config.bar_config,
+                            &config.frame.theme,
                             &item_data,
                             Some(&slot_values),
                         )?;
@@ -251,6 +254,7 @@ impl SynthwaveDisplayer {
                         item_w,
                         item_h,
                         &item_config.bar_config,
+                        &config.frame.theme,
                         &item_data,
                         Some(&slot_values),
                     )?;
@@ -290,6 +294,7 @@ impl SynthwaveDisplayer {
                         item_w,
                         item_h,
                         core_bars_config,
+                        &config.frame.theme,
                         &core_values,
                         Some(&slot_values),
                     )?;
@@ -312,6 +317,7 @@ impl SynthwaveDisplayer {
                     render_arc(
                         cr,
                         &item_config.arc_config,
+                        &config.frame.theme,
                         animated_percent,
                         &slot_values,
                         item_w,

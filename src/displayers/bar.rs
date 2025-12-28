@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::bar_display::{render_bar, BarDisplayConfig};
+use crate::ui::theme::ComboThemeConfig;
 
 /// Bar displayer
 pub struct BarDisplayer {
@@ -20,6 +21,7 @@ pub struct BarDisplayer {
 #[derive(Clone)]
 struct DisplayData {
     config: BarDisplayConfig,
+    theme: ComboThemeConfig,
     value: f64,
     animated_value: f64,
     values: HashMap<String, Value>, // Text overlay field values (extracted, not full clone)
@@ -33,6 +35,7 @@ impl BarDisplayer {
     pub fn new() -> Self {
         let data = Arc::new(Mutex::new(DisplayData {
             config: BarDisplayConfig::default(),
+            theme: ComboThemeConfig::default(),
             value: 0.0,
             animated_value: 0.0,
             values: HashMap::new(),
@@ -82,7 +85,7 @@ impl Displayer for BarDisplayer {
                     data.value
                 };
                 data.transform.apply(cr, width as f64, height as f64);
-                let _ = render_bar(cr, &data.config, display_value, &data.values, width as f64, height as f64);
+                let _ = render_bar(cr, &data.config, &data.theme, display_value, &data.values, width as f64, height as f64);
                 data.transform.restore(cr);
             }
         });
@@ -176,7 +179,7 @@ impl Displayer for BarDisplayer {
                 data.value
             };
             data.transform.apply(cr, width, height);
-            render_bar(cr, &data.config, display_value, &data.values, width, height)?;
+            render_bar(cr, &data.config, &data.theme, display_value, &data.values, width, height)?;
             data.transform.restore(cr);
         }
         Ok(())

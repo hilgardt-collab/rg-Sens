@@ -492,8 +492,8 @@ pub fn rebuild_content_tabs<C, F>(
 /// Create configuration UI for a single content item.
 pub fn create_content_item_config<C, F>(
     config: &Rc<RefCell<C>>,
-    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    preview: &DrawingArea,
+    _on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    _preview: &DrawingArea,
     slot_name: &str,
     available_fields: Vec<FieldMetadata>,
     get_content_items: F,

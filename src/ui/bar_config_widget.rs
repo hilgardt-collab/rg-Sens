@@ -12,17 +12,19 @@ use crate::ui::bar_display::{
     BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
     BarStyle, BarTaperAlignment, BarTaperStyle, render_bar,
 };
-use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::background::{Color, ColorStop};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
 use crate::ui::TextLineConfigWidget;
+use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
+use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::core::FieldMetadata;
 
 /// Bar configuration widget
 pub struct BarConfigWidget {
     container: GtkBox,
     config: Rc<RefCell<BarDisplayConfig>>,
+    theme: Rc<RefCell<ComboThemeConfig>>,
     preview: DrawingArea,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
 
@@ -35,15 +37,18 @@ pub struct BarConfigWidget {
     // Foreground UI elements
     fg_solid_radio: CheckButton,
     fg_gradient_radio: CheckButton,
-    fg_color_widget: Rc<ColorButtonWidget>,
+    fg_color_widget: Rc<ThemeColorSelector>,
     fg_gradient_editor: Rc<GradientEditor>,
 
     // Background UI elements
     bg_solid_radio: CheckButton,
     bg_gradient_radio: CheckButton,
     bg_transparent_radio: CheckButton,
-    bg_color_widget: Rc<ColorButtonWidget>,
+    bg_color_widget: Rc<ThemeColorSelector>,
     bg_gradient_editor: Rc<GradientEditor>,
+
+    // Border color widget (for theme updates)
+    border_color_widget: Rc<ThemeColorSelector>,
 
     // Rectangle options UI elements
     rect_width_spin: SpinButton,
@@ -84,6 +89,7 @@ impl BarConfigWidget {
         container.set_margin_bottom(12);
 
         let config = Rc::new(RefCell::new(BarDisplayConfig::default()));
+        let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         // Create notebook for tabs
@@ -133,15 +139,17 @@ impl BarConfigWidget {
         preview.set_vexpand(true);
 
         let config_clone = config.clone();
+        let theme_clone = theme.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             // Render checkerboard pattern to show transparency
             render_checkerboard(cr, width as f64, height as f64);
 
             let cfg = config_clone.borrow();
+            let thm = theme_clone.borrow();
             let mut preview_values = std::collections::HashMap::new();
             preview_values.insert("value".to_string(), serde_json::json!(75.0));
             preview_values.insert("percent".to_string(), serde_json::json!(75.0));
-            let _ = render_bar(cr, &cfg, 0.75, &preview_values, width as f64, height as f64);
+            let _ = render_bar(cr, &cfg, &thm, 0.75, &preview_values, width as f64, height as f64);
         });
 
         style_page.append(&preview);
@@ -165,15 +173,16 @@ impl BarConfigWidget {
         fg_type_box.append(&fg_gradient_radio);
         fg_page.append(&fg_type_box);
 
-        // Foreground solid color - using ColorButtonWidget
+        // Foreground solid color - using ThemeColorSelector
         let fg_color_box = GtkBox::new(Orientation::Horizontal, 6);
         fg_color_box.append(&Label::new(Some("Solid Color:")));
-        let initial_fg_color = if let BarFillType::Solid { color } = config.borrow().foreground {
-            color
+        let initial_fg_source = if let BarFillType::Solid { color } = &config.borrow().foreground {
+            color.clone()
         } else {
-            Color::new(0.2, 0.6, 1.0, 1.0)
+            ColorSource::Theme { index: 1 }
         };
-        let fg_color_widget = Rc::new(ColorButtonWidget::new(initial_fg_color));
+        let fg_color_widget = Rc::new(ThemeColorSelector::new(initial_fg_source));
+        fg_color_widget.set_theme_config(theme.borrow().clone());
         fg_color_box.append(fg_color_widget.widget());
         fg_page.append(&fg_color_box);
 
@@ -215,15 +224,16 @@ impl BarConfigWidget {
         bg_type_box.append(&bg_transparent_radio);
         bg_page.append(&bg_type_box);
 
-        // Background solid color - using ColorButtonWidget
+        // Background solid color - using ThemeColorSelector
         let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_color_box.append(&Label::new(Some("Solid Color:")));
-        let initial_bg_color = if let BarBackgroundType::Solid { color } = config.borrow().background {
-            color
+        let initial_bg_source = if let BarBackgroundType::Solid { color } = &config.borrow().background {
+            color.clone()
         } else {
-            Color::new(0.15, 0.15, 0.15, 0.8)
+            ColorSource::Custom { color: Color::new(0.15, 0.15, 0.15, 0.8) }
         };
-        let bg_color_widget = Rc::new(ColorButtonWidget::new(initial_bg_color));
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(initial_bg_source));
+        bg_color_widget.set_theme_config(theme.borrow().clone());
         bg_color_box.append(bg_color_widget.widget());
         bg_page.append(&bg_color_box);
 
@@ -408,10 +418,11 @@ impl BarConfigWidget {
         border_width_box.append(&border_width_spin);
         border_page.append(&border_width_box);
 
-        // Border color - using ColorButtonWidget
+        // Border color - using ThemeColorSelector
         let border_color_box = GtkBox::new(Orientation::Horizontal, 6);
         border_color_box.append(&Label::new(Some("Color:")));
-        let border_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().border.color));
+        let border_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().border.color.clone()));
+        border_color_widget.set_theme_config(theme.borrow().clone());
         border_color_box.append(border_color_widget.widget());
         border_page.append(&border_color_box);
 
@@ -540,6 +551,7 @@ impl BarConfigWidget {
         // Foreground type toggle handlers
         Self::setup_fg_handlers(
             &config,
+            &theme,
             &preview,
             &on_change,
             fg_solid_radio.clone(),
@@ -554,6 +566,7 @@ impl BarConfigWidget {
         // Background type toggle handlers
         Self::setup_bg_handlers(
             &config,
+            &theme,
             &preview,
             &on_change,
             bg_solid_radio.clone(),
@@ -624,8 +637,8 @@ impl BarConfigWidget {
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        border_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().border.color = color;
+        border_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().border.color = color_source;
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -691,6 +704,7 @@ impl BarConfigWidget {
         let border_width_spin_paste = border_width_spin.clone();
         let border_color_widget_paste = border_color_widget.clone();
         let text_widget_paste = text_config_widget.clone();
+        let theme_for_paste = theme.clone();
 
         paste_btn.connect_clicked(move |_| {
             let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
@@ -721,14 +735,15 @@ impl BarConfigWidget {
                 });
 
                 // Foreground
+                let thm = theme_for_paste.borrow();
                 match &cfg.foreground {
                     BarFillType::Solid { color } => {
                         fg_solid_radio_paste.set_active(true);
-                        fg_color_widget_paste.set_color(*color);
+                        fg_color_widget_paste.set_source(color.clone());
                     }
                     BarFillType::Gradient { stops, .. } => {
                         fg_gradient_radio_paste.set_active(true);
-                        fg_gradient_editor_paste.set_stops(stops.clone());
+                        fg_gradient_editor_paste.set_stops(stops.iter().map(|s| s.resolve(&thm)).collect());
                     }
                 }
 
@@ -736,11 +751,11 @@ impl BarConfigWidget {
                 match &cfg.background {
                     BarBackgroundType::Solid { color } => {
                         bg_solid_radio_paste.set_active(true);
-                        bg_color_widget_paste.set_color(*color);
+                        bg_color_widget_paste.set_source(color.clone());
                     }
                     BarBackgroundType::Gradient { stops, .. } => {
                         bg_gradient_radio_paste.set_active(true);
-                        bg_gradient_editor_paste.set_stops(stops.clone());
+                        bg_gradient_editor_paste.set_stops(stops.iter().map(|s| s.resolve(&thm)).collect());
                     }
                     BarBackgroundType::Transparent => {
                         bg_transparent_radio_paste.set_active(true);
@@ -776,7 +791,7 @@ impl BarConfigWidget {
                 // Border
                 border_check_paste.set_active(cfg.border.enabled);
                 border_width_spin_paste.set_value(cfg.border.width);
-                border_color_widget_paste.set_color(cfg.border.color);
+                border_color_widget_paste.set_source(cfg.border.color.clone());
 
                 // Text overlay
                 text_widget_paste.set_config(cfg.text_overlay.text_config.clone());
@@ -791,6 +806,7 @@ impl BarConfigWidget {
         Self {
             container,
             config,
+            theme,
             preview,
             on_change,
             style_dropdown,
@@ -806,6 +822,7 @@ impl BarConfigWidget {
             bg_transparent_radio,
             bg_color_widget,
             bg_gradient_editor,
+            border_color_widget,
             rect_width_spin,
             rect_height_spin,
             corner_radius_spin,
@@ -829,11 +846,12 @@ impl BarConfigWidget {
 
     fn setup_fg_handlers(
         config: &Rc<RefCell<BarDisplayConfig>>,
+        theme: &Rc<RefCell<ComboThemeConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         solid_radio: CheckButton,
         gradient_radio: CheckButton,
-        color_widget: Rc<ColorButtonWidget>,
+        color_widget: Rc<ThemeColorSelector>,
         gradient_editor: Rc<GradientEditor>,
         copy_paste_box: GtkBox,
         copy_btn: Button,
@@ -864,28 +882,30 @@ impl BarConfigWidget {
             }
         });
 
-        // Color widget handler - using ColorButtonWidget
+        // Color widget handler - using ThemeColorSelector
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().foreground = BarFillType::Solid { color };
+        color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().foreground = BarFillType::Solid { color: color_source };
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
         });
 
-        // Gradient editor handler
+        // Gradient editor handler - now preserves theme color references
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         let gradient_editor_clone = gradient_editor.clone();
 
         gradient_editor.set_on_change(move || {
-            let gradient = gradient_editor_clone.get_gradient();
+            // Get ColorStopSource directly to preserve theme references
+            let stops_source = gradient_editor_clone.get_stops_source();
+            let angle = gradient_editor_clone.get_gradient().angle;
             let mut cfg = config_clone.borrow_mut();
-            cfg.foreground = BarFillType::Gradient { stops: gradient.stops, angle: gradient.angle };
+            cfg.foreground = BarFillType::Gradient { stops: stops_source, angle };
             drop(cfg);
 
             preview_clone.queue_draw();
@@ -897,13 +917,17 @@ impl BarConfigWidget {
 
         // Copy gradient button handler
         let config_for_copy = config.clone();
+        let theme_for_copy = theme.clone();
         copy_btn.connect_clicked(move |_| {
             use crate::ui::CLIPBOARD;
 
             let cfg = config_for_copy.borrow();
+            let thm = theme_for_copy.borrow();
             if let BarFillType::Gradient { stops, .. } = &cfg.foreground {
+                // Resolve to ColorStop for clipboard
+                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                    clipboard.copy_gradient_stops(stops.clone());
+                    clipboard.copy_gradient_stops(resolved_stops);
                     log::info!("Bar foreground gradient copied to clipboard");
                 }
             }
@@ -926,15 +950,17 @@ impl BarConfigWidget {
                         90.0
                     };
 
+                    // Convert ColorStop to ColorStopSource (as custom colors)
+                    let stops_source: Vec<ColorStopSource> = stops.iter()
+                        .map(|s| ColorStopSource::custom(s.position, s.color))
+                        .collect();
+
                     let mut cfg = config_for_paste.borrow_mut();
-                    cfg.foreground = BarFillType::Gradient { stops: stops.clone(), angle };
+                    cfg.foreground = BarFillType::Gradient { stops: stops_source.clone(), angle };
                     drop(cfg);
 
-                    // Update gradient editor
-                    gradient_editor_for_paste.set_gradient(&LinearGradientConfig {
-                        angle,
-                        stops,
-                    });
+                    // Update gradient editor with ColorStopSource
+                    gradient_editor_for_paste.set_stops_source(stops_source);
 
                     preview_for_paste.queue_draw();
 
@@ -952,12 +978,13 @@ impl BarConfigWidget {
 
     fn setup_bg_handlers(
         config: &Rc<RefCell<BarDisplayConfig>>,
+        theme: &Rc<RefCell<ComboThemeConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         solid_radio: CheckButton,
         gradient_radio: CheckButton,
         transparent_radio: CheckButton,
-        color_widget: Rc<ColorButtonWidget>,
+        color_widget: Rc<ThemeColorSelector>,
         gradient_editor: Rc<GradientEditor>,
         copy_paste_box: GtkBox,
         copy_btn: Button,
@@ -977,7 +1004,7 @@ impl BarConfigWidget {
                 let mut cfg = config_clone.borrow_mut();
                 if !matches!(cfg.background, BarBackgroundType::Solid { .. }) {
                     cfg.background = BarBackgroundType::Solid {
-                        color: Color::new(0.15, 0.15, 0.15, 0.8),
+                        color: ColorSource::custom(Color::new(0.15, 0.15, 0.15, 0.8)),
                     };
                 }
             }
@@ -997,8 +1024,8 @@ impl BarConfigWidget {
                 if !matches!(cfg.background, BarBackgroundType::Gradient { .. }) {
                     cfg.background = BarBackgroundType::Gradient {
                         stops: vec![
-                            ColorStop::new(0.0, Color::new(0.2, 0.2, 0.2, 1.0)),
-                            ColorStop::new(1.0, Color::new(0.1, 0.1, 0.1, 1.0)),
+                            ColorStopSource::custom(0.0, Color::new(0.2, 0.2, 0.2, 1.0)),
+                            ColorStopSource::custom(1.0, Color::new(0.1, 0.1, 0.1, 1.0)),
                         ],
                         angle: 90.0,
                     };
@@ -1030,28 +1057,30 @@ impl BarConfigWidget {
             }
         });
 
-        // Color widget handler - using ColorButtonWidget
+        // Color widget handler - using ThemeColorSelector
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().background = BarBackgroundType::Solid { color };
+        color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().background = BarBackgroundType::Solid { color: color_source };
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
         });
 
-        // Gradient editor handler
+        // Gradient editor handler - now preserves theme color references
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         let gradient_editor_clone = gradient_editor.clone();
 
         gradient_editor.set_on_change(move || {
-            let gradient = gradient_editor_clone.get_gradient();
+            // Get ColorStopSource directly to preserve theme references
+            let stops_source = gradient_editor_clone.get_stops_source();
+            let angle = gradient_editor_clone.get_gradient().angle;
             let mut cfg = config_clone.borrow_mut();
-            cfg.background = BarBackgroundType::Gradient { stops: gradient.stops, angle: gradient.angle };
+            cfg.background = BarBackgroundType::Gradient { stops: stops_source, angle };
             drop(cfg);
 
             preview_clone.queue_draw();
@@ -1063,13 +1092,17 @@ impl BarConfigWidget {
 
         // Copy gradient button handler
         let config_for_copy = config.clone();
+        let theme_for_copy = theme.clone();
         copy_btn.connect_clicked(move |_| {
             use crate::ui::CLIPBOARD;
 
             let cfg = config_for_copy.borrow();
+            let thm = theme_for_copy.borrow();
             if let BarBackgroundType::Gradient { stops, .. } = &cfg.background {
+                // Resolve to ColorStop for clipboard
+                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                    clipboard.copy_gradient_stops(stops.clone());
+                    clipboard.copy_gradient_stops(resolved_stops);
                     log::info!("Bar background gradient copied to clipboard");
                 }
             }
@@ -1092,15 +1125,17 @@ impl BarConfigWidget {
                         90.0
                     };
 
+                    // Convert ColorStop to ColorStopSource (as custom colors)
+                    let stops_source: Vec<ColorStopSource> = stops.iter()
+                        .map(|s| ColorStopSource::custom(s.position, s.color))
+                        .collect();
+
                     let mut cfg = config_for_paste.borrow_mut();
-                    cfg.background = BarBackgroundType::Gradient { stops: stops.clone(), angle };
+                    cfg.background = BarBackgroundType::Gradient { stops: stops_source.clone(), angle };
                     drop(cfg);
 
-                    // Update gradient editor
-                    gradient_editor_for_paste.set_gradient(&LinearGradientConfig {
-                        angle,
-                        stops,
-                    });
+                    // Update gradient editor with ColorStopSource
+                    gradient_editor_for_paste.set_stops_source(stops_source);
 
                     preview_for_paste.queue_draw();
 
@@ -1412,45 +1447,37 @@ impl BarConfigWidget {
         self.animate_check.set_active(new_config.smooth_animation);
         self.animation_speed_spin.set_value(new_config.animation_speed);
 
-        // Update foreground UI
+        // Update foreground UI - preserving theme color references
         match &new_config.foreground {
             BarFillType::Solid { color } => {
                 self.fg_solid_radio.set_active(true);
                 self.fg_color_widget.widget().set_visible(true);
-                self.fg_color_widget.set_color(*color);
+                self.fg_color_widget.set_source(color.clone());
                 self.fg_gradient_editor.widget().set_visible(false);
             }
             BarFillType::Gradient { stops, angle } => {
                 self.fg_gradient_radio.set_active(true);
                 self.fg_color_widget.widget().set_visible(false);
                 self.fg_gradient_editor.widget().set_visible(true);
-                // Load gradient into editor with angle
-                let gradient = LinearGradientConfig {
-                    stops: stops.clone(),
-                    angle: *angle,
-                };
-                self.fg_gradient_editor.set_gradient(&gradient);
+                // Load gradient with ColorStopSource to preserve theme references
+                self.fg_gradient_editor.set_gradient_source(*angle, stops.clone());
             }
         }
 
-        // Update background UI
+        // Update background UI - preserving theme color references
         match &new_config.background {
             BarBackgroundType::Solid { color } => {
                 self.bg_solid_radio.set_active(true);
                 self.bg_color_widget.widget().set_visible(true);
-                self.bg_color_widget.set_color(*color);
+                self.bg_color_widget.set_source(color.clone());
                 self.bg_gradient_editor.widget().set_visible(false);
             }
             BarBackgroundType::Gradient { stops, angle } => {
                 self.bg_gradient_radio.set_active(true);
                 self.bg_color_widget.widget().set_visible(false);
                 self.bg_gradient_editor.widget().set_visible(true);
-                // Load gradient into editor with angle
-                let gradient = LinearGradientConfig {
-                    stops: stops.clone(),
-                    angle: *angle,
-                };
-                self.bg_gradient_editor.set_gradient(&gradient);
+                // Load gradient with ColorStopSource to preserve theme references
+                self.bg_gradient_editor.set_gradient_source(*angle, stops.clone());
             }
             BarBackgroundType::Transparent => {
                 self.bg_transparent_radio.set_active(true);
@@ -1458,6 +1485,9 @@ impl BarConfigWidget {
                 self.bg_gradient_editor.widget().set_visible(false);
             }
         }
+
+        // Update border color
+        self.border_color_widget.set_source(new_config.border.color.clone());
 
         // Update text config widget
         if let Some(ref text_widget) = self.text_config_widget {
@@ -1476,6 +1506,19 @@ impl BarConfigWidget {
         }
 
         config
+    }
+
+    /// Update the theme configuration and refresh the preview
+    pub fn set_theme(&self, theme: ComboThemeConfig) {
+        *self.theme.borrow_mut() = theme.clone();
+        // Update all ThemeColorSelector widgets with new theme
+        self.fg_color_widget.set_theme_config(theme.clone());
+        self.bg_color_widget.set_theme_config(theme.clone());
+        self.border_color_widget.set_theme_config(theme.clone());
+        // Update gradient editors with new theme
+        self.fg_gradient_editor.set_theme_config(theme.clone());
+        self.bg_gradient_editor.set_theme_config(theme);
+        self.preview.queue_draw();
     }
 
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {

@@ -6,14 +6,16 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
+use crate::ui::theme::{ColorStopSource, ComboThemeConfig};
+use crate::ui::theme_color_selector::ThemeColorSelector;
 
 /// Gradient editor widget
 pub struct GradientEditor {
     container: GtkBox,
-    stops: Rc<RefCell<Vec<ColorStop>>>,
+    stops: Rc<RefCell<Vec<ColorStopSource>>>,
     angle: Rc<RefCell<f64>>,
+    theme_config: Rc<RefCell<Option<ComboThemeConfig>>>,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     preview: DrawingArea,
     stops_listbox: ListBox,
@@ -44,8 +46,9 @@ impl GradientEditor {
         container.set_margin_bottom(12);
         container.set_vexpand(true);
 
-        let stops = Rc::new(RefCell::new(Vec::new()));
+        let stops: Rc<RefCell<Vec<ColorStopSource>>> = Rc::new(RefCell::new(Vec::new()));
         let angle = Rc::new(RefCell::new(0.0));
+        let theme_config: Rc<RefCell<Option<ComboThemeConfig>>> = Rc::new(RefCell::new(None));
         let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         // Preview area (created early so angle handlers can reference it)
@@ -55,6 +58,7 @@ impl GradientEditor {
 
         let stops_clone = stops.clone();
         let angle_clone = angle.clone();
+        let theme_config_clone = theme_config.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             use crate::ui::background::render_background;
             use crate::ui::background::{BackgroundConfig, BackgroundType, LinearGradientConfig, RadialGradientConfig};
@@ -62,14 +66,22 @@ impl GradientEditor {
             // Render checkerboard pattern to show transparency
             render_checkerboard(cr, width as f64, height as f64);
 
-            let stops = stops_clone.borrow();
+            let stops_source = stops_clone.borrow();
             let angle = *angle_clone.borrow();
+
+            // Resolve ColorStopSource to ColorStop using theme
+            let default_theme = ComboThemeConfig::default();
+            let theme = theme_config_clone.borrow();
+            let theme_ref = theme.as_ref().unwrap_or(&default_theme);
+            let resolved_stops: Vec<ColorStop> = stops_source.iter()
+                .map(|s| s.resolve(theme_ref))
+                .collect();
 
             let config = if use_linear_preview {
                 BackgroundConfig {
                     background: BackgroundType::LinearGradient(LinearGradientConfig {
                         angle,
-                        stops: stops.clone(),
+                        stops: resolved_stops,
                     }),
                 }
             } else {
@@ -78,7 +90,7 @@ impl GradientEditor {
                         center_x: 0.5,
                         center_y: 0.5,
                         radius: 0.7,
-                        stops: stops.clone(),
+                        stops: resolved_stops,
                     }),
                 }
             };
@@ -167,6 +179,7 @@ impl GradientEditor {
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
 
+        let theme_config_for_add = theme_config.clone();
         add_button.connect_clicked(move |_| {
             let mut stops_list = stops_clone.borrow_mut();
 
@@ -175,7 +188,7 @@ impl GradientEditor {
                 0.5
             } else {
                 let mut positions: Vec<f64> = stops_list.iter().map(|s| s.position).collect();
-                positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                positions.sort_by(|a: &f64, b: &f64| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
                 let mut max_gap = positions[0];
                 let mut max_gap_pos = positions[0] / 2.0;
@@ -195,7 +208,8 @@ impl GradientEditor {
                 }
             };
 
-            let new_stop = ColorStop::new(position, Color::new(0.5, 0.5, 0.5, 1.0));
+            // New stops default to custom gray color
+            let new_stop = ColorStopSource::custom(position, Color::new(0.5, 0.5, 0.5, 1.0));
             stops_list.push(new_stop);
             stops_list.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -206,6 +220,7 @@ impl GradientEditor {
                 &stops_clone,
                 &preview_clone,
                 &on_change_clone,
+                &theme_config_for_add,
             );
 
             preview_clone.queue_draw();
@@ -215,12 +230,11 @@ impl GradientEditor {
             }
         });
 
-        
-
         Self {
             container,
             stops,
             angle,
+            theme_config,
             on_change,
             preview,
             stops_listbox,
@@ -232,9 +246,10 @@ impl GradientEditor {
     /// Rebuild the stops list UI
     fn rebuild_stops_list(
         listbox: &ListBox,
-        stops: &Rc<RefCell<Vec<ColorStop>>>,
+        stops: &Rc<RefCell<Vec<ColorStopSource>>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+        theme_config: &Rc<RefCell<Option<ComboThemeConfig>>>,
     ) {
         // Clear existing rows
         while let Some(child) = listbox.first_child() {
@@ -253,6 +268,7 @@ impl GradientEditor {
                 listbox,
                 preview,
                 on_change,
+                theme_config,
             );
             listbox.append(&row);
         }
@@ -261,12 +277,13 @@ impl GradientEditor {
     /// Create a row for a color stop
     fn create_stop_row(
         index: usize,
-        stop: &ColorStop,
+        stop: &ColorStopSource,
         stop_count: usize,
-        stops: &Rc<RefCell<Vec<ColorStop>>>,
+        stops: &Rc<RefCell<Vec<ColorStopSource>>>,
         listbox: &ListBox,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
+        theme_config: &Rc<RefCell<Option<ComboThemeConfig>>>,
     ) -> ListBoxRow {
         let row = ListBoxRow::new();
         let hbox = GtkBox::new(Orientation::Horizontal, 12);
@@ -292,20 +309,24 @@ impl GradientEditor {
         position_box.append(&percent_label);
         hbox.append(&position_box);
 
-        // Color button using ColorButtonWidget
-        let color_widget = ColorButtonWidget::new(stop.color);
-        hbox.append(color_widget.widget());
+        // Color selector using ThemeColorSelector
+        let color_selector = ThemeColorSelector::new(stop.color.clone());
+        if let Some(ref cfg) = *theme_config.borrow() {
+            color_selector.set_theme_config(cfg.clone());
+        }
+        hbox.append(color_selector.widget());
 
         // Set up color change handler
         let stops_clone = stops.clone();
         let listbox_clone = listbox.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        color_widget.set_on_change(move |new_color| {
+        let theme_config_clone = theme_config.clone();
+        color_selector.set_on_change(move |new_color_source| {
             {
                 let mut stops = stops_clone.borrow_mut();
                 if let Some(stop) = stops.get_mut(index) {
-                    stop.color = new_color;
+                    stop.color = new_color_source;
                 }
             }
 
@@ -314,6 +335,7 @@ impl GradientEditor {
                 &stops_clone,
                 &preview_clone,
                 &on_change_clone,
+                &theme_config_clone,
             );
 
             preview_clone.queue_draw();
@@ -332,6 +354,7 @@ impl GradientEditor {
             let listbox_clone = listbox.clone();
             let preview_clone = preview.clone();
             let on_change_clone = on_change.clone();
+            let theme_config_clone = theme_config.clone();
 
             remove_button.connect_clicked(move |_| {
                 let mut stops = stops_clone.borrow_mut();
@@ -344,6 +367,7 @@ impl GradientEditor {
                         &stops_clone,
                         &preview_clone,
                         &on_change_clone,
+                        &theme_config_clone,
                     );
 
                     preview_clone.queue_draw();
@@ -364,6 +388,7 @@ impl GradientEditor {
         let listbox_clone = listbox.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
+        let theme_config_clone = theme_config.clone();
 
         position_spin.connect_value_changed(move |spin| {
             let mut new_position = spin.value() / 100.0; // Convert from percentage to 0.0-1.0
@@ -414,12 +439,14 @@ impl GradientEditor {
                 let stops_clone2 = stops_clone.clone();
                 let preview_clone2 = preview_clone.clone();
                 let on_change_clone2 = on_change_clone.clone();
+                let theme_config_clone2 = theme_config_clone.clone();
                 gtk4::glib::idle_add_local_once(move || {
                     Self::rebuild_stops_list(
                         &listbox_clone2,
                         &stops_clone2,
                         &preview_clone2,
                         &on_change_clone2,
+                        &theme_config_clone2,
                     );
                 });
             }
@@ -434,9 +461,71 @@ impl GradientEditor {
         row
     }
 
-    /// Set the gradient configuration
+    /// Set the theme configuration for resolving theme colors
+    pub fn set_theme_config(&self, config: ComboThemeConfig) {
+        *self.theme_config.borrow_mut() = Some(config);
+
+        // Rebuild stops list to update ThemeColorSelectors with new theme
+        Self::rebuild_stops_list(
+            &self.stops_listbox,
+            &self.stops,
+            &self.preview,
+            &self.on_change,
+            &self.theme_config,
+        );
+        self.preview.queue_draw();
+    }
+
+    /// Set the gradient configuration using ColorStopSource (theme-aware)
+    pub fn set_stops_source(&self, stops: Vec<ColorStopSource>) {
+        *self.stops.borrow_mut() = stops;
+
+        Self::rebuild_stops_list(
+            &self.stops_listbox,
+            &self.stops,
+            &self.preview,
+            &self.on_change,
+            &self.theme_config,
+        );
+        self.preview.queue_draw();
+    }
+
+    /// Get the color stops as ColorStopSource (theme-aware)
+    pub fn get_stops_source(&self) -> Vec<ColorStopSource> {
+        self.stops.borrow().clone()
+    }
+
+    /// Set angle and stops using ColorStopSource
+    pub fn set_gradient_source(&self, angle: f64, stops: Vec<ColorStopSource>) {
+        *self.stops.borrow_mut() = stops;
+        *self.angle.borrow_mut() = angle;
+
+        // Update the angle UI widgets (if they exist)
+        if let Some(ref angle_scale) = self.angle_scale {
+            angle_scale.set_value(angle);
+        }
+        if let Some(ref angle_spin) = self.angle_spin {
+            angle_spin.set_value(angle);
+        }
+
+        Self::rebuild_stops_list(
+            &self.stops_listbox,
+            &self.stops,
+            &self.preview,
+            &self.on_change,
+            &self.theme_config,
+        );
+        self.preview.queue_draw();
+    }
+
+    /// Set the gradient configuration (backward compatible - converts to Custom colors)
     pub fn set_gradient(&self, config: &LinearGradientConfig) {
-        *self.stops.borrow_mut() = config.stops.clone();
+        // Convert ColorStop to ColorStopSource with Custom colors
+        let stops_source: Vec<ColorStopSource> = config.stops.iter()
+            .map(|s| ColorStopSource::custom(s.position, s.color))
+            .collect();
+
+        *self.stops.borrow_mut() = stops_source;
         *self.angle.borrow_mut() = config.angle;
 
         // Update the angle UI widgets (if they exist)
@@ -452,33 +541,46 @@ impl GradientEditor {
             &self.stops,
             &self.preview,
             &self.on_change,
+            &self.theme_config,
         );
         self.preview.queue_draw();
     }
 
-    /// Set just the color stops (useful for radial gradients)
+    /// Set just the color stops (backward compatible - converts to Custom colors)
     pub fn set_stops(&self, stops: Vec<ColorStop>) {
-        *self.stops.borrow_mut() = stops;
+        // Convert ColorStop to ColorStopSource with Custom colors
+        let stops_source: Vec<ColorStopSource> = stops.iter()
+            .map(|s| ColorStopSource::custom(s.position, s.color))
+            .collect();
+
+        *self.stops.borrow_mut() = stops_source;
 
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,
             &self.preview,
             &self.on_change,
+            &self.theme_config,
         );
         self.preview.queue_draw();
     }
 
-    /// Get just the color stops
+    /// Get just the color stops (resolved to concrete colors)
     pub fn get_stops(&self) -> Vec<ColorStop> {
-        self.stops.borrow().clone()
+        let default_theme = ComboThemeConfig::default();
+        let theme = self.theme_config.borrow();
+        let theme_ref = theme.as_ref().unwrap_or(&default_theme);
+
+        self.stops.borrow().iter()
+            .map(|s| s.resolve(theme_ref))
+            .collect()
     }
 
-    /// Get the current gradient configuration
+    /// Get the current gradient configuration (resolved to concrete colors)
     pub fn get_gradient(&self) -> LinearGradientConfig {
         LinearGradientConfig {
             angle: *self.angle.borrow(),
-            stops: self.stops.borrow().clone(),
+            stops: self.get_stops(),
         }
     }
 

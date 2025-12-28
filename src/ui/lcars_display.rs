@@ -12,6 +12,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::{BackgroundConfig, Color, render_background};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
+use crate::ui::theme::ComboThemeConfig;
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
 use crate::ui::arc_display::ArcDisplayConfig;
@@ -1405,6 +1406,7 @@ pub fn render_content_bar(
     w: f64,
     h: f64,
     bar_config: &BarDisplayConfig,
+    theme: &ComboThemeConfig,
     data: &ContentItemData,
     animated_percent: f64,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
@@ -1434,7 +1436,7 @@ pub fn render_content_bar(
     }
 
     // Call the reusable render_bar function
-    render_bar(cr, bar_config, animated_percent, &values, w, h)?;
+    render_bar(cr, bar_config, theme, animated_percent, &values, w, h)?;
 
     cr.restore()?;
     Ok(())
@@ -1448,6 +1450,7 @@ pub fn render_content_text(
     w: f64,
     h: f64,
     bar_config: &BarDisplayConfig,
+    theme: &ComboThemeConfig,
     data: &ContentItemData,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
@@ -1476,7 +1479,7 @@ pub fn render_content_text(
     }
 
     // Render with 0 value to show text only (bar won't be visible)
-    render_bar(cr, bar_config, 0.0, &values, w, h)?;
+    render_bar(cr, bar_config, theme, 0.0, &values, w, h)?;
 
     cr.restore()?;
     Ok(())
@@ -1573,6 +1576,7 @@ pub fn render_content_core_bars(
     w: f64,
     h: f64,
     config: &CoreBarsConfig,
+    theme: &ComboThemeConfig,
     core_values: &[f64],
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
@@ -1581,9 +1585,9 @@ pub fn render_content_core_bars(
 
     // Call the core_bars_display render function with source values for text overlay
     if let Some(values) = slot_values {
-        crate::ui::core_bars_display::render_core_bars_with_values(cr, config, core_values, w, h, values)?;
+        crate::ui::core_bars_display::render_core_bars_with_values(cr, config, theme, core_values, w, h, values)?;
     } else {
-        render_core_bars(cr, config, core_values, w, h)?;
+        render_core_bars(cr, config, theme, core_values, w, h)?;
     }
 
     cr.restore()?;

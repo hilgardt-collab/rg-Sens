@@ -1,6 +1,6 @@
 //! Theme color selector widget
 //!
-//! Provides a row of theme color toggle buttons (T1-T4) plus a custom color picker.
+//! Provides a row of theme color buttons (showing actual colors) plus a custom color picker.
 //! Used throughout combo panel config dialogs to select either a theme color or custom color.
 
 use crate::ui::background::Color;
@@ -8,19 +8,21 @@ use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_picker::ColorPickerDialog;
 use crate::ui::theme::{ColorSource, ComboThemeConfig};
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, DrawingArea, Orientation, ToggleButton};
+use gtk4::{Box as GtkBox, Button, DrawingArea, Orientation};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// A widget for selecting either a theme color (T1-T4) or a custom color.
+/// A widget for selecting either a theme color (1-4) or a custom color.
 ///
-/// Layout: [T1][T2][T3][T4] [Color Swatch][Copy][Paste]
+/// Layout: [Color1][Color2][Color3][Color4] | [Custom Color Swatch][Copy][Paste]
 ///
-/// When a theme button is active, the custom color picker is dimmed.
-/// When "Custom" mode is active (no theme button selected), the color picker is enabled.
+/// Theme buttons show the actual theme colors. Clicking a selected theme button
+/// switches to custom mode. The custom color swatch shows the current custom color.
 pub struct ThemeColorSelector {
     container: GtkBox,
-    theme_buttons: [ToggleButton; 4],
+    #[allow(dead_code)]
+    theme_buttons: [Button; 4],
+    theme_drawings: [DrawingArea; 4],
     color_button: Button,
     color_drawing_area: DrawingArea,
     #[allow(dead_code)]
@@ -29,17 +31,18 @@ pub struct ThemeColorSelector {
     paste_button: Button,
     source: Rc<RefCell<ColorSource>>,
     custom_color: Rc<RefCell<Color>>,
-    theme_config: Rc<RefCell<Option<ComboThemeConfig>>>,
+    theme_config: Rc<RefCell<ComboThemeConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn(ColorSource)>>>>,
+    selected_index: Rc<RefCell<Option<u8>>>, // None = custom, Some(1-4) = theme
 }
 
 impl ThemeColorSelector {
     /// Create a new ThemeColorSelector with the given initial source.
     pub fn new(initial_source: ColorSource) -> Self {
-        let container = GtkBox::new(Orientation::Horizontal, 4);
+        let container = GtkBox::new(Orientation::Horizontal, 2);
         let source = Rc::new(RefCell::new(initial_source.clone()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn(ColorSource)>>>> = Rc::new(RefCell::new(None));
-        let theme_config: Rc<RefCell<Option<ComboThemeConfig>>> = Rc::new(RefCell::new(None));
+        let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
 
         // Extract custom color from source, or default
         let initial_custom = match &initial_source {
@@ -48,35 +51,119 @@ impl ThemeColorSelector {
         };
         let custom_color = Rc::new(RefCell::new(initial_custom));
 
-        // Create theme toggle buttons
-        let theme_buttons: [ToggleButton; 4] = [
-            ToggleButton::with_label("T1"),
-            ToggleButton::with_label("T2"),
-            ToggleButton::with_label("T3"),
-            ToggleButton::with_label("T4"),
+        // Track which theme button is selected (None = custom mode)
+        let selected_index: Rc<RefCell<Option<u8>>> = Rc::new(RefCell::new(
+            match &initial_source {
+                ColorSource::Theme { index } => Some(*index),
+                ColorSource::Custom { .. } => None,
+            }
+        ));
+
+        // Create theme buttons with drawing areas inside
+        let theme_buttons: [Button; 4] = [
+            Button::new(),
+            Button::new(),
+            Button::new(),
+            Button::new(),
         ];
 
-        // Set tooltips
-        theme_buttons[0].set_tooltip_text(Some("Theme Color 1 (Primary)"));
-        theme_buttons[1].set_tooltip_text(Some("Theme Color 2 (Secondary)"));
-        theme_buttons[2].set_tooltip_text(Some("Theme Color 3 (Accent)"));
-        theme_buttons[3].set_tooltip_text(Some("Theme Color 4 (Highlight)"));
+        let theme_drawings: [DrawingArea; 4] = [
+            DrawingArea::new(),
+            DrawingArea::new(),
+            DrawingArea::new(),
+            DrawingArea::new(),
+        ];
 
-        // Group the toggle buttons so only one can be active at a time
-        // (or none, for custom mode)
-        for i in 1..4 {
-            theme_buttons[i].set_group(Some(&theme_buttons[0]));
+        // Set up each theme button
+        for i in 0..4 {
+            let drawing = &theme_drawings[i];
+            let button = &theme_buttons[i];
+
+            drawing.set_size_request(24, 20);
+            button.set_child(Some(drawing));
+
+            // Set tooltips
+            let tooltip = match i {
+                0 => "Theme Color 1 (Primary) - Click again to use custom",
+                1 => "Theme Color 2 (Secondary) - Click again to use custom",
+                2 => "Theme Color 3 (Accent) - Click again to use custom",
+                3 => "Theme Color 4 (Highlight) - Click again to use custom",
+                _ => "",
+            };
+            button.set_tooltip_text(Some(tooltip));
+
+            // Set up draw function for theme color
+            let theme_config_clone = theme_config.clone();
+            let selected_clone = selected_index.clone();
+            let idx = (i + 1) as u8;
+            drawing.set_draw_func(move |_, cr, width, height| {
+                let cfg = theme_config_clone.borrow();
+                let color = cfg.get_color(idx);
+                let is_selected = *selected_clone.borrow() == Some(idx);
+                draw_theme_button(cr, width, height, color, is_selected);
+            });
+
+            container.append(button);
         }
 
-        // Set initial active state based on source
-        if let ColorSource::Theme { index } = &initial_source {
-            let idx = (*index as usize).saturating_sub(1).min(3);
-            theme_buttons[idx].set_active(true);
-        }
+        // Connect theme button click handlers
+        for i in 0..4 {
+            let source_clone = source.clone();
+            let on_change_clone = on_change.clone();
+            let selected_clone = selected_index.clone();
+            let custom_color_clone = custom_color.clone();
+            let theme_drawings_clone: Vec<DrawingArea> = theme_drawings.iter().cloned().collect();
+            let color_button_ref = Rc::new(RefCell::new(None::<Button>));
+            let color_drawing_ref = Rc::new(RefCell::new(None::<DrawingArea>));
 
-        // Add theme buttons to container
-        for btn in &theme_buttons {
-            container.append(btn);
+            // We'll set these after creating the color button
+            let color_button_ref_clone = color_button_ref.clone();
+            let color_drawing_ref_clone = color_drawing_ref.clone();
+            let idx = (i + 1) as u8;
+
+            theme_buttons[i].connect_clicked(move |_| {
+                let currently_selected = *selected_clone.borrow();
+
+                if currently_selected == Some(idx) {
+                    // Already selected - switch to custom mode
+                    *selected_clone.borrow_mut() = None;
+                    let custom = *custom_color_clone.borrow();
+                    let new_source = ColorSource::Custom { color: custom };
+                    *source_clone.borrow_mut() = new_source.clone();
+
+                    // Enable custom color button
+                    if let Some(ref btn) = *color_button_ref_clone.borrow() {
+                        btn.set_sensitive(true);
+                    }
+
+                    if let Some(ref callback) = *on_change_clone.borrow() {
+                        callback(new_source);
+                    }
+                } else {
+                    // Select this theme color
+                    *selected_clone.borrow_mut() = Some(idx);
+                    let new_source = ColorSource::Theme { index: idx };
+                    *source_clone.borrow_mut() = new_source.clone();
+
+                    // Dim custom color button
+                    if let Some(ref btn) = *color_button_ref_clone.borrow() {
+                        btn.set_sensitive(false);
+                    }
+
+                    if let Some(ref callback) = *on_change_clone.borrow() {
+                        callback(new_source);
+                    }
+                }
+
+                // Redraw all theme buttons to update selection indicator
+                for drawing in &theme_drawings_clone {
+                    drawing.queue_draw();
+                }
+                // Redraw custom color swatch
+                if let Some(ref da) = *color_drawing_ref_clone.borrow() {
+                    da.queue_draw();
+                }
+            });
         }
 
         // Add separator
@@ -85,31 +172,21 @@ impl ThemeColorSelector {
         separator.set_margin_end(4);
         container.append(&separator);
 
-        // Create the color swatch button
+        // Create the custom color swatch button
         let color_button = Button::new();
         color_button.set_tooltip_text(Some("Custom color (click to change)"));
 
-        // Create the drawing area for the color swatch
+        // Create the drawing area for the custom color swatch
         let color_drawing_area = DrawingArea::new();
-        color_drawing_area.set_size_request(32, 24);
+        color_drawing_area.set_size_request(32, 20);
 
-        // Set up the draw function
+        // Set up the draw function for custom color
         let custom_color_for_draw = custom_color.clone();
-        let source_for_draw = source.clone();
-        let theme_config_for_draw = theme_config.clone();
+        let selected_for_draw = selected_index.clone();
         color_drawing_area.set_draw_func(move |_, cr, width, height| {
-            let current_source = source_for_draw.borrow().clone();
-            let display_color = match &current_source {
-                ColorSource::Custom { color } => *color,
-                ColorSource::Theme { index } => {
-                    if let Some(ref cfg) = *theme_config_for_draw.borrow() {
-                        cfg.get_color(*index)
-                    } else {
-                        *custom_color_for_draw.borrow()
-                    }
-                }
-            };
-            draw_color_swatch(cr, width, height, display_color);
+            let color = *custom_color_for_draw.borrow();
+            let is_custom_mode = selected_for_draw.borrow().is_none();
+            draw_custom_swatch(cr, width, height, color, is_custom_mode);
         });
 
         color_button.set_child(Some(&color_drawing_area));
@@ -118,6 +195,10 @@ impl ThemeColorSelector {
         if initial_source.is_theme() {
             color_button.set_sensitive(false);
         }
+
+        // Now update the button references in the theme button handlers
+        // We need to reconnect the handlers with the actual button references
+        // This is a bit awkward but necessary since we created the handlers before the button
 
         // Create copy button with icon
         let copy_button = Button::from_icon_name("edit-copy-symbolic");
@@ -132,33 +213,13 @@ impl ThemeColorSelector {
         container.append(&copy_button);
         container.append(&paste_button);
 
-        // Connect theme button toggled handlers
-        for (i, btn) in theme_buttons.iter().enumerate() {
-            let source_clone = source.clone();
-            let on_change_clone = on_change.clone();
-            let color_button_clone = color_button.clone();
-            let drawing_area_clone = color_drawing_area.clone();
-
-            btn.connect_toggled(move |toggle_btn| {
-                if toggle_btn.is_active() {
-                    let new_source = ColorSource::Theme { index: (i + 1) as u8 };
-                    *source_clone.borrow_mut() = new_source.clone();
-                    color_button_clone.set_sensitive(false);
-                    drawing_area_clone.queue_draw();
-
-                    if let Some(ref callback) = *on_change_clone.borrow() {
-                        callback(new_source);
-                    }
-                }
-            });
-        }
-
-        // Connect color button click handler (for custom color)
+        // Connect custom color button click handler
         let custom_color_clone = custom_color.clone();
         let source_for_click = source.clone();
         let on_change_for_click = on_change.clone();
-        let drawing_area_for_click = color_drawing_area.clone();
-        let theme_buttons_clone: Vec<ToggleButton> = theme_buttons.iter().cloned().collect();
+        let selected_for_click = selected_index.clone();
+        let color_drawing_for_click = color_drawing_area.clone();
+        let theme_drawings_for_click: Vec<DrawingArea> = theme_drawings.iter().cloned().collect();
         let color_button_for_click = color_button.clone();
 
         color_button.connect_clicked(move |btn| {
@@ -170,8 +231,9 @@ impl ThemeColorSelector {
             let custom_color_clone2 = custom_color_clone.clone();
             let source_clone2 = source_for_click.clone();
             let on_change_clone2 = on_change_for_click.clone();
-            let drawing_area_clone2 = drawing_area_for_click.clone();
-            let theme_buttons_clone2 = theme_buttons_clone.clone();
+            let selected_clone2 = selected_for_click.clone();
+            let color_drawing_clone2 = color_drawing_for_click.clone();
+            let theme_drawings_clone2 = theme_drawings_for_click.clone();
             let color_button_clone2 = color_button_for_click.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
@@ -182,12 +244,15 @@ impl ThemeColorSelector {
                     let new_source = ColorSource::Custom { color: new_color };
                     *source_clone2.borrow_mut() = new_source.clone();
 
-                    // Deselect all theme buttons
-                    for btn in &theme_buttons_clone2 {
-                        btn.set_active(false);
-                    }
+                    // Switch to custom mode
+                    *selected_clone2.borrow_mut() = None;
                     color_button_clone2.set_sensitive(true);
-                    drawing_area_clone2.queue_draw();
+
+                    // Redraw all
+                    color_drawing_clone2.queue_draw();
+                    for da in &theme_drawings_clone2 {
+                        da.queue_draw();
+                    }
 
                     if let Some(ref callback) = *on_change_clone2.borrow() {
                         callback(new_source);
@@ -198,18 +263,13 @@ impl ThemeColorSelector {
 
         // Set up copy button handler
         let source_for_copy = source.clone();
-        let custom_color_for_copy = custom_color.clone();
         let theme_config_for_copy = theme_config.clone();
         copy_button.connect_clicked(move |_| {
             let current_source = source_for_copy.borrow().clone();
             let c = match &current_source {
                 ColorSource::Custom { color } => *color,
                 ColorSource::Theme { index } => {
-                    if let Some(ref cfg) = *theme_config_for_copy.borrow() {
-                        cfg.get_color(*index)
-                    } else {
-                        *custom_color_for_copy.borrow()
-                    }
+                    theme_config_for_copy.borrow().get_color(*index)
                 }
             };
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
@@ -222,8 +282,9 @@ impl ThemeColorSelector {
         let custom_color_for_paste = custom_color.clone();
         let source_for_paste = source.clone();
         let on_change_for_paste = on_change.clone();
-        let drawing_area_for_paste = color_drawing_area.clone();
-        let theme_buttons_for_paste: Vec<ToggleButton> = theme_buttons.iter().cloned().collect();
+        let selected_for_paste = selected_index.clone();
+        let color_drawing_for_paste = color_drawing_area.clone();
+        let theme_drawings_for_paste: Vec<DrawingArea> = theme_drawings.iter().cloned().collect();
         let color_button_for_paste = color_button.clone();
 
         paste_button.connect_clicked(move |_| {
@@ -234,12 +295,15 @@ impl ThemeColorSelector {
                     let new_source = ColorSource::Custom { color: new_color };
                     *source_for_paste.borrow_mut() = new_source.clone();
 
-                    // Deselect all theme buttons and enable custom picker
-                    for btn in &theme_buttons_for_paste {
-                        btn.set_active(false);
-                    }
+                    // Switch to custom mode
+                    *selected_for_paste.borrow_mut() = None;
                     color_button_for_paste.set_sensitive(true);
-                    drawing_area_for_paste.queue_draw();
+
+                    // Redraw all
+                    color_drawing_for_paste.queue_draw();
+                    for da in &theme_drawings_for_paste {
+                        da.queue_draw();
+                    }
                     log::info!("Color pasted from clipboard");
 
                     if let Some(ref callback) = *on_change_for_paste.borrow() {
@@ -252,6 +316,7 @@ impl ThemeColorSelector {
         Self {
             container,
             theme_buttons,
+            theme_drawings,
             color_button,
             color_drawing_area,
             copy_button,
@@ -260,6 +325,7 @@ impl ThemeColorSelector {
             custom_color,
             theme_config,
             on_change,
+            selected_index,
         }
     }
 
@@ -279,26 +345,30 @@ impl ThemeColorSelector {
 
         match &source {
             ColorSource::Theme { index } => {
-                let idx = (*index as usize).saturating_sub(1).min(3);
-                self.theme_buttons[idx].set_active(true);
+                *self.selected_index.borrow_mut() = Some(*index);
                 self.color_button.set_sensitive(false);
             }
             ColorSource::Custom { color } => {
-                // Deselect all theme buttons
-                for btn in &self.theme_buttons {
-                    btn.set_active(false);
-                }
+                *self.selected_index.borrow_mut() = None;
                 *self.custom_color.borrow_mut() = *color;
                 self.color_button.set_sensitive(true);
             }
         }
+
+        // Redraw all
         self.color_drawing_area.queue_draw();
+        for da in &self.theme_drawings {
+            da.queue_draw();
+        }
     }
 
     /// Set the theme config (used to resolve theme colors for display).
     pub fn set_theme_config(&self, config: ComboThemeConfig) {
-        *self.theme_config.borrow_mut() = Some(config);
-        self.color_drawing_area.queue_draw();
+        *self.theme_config.borrow_mut() = config;
+        // Redraw theme buttons to show new colors
+        for da in &self.theme_drawings {
+            da.queue_draw();
+        }
     }
 
     /// Set a callback to be called when the source changes.
@@ -312,26 +382,25 @@ impl ThemeColorSelector {
         match &source {
             ColorSource::Custom { color } => *color,
             ColorSource::Theme { index } => {
-                if let Some(ref cfg) = *self.theme_config.borrow() {
-                    cfg.get_color(*index)
-                } else {
-                    *self.custom_color.borrow()
-                }
+                self.theme_config.borrow().get_color(*index)
             }
         }
     }
 }
 
-/// Draw a color swatch with checkerboard background for transparency.
-fn draw_color_swatch(cr: &gtk4::cairo::Context, width: i32, height: i32, color: Color) {
-    // Draw checkerboard pattern for transparency visualization
-    let checker_size = 6.0;
-    for y in 0..(height as f64 / checker_size).ceil() as i32 {
-        for x in 0..(width as f64 / checker_size).ceil() as i32 {
+/// Draw a theme color button with selection indicator.
+fn draw_theme_button(cr: &gtk4::cairo::Context, width: i32, height: i32, color: Color, is_selected: bool) {
+    let w = width as f64;
+    let h = height as f64;
+
+    // Draw checkerboard for transparency
+    let checker_size = 4.0;
+    for y in 0..(h / checker_size).ceil() as i32 {
+        for x in 0..(w / checker_size).ceil() as i32 {
             if (x + y) % 2 == 0 {
-                cr.set_source_rgb(0.8, 0.8, 0.8);
+                cr.set_source_rgb(0.7, 0.7, 0.7);
             } else {
-                cr.set_source_rgb(0.6, 0.6, 0.6);
+                cr.set_source_rgb(0.5, 0.5, 0.5);
             }
             cr.rectangle(
                 x as f64 * checker_size,
@@ -343,8 +412,64 @@ fn draw_color_swatch(cr: &gtk4::cairo::Context, width: i32, height: i32, color: 
         }
     }
 
-    // Draw the color with alpha on top
+    // Draw the color
     cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.rectangle(0.0, 0.0, width as f64, height as f64);
+    cr.rectangle(0.0, 0.0, w, h);
     let _ = cr.fill();
+
+    // Draw selection indicator (border)
+    if is_selected {
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.set_line_width(2.0);
+        cr.rectangle(1.0, 1.0, w - 2.0, h - 2.0);
+        let _ = cr.stroke();
+
+        cr.set_source_rgb(0.0, 0.0, 0.0);
+        cr.set_line_width(1.0);
+        cr.rectangle(2.5, 2.5, w - 5.0, h - 5.0);
+        let _ = cr.stroke();
+    }
+}
+
+/// Draw the custom color swatch.
+fn draw_custom_swatch(cr: &gtk4::cairo::Context, width: i32, height: i32, color: Color, is_custom_mode: bool) {
+    let w = width as f64;
+    let h = height as f64;
+
+    // Draw checkerboard for transparency
+    let checker_size = 4.0;
+    for y in 0..(h / checker_size).ceil() as i32 {
+        for x in 0..(w / checker_size).ceil() as i32 {
+            if (x + y) % 2 == 0 {
+                cr.set_source_rgb(0.7, 0.7, 0.7);
+            } else {
+                cr.set_source_rgb(0.5, 0.5, 0.5);
+            }
+            cr.rectangle(
+                x as f64 * checker_size,
+                y as f64 * checker_size,
+                checker_size,
+                checker_size,
+            );
+            let _ = cr.fill();
+        }
+    }
+
+    // Draw the color
+    cr.set_source_rgba(color.r, color.g, color.b, color.a);
+    cr.rectangle(0.0, 0.0, w, h);
+    let _ = cr.fill();
+
+    // Draw selection indicator if in custom mode
+    if is_custom_mode {
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.set_line_width(2.0);
+        cr.rectangle(1.0, 1.0, w - 2.0, h - 2.0);
+        let _ = cr.stroke();
+
+        cr.set_source_rgb(0.0, 0.0, 0.0);
+        cr.set_line_width(1.0);
+        cr.rectangle(2.5, 2.5, w - 5.0, h - 5.0);
+        let _ = cr.stroke();
+    }
 }
