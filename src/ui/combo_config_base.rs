@@ -588,6 +588,51 @@ where
     height_box.append(&height_spin);
     inner_box.append(&height_box);
 
+    // Connect auto-height checkbox
+    {
+        let height_spin_clone = height_spin.clone();
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        auto_height_check.connect_toggled(move |check| {
+            let is_auto = check.is_active();
+            height_spin_clone.set_sensitive(!is_auto);
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.auto_height = is_auto;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+
+    // Connect height spinner
+    {
+        let slot_name_clone = slot_name.to_string();
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        height_spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.item_height = spin.value();
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
+
     // Get available fields for this slot
     let slot_prefix = format!("{}_", slot_name);
     let mut slot_fields: Vec<FieldMetadata> = available_fields
