@@ -26,6 +26,7 @@ use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrien
 use crate::displayers::CyberpunkDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
+use crate::ui::theme::ColorSource;
 
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {
@@ -2077,16 +2078,16 @@ impl CyberpunkConfigWidget {
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 2.0;
-        config.line_color = Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 };  // Cyan
+        config.line_color = ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 });  // Cyan
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 };  // Cyan start
-        config.fill_gradient_end = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.0 };    // Transparent end
+        config.fill_gradient_start = ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 });  // Cyan start
+        config.fill_gradient_end = ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.0 });    // Transparent end
         config.background_color = Color { r: 0.04, g: 0.06, b: 0.1, a: 0.8 };
         config.plot_background_color = Color { r: 0.04, g: 0.06, b: 0.1, a: 0.6 };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 };  // Cyan grid
+        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 });  // Cyan grid
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 };  // Cyan grid
+        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 });  // Cyan grid
 
         config
     }

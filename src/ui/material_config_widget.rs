@@ -26,6 +26,7 @@ use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrien
 use crate::displayers::MaterialDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
+use crate::ui::theme::ColorSource;
 
 /// Holds references to Appearance tab widgets (theme variant & surface colors)
 struct AppearanceWidgets {
@@ -1984,16 +1985,16 @@ impl MaterialConfigWidget {
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 2.0;
-        config.line_color = Color { r: 0.24, g: 0.47, b: 0.96, a: 1.0 };  // Material Blue
+        config.line_color = ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 1.0 });  // Material Blue
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = Color { r: 0.24, g: 0.47, b: 0.96, a: 0.3 };
-        config.fill_gradient_end = Color { r: 0.24, g: 0.47, b: 0.96, a: 0.0 };
+        config.fill_gradient_start = ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 0.3 });
+        config.fill_gradient_end = ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 0.0 });
         config.background_color = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
         config.plot_background_color = Color { r: 0.98, g: 0.98, b: 0.98, a: 1.0 };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 };
+        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 });
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 };
+        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 });
 
         config
     }

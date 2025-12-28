@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use super::background::Color;
+use super::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 use crate::displayers::TextLineConfig;
 
 // Thread-local buffer for graph points to avoid allocation per frame
@@ -116,10 +117,12 @@ pub enum FillMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AxisConfig {
     pub show: bool,
-    pub color: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub color: ColorSource,
     pub width: f64,
     pub show_labels: bool,
-    pub label_color: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub label_color: ColorSource,
     #[serde(default = "default_label_font_family")]
     pub label_font_family: String,
     pub label_font_size: f64,
@@ -128,7 +131,8 @@ pub struct AxisConfig {
     #[serde(default)]
     pub label_italic: bool,
     pub show_grid: bool,
-    pub grid_color: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub grid_color: ColorSource,
     pub grid_width: f64,
     pub grid_line_style: LineStyle,
 }
@@ -141,16 +145,16 @@ impl Default for AxisConfig {
     fn default() -> Self {
         Self {
             show: true,
-            color: Color { r: 0.7, g: 0.7, b: 0.7, a: 1.0 },
+            color: ColorSource::custom(Color { r: 0.7, g: 0.7, b: 0.7, a: 1.0 }),
             width: 1.0,
             show_labels: true,
-            label_color: Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 },
+            label_color: ColorSource::custom(Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 }),
             label_font_family: "Sans".to_string(),
             label_font_size: 10.0,
             label_bold: false,
             label_italic: false,
             show_grid: true,
-            grid_color: Color { r: 0.3, g: 0.3, b: 0.3, a: 0.5 },
+            grid_color: ColorSource::custom(Color { r: 0.3, g: 0.3, b: 0.3, a: 0.5 }),
             grid_width: 0.5,
             grid_line_style: LineStyle::Dotted,
         }
@@ -184,20 +188,25 @@ pub struct GraphDisplayConfig {
     pub graph_type: GraphType,
     pub line_style: LineStyle,
     pub line_width: f64,
-    pub line_color: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub line_color: ColorSource,
 
     // Fill configuration
     pub fill_mode: FillMode,
-    pub fill_color: Color,
-    pub fill_gradient_start: Color,
-    pub fill_gradient_end: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub fill_color: ColorSource,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub fill_gradient_start: ColorSource,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub fill_gradient_end: ColorSource,
     pub fill_opacity: f64,
 
     // Data points
     pub max_data_points: usize,
     pub point_radius: f64,
     pub show_points: bool,
-    pub point_color: Color,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
+    pub point_color: ColorSource,
 
     // Value range
     pub auto_scale: bool,
@@ -231,22 +240,23 @@ fn default_update_interval() -> f64 {
 
 impl Default for GraphDisplayConfig {
     fn default() -> Self {
+        let default_graph_color = Color { r: 0.2, g: 0.8, b: 0.4, a: 1.0 };
         Self {
             graph_type: GraphType::Line,
             line_style: LineStyle::Solid,
             line_width: 2.0,
-            line_color: Color { r: 0.2, g: 0.8, b: 0.4, a: 1.0 },
+            line_color: ColorSource::custom(default_graph_color),
 
             fill_mode: FillMode::Gradient,
-            fill_color: Color { r: 0.2, g: 0.8, b: 0.4, a: 0.3 },
-            fill_gradient_start: Color { r: 0.2, g: 0.8, b: 0.4, a: 0.6 },
-            fill_gradient_end: Color { r: 0.2, g: 0.8, b: 0.4, a: 0.0 },
+            fill_color: ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.4, a: 0.3 }),
+            fill_gradient_start: ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.4, a: 0.6 }),
+            fill_gradient_end: ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.4, a: 0.0 }),
             fill_opacity: 0.3,
 
             max_data_points: 60,
             point_radius: 3.0,
             show_points: false,
-            point_color: Color { r: 0.2, g: 0.8, b: 0.4, a: 1.0 },
+            point_color: ColorSource::custom(default_graph_color),
 
             auto_scale: true,
             min_value: 0.0,
@@ -304,6 +314,38 @@ pub fn render_graph(
     height: f64,
     scroll_offset: f64,
 ) -> Result<()> {
+    render_graph_with_theme(cr, config, data, source_values, width, height, scroll_offset, None)
+}
+
+/// Render graph display with optional theme for color resolution
+pub fn render_graph_with_theme(
+    cr: &Context,
+    config: &GraphDisplayConfig,
+    data: &VecDeque<DataPoint>,
+    source_values: &std::collections::HashMap<String, serde_json::Value>,
+    width: f64,
+    height: f64,
+    scroll_offset: f64,
+    theme: Option<&ComboThemeConfig>,
+) -> Result<()> {
+    // Resolve theme colors
+    let default_theme = ComboThemeConfig::default();
+    let theme = theme.unwrap_or(&default_theme);
+
+    let line_color = config.line_color.resolve(theme);
+    let fill_color = config.fill_color.resolve(theme);
+    let fill_gradient_start = config.fill_gradient_start.resolve(theme);
+    let fill_gradient_end = config.fill_gradient_end.resolve(theme);
+    let point_color = config.point_color.resolve(theme);
+
+    // Resolve axis colors
+    let y_axis_color = config.y_axis.color.resolve(theme);
+    let y_axis_label_color = config.y_axis.label_color.resolve(theme);
+    let y_axis_grid_color = config.y_axis.grid_color.resolve(theme);
+    let x_axis_color = config.x_axis.color.resolve(theme);
+    let _x_axis_label_color = config.x_axis.label_color.resolve(theme);
+    let x_axis_grid_color = config.x_axis.grid_color.resolve(theme);
+
     // Clear background
     cr.save()?;
     cr.set_source_rgba(
@@ -372,10 +414,10 @@ pub fn render_graph(
     if config.y_axis.show_grid {
         cr.save()?;
         cr.set_source_rgba(
-            config.y_axis.grid_color.r,
-            config.y_axis.grid_color.g,
-            config.y_axis.grid_color.b,
-            config.y_axis.grid_color.a,
+            y_axis_grid_color.r,
+            y_axis_grid_color.g,
+            y_axis_grid_color.b,
+            y_axis_grid_color.a,
         );
         cr.set_line_width(config.y_axis.grid_width);
         apply_line_style(cr, config.y_axis.grid_line_style, config.y_axis.grid_width);
@@ -394,10 +436,10 @@ pub fn render_graph(
     if config.x_axis.show_grid && data.len() > 1 {
         cr.save()?;
         cr.set_source_rgba(
-            config.x_axis.grid_color.r,
-            config.x_axis.grid_color.g,
-            config.x_axis.grid_color.b,
-            config.x_axis.grid_color.a,
+            x_axis_grid_color.r,
+            x_axis_grid_color.g,
+            x_axis_grid_color.b,
+            x_axis_grid_color.a,
         );
         cr.set_line_width(config.x_axis.grid_width);
         apply_line_style(cr, config.x_axis.grid_line_style, config.x_axis.grid_width);
@@ -471,10 +513,10 @@ pub fn render_graph(
                     match config.fill_mode {
                         FillMode::Solid => {
                             cr.set_source_rgba(
-                                config.fill_color.r,
-                                config.fill_color.g,
-                                config.fill_color.b,
-                                config.fill_color.a * config.fill_opacity,
+                                fill_color.r,
+                                fill_color.g,
+                                fill_color.b,
+                                fill_color.a * config.fill_opacity,
                             );
                             cr.fill()?;
                         }
@@ -487,17 +529,17 @@ pub fn render_graph(
                             );
                             gradient.add_color_stop_rgba(
                                 0.0,
-                                config.fill_gradient_start.r,
-                                config.fill_gradient_start.g,
-                                config.fill_gradient_start.b,
-                                config.fill_gradient_start.a * config.fill_opacity,
+                                fill_gradient_start.r,
+                                fill_gradient_start.g,
+                                fill_gradient_start.b,
+                                fill_gradient_start.a * config.fill_opacity,
                             );
                             gradient.add_color_stop_rgba(
                                 1.0,
-                                config.fill_gradient_end.r,
-                                config.fill_gradient_end.g,
-                                config.fill_gradient_end.b,
-                                config.fill_gradient_end.a * config.fill_opacity,
+                                fill_gradient_end.r,
+                                fill_gradient_end.g,
+                                fill_gradient_end.b,
+                                fill_gradient_end.a * config.fill_opacity,
                             );
                             cr.set_source(&gradient)?;
                             cr.fill()?;
@@ -512,10 +554,10 @@ pub fn render_graph(
                 if points.len() > 1 {
                     cr.save()?;
                     cr.set_source_rgba(
-                        config.line_color.r,
-                        config.line_color.g,
-                        config.line_color.b,
-                        config.line_color.a,
+                        line_color.r,
+                        line_color.g,
+                        line_color.b,
+                        line_color.a,
                     );
                     cr.set_line_width(config.line_width);
                     apply_line_style(cr, config.line_style, config.line_width);
@@ -564,10 +606,10 @@ pub fn render_graph(
                 if config.show_points {
                     cr.save()?;
                     cr.set_source_rgba(
-                        config.point_color.r,
-                        config.point_color.g,
-                        config.point_color.b,
-                        config.point_color.a,
+                        point_color.r,
+                        point_color.g,
+                        point_color.b,
+                        point_color.a,
                     );
                     for &(x, y) in &points {
                         cr.arc(x, y, config.point_radius, 0.0, 2.0 * std::f64::consts::PI);
@@ -580,10 +622,10 @@ pub fn render_graph(
                 let bar_width = (plot_width / config.max_data_points as f64) * 0.8;
                 cr.save()?;
                 cr.set_source_rgba(
-                    config.line_color.r,
-                    config.line_color.g,
-                    config.line_color.b,
-                    config.line_color.a,
+                    line_color.r,
+                    line_color.g,
+                    line_color.b,
+                    line_color.a,
                 );
 
                 for &(x, y) in &points {
@@ -603,10 +645,10 @@ pub fn render_graph(
     if config.y_axis.show {
         cr.save()?;
         cr.set_source_rgba(
-            config.y_axis.color.r,
-            config.y_axis.color.g,
-            config.y_axis.color.b,
-            config.y_axis.color.a,
+            y_axis_color.r,
+            y_axis_color.g,
+            y_axis_color.b,
+            y_axis_color.a,
         );
         cr.set_line_width(config.y_axis.width);
         cr.move_to(plot_x, plot_y);
@@ -618,10 +660,10 @@ pub fn render_graph(
         if config.y_axis.show_labels {
             cr.save()?;
             cr.set_source_rgba(
-                config.y_axis.label_color.r,
-                config.y_axis.label_color.g,
-                config.y_axis.label_color.b,
-                config.y_axis.label_color.a,
+                y_axis_label_color.r,
+                y_axis_label_color.g,
+                y_axis_label_color.b,
+                y_axis_label_color.a,
             );
             let font_slant = if config.y_axis.label_italic {
                 cairo::FontSlant::Italic
@@ -664,10 +706,10 @@ pub fn render_graph(
     if config.x_axis.show {
         cr.save()?;
         cr.set_source_rgba(
-            config.x_axis.color.r,
-            config.x_axis.color.g,
-            config.x_axis.color.b,
-            config.x_axis.color.a,
+            x_axis_color.r,
+            x_axis_color.g,
+            x_axis_color.b,
+            x_axis_color.a,
         );
         cr.set_line_width(config.x_axis.width);
         cr.move_to(plot_x, plot_y + plot_height);
@@ -686,12 +728,13 @@ pub fn render_graph(
         let text_config = crate::displayers::TextDisplayerConfig {
             lines: config.text_overlay.clone(),
         };
-        crate::ui::text_renderer::render_text_lines(
+        crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,
             &text_config,
             source_values,
+            Some(theme),
         );
     } else {
         log::debug!("Graph text overlay is empty, source_values keys: {:?}", source_values.keys().collect::<Vec<_>>());

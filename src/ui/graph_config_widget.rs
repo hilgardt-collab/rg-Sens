@@ -11,29 +11,32 @@ use std::rc::Rc;
 use super::color_button_widget::ColorButtonWidget;
 use super::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 use super::text_line_config_widget::TextLineConfigWidget;
+use super::theme::ComboThemeConfig;
+use super::theme_color_selector::ThemeColorSelector;
 
 pub struct GraphConfigWidget {
     widget: GtkBox,
     config: Rc<RefCell<GraphDisplayConfig>>,
+    theme: Rc<RefCell<ComboThemeConfig>>,
 
     // Graph type controls
     graph_type_combo: DropDown,
     line_style_combo: DropDown,
     line_width_spin: SpinButton,
-    line_color_widget: Rc<ColorButtonWidget>,
+    line_color_widget: Rc<ThemeColorSelector>,
 
     // Fill controls
     fill_mode_combo: DropDown,
-    fill_color_widget: Rc<ColorButtonWidget>,
-    fill_gradient_start_widget: Rc<ColorButtonWidget>,
-    fill_gradient_end_widget: Rc<ColorButtonWidget>,
+    fill_color_widget: Rc<ThemeColorSelector>,
+    fill_gradient_start_widget: Rc<ThemeColorSelector>,
+    fill_gradient_end_widget: Rc<ThemeColorSelector>,
     fill_opacity_spin: SpinButton,
 
     // Data points
     max_points_spin: SpinButton,
     show_points_check: CheckButton,
     point_radius_spin: SpinButton,
-    point_color_widget: Rc<ColorButtonWidget>,
+    point_color_widget: Rc<ThemeColorSelector>,
 
     // Scaling
     auto_scale_check: CheckButton,
@@ -45,9 +48,9 @@ pub struct GraphConfigWidget {
     y_axis_show_check: CheckButton,
     y_axis_show_labels_check: CheckButton,
     y_axis_show_grid_check: CheckButton,
-    y_axis_color_widget: Rc<ColorButtonWidget>,
-    y_axis_grid_color_widget: Rc<ColorButtonWidget>,
-    y_axis_label_color_widget: Rc<ColorButtonWidget>,
+    y_axis_color_widget: Rc<ThemeColorSelector>,
+    y_axis_grid_color_widget: Rc<ThemeColorSelector>,
+    y_axis_label_color_widget: Rc<ThemeColorSelector>,
     y_axis_label_font_button: Button,
     y_axis_label_font_size_spin: SpinButton,
     y_axis_label_bold_check: CheckButton,
@@ -55,9 +58,9 @@ pub struct GraphConfigWidget {
 
     x_axis_show_check: CheckButton,
     x_axis_show_grid_check: CheckButton,
-    x_axis_color_widget: Rc<ColorButtonWidget>,
-    x_axis_grid_color_widget: Rc<ColorButtonWidget>,
-    x_axis_label_color_widget: Rc<ColorButtonWidget>,
+    x_axis_color_widget: Rc<ThemeColorSelector>,
+    x_axis_grid_color_widget: Rc<ThemeColorSelector>,
+    x_axis_label_color_widget: Rc<ThemeColorSelector>,
     x_axis_label_font_button: Button,
     x_axis_label_font_size_spin: SpinButton,
     x_axis_label_bold_check: CheckButton,
@@ -102,6 +105,9 @@ impl GraphConfigWidget {
 
         // Create on_change callback BEFORE creating pages so we can pass it to them
         let on_change: OnChangeCallback = Rc::new(RefCell::new(None));
+
+        // Create theme config for color selectors
+        let theme: Rc<RefCell<ComboThemeConfig>> = Rc::new(RefCell::new(ComboThemeConfig::default()));
 
         let notebook = Notebook::new();
         notebook.set_scrollable(true);
@@ -227,15 +233,15 @@ impl GraphConfigWidget {
                     LineStyle::Dotted => 2,
                 });
                 line_width_spin_p.set_value(cfg.line_width);
-                line_color_widget_p.set_color(cfg.line_color);
+                line_color_widget_p.set_source(cfg.line_color.clone());
                 fill_mode_combo_p.set_selected(match cfg.fill_mode {
                     FillMode::None => 0,
                     FillMode::Solid => 1,
                     FillMode::Gradient => 2,
                 });
-                fill_color_widget_p.set_color(cfg.fill_color);
-                fill_gradient_start_widget_p.set_color(cfg.fill_gradient_start);
-                fill_gradient_end_widget_p.set_color(cfg.fill_gradient_end);
+                fill_color_widget_p.set_source(cfg.fill_color.clone());
+                fill_gradient_start_widget_p.set_source(cfg.fill_gradient_start.clone());
+                fill_gradient_end_widget_p.set_source(cfg.fill_gradient_end.clone());
                 fill_opacity_spin_p.set_value(cfg.fill_opacity);
                 smooth_lines_check_p.set_active(cfg.smooth_lines);
                 animate_new_points_check_p.set_active(cfg.animate_new_points);
@@ -243,7 +249,7 @@ impl GraphConfigWidget {
                 max_points_spin_p.set_value(cfg.max_data_points as f64);
                 show_points_check_p.set_active(cfg.show_points);
                 point_radius_spin_p.set_value(cfg.point_radius);
-                point_color_widget_p.set_color(cfg.point_color);
+                point_color_widget_p.set_source(cfg.point_color.clone());
                 auto_scale_check_p.set_active(cfg.auto_scale);
                 min_value_spin_p.set_value(cfg.min_value);
                 max_value_spin_p.set_value(cfg.max_value);
@@ -252,9 +258,9 @@ impl GraphConfigWidget {
                 y_axis_show_check_p.set_active(cfg.y_axis.show);
                 y_axis_show_labels_check_p.set_active(cfg.y_axis.show_labels);
                 y_axis_show_grid_check_p.set_active(cfg.y_axis.show_grid);
-                y_axis_color_widget_p.set_color(cfg.y_axis.color);
-                y_axis_grid_color_widget_p.set_color(cfg.y_axis.grid_color);
-                y_axis_label_color_widget_p.set_color(cfg.y_axis.label_color);
+                y_axis_color_widget_p.set_source(cfg.y_axis.color.clone());
+                y_axis_grid_color_widget_p.set_source(cfg.y_axis.grid_color.clone());
+                y_axis_label_color_widget_p.set_source(cfg.y_axis.label_color.clone());
                 y_axis_label_font_button_p.set_label(&format!("{} {:.0}", cfg.y_axis.label_font_family, cfg.y_axis.label_font_size));
                 y_axis_label_font_size_spin_p.set_value(cfg.y_axis.label_font_size);
                 y_axis_label_bold_check_p.set_active(cfg.y_axis.label_bold);
@@ -262,9 +268,9 @@ impl GraphConfigWidget {
 
                 x_axis_show_check_p.set_active(cfg.x_axis.show);
                 x_axis_show_grid_check_p.set_active(cfg.x_axis.show_grid);
-                x_axis_color_widget_p.set_color(cfg.x_axis.color);
-                x_axis_grid_color_widget_p.set_color(cfg.x_axis.grid_color);
-                x_axis_label_color_widget_p.set_color(cfg.x_axis.label_color);
+                x_axis_color_widget_p.set_source(cfg.x_axis.color.clone());
+                x_axis_grid_color_widget_p.set_source(cfg.x_axis.grid_color.clone());
+                x_axis_label_color_widget_p.set_source(cfg.x_axis.label_color.clone());
                 x_axis_label_font_button_p.set_label(&format!("{} {:.0}", cfg.x_axis.label_font_family, cfg.x_axis.label_font_size));
                 x_axis_label_font_size_spin_p.set_value(cfg.x_axis.label_font_size);
                 x_axis_label_bold_check_p.set_active(cfg.x_axis.label_bold);
@@ -296,6 +302,7 @@ impl GraphConfigWidget {
         Self {
             widget,
             config,
+            theme,
             graph_type_combo: style_page.graph_type_combo,
             line_style_combo: style_page.line_style_combo,
             line_width_spin: style_page.line_width_spin,
@@ -393,7 +400,7 @@ impl GraphConfigWidget {
         });
 
         self.line_width_spin.set_value(config.line_width);
-        self.line_color_widget.set_color(config.line_color);
+        self.line_color_widget.set_source(config.line_color.clone());
 
         self.fill_mode_combo.set_selected(match config.fill_mode {
             FillMode::None => 0,
@@ -401,15 +408,15 @@ impl GraphConfigWidget {
             FillMode::Gradient => 2,
         });
 
-        self.fill_color_widget.set_color(config.fill_color);
-        self.fill_gradient_start_widget.set_color(config.fill_gradient_start);
-        self.fill_gradient_end_widget.set_color(config.fill_gradient_end);
+        self.fill_color_widget.set_source(config.fill_color.clone());
+        self.fill_gradient_start_widget.set_source(config.fill_gradient_start.clone());
+        self.fill_gradient_end_widget.set_source(config.fill_gradient_end.clone());
         self.fill_opacity_spin.set_value(config.fill_opacity);
 
         self.max_points_spin.set_value(config.max_data_points as f64);
         self.show_points_check.set_active(config.show_points);
         self.point_radius_spin.set_value(config.point_radius);
-        self.point_color_widget.set_color(config.point_color);
+        self.point_color_widget.set_source(config.point_color.clone());
 
         self.auto_scale_check.set_active(config.auto_scale);
         self.min_value_spin.set_value(config.min_value);
@@ -419,9 +426,9 @@ impl GraphConfigWidget {
         self.y_axis_show_check.set_active(config.y_axis.show);
         self.y_axis_show_labels_check.set_active(config.y_axis.show_labels);
         self.y_axis_show_grid_check.set_active(config.y_axis.show_grid);
-        self.y_axis_color_widget.set_color(config.y_axis.color);
-        self.y_axis_grid_color_widget.set_color(config.y_axis.grid_color);
-        self.y_axis_label_color_widget.set_color(config.y_axis.label_color);
+        self.y_axis_color_widget.set_source(config.y_axis.color.clone());
+        self.y_axis_grid_color_widget.set_source(config.y_axis.grid_color.clone());
+        self.y_axis_label_color_widget.set_source(config.y_axis.label_color.clone());
         self.y_axis_label_font_button.set_label(&format!("{} {:.0}", config.y_axis.label_font_family, config.y_axis.label_font_size));
         self.y_axis_label_font_size_spin.set_value(config.y_axis.label_font_size);
         self.y_axis_label_bold_check.set_active(config.y_axis.label_bold);
@@ -429,9 +436,9 @@ impl GraphConfigWidget {
 
         self.x_axis_show_check.set_active(config.x_axis.show);
         self.x_axis_show_grid_check.set_active(config.x_axis.show_grid);
-        self.x_axis_color_widget.set_color(config.x_axis.color);
-        self.x_axis_grid_color_widget.set_color(config.x_axis.grid_color);
-        self.x_axis_label_color_widget.set_color(config.x_axis.label_color);
+        self.x_axis_color_widget.set_source(config.x_axis.color.clone());
+        self.x_axis_grid_color_widget.set_source(config.x_axis.grid_color.clone());
+        self.x_axis_label_color_widget.set_source(config.x_axis.label_color.clone());
         self.x_axis_label_font_button.set_label(&format!("{} {:.0}", config.x_axis.label_font_family, config.x_axis.label_font_size));
         self.x_axis_label_font_size_spin.set_value(config.x_axis.label_font_size);
         self.x_axis_label_bold_check.set_active(config.x_axis.label_bold);
@@ -463,6 +470,31 @@ impl GraphConfigWidget {
 
         *self.config.borrow_mut() = config;
     }
+
+    /// Set the theme config for color resolution
+    pub fn set_theme(&self, theme: ComboThemeConfig) {
+        *self.theme.borrow_mut() = theme.clone();
+
+        // Update all theme color selectors
+        self.line_color_widget.set_theme_config(theme.clone());
+        self.fill_color_widget.set_theme_config(theme.clone());
+        self.fill_gradient_start_widget.set_theme_config(theme.clone());
+        self.fill_gradient_end_widget.set_theme_config(theme.clone());
+        self.point_color_widget.set_theme_config(theme.clone());
+
+        // Update axis color selectors
+        self.y_axis_color_widget.set_theme_config(theme.clone());
+        self.y_axis_grid_color_widget.set_theme_config(theme.clone());
+        self.y_axis_label_color_widget.set_theme_config(theme.clone());
+        self.x_axis_color_widget.set_theme_config(theme.clone());
+        self.x_axis_grid_color_widget.set_theme_config(theme.clone());
+        self.x_axis_label_color_widget.set_theme_config(theme.clone());
+
+        // Update text overlay config widgets
+        for text_widget in &self.text_config_widgets {
+            text_widget.set_theme(theme.clone());
+        }
+    }
 }
 
 impl Default for GraphConfigWidget {
@@ -477,11 +509,11 @@ struct StylePageWidgets {
     graph_type_combo: DropDown,
     line_style_combo: DropDown,
     line_width_spin: SpinButton,
-    line_color_widget: Rc<ColorButtonWidget>,
+    line_color_widget: Rc<ThemeColorSelector>,
     fill_mode_combo: DropDown,
-    fill_color_widget: Rc<ColorButtonWidget>,
-    fill_gradient_start_widget: Rc<ColorButtonWidget>,
-    fill_gradient_end_widget: Rc<ColorButtonWidget>,
+    fill_color_widget: Rc<ThemeColorSelector>,
+    fill_gradient_start_widget: Rc<ThemeColorSelector>,
+    fill_gradient_end_widget: Rc<ThemeColorSelector>,
     fill_opacity_spin: SpinButton,
     smooth_lines_check: CheckButton,
     animate_new_points_check: CheckButton,
@@ -492,7 +524,7 @@ struct DataPageWidgets {
     max_points_spin: SpinButton,
     show_points_check: CheckButton,
     point_radius_spin: SpinButton,
-    point_color_widget: Rc<ColorButtonWidget>,
+    point_color_widget: Rc<ThemeColorSelector>,
     auto_scale_check: CheckButton,
     min_value_spin: SpinButton,
     max_value_spin: SpinButton,
@@ -504,18 +536,18 @@ struct AxesPageWidgets {
     y_axis_show_check: CheckButton,
     y_axis_show_labels_check: CheckButton,
     y_axis_show_grid_check: CheckButton,
-    y_axis_color_widget: Rc<ColorButtonWidget>,
-    y_axis_grid_color_widget: Rc<ColorButtonWidget>,
-    y_axis_label_color_widget: Rc<ColorButtonWidget>,
+    y_axis_color_widget: Rc<ThemeColorSelector>,
+    y_axis_grid_color_widget: Rc<ThemeColorSelector>,
+    y_axis_label_color_widget: Rc<ThemeColorSelector>,
     y_axis_label_font_button: Button,
     y_axis_label_font_size_spin: SpinButton,
     y_axis_label_bold_check: CheckButton,
     y_axis_label_italic_check: CheckButton,
     x_axis_show_check: CheckButton,
     x_axis_show_grid_check: CheckButton,
-    x_axis_color_widget: Rc<ColorButtonWidget>,
-    x_axis_grid_color_widget: Rc<ColorButtonWidget>,
-    x_axis_label_color_widget: Rc<ColorButtonWidget>,
+    x_axis_color_widget: Rc<ThemeColorSelector>,
+    x_axis_grid_color_widget: Rc<ThemeColorSelector>,
+    x_axis_label_color_widget: Rc<ThemeColorSelector>,
     x_axis_label_font_button: Button,
     x_axis_label_font_size_spin: SpinButton,
     x_axis_label_bold_check: CheckButton,
@@ -607,17 +639,17 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
         notify_change_static(&on_change_clone);
     });
 
-    // Line color - using ColorButtonWidget
+    // Line color - using ThemeColorSelector
     let line_color_box = GtkBox::new(Orientation::Horizontal, 6);
     line_color_box.append(&Label::new(Some("Line Color:")));
-    let line_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().line_color));
+    let line_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().line_color.clone()));
     line_color_box.append(line_color_widget.widget());
     page.append(&line_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    line_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().line_color = color;
+    line_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().line_color = source;
         notify_change_static(&on_change_clone);
     });
 
@@ -645,45 +677,45 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
         notify_change_static(&on_change_clone);
     });
 
-    // Fill color - using ColorButtonWidget
+    // Fill color - using ThemeColorSelector
     let fill_color_box = GtkBox::new(Orientation::Horizontal, 6);
     fill_color_box.append(&Label::new(Some("Fill Color:")));
-    let fill_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().fill_color));
+    let fill_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_color.clone()));
     fill_color_box.append(fill_color_widget.widget());
     page.append(&fill_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    fill_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().fill_color = color;
+    fill_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().fill_color = source;
         notify_change_static(&on_change_clone);
     });
 
-    // Gradient start color - using ColorButtonWidget
+    // Gradient start color - using ThemeColorSelector
     let gradient_start_box = GtkBox::new(Orientation::Horizontal, 6);
     gradient_start_box.append(&Label::new(Some("Gradient Start:")));
-    let fill_gradient_start_widget = Rc::new(ColorButtonWidget::new(config.borrow().fill_gradient_start));
+    let fill_gradient_start_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_gradient_start.clone()));
     gradient_start_box.append(fill_gradient_start_widget.widget());
     page.append(&gradient_start_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    fill_gradient_start_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().fill_gradient_start = color;
+    fill_gradient_start_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().fill_gradient_start = source;
         notify_change_static(&on_change_clone);
     });
 
-    // Gradient end color - using ColorButtonWidget
+    // Gradient end color - using ThemeColorSelector
     let gradient_end_box = GtkBox::new(Orientation::Horizontal, 6);
     gradient_end_box.append(&Label::new(Some("Gradient End:")));
-    let fill_gradient_end_widget = Rc::new(ColorButtonWidget::new(config.borrow().fill_gradient_end));
+    let fill_gradient_end_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_gradient_end.clone()));
     gradient_end_box.append(fill_gradient_end_widget.widget());
     page.append(&gradient_end_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    fill_gradient_end_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().fill_gradient_end = color;
+    fill_gradient_end_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().fill_gradient_end = source;
         notify_change_static(&on_change_clone);
     });
 
@@ -793,17 +825,17 @@ fn create_data_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChange
         notify_change_static(&on_change_clone);
     });
 
-    // Point color - using ColorButtonWidget
+    // Point color - using ThemeColorSelector
     let point_color_box = GtkBox::new(Orientation::Horizontal, 6);
     point_color_box.append(&Label::new(Some("Point Color:")));
-    let point_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().point_color));
+    let point_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().point_color.clone()));
     point_color_box.append(point_color_widget.widget());
     page.append(&point_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    point_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().point_color = color;
+    point_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().point_color = source;
         notify_change_static(&on_change_clone);
     });
 
@@ -928,45 +960,45 @@ fn create_axes_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChange
         notify_change_static(&on_change_clone);
     });
 
-    // Y-Axis color - using ColorButtonWidget
+    // Y-Axis color - using ThemeColorSelector
     let y_color_box = GtkBox::new(Orientation::Horizontal, 6);
     y_color_box.append(&Label::new(Some("Y-Axis Color:")));
-    let y_axis_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().y_axis.color));
+    let y_axis_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().y_axis.color.clone()));
     y_color_box.append(y_axis_color_widget.widget());
     page.append(&y_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    y_axis_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().y_axis.color = color;
+    y_axis_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().y_axis.color = source;
         notify_change_static(&on_change_clone);
     });
 
-    // Y-Grid color - using ColorButtonWidget
+    // Y-Grid color - using ThemeColorSelector
     let y_grid_color_box = GtkBox::new(Orientation::Horizontal, 6);
     y_grid_color_box.append(&Label::new(Some("Y-Grid Color:")));
-    let y_axis_grid_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().y_axis.grid_color));
+    let y_axis_grid_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().y_axis.grid_color.clone()));
     y_grid_color_box.append(y_axis_grid_color_widget.widget());
     page.append(&y_grid_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    y_axis_grid_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().y_axis.grid_color = color;
+    y_axis_grid_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().y_axis.grid_color = source;
         notify_change_static(&on_change_clone);
     });
 
-    // Y-Axis label color - using ColorButtonWidget
+    // Y-Axis label color - using ThemeColorSelector
     let y_label_color_box = GtkBox::new(Orientation::Horizontal, 6);
     y_label_color_box.append(&Label::new(Some("Label Color:")));
-    let y_axis_label_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().y_axis.label_color));
+    let y_axis_label_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().y_axis.label_color.clone()));
     y_label_color_box.append(y_axis_label_color_widget.widget());
     page.append(&y_label_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    y_axis_label_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().y_axis.label_color = color;
+    y_axis_label_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().y_axis.label_color = source;
         notify_change_static(&on_change_clone);
     });
 
@@ -1143,45 +1175,45 @@ fn create_axes_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChange
         notify_change_static(&on_change_clone);
     });
 
-    // X-Axis color - using ColorButtonWidget
+    // X-Axis color - using ThemeColorSelector
     let x_color_box = GtkBox::new(Orientation::Horizontal, 6);
     x_color_box.append(&Label::new(Some("X-Axis Color:")));
-    let x_axis_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().x_axis.color));
+    let x_axis_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().x_axis.color.clone()));
     x_color_box.append(x_axis_color_widget.widget());
     page.append(&x_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    x_axis_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().x_axis.color = color;
+    x_axis_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().x_axis.color = source;
         notify_change_static(&on_change_clone);
     });
 
-    // X-Grid color - using ColorButtonWidget
+    // X-Grid color - using ThemeColorSelector
     let x_grid_color_box = GtkBox::new(Orientation::Horizontal, 6);
     x_grid_color_box.append(&Label::new(Some("X-Grid Color:")));
-    let x_axis_grid_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().x_axis.grid_color));
+    let x_axis_grid_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().x_axis.grid_color.clone()));
     x_grid_color_box.append(x_axis_grid_color_widget.widget());
     page.append(&x_grid_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    x_axis_grid_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().x_axis.grid_color = color;
+    x_axis_grid_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().x_axis.grid_color = source;
         notify_change_static(&on_change_clone);
     });
 
-    // X-Axis label color - using ColorButtonWidget
+    // X-Axis label color - using ThemeColorSelector
     let x_label_color_box = GtkBox::new(Orientation::Horizontal, 6);
     x_label_color_box.append(&Label::new(Some("Label Color:")));
-    let x_axis_label_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().x_axis.label_color));
+    let x_axis_label_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().x_axis.label_color.clone()));
     x_label_color_box.append(x_axis_label_color_widget.widget());
     page.append(&x_label_color_box);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    x_axis_label_color_widget.set_on_change(move |color| {
-        config_clone.borrow_mut().x_axis.label_color = color;
+    x_axis_label_color_widget.set_on_change(move |source| {
+        config_clone.borrow_mut().x_axis.label_color = source;
         notify_change_static(&on_change_clone);
     });
 

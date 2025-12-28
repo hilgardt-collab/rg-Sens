@@ -29,6 +29,7 @@ use crate::ui::background::Color;
 use crate::displayers::RetroTerminalDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
+use crate::ui::theme::ColorSource;
 
 /// Holds references to Colors tab widgets
 struct ColorsWidgets {
@@ -2070,16 +2071,16 @@ impl RetroTerminalConfigWidget {
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 1.5;
-        config.line_color = Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 };  // Phosphor green
+        config.line_color = ColorSource::custom(Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 });  // Phosphor green
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = Color { r: 0.1, g: 0.5, b: 0.1, a: 0.3 };
-        config.fill_gradient_end = Color { r: 0.05, g: 0.2, b: 0.05, a: 0.0 };
+        config.fill_gradient_start = ColorSource::custom(Color { r: 0.1, g: 0.5, b: 0.1, a: 0.3 });
+        config.fill_gradient_end = ColorSource::custom(Color { r: 0.05, g: 0.2, b: 0.05, a: 0.0 });
         config.background_color = Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 };
         config.plot_background_color = Color { r: 0.02, g: 0.05, b: 0.02, a: 1.0 };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 };
+        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 });
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 };
+        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 });
 
         config
     }
