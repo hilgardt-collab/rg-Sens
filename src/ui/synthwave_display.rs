@@ -452,25 +452,35 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
             let vanishing_distance = width * 0.3; // Based on width for consistency
             let vanishing_y = horizon_y - vanishing_distance;
 
+            // Clip to panel bounds for vertical lines
+            cr.save().ok();
+            cr.rectangle(0.0, horizon_y, width, height - horizon_y);
+            cr.clip();
+
             // Adjust vertical line count based on width
             let vertical_count = ((width / 25.0) as usize).clamp(8, 30);
 
+            // Distribute lines evenly AT THE HORIZON, then trace down to bottom
+            // This ensures lines extend to panel edges at the horizon
             for i in 0..vertical_count {
-                let x_bottom = (i as f64 / (vertical_count - 1) as f64) * width;
+                // Position at horizon spans full width
+                let x_horizon = (i as f64 / (vertical_count - 1) as f64) * width;
 
-                // Line from bottom to vanishing point, clipped at horizon
-                let dx = center_x - x_bottom;
-                let dy = vanishing_y - height;
+                // Calculate where this line would be at the bottom
+                // Line goes from vanishing point through x_horizon at horizon_y
+                let dx_to_vanish = center_x - x_horizon;
+                let dy_to_vanish = vanishing_y - horizon_y;
 
                 // Avoid division issues
-                if dy.abs() < 0.001 {
+                if dy_to_vanish.abs() < 0.001 {
                     continue;
                 }
 
-                let t_horizon = (horizon_y - height) / dy;
-                let x_horizon = x_bottom + dx * t_horizon;
+                // Extend line from horizon down to bottom of panel
+                let t_bottom = (height - horizon_y) / (-dy_to_vanish);
+                let x_bottom = x_horizon - dx_to_vanish * t_bottom;
 
-                let distance_from_center = (x_bottom - center_x).abs() / (width / 2.0);
+                let distance_from_center = (x_horizon - center_x).abs() / (width / 2.0);
                 let alpha = (1.0 - distance_from_center * 0.5) * 0.4;
                 cr.set_source_rgba(accent.r, accent.g, accent.b, alpha);
 
@@ -478,6 +488,8 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
                 cr.line_to(x_horizon, horizon_y);
                 cr.stroke().ok();
             }
+
+            cr.restore().ok();
         }
         GridStyle::Flat => {
             // Simple flat grid

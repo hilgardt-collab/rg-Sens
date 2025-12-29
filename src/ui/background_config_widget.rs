@@ -68,6 +68,7 @@ impl BackgroundConfigWidget {
         // Preview
         let preview = DrawingArea::new();
         preview.set_content_height(150);
+        preview.set_hexpand(true);
         preview.set_vexpand(false);
 
         let config_clone = config.clone();

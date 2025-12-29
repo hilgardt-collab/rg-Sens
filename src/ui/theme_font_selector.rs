@@ -91,7 +91,6 @@ impl ThemeFontSelector {
             let font_button_clone = font_button.clone();
             let custom_family_clone = custom_family.clone();
             let on_change_clone = on_change.clone();
-            let size_spin_clone = size_spin.clone();
 
             btn.connect_toggled(move |toggle_btn| {
                 if toggle_btn.is_active() {
@@ -105,13 +104,9 @@ impl ThemeFontSelector {
                         *custom_family_clone.borrow_mut() = family;
                     }
 
-                    // Emit change with current size
+                    // Emit change with Theme font source (not Custom!)
                     if let Some(ref callback) = *on_change_clone.borrow() {
-                        let size = size_spin_clone.value();
-                        callback(FontSource::Custom {
-                            family: custom_family_clone.borrow().clone(),
-                            size,
-                        });
+                        callback(FontSource::Theme { index: idx });
                     }
                 }
             });
@@ -235,6 +230,18 @@ impl ThemeFontSelector {
 
     pub fn set_theme_config(&self, config: ComboThemeConfig) {
         *self.theme_config.borrow_mut() = Some(config.clone());
+
+        // Update T1/T2 button tooltips with actual theme font names
+        let (font1_family, font1_size) = config.get_font(1);
+        let (font2_family, font2_size) = config.get_font(2);
+        self.theme_buttons[0].set_tooltip_text(Some(&format!("Theme Font 1: {} {:.0}pt", font1_family, font1_size)));
+        self.theme_buttons[1].set_tooltip_text(Some(&format!("Theme Font 2: {} {:.0}pt", font2_family, font2_size)));
+
+        // Update T1/T2 button labels to show font name abbreviation
+        let abbrev1 = if font1_family.len() > 8 { &font1_family[..8] } else { &font1_family };
+        let abbrev2 = if font2_family.len() > 8 { &font2_family[..8] } else { &font2_family };
+        self.theme_buttons[0].set_label(&format!("T1:{}", abbrev1));
+        self.theme_buttons[1].set_label(&format!("T2:{}", abbrev2));
 
         // Update font button label if using theme
         if let Some(idx) = *self.theme_index.borrow() {

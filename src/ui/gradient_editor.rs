@@ -54,6 +54,7 @@ impl GradientEditor {
         // Preview area (created early so angle handlers can reference it)
         let preview = DrawingArea::new();
         preview.set_content_height(100);
+        preview.set_hexpand(true);
         preview.set_vexpand(false);
 
         let stops_clone = stops.clone();

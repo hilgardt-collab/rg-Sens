@@ -273,50 +273,28 @@ impl DataSource for TestSource {
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
-        // Log when configure is called to help debug unexpected resets
-        log::warn!("TestSource::configure called with keys: {:?}", config.keys().collect::<Vec<_>>());
+        // DO NOT modify the global TEST_SOURCE_STATE here!
+        // The global state is controlled exclusively by the Test Source Dialog.
+        // This method is called when config dialogs open/create sources for preview,
+        // and we don't want that to reset the running test source state.
+        //
+        // Only update the update_interval_ms which is a per-panel setting
+        // that doesn't affect the running value generation.
 
-        // Use blocking lock - handlers only hold the lock briefly
-        let Ok(mut state) = TEST_SOURCE_STATE.lock() else {
-            log::warn!("TestSource::configure: Lock poisoned");
-            return Ok(());
-        };
-
-        // First check for test_config key (from typed config serialization)
         if let Some(test_config_value) = config.get("test_config") {
             if let Ok(test_config) = serde_json::from_value::<TestSourceConfig>(test_config_value.clone()) {
-                log::warn!("TestSource::configure: Setting config from test_config: mode={:?}, manual_value={}", test_config.mode, test_config.manual_value);
-                state.config = test_config;
-                return Ok(());
+                // Only update update_interval_ms, not mode/values
+                if let Ok(mut state) = TEST_SOURCE_STATE.lock() {
+                    state.config.update_interval_ms = test_config.update_interval_ms;
+                }
             }
         }
 
-        // Fallback: look for individual keys (for backwards compatibility)
-        if let Some(mode) = config.get("mode").and_then(|v| v.as_str()) {
-            state.config.mode = match mode {
-                "manual" => TestMode::Manual,
-                "sine_wave" => TestMode::SineWave,
-                "sawtooth" => TestMode::Sawtooth,
-                "triangle" => TestMode::Triangle,
-                "square" => TestMode::Square,
-                _ => TestMode::Manual,
-            };
-        }
-
-        if let Some(value) = config.get("manual_value").and_then(|v| v.as_f64()) {
-            state.config.manual_value = value;
-        }
-
-        if let Some(min) = config.get("min_value").and_then(|v| v.as_f64()) {
-            state.config.min_value = min;
-        }
-
-        if let Some(max) = config.get("max_value").and_then(|v| v.as_f64()) {
-            state.config.max_value = max;
-        }
-
-        if let Some(period) = config.get("period").and_then(|v| v.as_f64()) {
-            state.config.period = period.max(0.1); // Minimum 0.1 seconds
+        // Check for individual update_interval key
+        if let Some(interval) = config.get("update_interval_ms").and_then(|v| v.as_u64()) {
+            if let Ok(mut state) = TEST_SOURCE_STATE.lock() {
+                state.config.update_interval_ms = interval;
+            }
         }
 
         Ok(())

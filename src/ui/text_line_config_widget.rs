@@ -111,6 +111,9 @@ impl TextLineConfigWidget {
             let fill_color_selectors_inner = fill_color_selectors.clone();
 
             move || {
+                // Save current visible page name before rebuild
+                let current_page = stack_inner.visible_child_name().map(|s| s.to_string());
+
                 // Clear all stack pages
                 while let Some(child) = stack_inner.first_child() {
                     stack_inner.remove(&child);
@@ -138,11 +141,12 @@ impl TextLineConfigWidget {
                     );
                 }
 
-                // Select the last page (the newly added one) if there are any
-                let line_count = lines_inner.borrow().len();
-                if line_count > 0 {
-                    let page_name = format!("line_{}", line_count - 1);
-                    stack_inner.set_visible_child_name(&page_name);
+                // Restore the previously visible page if it still exists, otherwise stay on current
+                if let Some(page_name) = current_page {
+                    // Check if the page still exists (it might have been deleted)
+                    if stack_inner.child_by_name(&page_name).is_some() {
+                        stack_inner.set_visible_child_name(&page_name);
+                    }
                 }
             }
         });
@@ -151,18 +155,23 @@ impl TextLineConfigWidget {
         *rebuild_fn.borrow_mut() = Some(rebuild_closure.clone());
 
         let on_change_for_add = on_change.clone();
+        let stack_for_add_btn = stack.clone();
         add_button.connect_clicked(move |_| {
             log::info!("=== TextLineConfigWidget: Add Line clicked ===");
             // Add new line to data
-            {
+            let new_line_index = {
                 let mut lines = lines_for_add.borrow_mut();
                 let new_line = TextLineConfig::default();
                 log::info!("    Adding new line with default field_id='{}'", new_line.field_id);
                 lines.push(new_line);
                 log::info!("    Total lines now: {}", lines.len());
-            }
+                lines.len() - 1
+            };
             // Trigger full rebuild so the new line has the rebuild callback
             rebuild_closure();
+            // Select the newly added page
+            let page_name = format!("line_{}", new_line_index);
+            stack_for_add_btn.set_visible_child_name(&page_name);
             // Trigger on_change callback
             if let Some(ref callback) = *on_change_for_add.borrow() {
                 log::info!("    Calling on_change callback");
@@ -368,12 +377,17 @@ impl TextLineConfigWidget {
         // Connect position grid change handler
         let lines_clone_pos = lines.clone();
         let on_change_pos = on_change.clone();
+        let rebuild_pos = rebuild_callback.clone();
         position_grid.set_on_change(move |new_pos| {
             let mut lines_ref = lines_clone_pos.borrow_mut();
             if let Some(line) = lines_ref.get_mut(list_index) {
                 line.position = new_pos;
             }
             drop(lines_ref);
+            // Rebuild to update direction/alignment visibility for all lines
+            if let Some(ref rebuild_fn) = rebuild_pos {
+                rebuild_fn();
+            }
             if let Some(ref callback) = *on_change_pos.borrow() {
                 callback();
             }
@@ -405,31 +419,39 @@ impl TextLineConfigWidget {
 
         // Helper to check if direction/alignment should be visible:
         // 1. This line must be combined with a group_id
-        // 2. Must be the FIRST line in the group
-        // 3. There must be 2+ lines in the group
+        // 2. Must be the FIRST line in the group with the same position
+        // 3. There must be 2+ lines in the group with the SAME position
         let should_show_dir_align = {
             let all_lines = lines.borrow();
-            if !line_config.is_combined || line_config.group_id.is_none() {
+            // Use current data from lines, not the stale line_config copy
+            let current_line = all_lines.get(list_index);
+            if current_line.is_none() {
                 false
             } else {
-                let group_id = line_config.group_id.as_ref().unwrap();
+                let current_line = current_line.unwrap();
+                if !current_line.is_combined || current_line.group_id.is_none() {
+                    false
+                } else {
+                    let group_id = current_line.group_id.as_ref().unwrap();
+                    let this_position = current_line.position;
 
-                // Find first line in group and count lines in group
-                let mut first_index_in_group: Option<usize> = None;
-                let mut group_count = 0;
+                    // Find first line in group with same position and count lines in group with same position
+                    let mut first_index_in_group_with_pos: Option<usize> = None;
+                    let mut group_count_with_same_pos = 0;
 
-                for (i, line) in all_lines.iter().enumerate() {
-                    if line.is_combined && line.group_id.as_ref() == Some(group_id) {
-                        // Track first line in group
-                        if first_index_in_group.is_none() {
-                            first_index_in_group = Some(i);
+                    for (i, line) in all_lines.iter().enumerate() {
+                        if line.is_combined && line.group_id.as_ref() == Some(group_id) && line.position == this_position {
+                            // Track first line in group with same position
+                            if first_index_in_group_with_pos.is_none() {
+                                first_index_in_group_with_pos = Some(i);
+                            }
+                            group_count_with_same_pos += 1;
                         }
-                        group_count += 1;
                     }
-                }
 
-                // Show only if this is the first line in group AND there are 2+ lines in the group
-                first_index_in_group == Some(list_index) && group_count >= 2
+                    // Show only if this is the first line in group with same position AND there are 2+ such lines
+                    first_index_in_group_with_pos == Some(list_index) && group_count_with_same_pos >= 2
+                }
             }
         };
 
@@ -969,6 +991,12 @@ impl TextLineConfigWidget {
                 _ => (8, true), // Custom
             }
         } else {
+            // Default to Group 1 and set it in the data so matching works
+            let mut lines_ref = lines.borrow_mut();
+            if let Some(line) = lines_ref.get_mut(list_index) {
+                line.group_id = Some("Group 1".to_string());
+            }
+            drop(lines_ref);
             (0, false)
         };
 
@@ -1095,7 +1123,7 @@ impl TextLineConfigWidget {
             });
         }
 
-        // Helper function to check if this is the first line in a group
+        // Helper function to check if this is the first line in a group with same position
         let is_first_in_group = |lines: &[TextLineConfig], index: usize| -> bool {
             if index >= lines.len() {
                 return true;
@@ -1108,17 +1136,18 @@ impl TextLineConfigWidget {
                 return true; // No group set, can set angle
             }
 
-            // Check if there's any earlier line with the same group_id
+            // Check if there's any earlier line with the same group_id AND same position
             let group_id = current_line.group_id.as_ref().unwrap();
+            let position = current_line.position;
             for (i, line) in lines.iter().enumerate() {
                 if i >= index {
                     break;
                 }
-                if line.is_combined && line.group_id.as_ref() == Some(group_id) {
-                    return false; // Found an earlier line in the same group
+                if line.is_combined && line.group_id.as_ref() == Some(group_id) && line.position == position {
+                    return false; // Found an earlier line in the same group at same position
                 }
             }
-            true // This is the first line in the group
+            true // This is the first line in the group at this position
         };
 
         // Update angle spinner sensitivity based on group position
@@ -1280,6 +1309,9 @@ impl TextLineConfigWidget {
         let fill_color_selectors_for_rebuild = fill_color_selectors_clone.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
+            // Save current visible page name before rebuild
+            let current_page = stack_clone.visible_child_name().map(|s| s.to_string());
+
             // Clear all stack pages
             while let Some(child) = stack_clone.first_child() {
                 stack_clone.remove(&child);
@@ -1305,6 +1337,13 @@ impl TextLineConfigWidget {
                     font_selectors_for_rebuild.clone(),
                     fill_color_selectors_for_rebuild.clone(),
                 );
+            }
+
+            // Restore the previously visible page if it still exists
+            if let Some(page_name) = current_page {
+                if stack_clone.child_by_name(&page_name).is_some() {
+                    stack_clone.set_visible_child_name(&page_name);
+                }
             }
         });
 

@@ -199,6 +199,7 @@ impl CoreBarsConfigWidget {
 
         // Preview configuration
         preview.set_content_height(150);
+        preview.set_hexpand(true);
         preview.set_vexpand(false);
 
         let config_for_preview = config.clone();

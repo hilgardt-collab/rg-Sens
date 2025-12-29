@@ -130,6 +130,7 @@ impl SynthwaveConfigWidget {
         // Preview at the top
         let preview = DrawingArea::new();
         preview.set_content_height(180);
+        preview.set_hexpand(true);
         preview.set_vexpand(false);
 
         let config_clone = config.clone();

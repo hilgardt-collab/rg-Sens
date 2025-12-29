@@ -165,6 +165,7 @@ impl LcarsConfigWidget {
         // Preview at the top
         let preview = DrawingArea::new();
         preview.set_content_height(200);
+        preview.set_hexpand(true);
         preview.set_vexpand(false);
 
         let config_clone = config.clone();
@@ -189,21 +190,21 @@ impl LcarsConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Frame
-        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets);
-        notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
-
-        // Tab 2: Headers
-        let headers_page = Self::create_headers_page(&config, &on_change, &preview, &headers_widgets);
-        notebook.append_page(&headers_page, Some(&Label::new(Some("Headers"))));
-
-        // Tab 3: Segments
-        let segments_page = Self::create_segments_page(&config, &on_change, &preview, &segments_widgets, &split_widgets);
-        notebook.append_page(&segments_page, Some(&Label::new(Some("Segments"))));
-
-        // Tab 4: Theme
+        // Tab 1: Theme (first for easy access)
         let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
+
+        // Tab 2: Frame
+        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets, &theme_ref_refreshers);
+        notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
+
+        // Tab 3: Headers
+        let headers_page = Self::create_headers_page(&config, &on_change, &preview, &headers_widgets, &theme_ref_refreshers);
+        notebook.append_page(&headers_page, Some(&Label::new(Some("Headers"))));
+
+        // Tab 4: Segments
+        let segments_page = Self::create_segments_page(&config, &on_change, &preview, &segments_widgets, &split_widgets, &theme_ref_refreshers);
+        notebook.append_page(&segments_page, Some(&Label::new(Some("Segments"))));
 
         // Tab 5: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
@@ -508,9 +509,18 @@ impl LcarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         frame_widgets_out: &Rc<RefCell<Option<FrameWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
+
+        // Theme reference section for quick access to theme colors/fonts
+        let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
+            config,
+            |cfg| cfg.frame.theme.clone(),
+        );
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
+        page.append(&theme_ref_section);
 
         // Sidebar width
         let sidebar_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -793,9 +803,18 @@ impl LcarsConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         headers_widgets_out: &Rc<RefCell<Option<HeadersWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
+
+        // Theme reference section for quick access to theme colors/fonts
+        let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
+            config,
+            |cfg| cfg.frame.theme.clone(),
+        );
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
+        page.append(&theme_ref_section);
 
         // Top Header section
         let top_label = Label::new(Some("Top Header"));
@@ -1455,9 +1474,18 @@ impl LcarsConfigWidget {
         preview: &DrawingArea,
         segments_widgets_out: &Rc<RefCell<Option<SegmentsWidgets>>>,
         split_widgets: &Rc<RefCell<Option<SplitWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
+
+        // Theme reference section for quick access to theme colors/fonts
+        let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
+            config,
+            |cfg| cfg.frame.theme.clone(),
+        );
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
+        page.append(&theme_ref_section);
 
         // Segment count
         let count_box = GtkBox::new(Orientation::Horizontal, 6);

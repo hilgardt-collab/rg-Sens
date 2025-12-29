@@ -140,6 +140,7 @@ impl CyberpunkConfigWidget {
         // Preview at the top
         let preview = DrawingArea::new();
         preview.set_content_height(200);
+        preview.set_hexpand(true);
         preview.set_vexpand(false);
 
         let config_clone = config.clone();

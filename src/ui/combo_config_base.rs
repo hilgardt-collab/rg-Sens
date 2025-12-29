@@ -172,15 +172,16 @@ where
         colors_box.append(&item_box);
     }
 
-    content_box.append(&colors_box);
+    // Add separator between colors and gradient
+    let separator = gtk4::Separator::new(Orientation::Vertical);
+    separator.set_margin_start(4);
+    separator.set_margin_end(4);
+    colors_box.append(&separator);
 
-    // Gradient row
-    let gradient_box = GtkBox::new(Orientation::Horizontal, 8);
-    gradient_box.append(&Label::new(Some("Gradient:")));
-
-    // Gradient preview swatch - reads from config dynamically
+    // Gradient preview swatch - in same row as colors
+    let gradient_item_box = GtkBox::new(Orientation::Horizontal, 2);
     let gradient_swatch = DrawingArea::new();
-    gradient_swatch.set_size_request(60, 20);
+    gradient_swatch.set_size_request(50, 20);
     let config_for_gradient = config.clone();
     let get_theme_for_gradient = get_theme.clone();
     gradient_swatch.set_draw_func(move |_, cr, width, height| {
@@ -216,9 +217,9 @@ where
         cr.rectangle(0.5, 0.5, w - 1.0, h - 1.0);
         let _ = cr.stroke();
     });
-    gradient_box.append(&gradient_swatch);
+    gradient_item_box.append(&gradient_swatch);
 
-    // Gradient copy button - reads from config dynamically
+    // Gradient copy button
     let gradient_copy_btn = Button::from_icon_name("edit-copy-symbolic");
     gradient_copy_btn.set_tooltip_text(Some("Copy Theme Gradient to clipboard"));
     let config_for_gradient_copy = config.clone();
@@ -231,9 +232,10 @@ where
             log::info!("Theme gradient copied to clipboard");
         }
     });
-    gradient_box.append(&gradient_copy_btn);
+    gradient_item_box.append(&gradient_copy_btn);
+    colors_box.append(&gradient_item_box);
 
-    content_box.append(&gradient_box);
+    content_box.append(&colors_box);
 
     // Fonts row
     let fonts_box = GtkBox::new(Orientation::Horizontal, 8);
