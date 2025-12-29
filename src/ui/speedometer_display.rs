@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::theme::{ColorSource, ComboThemeConfig};
 use crate::displayers::TextDisplayerConfig;
 
 /// Needle style
@@ -73,7 +74,7 @@ pub enum BezelStyle {
 pub struct TickLabelConfig {
     pub font_family: String,
     pub font_size: f64,
-    pub color: Color,
+    pub color: ColorSource,
     pub bold: bool,
     pub italic: bool,
     pub use_percentage: bool, // Show as 0-100% instead of actual values
@@ -84,7 +85,7 @@ impl Default for TickLabelConfig {
         Self {
             font_family: "Sans".to_string(),
             font_size: 12.0,
-            color: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },
+            color: ColorSource::Custom { color: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 } },
             bold: false,
             italic: false,
             use_percentage: false,
@@ -108,8 +109,8 @@ pub struct SpeedometerConfig {
     // Arc/Track display
     #[serde(default = "default_true")]
     pub show_track: bool,
-    #[serde(default = "default_track_color")]
-    pub track_color: Color,
+    #[serde(default = "default_track_color_source")]
+    pub track_color: ColorSource,
     #[serde(default = "default_color_stops")]
     pub track_color_stops: Vec<ColorStop>, // Color zones for track
 
@@ -122,8 +123,8 @@ pub struct SpeedometerConfig {
     pub major_tick_length: f64, // Percentage of arc width
     #[serde(default = "default_major_tick_width")]
     pub major_tick_width: f64,
-    #[serde(default = "default_tick_color")]
-    pub major_tick_color: Color,
+    #[serde(default = "default_tick_color_source")]
+    pub major_tick_color: ColorSource,
     #[serde(default)]
     pub major_tick_style: TickStyle,
 
@@ -135,8 +136,8 @@ pub struct SpeedometerConfig {
     pub minor_tick_length: f64,
     #[serde(default = "default_minor_tick_width")]
     pub minor_tick_width: f64,
-    #[serde(default = "default_tick_color")]
-    pub minor_tick_color: Color,
+    #[serde(default = "default_tick_color_source")]
+    pub minor_tick_color: ColorSource,
     #[serde(default)]
     pub minor_tick_style: TickStyle,
 
@@ -157,8 +158,8 @@ pub struct SpeedometerConfig {
     pub needle_length: f64, // Percentage of radius
     #[serde(default = "default_needle_width")]
     pub needle_width: f64,
-    #[serde(default = "default_needle_color")]
-    pub needle_color: Color,
+    #[serde(default = "default_needle_color_source")]
+    pub needle_color: ColorSource,
     #[serde(default = "default_false")]
     pub needle_shadow: bool,
 
@@ -167,8 +168,8 @@ pub struct SpeedometerConfig {
     pub show_center_hub: bool,
     #[serde(default = "default_hub_radius")]
     pub center_hub_radius: f64,
-    #[serde(default = "default_hub_color")]
-    pub center_hub_color: Color,
+    #[serde(default = "default_hub_color_source")]
+    pub center_hub_color: ColorSource,
     #[serde(default = "default_false")]
     pub center_hub_3d: bool, // Add 3D highlight effect
 
@@ -253,8 +254,8 @@ fn default_false() -> bool {
     false
 }
 
-fn default_track_color() -> Color {
-    Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 }
+fn default_track_color_source() -> ColorSource {
+    ColorSource::Custom { color: Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 } }
 }
 
 fn default_color_stops() -> Vec<ColorStop> {
@@ -289,8 +290,8 @@ fn default_minor_tick_width() -> f64 {
     1.0
 }
 
-fn default_tick_color() -> Color {
-    Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 }
+fn default_tick_color_source() -> ColorSource {
+    ColorSource::Custom { color: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 } }
 }
 
 fn default_needle_length() -> f64 {
@@ -301,16 +302,16 @@ fn default_needle_width() -> f64 {
     3.0
 }
 
-fn default_needle_color() -> Color {
-    Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }
+fn default_needle_color_source() -> ColorSource {
+    ColorSource::Custom { color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 } }
 }
 
 fn default_hub_radius() -> f64 {
     0.08
 }
 
-fn default_hub_color() -> Color {
-    Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 }
+fn default_hub_color_source() -> ColorSource {
+    ColorSource::Custom { color: Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 } }
 }
 
 fn default_bezel_width() -> f64 {
@@ -329,19 +330,19 @@ impl Default for SpeedometerConfig {
             arc_width: default_arc_width(),
             radius_percent: default_radius_percent(),
             show_track: default_true(),
-            track_color: default_track_color(),
+            track_color: default_track_color_source(),
             track_color_stops: default_color_stops(),
             show_major_ticks: default_true(),
             major_tick_count: default_major_tick_count(),
             major_tick_length: default_major_tick_length(),
             major_tick_width: default_major_tick_width(),
-            major_tick_color: default_tick_color(),
+            major_tick_color: default_tick_color_source(),
             major_tick_style: TickStyle::default(),
             show_minor_ticks: default_true(),
             minor_ticks_per_major: default_minor_tick_count(),
             minor_tick_length: default_minor_tick_length(),
             minor_tick_width: default_minor_tick_width(),
-            minor_tick_color: default_tick_color(),
+            minor_tick_color: default_tick_color_source(),
             minor_tick_style: TickStyle::default(),
             show_tick_labels: default_true(),
             tick_label_config: TickLabelConfig::default(),
@@ -350,11 +351,11 @@ impl Default for SpeedometerConfig {
             needle_tail_style: NeedleTailStyle::default(),
             needle_length: default_needle_length(),
             needle_width: default_needle_width(),
-            needle_color: default_needle_color(),
+            needle_color: default_needle_color_source(),
             needle_shadow: default_false(),
             show_center_hub: default_true(),
             center_hub_radius: default_hub_radius(),
-            center_hub_color: default_hub_color(),
+            center_hub_color: default_hub_color_source(),
             center_hub_3d: default_false(),
             show_bezel: default_true(),
             bezel_width: default_bezel_width(),
@@ -376,6 +377,20 @@ pub fn render_speedometer(
     values: &HashMap<String, Value>,
     width: f64,
     height: f64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Use default theme for standalone rendering (e.g., from non-combo panels)
+    render_speedometer_with_theme(cr, config, value, values, width, height, &ComboThemeConfig::default())
+}
+
+/// Render a speedometer gauge with theme support
+pub fn render_speedometer_with_theme(
+    cr: &cairo::Context,
+    config: &SpeedometerConfig,
+    value: f64, // 0.0 to 1.0
+    values: &HashMap<String, Value>,
+    width: f64,
+    height: f64,
+    theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let center_x = width / 2.0;
     let center_y = height / 2.0;
@@ -404,33 +419,34 @@ pub fn render_speedometer(
 
     // Draw track
     if config.show_track {
-        draw_track(cr, center_x, center_y, radius, start_rad, end_rad, sweep, config)?;
+        draw_track(cr, center_x, center_y, radius, start_rad, end_rad, sweep, config, theme)?;
     }
 
     // Draw ticks and labels
     if config.show_major_ticks || config.show_minor_ticks || config.show_tick_labels {
-        draw_ticks(cr, center_x, center_y, radius, start_rad, sweep, config, values)?;
+        draw_ticks(cr, center_x, center_y, radius, start_rad, sweep, config, values, theme)?;
     }
 
     // Draw needle
     if config.show_needle {
         let needle_angle = start_rad + sweep * value.clamp(0.0, 1.0);
-        draw_needle(cr, center_x, center_y, radius, needle_angle, config)?;
+        draw_needle(cr, center_x, center_y, radius, needle_angle, config, theme)?;
     }
 
     // Draw center hub
     if config.show_center_hub {
-        draw_center_hub(cr, center_x, center_y, radius, config)?;
+        draw_center_hub(cr, center_x, center_y, radius, config, theme)?;
     }
 
     // Draw text overlay
     if config.text_overlay.enabled {
-        crate::ui::text_renderer::render_text_lines(
+        crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,
             &config.text_overlay.text_config,
             values,
+            Some(theme),
         );
     }
 
@@ -507,6 +523,7 @@ fn draw_track(
     end_rad: f64,
     sweep: f64,
     config: &SpeedometerConfig,
+    theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
     cr.new_path();  // Clear any existing path to prevent spurious lines
@@ -534,7 +551,8 @@ fn draw_track(
         }
     } else {
         // Simple solid color track
-        cr.set_source_rgba(config.track_color.r, config.track_color.g, config.track_color.b, config.track_color.a);
+        let track_color = config.track_color.resolve(theme);
+        cr.set_source_rgba(track_color.r, track_color.g, track_color.b, track_color.a);
         cr.set_line_width(arc_width_pixels);
         cr.arc(center_x, center_y, radius, start_rad, end_rad);
         cr.stroke()?;
@@ -553,12 +571,18 @@ fn draw_ticks(
     sweep: f64,
     config: &SpeedometerConfig,
     values: &HashMap<String, Value>,
+    theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
     cr.new_path();  // Clear any existing path
 
     let arc_width_pixels = radius * config.arc_width;
     let tick_base_radius = radius + arc_width_pixels / 2.0;
+
+    // Resolve colors once
+    let major_tick_color = config.major_tick_color.resolve(theme);
+    let minor_tick_color = config.minor_tick_color.resolve(theme);
+    let tick_label_color = config.tick_label_config.color.resolve(theme);
 
     // Get min/max for label calculation
     let min_val = values.get("min_limit").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -579,7 +603,7 @@ fn draw_ticks(
                 angle,
                 config.major_tick_length * arc_width_pixels,
                 config.major_tick_width,
-                &config.major_tick_color,
+                &major_tick_color,
                 config.major_tick_style,
             )?;
         }
@@ -608,6 +632,7 @@ fn draw_ticks(
                 angle,
                 &label_text,
                 &config.tick_label_config,
+                &tick_label_color,
             )?;
         }
 
@@ -628,7 +653,7 @@ fn draw_ticks(
                         minor_angle,
                         config.minor_tick_length * arc_width_pixels,
                         config.minor_tick_width,
-                        &config.minor_tick_color,
+                        &minor_tick_color,
                         config.minor_tick_style,
                     )?;
                 }
@@ -697,6 +722,7 @@ fn draw_tick_label(
     angle: f64,
     text: &str,
     label_config: &TickLabelConfig,
+    resolved_color: &Color,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
 
@@ -713,7 +739,7 @@ fn draw_tick_label(
 
     cr.select_font_face(&label_config.font_family, font_slant, font_weight);
     cr.set_font_size(label_config.font_size);
-    cr.set_source_rgba(label_config.color.r, label_config.color.g, label_config.color.b, label_config.color.a);
+    cr.set_source_rgba(resolved_color.r, resolved_color.g, resolved_color.b, resolved_color.a);
 
     let extents = cr.text_extents(text)?;
     let x = center_x + label_radius * angle.cos() - extents.width() / 2.0;
@@ -733,6 +759,7 @@ fn draw_needle(
     radius: f64,
     angle: f64,
     config: &SpeedometerConfig,
+    theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
 
@@ -752,7 +779,8 @@ fn draw_needle(
     }
 
     // Draw needle
-    cr.set_source_rgba(config.needle_color.r, config.needle_color.g, config.needle_color.b, config.needle_color.a);
+    let needle_color = config.needle_color.resolve(theme);
+    cr.set_source_rgba(needle_color.r, needle_color.g, needle_color.b, needle_color.a);
     draw_needle_shape(cr, center_x, center_y, angle, needle_length, tail_length, config)?;
 
     cr.restore()?;
@@ -822,10 +850,12 @@ fn draw_center_hub(
     center_y: f64,
     radius: f64,
     config: &SpeedometerConfig,
+    theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
 
     let hub_radius = radius * config.center_hub_radius;
+    let hub_color = config.center_hub_color.resolve(theme);
 
     if config.center_hub_3d {
         // 3D effect with radial gradient
@@ -838,18 +868,18 @@ fn draw_center_hub(
             hub_radius,
         );
         gradient.add_color_stop_rgb(0.0,
-            (config.center_hub_color.r * 1.5).min(1.0),
-            (config.center_hub_color.g * 1.5).min(1.0),
-            (config.center_hub_color.b * 1.5).min(1.0)
+            (hub_color.r * 1.5).min(1.0),
+            (hub_color.g * 1.5).min(1.0),
+            (hub_color.b * 1.5).min(1.0)
         );
         gradient.add_color_stop_rgb(1.0,
-            config.center_hub_color.r * 0.5,
-            config.center_hub_color.g * 0.5,
-            config.center_hub_color.b * 0.5
+            hub_color.r * 0.5,
+            hub_color.g * 0.5,
+            hub_color.b * 0.5
         );
         cr.set_source(&gradient)?;
     } else {
-        cr.set_source_rgba(config.center_hub_color.r, config.center_hub_color.g, config.center_hub_color.b, config.center_hub_color.a);
+        cr.set_source_rgba(hub_color.r, hub_color.g, hub_color.b, hub_color.a);
     }
 
     cr.arc(center_x, center_y, hub_radius, 0.0, 2.0 * std::f64::consts::PI);

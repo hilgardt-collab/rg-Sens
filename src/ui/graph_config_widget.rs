@@ -369,6 +369,9 @@ impl GraphConfigWidget {
             })
             .collect();
 
+        // Include current theme in config
+        config.theme = self.theme.borrow().clone();
+
         log::debug!("GraphConfigWidget::get_config - total text_overlay lines: {}", config.text_overlay.len());
         config
     }

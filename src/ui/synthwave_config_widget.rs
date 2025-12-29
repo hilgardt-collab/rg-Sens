@@ -1645,9 +1645,9 @@ impl SynthwaveConfigWidget {
                 .map(|item| item.bar_config.clone())
                 .unwrap_or_default()
         };
-        bar_widget.set_config(current_bar_config);
-        // Set initial theme
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
         bar_widget.set_theme(config.borrow().frame.theme.clone());
+        bar_widget.set_config(current_bar_config);
 
         let slot_name_clone = slot_name.to_string();
         let config_clone = config.clone();
@@ -1858,9 +1858,9 @@ impl SynthwaveConfigWidget {
                 .map(|item| item.arc_config.clone())
                 .unwrap_or_default()
         };
-        arc_widget.set_config(current_arc_config);
-        // Set initial theme
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
         arc_widget.set_theme(config.borrow().frame.theme.clone());
+        arc_widget.set_config(current_arc_config);
 
         let slot_name_clone = slot_name.to_string();
         let config_clone = config.clone();
@@ -2156,6 +2156,16 @@ impl SynthwaveConfigWidget {
 
     pub fn set_on_change(&self, callback: impl Fn() + 'static) {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Set the theme configuration. Call this BEFORE set_config to ensure
+    /// font selectors have the correct theme when the UI is rebuilt.
+    pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        self.config.borrow_mut().frame.theme = theme;
+        // Trigger all theme refreshers to update child widgets
+        for refresher in self.theme_ref_refreshers.borrow().iter() {
+            refresher();
+        }
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {

@@ -917,6 +917,9 @@ impl ArcConfigWidget {
             config.text_overlay.text_config = text_widget.get_config();
         }
 
+        // Include current theme in config
+        config.theme = self.theme.borrow().clone();
+
         config
     }
 

@@ -701,6 +701,11 @@ where
     bar_config_frame.set_margin_top(12);
 
     let bar_widget = BarConfigWidget::new(slot_fields.clone());
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        bar_widget.set_theme(get_theme(&cfg));
+    }
     let current_bar_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -733,6 +738,19 @@ where
             queue_redraw(&preview_clone, &on_change_clone);
         });
     }
+
+    // Register theme refresh callback for bar widget
+    {
+        let bar_widget_for_theme = bar_widget_rc.clone();
+        let config_for_bar_theme = config.clone();
+        let get_theme_for_bar = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_bar(&config_for_bar_theme.borrow());
+            bar_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
     bar_config_frame.set_child(Some(bar_widget_rc.widget()));
     inner_box.append(&bar_config_frame);
 
@@ -955,6 +973,11 @@ where
     speedometer_config_frame.set_margin_top(12);
 
     let speedometer_widget = SpeedometerConfigWidget::new(slot_fields.clone());
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        speedometer_widget.set_theme(get_theme(&cfg));
+    }
     let current_speedometer_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -987,6 +1010,19 @@ where
             queue_redraw(&preview_clone, &on_change_clone);
         }));
     }
+
+    // Register theme refresh callback for speedometer widget
+    {
+        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
+        let config_for_speedometer_theme = config.clone();
+        let get_theme_for_speedometer = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_speedometer(&config_for_speedometer_theme.borrow());
+            speedometer_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
     speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
     inner_box.append(&speedometer_config_frame);
 
