@@ -293,6 +293,27 @@ impl ColorSource {
     }
 }
 
+/// Deserialize a FontSource from either:
+/// - New format: { "type": "Theme", "index": 1 } or { "type": "Custom", "family": "...", "size": ... }
+/// - Legacy format: just a string like "Sans" (will use default size 12.0)
+pub fn deserialize_font_or_source<'de, D>(deserializer: D) -> Result<FontSource, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+
+    // Check if it's the new FontSource format (has "type" field)
+    if value.get("type").is_some() {
+        // New format - deserialize as FontSource
+        FontSource::deserialize(value).map_err(serde::de::Error::custom)
+    } else if let Some(family) = value.as_str() {
+        // Legacy format - just a font family string, use default size
+        Ok(FontSource::Custom { family: family.to_string(), size: 12.0 })
+    } else {
+        Err(serde::de::Error::custom("Expected FontSource or font family string"))
+    }
+}
+
 /// Reference to a theme font or custom font
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]

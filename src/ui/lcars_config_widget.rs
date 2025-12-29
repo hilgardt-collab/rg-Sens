@@ -1007,10 +1007,7 @@ impl LcarsConfigWidget {
         let top_font_box = GtkBox::new(Orientation::Horizontal, 6);
         top_font_box.append(&Label::new(Some("Font:")));
 
-        let top_font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
-            family: config.borrow().frame.top_header.font.clone(),
-            size: config.borrow().frame.top_header.font_size,
-        }));
+        let top_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.top_header.font.clone()));
         top_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         top_font_box.append(top_font_selector.widget());
 
@@ -1038,7 +1035,8 @@ impl LcarsConfigWidget {
         top_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(cfg.frame.top_header.font.clone(), cfg.frame.top_header.font_size, cfg.frame.top_header.font_bold, false);
+                let (family, size) = cfg.frame.top_header.font.resolve(&cfg.frame.theme);
+                clipboard.copy_font(family, size, cfg.frame.top_header.font_bold, false);
             }
         });
 
@@ -1050,12 +1048,9 @@ impl LcarsConfigWidget {
         top_paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                    {
-                        let mut cfg = config_clone.borrow_mut();
-                        cfg.frame.top_header.font = family.clone();
-                        cfg.frame.top_header.font_size = size;
-                    }
-                    top_font_selector_clone.set_source(FontSource::Custom { family, size });
+                    let new_font = FontSource::Custom { family, size };
+                    config_clone.borrow_mut().frame.top_header.font = new_font.clone();
+                    top_font_selector_clone.set_source(new_font);
                     Self::queue_redraw(&preview_clone, &on_change_clone);
                 }
             }
@@ -1066,18 +1061,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         top_font_selector.set_on_change(move |source| {
-            let (family, size) = match &source {
-                FontSource::Theme { index } => {
-                    let cfg = config_clone.borrow();
-                    cfg.frame.theme.get_font(*index)
-                }
-                FontSource::Custom { family, size } => (family.clone(), *size),
-            };
-            {
-                let mut cfg = config_clone.borrow_mut();
-                cfg.frame.top_header.font = family;
-                cfg.frame.top_header.font_size = size;
-            }
+            config_clone.borrow_mut().frame.top_header.font = source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_font_box);
@@ -1272,10 +1256,7 @@ impl LcarsConfigWidget {
         let bottom_font_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_font_box.append(&Label::new(Some("Font:")));
 
-        let bottom_font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
-            family: config.borrow().frame.bottom_header.font.clone(),
-            size: config.borrow().frame.bottom_header.font_size,
-        }));
+        let bottom_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.bottom_header.font.clone()));
         bottom_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         bottom_font_box.append(bottom_font_selector.widget());
 
@@ -1302,8 +1283,9 @@ impl LcarsConfigWidget {
         let config_clone = config.clone();
         bottom_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
+            let (family, size) = cfg.frame.bottom_header.font.resolve(&cfg.frame.theme);
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(cfg.frame.bottom_header.font.clone(), cfg.frame.bottom_header.font_size, cfg.frame.bottom_header.font_bold, false);
+                clipboard.copy_font(family, size, cfg.frame.bottom_header.font_bold, false);
             }
         });
 
@@ -1315,12 +1297,9 @@ impl LcarsConfigWidget {
         bottom_paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                    {
-                        let mut cfg = config_clone.borrow_mut();
-                        cfg.frame.bottom_header.font = family.clone();
-                        cfg.frame.bottom_header.font_size = size;
-                    }
-                    bottom_font_selector_clone.set_source(FontSource::Custom { family, size });
+                    let source = FontSource::Custom { family, size };
+                    config_clone.borrow_mut().frame.bottom_header.font = source.clone();
+                    bottom_font_selector_clone.set_source(source);
                     Self::queue_redraw(&preview_clone, &on_change_clone);
                 }
             }
@@ -1331,18 +1310,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         bottom_font_selector.set_on_change(move |source| {
-            let (family, size) = match &source {
-                FontSource::Theme { index } => {
-                    let cfg = config_clone.borrow();
-                    cfg.frame.theme.get_font(*index)
-                }
-                FontSource::Custom { family, size } => (family.clone(), *size),
-            };
-            {
-                let mut cfg = config_clone.borrow_mut();
-                cfg.frame.bottom_header.font = family;
-                cfg.frame.bottom_header.font_size = size;
-            }
+            config_clone.borrow_mut().frame.bottom_header.font = source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_font_box);
@@ -1558,19 +1526,16 @@ impl LcarsConfigWidget {
                 let font_box = GtkBox::new(Orientation::Horizontal, 6);
                 font_box.append(&Label::new(Some("Font:")));
 
-                let (font_family, font_size) = {
+                let font_source = {
                     let cfg = config.borrow();
                     if let Some(seg) = cfg.frame.segments.get(seg_idx) {
-                        (seg.font.clone(), seg.font_size)
+                        seg.font.clone()
                     } else {
-                        ("Sans".to_string(), 12.0)
+                        FontSource::default()
                     }
                 };
 
-                let font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
-                    family: font_family,
-                    size: font_size,
-                }));
+                let font_selector = Rc::new(ThemeFontSelector::new(font_source));
                 font_selector.set_theme_config(config.borrow().frame.theme.clone());
                 font_box.append(font_selector.widget());
 
@@ -1585,8 +1550,9 @@ impl LcarsConfigWidget {
                 copy_font_btn.connect_clicked(move |_| {
                     let cfg = config_clone.borrow();
                     if let Some(seg) = cfg.frame.segments.get(seg_idx) {
+                        let (family, size) = seg.font.resolve(&cfg.frame.theme);
                         if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                            clipboard.copy_font(seg.font.clone(), seg.font_size, false, false);
+                            clipboard.copy_font(family, size, false, false);
                         }
                     }
                 });
@@ -1599,15 +1565,15 @@ impl LcarsConfigWidget {
                 paste_font_btn.connect_clicked(move |_| {
                     if let Ok(clipboard) = CLIPBOARD.lock() {
                         if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
+                            let source = FontSource::Custom { family, size };
                             {
                                 let mut cfg = config_clone.borrow_mut();
                                 while cfg.frame.segments.len() <= seg_idx {
                                     cfg.frame.segments.push(SegmentConfig::default());
                                 }
-                                cfg.frame.segments[seg_idx].font = family.clone();
-                                cfg.frame.segments[seg_idx].font_size = size;
+                                cfg.frame.segments[seg_idx].font = source.clone();
                             }
-                            font_selector_clone.set_source(FontSource::Custom { family, size });
+                            font_selector_clone.set_source(source);
                             Self::queue_redraw(&preview_clone, &on_change_clone);
                         }
                     }
@@ -1618,20 +1584,12 @@ impl LcarsConfigWidget {
                 let on_change_clone = on_change.clone();
                 let preview_clone = preview.clone();
                 font_selector.set_on_change(move |source| {
-                    let (family, size) = match &source {
-                        FontSource::Theme { index } => {
-                            let cfg = config_clone.borrow();
-                            cfg.frame.theme.get_font(*index)
-                        }
-                        FontSource::Custom { family, size } => (family.clone(), *size),
-                    };
                     {
                         let mut cfg = config_clone.borrow_mut();
                         while cfg.frame.segments.len() <= seg_idx {
                             cfg.frame.segments.push(SegmentConfig::default());
                         }
-                        cfg.frame.segments[seg_idx].font = family;
-                        cfg.frame.segments[seg_idx].font_size = size;
+                        cfg.frame.segments[seg_idx].font = source;
                     }
                     Self::queue_redraw(&preview_clone, &on_change_clone);
                 });
@@ -2873,7 +2831,7 @@ impl LcarsConfigWidget {
     pub fn set_config(&self, new_config: LcarsDisplayConfig) {
         // Debug: Log the font values being loaded
         log::debug!(
-            "LCARS set_config - top font: '{}', bottom font: '{}'",
+            "LCARS set_config - top font: '{:?}', bottom font: '{:?}'",
             new_config.frame.top_header.font,
             new_config.frame.bottom_header.font
         );
@@ -2887,14 +2845,7 @@ impl LcarsConfigWidget {
         }
 
         // First update the internal config with the new values
-        // Handle empty fonts by substituting defaults
-        let mut config_to_use = new_config.clone();
-        if config_to_use.frame.top_header.font.is_empty() {
-            config_to_use.frame.top_header.font = "Sans".to_string();
-        }
-        if config_to_use.frame.bottom_header.font.is_empty() {
-            config_to_use.frame.bottom_header.font = "Sans".to_string();
-        }
+        let config_to_use = new_config.clone();
 
         // Update internal config
         *self.config.borrow_mut() = config_to_use.clone();
@@ -2952,10 +2903,7 @@ impl LcarsConfigWidget {
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
             widgets.top_bg_widget.set_source(config_to_use.frame.top_header.bg_color.clone());
             widgets.top_text_color_widget.set_source(config_to_use.frame.top_header.text_color.clone());
-            widgets.top_font_selector.set_source(FontSource::Custom {
-                family: config_to_use.frame.top_header.font.clone(),
-                size: config_to_use.frame.top_header.font_size,
-            });
+            widgets.top_font_selector.set_source(config_to_use.frame.top_header.font.clone());
             widgets.top_bold_check.set_active(config_to_use.frame.top_header.font_bold);
             let top_align_idx = match config_to_use.frame.top_header.align {
                 HeaderAlign::Left => 0,
@@ -2974,10 +2922,7 @@ impl LcarsConfigWidget {
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
             widgets.bottom_bg_widget.set_source(config_to_use.frame.bottom_header.bg_color.clone());
             widgets.bottom_text_color_widget.set_source(config_to_use.frame.bottom_header.text_color.clone());
-            widgets.bottom_font_selector.set_source(FontSource::Custom {
-                family: config_to_use.frame.bottom_header.font.clone(),
-                size: config_to_use.frame.bottom_header.font_size,
-            });
+            widgets.bottom_font_selector.set_source(config_to_use.frame.bottom_header.font.clone());
             widgets.bottom_bold_check.set_active(config_to_use.frame.bottom_header.font_bold);
             let bottom_align_idx = match config_to_use.frame.bottom_header.align {
                 HeaderAlign::Left => 0,
@@ -3007,10 +2952,7 @@ impl LcarsConfigWidget {
                     color_widget.set_source(seg.color.clone());
                     label_color_widget.set_source(seg.label_color.clone());
                     weight_spin.set_value(seg.height_weight);
-                    font_selector.set_source(FontSource::Custom {
-                        family: seg.font.clone(),
-                        size: seg.font_size,
-                    });
+                    font_selector.set_source(seg.font.clone());
                 }
             }
         }

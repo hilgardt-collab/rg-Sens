@@ -12,7 +12,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::{BackgroundConfig, Color, render_background};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
-use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
 use crate::ui::arc_display::ArcDisplayConfig;
@@ -189,6 +189,7 @@ impl ContentDisplayType {
 
 /// Configuration for a sidebar segment
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "RawSegmentConfig")]
 pub struct SegmentConfig {
     #[serde(default = "default_segment_height_weight")]
     pub height_weight: f64,
@@ -197,11 +198,51 @@ pub struct SegmentConfig {
     #[serde(default)]
     pub label: String,
     #[serde(default = "default_segment_font")]
-    pub font: String,
-    #[serde(default = "default_segment_font_size")]
-    pub font_size: f64,
+    pub font: FontSource,
     #[serde(default = "default_segment_label_color", deserialize_with = "deserialize_color_or_source")]
     pub label_color: ColorSource,
+}
+
+/// Helper struct for deserializing SegmentConfig with backward compatibility
+#[derive(Deserialize)]
+struct RawSegmentConfig {
+    #[serde(default = "default_segment_height_weight")]
+    height_weight: f64,
+    #[serde(default = "default_segment_color", deserialize_with = "deserialize_color_or_source")]
+    color: ColorSource,
+    #[serde(default)]
+    label: String,
+    // New format: font as FontSource
+    #[serde(default)]
+    font: Option<FontSource>,
+    // Legacy format: separate font_family and font_size
+    #[serde(default)]
+    font_family: Option<String>,
+    #[serde(default)]
+    font_size: Option<f64>,
+    #[serde(default = "default_segment_label_color", deserialize_with = "deserialize_color_or_source")]
+    label_color: ColorSource,
+}
+
+impl From<RawSegmentConfig> for SegmentConfig {
+    fn from(raw: RawSegmentConfig) -> Self {
+        let font = if let Some(font_source) = raw.font {
+            font_source
+        } else {
+            // Legacy format: construct FontSource from font_family and font_size
+            let family = raw.font_family.unwrap_or_else(|| "Sans".to_string());
+            let size = raw.font_size.unwrap_or(12.0);
+            FontSource::Custom { family, size }
+        };
+
+        Self {
+            height_weight: raw.height_weight,
+            color: raw.color,
+            label: raw.label,
+            font,
+            label_color: raw.label_color,
+        }
+    }
 }
 
 fn default_segment_height_weight() -> f64 {
@@ -212,12 +253,8 @@ fn default_segment_color() -> ColorSource {
     ColorSource::custom(Color::new(0.78, 0.39, 0.39, 1.0)) // Reddish LCARS color
 }
 
-fn default_segment_font() -> String {
-    "Sans".to_string()
-}
-
-fn default_segment_font_size() -> f64 {
-    12.0
+fn default_segment_font() -> FontSource {
+    FontSource::Custom { family: "Sans".to_string(), size: 12.0 }
 }
 
 fn default_segment_label_color() -> ColorSource {
@@ -231,7 +268,6 @@ impl Default for SegmentConfig {
             color: default_segment_color(),
             label: String::new(),
             font: default_segment_font(),
-            font_size: default_segment_font_size(),
             label_color: default_segment_label_color(),
         }
     }
@@ -239,15 +275,14 @@ impl Default for SegmentConfig {
 
 /// Configuration for a header bar
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "RawHeaderConfig")]
 pub struct HeaderConfig {
     #[serde(default)]
     pub position: HeaderPosition,
     #[serde(default)]
     pub text: String,
     #[serde(default = "default_header_font")]
-    pub font: String,
-    #[serde(default = "default_header_font_size")]
-    pub font_size: f64,
+    pub font: FontSource,
     #[serde(default = "default_header_font_bold")]
     pub font_bold: bool,
     #[serde(default = "default_header_text_color", deserialize_with = "deserialize_color_or_source")]
@@ -270,12 +305,71 @@ pub struct HeaderConfig {
     pub width_percent: f64,
 }
 
-fn default_header_font() -> String {
-    "Sans".to_string()
+/// Helper struct for deserializing HeaderConfig with backward compatibility
+#[derive(Deserialize)]
+struct RawHeaderConfig {
+    #[serde(default)]
+    position: HeaderPosition,
+    #[serde(default)]
+    text: String,
+    // New format: font as FontSource
+    #[serde(default)]
+    font: Option<FontSource>,
+    // Legacy format: separate font_family and font_size
+    #[serde(default)]
+    font_family: Option<String>,
+    #[serde(default)]
+    font_size: Option<f64>,
+    #[serde(default = "default_header_font_bold")]
+    font_bold: bool,
+    #[serde(default = "default_header_text_color", deserialize_with = "deserialize_color_or_source")]
+    text_color: ColorSource,
+    #[serde(default = "default_header_bg_color", deserialize_with = "deserialize_color_or_source")]
+    bg_color: ColorSource,
+    #[serde(default)]
+    shape: HeaderShape,
+    #[serde(default)]
+    align: HeaderAlign,
+    #[serde(default)]
+    width_mode: HeaderWidthMode,
+    #[serde(default = "default_header_padding")]
+    padding: f64,
+    #[serde(default = "default_header_height_percent")]
+    height_percent: f64,
+    #[serde(default = "default_header_width_percent")]
+    width_percent: f64,
 }
 
-fn default_header_font_size() -> f64 {
-    14.0
+impl From<RawHeaderConfig> for HeaderConfig {
+    fn from(raw: RawHeaderConfig) -> Self {
+        let font = if let Some(font_source) = raw.font {
+            font_source
+        } else {
+            // Legacy format: construct FontSource from font_family and font_size
+            let family = raw.font_family.unwrap_or_else(|| "Sans".to_string());
+            let size = raw.font_size.unwrap_or(14.0);
+            FontSource::Custom { family, size }
+        };
+
+        Self {
+            position: raw.position,
+            text: raw.text,
+            font,
+            font_bold: raw.font_bold,
+            text_color: raw.text_color,
+            bg_color: raw.bg_color,
+            shape: raw.shape,
+            align: raw.align,
+            width_mode: raw.width_mode,
+            padding: raw.padding,
+            height_percent: raw.height_percent,
+            width_percent: raw.width_percent,
+        }
+    }
+}
+
+fn default_header_font() -> FontSource {
+    FontSource::Custom { family: "Sans".to_string(), size: 14.0 }
 }
 
 fn default_header_font_bold() -> bool {
@@ -308,7 +402,6 @@ impl Default for HeaderConfig {
             position: HeaderPosition::default(),
             text: String::new(),
             font: default_header_font(),
-            font_size: default_header_font_size(),
             font_bold: default_header_font_bold(),
             text_color: default_header_text_color(),
             bg_color: default_header_bg_color(),
@@ -887,10 +980,11 @@ pub fn render_lcars_frame(
 
         // Collect label info to draw after restoring transform
         if !segment.label.is_empty() {
+            let (font_family, font_size) = segment.font.resolve(&config.theme);
             labels.push(LabelInfo {
                 text: segment.label.to_uppercase(),
-                font: segment.font.clone(),
-                font_size: segment.font_size,
+                font: font_family,
+                font_size,
                 color: segment.label_color.resolve(&config.theme),
                 y: current_y,
                 seg_h,
@@ -1068,13 +1162,14 @@ fn render_header_bar(
     cr.save()?;
 
     // Calculate text dimensions
+    let (font_family, font_size) = header_config.font.resolve(&frame_config.theme);
     let font_weight = if header_config.font_bold {
         cairo::FontWeight::Bold
     } else {
         cairo::FontWeight::Normal
     };
-    cr.select_font_face(&header_config.font, cairo::FontSlant::Normal, font_weight);
-    cr.set_font_size(header_config.font_size);
+    cr.select_font_face(&font_family, cairo::FontSlant::Normal, font_weight);
+    cr.set_font_size(font_size);
     let text_extents = cr.text_extents(&text)?;
 
     // Calculate available space for width calculations
@@ -1153,7 +1248,7 @@ fn render_header_bar(
     // Draw header text
     header_config.text_color.resolve(&frame_config.theme).apply_to_cairo(cr);
     let text_x = bar_x + (bar_w - text_extents.width()) / 2.0;
-    let text_y = bar_y + (bar_content_h + header_config.font_size * 0.7) / 2.0;
+    let text_y = bar_y + (bar_content_h + font_size * 0.7) / 2.0;
     cr.move_to(text_x, text_y);
     cr.show_text(&text)?;
 
@@ -1240,8 +1335,9 @@ fn render_sidebar_segments(
         // Draw segment label
         if !segment.label.is_empty() {
             let label_text = segment.label.to_uppercase();
-            cr.select_font_face(&segment.font, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-            cr.set_font_size(segment.font_size);
+            let (font_family, font_size) = segment.font.resolve(&config.theme);
+            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            cr.set_font_size(font_size);
 
             let text_extents = cr.text_extents(&label_text)?;
             segment.label_color.resolve(&config.theme).apply_to_cairo(cr);
