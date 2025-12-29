@@ -363,6 +363,30 @@ impl FontSource {
     }
 }
 
+/// Helper enum for deserializing font that can be either:
+/// - A string (legacy format: just the font family)
+/// - A FontSource object (new format)
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum FontOrString {
+    /// New format: FontSource object
+    Source(FontSource),
+    /// Legacy format: just the font family as a string
+    LegacyFamily(String),
+}
+
+impl FontOrString {
+    /// Convert to Option<FontSource>, using default size for legacy strings
+    /// Returns None if the legacy string was empty
+    pub fn into_font_source(self, default_size: f64) -> Option<FontSource> {
+        match self {
+            FontOrString::Source(source) => Some(source),
+            FontOrString::LegacyFamily(family) if family.is_empty() => None,
+            FontOrString::LegacyFamily(family) => Some(FontSource::Custom { family, size: default_size }),
+        }
+    }
+}
+
 /// Reference to theme gradient or custom gradient
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]

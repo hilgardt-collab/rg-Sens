@@ -12,7 +12,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::{BackgroundConfig, Color, render_background};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
-use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource, deserialize_color_or_source};
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
 use crate::ui::arc_display::ArcDisplayConfig;
@@ -212,12 +212,10 @@ struct RawSegmentConfig {
     color: ColorSource,
     #[serde(default)]
     label: String,
-    // New format: font as FontSource
+    // Font can be: FontSource object (new) or string (legacy family name)
     #[serde(default)]
-    font: Option<FontSource>,
-    // Legacy format: separate font_family and font_size
-    #[serde(default)]
-    font_family: Option<String>,
+    font: Option<FontOrString>,
+    // Legacy format: font_size as separate field
     #[serde(default)]
     font_size: Option<f64>,
     #[serde(default = "default_segment_label_color", deserialize_with = "deserialize_color_or_source")]
@@ -226,14 +224,10 @@ struct RawSegmentConfig {
 
 impl From<RawSegmentConfig> for SegmentConfig {
     fn from(raw: RawSegmentConfig) -> Self {
-        let font = if let Some(font_source) = raw.font {
-            font_source
-        } else {
-            // Legacy format: construct FontSource from font_family and font_size
-            let family = raw.font_family.unwrap_or_else(|| "Sans".to_string());
-            let size = raw.font_size.unwrap_or(12.0);
-            FontSource::Custom { family, size }
-        };
+        let default_size = raw.font_size.unwrap_or(12.0);
+        let font = raw.font
+            .and_then(|f| f.into_font_source(default_size))
+            .unwrap_or_else(default_segment_font);
 
         Self {
             height_weight: raw.height_weight,
@@ -312,12 +306,10 @@ struct RawHeaderConfig {
     position: HeaderPosition,
     #[serde(default)]
     text: String,
-    // New format: font as FontSource
+    // Font can be: FontSource object (new) or string (legacy family name)
     #[serde(default)]
-    font: Option<FontSource>,
-    // Legacy format: separate font_family and font_size
-    #[serde(default)]
-    font_family: Option<String>,
+    font: Option<FontOrString>,
+    // Legacy format: font_size as separate field
     #[serde(default)]
     font_size: Option<f64>,
     #[serde(default = "default_header_font_bold")]
@@ -342,14 +334,10 @@ struct RawHeaderConfig {
 
 impl From<RawHeaderConfig> for HeaderConfig {
     fn from(raw: RawHeaderConfig) -> Self {
-        let font = if let Some(font_source) = raw.font {
-            font_source
-        } else {
-            // Legacy format: construct FontSource from font_family and font_size
-            let family = raw.font_family.unwrap_or_else(|| "Sans".to_string());
-            let size = raw.font_size.unwrap_or(14.0);
-            FontSource::Custom { family, size }
-        };
+        let default_size = raw.font_size.unwrap_or(14.0);
+        let font = raw.font
+            .and_then(|f| f.into_font_source(default_size))
+            .unwrap_or_else(default_header_font);
 
         Self {
             position: raw.position,
