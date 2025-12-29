@@ -29,7 +29,7 @@ use crate::ui::lcars_display::{
     ContentDisplayType, ContentItemConfig,
 };
 use crate::ui::arc_display::render_arc;
-use crate::ui::speedometer_display::render_speedometer;
+use crate::ui::speedometer_display::render_speedometer_with_theme;
 
 /// Full Fighter HUD display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -322,13 +322,14 @@ impl FighterHudDisplayer {
                 ContentDisplayType::Speedometer => {
                     cr.save()?;
                     cr.translate(item_x, item_y);
-                    if let Err(e) = render_speedometer(
+                    if let Err(e) = render_speedometer_with_theme(
                         cr,
                         &item_config.speedometer_config,
                         animated_percent,
                         &slot_values,
                         item_w,
                         item_h,
+                        &config.frame.theme,
                     ) {
                         log::warn!("Failed to render speedometer for {}: {}", prefix, e);
                     }

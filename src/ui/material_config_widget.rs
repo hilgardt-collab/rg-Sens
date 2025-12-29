@@ -2060,6 +2060,16 @@ impl MaterialConfigWidget {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
+    /// Set the theme configuration. Call this BEFORE set_config to ensure
+    /// font selectors have the correct theme when the UI is rebuilt.
+    pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        self.config.borrow_mut().frame.theme = theme;
+        // Trigger all theme refreshers to update child widgets
+        for refresher in self.theme_ref_refreshers.borrow().iter() {
+            refresher();
+        }
+    }
+
     pub fn get_config(&self) -> MaterialDisplayConfig {
         self.config.borrow().clone()
     }

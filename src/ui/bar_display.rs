@@ -278,6 +278,10 @@ pub struct BarDisplayConfig {
     pub smooth_animation: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64, // 0.0 to 1.0
+
+    // Theme configuration for resolving theme color/font references
+    #[serde(default)]
+    pub theme: ComboThemeConfig,
 }
 
 fn default_corner_radius() -> f64 {
@@ -347,6 +351,7 @@ impl Default for BarDisplayConfig {
             text_overlay: TextOverlayConfig::default(),
             smooth_animation: default_true(),
             animation_speed: default_animation_speed(),
+            theme: ComboThemeConfig::default(),
         }
     }
 }

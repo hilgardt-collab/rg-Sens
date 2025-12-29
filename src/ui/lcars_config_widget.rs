@@ -3161,6 +3161,16 @@ impl LcarsConfigWidget {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
+    /// Set the theme configuration. Call this BEFORE set_config to ensure
+    /// font selectors have the correct theme when the UI is rebuilt.
+    pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        self.config.borrow_mut().frame.theme = theme;
+        // Trigger all theme refreshers to update child widgets
+        for refresher in self.theme_ref_refreshers.borrow().iter() {
+            refresher();
+        }
+    }
+
     /// Update the source summaries and rebuild the content notebook tabs
     /// Call this when the combo source configuration changes
     /// summaries: Vec of (slot_name, source_summary, group_num, item_idx)

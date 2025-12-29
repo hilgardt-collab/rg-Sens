@@ -226,7 +226,7 @@ impl Registry {
     pub fn get_compatible_displayers(&self, source_id: &str) -> Vec<DisplayerInfo> {
         let source_info = match self.get_source_info(source_id) {
             Some(info) => info,
-            None => return self.list_displayers_with_info(), // fallback to all
+            None => return self.list_displayers_with_info(), // fallback to all (already sorted)
         };
 
         // If no compatible displayers specified, return all (except special ones)
@@ -237,11 +237,13 @@ impl Registry {
                 .collect();
         }
 
-        // Return only compatible displayers
-        source_info.compatible_displayers
+        // Return only compatible displayers, sorted alphabetically by display name
+        let mut displayers: Vec<DisplayerInfo> = source_info.compatible_displayers
             .iter()
             .filter_map(|id| self.get_displayer_info(id))
-            .collect()
+            .collect();
+        displayers.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        displayers
     }
 }
 

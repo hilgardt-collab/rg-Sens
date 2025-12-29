@@ -1505,6 +1505,9 @@ impl BarConfigWidget {
             config.text_overlay.text_config = text_widget.get_config();
         }
 
+        // Include current theme in config
+        config.theme = self.theme.borrow().clone();
+
         config
     }
 
@@ -1517,7 +1520,11 @@ impl BarConfigWidget {
         self.border_color_widget.set_theme_config(theme.clone());
         // Update gradient editors with new theme
         self.fg_gradient_editor.set_theme_config(theme.clone());
-        self.bg_gradient_editor.set_theme_config(theme);
+        self.bg_gradient_editor.set_theme_config(theme.clone());
+        // Update text config widget with new theme (for font selectors)
+        if let Some(ref text_widget) = self.text_config_widget {
+            text_widget.set_theme(theme);
+        }
         self.preview.queue_draw();
     }
 

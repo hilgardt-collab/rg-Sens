@@ -232,6 +232,10 @@ pub struct GraphDisplayConfig {
     // Text overlay - supports both Vec<TextLineConfig> and legacy TextOverlayConfig format
     #[serde(default, deserialize_with = "deserialize_text_overlay")]
     pub text_overlay: Vec<TextLineConfig>,
+
+    // Theme configuration for resolving theme color/font references
+    #[serde(default)]
+    pub theme: ComboThemeConfig,
 }
 
 fn default_update_interval() -> f64 {
@@ -275,6 +279,7 @@ impl Default for GraphDisplayConfig {
             update_interval: default_update_interval(),
 
             text_overlay: Vec::new(),
+            theme: ComboThemeConfig::default(),
         }
     }
 }
@@ -314,7 +319,8 @@ pub fn render_graph(
     height: f64,
     scroll_offset: f64,
 ) -> Result<()> {
-    render_graph_with_theme(cr, config, data, source_values, width, height, scroll_offset, None)
+    // Use theme from config for color/font resolution
+    render_graph_with_theme(cr, config, data, source_values, width, height, scroll_offset, Some(&config.theme))
 }
 
 /// Render graph display with optional theme for color resolution

@@ -273,6 +273,9 @@ impl DataSource for TestSource {
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
+        // Log when configure is called to help debug unexpected resets
+        log::warn!("TestSource::configure called with keys: {:?}", config.keys().collect::<Vec<_>>());
+
         // Use blocking lock - handlers only hold the lock briefly
         let Ok(mut state) = TEST_SOURCE_STATE.lock() else {
             log::warn!("TestSource::configure: Lock poisoned");
@@ -282,7 +285,7 @@ impl DataSource for TestSource {
         // First check for test_config key (from typed config serialization)
         if let Some(test_config_value) = config.get("test_config") {
             if let Ok(test_config) = serde_json::from_value::<TestSourceConfig>(test_config_value.clone()) {
-                log::debug!("TestSource::configure: Loaded from test_config: mode={:?}", test_config.mode);
+                log::warn!("TestSource::configure: Setting config from test_config: mode={:?}, manual_value={}", test_config.mode, test_config.manual_value);
                 state.config = test_config;
                 return Ok(());
             }

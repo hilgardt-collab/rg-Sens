@@ -227,8 +227,10 @@ pub(crate) fn show_panel_properties_dialog(
 
     let source_combo_label = Label::new(Some("Source:"));
 
-    // Populate source dropdown
-    let sources = registry.list_sources();
+    // Populate source dropdown with display names (sorted alphabetically)
+    let source_infos = registry.list_sources_with_info();
+    let sources: Vec<String> = source_infos.iter().map(|s| s.id.clone()).collect();
+    let source_display_names: Vec<String> = source_infos.iter().map(|s| s.display_name.clone()).collect();
     let mut selected_source_idx = 0;
     for (idx, source_id) in sources.iter().enumerate() {
         if source_id == &old_source_id {
@@ -236,7 +238,7 @@ pub(crate) fn show_panel_properties_dialog(
         }
     }
 
-    let source_strings: Vec<&str> = sources.iter().map(|s| s.as_str()).collect();
+    let source_strings: Vec<&str> = source_display_names.iter().map(|s| s.as_str()).collect();
     let source_list = StringList::new(&source_strings);
     let source_combo = DropDown::new(Some(source_list), Option::<gtk4::Expression>::None);
     source_combo.set_selected(selected_source_idx as u32);
@@ -586,17 +588,27 @@ pub(crate) fn show_panel_properties_dialog(
 
     let displayer_combo_label = Label::new(Some("Displayer:"));
 
-    // Populate displayer dropdown
-    let displayers = registry.list_displayers();
+    // Populate displayer dropdown with compatible displayers (sorted alphabetically by display name)
+    let displayer_infos = registry.get_compatible_displayers(&old_source_id);
+    let displayers: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
+        displayer_infos.iter().map(|d| d.id.clone()).collect()
+    ));
+    let displayer_display_names: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
+        displayer_infos.iter().map(|d| d.display_name.clone()).collect()
+    ));
     let mut selected_displayer_idx = 0;
-    for (idx, displayer_id) in displayers.iter().enumerate() {
-        if displayer_id == &old_displayer_id {
-            selected_displayer_idx = idx;
+    {
+        let displayers_borrow = displayers.borrow();
+        for (idx, displayer_id) in displayers_borrow.iter().enumerate() {
+            if displayer_id == &old_displayer_id {
+                selected_displayer_idx = idx;
+            }
         }
     }
 
-    let displayer_strings: Vec<&str> = displayers.iter().map(|s| s.as_str()).collect();
-    let displayer_list = StringList::new(&displayer_strings);
+    let displayer_strings: Vec<String> = displayer_display_names.borrow().clone();
+    let displayer_str_refs: Vec<&str> = displayer_strings.iter().map(|s| s.as_str()).collect();
+    let displayer_list = StringList::new(&displayer_str_refs);
     let displayer_combo = DropDown::new(Some(displayer_list), Option::<gtk4::Expression>::None);
     displayer_combo.set_selected(selected_displayer_idx as u32);
 
@@ -833,8 +845,10 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::LcarsConfigWidget::new(available_fields.clone());
 
         // Load existing LCARS config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading LCARS config from displayer.get_typed_config() ===");
+            widget.set_theme(lcars_config.frame.theme.clone());
             widget.set_config(lcars_config);
             true
         } else {
@@ -845,6 +859,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("lcars_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading LCARS config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
                 }
             }
@@ -957,8 +972,10 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::CyberpunkConfigWidget::new(available_fields.clone());
 
         // Load existing Cyberpunk config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Cyberpunk(cyberpunk_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Cyberpunk config from displayer.get_typed_config() ===");
+            widget.set_theme(cyberpunk_config.frame.theme.clone());
             widget.set_config(&cyberpunk_config);
             true
         } else {
@@ -969,6 +986,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("cyberpunk_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::CyberpunkDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Cyberpunk config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
                 }
             }
@@ -1019,8 +1037,10 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::MaterialConfigWidget::new(available_fields.clone());
 
         // Load existing Material config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Material(material_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Material config from displayer.get_typed_config() ===");
+            widget.set_theme(material_config.frame.theme.clone());
             widget.set_config(&material_config);
             true
         } else {
@@ -1031,6 +1051,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("material_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::MaterialDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Material config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
                 }
             }
@@ -1080,9 +1101,10 @@ pub(crate) fn show_panel_properties_dialog(
         log::info!("=== Creating IndustrialConfigWidget (lazy init) ===");
         let widget = crate::ui::IndustrialConfigWidget::new(available_fields.clone());
 
-        // Load existing Industrial config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Industrial(industrial_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Industrial config from displayer.get_typed_config() ===");
+            widget.set_theme(industrial_config.frame.theme.clone());
             widget.set_config(&industrial_config);
             true
         } else {
@@ -1093,6 +1115,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("industrial_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::IndustrialDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Industrial config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
                 }
             }
@@ -1142,9 +1165,10 @@ pub(crate) fn show_panel_properties_dialog(
         log::info!("=== Creating RetroTerminalConfigWidget (lazy init) ===");
         let widget = crate::ui::RetroTerminalConfigWidget::new(available_fields.clone());
 
-        // Load existing Retro Terminal config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::RetroTerminal(retro_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Retro Terminal config from displayer.get_typed_config() ===");
+            widget.set_theme(retro_config.frame.theme.clone());
             widget.set_config(&retro_config);
             true
         } else {
@@ -1155,6 +1179,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("retro_terminal_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::RetroTerminalDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Retro Terminal config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
                 }
             }
@@ -1204,9 +1229,10 @@ pub(crate) fn show_panel_properties_dialog(
         log::info!("=== Creating FighterHudConfigWidget (lazy init) ===");
         let widget = crate::ui::FighterHudConfigWidget::new(available_fields.clone());
 
-        // Load existing Fighter HUD config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::FighterHud(hud_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Fighter HUD config from displayer.get_typed_config() ===");
+            widget.set_theme(hud_config.frame.theme.clone());
             widget.set_config(hud_config);
             true
         } else {
@@ -1217,6 +1243,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("fighter_hud_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::FighterHudDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Fighter HUD config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
                 }
             }
@@ -1267,8 +1294,10 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::SynthwaveConfigWidget::new(available_fields.clone());
 
         // Load existing Synthwave config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Synthwave(sw_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading Synthwave config from displayer.get_typed_config() ===");
+            widget.set_theme(sw_config.frame.theme.clone());
             widget.set_config(sw_config);
             true
         } else {
@@ -1279,6 +1308,7 @@ pub(crate) fn show_panel_properties_dialog(
             if let Some(config_value) = panel_guard.config.get("synthwave_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::SynthwaveDisplayConfig>(config_value.clone()) {
                     log::info!("=== Loading Synthwave config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
                 }
             }
@@ -1572,7 +1602,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 let is_text = displayer_id == "text";
                 let is_bar = displayer_id == "bar";
                 let is_arc = displayer_id == "arc";
@@ -1636,7 +1666,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_lcars_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "lcars" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -1698,7 +1728,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_cyberpunk_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "cyberpunk" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -1760,7 +1790,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_material_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "material" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -1822,7 +1852,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_industrial_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "industrial" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -1884,7 +1914,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_retro_terminal_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "retro_terminal" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -1946,7 +1976,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_fighter_hud_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "fighter_hud" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -2008,7 +2038,7 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_for_synthwave_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
-            if let Some(displayer_id) = displayers_clone.get(selected_idx) {
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 if displayer_id == "synthwave" {
                     let source_idx = source_combo_clone.selected() as usize;
                     if let Some(source_id) = sources_clone.get(source_idx) {
@@ -2072,6 +2102,45 @@ pub(crate) fn show_panel_properties_dialog(
                     // TODO: Add update_fields() method to TextLineConfigWidget
                     let _ = new_fields; // Suppress unused warning for now
                 }
+            }
+        });
+    }
+
+    // Update displayer dropdown when source changes to show only compatible displayers
+    {
+        let sources_clone = sources.clone();
+        let displayers_clone = displayers.clone();
+        let displayer_display_names_clone = displayer_display_names.clone();
+        let displayer_combo_clone = displayer_combo.clone();
+        source_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(source_id) = sources_clone.get(selected_idx) {
+                // Get the currently selected displayer ID before changing the list
+                let current_displayer_id = {
+                    let current_idx = displayer_combo_clone.selected() as usize;
+                    displayers_clone.borrow().get(current_idx).cloned()
+                };
+
+                // Get compatible displayers for the new source
+                let new_displayer_infos = registry.get_compatible_displayers(source_id);
+                let new_displayer_ids: Vec<String> = new_displayer_infos.iter().map(|d| d.id.clone()).collect();
+                let new_display_names: Vec<String> = new_displayer_infos.iter().map(|d| d.display_name.clone()).collect();
+
+                // Find the index of the current displayer in the new list (if it's still valid)
+                let new_selected_idx = current_displayer_id
+                    .as_ref()
+                    .and_then(|id| new_displayer_ids.iter().position(|d| d == id))
+                    .unwrap_or(0) as u32;
+
+                // Update stored displayer data
+                *displayers_clone.borrow_mut() = new_displayer_ids;
+                *displayer_display_names_clone.borrow_mut() = new_display_names.clone();
+
+                // Update dropdown model
+                let display_strs: Vec<&str> = new_display_names.iter().map(|s| s.as_str()).collect();
+                let new_list = StringList::new(&display_strs);
+                displayer_combo_clone.set_model(Some(&new_list));
+                displayer_combo_clone.set_selected(new_selected_idx);
             }
         });
     }
@@ -2321,7 +2390,7 @@ pub(crate) fn show_panel_properties_dialog(
         let new_source_id = sources.get(source_combo.selected() as usize)
             .cloned()
             .unwrap_or_else(|| old_source_id.clone());
-        let new_displayer_id = displayers.get(displayer_combo.selected() as usize)
+        let new_displayer_id = displayers.borrow().get(displayer_combo.selected() as usize)
             .cloned()
             .unwrap_or_else(|| old_displayer_id.clone());
 

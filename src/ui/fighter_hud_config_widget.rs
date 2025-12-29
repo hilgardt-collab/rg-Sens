@@ -2155,6 +2155,16 @@ impl FighterHudConfigWidget {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
+    /// Set the theme configuration. Call this BEFORE set_config to ensure
+    /// font selectors have the correct theme when the UI is rebuilt.
+    pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        self.config.borrow_mut().frame.theme = theme;
+        // Trigger all theme refreshers to update child widgets
+        for refresher in self.theme_ref_refreshers.borrow().iter() {
+            refresher();
+        }
+    }
+
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries (lesson #1)
         let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();

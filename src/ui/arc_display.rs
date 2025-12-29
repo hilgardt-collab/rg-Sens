@@ -118,6 +118,10 @@ pub struct ArcDisplayConfig {
     // Text overlay
     #[serde(default)]
     pub text_overlay: TextOverlayConfig,
+
+    // Theme configuration for resolving theme color/font references
+    #[serde(default)]
+    pub theme: ComboThemeConfig,
 }
 
 /// Text overlay configuration
@@ -214,6 +218,7 @@ impl Default for ArcDisplayConfig {
             animate: default_false(),
             animation_duration: default_animation_duration(),
             text_overlay: TextOverlayConfig::default(),
+            theme: ComboThemeConfig::default(),
         }
     }
 }

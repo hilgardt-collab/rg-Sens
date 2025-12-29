@@ -2151,10 +2151,11 @@ impl CyberpunkConfigWidget {
         use crate::ui::speedometer_display::SpeedometerConfig;
         use crate::ui::background::{Color, ColorStop};
 
+        use crate::ui::theme::ColorSource;
         let mut config = SpeedometerConfig::default();
 
         // Cyberpunk colored track
-        config.track_color = Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 };
+        config.track_color = ColorSource::Custom { color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 } };
         config.track_color_stops = vec![
             ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },   // Cyan (low)
             ColorStop { position: 0.6, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },   // Yellow (mid)
@@ -2162,14 +2163,14 @@ impl CyberpunkConfigWidget {
         ];
 
         // Cyberpunk tick colors
-        config.major_tick_color = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.8 };  // Cyan
-        config.minor_tick_color = Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 };  // Dimmer cyan
+        config.major_tick_color = ColorSource::Custom { color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.8 } };  // Cyan
+        config.minor_tick_color = ColorSource::Custom { color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 } };  // Dimmer cyan
 
         // Cyberpunk needle - magenta with glow effect
-        config.needle_color = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };  // Magenta
+        config.needle_color = ColorSource::Custom { color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } };  // Magenta
 
         // Center hub - dark with cyan accent
-        config.center_hub_color = Color { r: 0.0, g: 0.4, b: 0.4, a: 1.0 };  // Dark cyan
+        config.center_hub_color = ColorSource::Custom { color: Color { r: 0.0, g: 0.4, b: 0.4, a: 1.0 } };  // Dark cyan
         config.center_hub_3d = true;
 
         config
@@ -2234,6 +2235,16 @@ impl CyberpunkConfigWidget {
 
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Set the theme configuration. Call this BEFORE set_config to ensure
+    /// font selectors have the correct theme when the UI is rebuilt.
+    pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        self.config.borrow_mut().frame.theme = theme;
+        // Trigger all theme refreshers to update child widgets
+        for refresher in self.theme_ref_refreshers.borrow().iter() {
+            refresher();
+        }
     }
 
     pub fn get_config(&self) -> CyberpunkDisplayConfig {
