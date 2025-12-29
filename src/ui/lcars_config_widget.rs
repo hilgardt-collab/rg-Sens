@@ -276,74 +276,41 @@ impl LcarsConfigWidget {
         colors_label.add_css_class("heading");
         page.append(&colors_label);
 
-        // Color 1
+        // Create a 2x2 grid for theme colors
+        let colors_grid = gtk4::Grid::new();
+        colors_grid.set_row_spacing(6);
+        colors_grid.set_column_spacing(12);
+        colors_grid.set_margin_start(6);
+
+        // Color 1 (row 0, col 0)
         let color1_box = GtkBox::new(Orientation::Horizontal, 6);
-        color1_box.append(&Label::new(Some("Color 1 (Primary):")));
+        color1_box.append(&Label::new(Some("C1 (Primary):")));
         let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
         color1_box.append(theme_color1_widget.widget());
-        page.append(&color1_box);
+        colors_grid.attach(&color1_box, 0, 0, 1, 1);
 
-        // Color 2
+        // Color 2 (row 0, col 1)
         let color2_box = GtkBox::new(Orientation::Horizontal, 6);
-        color2_box.append(&Label::new(Some("Color 2 (Secondary):")));
+        color2_box.append(&Label::new(Some("C2 (Secondary):")));
         let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
         color2_box.append(theme_color2_widget.widget());
-        page.append(&color2_box);
+        colors_grid.attach(&color2_box, 1, 0, 1, 1);
 
-        // Color 3
+        // Color 3 (row 1, col 0)
         let color3_box = GtkBox::new(Orientation::Horizontal, 6);
-        color3_box.append(&Label::new(Some("Color 3 (Accent):")));
+        color3_box.append(&Label::new(Some("C3 (Accent):")));
         let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
         color3_box.append(theme_color3_widget.widget());
-        page.append(&color3_box);
+        colors_grid.attach(&color3_box, 0, 1, 1, 1);
 
-        // Color 4
+        // Color 4 (row 1, col 1)
         let color4_box = GtkBox::new(Orientation::Horizontal, 6);
-        color4_box.append(&Label::new(Some("Color 4 (Highlight):")));
+        color4_box.append(&Label::new(Some("C4 (Highlight):")));
         let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
         color4_box.append(theme_color4_widget.widget());
-        page.append(&color4_box);
+        colors_grid.attach(&color4_box, 1, 1, 1, 1);
 
-        // Connect color widget callbacks
-        let config_c1 = config.clone();
-        let on_change_c1 = on_change.clone();
-        let preview_c1 = preview.clone();
-        let refreshers_c1 = theme_ref_refreshers.clone();
-        theme_color1_widget.set_on_change(move |color| {
-            config_c1.borrow_mut().frame.theme.color1 = color;
-            Self::queue_redraw(&preview_c1, &on_change_c1);
-            Self::refresh_theme_refs(&refreshers_c1);
-        });
-
-        let config_c2 = config.clone();
-        let on_change_c2 = on_change.clone();
-        let preview_c2 = preview.clone();
-        let refreshers_c2 = theme_ref_refreshers.clone();
-        theme_color2_widget.set_on_change(move |color| {
-            config_c2.borrow_mut().frame.theme.color2 = color;
-            Self::queue_redraw(&preview_c2, &on_change_c2);
-            Self::refresh_theme_refs(&refreshers_c2);
-        });
-
-        let config_c3 = config.clone();
-        let on_change_c3 = on_change.clone();
-        let preview_c3 = preview.clone();
-        let refreshers_c3 = theme_ref_refreshers.clone();
-        theme_color3_widget.set_on_change(move |color| {
-            config_c3.borrow_mut().frame.theme.color3 = color;
-            Self::queue_redraw(&preview_c3, &on_change_c3);
-            Self::refresh_theme_refs(&refreshers_c3);
-        });
-
-        let config_c4 = config.clone();
-        let on_change_c4 = on_change.clone();
-        let preview_c4 = preview.clone();
-        let refreshers_c4 = theme_ref_refreshers.clone();
-        theme_color4_widget.set_on_change(move |color| {
-            config_c4.borrow_mut().frame.theme.color4 = color;
-            Self::queue_redraw(&preview_c4, &on_change_c4);
-            Self::refresh_theme_refs(&refreshers_c4);
-        });
+        page.append(&colors_grid);
 
         // Theme Gradient section
         let gradient_label = Label::new(Some("Theme Gradient"));
@@ -353,6 +320,8 @@ impl LcarsConfigWidget {
         page.append(&gradient_label);
 
         let theme_gradient_editor = Rc::new(GradientEditor::new());
+        // Set theme config so T1-T4 buttons show correct theme colors
+        theme_gradient_editor.set_theme_config(config.borrow().frame.theme.clone());
         theme_gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
         page.append(theme_gradient_editor.widget());
 
@@ -365,6 +334,67 @@ impl LcarsConfigWidget {
             config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient_source_config();
             Self::queue_redraw(&preview_grad, &on_change_grad);
             Self::refresh_theme_refs(&refreshers_grad);
+        });
+
+        // Connect color widget callbacks (after gradient editor is created so we can update it)
+        let config_c1 = config.clone();
+        let on_change_c1 = on_change.clone();
+        let preview_c1 = preview.clone();
+        let refreshers_c1 = theme_ref_refreshers.clone();
+        let gradient_editor_c1 = theme_gradient_editor.clone();
+        theme_color1_widget.set_on_change(move |color| {
+            {
+                let mut cfg = config_c1.borrow_mut();
+                cfg.frame.theme.color1 = color;
+                gradient_editor_c1.set_theme_config(cfg.frame.theme.clone());
+            }
+            Self::queue_redraw(&preview_c1, &on_change_c1);
+            Self::refresh_theme_refs(&refreshers_c1);
+        });
+
+        let config_c2 = config.clone();
+        let on_change_c2 = on_change.clone();
+        let preview_c2 = preview.clone();
+        let refreshers_c2 = theme_ref_refreshers.clone();
+        let gradient_editor_c2 = theme_gradient_editor.clone();
+        theme_color2_widget.set_on_change(move |color| {
+            {
+                let mut cfg = config_c2.borrow_mut();
+                cfg.frame.theme.color2 = color;
+                gradient_editor_c2.set_theme_config(cfg.frame.theme.clone());
+            }
+            Self::queue_redraw(&preview_c2, &on_change_c2);
+            Self::refresh_theme_refs(&refreshers_c2);
+        });
+
+        let config_c3 = config.clone();
+        let on_change_c3 = on_change.clone();
+        let preview_c3 = preview.clone();
+        let refreshers_c3 = theme_ref_refreshers.clone();
+        let gradient_editor_c3 = theme_gradient_editor.clone();
+        theme_color3_widget.set_on_change(move |color| {
+            {
+                let mut cfg = config_c3.borrow_mut();
+                cfg.frame.theme.color3 = color;
+                gradient_editor_c3.set_theme_config(cfg.frame.theme.clone());
+            }
+            Self::queue_redraw(&preview_c3, &on_change_c3);
+            Self::refresh_theme_refs(&refreshers_c3);
+        });
+
+        let config_c4 = config.clone();
+        let on_change_c4 = on_change.clone();
+        let preview_c4 = preview.clone();
+        let refreshers_c4 = theme_ref_refreshers.clone();
+        let gradient_editor_c4 = theme_gradient_editor.clone();
+        theme_color4_widget.set_on_change(move |color| {
+            {
+                let mut cfg = config_c4.borrow_mut();
+                cfg.frame.theme.color4 = color;
+                gradient_editor_c4.set_theme_config(cfg.frame.theme.clone());
+            }
+            Self::queue_redraw(&preview_c4, &on_change_c4);
+            Self::refresh_theme_refs(&refreshers_c4);
         });
 
         // Theme Fonts section
@@ -3216,7 +3246,11 @@ impl LcarsConfigWidget {
     /// Set the theme configuration. Call this BEFORE set_config to ensure
     /// font selectors have the correct theme when the UI is rebuilt.
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
-        self.config.borrow_mut().frame.theme = theme;
+        self.config.borrow_mut().frame.theme = theme.clone();
+        // Update gradient editor with new theme colors
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.theme_gradient_editor.set_theme_config(theme);
+        }
         // Trigger all theme refreshers to update child widgets
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
