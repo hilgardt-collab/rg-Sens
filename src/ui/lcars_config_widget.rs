@@ -13,6 +13,8 @@ use std::rc::Rc;
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::theme::ColorSource;
 use crate::ui::lcars_display::{
     render_lcars_frame, render_content_background, SidebarPosition,
     ExtensionMode, CornerStyle, HeaderPosition, HeaderShape, HeaderAlign, SegmentConfig,
@@ -50,8 +52,8 @@ struct HeadersWidgets {
     top_show_check: CheckButton,
     top_text_entry: Entry,
     top_shape_dropdown: DropDown,
-    top_bg_widget: Rc<ColorButtonWidget>,
-    top_text_color_widget: Rc<ColorButtonWidget>,
+    top_bg_widget: Rc<ThemeColorSelector>,
+    top_text_color_widget: Rc<ThemeColorSelector>,
     top_font_btn: Button,
     top_font_size_spin: SpinButton,
     top_bold_check: CheckButton,
@@ -60,8 +62,8 @@ struct HeadersWidgets {
     bottom_show_check: CheckButton,
     bottom_text_entry: Entry,
     bottom_shape_dropdown: DropDown,
-    bottom_bg_widget: Rc<ColorButtonWidget>,
-    bottom_text_color_widget: Rc<ColorButtonWidget>,
+    bottom_bg_widget: Rc<ThemeColorSelector>,
+    bottom_text_color_widget: Rc<ThemeColorSelector>,
     bottom_font_btn: Button,
     bottom_font_size_spin: SpinButton,
     bottom_bold_check: CheckButton,
@@ -73,7 +75,7 @@ struct SegmentsWidgets {
     count_spin: SpinButton,
     segment_frames: Rc<RefCell<Vec<gtk4::Frame>>>,
     // Store segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin)
-    segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ColorButtonWidget>, Rc<ColorButtonWidget>, SpinButton, Button, SpinButton)>>>,
+    segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Button, SpinButton)>>>,
 }
 
 /// Holds references to Content tab widgets for updating when config changes
@@ -85,7 +87,7 @@ struct ContentWidgets {
 struct SplitWidgets {
     orient_dropdown: DropDown,
     divider_spin: SpinButton,
-    div_color_widget: Rc<ColorButtonWidget>,
+    div_color_widget: Rc<ThemeColorSelector>,
     start_cap_dropdown: DropDown,
     end_cap_dropdown: DropDown,
     /// Container for group size weight spinners (rebuilt when groups change)
@@ -970,14 +972,16 @@ impl LcarsConfigWidget {
         // Top header colors row
         let top_colors_box = GtkBox::new(Orientation::Horizontal, 6);
         top_colors_box.append(&Label::new(Some("Background:")));
-        let top_bg_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.top_header.bg_color));
+        let top_bg_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.top_header.bg_color)));
+        top_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         top_colors_box.append(top_bg_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        top_bg_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.top_header.bg_color = color;
+        top_bg_widget.set_on_change(move |color_source| {
+            let theme = config_clone.borrow().frame.theme.clone();
+            config_clone.borrow_mut().frame.top_header.bg_color = color_source.resolve(&theme);
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -985,14 +989,16 @@ impl LcarsConfigWidget {
         });
 
         top_colors_box.append(&Label::new(Some("Text:")));
-        let top_text_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.top_header.text_color));
+        let top_text_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.top_header.text_color)));
+        top_text_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         top_colors_box.append(top_text_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        top_text_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.top_header.text_color = color;
+        top_text_color_widget.set_on_change(move |color_source| {
+            let theme = config_clone.borrow().frame.theme.clone();
+            config_clone.borrow_mut().frame.top_header.text_color = color_source.resolve(&theme);
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -1285,14 +1291,16 @@ impl LcarsConfigWidget {
         // Bottom header colors row
         let bottom_colors_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_colors_box.append(&Label::new(Some("Background:")));
-        let bottom_bg_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.bottom_header.bg_color));
+        let bottom_bg_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.bottom_header.bg_color)));
+        bottom_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         bottom_colors_box.append(bottom_bg_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        bottom_bg_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.bottom_header.bg_color = color;
+        bottom_bg_widget.set_on_change(move |color_source| {
+            let theme = config_clone.borrow().frame.theme.clone();
+            config_clone.borrow_mut().frame.bottom_header.bg_color = color_source.resolve(&theme);
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -1300,14 +1308,16 @@ impl LcarsConfigWidget {
         });
 
         bottom_colors_box.append(&Label::new(Some("Text:")));
-        let bottom_text_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.bottom_header.text_color));
+        let bottom_text_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.bottom_header.text_color)));
+        bottom_text_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         bottom_colors_box.append(bottom_text_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        bottom_text_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.bottom_header.text_color = color;
+        bottom_text_color_widget.set_on_change(move |color_source| {
+            let theme = config_clone.borrow().frame.theme.clone();
+            config_clone.borrow_mut().frame.bottom_header.text_color = color_source.resolve(&theme);
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -1538,7 +1548,7 @@ impl LcarsConfigWidget {
         let segment_frames: Rc<RefCell<Vec<gtk4::Frame>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Store per-segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin)
-        let segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ColorButtonWidget>, Rc<ColorButtonWidget>, SpinButton, Button, SpinButton)>>> = Rc::new(RefCell::new(Vec::new()));
+        let segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Button, SpinButton)>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Helper function to create a segment config widget
         // Returns (frame, (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin))
@@ -1546,7 +1556,7 @@ impl LcarsConfigWidget {
             let config = config.clone();
             let on_change = on_change.clone();
             let preview = preview.clone();
-            move |seg_idx: usize| -> (gtk4::Frame, (Entry, Rc<ColorButtonWidget>, Rc<ColorButtonWidget>, SpinButton, Button, SpinButton)) {
+            move |seg_idx: usize| -> (gtk4::Frame, (Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Button, SpinButton)) {
                 let seg_frame = gtk4::Frame::new(Some(&format!("Segment {}", seg_idx + 1)));
                 let seg_box = GtkBox::new(Orientation::Vertical, 4);
                 seg_box.set_margin_start(8);
@@ -1584,18 +1594,19 @@ impl LcarsConfigWidget {
                 let seg_color = config.borrow().frame.segments.get(seg_idx)
                     .map(|s| s.color)
                     .unwrap_or_else(|| Color::new(0.8, 0.4, 0.4, 1.0));
-                let color_widget = Rc::new(ColorButtonWidget::new(seg_color));
+                let color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(seg_color)));
+                color_widget.set_theme_config(config.borrow().frame.theme.clone());
                 colors_box.append(color_widget.widget());
 
                 let config_clone = config.clone();
                 let on_change_clone = on_change.clone();
                 let preview_clone = preview.clone();
-                color_widget.set_on_change(move |color| {
+                color_widget.set_on_change(move |color_source| {
                     let mut cfg = config_clone.borrow_mut();
                     while cfg.frame.segments.len() <= seg_idx {
                         cfg.frame.segments.push(SegmentConfig::default());
                     }
-                    cfg.frame.segments[seg_idx].color = color;
+                    cfg.frame.segments[seg_idx].color = color_source.resolve(&cfg.frame.theme);
                     drop(cfg);
                     preview_clone.queue_draw();
                     if let Some(cb) = on_change_clone.borrow().as_ref() {
@@ -1607,18 +1618,19 @@ impl LcarsConfigWidget {
                 let label_color = config.borrow().frame.segments.get(seg_idx)
                     .map(|s| s.label_color)
                     .unwrap_or_else(|| Color::new(0.0, 0.0, 0.0, 1.0));
-                let label_color_widget = Rc::new(ColorButtonWidget::new(label_color));
+                let label_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(label_color)));
+                label_color_widget.set_theme_config(config.borrow().frame.theme.clone());
                 colors_box.append(label_color_widget.widget());
 
                 let config_clone = config.clone();
                 let on_change_clone = on_change.clone();
                 let preview_clone = preview.clone();
-                label_color_widget.set_on_change(move |color| {
+                label_color_widget.set_on_change(move |color_source| {
                     let mut cfg = config_clone.borrow_mut();
                     while cfg.frame.segments.len() <= seg_idx {
                         cfg.frame.segments.push(SegmentConfig::default());
                     }
-                    cfg.frame.segments[seg_idx].label_color = color;
+                    cfg.frame.segments[seg_idx].label_color = color_source.resolve(&cfg.frame.theme);
                     drop(cfg);
                     preview_clone.queue_draw();
                     if let Some(cb) = on_change_clone.borrow().as_ref() {
@@ -2732,14 +2744,16 @@ impl LcarsConfigWidget {
         // Divider color
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Divider Color:")));
-        let div_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.divider_config.color));
+        let div_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.divider_config.color)));
+        div_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(div_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        div_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.divider_config.color = color;
+        div_color_widget.set_on_change(move |color_source| {
+            let theme = config_clone.borrow().frame.theme.clone();
+            config_clone.borrow_mut().frame.divider_config.color = color_source.resolve(&theme);
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -3103,8 +3117,8 @@ impl LcarsConfigWidget {
                 HeaderShape::Square => 1,
             };
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
-            widgets.top_bg_widget.set_color(config_to_use.frame.top_header.bg_color);
-            widgets.top_text_color_widget.set_color(config_to_use.frame.top_header.text_color);
+            widgets.top_bg_widget.set_source(ColorSource::custom(config_to_use.frame.top_header.bg_color));
+            widgets.top_text_color_widget.set_source(ColorSource::custom(config_to_use.frame.top_header.text_color));
             widgets.top_font_btn.set_label(&format!(
                 "{} {:.0}",
                 config_to_use.frame.top_header.font,
@@ -3127,8 +3141,8 @@ impl LcarsConfigWidget {
                 HeaderShape::Square => 1,
             };
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
-            widgets.bottom_bg_widget.set_color(config_to_use.frame.bottom_header.bg_color);
-            widgets.bottom_text_color_widget.set_color(config_to_use.frame.bottom_header.text_color);
+            widgets.bottom_bg_widget.set_source(ColorSource::custom(config_to_use.frame.bottom_header.bg_color));
+            widgets.bottom_text_color_widget.set_source(ColorSource::custom(config_to_use.frame.bottom_header.text_color));
             widgets.bottom_font_btn.set_label(&format!(
                 "{} {:.0}",
                 config_to_use.frame.bottom_header.font,
@@ -3161,8 +3175,8 @@ impl LcarsConfigWidget {
             for (i, (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin)) in segment_widgets.iter().enumerate() {
                 if let Some(seg) = new_config.frame.segments.get(i) {
                     label_entry.set_text(&seg.label);
-                    color_widget.set_color(seg.color);
-                    label_color_widget.set_color(seg.label_color);
+                    color_widget.set_source(ColorSource::custom(seg.color));
+                    label_color_widget.set_source(ColorSource::custom(seg.label_color));
                     weight_spin.set_value(seg.height_weight);
                     font_btn.set_label(&format!("{} {:.0}", seg.font, seg.font_size));
                     size_spin.set_value(seg.font_size);
@@ -3183,7 +3197,7 @@ impl LcarsConfigWidget {
             };
             widgets.orient_dropdown.set_selected(orient_idx);
             widgets.divider_spin.set_value(new_config.frame.divider_config.width);
-            widgets.div_color_widget.set_color(new_config.frame.divider_config.color);
+            widgets.div_color_widget.set_source(ColorSource::custom(new_config.frame.divider_config.color));
             let start_cap_idx = match new_config.frame.divider_config.cap_start {
                 DividerCapStyle::Square => 0,
                 DividerCapStyle::Round => 1,
@@ -3249,7 +3263,25 @@ impl LcarsConfigWidget {
         self.config.borrow_mut().frame.theme = theme.clone();
         // Update gradient editor with new theme colors
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.theme_gradient_editor.set_theme_config(theme);
+            widgets.theme_gradient_editor.set_theme_config(theme.clone());
+        }
+        // Update header widgets with new theme colors
+        if let Some(ref widgets) = *self.headers_widgets.borrow() {
+            widgets.top_bg_widget.set_theme_config(theme.clone());
+            widgets.top_text_color_widget.set_theme_config(theme.clone());
+            widgets.bottom_bg_widget.set_theme_config(theme.clone());
+            widgets.bottom_text_color_widget.set_theme_config(theme.clone());
+        }
+        // Update segment widgets with new theme colors
+        if let Some(ref widgets) = *self.segments_widgets.borrow() {
+            for (_, color_widget, label_color_widget, _, _, _) in widgets.segment_widgets.borrow().iter() {
+                color_widget.set_theme_config(theme.clone());
+                label_color_widget.set_theme_config(theme.clone());
+            }
+        }
+        // Update layout widgets with new theme colors
+        if let Some(ref widgets) = *self.split_widgets.borrow() {
+            widgets.div_color_widget.set_theme_config(theme.clone());
         }
         // Trigger all theme refreshers to update child widgets
         for refresher in self.theme_ref_refreshers.borrow().iter() {
