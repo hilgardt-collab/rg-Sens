@@ -971,7 +971,7 @@ impl LcarsConfigWidget {
         // Top header colors row
         let top_colors_box = GtkBox::new(Orientation::Horizontal, 6);
         top_colors_box.append(&Label::new(Some("Background:")));
-        let top_bg_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.top_header.bg_color)));
+        let top_bg_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.top_header.bg_color.clone()));
         top_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         top_colors_box.append(top_bg_widget.widget());
 
@@ -979,8 +979,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         top_bg_widget.set_on_change(move |color_source| {
-            let theme = config_clone.borrow().frame.theme.clone();
-            config_clone.borrow_mut().frame.top_header.bg_color = color_source.resolve(&theme);
+            config_clone.borrow_mut().frame.top_header.bg_color = color_source;
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -988,7 +987,7 @@ impl LcarsConfigWidget {
         });
 
         top_colors_box.append(&Label::new(Some("Text:")));
-        let top_text_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.top_header.text_color)));
+        let top_text_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.top_header.text_color.clone()));
         top_text_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         top_colors_box.append(top_text_color_widget.widget());
 
@@ -996,8 +995,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         top_text_color_widget.set_on_change(move |color_source| {
-            let theme = config_clone.borrow().frame.theme.clone();
-            config_clone.borrow_mut().frame.top_header.text_color = color_source.resolve(&theme);
+            config_clone.borrow_mut().frame.top_header.text_color = color_source;
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -1027,6 +1025,40 @@ impl LcarsConfigWidget {
         top_bold_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.top_header.font_bold = check.is_active();
             Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Copy/Paste font buttons
+        let top_copy_font_btn = Button::with_label("Copy");
+        let top_paste_font_btn = Button::with_label("Paste");
+        top_font_box.append(&top_copy_font_btn);
+        top_font_box.append(&top_paste_font_btn);
+
+        // Copy font handler
+        let config_clone = config.clone();
+        top_copy_font_btn.connect_clicked(move |_| {
+            let cfg = config_clone.borrow();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_font(cfg.frame.top_header.font.clone(), cfg.frame.top_header.font_size, cfg.frame.top_header.font_bold, false);
+            }
+        });
+
+        // Paste font handler
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let top_font_selector_clone = top_font_selector.clone();
+        top_paste_font_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
+                    {
+                        let mut cfg = config_clone.borrow_mut();
+                        cfg.frame.top_header.font = family.clone();
+                        cfg.frame.top_header.font_size = size;
+                    }
+                    top_font_selector_clone.set_source(FontSource::Custom { family, size });
+                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                }
+            }
         });
 
         // Font selector change handler
@@ -1204,7 +1236,7 @@ impl LcarsConfigWidget {
         // Bottom header colors row
         let bottom_colors_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_colors_box.append(&Label::new(Some("Background:")));
-        let bottom_bg_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.bottom_header.bg_color)));
+        let bottom_bg_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.bottom_header.bg_color.clone()));
         bottom_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         bottom_colors_box.append(bottom_bg_widget.widget());
 
@@ -1212,8 +1244,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         bottom_bg_widget.set_on_change(move |color_source| {
-            let theme = config_clone.borrow().frame.theme.clone();
-            config_clone.borrow_mut().frame.bottom_header.bg_color = color_source.resolve(&theme);
+            config_clone.borrow_mut().frame.bottom_header.bg_color = color_source;
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -1221,7 +1252,7 @@ impl LcarsConfigWidget {
         });
 
         bottom_colors_box.append(&Label::new(Some("Text:")));
-        let bottom_text_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.bottom_header.text_color)));
+        let bottom_text_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.bottom_header.text_color.clone()));
         bottom_text_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         bottom_colors_box.append(bottom_text_color_widget.widget());
 
@@ -1229,8 +1260,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         bottom_text_color_widget.set_on_change(move |color_source| {
-            let theme = config_clone.borrow().frame.theme.clone();
-            config_clone.borrow_mut().frame.bottom_header.text_color = color_source.resolve(&theme);
+            config_clone.borrow_mut().frame.bottom_header.text_color = color_source;
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -1260,6 +1290,40 @@ impl LcarsConfigWidget {
         bottom_bold_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.bottom_header.font_bold = check.is_active();
             Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Copy/Paste font buttons
+        let bottom_copy_font_btn = Button::with_label("Copy");
+        let bottom_paste_font_btn = Button::with_label("Paste");
+        bottom_font_box.append(&bottom_copy_font_btn);
+        bottom_font_box.append(&bottom_paste_font_btn);
+
+        // Copy font handler
+        let config_clone = config.clone();
+        bottom_copy_font_btn.connect_clicked(move |_| {
+            let cfg = config_clone.borrow();
+            if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                clipboard.copy_font(cfg.frame.bottom_header.font.clone(), cfg.frame.bottom_header.font_size, cfg.frame.bottom_header.font_bold, false);
+            }
+        });
+
+        // Paste font handler
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let bottom_font_selector_clone = bottom_font_selector.clone();
+        bottom_paste_font_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
+                    {
+                        let mut cfg = config_clone.borrow_mut();
+                        cfg.frame.bottom_header.font = family.clone();
+                        cfg.frame.bottom_header.font_size = size;
+                    }
+                    bottom_font_selector_clone.set_source(FontSource::Custom { family, size });
+                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                }
+            }
         });
 
         // Font selector change handler
@@ -1417,9 +1481,9 @@ impl LcarsConfigWidget {
                 let colors_box = GtkBox::new(Orientation::Horizontal, 12);
                 colors_box.append(&Label::new(Some("Segment:")));
                 let seg_color = config.borrow().frame.segments.get(seg_idx)
-                    .map(|s| s.color)
-                    .unwrap_or_else(|| Color::new(0.8, 0.4, 0.4, 1.0));
-                let color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(seg_color)));
+                    .map(|s| s.color.clone())
+                    .unwrap_or_else(|| ColorSource::custom(Color::new(0.8, 0.4, 0.4, 1.0)));
+                let color_widget = Rc::new(ThemeColorSelector::new(seg_color));
                 color_widget.set_theme_config(config.borrow().frame.theme.clone());
                 colors_box.append(color_widget.widget());
 
@@ -1431,7 +1495,7 @@ impl LcarsConfigWidget {
                     while cfg.frame.segments.len() <= seg_idx {
                         cfg.frame.segments.push(SegmentConfig::default());
                     }
-                    cfg.frame.segments[seg_idx].color = color_source.resolve(&cfg.frame.theme);
+                    cfg.frame.segments[seg_idx].color = color_source;
                     drop(cfg);
                     preview_clone.queue_draw();
                     if let Some(cb) = on_change_clone.borrow().as_ref() {
@@ -1441,9 +1505,9 @@ impl LcarsConfigWidget {
 
                 colors_box.append(&Label::new(Some("Label:")));
                 let label_color = config.borrow().frame.segments.get(seg_idx)
-                    .map(|s| s.label_color)
-                    .unwrap_or_else(|| Color::new(0.0, 0.0, 0.0, 1.0));
-                let label_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(label_color)));
+                    .map(|s| s.label_color.clone())
+                    .unwrap_or_else(|| ColorSource::custom(Color::new(0.0, 0.0, 0.0, 1.0)));
+                let label_color_widget = Rc::new(ThemeColorSelector::new(label_color));
                 label_color_widget.set_theme_config(config.borrow().frame.theme.clone());
                 colors_box.append(label_color_widget.widget());
 
@@ -1455,7 +1519,7 @@ impl LcarsConfigWidget {
                     while cfg.frame.segments.len() <= seg_idx {
                         cfg.frame.segments.push(SegmentConfig::default());
                     }
-                    cfg.frame.segments[seg_idx].label_color = color_source.resolve(&cfg.frame.theme);
+                    cfg.frame.segments[seg_idx].label_color = color_source;
                     drop(cfg);
                     preview_clone.queue_draw();
                     if let Some(cb) = on_change_clone.borrow().as_ref() {
@@ -1509,6 +1573,45 @@ impl LcarsConfigWidget {
                 }));
                 font_selector.set_theme_config(config.borrow().frame.theme.clone());
                 font_box.append(font_selector.widget());
+
+                // Copy/Paste font buttons
+                let copy_font_btn = Button::with_label("Copy");
+                let paste_font_btn = Button::with_label("Paste");
+                font_box.append(&copy_font_btn);
+                font_box.append(&paste_font_btn);
+
+                // Copy font handler
+                let config_clone = config.clone();
+                copy_font_btn.connect_clicked(move |_| {
+                    let cfg = config_clone.borrow();
+                    if let Some(seg) = cfg.frame.segments.get(seg_idx) {
+                        if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                            clipboard.copy_font(seg.font.clone(), seg.font_size, false, false);
+                        }
+                    }
+                });
+
+                // Paste font handler
+                let config_clone = config.clone();
+                let on_change_clone = on_change.clone();
+                let preview_clone = preview.clone();
+                let font_selector_clone = font_selector.clone();
+                paste_font_btn.connect_clicked(move |_| {
+                    if let Ok(clipboard) = CLIPBOARD.lock() {
+                        if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
+                            {
+                                let mut cfg = config_clone.borrow_mut();
+                                while cfg.frame.segments.len() <= seg_idx {
+                                    cfg.frame.segments.push(SegmentConfig::default());
+                                }
+                                cfg.frame.segments[seg_idx].font = family.clone();
+                                cfg.frame.segments[seg_idx].font_size = size;
+                            }
+                            font_selector_clone.set_source(FontSource::Custom { family, size });
+                            Self::queue_redraw(&preview_clone, &on_change_clone);
+                        }
+                    }
+                });
 
                 // Font selector change handler
                 let config_clone = config.clone();
@@ -2475,7 +2578,7 @@ impl LcarsConfigWidget {
         // Divider color
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Divider Color:")));
-        let div_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(config.borrow().frame.divider_config.color)));
+        let div_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.divider_config.color.clone()));
         div_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(div_color_widget.widget());
 
@@ -2483,8 +2586,7 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         div_color_widget.set_on_change(move |color_source| {
-            let theme = config_clone.borrow().frame.theme.clone();
-            config_clone.borrow_mut().frame.divider_config.color = color_source.resolve(&theme);
+            config_clone.borrow_mut().frame.divider_config.color = color_source;
             preview_clone.queue_draw();
             if let Some(cb) = on_change_clone.borrow().as_ref() {
                 cb();
@@ -2848,8 +2950,8 @@ impl LcarsConfigWidget {
                 HeaderShape::Square => 1,
             };
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
-            widgets.top_bg_widget.set_source(ColorSource::custom(config_to_use.frame.top_header.bg_color));
-            widgets.top_text_color_widget.set_source(ColorSource::custom(config_to_use.frame.top_header.text_color));
+            widgets.top_bg_widget.set_source(config_to_use.frame.top_header.bg_color.clone());
+            widgets.top_text_color_widget.set_source(config_to_use.frame.top_header.text_color.clone());
             widgets.top_font_selector.set_source(FontSource::Custom {
                 family: config_to_use.frame.top_header.font.clone(),
                 size: config_to_use.frame.top_header.font_size,
@@ -2870,8 +2972,8 @@ impl LcarsConfigWidget {
                 HeaderShape::Square => 1,
             };
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
-            widgets.bottom_bg_widget.set_source(ColorSource::custom(config_to_use.frame.bottom_header.bg_color));
-            widgets.bottom_text_color_widget.set_source(ColorSource::custom(config_to_use.frame.bottom_header.text_color));
+            widgets.bottom_bg_widget.set_source(config_to_use.frame.bottom_header.bg_color.clone());
+            widgets.bottom_text_color_widget.set_source(config_to_use.frame.bottom_header.text_color.clone());
             widgets.bottom_font_selector.set_source(FontSource::Custom {
                 family: config_to_use.frame.bottom_header.font.clone(),
                 size: config_to_use.frame.bottom_header.font_size,
@@ -2902,8 +3004,8 @@ impl LcarsConfigWidget {
             for (i, (label_entry, color_widget, label_color_widget, weight_spin, font_selector)) in segment_widgets.iter().enumerate() {
                 if let Some(seg) = new_config.frame.segments.get(i) {
                     label_entry.set_text(&seg.label);
-                    color_widget.set_source(ColorSource::custom(seg.color));
-                    label_color_widget.set_source(ColorSource::custom(seg.label_color));
+                    color_widget.set_source(seg.color.clone());
+                    label_color_widget.set_source(seg.label_color.clone());
                     weight_spin.set_value(seg.height_weight);
                     font_selector.set_source(FontSource::Custom {
                         family: seg.font.clone(),
@@ -2926,7 +3028,7 @@ impl LcarsConfigWidget {
             };
             widgets.orient_dropdown.set_selected(orient_idx);
             widgets.divider_spin.set_value(new_config.frame.divider_config.width);
-            widgets.div_color_widget.set_source(ColorSource::custom(new_config.frame.divider_config.color));
+            widgets.div_color_widget.set_source(new_config.frame.divider_config.color.clone());
             let start_cap_idx = match new_config.frame.divider_config.cap_start {
                 DividerCapStyle::Square => 0,
                 DividerCapStyle::Round => 1,

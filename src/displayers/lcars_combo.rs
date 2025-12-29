@@ -451,6 +451,7 @@ impl Displayer for LcarsComboDisplayer {
                                         content_h,
                                         divider_config,
                                         SplitOrientation::Vertical,
+                                        &data.config.frame.theme,
                                     );
                                     current_x = divider_x + divider_config.width + divider_config.spacing_after;
                                 } else {
@@ -495,6 +496,7 @@ impl Displayer for LcarsComboDisplayer {
                                         divider_config.width,
                                         divider_config,
                                         SplitOrientation::Horizontal,
+                                        &data.config.frame.theme,
                                     );
                                     current_y = divider_y + divider_config.width + divider_config.spacing_after;
                                 } else {

@@ -12,7 +12,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::{BackgroundConfig, Color, render_background};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
-use crate::ui::theme::ComboThemeConfig;
+use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
 use crate::ui::arc_display::ArcDisplayConfig;
@@ -192,24 +192,24 @@ impl ContentDisplayType {
 pub struct SegmentConfig {
     #[serde(default = "default_segment_height_weight")]
     pub height_weight: f64,
-    #[serde(default = "default_segment_color")]
-    pub color: Color,
+    #[serde(default = "default_segment_color", deserialize_with = "deserialize_color_or_source")]
+    pub color: ColorSource,
     #[serde(default)]
     pub label: String,
     #[serde(default = "default_segment_font")]
     pub font: String,
     #[serde(default = "default_segment_font_size")]
     pub font_size: f64,
-    #[serde(default = "default_segment_label_color")]
-    pub label_color: Color,
+    #[serde(default = "default_segment_label_color", deserialize_with = "deserialize_color_or_source")]
+    pub label_color: ColorSource,
 }
 
 fn default_segment_height_weight() -> f64 {
     1.0
 }
 
-fn default_segment_color() -> Color {
-    Color::new(0.78, 0.39, 0.39, 1.0) // Reddish LCARS color
+fn default_segment_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.78, 0.39, 0.39, 1.0)) // Reddish LCARS color
 }
 
 fn default_segment_font() -> String {
@@ -220,8 +220,8 @@ fn default_segment_font_size() -> f64 {
     12.0
 }
 
-fn default_segment_label_color() -> Color {
-    Color::new(0.0, 0.0, 0.0, 1.0) // Black
+fn default_segment_label_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.0, 0.0, 0.0, 1.0)) // Black
 }
 
 impl Default for SegmentConfig {
@@ -250,10 +250,10 @@ pub struct HeaderConfig {
     pub font_size: f64,
     #[serde(default = "default_header_font_bold")]
     pub font_bold: bool,
-    #[serde(default = "default_header_text_color")]
-    pub text_color: Color,
-    #[serde(default = "default_header_bg_color")]
-    pub bg_color: Color,
+    #[serde(default = "default_header_text_color", deserialize_with = "deserialize_color_or_source")]
+    pub text_color: ColorSource,
+    #[serde(default = "default_header_bg_color", deserialize_with = "deserialize_color_or_source")]
+    pub bg_color: ColorSource,
     #[serde(default)]
     pub shape: HeaderShape,
     #[serde(default)]
@@ -282,12 +282,12 @@ fn default_header_font_bold() -> bool {
     true
 }
 
-fn default_header_text_color() -> Color {
-    Color::new(0.0, 0.0, 0.0, 1.0) // Black
+fn default_header_text_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.0, 0.0, 0.0, 1.0)) // Black
 }
 
-fn default_header_bg_color() -> Color {
-    Color::new(0.6, 0.4, 0.8, 1.0) // Purple LCARS color
+fn default_header_bg_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.6, 0.4, 0.8, 1.0)) // Purple LCARS color
 }
 
 fn default_header_padding() -> f64 {
@@ -327,8 +327,8 @@ impl Default for HeaderConfig {
 pub struct DividerConfig {
     #[serde(default = "default_divider_width")]
     pub width: f64,
-    #[serde(default = "default_divider_color")]
-    pub color: Color,
+    #[serde(default = "default_divider_color", deserialize_with = "deserialize_color_or_source")]
+    pub color: ColorSource,
     #[serde(default)]
     pub cap_start: DividerCapStyle,
     #[serde(default)]
@@ -343,8 +343,8 @@ fn default_divider_width() -> f64 {
     10.0
 }
 
-fn default_divider_color() -> Color {
-    Color::new(1.0, 0.6, 0.4, 1.0) // Orange LCARS color
+fn default_divider_color() -> ColorSource {
+    ColorSource::custom(Color::new(1.0, 0.6, 0.4, 1.0)) // Orange LCARS color
 }
 
 impl Default for DividerConfig {
@@ -583,17 +583,17 @@ impl Default for LcarsFrameConfig {
             segment_count: default_segment_count(),
             segments: vec![
                 SegmentConfig {
-                    color: Color::new(1.0, 0.6, 0.4, 1.0),
+                    color: ColorSource::custom(Color::new(1.0, 0.6, 0.4, 1.0)),
                     label: "SYS".to_string(),
                     ..Default::default()
                 },
                 SegmentConfig {
-                    color: Color::new(0.8, 0.6, 0.9, 1.0),
+                    color: ColorSource::custom(Color::new(0.8, 0.6, 0.9, 1.0)),
                     label: "MON".to_string(),
                     ..Default::default()
                 },
                 SegmentConfig {
-                    color: Color::new(0.6, 0.8, 1.0, 1.0),
+                    color: ColorSource::custom(Color::new(0.6, 0.8, 1.0, 1.0)),
                     label: "DATA".to_string(),
                     ..Default::default()
                 },
@@ -797,7 +797,7 @@ pub fn render_lcars_frame(
         let is_first = i == 0;
         let is_last = i == segment_count - 1;
 
-        segment.color.apply_to_cairo(cr);
+        segment.color.resolve(&config.theme).apply_to_cairo(cr);
         cr.new_path();
 
         if is_first && has_top_ext {
@@ -891,7 +891,7 @@ pub fn render_lcars_frame(
                 text: segment.label.to_uppercase(),
                 font: segment.font.clone(),
                 font_size: segment.font_size,
-                color: segment.label_color,
+                color: segment.label_color.resolve(&config.theme),
                 y: current_y,
                 seg_h,
                 is_last,
@@ -1147,11 +1147,11 @@ fn render_header_bar(
         }
     }
 
-    header_config.bg_color.apply_to_cairo(cr);
+    header_config.bg_color.resolve(&frame_config.theme).apply_to_cairo(cr);
     cr.fill()?;
 
     // Draw header text
-    header_config.text_color.apply_to_cairo(cr);
+    header_config.text_color.resolve(&frame_config.theme).apply_to_cairo(cr);
     let text_x = bar_x + (bar_w - text_extents.width()) / 2.0;
     let text_y = bar_y + (bar_content_h + header_config.font_size * 0.7) / 2.0;
     cr.move_to(text_x, text_y);
@@ -1224,7 +1224,7 @@ fn render_sidebar_segments(
         cr.save()?;
 
         // Draw segment background
-        segment.color.apply_to_cairo(cr);
+        segment.color.resolve(&config.theme).apply_to_cairo(cr);
         cr.rectangle(sidebar_x, current_y, sidebar_w, seg_h);
         cr.fill()?;
 
@@ -1244,7 +1244,7 @@ fn render_sidebar_segments(
             cr.set_font_size(segment.font_size);
 
             let text_extents = cr.text_extents(&label_text)?;
-            segment.label_color.apply_to_cairo(cr);
+            segment.label_color.resolve(&config.theme).apply_to_cairo(cr);
 
             // Position label at bottom-right of segment
             let label_x = sidebar_x + sidebar_w - text_extents.width() - 5.0;
@@ -1264,8 +1264,8 @@ fn render_sidebar_segments(
     if has_bottom_ext && config.segment_count > 0 {
         let last_idx = (config.segment_count as usize).saturating_sub(1);
         let last_segment_color = config.segments.get(last_idx)
-            .map(|s| s.color)
-            .unwrap_or_default();
+            .map(|s| s.color.resolve(&config.theme))
+            .unwrap_or_else(|| default_segment_color().resolve(&config.theme));
 
         cr.save()?;
         last_segment_color.apply_to_cairo(cr);
@@ -1371,6 +1371,7 @@ pub fn render_divider(
     h: f64,
     divider_config: &DividerConfig,
     orientation: SplitOrientation,
+    theme: &ComboThemeConfig,
 ) -> Result<(), cairo::Error> {
     let radius = w.min(h) / 2.0;
 
@@ -1435,7 +1436,7 @@ pub fn render_divider(
     }
 
     cr.close_path();
-    divider_config.color.apply_to_cairo(cr);
+    divider_config.color.resolve(theme).apply_to_cairo(cr);
     cr.fill()?;
 
     cr.restore()?;
