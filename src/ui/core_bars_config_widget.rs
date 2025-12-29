@@ -13,7 +13,6 @@ use crate::ui::background::{Color, ColorStop};
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::clipboard::CLIPBOARD;
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
@@ -53,20 +52,18 @@ pub struct CoreBarsConfigWidget {
     // Colors
     fg_solid_radio: CheckButton,
     fg_gradient_radio: CheckButton,
-    fg_color_widget: Rc<ColorButtonWidget>,
-    #[allow(dead_code)]
+    fg_color_widget: Rc<ThemeColorSelector>,
     fg_gradient_editor: Rc<GradientEditor>,
     bg_solid_radio: CheckButton,
     bg_gradient_radio: CheckButton,
     bg_transparent_radio: CheckButton,
-    bg_color_widget: Rc<ColorButtonWidget>,
-    #[allow(dead_code)]
+    bg_color_widget: Rc<ThemeColorSelector>,
     bg_gradient_editor: Rc<GradientEditor>,
 
     // Border
     border_check: CheckButton,
     border_width_spin: SpinButton,
-    border_color_widget: Rc<ColorButtonWidget>,
+    border_color_widget: Rc<ThemeColorSelector>,
 
     // Labels
     show_labels_check: CheckButton,
@@ -131,7 +128,7 @@ impl CoreBarsConfigWidget {
         let (colors_page, fg_solid_radio, fg_gradient_radio, fg_color_widget, fg_gradient_editor,
              bg_solid_radio, bg_gradient_radio, bg_transparent_radio, bg_color_widget, bg_gradient_editor,
              border_check, border_width_spin, border_color_widget, gradient_spans_bars_check) =
-            Self::create_colors_page(&config, &on_change);
+            Self::create_colors_page(&config, &theme, &on_change);
         notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
 
         // === Tab 4: Labels ===
@@ -601,10 +598,11 @@ impl CoreBarsConfigWidget {
 
     fn create_colors_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
+        theme: &Rc<RefCell<ComboThemeConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, CheckButton, CheckButton, Rc<ColorButtonWidget>, Rc<GradientEditor>,
-          CheckButton, CheckButton, CheckButton, Rc<ColorButtonWidget>, Rc<GradientEditor>,
-          CheckButton, SpinButton, Rc<ColorButtonWidget>, CheckButton) {
+    ) -> (GtkBox, CheckButton, CheckButton, Rc<ThemeColorSelector>, Rc<GradientEditor>,
+          CheckButton, CheckButton, CheckButton, Rc<ThemeColorSelector>, Rc<GradientEditor>,
+          CheckButton, SpinButton, Rc<ThemeColorSelector>, CheckButton) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -625,15 +623,15 @@ impl CoreBarsConfigWidget {
         fg_type_row.append(&fg_gradient_radio);
         page.append(&fg_type_row);
 
-        let initial_fg_color = {
+        let initial_fg_source = {
             let cfg = config.borrow();
-            let thm = ComboThemeConfig::default();
             match &cfg.foreground {
-                BarFillType::Solid { color } => color.resolve(&thm),
-                _ => Color::new(0.2, 0.6, 1.0, 1.0),
+                BarFillType::Solid { color } => color.clone(),
+                _ => ColorSource::custom(Color::new(0.2, 0.6, 1.0, 1.0)),
             }
         };
-        let fg_color_widget = Rc::new(ColorButtonWidget::new(initial_fg_color));
+        let fg_color_widget = Rc::new(ThemeColorSelector::new(initial_fg_source));
+        fg_color_widget.set_theme_config(theme.borrow().clone());
         page.append(fg_color_widget.widget());
 
         let fg_gradient_editor = Rc::new(GradientEditor::new());
@@ -673,7 +671,15 @@ impl CoreBarsConfigWidget {
         bg_type_row.append(&bg_transparent_radio);
         page.append(&bg_type_row);
 
-        let bg_color_widget = Rc::new(ColorButtonWidget::new(Color::new(0.2, 0.2, 0.2, 0.5)));
+        let initial_bg_source = {
+            let cfg = config.borrow();
+            match &cfg.background {
+                BarBackgroundType::Solid { color } => color.clone(),
+                _ => ColorSource::custom(Color::new(0.2, 0.2, 0.2, 0.5)),
+            }
+        };
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(initial_bg_source));
+        bg_color_widget.set_theme_config(theme.borrow().clone());
         bg_color_widget.widget().set_visible(false);
         page.append(bg_color_widget.widget());
 
@@ -704,7 +710,12 @@ impl CoreBarsConfigWidget {
         border_row.append(&border_width_spin);
         page.append(&border_row);
 
-        let border_color_widget = Rc::new(ColorButtonWidget::new(Color::new(0.5, 0.5, 0.5, 1.0)));
+        let initial_border_source = {
+            let cfg = config.borrow();
+            cfg.border.color.clone()
+        };
+        let border_color_widget = Rc::new(ThemeColorSelector::new(initial_border_source));
+        border_color_widget.set_theme_config(theme.borrow().clone());
         page.append(border_color_widget.widget());
 
         // Connect foreground signals
@@ -721,7 +732,7 @@ impl CoreBarsConfigWidget {
             fg_copy_paste_box_vis.set_visible(!radio.is_active());
             gradient_spans_bars_check_vis.set_visible(!radio.is_active());
             if radio.is_active() {
-                let color = ColorSource::custom(fg_color_widget_for_solid.color());
+                let color = fg_color_widget_for_solid.source();
                 config_for_fg_solid.borrow_mut().foreground = BarFillType::Solid { color };
                 if let Some(ref cb) = *on_change_for_fg_solid.borrow() {
                     cb();
@@ -758,9 +769,8 @@ impl CoreBarsConfigWidget {
 
         let config_clone2 = config.clone();
         let on_change_clone2 = on_change.clone();
-        fg_color_widget.set_on_change(move |color| {
-            let color = ColorSource::custom(color);
-            config_clone2.borrow_mut().foreground = BarFillType::Solid { color };
+        fg_color_widget.set_on_change(move |color_source| {
+            config_clone2.borrow_mut().foreground = BarFillType::Solid { color: color_source };
             if let Some(ref cb) = *on_change_clone2.borrow() {
                 cb();
             }
@@ -795,7 +805,7 @@ impl CoreBarsConfigWidget {
             bg_gradient_editor_vis.set_visible(false);
             bg_copy_paste_box_vis.set_visible(false);
             if radio.is_active() {
-                let color = ColorSource::custom(bg_color_widget_for_solid.color());
+                let color = bg_color_widget_for_solid.source();
                 config_for_bg_solid.borrow_mut().background = BarBackgroundType::Solid { color };
                 if let Some(ref cb) = *on_change_for_bg_solid.borrow() {
                     cb();
@@ -847,9 +857,8 @@ impl CoreBarsConfigWidget {
 
         let config_clone6 = config.clone();
         let on_change_clone6 = on_change.clone();
-        bg_color_widget.set_on_change(move |color| {
-            let color = ColorSource::custom(color);
-            config_clone6.borrow_mut().background = BarBackgroundType::Solid { color };
+        bg_color_widget.set_on_change(move |color_source| {
+            config_clone6.borrow_mut().background = BarBackgroundType::Solid { color: color_source };
             if let Some(ref cb) = *on_change_clone6.borrow() {
                 cb();
             }
@@ -955,8 +964,8 @@ impl CoreBarsConfigWidget {
 
         let config_clone9 = config.clone();
         let on_change_clone9 = on_change.clone();
-        border_color_widget.set_on_change(move |color| {
-            config_clone9.borrow_mut().border.color = ColorSource::custom(color);
+        border_color_widget.set_on_change(move |color_source| {
+            config_clone9.borrow_mut().border.color = color_source;
             if let Some(ref cb) = *on_change_clone9.borrow() {
                 cb();
             }
@@ -1309,7 +1318,7 @@ impl CoreBarsConfigWidget {
         match &config.foreground {
             BarFillType::Solid { color } => {
                 self.fg_solid_radio.set_active(true);
-                self.fg_color_widget.set_color(color.resolve(&thm));
+                self.fg_color_widget.set_source(color.clone());
             }
             BarFillType::Gradient { stops, angle } => {
                 let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
@@ -1324,7 +1333,7 @@ impl CoreBarsConfigWidget {
         match &config.background {
             BarBackgroundType::Solid { color } => {
                 self.bg_solid_radio.set_active(true);
-                self.bg_color_widget.set_color(color.resolve(&thm));
+                self.bg_color_widget.set_source(color.clone());
             }
             BarBackgroundType::Gradient { stops, angle } => {
                 let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
@@ -1341,7 +1350,7 @@ impl CoreBarsConfigWidget {
 
         self.border_check.set_active(config.border.enabled);
         self.border_width_spin.set_value(config.border.width);
-        self.border_color_widget.set_color(config.border.color.resolve(&thm));
+        self.border_color_widget.set_source(config.border.color.clone());
 
         // Labels
         self.show_labels_check.set_active(config.show_labels);
@@ -1398,7 +1407,17 @@ impl CoreBarsConfigWidget {
     /// Update the theme configuration and refresh the preview
     pub fn set_theme(&self, theme: ComboThemeConfig) {
         *self.theme.borrow_mut() = theme.clone();
-        self.label_color_widget.set_theme_config(theme);
+        // Update all color selectors with the new theme
+        self.fg_color_widget.set_theme_config(theme.clone());
+        self.fg_gradient_editor.set_theme_config(theme.clone());
+        self.bg_color_widget.set_theme_config(theme.clone());
+        self.bg_gradient_editor.set_theme_config(theme.clone());
+        self.border_color_widget.set_theme_config(theme.clone());
+        self.label_color_widget.set_theme_config(theme.clone());
+        // Update text config widget if present
+        if let Some(ref text_widget) = self.text_config_widget {
+            text_widget.set_theme(theme);
+        }
         self.preview.queue_draw();
         // Notify parent to refresh with new theme colors
         if let Some(callback) = self.on_change.borrow().as_ref() {
