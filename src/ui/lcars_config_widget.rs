@@ -14,7 +14,8 @@ use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::theme::ColorSource;
+use crate::ui::theme::{ColorSource, FontSource};
+use crate::ui::theme_font_selector::ThemeFontSelector;
 use crate::ui::lcars_display::{
     render_lcars_frame, render_content_background, SidebarPosition,
     ExtensionMode, CornerStyle, HeaderPosition, HeaderShape, HeaderAlign, SegmentConfig,
@@ -54,8 +55,7 @@ struct HeadersWidgets {
     top_shape_dropdown: DropDown,
     top_bg_widget: Rc<ThemeColorSelector>,
     top_text_color_widget: Rc<ThemeColorSelector>,
-    top_font_btn: Button,
-    top_font_size_spin: SpinButton,
+    top_font_selector: Rc<ThemeFontSelector>,
     top_bold_check: CheckButton,
     top_align_dropdown: DropDown,
     // Bottom header
@@ -64,8 +64,7 @@ struct HeadersWidgets {
     bottom_shape_dropdown: DropDown,
     bottom_bg_widget: Rc<ThemeColorSelector>,
     bottom_text_color_widget: Rc<ThemeColorSelector>,
-    bottom_font_btn: Button,
-    bottom_font_size_spin: SpinButton,
+    bottom_font_selector: Rc<ThemeFontSelector>,
     bottom_bold_check: CheckButton,
     bottom_align_dropdown: DropDown,
 }
@@ -74,8 +73,8 @@ struct HeadersWidgets {
 struct SegmentsWidgets {
     count_spin: SpinButton,
     segment_frames: Rc<RefCell<Vec<gtk4::Frame>>>,
-    // Store segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin)
-    segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Button, SpinButton)>>>,
+    // Store segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
+    segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>>,
 }
 
 /// Holds references to Content tab widgets for updating when config changes
@@ -1006,34 +1005,16 @@ impl LcarsConfigWidget {
         });
         page.append(&top_colors_box);
 
-        // Top header font settings (with font dialog button)
+        // Top header font settings (with theme font selector)
         let top_font_box = GtkBox::new(Orientation::Horizontal, 6);
         top_font_box.append(&Label::new(Some("Font:")));
 
-        let top_font_initial = {
-            let cfg = config.borrow();
-            let font = if cfg.frame.top_header.font.is_empty() {
-                "Sans"
-            } else {
-                &cfg.frame.top_header.font
-            };
-            format!("{} {:.0}", font, cfg.frame.top_header.font_size)
-        };
-        let top_font_btn = Button::with_label(&top_font_initial);
-        top_font_btn.set_hexpand(true);
-        top_font_box.append(&top_font_btn);
-
-        top_font_box.append(&Label::new(Some("Size:")));
-        let top_font_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        top_font_size_spin.set_value(config.borrow().frame.top_header.font_size);
-        top_font_size_spin.set_width_chars(4);
-        top_font_box.append(&top_font_size_spin);
-
-        // Copy/Paste font buttons
-        let top_copy_font_btn = Button::with_label("Copy");
-        let top_paste_font_btn = Button::with_label("Paste");
-        top_font_box.append(&top_copy_font_btn);
-        top_font_box.append(&top_paste_font_btn);
+        let top_font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
+            family: config.borrow().frame.top_header.font.clone(),
+            size: config.borrow().frame.top_header.font_size,
+        }));
+        top_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        top_font_box.append(top_font_selector.widget());
 
         // Bold checkbox
         let top_bold_check = CheckButton::with_label("Bold");
@@ -1048,92 +1029,24 @@ impl LcarsConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Font button click handler
+        // Font selector change handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let top_font_btn_clone = top_font_btn.clone();
-        let top_font_size_spin_clone = top_font_size_spin.clone();
-        top_font_btn.connect_clicked(move |button| {
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_ref = config_clone.clone();
-            let on_change_ref = on_change_clone.clone();
-            let preview_ref = preview_clone.clone();
-            let btn_ref = top_font_btn_clone.clone();
-            let spin_ref = top_font_size_spin_clone.clone();
-
-            let font_dialog = shared_font_dialog();
-            let current_font = {
-                let cfg = config_ref.borrow();
-                format!("{} {}", cfg.frame.top_header.font, cfg.frame.top_header.font_size as i32)
-            };
-            let pango_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Ok(desc) = font_dialog.choose_font_future(window.as_ref(), Some(&pango_desc)).await {
-                    let family = desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                    let size = (desc.size() / gtk4::pango::SCALE) as f64;
-
-                    {
-                        let mut cfg = config_ref.borrow_mut();
-                        cfg.frame.top_header.font = family.clone();
-                        cfg.frame.top_header.font_size = size;
-                    }
-
-                    btn_ref.set_label(&format!("{} {:.0}", family, size));
-                    spin_ref.set_value(size);
-                    preview_ref.queue_draw();
-                    if let Some(cb) = on_change_ref.borrow().as_ref() {
-                        cb();
-                    }
+        top_font_selector.set_on_change(move |source| {
+            let (family, size) = match &source {
+                FontSource::Theme { index } => {
+                    let cfg = config_clone.borrow();
+                    cfg.frame.theme.get_font(*index)
                 }
-            });
-        });
-
-        // Font size spin handler
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let top_font_btn_clone = top_font_btn.clone();
-        top_font_size_spin.connect_value_changed(move |spin| {
-            let new_size = spin.value();
-            let family = {
-                let f = config_clone.borrow().frame.top_header.font.clone();
-                if f.is_empty() { "Sans".to_string() } else { f }
+                FontSource::Custom { family, size } => (family.clone(), *size),
             };
-            config_clone.borrow_mut().frame.top_header.font_size = new_size;
-            top_font_btn_clone.set_label(&format!("{} {:.0}", family, new_size));
+            {
+                let mut cfg = config_clone.borrow_mut();
+                cfg.frame.top_header.font = family;
+                cfg.frame.top_header.font_size = size;
+            }
             Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Copy font handler
-        let config_clone = config.clone();
-        top_copy_font_btn.connect_clicked(move |_| {
-            let cfg = config_clone.borrow();
-            if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(cfg.frame.top_header.font.clone(), cfg.frame.top_header.font_size, false, false);
-            }
-        });
-
-        // Paste font handler
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let top_font_btn_clone = top_font_btn.clone();
-        let top_font_size_spin_clone = top_font_size_spin.clone();
-        top_paste_font_btn.connect_clicked(move |_| {
-            if let Ok(clipboard) = CLIPBOARD.lock() {
-                if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                    {
-                        let mut cfg = config_clone.borrow_mut();
-                        cfg.frame.top_header.font = family.clone();
-                        cfg.frame.top_header.font_size = size;
-                    }
-                    top_font_btn_clone.set_label(&format!("{} {:.0}", family, size));
-                    top_font_size_spin_clone.set_value(size);
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
-                }
-            }
         });
         page.append(&top_font_box);
 
@@ -1325,34 +1238,16 @@ impl LcarsConfigWidget {
         });
         page.append(&bottom_colors_box);
 
-        // Bottom header font settings (with font dialog button)
+        // Bottom header font settings (with theme font selector)
         let bottom_font_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_font_box.append(&Label::new(Some("Font:")));
 
-        let bottom_font_initial = {
-            let cfg = config.borrow();
-            let font = if cfg.frame.bottom_header.font.is_empty() {
-                "Sans"
-            } else {
-                &cfg.frame.bottom_header.font
-            };
-            format!("{} {:.0}", font, cfg.frame.bottom_header.font_size)
-        };
-        let bottom_font_btn = Button::with_label(&bottom_font_initial);
-        bottom_font_btn.set_hexpand(true);
-        bottom_font_box.append(&bottom_font_btn);
-
-        bottom_font_box.append(&Label::new(Some("Size:")));
-        let bottom_font_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        bottom_font_size_spin.set_value(config.borrow().frame.bottom_header.font_size);
-        bottom_font_size_spin.set_width_chars(4);
-        bottom_font_box.append(&bottom_font_size_spin);
-
-        // Copy/Paste font buttons
-        let bottom_copy_font_btn = Button::with_label("Copy");
-        let bottom_paste_font_btn = Button::with_label("Paste");
-        bottom_font_box.append(&bottom_copy_font_btn);
-        bottom_font_box.append(&bottom_paste_font_btn);
+        let bottom_font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
+            family: config.borrow().frame.bottom_header.font.clone(),
+            size: config.borrow().frame.bottom_header.font_size,
+        }));
+        bottom_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        bottom_font_box.append(bottom_font_selector.widget());
 
         // Bold checkbox
         let bottom_bold_check = CheckButton::with_label("Bold");
@@ -1367,92 +1262,24 @@ impl LcarsConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Font button click handler
+        // Font selector change handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let bottom_font_btn_clone = bottom_font_btn.clone();
-        let bottom_font_size_spin_clone = bottom_font_size_spin.clone();
-        bottom_font_btn.connect_clicked(move |button| {
-            let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-            let config_ref = config_clone.clone();
-            let on_change_ref = on_change_clone.clone();
-            let preview_ref = preview_clone.clone();
-            let btn_ref = bottom_font_btn_clone.clone();
-            let spin_ref = bottom_font_size_spin_clone.clone();
-
-            let font_dialog = shared_font_dialog();
-            let current_font = {
-                let cfg = config_ref.borrow();
-                format!("{} {}", cfg.frame.bottom_header.font, cfg.frame.bottom_header.font_size as i32)
-            };
-            let pango_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-            gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Ok(desc) = font_dialog.choose_font_future(window.as_ref(), Some(&pango_desc)).await {
-                    let family = desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                    let size = (desc.size() / gtk4::pango::SCALE) as f64;
-
-                    {
-                        let mut cfg = config_ref.borrow_mut();
-                        cfg.frame.bottom_header.font = family.clone();
-                        cfg.frame.bottom_header.font_size = size;
-                    }
-
-                    btn_ref.set_label(&format!("{} {:.0}", family, size));
-                    spin_ref.set_value(size);
-                    preview_ref.queue_draw();
-                    if let Some(cb) = on_change_ref.borrow().as_ref() {
-                        cb();
-                    }
+        bottom_font_selector.set_on_change(move |source| {
+            let (family, size) = match &source {
+                FontSource::Theme { index } => {
+                    let cfg = config_clone.borrow();
+                    cfg.frame.theme.get_font(*index)
                 }
-            });
-        });
-
-        // Font size spin handler
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let bottom_font_btn_clone = bottom_font_btn.clone();
-        bottom_font_size_spin.connect_value_changed(move |spin| {
-            let new_size = spin.value();
-            let family = {
-                let f = config_clone.borrow().frame.bottom_header.font.clone();
-                if f.is_empty() { "Sans".to_string() } else { f }
+                FontSource::Custom { family, size } => (family.clone(), *size),
             };
-            config_clone.borrow_mut().frame.bottom_header.font_size = new_size;
-            bottom_font_btn_clone.set_label(&format!("{} {:.0}", family, new_size));
+            {
+                let mut cfg = config_clone.borrow_mut();
+                cfg.frame.bottom_header.font = family;
+                cfg.frame.bottom_header.font_size = size;
+            }
             Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Copy font handler
-        let config_clone = config.clone();
-        bottom_copy_font_btn.connect_clicked(move |_| {
-            let cfg = config_clone.borrow();
-            if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(cfg.frame.bottom_header.font.clone(), cfg.frame.bottom_header.font_size, false, false);
-            }
-        });
-
-        // Paste font handler
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let bottom_font_btn_clone = bottom_font_btn.clone();
-        let bottom_font_size_spin_clone = bottom_font_size_spin.clone();
-        bottom_paste_font_btn.connect_clicked(move |_| {
-            if let Ok(clipboard) = CLIPBOARD.lock() {
-                if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                    {
-                        let mut cfg = config_clone.borrow_mut();
-                        cfg.frame.bottom_header.font = family.clone();
-                        cfg.frame.bottom_header.font_size = size;
-                    }
-                    bottom_font_btn_clone.set_label(&format!("{} {:.0}", family, size));
-                    bottom_font_size_spin_clone.set_value(size);
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
-                }
-            }
         });
         page.append(&bottom_font_box);
 
@@ -1490,8 +1317,7 @@ impl LcarsConfigWidget {
             top_shape_dropdown: top_shape_dropdown.clone(),
             top_bg_widget: top_bg_widget.clone(),
             top_text_color_widget: top_text_color_widget.clone(),
-            top_font_btn: top_font_btn.clone(),
-            top_font_size_spin: top_font_size_spin.clone(),
+            top_font_selector: top_font_selector.clone(),
             top_bold_check: top_bold_check.clone(),
             top_align_dropdown: top_align_dropdown.clone(),
             bottom_show_check: bottom_show_check.clone(),
@@ -1499,8 +1325,7 @@ impl LcarsConfigWidget {
             bottom_shape_dropdown: bottom_shape_dropdown.clone(),
             bottom_bg_widget: bottom_bg_widget.clone(),
             bottom_text_color_widget: bottom_text_color_widget.clone(),
-            bottom_font_btn: bottom_font_btn.clone(),
-            bottom_font_size_spin: bottom_font_size_spin.clone(),
+            bottom_font_selector: bottom_font_selector.clone(),
             bottom_bold_check: bottom_bold_check.clone(),
             bottom_align_dropdown: bottom_align_dropdown.clone(),
         });
@@ -1547,16 +1372,16 @@ impl LcarsConfigWidget {
         // Create wrapper container to hold segment frames
         let segment_frames: Rc<RefCell<Vec<gtk4::Frame>>> = Rc::new(RefCell::new(Vec::new()));
 
-        // Store per-segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin)
-        let segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Button, SpinButton)>>> = Rc::new(RefCell::new(Vec::new()));
+        // Store per-segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
+        let segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Helper function to create a segment config widget
-        // Returns (frame, (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin))
+        // Returns (frame, (label_entry, color_widget, label_color_widget, weight_spin, font_selector))
         let create_segment_widget = {
             let config = config.clone();
             let on_change = on_change.clone();
             let preview = preview.clone();
-            move |seg_idx: usize| -> (gtk4::Frame, (Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Button, SpinButton)) {
+            move |seg_idx: usize| -> (gtk4::Frame, (Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)) {
                 let seg_frame = gtk4::Frame::new(Some(&format!("Segment {}", seg_idx + 1)));
                 let seg_box = GtkBox::new(Orientation::Vertical, 4);
                 seg_box.set_margin_start(8);
@@ -1665,7 +1490,7 @@ impl LcarsConfigWidget {
                 });
                 seg_box.append(&weight_box);
 
-                // Font settings (with font dialog button + size spinner + copy/paste)
+                // Font settings (with theme font selector)
                 let font_box = GtkBox::new(Orientation::Horizontal, 6);
                 font_box.append(&Label::new(Some("Font:")));
 
@@ -1678,133 +1503,39 @@ impl LcarsConfigWidget {
                     }
                 };
 
-                let font_btn = Button::with_label(&format!("{} {:.0}", font_family, font_size));
-                font_btn.set_hexpand(true);
-                font_box.append(&font_btn);
+                let font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
+                    family: font_family,
+                    size: font_size,
+                }));
+                font_selector.set_theme_config(config.borrow().frame.theme.clone());
+                font_box.append(font_selector.widget());
 
-                font_box.append(&Label::new(Some("Size:")));
-                let size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-                size_spin.set_value(font_size);
-                size_spin.set_width_chars(4);
-                font_box.append(&size_spin);
-
-                // Copy/Paste font buttons
-                let copy_font_btn = Button::with_label("Copy");
-                let paste_font_btn = Button::with_label("Paste");
-                font_box.append(&copy_font_btn);
-                font_box.append(&paste_font_btn);
-
-                // Font button click handler
+                // Font selector change handler
                 let config_clone = config.clone();
                 let on_change_clone = on_change.clone();
                 let preview_clone = preview.clone();
-                let font_btn_clone = font_btn.clone();
-                let size_spin_clone = size_spin.clone();
-                font_btn.connect_clicked(move |button| {
-                    let window = button.root().and_then(|root| root.downcast::<gtk4::Window>().ok());
-                    let config_ref = config_clone.clone();
-                    let on_change_ref = on_change_clone.clone();
-                    let preview_ref = preview_clone.clone();
-                    let btn_ref = font_btn_clone.clone();
-                    let spin_ref = size_spin_clone.clone();
-
-                    let font_dialog = shared_font_dialog();
-                    let current_font = {
-                        let cfg = config_ref.borrow();
-                        if let Some(seg) = cfg.frame.segments.get(seg_idx) {
-                            format!("{} {}", seg.font, seg.font_size as i32)
-                        } else {
-                            "Sans 12".to_string()
+                font_selector.set_on_change(move |source| {
+                    let (family, size) = match &source {
+                        FontSource::Theme { index } => {
+                            let cfg = config_clone.borrow();
+                            cfg.frame.theme.get_font(*index)
                         }
-                    };
-                    let pango_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-                    gtk4::glib::MainContext::default().spawn_local(async move {
-                        if let Ok(desc) = font_dialog.choose_font_future(window.as_ref(), Some(&pango_desc)).await {
-                            let family = desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                            let size = (desc.size() / gtk4::pango::SCALE) as f64;
-
-                            {
-                                let mut cfg = config_ref.borrow_mut();
-                                while cfg.frame.segments.len() <= seg_idx {
-                                    cfg.frame.segments.push(SegmentConfig::default());
-                                }
-                                cfg.frame.segments[seg_idx].font = family.clone();
-                                cfg.frame.segments[seg_idx].font_size = size;
-                            }
-
-                            btn_ref.set_label(&format!("{} {:.0}", family, size));
-                            spin_ref.set_value(size);
-                            preview_ref.queue_draw();
-                            if let Some(cb) = on_change_ref.borrow().as_ref() {
-                                cb();
-                            }
-                        }
-                    });
-                });
-
-                // Size spin handler
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                let font_btn_clone = font_btn.clone();
-                size_spin.connect_value_changed(move |spin| {
-                    let new_size = spin.value();
-                    let family = {
-                        let cfg = config_clone.borrow();
-                        cfg.frame.segments.get(seg_idx)
-                            .map(|s| s.font.clone())
-                            .unwrap_or_else(|| "Sans".to_string())
+                        FontSource::Custom { family, size } => (family.clone(), *size),
                     };
                     {
                         let mut cfg = config_clone.borrow_mut();
                         while cfg.frame.segments.len() <= seg_idx {
                             cfg.frame.segments.push(SegmentConfig::default());
                         }
-                        cfg.frame.segments[seg_idx].font_size = new_size;
+                        cfg.frame.segments[seg_idx].font = family;
+                        cfg.frame.segments[seg_idx].font_size = size;
                     }
-                    font_btn_clone.set_label(&format!("{} {:.0}", family, new_size));
                     Self::queue_redraw(&preview_clone, &on_change_clone);
-                });
-
-                // Copy font handler
-                let config_clone = config.clone();
-                copy_font_btn.connect_clicked(move |_| {
-                    let cfg = config_clone.borrow();
-                    if let Some(seg) = cfg.frame.segments.get(seg_idx) {
-                        if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                            clipboard.copy_font(seg.font.clone(), seg.font_size, false, false);
-                        }
-                    }
-                });
-
-                // Paste font handler
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                let font_btn_clone = font_btn.clone();
-                let size_spin_clone = size_spin.clone();
-                paste_font_btn.connect_clicked(move |_| {
-                    if let Ok(clipboard) = CLIPBOARD.lock() {
-                        if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                            {
-                                let mut cfg = config_clone.borrow_mut();
-                                while cfg.frame.segments.len() <= seg_idx {
-                                    cfg.frame.segments.push(SegmentConfig::default());
-                                }
-                                cfg.frame.segments[seg_idx].font = family.clone();
-                                cfg.frame.segments[seg_idx].font_size = size;
-                            }
-                            font_btn_clone.set_label(&format!("{} {:.0}", family, size));
-                            size_spin_clone.set_value(size);
-                            Self::queue_redraw(&preview_clone, &on_change_clone);
-                        }
-                    }
                 });
                 seg_box.append(&font_box);
 
                 seg_frame.set_child(Some(&seg_box));
-                (seg_frame, (label_entry, color_widget.clone(), label_color_widget.clone(), weight_spin.clone(), font_btn.clone(), size_spin.clone()))
+                (seg_frame, (label_entry, color_widget.clone(), label_color_widget.clone(), weight_spin.clone(), font_selector.clone()))
             }
         };
 
@@ -3119,12 +2850,10 @@ impl LcarsConfigWidget {
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
             widgets.top_bg_widget.set_source(ColorSource::custom(config_to_use.frame.top_header.bg_color));
             widgets.top_text_color_widget.set_source(ColorSource::custom(config_to_use.frame.top_header.text_color));
-            widgets.top_font_btn.set_label(&format!(
-                "{} {:.0}",
-                config_to_use.frame.top_header.font,
-                config_to_use.frame.top_header.font_size
-            ));
-            widgets.top_font_size_spin.set_value(config_to_use.frame.top_header.font_size);
+            widgets.top_font_selector.set_source(FontSource::Custom {
+                family: config_to_use.frame.top_header.font.clone(),
+                size: config_to_use.frame.top_header.font_size,
+            });
             widgets.top_bold_check.set_active(config_to_use.frame.top_header.font_bold);
             let top_align_idx = match config_to_use.frame.top_header.align {
                 HeaderAlign::Left => 0,
@@ -3143,12 +2872,10 @@ impl LcarsConfigWidget {
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
             widgets.bottom_bg_widget.set_source(ColorSource::custom(config_to_use.frame.bottom_header.bg_color));
             widgets.bottom_text_color_widget.set_source(ColorSource::custom(config_to_use.frame.bottom_header.text_color));
-            widgets.bottom_font_btn.set_label(&format!(
-                "{} {:.0}",
-                config_to_use.frame.bottom_header.font,
-                config_to_use.frame.bottom_header.font_size
-            ));
-            widgets.bottom_font_size_spin.set_value(config_to_use.frame.bottom_header.font_size);
+            widgets.bottom_font_selector.set_source(FontSource::Custom {
+                family: config_to_use.frame.bottom_header.font.clone(),
+                size: config_to_use.frame.bottom_header.font_size,
+            });
             widgets.bottom_bold_check.set_active(config_to_use.frame.bottom_header.font_bold);
             let bottom_align_idx = match config_to_use.frame.bottom_header.align {
                 HeaderAlign::Left => 0,
@@ -3172,14 +2899,16 @@ impl LcarsConfigWidget {
 
             // Update individual segment widgets
             let segment_widgets = widgets.segment_widgets.borrow();
-            for (i, (label_entry, color_widget, label_color_widget, weight_spin, font_btn, size_spin)) in segment_widgets.iter().enumerate() {
+            for (i, (label_entry, color_widget, label_color_widget, weight_spin, font_selector)) in segment_widgets.iter().enumerate() {
                 if let Some(seg) = new_config.frame.segments.get(i) {
                     label_entry.set_text(&seg.label);
                     color_widget.set_source(ColorSource::custom(seg.color));
                     label_color_widget.set_source(ColorSource::custom(seg.label_color));
                     weight_spin.set_value(seg.height_weight);
-                    font_btn.set_label(&format!("{} {:.0}", seg.font, seg.font_size));
-                    size_spin.set_value(seg.font_size);
+                    font_selector.set_source(FontSource::Custom {
+                        family: seg.font.clone(),
+                        size: seg.font_size,
+                    });
                 }
             }
         }
@@ -3265,18 +2994,21 @@ impl LcarsConfigWidget {
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
             widgets.theme_gradient_editor.set_theme_config(theme.clone());
         }
-        // Update header widgets with new theme colors
+        // Update header widgets with new theme colors and fonts
         if let Some(ref widgets) = *self.headers_widgets.borrow() {
             widgets.top_bg_widget.set_theme_config(theme.clone());
             widgets.top_text_color_widget.set_theme_config(theme.clone());
+            widgets.top_font_selector.set_theme_config(theme.clone());
             widgets.bottom_bg_widget.set_theme_config(theme.clone());
             widgets.bottom_text_color_widget.set_theme_config(theme.clone());
+            widgets.bottom_font_selector.set_theme_config(theme.clone());
         }
-        // Update segment widgets with new theme colors
+        // Update segment widgets with new theme colors and fonts
         if let Some(ref widgets) = *self.segments_widgets.borrow() {
-            for (_, color_widget, label_color_widget, _, _, _) in widgets.segment_widgets.borrow().iter() {
+            for (_, color_widget, label_color_widget, _, font_selector) in widgets.segment_widgets.borrow().iter() {
                 color_widget.set_theme_config(theme.clone());
                 label_color_widget.set_theme_config(theme.clone());
+                font_selector.set_theme_config(theme.clone());
             }
         }
         // Update layout widgets with new theme colors
