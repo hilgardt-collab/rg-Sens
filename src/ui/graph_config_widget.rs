@@ -1524,13 +1524,10 @@ fn create_text_overlay_page(_config: Rc<RefCell<GraphDisplayConfig>>, available_
     // Connect the text widget's on_change to propagate changes up
     let on_change_clone = on_change.clone();
     text_widget.set_on_change(move || {
-        log::info!("=== GraphConfigWidget: text_widget on_change triggered ===");
         if let Some(ref callback) = *on_change_clone.borrow() {
-            log::info!("    Parent callback exists, calling it");
             callback();
-        } else {
-            log::warn!("    Parent callback is None - changes won't be saved!");
         }
+        // Note: callback may be None during initialization - this is expected
     });
 
     page.append(text_widget.widget());

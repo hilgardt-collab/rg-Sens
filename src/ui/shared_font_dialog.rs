@@ -1,20 +1,15 @@
-//! Shared font dialog singleton
+//! Font dialog factory
+//!
+//! Creates new FontDialog instances for each usage to avoid issues
+//! with GTK4's FontDialog hanging when reusing the same instance.
 
 use gtk4::FontDialog;
-use std::cell::RefCell;
 use std::rc::Rc;
 
-thread_local! {
-    static FONT_DIALOG: RefCell<Option<Rc<FontDialog>>> = const { RefCell::new(None) };
-}
-
-/// Get the shared font dialog instance (thread-local for GTK thread safety)
+/// Create a new font dialog instance for each usage.
+///
+/// GTK4's FontDialog can hang if the same instance is reused while
+/// already displaying a dialog. Creating a fresh instance avoids this.
 pub fn shared_font_dialog() -> Rc<FontDialog> {
-    FONT_DIALOG.with(|dialog| {
-        let mut dialog_ref = dialog.borrow_mut();
-        if dialog_ref.is_none() {
-            *dialog_ref = Some(Rc::new(FontDialog::new()));
-        }
-        dialog_ref.as_ref().unwrap().clone()
-    })
+    Rc::new(FontDialog::new())
 }
