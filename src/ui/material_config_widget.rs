@@ -26,7 +26,7 @@ use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrien
 use crate::displayers::MaterialDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
-use crate::ui::theme::ColorSource;
+use crate::ui::theme::{ColorSource, FontSource};
 
 /// Holds references to Appearance tab widgets (theme variant & surface colors)
 struct AppearanceWidgets {
@@ -804,12 +804,10 @@ impl MaterialConfigWidget {
 
             let copy_btn = Button::from_icon_name("edit-copy-symbolic");
             copy_btn.set_tooltip_text(Some(&format!("Copy {} to clipboard", tooltip)));
-            let config_for_copy = config.clone();
             let font_idx = *idx;
             copy_btn.connect_clicked(move |_| {
-                let (family, size) = config_for_copy.borrow().frame.theme.get_font(font_idx);
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                    clipboard.copy_font(family, size, false, false);
+                    clipboard.copy_font_source(FontSource::Theme { index: font_idx }, false, false);
                 }
             });
             item_box.append(&copy_btn);

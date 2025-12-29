@@ -15,7 +15,7 @@ use std::rc::Rc;
 use crate::core::{FieldMetadata, FieldPurpose, FieldType};
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
-use crate::ui::theme::ComboThemeConfig;
+use crate::ui::theme::{ComboThemeConfig, FontSource};
 use crate::ui::{
     ArcConfigWidget, BarConfigWidget, CoreBarsConfigWidget, GradientEditor, GraphConfigWidget,
     SpeedometerConfigWidget, TextLineConfigWidget,
@@ -258,18 +258,14 @@ where
         font_labels.borrow_mut().push(info.clone());
         item_box.append(&info);
 
-        // Copy button with icon - reads from config dynamically
+        // Copy button with icon - copies theme font reference to clipboard
         let copy_btn = Button::from_icon_name("edit-copy-symbolic");
         copy_btn.set_tooltip_text(Some(&format!("Copy {} to clipboard", tooltip)));
-        let config_for_copy = config.clone();
-        let get_theme_for_copy = get_theme.clone();
         let font_idx = *idx;
         let tooltip_for_log = tooltip.to_string();
         copy_btn.connect_clicked(move |_| {
-            let theme = get_theme_for_copy(&config_for_copy.borrow());
-            let (family, size) = theme.get_font(font_idx);
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(family, size, false, false);
+                clipboard.copy_font_source(FontSource::Theme { index: font_idx }, false, false);
                 log::info!("Theme {} copied to clipboard", tooltip_for_log);
             }
         });

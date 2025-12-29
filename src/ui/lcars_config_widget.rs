@@ -1035,8 +1035,7 @@ impl LcarsConfigWidget {
         top_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                let (family, size) = cfg.frame.top_header.font.resolve(&cfg.frame.theme);
-                clipboard.copy_font(family, size, cfg.frame.top_header.font_bold, false);
+                clipboard.copy_font_source(cfg.frame.top_header.font.clone(), cfg.frame.top_header.font_bold, false);
             }
         });
 
@@ -1047,10 +1046,9 @@ impl LcarsConfigWidget {
         let top_font_selector_clone = top_font_selector.clone();
         top_paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
-                if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                    let new_font = FontSource::Custom { family, size };
-                    config_clone.borrow_mut().frame.top_header.font = new_font.clone();
-                    top_font_selector_clone.set_source(new_font);
+                if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
+                    config_clone.borrow_mut().frame.top_header.font = source.clone();
+                    top_font_selector_clone.set_source(source);
                     Self::queue_redraw(&preview_clone, &on_change_clone);
                 }
             }
@@ -1283,9 +1281,8 @@ impl LcarsConfigWidget {
         let config_clone = config.clone();
         bottom_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
-            let (family, size) = cfg.frame.bottom_header.font.resolve(&cfg.frame.theme);
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(family, size, cfg.frame.bottom_header.font_bold, false);
+                clipboard.copy_font_source(cfg.frame.bottom_header.font.clone(), cfg.frame.bottom_header.font_bold, false);
             }
         });
 
@@ -1296,8 +1293,7 @@ impl LcarsConfigWidget {
         let bottom_font_selector_clone = bottom_font_selector.clone();
         bottom_paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
-                if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                    let source = FontSource::Custom { family, size };
+                if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
                     config_clone.borrow_mut().frame.bottom_header.font = source.clone();
                     bottom_font_selector_clone.set_source(source);
                     Self::queue_redraw(&preview_clone, &on_change_clone);
@@ -1550,9 +1546,8 @@ impl LcarsConfigWidget {
                 copy_font_btn.connect_clicked(move |_| {
                     let cfg = config_clone.borrow();
                     if let Some(seg) = cfg.frame.segments.get(seg_idx) {
-                        let (family, size) = seg.font.resolve(&cfg.frame.theme);
                         if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                            clipboard.copy_font(family, size, false, false);
+                            clipboard.copy_font_source(seg.font.clone(), false, false);
                         }
                     }
                 });
@@ -1564,8 +1559,7 @@ impl LcarsConfigWidget {
                 let font_selector_clone = font_selector.clone();
                 paste_font_btn.connect_clicked(move |_| {
                     if let Ok(clipboard) = CLIPBOARD.lock() {
-                        if let Some((family, size, _bold, _italic)) = clipboard.paste_font() {
-                            let source = FontSource::Custom { family, size };
+                        if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
                             {
                                 let mut cfg = config_clone.borrow_mut();
                                 while cfg.frame.segments.len() <= seg_idx {
@@ -1934,12 +1928,10 @@ impl LcarsConfigWidget {
 
             let copy_btn = Button::from_icon_name("edit-copy-symbolic");
             copy_btn.set_tooltip_text(Some(&format!("Copy {} to clipboard", tooltip)));
-            let config_for_copy = config.clone();
             let font_idx = *idx;
             copy_btn.connect_clicked(move |_| {
-                let (family, size) = config_for_copy.borrow().frame.theme.get_font(font_idx);
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                    clipboard.copy_font(family, size, false, false);
+                    clipboard.copy_font_source(FontSource::Theme { index: font_idx }, false, false);
                 }
             });
             item_box.append(&copy_btn);

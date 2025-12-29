@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use crate::displayers::{TextLineConfig, TextDisplayerConfig};
 use crate::ui::{BackgroundConfig, ColorStop, CpuSourceConfig, GpuSourceConfig};
 use crate::ui::bar_display::BarDisplayConfig;
+use crate::ui::theme::FontSource;
 use crate::ui::graph_display::GraphDisplayConfig;
 use crate::ui::arc_display::ArcDisplayConfig;
 use crate::ui::speedometer_display::SpeedometerConfig;
@@ -32,8 +33,10 @@ pub struct PanelStyle {
 pub struct Clipboard {
     /// Copied plain text
     pub text: Option<String>,
-    /// Copied font (family, size, bold, italic)
+    /// Copied font (family, size, bold, italic) - legacy format
     pub font: Option<(String, f64, bool, bool)>,
+    /// Copied font source (preserves theme reference)
+    pub font_source: Option<(FontSource, bool, bool)>,
     /// Copied color (r, g, b, a)
     pub color: Option<(f64, f64, f64, f64)>,
     /// Copied text line configuration
@@ -81,6 +84,16 @@ impl Clipboard {
     /// Paste font from clipboard
     pub fn paste_font(&self) -> Option<(String, f64, bool, bool)> {
         self.font.clone()
+    }
+
+    /// Copy font source to clipboard (preserves theme reference)
+    pub fn copy_font_source(&mut self, source: FontSource, bold: bool, italic: bool) {
+        self.font_source = Some((source, bold, italic));
+    }
+
+    /// Paste font source from clipboard
+    pub fn paste_font_source(&self) -> Option<(FontSource, bool, bool)> {
+        self.font_source.clone()
     }
 
     /// Copy color to clipboard
@@ -218,6 +231,7 @@ impl Clipboard {
     pub fn clear(&mut self) {
         self.text = None;
         self.font = None;
+        self.font_source = None;
         self.color = None;
         self.text_line = None;
         self.background = None;
