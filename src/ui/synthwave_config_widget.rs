@@ -2175,7 +2175,11 @@ impl SynthwaveConfigWidget {
     /// Set the theme configuration. Call this BEFORE set_config to ensure
     /// font selectors have the correct theme when the UI is rebuilt.
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
-        self.config.borrow_mut().frame.theme = theme;
+        self.config.borrow_mut().frame.theme = theme.clone();
+        // Update header font selector with new theme
+        if let Some(ref widgets) = *self.header_widgets.borrow() {
+            widgets.header_font_selector.set_theme_config(theme.clone());
+        }
         // Trigger all theme refreshers to update child widgets
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
