@@ -882,6 +882,11 @@ where
             .map(|item| item.core_bars_config.clone())
             .unwrap_or_default()
     };
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        core_bars_widget.set_theme(get_theme(&cfg));
+    }
     core_bars_widget.set_config(current_core_bars_config);
 
     // Connect core bars widget on_change
@@ -907,6 +912,19 @@ where
             queue_redraw(&preview_clone, &on_change_clone);
         });
     }
+
+    // Register theme refresh callback for core bars widget
+    {
+        let core_bars_widget_for_theme = core_bars_widget_rc.clone();
+        let config_for_core_bars_theme = config.clone();
+        let get_theme_for_core_bars = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_core_bars(&config_for_core_bars_theme.borrow());
+            core_bars_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
     core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
     inner_box.append(&core_bars_config_frame);
 

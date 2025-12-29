@@ -1804,6 +1804,8 @@ impl CyberpunkConfigWidget {
                 .map(|item| item.core_bars_config.clone())
                 .unwrap_or_else(Self::default_core_bars_config_cyberpunk)
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        core_bars_widget.set_theme(config.borrow().frame.theme.clone());
         core_bars_widget.set_config(current_core_bars_config);
 
         // Set up change callback

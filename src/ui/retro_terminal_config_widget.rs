@@ -1815,6 +1815,8 @@ impl RetroTerminalConfigWidget {
                 .map(|item| item.core_bars_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        core_bars_widget.set_theme(config.borrow().frame.theme.clone());
         core_bars_widget.set_config(current_core_bars_config);
 
         let slot_name_clone = slot_name.to_string();

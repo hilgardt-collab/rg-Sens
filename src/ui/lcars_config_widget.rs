@@ -2282,9 +2282,9 @@ impl LcarsConfigWidget {
                 .map(|item| item.bar_config.clone())
                 .unwrap_or_default()
         };
-        bar_widget.set_config(current_bar_config);
-        // Set initial theme
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
         bar_widget.set_theme(config.borrow().frame.theme.clone());
+        bar_widget.set_config(current_bar_config);
 
         // Set up change callback to sync config back
         let slot_name_clone = slot_name.to_string();
@@ -2346,6 +2346,8 @@ impl LcarsConfigWidget {
             lcars_fields.len(),
             lcars_fields.iter().map(|f| f.id.as_str()).collect::<Vec<_>>()
         );
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        graph_widget.set_theme(config.borrow().frame.theme.clone());
         graph_widget.set_config(current_graph_config);
 
         // Set up change callback to sync config back
@@ -2377,6 +2379,15 @@ impl LcarsConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for graph widget
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_graph_theme.borrow().frame.theme.clone();
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
@@ -2396,6 +2407,8 @@ impl LcarsConfigWidget {
                 .map(|item| item.bar_config.text_overlay.text_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        text_widget.set_theme(config.borrow().frame.theme.clone());
         text_widget.set_config(current_text_config);
 
         // Set up change callback to sync text config back to bar_config's text_overlay
@@ -2418,6 +2431,15 @@ impl LcarsConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for text widget
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_text_theme.borrow().frame.theme.clone();
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
 
@@ -2436,6 +2458,8 @@ impl LcarsConfigWidget {
                 .map(|item| item.core_bars_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        core_bars_widget.set_theme(config.borrow().frame.theme.clone());
         core_bars_widget.set_config(current_core_bars_config);
 
         // Set up change callback to sync config back
