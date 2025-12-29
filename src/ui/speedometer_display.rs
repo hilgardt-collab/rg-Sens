@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
+use crate::ui::theme::{deserialize_color_or_source, ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::displayers::TextDisplayerConfig;
 
 /// Needle style
@@ -74,6 +74,7 @@ pub enum BezelStyle {
 pub struct TickLabelConfig {
     pub font_family: String,
     pub font_size: f64,
+    #[serde(deserialize_with = "deserialize_color_or_source")]
     pub color: ColorSource,
     pub bold: bool,
     pub italic: bool,
