@@ -171,7 +171,10 @@ impl GradientEditor {
         let scroll = gtk4::ScrolledWindow::new();
         scroll.set_child(Some(&stops_listbox));
         scroll.set_vexpand(true);
-        scroll.set_propagate_natural_height(false);
+        // Allow the scroll window to grow with content up to a reasonable size
+        scroll.set_propagate_natural_height(true);
+        scroll.set_max_content_height(300);
+        scroll.set_min_content_height(80);
         container.append(&scroll);
 
         // Add stop button handler

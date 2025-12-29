@@ -3121,6 +3121,8 @@ impl LcarsConfigWidget {
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
         }
+        // Redraw the main preview to reflect theme color changes
+        self.preview.queue_draw();
     }
 
     /// Update the source summaries and rebuild the content notebook tabs

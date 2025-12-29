@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
-use crate::ui::background::{Color, ColorStop};
+use crate::ui::background::Color;
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::clipboard::CLIPBOARD;
@@ -780,13 +780,10 @@ impl CoreBarsConfigWidget {
         let on_change_for_fg_gradient = on_change.clone();
         let fg_gradient_editor_for_change = fg_gradient_editor.clone();
         fg_gradient_editor.set_on_change(move || {
-            let gradient = fg_gradient_editor_for_change.get_gradient();
-            let stops: Vec<ColorStopSource> = gradient.stops.iter()
-                .map(|s| ColorStopSource::custom(s.position, s.color))
-                .collect();
+            let gradient_source = fg_gradient_editor_for_change.get_gradient_source_config();
             config_for_fg_gradient.borrow_mut().foreground = BarFillType::Gradient {
-                stops,
-                angle: gradient.angle
+                stops: gradient_source.stops,
+                angle: gradient_source.angle,
             };
             if let Some(ref cb) = *on_change_for_fg_gradient.borrow() {
                 cb();
@@ -868,13 +865,10 @@ impl CoreBarsConfigWidget {
         let on_change_for_bg_gradient = on_change.clone();
         let bg_gradient_editor_for_change = bg_gradient_editor.clone();
         bg_gradient_editor.set_on_change(move || {
-            let gradient = bg_gradient_editor_for_change.get_gradient();
-            let stops: Vec<ColorStopSource> = gradient.stops.iter()
-                .map(|s| ColorStopSource::custom(s.position, s.color))
-                .collect();
+            let gradient_source = bg_gradient_editor_for_change.get_gradient_source_config();
             config_for_bg_gradient.borrow_mut().background = BarBackgroundType::Gradient {
-                stops,
-                angle: gradient.angle
+                stops: gradient_source.stops,
+                angle: gradient_source.angle,
             };
             if let Some(ref cb) = *on_change_for_bg_gradient.borrow() {
                 cb();
@@ -1314,18 +1308,13 @@ impl CoreBarsConfigWidget {
         self.segment_spacing_spin.set_value(config.segment_spacing);
 
         // Colors
-        let thm = self.theme.borrow();
         match &config.foreground {
             BarFillType::Solid { color } => {
                 self.fg_solid_radio.set_active(true);
                 self.fg_color_widget.set_source(color.clone());
             }
             BarFillType::Gradient { stops, angle } => {
-                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
-                self.fg_gradient_editor.set_gradient(&crate::ui::background::LinearGradientConfig {
-                    stops: resolved_stops,
-                    angle: *angle,
-                });
+                self.fg_gradient_editor.set_gradient_source(*angle, stops.clone());
                 self.fg_gradient_radio.set_active(true);
             }
         }
@@ -1336,11 +1325,7 @@ impl CoreBarsConfigWidget {
                 self.bg_color_widget.set_source(color.clone());
             }
             BarBackgroundType::Gradient { stops, angle } => {
-                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
-                self.bg_gradient_editor.set_gradient(&crate::ui::background::LinearGradientConfig {
-                    stops: resolved_stops,
-                    angle: *angle,
-                });
+                self.bg_gradient_editor.set_gradient_source(*angle, stops.clone());
                 self.bg_gradient_radio.set_active(true);
             }
             BarBackgroundType::Transparent => {
