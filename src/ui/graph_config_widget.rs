@@ -478,6 +478,9 @@ impl GraphConfigWidget {
     pub fn set_theme(&self, theme: ComboThemeConfig) {
         *self.theme.borrow_mut() = theme.clone();
 
+        // Also update the embedded theme in the config so render_graph uses the new theme
+        self.config.borrow_mut().theme = theme.clone();
+
         // Update all theme color selectors
         self.line_color_widget.set_theme_config(theme.clone());
         self.fill_color_widget.set_theme_config(theme.clone());
@@ -497,6 +500,9 @@ impl GraphConfigWidget {
         for text_widget in &self.text_config_widgets {
             text_widget.set_theme(theme.clone());
         }
+
+        // Notify parent to refresh preview with new theme colors
+        notify_change_static(&self.on_change);
     }
 }
 

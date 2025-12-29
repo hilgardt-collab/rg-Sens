@@ -1906,6 +1906,8 @@ impl SynthwaveConfigWidget {
                 .map(|item| item.speedometer_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        speedometer_widget.set_theme(config.borrow().frame.theme.clone());
         speedometer_widget.set_config(&current_speedometer_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1924,6 +1926,15 @@ impl SynthwaveConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         }));
+
+        // Register theme refresh callback for speedometer widget
+        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
+        let config_for_speedometer_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_speedometer_theme.borrow().frame.theme.clone();
+            speedometer_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
         inner_box.append(&speedometer_config_frame);

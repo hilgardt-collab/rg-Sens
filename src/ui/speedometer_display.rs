@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::theme::{ColorSource, ComboThemeConfig};
+use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::displayers::TextDisplayerConfig;
 
 /// Needle style
@@ -112,7 +112,7 @@ pub struct SpeedometerConfig {
     #[serde(default = "default_track_color_source")]
     pub track_color: ColorSource,
     #[serde(default = "default_color_stops")]
-    pub track_color_stops: Vec<ColorStop>, // Color zones for track
+    pub track_color_stops: Vec<ColorStopSource>, // Color zones for track (theme-aware)
 
     // Ticks
     #[serde(default = "default_true")]
@@ -258,11 +258,11 @@ fn default_track_color_source() -> ColorSource {
     ColorSource::Custom { color: Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 } }
 }
 
-fn default_color_stops() -> Vec<ColorStop> {
+fn default_color_stops() -> Vec<ColorStopSource> {
     vec![
-        ColorStop { position: 0.0, color: Color { r: 0.0, g: 0.8, b: 0.0, a: 1.0 } },
-        ColorStop { position: 0.7, color: Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 } },
-        ColorStop { position: 0.9, color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 } },
+        ColorStopSource::custom(0.0, Color { r: 0.0, g: 0.8, b: 0.0, a: 1.0 }),
+        ColorStopSource::custom(0.7, Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 }),
+        ColorStopSource::custom(0.9, Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }),
     ]
 }
 
@@ -532,6 +532,12 @@ fn draw_track(
 
     // If we have color stops, create gradient
     if config.track_color_stops.len() > 1 {
+        // Resolve theme-aware color stops to concrete colors
+        let resolved_stops: Vec<ColorStop> = config.track_color_stops
+            .iter()
+            .map(|stop| stop.resolve(theme))
+            .collect();
+
         // Draw track with gradient by drawing many small segments
         let segments = 100;
         for i in 0..segments {
@@ -541,8 +547,8 @@ fn draw_track(
             let angle1 = start_rad + sweep * t1;
             let angle2 = start_rad + sweep * t2;
 
-            // Interpolate color
-            let color = interpolate_color_stops(&config.track_color_stops, t1);
+            // Interpolate color from resolved stops
+            let color = interpolate_color_stops(&resolved_stops, t1);
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.set_line_width(arc_width_pixels);

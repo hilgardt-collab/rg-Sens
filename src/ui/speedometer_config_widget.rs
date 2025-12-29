@@ -132,7 +132,7 @@ impl SpeedometerConfigWidget {
 
         // === Tab 2: Track ===
         let (track_page, show_track_check, track_color_widget, gradient_editor) =
-            Self::create_track_page(&config, &on_change, &preview);
+            Self::create_track_page(&config, &on_change, &preview, &theme);
         notebook.append_page(&track_page, Some(&Label::new(Some("Track"))));
 
         // === Tab 3: Ticks ===
@@ -256,11 +256,8 @@ impl SpeedometerConfigWidget {
                     // Update track
                     show_track_check_paste.set_active(new_config.show_track);
                     track_color_widget_paste.set_source(new_config.track_color.clone());
-                    let gradient_config = crate::ui::LinearGradientConfig {
-                        angle: 0.0,
-                        stops: new_config.track_color_stops.clone(),
-                    };
-                    gradient_editor_paste.set_gradient(&gradient_config);
+                    // Use theme-aware color stops
+                    gradient_editor_paste.set_stops_source(new_config.track_color_stops.clone());
 
                     // Update major ticks
                     show_major_ticks_check_paste.set_active(new_config.show_major_ticks);
@@ -501,6 +498,7 @@ impl SpeedometerConfigWidget {
         config: &Rc<RefCell<SpeedometerConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
+        theme: &Rc<RefCell<ComboThemeConfig>>,
     ) -> (GtkBox, CheckButton, Rc<ThemeColorSelector>, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
         page.set_margin_start(12);
@@ -545,12 +543,19 @@ impl SpeedometerConfigWidget {
         let paste_gradient_btn = Button::with_label("Paste Gradient");
 
         let config_for_copy = config.clone();
+        let theme_for_copy = theme.clone();
         copy_gradient_btn.connect_clicked(move |_| {
             use crate::ui::CLIPBOARD;
 
             let cfg = config_for_copy.borrow();
+            let thm = theme_for_copy.borrow();
+            // Resolve theme-aware stops to concrete colors for clipboard
+            let resolved_stops: Vec<crate::ui::background::ColorStop> = cfg.track_color_stops
+                .iter()
+                .map(|stop| stop.resolve(&thm))
+                .collect();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_gradient_stops(cfg.track_color_stops.clone());
+                clipboard.copy_gradient_stops(resolved_stops);
                 log::info!("Speedometer track gradient color stops copied to clipboard");
             }
         });
@@ -561,17 +566,20 @@ impl SpeedometerConfigWidget {
         let gradient_editor_for_paste = gradient_editor.clone();
         paste_gradient_btn.connect_clicked(move |_| {
             use crate::ui::CLIPBOARD;
+            use crate::ui::theme::ColorStopSource;
 
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
-                    config_for_paste.borrow_mut().track_color_stops = stops.clone();
+                    // Convert ColorStop to ColorStopSource (as custom colors)
+                    let stops_source: Vec<ColorStopSource> = stops
+                        .into_iter()
+                        .map(|stop| ColorStopSource::custom(stop.position, stop.color))
+                        .collect();
 
-                    // Update the gradient editor widget
-                    let gradient_config = crate::ui::LinearGradientConfig {
-                        angle: 0.0,
-                        stops,
-                    };
-                    gradient_editor_for_paste.set_gradient(&gradient_config);
+                    config_for_paste.borrow_mut().track_color_stops = stops_source.clone();
+
+                    // Update the gradient editor widget with theme-aware stops
+                    gradient_editor_for_paste.set_stops_source(stops_source);
 
                     Self::queue_preview_redraw(&preview_for_paste, &on_change_for_paste);
                     log::info!("Speedometer track gradient color stops pasted from clipboard");
@@ -591,8 +599,9 @@ impl SpeedometerConfigWidget {
         let preview_clone = preview.clone();
         let gradient_editor_clone = gradient_editor.clone();
         gradient_editor.set_on_change(move || {
-            let gradient = gradient_editor_clone.get_gradient();
-            config_clone.borrow_mut().track_color_stops = gradient.stops;
+            // Use theme-aware color stops
+            let stops = gradient_editor_clone.get_stops_source();
+            config_clone.borrow_mut().track_color_stops = stops;
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
@@ -1509,11 +1518,8 @@ impl SpeedometerConfigWidget {
 
         self.show_track_check.set_active(new_config.show_track);
         self.track_color_widget.set_source(new_config.track_color.clone());
-        let gradient_config = crate::ui::LinearGradientConfig {
-            angle: 0.0, // Horizontal gradient
-            stops: new_config.track_color_stops.clone(),
-        };
-        self.gradient_editor.set_gradient(&gradient_config);
+        // Use theme-aware color stops
+        self.gradient_editor.set_stops_source(new_config.track_color_stops.clone());
 
         self.show_major_ticks_check.set_active(new_config.show_major_ticks);
         self.major_tick_count_spin.set_value(new_config.major_tick_count as f64);
@@ -1580,10 +1586,18 @@ impl SpeedometerConfigWidget {
         self.needle_color_widget.set_theme_config(theme.clone());
         self.center_hub_color_widget.set_theme_config(theme.clone());
 
+        // Propagate theme to gradient editor for theme-aware color stops
+        self.gradient_editor.set_theme_config(theme.clone());
+
         // Propagate theme to text config widget for T1/T2 font selectors
         self.text_config_widget.set_theme(theme);
 
         // Redraw preview with new theme
         self.preview.queue_draw();
+
+        // Notify parent to refresh with new theme colors
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
     }
 }

@@ -2152,17 +2152,16 @@ impl CyberpunkConfigWidget {
     #[allow(clippy::field_reassign_with_default)]
     fn default_speedometer_config_cyberpunk() -> crate::ui::SpeedometerConfig {
         use crate::ui::speedometer_display::SpeedometerConfig;
-        use crate::ui::background::{Color, ColorStop};
-
-        use crate::ui::theme::ColorSource;
+        use crate::ui::background::Color;
+        use crate::ui::theme::{ColorSource, ColorStopSource};
         let mut config = SpeedometerConfig::default();
 
         // Cyberpunk colored track
         config.track_color = ColorSource::Custom { color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 } };
         config.track_color_stops = vec![
-            ColorStop { position: 0.0, color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } },   // Cyan (low)
-            ColorStop { position: 0.6, color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } },   // Yellow (mid)
-            ColorStop { position: 1.0, color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } },   // Magenta (high)
+            ColorStopSource::custom(0.0, Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }),   // Cyan (low)
+            ColorStopSource::custom(0.6, Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 }),   // Yellow (mid)
+            ColorStopSource::custom(1.0, Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 }),   // Magenta (high)
         ];
 
         // Cyberpunk tick colors

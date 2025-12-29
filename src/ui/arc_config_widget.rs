@@ -940,6 +940,10 @@ impl ArcConfigWidget {
             text_widget.set_theme(new_theme);
         }
         self.preview.queue_draw();
+        // Notify parent to refresh with new theme colors
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
     }
 }
 

@@ -1527,6 +1527,10 @@ impl BarConfigWidget {
             text_widget.set_theme(theme);
         }
         self.preview.queue_draw();
+        // Notify parent to refresh with new theme colors
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
     }
 
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {

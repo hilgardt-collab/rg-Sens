@@ -1400,6 +1400,10 @@ impl CoreBarsConfigWidget {
         *self.theme.borrow_mut() = theme.clone();
         self.label_color_widget.set_theme_config(theme);
         self.preview.queue_draw();
+        // Notify parent to refresh with new theme colors
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
     }
 
     /// Create default fields for combo panel core bars slots

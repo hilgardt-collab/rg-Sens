@@ -1417,5 +1417,9 @@ impl TextLineConfigWidget {
         for selector in self.font_selectors.borrow().iter() {
             selector.set_theme_config(theme.clone());
         }
+        // Notify parent to refresh with new theme colors/fonts
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
     }
 }
