@@ -181,6 +181,9 @@ pub struct SpeedometerConfig {
     pub bezel_width: f64, // 0.0 to 1.0 (percentage of radius)
     #[serde(default)]
     pub bezel_background: crate::ui::BackgroundConfig,
+    /// Theme-aware solid color for bezel (used when bezel_background is solid)
+    #[serde(default = "default_bezel_solid_color", deserialize_with = "deserialize_color_or_source")]
+    pub bezel_solid_color: ColorSource,
 
     // Value zones/regions (danger zone, warning zone, etc.)
     #[serde(default)]
@@ -319,6 +322,10 @@ fn default_bezel_width() -> f64 {
     0.05
 }
 
+fn default_bezel_solid_color() -> ColorSource {
+    ColorSource::Custom { color: Color::new(0.3, 0.3, 0.3, 1.0) }
+}
+
 fn default_animation_duration() -> f64 {
     0.3
 }
@@ -361,6 +368,7 @@ impl Default for SpeedometerConfig {
             show_bezel: default_true(),
             bezel_width: default_bezel_width(),
             bezel_background: crate::ui::BackgroundConfig::default(),
+            bezel_solid_color: default_bezel_solid_color(),
             zones: Vec::new(),
             animate: default_true(),
             animation_duration: default_animation_duration(),
@@ -410,7 +418,7 @@ pub fn render_speedometer_with_theme(
 
     // Draw bezel
     if config.show_bezel {
-        draw_bezel(cr, center_x, center_y, radius, config, width, height)?;
+        draw_bezel(cr, center_x, center_y, radius, config, theme, width, height)?;
     }
 
     // Draw value zones
@@ -460,6 +468,7 @@ fn draw_bezel(
     center_y: f64,
     radius: f64,
     config: &SpeedometerConfig,
+    theme: &ComboThemeConfig,
     width: f64,
     height: f64,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -473,13 +482,32 @@ fn draw_bezel(
 
     cr.save()?;
 
-    // Create clipping path for the bezel ring
+    // Create clipping path for the bezel ring (donut shape)
+    // Use new_sub_path() to prevent Cairo from drawing a line between the arcs
+    cr.new_path();
     cr.arc(center_x, center_y, bezel_outer, 0.0, 2.0 * std::f64::consts::PI);
-    cr.arc_negative(center_x, center_y, bezel_inner, 0.0, -2.0 * std::f64::consts::PI);
+    cr.close_path();
+    cr.new_sub_path();
+    cr.arc(center_x, center_y, bezel_inner, 0.0, 2.0 * std::f64::consts::PI);
+    cr.close_path();
+    cr.set_fill_rule(cairo::FillRule::EvenOdd);
     cr.clip();
 
     // Render background within the clipped region
-    crate::ui::background::render_background(cr, &config.bezel_background, width, height)?;
+    // Use theme-aware color for solid backgrounds
+    match &config.bezel_background.background {
+        crate::ui::background::BackgroundType::Solid { .. } => {
+            // Use theme-aware bezel_solid_color instead of the raw color
+            let color = config.bezel_solid_color.resolve(theme);
+            color.apply_to_cairo(cr);
+            cr.rectangle(0.0, 0.0, width, height);
+            cr.fill()?;
+        }
+        _ => {
+            // For gradients and images, use the standard background rendering
+            crate::ui::background::render_background(cr, &config.bezel_background, width, height)?;
+        }
+    }
 
     cr.restore()?;
     Ok(())

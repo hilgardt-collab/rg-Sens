@@ -82,6 +82,7 @@ pub struct SpeedometerConfigWidget {
     // Bezel controls (using BackgroundConfig)
     show_bezel_check: CheckButton,
     bezel_width_scale: Scale,
+    bezel_solid_color_widget: Rc<ThemeColorSelector>,
     bezel_background_widget: Rc<crate::ui::BackgroundConfigWidget>,
 
     // Animation controls
@@ -154,7 +155,8 @@ impl SpeedometerConfigWidget {
 
         // === Tab 5: Bezel & Hub ===
         let (bezel_page, show_center_hub_check, center_hub_radius_scale, center_hub_color_button,
-             center_hub_3d_check, show_bezel_check, bezel_width_scale, bezel_background_widget) =
+             center_hub_3d_check, show_bezel_check, bezel_width_scale, bezel_solid_color_widget,
+             bezel_background_widget) =
             Self::create_bezel_page(&config, &on_change, &preview);
         notebook.append_page(&bezel_page, Some(&Label::new(Some("Bezel & Hub"))));
 
@@ -235,6 +237,7 @@ impl SpeedometerConfigWidget {
         let center_hub_3d_check_paste = center_hub_3d_check.clone();
         let show_bezel_check_paste = show_bezel_check.clone();
         let bezel_width_scale_paste = bezel_width_scale.clone();
+        let bezel_solid_color_widget_paste = bezel_solid_color_widget.clone();
         let bezel_background_widget_paste = bezel_background_widget.clone();
         let animate_check_paste = animate_check.clone();
         let animation_duration_spin_paste = animation_duration_spin.clone();
@@ -326,6 +329,7 @@ impl SpeedometerConfigWidget {
                     // Update bezel
                     show_bezel_check_paste.set_active(new_config.show_bezel);
                     bezel_width_scale_paste.set_value(new_config.bezel_width);
+                    bezel_solid_color_widget_paste.set_source(new_config.bezel_solid_color.clone());
                     bezel_background_widget_paste.set_config(new_config.bezel_background.clone());
 
                     // Update animation
@@ -390,6 +394,7 @@ impl SpeedometerConfigWidget {
             center_hub_3d_check,
             show_bezel_check,
             bezel_width_scale,
+            bezel_solid_color_widget,
             bezel_background_widget,
             animate_check,
             animation_duration_spin,
@@ -1251,6 +1256,7 @@ impl SpeedometerConfigWidget {
         CheckButton,
         CheckButton,
         Scale,
+        Rc<ThemeColorSelector>,
         Rc<crate::ui::BackgroundConfigWidget>,
     ) {
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -1356,8 +1362,23 @@ impl SpeedometerConfigWidget {
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Bezel background (full background config widget)
-        let bezel_background_label = Label::new(Some("Bezel Background:"));
+        // Bezel solid color (theme-aware)
+        let bezel_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        bezel_color_box.append(&Label::new(Some("Bezel Solid Color:")));
+        let bezel_solid_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().bezel_solid_color.clone()));
+        bezel_color_box.append(bezel_solid_color_widget.widget());
+        page.append(&bezel_color_box);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        bezel_solid_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().bezel_solid_color = color_source;
+            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Bezel background (full background config widget - for gradients/images)
+        let bezel_background_label = Label::new(Some("Bezel Background (for gradients/images):"));
         page.append(&bezel_background_label);
 
         let bezel_background_widget = Rc::new(crate::ui::BackgroundConfigWidget::new());
@@ -1380,6 +1401,7 @@ impl SpeedometerConfigWidget {
             center_hub_3d_check,
             show_bezel_check,
             bezel_width_scale,
+            bezel_solid_color_widget,
             bezel_background_widget,
         )
     }
@@ -1557,6 +1579,7 @@ impl SpeedometerConfigWidget {
 
         self.show_bezel_check.set_active(new_config.show_bezel);
         self.bezel_width_scale.set_value(new_config.bezel_width);
+        self.bezel_solid_color_widget.set_source(new_config.bezel_solid_color.clone());
         self.bezel_background_widget.set_config(new_config.bezel_background.clone());
 
         self.animate_check.set_active(new_config.animate);
@@ -1585,6 +1608,7 @@ impl SpeedometerConfigWidget {
         self.tick_label_color_widget.set_theme_config(theme.clone());
         self.needle_color_widget.set_theme_config(theme.clone());
         self.center_hub_color_widget.set_theme_config(theme.clone());
+        self.bezel_solid_color_widget.set_theme_config(theme.clone());
 
         // Propagate theme to gradient editor for theme-aware color stops
         self.gradient_editor.set_theme_config(theme.clone());
