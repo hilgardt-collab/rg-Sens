@@ -1613,6 +1613,9 @@ impl SpeedometerConfigWidget {
         // Propagate theme to gradient editor for theme-aware color stops
         self.gradient_editor.set_theme_config(theme.clone());
 
+        // Propagate theme to bezel background widget for theme-aware gradients
+        self.bezel_background_widget.set_theme_config(theme.clone());
+
         // Propagate theme to text config widget for T1/T2 font selectors
         self.text_config_widget.set_theme(theme);
 

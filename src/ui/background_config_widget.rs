@@ -1207,6 +1207,13 @@ impl BackgroundConfigWidget {
         // Also update the entry for combo sources
         self.indicator_field_entry.set_text(&current_value);
     }
+
+    /// Set theme config for all gradient editors in this widget
+    pub fn set_theme_config(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        self.linear_gradient_editor.set_theme_config(theme.clone());
+        self.radial_gradient_editor.set_theme_config(theme.clone());
+        self.indicator_gradient_editor.set_theme_config(theme);
+    }
 }
 
 impl Default for BackgroundConfigWidget {

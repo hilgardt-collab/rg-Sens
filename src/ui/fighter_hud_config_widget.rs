@@ -1841,6 +1841,8 @@ impl FighterHudConfigWidget {
                 .map(|item| item.static_config.background.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config for gradient editor theme colors
+        static_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         static_bg_widget.set_config(current_static_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1859,6 +1861,15 @@ impl FighterHudConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for static background widget
+        let static_bg_widget_for_theme = static_bg_widget_rc.clone();
+        let config_for_static_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_static_theme.borrow().frame.theme.clone();
+            static_bg_widget_for_theme.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         static_config_frame.set_child(Some(static_bg_widget_rc.widget()));
         inner_box.append(&static_config_frame);
