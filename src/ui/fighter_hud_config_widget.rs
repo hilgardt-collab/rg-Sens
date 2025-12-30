@@ -26,6 +26,7 @@ use crate::displayers::FighterHudDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
 use crate::ui::theme::FontSource;
+use crate::ui::theme_font_selector::ThemeFontSelector;
 
 /// Holds references to Colors tab widgets
 struct ColorsWidgets {
@@ -52,8 +53,7 @@ struct HeaderWidgets {
     header_text_entry: Entry,
     header_style_dropdown: DropDown,
     header_height_spin: SpinButton,
-    header_font_btn: Button,
-    header_font_size_spin: SpinButton,
+    header_font_selector: Rc<ThemeFontSelector>,
 }
 
 /// Holds references to Layout tab widgets
@@ -151,25 +151,25 @@ impl FighterHudConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Colors
+        // Tab 1: Theme (first for easy access to theme colors/fonts)
+        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
+
+        // Tab 2: Colors
         let colors_page = Self::create_colors_page(&config, &on_change, &preview, &colors_widgets);
         notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
 
-        // Tab 2: Frame
+        // Tab 3: Frame
         let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets);
         notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
 
-        // Tab 3: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets);
+        // Tab 4: Header
+        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
-        // Tab 4: Layout
+        // Tab 5: Layout
         let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
-
-        // Tab 5: Theme
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
-        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 6: Content
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
@@ -483,6 +483,7 @@ impl FighterHudConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -567,68 +568,34 @@ impl FighterHudConfigWidget {
         });
         page.append(&height_box);
 
-        // Font section
+        // Font section (theme-aware)
         let font_label = Label::new(Some("Font"));
         font_label.set_halign(gtk4::Align::Start);
         font_label.add_css_class("heading");
         font_label.set_margin_top(12);
         page.append(&font_label);
 
-        // Font button
-        let font_box = GtkBox::new(Orientation::Horizontal, 6);
-        let header_font_btn = Button::with_label(&config.borrow().frame.header_font);
-        header_font_btn.set_hexpand(true);
-        font_box.append(&header_font_btn);
+        // Header font selector (theme-aware)
+        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        page.append(header_font_selector.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let btn_clone = header_font_btn.clone();
-        header_font_btn.connect_clicked(move |button| {
-            let config_for_cb = config_clone.clone();
-            let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
-            let font_btn_for_cb = btn_clone.clone();
-            let current_font = config_for_cb.borrow().frame.header_font.clone();
-
-            if let Some(root) = button.root() {
-                if let Some(window) = root.downcast_ref::<gtk4::Window>() {
-                    let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-                    shared_font_dialog().choose_font(
-                        Some(window),
-                        Some(&font_desc),
-                        gtk4::gio::Cancellable::NONE,
-                        move |result| {
-                            if let Ok(font_desc) = result {
-                                let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "monospace".to_string());
-                                config_for_cb.borrow_mut().frame.header_font = family.clone();
-                                font_btn_for_cb.set_label(&family);
-                                Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                            }
-                        },
-                    );
-                }
-            }
-        });
-        page.append(&font_box);
-
-        // Font size
-        let size_box = GtkBox::new(Orientation::Horizontal, 6);
-        size_box.append(&Label::new(Some("Font Size:")));
-        let header_font_size_spin = SpinButton::with_range(8.0, 24.0, 1.0);
-        header_font_size_spin.set_value(config.borrow().frame.header_font_size);
-        header_font_size_spin.set_hexpand(true);
-        size_box.append(&header_font_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_font_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_font_size = spin.value();
+        header_font_selector.set_on_change(move |font_source| {
+            config_clone.borrow_mut().frame.header_font = font_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&size_box);
+
+        // Register theme refresh callback for header font
+        let header_font_selector_for_theme = header_font_selector.clone();
+        let config_for_header_theme = config.clone();
+        let header_font_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_header_theme.borrow().frame.theme.clone();
+            header_font_selector_for_theme.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(header_font_refresh);
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
@@ -636,8 +603,7 @@ impl FighterHudConfigWidget {
             header_text_entry,
             header_style_dropdown,
             header_height_spin,
-            header_font_btn,
-            header_font_size_spin,
+            header_font_selector,
         });
 
         page
@@ -1722,6 +1688,8 @@ impl FighterHudConfigWidget {
                 .map(|item| item.graph_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        graph_widget.set_theme(config.borrow().frame.theme.clone());
         graph_widget.set_config(current_graph_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1741,6 +1709,15 @@ impl FighterHudConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for graph widget
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_graph_theme.borrow().frame.theme.clone();
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
@@ -1756,6 +1733,8 @@ impl FighterHudConfigWidget {
                 .map(|item| item.bar_config.text_overlay.text_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        text_widget.set_theme(config.borrow().frame.theme.clone());
         text_widget.set_config(current_text_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1780,6 +1759,15 @@ impl FighterHudConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for text widget
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_text_theme.borrow().frame.theme.clone();
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
@@ -1931,6 +1919,8 @@ impl FighterHudConfigWidget {
                 .map(|item| item.speedometer_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config
+        speedometer_widget.set_theme(config.borrow().frame.theme.clone());
         speedometer_widget.set_config(&current_speedometer_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1949,6 +1939,15 @@ impl FighterHudConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         }));
+
+        // Register theme refresh callback for speedometer widget
+        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
+        let config_for_speedometer_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_speedometer_theme.borrow().frame.theme.clone();
+            speedometer_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
         inner_box.append(&speedometer_config_frame);
@@ -2075,7 +2074,7 @@ impl FighterHudConfigWidget {
         };
         let header_height = config.frame.header_height;
         let header_font = config.frame.header_font.clone();
-        let header_font_size = config.frame.header_font_size;
+        let theme = config.frame.theme.clone();
 
         let orient_idx = match config.frame.split_orientation {
             SplitOrientation::Vertical => 0,
@@ -2124,8 +2123,8 @@ impl FighterHudConfigWidget {
             widgets.header_text_entry.set_text(&header_text);
             widgets.header_style_dropdown.set_selected(header_style_idx);
             widgets.header_height_spin.set_value(header_height);
-            widgets.header_font_btn.set_label(&header_font);
-            widgets.header_font_size_spin.set_value(header_font_size);
+            widgets.header_font_selector.set_source(header_font);
+            widgets.header_font_selector.set_theme_config(theme.clone());
         }
 
         if let Some(ref widgets) = *self.layout_widgets.borrow() {

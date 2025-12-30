@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
+use crate::ui::theme::{FontSource, deserialize_font_or_source};
 
 // Re-export types we use
 pub use crate::ui::lcars_display::{ContentDisplayType as FighterHudContentType, ContentItemConfig as FighterHudContentItemConfig};
@@ -120,8 +121,7 @@ fn default_line_width() -> f64 { 1.5 }
 fn default_bracket_size() -> f64 { 20.0 }
 fn default_bracket_thickness() -> f64 { 2.0 }
 fn default_content_padding() -> f64 { 16.0 }
-fn default_header_font() -> String { "monospace".to_string() }
-fn default_header_font_size() -> f64 { 12.0 }
+fn default_header_font_source() -> FontSource { FontSource::theme(1, 12.0) } // Theme font 1
 fn default_header_height() -> f64 { 24.0 }
 fn default_divider_padding() -> f64 { 6.0 }
 fn default_group_count() -> usize { 1 }
@@ -167,10 +167,8 @@ pub struct FighterHudFrameConfig {
     pub header_text: String,
     #[serde(default)]
     pub header_style: HudHeaderStyle,
-    #[serde(default = "default_header_font")]
-    pub header_font: String,
-    #[serde(default = "default_header_font_size")]
-    pub header_font_size: f64,
+    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
 
@@ -233,8 +231,7 @@ impl Default for FighterHudFrameConfig {
             show_header: true,
             header_text: "SYS MONITOR".to_string(),
             header_style: HudHeaderStyle::StatusBar,
-            header_font: default_header_font(),
-            header_font_size: default_header_font_size(),
+            header_font: default_header_font_source(),
             header_height: default_header_height(),
 
             content_padding: default_content_padding(),
@@ -525,12 +522,14 @@ fn draw_header(
 
     cr.save().ok();
 
+    // Resolve header font from FontSource using theme
+    let (header_font_family, header_font_size) = config.header_font.resolve(&config.theme);
     cr.select_font_face(
-        &config.header_font,
+        &header_font_family,
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
     );
-    cr.set_font_size(config.header_font_size);
+    cr.set_font_size(header_font_size);
 
     let text = if config.header_text.is_empty() {
         "HUD"
