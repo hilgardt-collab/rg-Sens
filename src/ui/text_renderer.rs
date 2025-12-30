@@ -295,6 +295,16 @@ fn render_text_part(
     // Resolve font using theme if available
     let (font_family, font_size) = config.resolved_font(theme);
 
+    // Debug log font resolution
+    if let Some(ref source) = config.font_source {
+        if let Some(t) = theme {
+            log::trace!(
+                "render_single_text: font_source={:?}, theme T1='{}' T2='{}', resolved='{}'",
+                source, t.font1_family, t.font2_family, font_family
+            );
+        }
+    }
+
     // Set font
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };

@@ -122,8 +122,9 @@ impl ThemeFontSelector {
                     }
 
                     // Emit change with Theme font source including current size
+                    let source = FontSource::Theme { index: idx, size: size_spin_clone.value() };
                     if let Some(ref callback) = *on_change_clone.borrow() {
-                        callback(FontSource::Theme { index: idx, size: size_spin_clone.value() });
+                        callback(source);
                     }
                 } else {
                     // Button was deactivated - if this was the active button, clear theme_index

@@ -1740,6 +1740,7 @@ impl SynthwaveConfigWidget {
         };
         text_widget.set_config(current_text_config);
 
+        // Only save when Text display mode is active to avoid overwriting BarConfigWidget's changes
         let slot_name_clone = slot_name.to_string();
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -1747,13 +1748,17 @@ impl SynthwaveConfigWidget {
         let text_widget_rc = Rc::new(text_widget);
         let text_widget_for_callback = text_widget_rc.clone();
         text_widget_rc.set_on_change(move || {
-            let text_config = text_widget_for_callback.get_config();
             let mut cfg = config_clone.borrow_mut();
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())
                 .or_default();
-            item.bar_config.text_overlay.enabled = true;
-            item.bar_config.text_overlay.text_config = text_config;
+            // Only update if Text mode is active (not Bar mode which has its own text widget)
+            let is_text_mode = matches!(item.display_as, ContentDisplayType::Text | ContentDisplayType::Static);
+            if is_text_mode {
+                let text_config = text_widget_for_callback.get_config();
+                item.bar_config.text_overlay.enabled = true;
+                item.bar_config.text_overlay.text_config = text_config;
+            }
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });

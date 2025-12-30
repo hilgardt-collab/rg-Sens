@@ -837,16 +837,21 @@ where
         let preview_clone = preview.clone();
         let slot_name_clone = slot_name.to_string();
         let get_content_items_clone = get_content_items.clone();
+        // Only save when Text display mode is active to avoid overwriting BarConfigWidget's changes
         let set_content_item_clone = set_content_item.clone();
         let text_widget_for_cb = text_widget_rc.clone();
         text_widget_rc.set_on_change(move || {
-            let text_config = text_widget_for_cb.get_config();
             let mut cfg = config_clone.borrow_mut();
             let mut item = get_content_items_clone(&cfg)
                 .get(&slot_name_clone)
                 .cloned()
                 .unwrap_or_default();
-            item.bar_config.text_overlay.text_config = text_config;
+            // Only update if Text mode is active (not Bar mode which has its own text widget)
+            let is_text_mode = matches!(item.display_as, ContentDisplayType::Text | ContentDisplayType::Static);
+            if is_text_mode {
+                let text_config = text_widget_for_cb.get_config();
+                item.bar_config.text_overlay.text_config = text_config;
+            }
             set_content_item_clone(&mut cfg, &slot_name_clone, item);
             drop(cfg);
             queue_redraw(&preview_clone, &on_change_clone);
