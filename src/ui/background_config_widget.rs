@@ -10,6 +10,8 @@ use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDispla
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
+use crate::ui::theme::{ColorSource, ComboThemeConfig};
+use crate::ui::theme_color_selector::ThemeColorSelector;
 
 /// Background configuration widget
 pub struct BackgroundConfigWidget {
@@ -34,6 +36,11 @@ pub struct BackgroundConfigWidget {
     indicator_field_entry_box: GtkBox,
     // Flag to prevent dropdown handler from overwriting value_field during sync
     syncing_indicator_dropdown: Rc<RefCell<bool>>,
+    // Theme config for polygon colors
+    theme_config: Rc<RefCell<ComboThemeConfig>>,
+    // Polygon color selectors (theme-aware)
+    polygon_color1_selector: Rc<ThemeColorSelector>,
+    polygon_color2_selector: Rc<ThemeColorSelector>,
 }
 
 impl BackgroundConfigWidget {
@@ -46,6 +53,7 @@ impl BackgroundConfigWidget {
 
         let config = Rc::new(RefCell::new(BackgroundConfig::default()));
         let on_change = Rc::new(RefCell::new(None));
+        let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
 
         // Type selector
         let type_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -72,14 +80,16 @@ impl BackgroundConfigWidget {
         preview.set_vexpand(false);
 
         let config_clone = config.clone();
+        let theme_for_preview = theme_config.clone();
         preview.set_draw_func(move |_, cr, width, height| {
-            use crate::ui::background::render_background;
+            use crate::ui::background::render_background_with_theme;
 
             // Render checkerboard pattern to show transparency
             render_checkerboard(cr, width as f64, height as f64);
 
             let cfg = config_clone.borrow();
-            let _ = render_background(cr, &cfg, width as f64, height as f64);
+            let theme = theme_for_preview.borrow();
+            let _ = render_background_with_theme(cr, &cfg, width as f64, height as f64, Some(&theme));
         });
 
         container.append(&preview);
@@ -105,7 +115,8 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&image_page, Some("image"));
 
         // Polygon configuration
-        let polygon_page = Self::create_polygon_config(&config, &preview, &on_change);
+        let (polygon_page, polygon_color1_selector, polygon_color2_selector) =
+            Self::create_polygon_config(&config, &preview, &on_change, &theme_config);
         config_stack.add_named(&polygon_page, Some("polygons"));
 
         // Initialize source fields storage and syncing flag
@@ -246,6 +257,9 @@ impl BackgroundConfigWidget {
             indicator_field_dropdown_box,
             indicator_field_entry_box,
             syncing_indicator_dropdown,
+            theme_config,
+            polygon_color1_selector,
+            polygon_color2_selector,
         }
     }
 
@@ -620,7 +634,8 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> GtkBox {
+        theme_config: &Rc<RefCell<ComboThemeConfig>>,
+    ) -> (GtkBox, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Tile size
@@ -707,29 +722,30 @@ impl BackgroundConfigWidget {
         angle_box.append(&angle_scale);
         page.append(&angle_box);
 
-        // Color 1 - using ColorButtonWidget
+        // Color 1 - using ThemeColorSelector (theme-aware)
         let color1_box = GtkBox::new(Orientation::Horizontal, 6);
         color1_box.append(&Label::new(Some("Color 1:")));
 
-        let color1 = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
-            poly.colors.first().copied().unwrap_or_default()
+        let color1_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
+            poly.colors.first().cloned().unwrap_or_default()
         } else {
-            Color::default()
+            ColorSource::default()
         };
-        let color1_widget = ColorButtonWidget::new(color1);
-        color1_box.append(color1_widget.widget());
+        let color1_selector = Rc::new(ThemeColorSelector::new(color1_source));
+        color1_selector.set_theme_config(theme_config.borrow().clone());
+        color1_box.append(color1_selector.widget());
         page.append(&color1_box);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        color1_widget.set_on_change(move |new_color| {
+        color1_selector.set_on_change(move |new_source| {
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 if poly.colors.is_empty() {
-                    poly.colors.push(new_color);
+                    poly.colors.push(new_source);
                 } else {
-                    poly.colors[0] = new_color;
+                    poly.colors[0] = new_source;
                 }
             }
             drop(cfg);
@@ -739,29 +755,30 @@ impl BackgroundConfigWidget {
             }
         });
 
-        // Color 2 - using ColorButtonWidget
+        // Color 2 - using ThemeColorSelector (theme-aware)
         let color2_box = GtkBox::new(Orientation::Horizontal, 6);
         color2_box.append(&Label::new(Some("Color 2:")));
 
-        let color2 = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
-            poly.colors.get(1).copied().unwrap_or_default()
+        let color2_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
+            poly.colors.get(1).cloned().unwrap_or_default()
         } else {
-            Color::default()
+            ColorSource::default()
         };
-        let color2_widget = ColorButtonWidget::new(color2);
-        color2_box.append(color2_widget.widget());
+        let color2_selector = Rc::new(ThemeColorSelector::new(color2_source));
+        color2_selector.set_theme_config(theme_config.borrow().clone());
+        color2_box.append(color2_selector.widget());
         page.append(&color2_box);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        color2_widget.set_on_change(move |new_color| {
+        color2_selector.set_on_change(move |new_source| {
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 if poly.colors.len() < 2 {
-                    poly.colors.push(new_color);
+                    poly.colors.push(new_source);
                 } else {
-                    poly.colors[1] = new_color;
+                    poly.colors[1] = new_source;
                 }
             }
             drop(cfg);
@@ -771,7 +788,7 @@ impl BackgroundConfigWidget {
             }
         });
 
-        page
+        (page, color1_selector, color2_selector)
     }
 
     /// Create indicator configuration page
@@ -1081,6 +1098,15 @@ impl BackgroundConfigWidget {
         if let BackgroundType::RadialGradient(ref grad) = new_config.background {
             self.radial_gradient_editor.set_stops(grad.stops.clone());
         }
+        if let BackgroundType::Polygons(ref poly) = new_config.background {
+            // Update polygon color selectors with saved color sources
+            if let Some(color1) = poly.colors.first() {
+                self.polygon_color1_selector.set_source(color1.clone());
+            }
+            if let Some(color2) = poly.colors.get(1) {
+                self.polygon_color2_selector.set_source(color2.clone());
+            }
+        }
         if let BackgroundType::Indicator(ref ind) = new_config.background {
             self.indicator_gradient_editor.set_stops(ind.gradient_stops.clone());
             // Update the field entry with saved value (for combo sources)
@@ -1208,11 +1234,22 @@ impl BackgroundConfigWidget {
         self.indicator_field_entry.set_text(&current_value);
     }
 
-    /// Set theme config for all gradient editors in this widget
+    /// Set theme config for all gradient editors and polygon color selectors in this widget
     pub fn set_theme_config(&self, theme: crate::ui::theme::ComboThemeConfig) {
+        // Store theme for preview rendering
+        *self.theme_config.borrow_mut() = theme.clone();
+
+        // Update gradient editors
         self.linear_gradient_editor.set_theme_config(theme.clone());
         self.radial_gradient_editor.set_theme_config(theme.clone());
-        self.indicator_gradient_editor.set_theme_config(theme);
+        self.indicator_gradient_editor.set_theme_config(theme.clone());
+
+        // Update polygon color selectors
+        self.polygon_color1_selector.set_theme_config(theme.clone());
+        self.polygon_color2_selector.set_theme_config(theme);
+
+        // Redraw preview to reflect theme colors
+        self.preview.queue_draw();
     }
 }
 

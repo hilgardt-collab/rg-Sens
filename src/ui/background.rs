@@ -2,6 +2,8 @@ use gtk4::cairo;
 use gtk4::prelude::GdkCairoContextExt;
 use serde::{Deserialize, Serialize};
 
+use crate::ui::theme::{ColorSource, ComboThemeConfig};
+
 /// RGBA color with alpha channel
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Color {
@@ -122,7 +124,7 @@ pub struct PolygonConfig {
     pub tile_size: u32,           // Size of each tile
     pub num_sides: u32,            // Number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, etc.)
     pub rotation_angle: f64,       // Rotation angle in degrees
-    pub colors: Vec<Color>,        // Colors that alternate for tiles
+    pub colors: Vec<ColorSource>,  // Colors that alternate for tiles (theme-aware)
 }
 
 impl Default for PolygonConfig {
@@ -132,8 +134,8 @@ impl Default for PolygonConfig {
             num_sides: 6, // Hexagons by default
             rotation_angle: 0.0,
             colors: vec![
-                Color::new(0.2, 0.2, 0.25, 1.0),
-                Color::new(0.15, 0.15, 0.2, 1.0),
+                ColorSource::custom(Color::new(0.2, 0.2, 0.25, 1.0)),
+                ColorSource::custom(Color::new(0.15, 0.15, 0.2, 1.0)),
             ],
         }
     }
@@ -294,6 +296,17 @@ pub fn render_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
+    render_background_with_theme(cr, config, width, height, None)
+}
+
+/// Render a background to a Cairo context with theme support for polygon colors
+pub fn render_background_with_theme(
+    cr: &cairo::Context,
+    config: &BackgroundConfig,
+    width: f64,
+    height: f64,
+    theme: Option<&ComboThemeConfig>,
+) -> Result<(), cairo::Error> {
     match &config.background {
         BackgroundType::Solid { color } => {
             color.apply_to_cairo(cr);
@@ -310,7 +323,7 @@ pub fn render_background(
             render_image_background(cr, path, *display_mode, *alpha, width, height)?;
         }
         BackgroundType::Polygons(poly) => {
-            render_polygon_background(cr, poly, width, height)?;
+            render_polygon_background(cr, poly, width, height, theme)?;
         }
         BackgroundType::Indicator(indicator) => {
             render_indicator_background(cr, indicator, width, height)?;
@@ -505,20 +518,28 @@ fn render_polygon_background(
     config: &PolygonConfig,
     width: f64,
     height: f64,
+    theme: Option<&ComboThemeConfig>,
 ) -> Result<(), cairo::Error> {
     if config.colors.is_empty() {
         return Ok(());
     }
+
+    // Resolve colors from ColorSource using theme (or default if no theme provided)
+    let default_theme = ComboThemeConfig::default();
+    let theme = theme.unwrap_or(&default_theme);
+    let resolved_colors: Vec<Color> = config.colors.iter()
+        .map(|cs| cs.resolve(theme))
+        .collect();
 
     let size = config.tile_size as f64;
     let sides = config.num_sides.max(3); // Minimum 3 sides
     let angle = config.rotation_angle.to_radians();
 
     match sides {
-        3 => render_triangle_tiling(cr, size, angle, &config.colors, width, height)?,
-        4 => render_square_tiling(cr, size, angle, &config.colors, width, height)?,
-        6 => render_hexagon_tiling(cr, size, angle, &config.colors, width, height)?,
-        _ => render_generic_polygon_tiling(cr, size, sides, angle, &config.colors, width, height)?,
+        3 => render_triangle_tiling(cr, size, angle, &resolved_colors, width, height)?,
+        4 => render_square_tiling(cr, size, angle, &resolved_colors, width, height)?,
+        6 => render_hexagon_tiling(cr, size, angle, &resolved_colors, width, height)?,
+        _ => render_generic_polygon_tiling(cr, size, sides, angle, &resolved_colors, width, height)?,
     }
 
     Ok(())
