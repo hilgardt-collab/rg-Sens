@@ -169,25 +169,25 @@ impl CyberpunkConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Frame
-        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets);
-        notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
-
-        // Tab 2: Effects
-        let effects_page = Self::create_effects_page(&config, &on_change, &preview, &effects_widgets);
-        notebook.append_page(&effects_page, Some(&Label::new(Some("Effects"))));
-
-        // Tab 3: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets);
-        notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
-
-        // Tab 4: Layout
-        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
-        notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
-
-        // Tab 5: Theme
+        // Tab 1: Theme (first for easy access to theme colors/fonts)
         let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
+
+        // Tab 2: Frame
+        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets, &theme_ref_refreshers);
+        notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
+
+        // Tab 3: Effects
+        let effects_page = Self::create_effects_page(&config, &on_change, &preview, &effects_widgets, &theme_ref_refreshers);
+        notebook.append_page(&effects_page, Some(&Label::new(Some("Effects"))));
+
+        // Tab 4: Header
+        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
+        notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
+
+        // Tab 5: Layout
+        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets, &theme_ref_refreshers);
+        notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
         // Tab 6: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
@@ -236,6 +236,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         frame_widgets_out: &Rc<RefCell<Option<FrameWidgets>>>,
+        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -389,6 +390,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         effects_widgets_out: &Rc<RefCell<Option<EffectsWidgets>>>,
+        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -550,6 +552,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
+        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -706,6 +709,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
+        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1007,6 +1011,8 @@ impl CyberpunkConfigWidget {
         gradient_box.set_margin_bottom(8);
 
         let gradient_editor = Rc::new(GradientEditor::new());
+        // Set theme config so T1-T4 buttons show correct theme colors
+        gradient_editor.set_theme_config(config.borrow().frame.theme.clone());
         gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
 
         let config_clone = config.clone();
@@ -1020,6 +1026,15 @@ impl CyberpunkConfigWidget {
             Self::refresh_theme_refs(&refreshers_clone);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for gradient editor
+        let gradient_editor_for_theme = gradient_editor.clone();
+        let config_for_gradient_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_gradient_theme.borrow().frame.theme.clone();
+            gradient_editor_for_theme.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         gradient_box.append(gradient_editor.widget());
         gradient_frame.set_child(Some(&gradient_box));
@@ -1729,6 +1744,8 @@ impl CyberpunkConfigWidget {
                 .map(|item| item.graph_config.clone())
                 .unwrap_or_else(Self::default_graph_config_cyberpunk)
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        graph_widget.set_theme(config.borrow().frame.theme.clone());
         graph_widget.set_config(current_graph_config);
 
         // Set up change callback
@@ -1749,6 +1766,15 @@ impl CyberpunkConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for graph widget
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_graph_theme.borrow().frame.theme.clone();
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
@@ -1766,6 +1792,8 @@ impl CyberpunkConfigWidget {
                 .map(|item| item.bar_config.text_overlay.text_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        text_widget.set_theme(config.borrow().frame.theme.clone());
         text_widget.set_config(current_text_config);
 
         // Set up change callback
@@ -1791,6 +1819,15 @@ impl CyberpunkConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for text widget
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_text_theme.borrow().frame.theme.clone();
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
@@ -1942,6 +1979,8 @@ impl CyberpunkConfigWidget {
                 .map(|item| item.speedometer_config.clone())
                 .unwrap_or_else(Self::default_speedometer_config_cyberpunk)
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        speedometer_widget.set_theme(config.borrow().frame.theme.clone());
         speedometer_widget.set_config(&current_speedometer_config);
 
         // Set up change callback
@@ -1961,6 +2000,15 @@ impl CyberpunkConfigWidget {
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         }));
+
+        // Register theme refresh callback for speedometer widget
+        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
+        let config_for_speedometer_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_speedometer_theme.borrow().frame.theme.clone();
+            speedometer_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
         inner_box.append(&speedometer_config_frame);
@@ -2353,6 +2401,7 @@ impl CyberpunkConfigWidget {
             widgets.theme_color2_widget.set_color(config.frame.theme.color2);
             widgets.theme_color3_widget.set_color(config.frame.theme.color3);
             widgets.theme_color4_widget.set_color(config.frame.theme.color4);
+            widgets.theme_gradient_editor.set_theme_config(config.frame.theme.clone());
             widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
             widgets.font1_btn.set_label(&config.frame.theme.font1_family);
             widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
