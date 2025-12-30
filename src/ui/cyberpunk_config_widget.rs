@@ -12,6 +12,8 @@ use std::rc::Rc;
 
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::theme_font_selector::ThemeFontSelector;
 use crate::ui::cyberpunk_display::{
     render_cyberpunk_frame, CornerStyle, HeaderStyle, DividerStyle,
 };
@@ -31,23 +33,23 @@ use crate::ui::theme::{ColorSource, FontSource};
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {
     border_width_spin: SpinButton,
-    border_color_widget: Rc<ColorButtonWidget>,
+    border_color_widget: Rc<ThemeColorSelector>,
     glow_spin: SpinButton,
     corner_style_dropdown: DropDown,
     corner_size_spin: SpinButton,
-    bg_color_widget: Rc<ColorButtonWidget>,
+    bg_color_widget: Rc<ThemeColorSelector>,
     padding_spin: SpinButton,
 }
 
 /// Holds references to Effects tab widgets
 struct EffectsWidgets {
     show_grid_check: CheckButton,
-    grid_color_widget: Rc<ColorButtonWidget>,
+    grid_color_widget: Rc<ThemeColorSelector>,
     grid_spacing_spin: SpinButton,
     show_scanlines_check: CheckButton,
     scanline_opacity_spin: SpinButton,
     item_frame_check: CheckButton,
-    item_frame_color_widget: Rc<ColorButtonWidget>,
+    item_frame_color_widget: Rc<ThemeColorSelector>,
     item_glow_check: CheckButton,
 }
 
@@ -56,16 +58,15 @@ struct HeaderWidgets {
     show_header_check: CheckButton,
     header_text_entry: Entry,
     header_style_dropdown: DropDown,
-    header_color_widget: Rc<ColorButtonWidget>,
-    header_font_btn: Button,
-    header_font_size_spin: SpinButton,
+    header_color_widget: Rc<ThemeColorSelector>,
+    header_font_selector: Rc<ThemeFontSelector>,
 }
 
 /// Holds references to Layout tab widgets
 struct LayoutWidgets {
     orientation_dropdown: DropDown,
     divider_style_dropdown: DropDown,
-    divider_color_widget: Rc<ColorButtonWidget>,
+    divider_color_widget: Rc<ThemeColorSelector>,
     divider_width_spin: SpinButton,
     divider_padding_spin: SpinButton,
     group_weights_box: GtkBox,
@@ -258,17 +259,18 @@ impl CyberpunkConfigWidget {
         });
         page.append(&border_box);
 
-        // Border color
+        // Border color (theme-aware)
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Border Color:")));
-        let border_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.border_color));
+        let border_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.border_color.clone()));
+        border_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         color_box.append(border_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        border_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.border_color = color;
+        border_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.border_color = color_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&color_box);
@@ -339,17 +341,18 @@ impl CyberpunkConfigWidget {
         });
         page.append(&corner_size_box);
 
-        // Background color
+        // Background color (theme-aware)
         let bg_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_box.append(&Label::new(Some("Background:")));
-        let bg_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.background_color.clone()));
+        bg_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         bg_box.append(bg_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        bg_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.background_color = color;
+        bg_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.background_color = color_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bg_box);
@@ -374,13 +377,24 @@ impl CyberpunkConfigWidget {
         // Store widget refs
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
             border_width_spin,
-            border_color_widget,
+            border_color_widget: border_color_widget.clone(),
             glow_spin,
             corner_style_dropdown,
             corner_size_spin,
-            bg_color_widget,
+            bg_color_widget: bg_color_widget.clone(),
             padding_spin,
         });
+
+        // Register theme refresh callbacks
+        let border_color_for_refresh = border_color_widget.clone();
+        let bg_color_for_refresh = bg_color_widget.clone();
+        let config_for_refresh = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_refresh.borrow().frame.theme.clone();
+            border_color_for_refresh.set_theme_config(theme.clone());
+            bg_color_for_refresh.set_theme_config(theme);
+        });
+        _theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         page
     }
@@ -390,7 +404,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         effects_widgets_out: &Rc<RefCell<Option<EffectsWidgets>>>,
-        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -414,17 +428,18 @@ impl CyberpunkConfigWidget {
         });
         page.append(&show_grid_check);
 
-        // Grid color
+        // Grid color (theme-aware)
         let grid_color_box = GtkBox::new(Orientation::Horizontal, 6);
         grid_color_box.append(&Label::new(Some("Grid Color:")));
-        let grid_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.grid_color));
+        let grid_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.grid_color.clone()));
+        grid_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         grid_color_box.append(grid_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        grid_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.grid_color = color;
+        grid_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.grid_color = color_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&grid_color_box);
@@ -504,17 +519,18 @@ impl CyberpunkConfigWidget {
         });
         page.append(&item_frame_check);
 
-        // Item frame color
+        // Item frame color (theme-aware)
         let item_frame_color_box = GtkBox::new(Orientation::Horizontal, 6);
         item_frame_color_box.append(&Label::new(Some("Frame Color:")));
-        let item_frame_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.item_frame_color));
+        let item_frame_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.item_frame_color.clone()));
+        item_frame_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         item_frame_color_box.append(item_frame_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        item_frame_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.item_frame_color = color;
+        item_frame_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.item_frame_color = color_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&item_frame_color_box);
@@ -535,14 +551,25 @@ impl CyberpunkConfigWidget {
         // Store widget refs
         *effects_widgets_out.borrow_mut() = Some(EffectsWidgets {
             show_grid_check,
-            grid_color_widget,
+            grid_color_widget: grid_color_widget.clone(),
             grid_spacing_spin,
             show_scanlines_check,
             scanline_opacity_spin,
             item_frame_check,
-            item_frame_color_widget,
+            item_frame_color_widget: item_frame_color_widget.clone(),
             item_glow_check,
         });
+
+        // Register theme refresh callbacks
+        let grid_color_for_refresh = grid_color_widget.clone();
+        let item_frame_color_for_refresh = item_frame_color_widget.clone();
+        let config_for_refresh = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_refresh.borrow().frame.theme.clone();
+            grid_color_for_refresh.set_theme_config(theme.clone());
+            item_frame_color_for_refresh.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         page
     }
@@ -620,86 +647,57 @@ impl CyberpunkConfigWidget {
         });
         page.append(&style_box);
 
-        // Header color
+        // Header color (theme-aware)
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Text Color:")));
-        let header_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.header_color));
+        let header_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.header_color.clone()));
+        header_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         color_box.append(header_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        header_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.header_color = color;
+        header_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.header_color = color_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&color_box);
 
-        // Header font
+        // Header font (theme-aware)
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
         font_box.append(&Label::new(Some("Font:")));
-        let header_font_btn = Button::with_label(&config.borrow().frame.header_font);
-        header_font_btn.set_hexpand(true);
-        font_box.append(&header_font_btn);
+        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        font_box.append(header_font_selector.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let font_btn_clone = header_font_btn.clone();
-        header_font_btn.connect_clicked(move |btn| {
-            let root = btn.root();
-            let window = root.as_ref().and_then(|r| r.downcast_ref::<gtk4::Window>());
-            let current_font = config_clone.borrow().frame.header_font.clone();
-            let config_for_cb = config_clone.clone();
-            let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
-            let font_btn_for_cb = font_btn_clone.clone();
-
-            // Create font description from current font family
-            let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-            shared_font_dialog().choose_font(
-                window,
-                Some(&font_desc),
-                gtk4::gio::Cancellable::NONE,
-                move |result| {
-                    if let Ok(font_desc) = result {
-                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
-                        config_for_cb.borrow_mut().frame.header_font = family.clone();
-                        font_btn_for_cb.set_label(&family);
-                        Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                    }
-                },
-            );
-        });
-        page.append(&font_box);
-
-        // Header font size
-        let size_box = GtkBox::new(Orientation::Horizontal, 6);
-        size_box.append(&Label::new(Some("Font Size:")));
-        let header_font_size_spin = SpinButton::with_range(8.0, 48.0, 1.0);
-        header_font_size_spin.set_value(config.borrow().frame.header_font_size);
-        header_font_size_spin.set_hexpand(true);
-        size_box.append(&header_font_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_font_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_font_size = spin.value();
+        header_font_selector.set_on_change(move |font_source| {
+            config_clone.borrow_mut().frame.header_font = font_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&size_box);
+        page.append(&font_box);
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
             show_header_check,
             header_text_entry,
             header_style_dropdown,
-            header_color_widget,
-            header_font_btn,
-            header_font_size_spin,
+            header_color_widget: header_color_widget.clone(),
+            header_font_selector: header_font_selector.clone(),
         });
+
+        // Register theme refresh callbacks
+        let header_color_for_refresh = header_color_widget.clone();
+        let header_font_for_refresh = header_font_selector.clone();
+        let config_for_refresh = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_refresh.borrow().frame.theme.clone();
+            header_color_for_refresh.set_theme_config(theme.clone());
+            header_font_for_refresh.set_theme_config(theme);
+        });
+        _theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         page
     }
@@ -709,7 +707,7 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
-        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -806,20 +804,30 @@ impl CyberpunkConfigWidget {
         });
         page.append(&div_style_box);
 
-        // Divider color
+        // Divider color (theme-aware)
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Color:")));
-        let divider_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.divider_color));
+        let divider_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.divider_color.clone()));
+        divider_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(divider_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        divider_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.divider_color = color;
+        divider_color_widget.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.divider_color = color_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_color_box);
+
+        // Register theme refresh callback for divider color
+        let divider_color_widget_for_theme = divider_color_widget.clone();
+        let config_for_divider_theme = config.clone();
+        let divider_color_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_divider_theme.borrow().frame.theme.clone();
+            divider_color_widget_for_theme.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(divider_color_refresh);
 
         // Divider width
         let div_width_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -2335,7 +2343,8 @@ impl CyberpunkConfigWidget {
         // Update Frame widgets
         if let Some(widgets) = self.frame_widgets.borrow().as_ref() {
             widgets.border_width_spin.set_value(config.frame.border_width);
-            widgets.border_color_widget.set_color(config.frame.border_color);
+            widgets.border_color_widget.set_source(config.frame.border_color.clone());
+            widgets.border_color_widget.set_theme_config(config.frame.theme.clone());
             widgets.glow_spin.set_value(config.frame.glow_intensity);
             widgets.corner_style_dropdown.set_selected(match config.frame.corner_style {
                 CornerStyle::Chamfer => 0,
@@ -2343,19 +2352,22 @@ impl CyberpunkConfigWidget {
                 CornerStyle::Angular => 2,
             });
             widgets.corner_size_spin.set_value(config.frame.corner_size);
-            widgets.bg_color_widget.set_color(config.frame.background_color);
+            widgets.bg_color_widget.set_source(config.frame.background_color.clone());
+            widgets.bg_color_widget.set_theme_config(config.frame.theme.clone());
             widgets.padding_spin.set_value(config.frame.content_padding);
         }
 
         // Update Effects widgets
         if let Some(widgets) = self.effects_widgets.borrow().as_ref() {
             widgets.show_grid_check.set_active(config.frame.show_grid);
-            widgets.grid_color_widget.set_color(config.frame.grid_color);
+            widgets.grid_color_widget.set_source(config.frame.grid_color.clone());
+            widgets.grid_color_widget.set_theme_config(config.frame.theme.clone());
             widgets.grid_spacing_spin.set_value(config.frame.grid_spacing);
             widgets.show_scanlines_check.set_active(config.frame.show_scanlines);
             widgets.scanline_opacity_spin.set_value(config.frame.scanline_opacity);
             widgets.item_frame_check.set_active(config.frame.item_frame_enabled);
-            widgets.item_frame_color_widget.set_color(config.frame.item_frame_color);
+            widgets.item_frame_color_widget.set_source(config.frame.item_frame_color.clone());
+            widgets.item_frame_color_widget.set_theme_config(config.frame.theme.clone());
             widgets.item_glow_check.set_active(config.frame.item_glow_enabled);
         }
 
@@ -2369,9 +2381,10 @@ impl CyberpunkConfigWidget {
                 HeaderStyle::Box => 2,
                 HeaderStyle::None => 3,
             });
-            widgets.header_color_widget.set_color(config.frame.header_color);
-            widgets.header_font_btn.set_label(&config.frame.header_font);
-            widgets.header_font_size_spin.set_value(config.frame.header_font_size);
+            widgets.header_color_widget.set_source(config.frame.header_color.clone());
+            widgets.header_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.header_font_selector.set_source(config.frame.header_font.clone());
+            widgets.header_font_selector.set_theme_config(config.frame.theme.clone());
         }
 
         // Update Layout widgets
@@ -2387,7 +2400,8 @@ impl CyberpunkConfigWidget {
                 DividerStyle::Dots => 3,
                 DividerStyle::None => 4,
             });
-            widgets.divider_color_widget.set_color(config.frame.divider_color);
+            widgets.divider_color_widget.set_source(config.frame.divider_color.clone());
+            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
             widgets.divider_width_spin.set_value(config.frame.divider_width);
             widgets.divider_padding_spin.set_value(config.frame.divider_padding);
 

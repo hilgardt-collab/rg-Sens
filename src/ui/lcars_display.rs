@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::f64::consts::PI;
 
-use crate::ui::background::{BackgroundConfig, Color, render_background};
+use crate::ui::background::{BackgroundConfig, Color, render_background_with_theme};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
@@ -1738,8 +1738,8 @@ pub fn render_content_static(
     cr.save()?;
     cr.translate(x, y);
 
-    // Render the background
-    render_background(cr, &config.background, w, h)?;
+    // Render the background (with theme for polygon color support)
+    render_background_with_theme(cr, &config.background, w, h, Some(theme))?;
 
     // Render text overlay if enabled
     if bar_config.text_overlay.enabled {

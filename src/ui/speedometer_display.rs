@@ -504,8 +504,8 @@ fn draw_bezel(
             cr.fill()?;
         }
         _ => {
-            // For gradients and images, use the standard background rendering
-            crate::ui::background::render_background(cr, &config.bezel_background, width, height)?;
+            // For gradients, images, and polygons, use theme-aware background rendering
+            crate::ui::background::render_background_with_theme(cr, &config.bezel_background, width, height, Some(theme))?;
         }
     }
 
