@@ -318,22 +318,30 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum FontSource {
-    /// Use a theme font (index 1-2)
-    Theme { index: u8 },
+    /// Use a theme font (index 1-2) with independent size
+    Theme {
+        index: u8,
+        #[serde(default = "default_font_size")]
+        size: f64,
+    },
     /// Use a custom font
     Custom { family: String, size: f64 },
 }
 
+fn default_font_size() -> f64 {
+    14.0
+}
+
 impl Default for FontSource {
     fn default() -> Self {
-        FontSource::Theme { index: 1 }
+        FontSource::Theme { index: 1, size: 14.0 }
     }
 }
 
 impl FontSource {
-    /// Create a theme font reference
-    pub fn theme(index: u8) -> Self {
-        FontSource::Theme { index: index.clamp(1, 2) }
+    /// Create a theme font reference with size
+    pub fn theme(index: u8, size: f64) -> Self {
+        FontSource::Theme { index: index.clamp(1, 2), size }
     }
 
     /// Create a custom font
@@ -342,10 +350,30 @@ impl FontSource {
     }
 
     /// Resolve to actual font (family, size) using theme
+    /// For theme fonts, uses family from theme but size from self
     pub fn resolve(&self, theme: &ComboThemeConfig) -> (String, f64) {
         match self {
-            FontSource::Theme { index } => theme.get_font(*index),
+            FontSource::Theme { index, size } => {
+                let (family, _) = theme.get_font(*index);
+                (family, *size)
+            }
             FontSource::Custom { family, size } => (family.clone(), *size),
+        }
+    }
+
+    /// Get the font size (independent of theme or custom)
+    pub fn size(&self) -> f64 {
+        match self {
+            FontSource::Theme { size, .. } => *size,
+            FontSource::Custom { size, .. } => *size,
+        }
+    }
+
+    /// Create a new FontSource with updated size
+    pub fn with_size(&self, new_size: f64) -> Self {
+        match self {
+            FontSource::Theme { index, .. } => FontSource::Theme { index: *index, size: new_size },
+            FontSource::Custom { family, .. } => FontSource::Custom { family: family.clone(), size: new_size },
         }
     }
 
@@ -357,7 +385,7 @@ impl FontSource {
     /// Get theme index if this is a theme reference
     pub fn theme_index(&self) -> Option<u8> {
         match self {
-            FontSource::Theme { index } => Some(*index),
+            FontSource::Theme { index, .. } => Some(*index),
             FontSource::Custom { .. } => None,
         }
     }

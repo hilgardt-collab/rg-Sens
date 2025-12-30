@@ -384,11 +384,11 @@ impl TextLineConfig {
                     // Fallback for when no theme is available
                     match source {
                         FontSource::Custom { family, size } => (family.clone(), *size),
-                        FontSource::Theme { index } => {
-                            // Return a default font based on theme index
+                        FontSource::Theme { index, size } => {
+                            // Return a default font based on theme index, use stored size
                             match index {
-                                1 => ("Sans Bold".to_string(), 16.0),
-                                _ => ("Sans".to_string(), 12.0),
+                                1 => ("Sans Bold".to_string(), *size),
+                                _ => ("Sans".to_string(), *size),
                             }
                         }
                     }

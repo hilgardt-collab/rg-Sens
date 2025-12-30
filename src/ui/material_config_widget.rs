@@ -807,7 +807,7 @@ impl MaterialConfigWidget {
             let font_idx = *idx;
             copy_btn.connect_clicked(move |_| {
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                    clipboard.copy_font_source(FontSource::Theme { index: font_idx }, false, false);
+                    clipboard.copy_font_source(FontSource::Theme { index: font_idx, size: 14.0 }, false, false);
                 }
             });
             item_box.append(&copy_btn);

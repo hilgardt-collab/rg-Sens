@@ -972,9 +972,10 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |source| {
             let (family, size) = match &source {
-                FontSource::Theme { index } => {
+                FontSource::Theme { index, size } => {
                     let cfg = config_clone.borrow();
-                    cfg.frame.theme.get_font(*index)
+                    let (family, _) = cfg.frame.theme.get_font(*index);
+                    (family, *size)
                 }
                 FontSource::Custom { family, size } => (family.clone(), *size),
             };
@@ -1434,7 +1435,7 @@ impl SynthwaveConfigWidget {
             let tooltip_for_log = tooltip.to_string();
             copy_btn.connect_clicked(move |_| {
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                    clipboard.copy_font_source(FontSource::Theme { index: font_idx }, false, false);
+                    clipboard.copy_font_source(FontSource::Theme { index: font_idx, size: 14.0 }, false, false);
                     log::info!("Theme {} copied to clipboard", tooltip_for_log);
                 }
             });

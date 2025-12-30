@@ -38,7 +38,7 @@ impl ThemeFontSelector {
         // Extract initial values
         let (initial_family, initial_size, initial_theme_index) = match &initial_source {
             FontSource::Custom { family, size } => (family.clone(), *size, None),
-            FontSource::Theme { index } => ("sans-serif".to_string(), 12.0, Some(*index)),
+            FontSource::Theme { index, size } => ("sans-serif".to_string(), *size, Some(*index)),
         };
         let custom_family = Rc::new(RefCell::new(initial_family.clone()));
         let theme_index = Rc::new(RefCell::new(initial_theme_index));
@@ -84,13 +84,14 @@ impl ThemeFontSelector {
         size_spin.set_value(initial_size);
         container.append(&size_spin);
 
-        // Connect theme button handlers - only sets font family
+        // Connect theme button handlers - sets font family from theme, keeps current size
         for (i, btn) in theme_buttons.iter().enumerate() {
             let theme_index_clone = theme_index.clone();
             let theme_config_clone = theme_config.clone();
             let font_button_clone = font_button.clone();
             let custom_family_clone = custom_family.clone();
             let on_change_clone = on_change.clone();
+            let size_spin_clone = size_spin.clone();
 
             btn.connect_toggled(move |toggle_btn| {
                 if toggle_btn.is_active() {
@@ -104,9 +105,9 @@ impl ThemeFontSelector {
                         *custom_family_clone.borrow_mut() = family;
                     }
 
-                    // Emit change with Theme font source (not Custom!)
+                    // Emit change with Theme font source including current size
                     if let Some(ref callback) = *on_change_clone.borrow() {
-                        callback(FontSource::Theme { index: idx });
+                        callback(FontSource::Theme { index: idx, size: size_spin_clone.value() });
                     }
                 }
             });
@@ -167,16 +168,22 @@ impl ThemeFontSelector {
             }
         });
 
-        // Size spinner - always emits change, doesn't affect theme selection
+        // Size spinner - emits change preserving current font source type
         let custom_family_for_spin = custom_family.clone();
+        let theme_index_for_spin = theme_index.clone();
         let on_change_for_spin = on_change.clone();
 
         size_spin.connect_value_changed(move |spin| {
             if let Some(ref callback) = *on_change_for_spin.borrow() {
-                callback(FontSource::Custom {
-                    family: custom_family_for_spin.borrow().clone(),
-                    size: spin.value(),
-                });
+                // Preserve theme selection, update size
+                if let Some(idx) = *theme_index_for_spin.borrow() {
+                    callback(FontSource::Theme { index: idx, size: spin.value() });
+                } else {
+                    callback(FontSource::Custom {
+                        family: custom_family_for_spin.borrow().clone(),
+                        size: spin.value(),
+                    });
+                }
             }
         });
 
@@ -197,18 +204,23 @@ impl ThemeFontSelector {
     }
 
     pub fn source(&self) -> FontSource {
-        FontSource::Custom {
-            family: self.custom_family.borrow().clone(),
-            size: self.size_spin.value(),
+        if let Some(idx) = *self.theme_index.borrow() {
+            FontSource::Theme { index: idx, size: self.size_spin.value() }
+        } else {
+            FontSource::Custom {
+                family: self.custom_family.borrow().clone(),
+                size: self.size_spin.value(),
+            }
         }
     }
 
     pub fn set_source(&self, source: FontSource) {
         match &source {
-            FontSource::Theme { index } => {
+            FontSource::Theme { index, size } => {
                 let idx = (*index as usize).saturating_sub(1).min(1);
                 self.theme_buttons[idx].set_active(true);
                 *self.theme_index.borrow_mut() = Some(*index);
+                self.size_spin.set_value(*size);
 
                 if let Some(ref cfg) = *self.theme_config.borrow() {
                     let (family, _) = cfg.get_font(*index);
@@ -258,5 +270,15 @@ impl ThemeFontSelector {
     /// Get current font family and size
     pub fn resolve_font(&self) -> (String, f64) {
         (self.custom_family.borrow().clone(), self.size_spin.value())
+    }
+
+    /// Get the current font size (independent of theme selection)
+    pub fn size(&self) -> f64 {
+        self.size_spin.value()
+    }
+
+    /// Set the font size without affecting theme selection
+    pub fn set_size(&self, size: f64) {
+        self.size_spin.set_value(size);
     }
 }

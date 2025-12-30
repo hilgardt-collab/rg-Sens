@@ -265,7 +265,7 @@ where
         let tooltip_for_log = tooltip.to_string();
         copy_btn.connect_clicked(move |_| {
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font_source(FontSource::Theme { index: font_idx }, false, false);
+                clipboard.copy_font_source(FontSource::Theme { index: font_idx, size: 14.0 }, false, false);
                 log::info!("Theme {} copied to clipboard", tooltip_for_log);
             }
         });
