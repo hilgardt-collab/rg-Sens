@@ -1425,9 +1425,9 @@ impl CoreBarsConfigWidget {
         // Add core usage fields (core0 through core31 to cover most systems)
         for i in 0..32 {
             fields.push(FieldMetadata::new(
-                &format!("core{}_usage", i),
-                &format!("Core {} Usage", i),
-                &format!("CPU core {} usage percentage", i),
+                format!("core{}_usage", i),
+                format!("Core {} Usage", i),
+                format!("CPU core {} usage percentage", i),
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ));

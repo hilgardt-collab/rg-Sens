@@ -425,10 +425,7 @@ impl TextLineConfigWidget {
             let all_lines = lines.borrow();
             // Use current data from lines, not the stale line_config copy
             let current_line = all_lines.get(list_index);
-            if current_line.is_none() {
-                false
-            } else {
-                let current_line = current_line.unwrap();
+            if let Some(current_line) = current_line {
                 if !current_line.is_combined || current_line.group_id.is_none() {
                     false
                 } else {
@@ -452,6 +449,8 @@ impl TextLineConfigWidget {
                     // Show only if this is the first line in group with same position AND there are 2+ such lines
                     first_index_in_group_with_pos == Some(list_index) && group_count_with_same_pos >= 2
                 }
+            } else {
+                false
             }
         };
 

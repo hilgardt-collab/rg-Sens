@@ -107,12 +107,12 @@ impl ThemeColorSelector {
         }
 
         // Connect theme button click handlers
-        for i in 0..4 {
+        for (i, theme_button) in theme_buttons.iter().enumerate() {
             let source_clone = source.clone();
             let on_change_clone = on_change.clone();
             let selected_clone = selected_index.clone();
             let custom_color_clone = custom_color.clone();
-            let theme_drawings_clone: Vec<DrawingArea> = theme_drawings.iter().cloned().collect();
+            let theme_drawings_clone: Vec<DrawingArea> = theme_drawings.to_vec();
             let color_button_ref = Rc::new(RefCell::new(None::<Button>));
             let color_drawing_ref = Rc::new(RefCell::new(None::<DrawingArea>));
 
@@ -121,7 +121,7 @@ impl ThemeColorSelector {
             let color_drawing_ref_clone = color_drawing_ref.clone();
             let idx = (i + 1) as u8;
 
-            theme_buttons[i].connect_clicked(move |_| {
+            theme_button.connect_clicked(move |_| {
                 let currently_selected = *selected_clone.borrow();
 
                 if currently_selected == Some(idx) {
@@ -219,7 +219,7 @@ impl ThemeColorSelector {
         let on_change_for_click = on_change.clone();
         let selected_for_click = selected_index.clone();
         let color_drawing_for_click = color_drawing_area.clone();
-        let theme_drawings_for_click: Vec<DrawingArea> = theme_drawings.iter().cloned().collect();
+        let theme_drawings_for_click: Vec<DrawingArea> = theme_drawings.to_vec();
         let color_button_for_click = color_button.clone();
 
         color_button.connect_clicked(move |btn| {
@@ -284,7 +284,7 @@ impl ThemeColorSelector {
         let on_change_for_paste = on_change.clone();
         let selected_for_paste = selected_index.clone();
         let color_drawing_for_paste = color_drawing_area.clone();
-        let theme_drawings_for_paste: Vec<DrawingArea> = theme_drawings.iter().cloned().collect();
+        let theme_drawings_for_paste: Vec<DrawingArea> = theme_drawings.to_vec();
         let color_button_for_paste = color_button.clone();
 
         paste_button.connect_clicked(move |_| {

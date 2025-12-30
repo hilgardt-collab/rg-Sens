@@ -116,7 +116,7 @@ impl ThemeFontSelector {
         let theme_index_for_click = theme_index.clone();
         let custom_family_for_click = custom_family.clone();
         let on_change_for_click = on_change.clone();
-        let theme_buttons_for_click: Vec<ToggleButton> = theme_buttons.iter().cloned().collect();
+        let theme_buttons_for_click: Vec<ToggleButton> = theme_buttons.to_vec();
         let font_button_for_click = font_button.clone();
         let size_spin_for_click = size_spin.clone();
 

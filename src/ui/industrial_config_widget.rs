@@ -1742,9 +1742,10 @@ impl IndustrialConfigWidget {
         {
             let mut cfg = config.borrow_mut();
             if !cfg.frame.content_items.contains_key(slot_name) {
-                let mut item = ContentItemConfig::default();
-                // Use smart default based on field types
-                item.display_as = ContentDisplayType::suggest_for_fields(&slot_fields_for_default);
+                let item = ContentItemConfig {
+                    display_as: ContentDisplayType::suggest_for_fields(&slot_fields_for_default),
+                    ..Default::default()
+                };
                 cfg.frame.content_items.insert(slot_name.to_string(), item);
             }
         }

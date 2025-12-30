@@ -388,19 +388,14 @@ impl FontOrString {
 }
 
 /// Reference to theme gradient or custom gradient
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(tag = "type")]
 pub enum GradientSource {
     /// Use the theme gradient
+    #[default]
     Theme,
     /// Use a custom gradient
     Custom { gradient: LinearGradientConfig },
-}
-
-impl Default for GradientSource {
-    fn default() -> Self {
-        GradientSource::Theme
-    }
 }
 
 impl GradientSource {
