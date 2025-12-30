@@ -535,34 +535,45 @@ impl TextLineConfigWidget {
             }
         });
 
-        // Copy font button
+        // Copy font button - preserves FontSource (Theme or Custom)
         let copy_font_btn = Button::with_label("Copy");
         let lines_clone_copy_font = lines.clone();
         copy_font_btn.connect_clicked(move |_| {
             let lines_ref = lines_clone_copy_font.borrow();
             if let Some(line) = lines_ref.get(list_index) {
                 if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                    // Get resolved font for clipboard (using legacy fields for compatibility)
-                    clipboard.copy_font(line.font_family.clone(), line.font_size, line.bold, line.italic);
+                    // Copy FontSource to preserve theme reference
+                    if let Some(ref source) = line.font_source {
+                        clipboard.copy_font_source(source.clone(), line.bold, line.italic);
+                    } else {
+                        // Fallback to legacy fields as Custom
+                        let source = FontSource::Custom {
+                            family: line.font_family.clone(),
+                            size: line.font_size,
+                        };
+                        clipboard.copy_font_source(source, line.bold, line.italic);
+                    }
                 }
             }
         });
         font_box.append(&copy_font_btn);
 
-        // Paste font button
+        // Paste font button - preserves FontSource (Theme or Custom)
         let paste_font_btn = Button::with_label("Paste");
         let lines_clone_paste_font = lines.clone();
         let font_selector_clone = font_selector.clone();
         let bold_check_clone = bold_check.clone();
         let italic_check_clone = italic_check.clone();
         let on_change_paste = on_change.clone();
+        let theme_paste = theme.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                if let Some((family, size, bold, italic)) = clipboard.paste_font() {
-                    let new_source = FontSource::Custom { family: family.clone(), size };
+                if let Some((source, bold, italic)) = clipboard.paste_font_source() {
                     let mut lines_ref = lines_clone_paste_font.borrow_mut();
                     if let Some(line) = lines_ref.get_mut(list_index) {
-                        line.font_source = Some(new_source.clone());
+                        line.font_source = Some(source.clone());
+                        // Update legacy fields for compatibility
+                        let (family, size) = source.resolve(&theme_paste.borrow());
                         line.font_family = family;
                         line.font_size = size;
                         line.bold = bold;
@@ -571,7 +582,7 @@ impl TextLineConfigWidget {
                     drop(lines_ref);
 
                     // Update font selector and bold/italic checks
-                    font_selector_clone.set_source(new_source);
+                    font_selector_clone.set_source(source);
                     bold_check_clone.set_active(bold);
                     italic_check_clone.set_active(italic);
 
@@ -1374,10 +1385,6 @@ impl TextLineConfigWidget {
 
     /// Set the configuration
     pub fn set_config(&self, config: TextDisplayerConfig) {
-        log::debug!(
-            "TextLineConfigWidget::set_config: received {} lines",
-            config.lines.len()
-        );
         // Update lines vector
         *self.lines.borrow_mut() = config.lines;
 
@@ -1388,10 +1395,6 @@ impl TextLineConfigWidget {
     /// Get the current configuration
     pub fn get_config(&self) -> TextDisplayerConfig {
         let lines = self.lines.borrow().clone();
-        log::debug!(
-            "TextLineConfigWidget::get_config: returning {} lines",
-            lines.len()
-        );
         TextDisplayerConfig { lines }
     }
 

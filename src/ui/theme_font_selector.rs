@@ -31,6 +31,7 @@ pub struct ThemeFontSelector {
 impl ThemeFontSelector {
     /// Create a new ThemeFontSelector with the given initial source.
     pub fn new(initial_source: FontSource) -> Self {
+        log::trace!("ThemeFontSelector::new() initial_source={:?}", initial_source);
         let container = GtkBox::new(Orientation::Horizontal, 4);
         let on_change: Rc<RefCell<Option<Box<dyn Fn(FontSource)>>>> = Rc::new(RefCell::new(None));
         let theme_config: Rc<RefCell<Option<ComboThemeConfig>>> = Rc::new(RefCell::new(None));
@@ -43,7 +44,7 @@ impl ThemeFontSelector {
         let custom_family = Rc::new(RefCell::new(initial_family.clone()));
         let theme_index = Rc::new(RefCell::new(initial_theme_index));
 
-        // Create theme toggle buttons
+        // Create theme toggle buttons (NOT grouped - we manage exclusivity manually to allow none active)
         let theme_buttons: [ToggleButton; 2] = [
             ToggleButton::with_label("T1"),
             ToggleButton::with_label("T2"),
@@ -51,16 +52,19 @@ impl ThemeFontSelector {
 
         theme_buttons[0].set_tooltip_text(Some("Use Theme Font 1"));
         theme_buttons[1].set_tooltip_text(Some("Use Theme Font 2"));
-        theme_buttons[1].set_group(Some(&theme_buttons[0]));
-
-        // Set initial active state
-        if let Some(idx) = initial_theme_index {
-            let btn_idx = (idx as usize).saturating_sub(1).min(1);
-            theme_buttons[btn_idx].set_active(true);
-        }
+        // NOTE: We intentionally don't use set_group() because we need to allow
+        // all buttons to be inactive when a custom font is selected.
 
         for btn in &theme_buttons {
             container.append(btn);
+        }
+
+        // Set initial active state AFTER buttons are added to container
+        // (GTK4 widget state may not be properly applied before realization)
+        if let Some(idx) = initial_theme_index {
+            let btn_idx = (idx as usize).saturating_sub(1).min(1);
+            log::trace!("ThemeFontSelector: setting btn[{}] active for theme index {}", btn_idx, idx);
+            theme_buttons[btn_idx].set_active(true);
         }
 
         // Separator
@@ -85,6 +89,8 @@ impl ThemeFontSelector {
         container.append(&size_spin);
 
         // Connect theme button handlers - sets font family from theme, keeps current size
+        // We need to manually handle exclusivity since we don't use set_group()
+        let theme_buttons_vec: Vec<ToggleButton> = theme_buttons.to_vec();
         for (i, btn) in theme_buttons.iter().enumerate() {
             let theme_index_clone = theme_index.clone();
             let theme_config_clone = theme_config.clone();
@@ -92,11 +98,21 @@ impl ThemeFontSelector {
             let custom_family_clone = custom_family.clone();
             let on_change_clone = on_change.clone();
             let size_spin_clone = size_spin.clone();
+            let other_buttons: Vec<ToggleButton> = theme_buttons_vec.iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, b)| b.clone())
+                .collect();
 
             btn.connect_toggled(move |toggle_btn| {
                 if toggle_btn.is_active() {
                     let idx = (i + 1) as u8;
                     *theme_index_clone.borrow_mut() = Some(idx);
+
+                    // Deactivate other theme buttons (manual exclusivity)
+                    for other_btn in &other_buttons {
+                        other_btn.set_active(false);
+                    }
 
                     // Get theme font family and update button label
                     if let Some(ref cfg) = *theme_config_clone.borrow() {
@@ -108,6 +124,18 @@ impl ThemeFontSelector {
                     // Emit change with Theme font source including current size
                     if let Some(ref callback) = *on_change_clone.borrow() {
                         callback(FontSource::Theme { index: idx, size: size_spin_clone.value() });
+                    }
+                } else {
+                    // Button was deactivated - if this was the active button, clear theme_index
+                    let current_idx = *theme_index_clone.borrow();
+                    let this_idx = (i + 1) as u8;
+                    if current_idx == Some(this_idx) {
+                        // This button was the active theme button and is being deselected
+                        // Only clear if no other theme button is active
+                        let any_other_active = other_buttons.iter().any(|b| b.is_active());
+                        if !any_other_active {
+                            *theme_index_clone.borrow_mut() = None;
+                        }
                     }
                 }
             });
