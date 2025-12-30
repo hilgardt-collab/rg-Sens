@@ -65,6 +65,22 @@ impl HudColorPreset {
             a: c.a
         }
     }
+
+    /// Generate theme colors based on this preset
+    /// Returns (color1, color2, color3, color4) for the theme
+    pub fn to_theme_colors(&self) -> (Color, Color, Color, Color) {
+        let primary = self.to_color();
+        let dim = self.to_dim_color();
+        let bright = self.to_bright_color();
+        // Color 4: semi-transparent version for backgrounds/accents
+        let accent = Color {
+            r: primary.r,
+            g: primary.g,
+            b: primary.b,
+            a: 0.5,
+        };
+        (primary, dim, bright, accent)
+    }
 }
 
 /// Frame style for the HUD

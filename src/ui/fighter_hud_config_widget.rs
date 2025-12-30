@@ -28,15 +28,6 @@ use crate::ui::combo_config_base;
 use crate::ui::theme::FontSource;
 use crate::ui::theme_font_selector::ThemeFontSelector;
 
-/// Holds references to Colors tab widgets
-struct ColorsWidgets {
-    hud_color_dropdown: DropDown,
-    custom_color_widget: Rc<ColorButtonWidget>,
-    custom_color_box: GtkBox,
-    background_widget: Rc<ColorButtonWidget>,
-    glow_scale: Scale,
-}
-
 /// Holds references to Frame tab widgets
 struct FrameWidgets {
     style_dropdown: DropDown,
@@ -76,6 +67,13 @@ struct AnimationWidgets {
 /// Holds references to Theme tab widgets
 #[allow(dead_code)]
 struct ThemeWidgets {
+    // HUD scheme widgets
+    hud_color_dropdown: DropDown,
+    custom_hud_color_widget: Rc<ColorButtonWidget>,
+    custom_color_row: GtkBox,
+    background_widget: Rc<ColorButtonWidget>,
+    glow_scale: Scale,
+    // Theme color widgets
     theme_color1_widget: Rc<ColorButtonWidget>,
     theme_color2_widget: Rc<ColorButtonWidget>,
     theme_color3_widget: Rc<ColorButtonWidget>,
@@ -96,7 +94,6 @@ pub struct FighterHudConfigWidget {
     content_notebook: Rc<RefCell<Notebook>>,
     source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
-    colors_widgets: Rc<RefCell<Option<ColorsWidgets>>>,
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     header_widgets: Rc<RefCell<Option<HeaderWidgets>>>,
     layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
@@ -116,7 +113,6 @@ impl FighterHudConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
         let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
-        let colors_widgets: Rc<RefCell<Option<ColorsWidgets>>> = Rc::new(RefCell::new(None));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
@@ -151,15 +147,11 @@ impl FighterHudConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Theme (first for easy access to theme colors/fonts)
+        // Tab 1: Theme (includes HUD color scheme, theme colors, and fonts)
         let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
-        // Tab 2: Colors
-        let colors_page = Self::create_colors_page(&config, &on_change, &preview, &colors_widgets);
-        notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
-
-        // Tab 3: Frame
+        // Tab 2: Frame
         let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets);
         notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
 
@@ -192,7 +184,6 @@ impl FighterHudConfigWidget {
             content_notebook,
             source_summaries,
             available_fields,
-            colors_widgets,
             frame_widgets,
             header_widgets,
             layout_widgets,
@@ -211,127 +202,6 @@ impl FighterHudConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) {
         combo_config_base::queue_redraw(preview, on_change);
-    }
-
-    fn create_colors_page(
-        config: &Rc<RefCell<FighterHudDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
-
-        // HUD color preset
-        let color_box = GtkBox::new(Orientation::Horizontal, 6);
-        color_box.append(&Label::new(Some("HUD Color:")));
-        let color_list = StringList::new(&["Military Green", "Amber", "Cyan", "White", "Custom"]);
-        let hud_color_dropdown = DropDown::new(Some(color_list), None::<gtk4::Expression>);
-        let color_idx = match &config.borrow().frame.hud_color {
-            HudColorPreset::MilitaryGreen => 0,
-            HudColorPreset::Amber => 1,
-            HudColorPreset::Cyan => 2,
-            HudColorPreset::White => 3,
-            HudColorPreset::Custom(_) => 4,
-        };
-        hud_color_dropdown.set_selected(color_idx);
-        hud_color_dropdown.set_hexpand(true);
-        color_box.append(&hud_color_dropdown);
-        page.append(&color_box);
-
-        // Custom color (shown only when Custom is selected)
-        let custom_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        custom_color_box.append(&Label::new(Some("Custom Color:")));
-        let custom_color = if let HudColorPreset::Custom(c) = &config.borrow().frame.hud_color {
-            *c
-        } else {
-            Color { r: 0.0, g: 0.9, b: 0.3, a: 1.0 }
-        };
-        let custom_color_widget = Rc::new(ColorButtonWidget::new(custom_color));
-        custom_color_box.append(custom_color_widget.widget());
-        custom_color_box.set_visible(color_idx == 4);
-        page.append(&custom_color_box);
-
-        // Connect color dropdown
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let custom_box_clone = custom_color_box.clone();
-        let custom_widget_clone = custom_color_widget.clone();
-        hud_color_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            custom_box_clone.set_visible(selected == 4);
-            config_clone.borrow_mut().frame.hud_color = match selected {
-                0 => HudColorPreset::MilitaryGreen,
-                1 => HudColorPreset::Amber,
-                2 => HudColorPreset::Cyan,
-                3 => HudColorPreset::White,
-                _ => HudColorPreset::Custom(custom_widget_clone.color()),
-            };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Connect custom color widget
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        custom_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.hud_color = HudColorPreset::Custom(color);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Background color
-        let bg_label = Label::new(Some("Background"));
-        bg_label.set_halign(gtk4::Align::Start);
-        bg_label.add_css_class("heading");
-        bg_label.set_margin_top(12);
-        page.append(&bg_label);
-
-        let bg_box = GtkBox::new(Orientation::Horizontal, 6);
-        bg_box.append(&Label::new(Some("Background Color:")));
-        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
-        bg_box.append(background_widget.widget());
-        page.append(&bg_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        background_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.background_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Glow intensity
-        let glow_box = GtkBox::new(Orientation::Horizontal, 6);
-        glow_box.append(&Label::new(Some("Glow Intensity:")));
-        let glow_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
-        glow_scale.set_value(config.borrow().frame.glow_intensity);
-        glow_scale.set_hexpand(true);
-        glow_scale.set_draw_value(true);
-        glow_box.append(&glow_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        glow_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.glow_intensity = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&glow_box);
-
-        // Store widget refs
-        *colors_widgets_out.borrow_mut() = Some(ColorsWidgets {
-            hud_color_dropdown,
-            custom_color_widget,
-            custom_color_box,
-            background_widget,
-            glow_scale,
-        });
-
-        page
     }
 
     fn create_frame_page(
@@ -788,11 +658,71 @@ impl FighterHudConfigWidget {
         let inner_box = GtkBox::new(Orientation::Vertical, 8);
 
         // Info label
-        let info_label = Label::new(Some("Configure theme colors, gradient, and fonts.\nThese can be referenced in content items for consistent styling."));
+        let info_label = Label::new(Some("Configure HUD color scheme, theme colors, gradient, and fonts.\nThese can be referenced in content items for consistent styling."));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
         info_label.set_wrap(true);
         inner_box.append(&info_label);
+
+        // === HUD Color Scheme Section ===
+        let hud_scheme_frame = gtk4::Frame::new(Some("HUD Color Scheme"));
+        let hud_scheme_box = GtkBox::new(Orientation::Vertical, 6);
+        hud_scheme_box.set_margin_start(8);
+        hud_scheme_box.set_margin_end(8);
+        hud_scheme_box.set_margin_top(8);
+        hud_scheme_box.set_margin_bottom(8);
+
+        // HUD color preset dropdown
+        let hud_color_row = GtkBox::new(Orientation::Horizontal, 8);
+        hud_color_row.append(&Label::new(Some("HUD Color:")));
+        let hud_color_list = StringList::new(&["Military Green", "Amber", "Cyan", "White", "Custom"]);
+        let hud_color_dropdown = DropDown::new(Some(hud_color_list), None::<gtk4::Expression>);
+        let hud_color_idx = match &config.borrow().frame.hud_color {
+            HudColorPreset::MilitaryGreen => 0,
+            HudColorPreset::Amber => 1,
+            HudColorPreset::Cyan => 2,
+            HudColorPreset::White => 3,
+            HudColorPreset::Custom(_) => 4,
+        };
+        hud_color_dropdown.set_selected(hud_color_idx);
+        hud_color_dropdown.set_hexpand(true);
+        hud_color_row.append(&hud_color_dropdown);
+        hud_scheme_box.append(&hud_color_row);
+
+        // Custom color (shown only when Custom is selected)
+        let custom_color_row = GtkBox::new(Orientation::Horizontal, 8);
+        custom_color_row.append(&Label::new(Some("Custom Color:")));
+        let custom_hud_color = if let HudColorPreset::Custom(c) = &config.borrow().frame.hud_color {
+            *c
+        } else {
+            Color { r: 0.0, g: 0.9, b: 0.3, a: 1.0 }
+        };
+        let custom_hud_color_widget = Rc::new(ColorButtonWidget::new(custom_hud_color));
+        custom_hud_color_widget.widget().set_hexpand(true);
+        custom_color_row.append(custom_hud_color_widget.widget());
+        custom_color_row.set_visible(hud_color_idx == 4);
+        hud_scheme_box.append(&custom_color_row);
+
+        // Background color
+        let bg_row = GtkBox::new(Orientation::Horizontal, 8);
+        bg_row.append(&Label::new(Some("Background:")));
+        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
+        background_widget.widget().set_hexpand(true);
+        bg_row.append(background_widget.widget());
+        hud_scheme_box.append(&bg_row);
+
+        // Glow intensity
+        let glow_row = GtkBox::new(Orientation::Horizontal, 8);
+        glow_row.append(&Label::new(Some("Glow Intensity:")));
+        let glow_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
+        glow_scale.set_value(config.borrow().frame.glow_intensity);
+        glow_scale.set_hexpand(true);
+        glow_scale.set_draw_value(true);
+        glow_row.append(&glow_scale);
+        hud_scheme_box.append(&glow_row);
+
+        hud_scheme_frame.set_child(Some(&hud_scheme_box));
+        inner_box.append(&hud_scheme_frame);
 
         // Theme Colors section
         let colors_frame = gtk4::Frame::new(Some("Theme Colors"));
@@ -844,6 +774,100 @@ impl FighterHudConfigWidget {
 
         colors_frame.set_child(Some(&colors_box));
         inner_box.append(&colors_frame);
+
+        // === HUD Scheme Callbacks (now that color_widgets exist) ===
+
+        // HUD color dropdown callback - updates hud_color and theme colors
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let custom_color_row_clone = custom_color_row.clone();
+        let custom_hud_color_widget_clone = custom_hud_color_widget.clone();
+        let color_widgets_for_hud = color_widgets.clone();
+        let refreshers_for_hud = theme_ref_refreshers.clone();
+        hud_color_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            custom_color_row_clone.set_visible(selected == 4);
+
+            let preset = match selected {
+                0 => HudColorPreset::MilitaryGreen,
+                1 => HudColorPreset::Amber,
+                2 => HudColorPreset::Cyan,
+                3 => HudColorPreset::White,
+                _ => HudColorPreset::Custom(custom_hud_color_widget_clone.color()),
+            };
+
+            // Update theme colors based on preset
+            let (c1, c2, c3, c4) = preset.to_theme_colors();
+            let mut cfg = config_clone.borrow_mut();
+            cfg.frame.hud_color = preset;
+            cfg.frame.theme.color1 = c1;
+            cfg.frame.theme.color2 = c2;
+            cfg.frame.theme.color3 = c3;
+            cfg.frame.theme.color4 = c4;
+            drop(cfg);
+
+            // Update color widgets
+            if color_widgets_for_hud.len() >= 4 {
+                color_widgets_for_hud[0].set_color(c1);
+                color_widgets_for_hud[1].set_color(c2);
+                color_widgets_for_hud[2].set_color(c3);
+                color_widgets_for_hud[3].set_color(c4);
+            }
+
+            Self::refresh_theme_refs(&refreshers_for_hud);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Custom HUD color callback
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let color_widgets_for_custom = color_widgets.clone();
+        let refreshers_for_custom = theme_ref_refreshers.clone();
+        custom_hud_color_widget.set_on_change(move |color| {
+            let preset = HudColorPreset::Custom(color);
+            let (c1, c2, c3, c4) = preset.to_theme_colors();
+            let mut cfg = config_clone.borrow_mut();
+            cfg.frame.hud_color = preset;
+            cfg.frame.theme.color1 = c1;
+            cfg.frame.theme.color2 = c2;
+            cfg.frame.theme.color3 = c3;
+            cfg.frame.theme.color4 = c4;
+            drop(cfg);
+
+            // Update color widgets
+            if color_widgets_for_custom.len() >= 4 {
+                color_widgets_for_custom[0].set_color(c1);
+                color_widgets_for_custom[1].set_color(c2);
+                color_widgets_for_custom[2].set_color(c3);
+                color_widgets_for_custom[3].set_color(c4);
+            }
+
+            Self::refresh_theme_refs(&refreshers_for_custom);
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Background color callback
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        background_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.background_color = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Glow intensity callback
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        glow_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.glow_intensity = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
 
         // Theme Gradient section
         let gradient_frame = gtk4::Frame::new(Some("Theme Gradient"));
@@ -1062,6 +1086,13 @@ impl FighterHudConfigWidget {
 
         // Store theme widgets for later updates
         *theme_widgets_out.borrow_mut() = Some(ThemeWidgets {
+            // HUD scheme widgets
+            hud_color_dropdown,
+            custom_hud_color_widget,
+            custom_color_row,
+            background_widget,
+            glow_scale,
+            // Theme color widgets
             theme_color1_widget: color_widgets[0].clone(),
             theme_color2_widget: color_widgets[1].clone(),
             theme_color3_widget: color_widgets[2].clone(),
@@ -2099,14 +2130,25 @@ impl FighterHudConfigWidget {
         *self.config.borrow_mut() = config;
 
         // Update UI widgets - config borrow is dropped, so callbacks can safely borrow_mut
-        if let Some(ref widgets) = *self.colors_widgets.borrow() {
+        // Update theme widgets (includes HUD scheme settings)
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
             widgets.hud_color_dropdown.set_selected(color_idx);
-            widgets.custom_color_box.set_visible(color_idx == 4);
+            widgets.custom_color_row.set_visible(color_idx == 4);
             if let Some(c) = custom_color {
-                widgets.custom_color_widget.set_color(c);
+                widgets.custom_hud_color_widget.set_color(c);
             }
             widgets.background_widget.set_color(background_color);
             widgets.glow_scale.set_value(glow_intensity);
+            // Update theme colors too
+            widgets.theme_color1_widget.set_color(theme.color1);
+            widgets.theme_color2_widget.set_color(theme.color2);
+            widgets.theme_color3_widget.set_color(theme.color3);
+            widgets.theme_color4_widget.set_color(theme.color4);
+            widgets.theme_gradient_editor.set_gradient_source_config(&theme.gradient);
+            widgets.font1_btn.set_label(&theme.font1_family);
+            widgets.font1_size_spin.set_value(theme.font1_size);
+            widgets.font2_btn.set_label(&theme.font2_family);
+            widgets.font2_size_spin.set_value(theme.font2_size);
         }
 
         if let Some(ref widgets) = *self.frame_widgets.borrow() {
