@@ -27,6 +27,7 @@ use crate::displayers::MaterialDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
 use crate::ui::theme::{ColorSource, FontSource};
+use crate::ui::theme_font_selector::ThemeFontSelector;
 
 /// Holds references to Appearance tab widgets (theme variant & surface colors)
 struct AppearanceWidgets {
@@ -68,8 +69,7 @@ struct HeaderWidgets {
     header_text_entry: Entry,
     header_style_dropdown: DropDown,
     header_height_spin: SpinButton,
-    header_font_btn: Button,
-    header_font_size_spin: SpinButton,
+    header_font_selector: Rc<ThemeFontSelector>,
 }
 
 /// Holds references to Layout tab widgets
@@ -153,25 +153,25 @@ impl MaterialConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Appearance (theme variant, surface colors, etc.)
+        // Tab 1: Theme (combo theme colors, fonts, gradient) - first for visibility
+        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
+
+        // Tab 2: Appearance (theme variant, surface colors, etc.)
         let appearance_page = Self::create_appearance_page(&config, &on_change, &preview, &appearance_widgets);
         notebook.append_page(&appearance_page, Some(&Label::new(Some("Appearance"))));
 
-        // Tab 2: Card
+        // Tab 3: Card
         let card_page = Self::create_card_page(&config, &on_change, &preview, &card_widgets);
         notebook.append_page(&card_page, Some(&Label::new(Some("Card"))));
 
-        // Tab 3: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets);
+        // Tab 4: Header
+        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
-        // Tab 4: Layout
+        // Tab 5: Layout
         let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
-
-        // Tab 5: Theme (combo theme colors, fonts, gradient)
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
-        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 6: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
@@ -986,6 +986,7 @@ impl MaterialConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1070,60 +1071,27 @@ impl MaterialConfigWidget {
         });
         page.append(&height_box);
 
-        // Header font
-        let font_box = GtkBox::new(Orientation::Horizontal, 6);
-        font_box.append(&Label::new(Some("Font:")));
-        let header_font_btn = Button::with_label(&config.borrow().frame.header_font);
-        header_font_btn.set_hexpand(true);
-        font_box.append(&header_font_btn);
+        // Header font selector (theme-aware)
+        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        page.append(header_font_selector.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let font_btn_clone = header_font_btn.clone();
-        header_font_btn.connect_clicked(move |btn| {
-            let root = btn.root();
-            let window = root.as_ref().and_then(|r| r.downcast_ref::<gtk4::Window>());
-            let current_font = config_clone.borrow().frame.header_font.clone();
-            let config_for_cb = config_clone.clone();
-            let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
-            let font_btn_for_cb = font_btn_clone.clone();
-
-            let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-            shared_font_dialog().choose_font(
-                window,
-                Some(&font_desc),
-                gtk4::gio::Cancellable::NONE,
-                move |result| {
-                    if let Ok(font_desc) = result {
-                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
-                        config_for_cb.borrow_mut().frame.header_font = family.clone();
-                        font_btn_for_cb.set_label(&family);
-                        Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                    }
-                },
-            );
-        });
-        page.append(&font_box);
-
-        // Header font size
-        let size_box = GtkBox::new(Orientation::Horizontal, 6);
-        size_box.append(&Label::new(Some("Font Size:")));
-        let header_font_size_spin = SpinButton::with_range(10.0, 32.0, 1.0);
-        header_font_size_spin.set_value(config.borrow().frame.header_font_size);
-        header_font_size_spin.set_hexpand(true);
-        size_box.append(&header_font_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_font_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_font_size = spin.value();
+        header_font_selector.set_on_change(move |font_source| {
+            config_clone.borrow_mut().frame.header_font = font_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&size_box);
+
+        // Register theme refresh callback for the font selector
+        let selector_for_refresh = header_font_selector.clone();
+        let config_for_refresh = config.clone();
+        let font_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_refresh.borrow().frame.theme.clone();
+            selector_for_refresh.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(font_refresh);
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
@@ -1131,8 +1099,7 @@ impl MaterialConfigWidget {
             header_text_entry,
             header_style_dropdown,
             header_height_spin,
-            header_font_btn,
-            header_font_size_spin,
+            header_font_selector,
         });
 
         page
@@ -1658,6 +1625,8 @@ impl MaterialConfigWidget {
                 .map(|item| item.graph_config.clone())
                 .unwrap_or_else(Self::default_graph_config_material)
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        graph_widget.set_theme(config.borrow().frame.theme.clone());
         graph_widget.set_config(current_graph_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1680,6 +1649,15 @@ impl MaterialConfigWidget {
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
+        // Register theme refresh callback for graph widget
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_graph_theme.borrow().frame.theme.clone();
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         // === Text Configuration Section ===
         let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
         text_config_frame.set_margin_top(12);
@@ -1692,6 +1670,8 @@ impl MaterialConfigWidget {
                 .map(|item| item.bar_config.text_overlay.text_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        text_widget.set_theme(config.borrow().frame.theme.clone());
         text_widget.set_config(current_text_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1719,6 +1699,15 @@ impl MaterialConfigWidget {
 
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
+
+        // Register theme refresh callback for text widget
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_text_theme.borrow().frame.theme.clone();
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         // === Core Bars Configuration Section ===
         let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
@@ -1867,6 +1856,8 @@ impl MaterialConfigWidget {
                 .map(|item| item.speedometer_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        speedometer_widget.set_theme(config.borrow().frame.theme.clone());
         speedometer_widget.set_config(&current_speedometer_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1888,6 +1879,15 @@ impl MaterialConfigWidget {
 
         speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
         inner_box.append(&speedometer_config_frame);
+
+        // Register theme refresh callback for speedometer widget
+        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
+        let config_for_speedometer_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_speedometer_theme.borrow().frame.theme.clone();
+            speedometer_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         // Show/hide sections based on display type
         let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
@@ -2152,8 +2152,7 @@ impl MaterialConfigWidget {
                 HeaderStyle::None => 3,
             });
             widgets.header_height_spin.set_value(config.frame.header_height);
-            widgets.header_font_btn.set_label(&config.frame.header_font);
-            widgets.header_font_size_spin.set_value(config.frame.header_font_size);
+            widgets.header_font_selector.set_source(config.frame.header_font.clone());
         }
 
         // Update Layout widgets

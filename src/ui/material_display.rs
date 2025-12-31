@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
+use crate::ui::theme::{FontSource, deserialize_font_or_source};
 
 // Re-export types we use
 pub use crate::ui::lcars_display::{ContentDisplayType as MaterialContentType, ContentItemConfig as MaterialContentItemConfig};
@@ -119,8 +120,7 @@ fn default_divider_color() -> Color {
     Color { r: 0.5, g: 0.5, b: 0.5, a: 0.2 } // Subtle gray
 }
 
-fn default_header_font() -> String { "Roboto".to_string() }
-fn default_header_font_size() -> f64 { 14.0 }
+fn default_header_font_source() -> FontSource { FontSource::theme(1, 14.0) } // Theme font 1
 
 /// Main configuration for the Material Cards frame
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,10 +170,8 @@ pub struct MaterialFrameConfig {
     pub header_text: String,
     #[serde(default)]
     pub header_style: HeaderStyle,
-    #[serde(default = "default_header_font")]
-    pub header_font: String,
-    #[serde(default = "default_header_font_size")]
-    pub header_font_size: f64,
+    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
 
@@ -240,8 +238,7 @@ impl Default for MaterialFrameConfig {
             show_header: false,
             header_text: String::new(),
             header_style: HeaderStyle::default(),
-            header_font: default_header_font(),
-            header_font_size: default_header_font_size(),
+            header_font: default_header_font_source(),
             header_height: default_header_height(),
             content_padding: default_content_padding(),
             item_spacing: default_item_spacing(),
@@ -400,15 +397,16 @@ fn draw_group_header(
                 cr.save().ok();
                 let text_color = config.text_color();
                 cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
-                cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                cr.set_font_size(config.header_font_size);
+                let (font_family, font_size) = config.header_font.resolve(&config.theme);
+                cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+                cr.set_font_size(font_size);
 
-                let text_y = y + bar_h + 8.0 + config.header_font_size;
+                let text_y = y + bar_h + 8.0 + font_size;
                 cr.move_to(x + config.card_padding, text_y);
                 cr.show_text(header_text).ok();
                 cr.restore().ok();
 
-                return bar_h + config.header_font_size + 16.0;
+                return bar_h + font_size + 16.0;
             }
 
             bar_h
@@ -425,10 +423,11 @@ fn draw_group_header(
 
             // Draw text in white
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size);
+            let (font_family, font_size) = config.header_font.resolve(&config.theme);
+            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.set_font_size(font_size);
 
-            let text_y = y + header_h / 2.0 + config.header_font_size / 3.0;
+            let text_y = y + header_h / 2.0 + font_size / 3.0;
             cr.move_to(x + config.card_padding, text_y);
             cr.show_text(header_text).ok();
 
@@ -443,15 +442,16 @@ fn draw_group_header(
 
             // Draw colored text
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size);
+            let (font_family, font_size) = config.header_font.resolve(&config.theme);
+            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.set_font_size(font_size);
 
-            let text_y = y + config.card_padding + config.header_font_size;
+            let text_y = y + config.card_padding + font_size;
             cr.move_to(x + config.card_padding, text_y);
             cr.show_text(header_text).ok();
 
             cr.restore().ok();
-            config.header_font_size + config.card_padding * 2.0
+            font_size + config.card_padding * 2.0
         }
         HeaderStyle::None => {
             cr.restore().ok();
@@ -607,15 +607,16 @@ fn draw_main_header(
             cr.save().ok();
             let text_color = config.text_color();
             cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size + 2.0);
+            let (font_family, font_size) = config.header_font.resolve(&config.theme);
+            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.set_font_size(font_size + 2.0);
 
-            let text_y = y + bar_h + 12.0 + config.header_font_size;
+            let text_y = y + bar_h + 12.0 + font_size;
             cr.move_to(x + config.card_padding, text_y);
             cr.show_text(&config.header_text).ok();
             cr.restore().ok();
 
-            bar_h + config.header_font_size + 24.0
+            bar_h + font_size + 24.0
         }
         HeaderStyle::Filled => {
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
@@ -626,10 +627,11 @@ fn draw_main_header(
 
             // White text
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size + 2.0);
+            let (font_family, font_size) = config.header_font.resolve(&config.theme);
+            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.set_font_size(font_size + 2.0);
 
-            let text_y = y + header_h / 2.0 + config.header_font_size / 3.0;
+            let text_y = y + header_h / 2.0 + font_size / 3.0;
             cr.move_to(x + config.card_padding, text_y);
             cr.show_text(&config.header_text).ok();
 
@@ -639,15 +641,16 @@ fn draw_main_header(
         HeaderStyle::TextOnly => {
             let text_color = config.text_color();
             cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size + 2.0);
+            let (font_family, font_size) = config.header_font.resolve(&config.theme);
+            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+            cr.set_font_size(font_size + 2.0);
 
-            let text_y = y + config.card_padding + config.header_font_size;
+            let text_y = y + config.card_padding + font_size;
             cr.move_to(x + config.card_padding, text_y);
             cr.show_text(&config.header_text).ok();
 
             cr.restore().ok();
-            config.header_font_size + config.card_padding * 2.0
+            font_size + config.card_padding * 2.0
         }
         HeaderStyle::None => {
             cr.restore().ok();
