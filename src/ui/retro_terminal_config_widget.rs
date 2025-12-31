@@ -30,6 +30,7 @@ use crate::displayers::RetroTerminalDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
 use crate::ui::theme::{ColorSource, FontSource};
+use crate::ui::theme_font_selector::ThemeFontSelector;
 
 /// Holds references to Colors tab widgets
 struct ColorsWidgets {
@@ -65,8 +66,7 @@ struct HeaderWidgets {
     header_text_entry: Entry,
     header_style_dropdown: DropDown,
     header_height_spin: SpinButton,
-    header_font_btn: Button,
-    header_font_size_spin: SpinButton,
+    header_font_selector: Rc<ThemeFontSelector>,
 }
 
 /// Holds references to Layout tab widgets
@@ -165,36 +165,32 @@ impl RetroTerminalConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Colors
-        let colors_page = Self::create_colors_page(&config, &on_change, &preview, &colors_widgets);
-        notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
+        // Tab 1: Theme (consolidated with Colors)
+        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers, &colors_widgets);
+        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: CRT Effects
         let effects_page = Self::create_effects_page(&config, &on_change, &preview, &effects_widgets);
         notebook.append_page(&effects_page, Some(&Label::new(Some("CRT Effects"))));
 
         // Tab 3: Bezel
-        let bezel_page = Self::create_bezel_page(&config, &on_change, &preview, &bezel_widgets);
+        let bezel_page = Self::create_bezel_page(&config, &on_change, &preview, &bezel_widgets, &theme_ref_refreshers);
         notebook.append_page(&bezel_page, Some(&Label::new(Some("Bezel"))));
 
         // Tab 4: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets);
+        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
         // Tab 5: Layout
         let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 6: Theme
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
-        notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
-
-        // Tab 7: Content - with dynamic per-slot notebook
+        // Tab 6: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
         let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
-        // Tab 8: Animation
+        // Tab 7: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
@@ -230,127 +226,6 @@ impl RetroTerminalConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) {
         combo_config_base::queue_redraw(preview, on_change);
-    }
-
-    fn create_colors_page(
-        config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
-
-        // Phosphor color preset
-        let phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
-        phosphor_box.append(&Label::new(Some("Phosphor Color:")));
-        let phosphor_list = StringList::new(&["Green (P1)", "Amber (P3)", "White (P4)", "Blue", "Custom"]);
-        let phosphor_dropdown = DropDown::new(Some(phosphor_list), None::<gtk4::Expression>);
-        let phosphor_idx = match &config.borrow().frame.phosphor_color {
-            PhosphorColor::Green => 0,
-            PhosphorColor::Amber => 1,
-            PhosphorColor::White => 2,
-            PhosphorColor::Blue => 3,
-            PhosphorColor::Custom(_) => 4,
-        };
-        phosphor_dropdown.set_selected(phosphor_idx);
-        phosphor_dropdown.set_hexpand(true);
-        phosphor_box.append(&phosphor_dropdown);
-        page.append(&phosphor_box);
-
-        // Custom phosphor color (shown only when Custom is selected)
-        let custom_phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
-        custom_phosphor_box.append(&Label::new(Some("Custom Color:")));
-        let custom_color = if let PhosphorColor::Custom(c) = &config.borrow().frame.phosphor_color {
-            *c
-        } else {
-            Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
-        };
-        let custom_phosphor_widget = Rc::new(ColorButtonWidget::new(custom_color));
-        custom_phosphor_box.append(custom_phosphor_widget.widget());
-        custom_phosphor_box.set_visible(phosphor_idx == 4);
-        page.append(&custom_phosphor_box);
-
-        // Connect phosphor dropdown
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let custom_box_clone = custom_phosphor_box.clone();
-        let custom_widget_clone = custom_phosphor_widget.clone();
-        phosphor_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            custom_box_clone.set_visible(selected == 4);
-            config_clone.borrow_mut().frame.phosphor_color = match selected {
-                0 => PhosphorColor::Green,
-                1 => PhosphorColor::Amber,
-                2 => PhosphorColor::White,
-                3 => PhosphorColor::Blue,
-                _ => PhosphorColor::Custom(custom_widget_clone.color()),
-            };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Connect custom color widget
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        custom_phosphor_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.phosphor_color = PhosphorColor::Custom(color);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Background color
-        let bg_label = Label::new(Some("Screen Background"));
-        bg_label.set_halign(gtk4::Align::Start);
-        bg_label.add_css_class("heading");
-        bg_label.set_margin_top(12);
-        page.append(&bg_label);
-
-        let bg_box = GtkBox::new(Orientation::Horizontal, 6);
-        bg_box.append(&Label::new(Some("Background:")));
-        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
-        bg_box.append(background_widget.widget());
-        page.append(&bg_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        background_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.background_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Text brightness
-        let brightness_box = GtkBox::new(Orientation::Horizontal, 6);
-        brightness_box.append(&Label::new(Some("Text Brightness:")));
-        let brightness_scale = Scale::with_range(Orientation::Horizontal, 0.3, 1.0, 0.05);
-        brightness_scale.set_value(config.borrow().frame.text_brightness);
-        brightness_scale.set_hexpand(true);
-        brightness_scale.set_draw_value(true);
-        brightness_box.append(&brightness_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        brightness_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.text_brightness = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&brightness_box);
-
-        // Store widget refs
-        *colors_widgets_out.borrow_mut() = Some(ColorsWidgets {
-            phosphor_dropdown,
-            custom_phosphor_widget,
-            custom_phosphor_box,
-            background_widget,
-            brightness_scale,
-        });
-
-        page
     }
 
     fn create_effects_page(
@@ -495,6 +370,7 @@ impl RetroTerminalConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         bezel_widgets_out: &Rc<RefCell<Option<BezelWidgets>>>,
+        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -616,6 +492,7 @@ impl RetroTerminalConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -707,60 +584,27 @@ impl RetroTerminalConfigWidget {
         font_label.set_margin_top(12);
         page.append(&font_label);
 
-        // Header font
-        let font_box = GtkBox::new(Orientation::Horizontal, 6);
-        font_box.append(&Label::new(Some("Font:")));
-        let header_font_btn = Button::with_label(&config.borrow().frame.header_font);
-        header_font_btn.set_hexpand(true);
-        font_box.append(&header_font_btn);
+        // Header font selector (theme-aware)
+        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        page.append(header_font_selector.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        let font_btn_clone = header_font_btn.clone();
-        header_font_btn.connect_clicked(move |btn| {
-            let root = btn.root();
-            let window = root.as_ref().and_then(|r| r.downcast_ref::<gtk4::Window>());
-            let current_font = config_clone.borrow().frame.header_font.clone();
-            let config_for_cb = config_clone.clone();
-            let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
-            let font_btn_for_cb = font_btn_clone.clone();
-
-            let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-
-            shared_font_dialog().choose_font(
-                window,
-                Some(&font_desc),
-                gtk4::gio::Cancellable::NONE,
-                move |result| {
-                    if let Ok(font_desc) = result {
-                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "monospace".to_string());
-                        config_for_cb.borrow_mut().frame.header_font = family.clone();
-                        font_btn_for_cb.set_label(&family);
-                        Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                    }
-                },
-            );
-        });
-        page.append(&font_box);
-
-        // Header font size
-        let size_box = GtkBox::new(Orientation::Horizontal, 6);
-        size_box.append(&Label::new(Some("Font Size:")));
-        let header_font_size_spin = SpinButton::with_range(8.0, 24.0, 1.0);
-        header_font_size_spin.set_value(config.borrow().frame.header_font_size);
-        header_font_size_spin.set_hexpand(true);
-        size_box.append(&header_font_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_font_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_font_size = spin.value();
+        header_font_selector.set_on_change(move |font_source| {
+            config_clone.borrow_mut().frame.header_font = font_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&size_box);
+
+        // Register theme refresh callback for the font selector
+        let selector_for_refresh = header_font_selector.clone();
+        let config_for_refresh = config.clone();
+        let font_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_refresh.borrow().frame.theme.clone();
+            selector_for_refresh.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(font_refresh);
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
@@ -768,8 +612,7 @@ impl RetroTerminalConfigWidget {
             header_text_entry,
             header_style_dropdown,
             header_height_spin,
-            header_font_btn,
-            header_font_size_spin,
+            header_font_selector,
         });
 
         page
@@ -967,6 +810,48 @@ impl RetroTerminalConfigWidget {
         combo_config_base::refresh_theme_refs(refreshers);
     }
 
+    /// Get theme colors for a given phosphor color preset
+    fn theme_colors_for_phosphor(phosphor: &PhosphorColor) -> [Color; 4] {
+        match phosphor {
+            PhosphorColor::Green => [
+                Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 },   // Primary: bright green
+                Color { r: 0.1, g: 0.6, b: 0.1, a: 1.0 },   // Secondary: dark green
+                Color { r: 0.3, g: 0.8, b: 0.3, a: 1.0 },   // Accent: medium green
+                Color { r: 0.5, g: 1.0, b: 0.5, a: 1.0 },   // Highlight: light green
+            ],
+            PhosphorColor::Amber => [
+                Color { r: 1.0, g: 0.69, b: 0.0, a: 1.0 },  // Primary: bright amber
+                Color { r: 0.6, g: 0.4, b: 0.0, a: 1.0 },   // Secondary: dark amber
+                Color { r: 0.8, g: 0.55, b: 0.0, a: 1.0 },  // Accent: medium amber
+                Color { r: 1.0, g: 0.8, b: 0.3, a: 1.0 },   // Highlight: light amber
+            ],
+            PhosphorColor::White => [
+                Color { r: 0.9, g: 0.9, b: 0.85, a: 1.0 },  // Primary: white
+                Color { r: 0.5, g: 0.5, b: 0.48, a: 1.0 },  // Secondary: gray
+                Color { r: 0.7, g: 0.7, b: 0.67, a: 1.0 },  // Accent: light gray
+                Color { r: 1.0, g: 1.0, b: 0.95, a: 1.0 },  // Highlight: bright white
+            ],
+            PhosphorColor::Blue => [
+                Color { r: 0.4, g: 0.6, b: 1.0, a: 1.0 },   // Primary: bright blue
+                Color { r: 0.2, g: 0.3, b: 0.6, a: 1.0 },   // Secondary: dark blue
+                Color { r: 0.3, g: 0.5, b: 0.8, a: 1.0 },   // Accent: medium blue
+                Color { r: 0.6, g: 0.8, b: 1.0, a: 1.0 },   // Highlight: light blue
+            ],
+            PhosphorColor::Custom(c) => {
+                // For custom, generate variations based on the custom color
+                let dim = Color { r: c.r * 0.6, g: c.g * 0.6, b: c.b * 0.6, a: c.a };
+                let accent = Color { r: c.r * 0.8, g: c.g * 0.8, b: c.b * 0.8, a: c.a };
+                let highlight = Color {
+                    r: (c.r * 1.2).min(1.0),
+                    g: (c.g * 1.2).min(1.0),
+                    b: (c.b * 1.2).min(1.0),
+                    a: c.a
+                };
+                [*c, dim, accent, highlight]
+            }
+        }
+    }
+
     /// Create the Theme configuration page
     fn create_theme_page(
         config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
@@ -974,6 +859,7 @@ impl RetroTerminalConfigWidget {
         preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -984,12 +870,187 @@ impl RetroTerminalConfigWidget {
 
         let inner_box = GtkBox::new(Orientation::Vertical, 8);
 
+        // Shared reference for theme color widgets (populated later, accessed by phosphor callback)
+        let theme_color_widgets: Rc<RefCell<Vec<Rc<ColorButtonWidget>>>> = Rc::new(RefCell::new(Vec::new()));
+
         // Info label
-        let info_label = Label::new(Some("Configure theme colors, gradient, and fonts.\nThese can be referenced in content items for consistent styling."));
+        let info_label = Label::new(Some("Configure terminal and theme colors, gradient, and fonts.\nThese can be referenced in content items for consistent styling."));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
         info_label.set_wrap(true);
         inner_box.append(&info_label);
+
+        // ========== Terminal Colors section (merged from Colors tab) ==========
+        let terminal_colors_frame = gtk4::Frame::new(Some("Terminal Colors"));
+        let terminal_colors_box = GtkBox::new(Orientation::Vertical, 6);
+        terminal_colors_box.set_margin_start(8);
+        terminal_colors_box.set_margin_end(8);
+        terminal_colors_box.set_margin_top(8);
+        terminal_colors_box.set_margin_bottom(8);
+
+        // Phosphor color preset
+        let phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
+        phosphor_box.append(&Label::new(Some("Phosphor Color:")));
+        let phosphor_list = StringList::new(&["Green (P1)", "Amber (P3)", "White (P4)", "Blue", "Custom"]);
+        let phosphor_dropdown = DropDown::new(Some(phosphor_list), None::<gtk4::Expression>);
+        let phosphor_idx = match &config.borrow().frame.phosphor_color {
+            PhosphorColor::Green => 0,
+            PhosphorColor::Amber => 1,
+            PhosphorColor::White => 2,
+            PhosphorColor::Blue => 3,
+            PhosphorColor::Custom(_) => 4,
+        };
+        phosphor_dropdown.set_selected(phosphor_idx);
+        phosphor_dropdown.set_hexpand(true);
+        phosphor_box.append(&phosphor_dropdown);
+        terminal_colors_box.append(&phosphor_box);
+
+        // Custom phosphor color (shown only when Custom is selected)
+        let custom_phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
+        custom_phosphor_box.append(&Label::new(Some("Custom Color:")));
+        let custom_color = if let PhosphorColor::Custom(c) = &config.borrow().frame.phosphor_color {
+            *c
+        } else {
+            Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
+        };
+        let custom_phosphor_widget = Rc::new(ColorButtonWidget::new(custom_color));
+        custom_phosphor_box.append(custom_phosphor_widget.widget());
+        custom_phosphor_box.set_visible(phosphor_idx == 4);
+        terminal_colors_box.append(&custom_phosphor_box);
+
+        // Connect phosphor dropdown
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let custom_box_clone = custom_phosphor_box.clone();
+        let custom_widget_clone = custom_phosphor_widget.clone();
+        let theme_color_widgets_clone = theme_color_widgets.clone();
+        let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
+        phosphor_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            custom_box_clone.set_visible(selected == 4);
+            let phosphor_color = match selected {
+                0 => PhosphorColor::Green,
+                1 => PhosphorColor::Amber,
+                2 => PhosphorColor::White,
+                3 => PhosphorColor::Blue,
+                _ => PhosphorColor::Custom(custom_widget_clone.color()),
+            };
+
+            // Get the corresponding theme colors for this phosphor
+            let theme_colors = Self::theme_colors_for_phosphor(&phosphor_color);
+
+            // Update the config
+            {
+                let mut cfg = config_clone.borrow_mut();
+                cfg.frame.phosphor_color = phosphor_color;
+                cfg.frame.theme.color1 = theme_colors[0];
+                cfg.frame.theme.color2 = theme_colors[1];
+                cfg.frame.theme.color3 = theme_colors[2];
+                cfg.frame.theme.color4 = theme_colors[3];
+            }
+
+            // Update the theme color widgets if they exist
+            let widgets = theme_color_widgets_clone.borrow();
+            if widgets.len() == 4 {
+                widgets[0].set_color(theme_colors[0]);
+                widgets[1].set_color(theme_colors[1]);
+                widgets[2].set_color(theme_colors[2]);
+                widgets[3].set_color(theme_colors[3]);
+            }
+            drop(widgets);
+
+            // Refresh all theme-linked widgets
+            Self::refresh_theme_refs(&theme_ref_refreshers_clone);
+
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Connect custom color widget
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let theme_color_widgets_clone = theme_color_widgets.clone();
+        let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
+        custom_phosphor_widget.set_on_change(move |color| {
+            let phosphor_color = PhosphorColor::Custom(color);
+
+            // Get the corresponding theme colors for this phosphor
+            let theme_colors = Self::theme_colors_for_phosphor(&phosphor_color);
+
+            // Update the config
+            {
+                let mut cfg = config_clone.borrow_mut();
+                cfg.frame.phosphor_color = phosphor_color;
+                cfg.frame.theme.color1 = theme_colors[0];
+                cfg.frame.theme.color2 = theme_colors[1];
+                cfg.frame.theme.color3 = theme_colors[2];
+                cfg.frame.theme.color4 = theme_colors[3];
+            }
+
+            // Update the theme color widgets if they exist
+            let widgets = theme_color_widgets_clone.borrow();
+            if widgets.len() == 4 {
+                widgets[0].set_color(theme_colors[0]);
+                widgets[1].set_color(theme_colors[1]);
+                widgets[2].set_color(theme_colors[2]);
+                widgets[3].set_color(theme_colors[3]);
+            }
+            drop(widgets);
+
+            // Refresh all theme-linked widgets
+            Self::refresh_theme_refs(&theme_ref_refreshers_clone);
+
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Background color
+        let bg_box = GtkBox::new(Orientation::Horizontal, 6);
+        bg_box.append(&Label::new(Some("Screen Background:")));
+        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
+        bg_box.append(background_widget.widget());
+        terminal_colors_box.append(&bg_box);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        background_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.background_color = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Text brightness
+        let brightness_box = GtkBox::new(Orientation::Horizontal, 6);
+        brightness_box.append(&Label::new(Some("Text Brightness:")));
+        let brightness_scale = Scale::with_range(Orientation::Horizontal, 0.3, 1.0, 0.05);
+        brightness_scale.set_value(config.borrow().frame.text_brightness);
+        brightness_scale.set_hexpand(true);
+        brightness_scale.set_draw_value(true);
+        brightness_box.append(&brightness_scale);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        brightness_scale.connect_value_changed(move |scale| {
+            config_clone.borrow_mut().frame.text_brightness = scale.value();
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        terminal_colors_box.append(&brightness_box);
+
+        terminal_colors_frame.set_child(Some(&terminal_colors_box));
+        inner_box.append(&terminal_colors_frame);
+
+        // Store colors widgets
+        *colors_widgets_out.borrow_mut() = Some(ColorsWidgets {
+            phosphor_dropdown: phosphor_dropdown.clone(),
+            custom_phosphor_widget: custom_phosphor_widget.clone(),
+            custom_phosphor_box: custom_phosphor_box.clone(),
+            background_widget: background_widget.clone(),
+            brightness_scale: brightness_scale.clone(),
+        });
 
         // Theme Colors section
         let colors_frame = gtk4::Frame::new(Some("Theme Colors"));
@@ -1039,6 +1100,9 @@ impl RetroTerminalConfigWidget {
             colors_box.append(&row);
         }
 
+        // Populate the shared theme_color_widgets for phosphor dropdown access
+        *theme_color_widgets.borrow_mut() = color_widgets.clone();
+
         colors_frame.set_child(Some(&colors_box));
         inner_box.append(&colors_frame);
 
@@ -1051,6 +1115,7 @@ impl RetroTerminalConfigWidget {
         gradient_box.set_margin_bottom(8);
 
         let gradient_editor = Rc::new(GradientEditor::new());
+        gradient_editor.set_theme_config(config.borrow().frame.theme.clone());
         gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
 
         let config_clone = config.clone();
@@ -1064,6 +1129,15 @@ impl RetroTerminalConfigWidget {
             Self::refresh_theme_refs(&refreshers_clone);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register a theme refresh callback for the gradient editor
+        let gradient_editor_for_refresh = gradient_editor.clone();
+        let config_for_gradient_refresh = config.clone();
+        let gradient_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_gradient_refresh.borrow().frame.theme.clone();
+            gradient_editor_for_refresh.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(gradient_refresh);
 
         gradient_box.append(gradient_editor.widget());
         gradient_frame.set_child(Some(&gradient_box));
@@ -1746,6 +1820,8 @@ impl RetroTerminalConfigWidget {
                 .map(|item| item.graph_config.clone())
                 .unwrap_or_else(Self::default_graph_config_terminal)
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        graph_widget.set_theme(config.borrow().frame.theme.clone());
         graph_widget.set_config(current_graph_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1768,6 +1844,15 @@ impl RetroTerminalConfigWidget {
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
+        // Register theme refresh callback for graph widget
+        let graph_widget_for_theme = graph_widget_rc.clone();
+        let config_for_graph_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_graph_theme.borrow().frame.theme.clone();
+            graph_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+
         // === Text Configuration Section ===
         let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
         text_config_frame.set_margin_top(12);
@@ -1780,6 +1865,8 @@ impl RetroTerminalConfigWidget {
                 .map(|item| item.bar_config.text_overlay.text_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        text_widget.set_theme(config.borrow().frame.theme.clone());
         text_widget.set_config(current_text_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1807,6 +1894,15 @@ impl RetroTerminalConfigWidget {
 
         text_config_frame.set_child(Some(text_widget_rc.widget()));
         inner_box.append(&text_config_frame);
+
+        // Register theme refresh callback for text widget
+        let text_widget_for_theme = text_widget_rc.clone();
+        let config_for_text_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_text_theme.borrow().frame.theme.clone();
+            text_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         // === Core Bars Configuration Section ===
         let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
@@ -1955,6 +2051,8 @@ impl RetroTerminalConfigWidget {
                 .map(|item| item.speedometer_config.clone())
                 .unwrap_or_default()
         };
+        // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+        speedometer_widget.set_theme(config.borrow().frame.theme.clone());
         speedometer_widget.set_config(&current_speedometer_config);
 
         let slot_name_clone = slot_name.to_string();
@@ -1976,6 +2074,15 @@ impl RetroTerminalConfigWidget {
 
         speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
         inner_box.append(&speedometer_config_frame);
+
+        // Register theme refresh callback for speedometer widget
+        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
+        let config_for_speedometer_theme = config.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_speedometer_theme.borrow().frame.theme.clone();
+            speedometer_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
         // Show/hide sections based on display type
         let show_bar = matches!(current_type, ContentDisplayType::Bar | ContentDisplayType::LevelBar);
@@ -2248,8 +2355,7 @@ impl RetroTerminalConfigWidget {
                 TerminalHeaderStyle::None => 3,
             });
             widgets.header_height_spin.set_value(config.frame.header_height);
-            widgets.header_font_btn.set_label(&config.frame.header_font);
-            widgets.header_font_size_spin.set_value(config.frame.header_font_size);
+            widgets.header_font_selector.set_source(config.frame.header_font.clone());
         }
 
         // Update Layout widgets

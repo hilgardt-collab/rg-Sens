@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
+use crate::ui::theme::{FontSource, deserialize_font_or_source};
 
 // Re-export types we use
 pub use crate::ui::lcars_display::{ContentDisplayType as RetroTerminalContentType, ContentItemConfig as RetroTerminalContentItemConfig};
@@ -112,8 +113,7 @@ fn default_vignette_intensity() -> f64 { 0.4 }
 fn default_screen_glow() -> f64 { 0.5 }
 fn default_bezel_width() -> f64 { 16.0 }
 fn default_content_padding() -> f64 { 12.0 }
-fn default_header_font() -> String { "monospace".to_string() }
-fn default_header_font_size() -> f64 { 14.0 }
+fn default_header_font_source() -> FontSource { FontSource::theme(1, 14.0) } // Theme font 1
 fn default_header_height() -> f64 { 28.0 }
 fn default_divider_padding() -> f64 { 4.0 }
 fn default_group_count() -> usize { 1 }
@@ -175,10 +175,8 @@ pub struct RetroTerminalFrameConfig {
     pub header_text: String,
     #[serde(default)]
     pub header_style: TerminalHeaderStyle,
-    #[serde(default = "default_header_font")]
-    pub header_font: String,
-    #[serde(default = "default_header_font_size")]
-    pub header_font_size: f64,
+    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
 
@@ -246,8 +244,7 @@ impl Default for RetroTerminalFrameConfig {
             show_header: true,
             header_text: "SYSTEM MONITOR".to_string(),
             header_style: TerminalHeaderStyle::TitleBar,
-            header_font: default_header_font(),
-            header_font_size: default_header_font_size(),
+            header_font: default_header_font_source(),
             header_height: default_header_height(),
 
             content_padding: default_content_padding(),
@@ -582,12 +579,14 @@ fn draw_header(
 
     cr.save().ok();
 
+    // Resolve the theme-aware font
+    let (font_family, font_size) = config.header_font.resolve(&config.theme);
     cr.select_font_face(
-        &config.header_font,
+        &font_family,
         cairo::FontSlant::Normal,
         cairo::FontWeight::Bold,
     );
-    cr.set_font_size(config.header_font_size);
+    cr.set_font_size(font_size);
 
     let text = if config.header_text.is_empty() {
         "TERMINAL"
