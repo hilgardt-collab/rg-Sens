@@ -59,6 +59,8 @@ pub mod fighter_hud_display;
 mod fighter_hud_config_widget;
 pub mod synthwave_display;
 mod synthwave_config_widget;
+pub mod art_deco_display;
+mod art_deco_config_widget;
 pub mod combo_config_base;
 pub mod theme;
 mod theme_color_selector;
@@ -155,6 +157,7 @@ pub use synthwave_display::{
     draw_group_dividers as synthwave_draw_group_dividers,
 };
 pub use synthwave_config_widget::SynthwaveConfigWidget;
+pub use art_deco_config_widget::ArtDecoConfigWidget;
 pub use theme_color_selector::ThemeColorSelector;
 pub use theme_font_selector::ThemeFontSelector;
 

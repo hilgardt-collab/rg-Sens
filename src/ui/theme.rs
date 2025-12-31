@@ -747,6 +747,27 @@ impl ComboThemeConfig {
             font2_size: 10.0,
         }
     }
+
+    /// Default theme for Art Deco panels
+    pub fn default_for_art_deco() -> Self {
+        Self {
+            color1: Color::new(0.831, 0.686, 0.216, 1.0), // Gold #D4AF37
+            color2: Color::new(0.722, 0.451, 0.200, 1.0), // Copper #B87333
+            color3: Color::new(0.804, 0.608, 0.114, 1.0), // Brass #CD9B1D
+            color4: Color::new(0.102, 0.102, 0.102, 1.0), // Dark charcoal #1A1A1A
+            gradient: LinearGradientSourceConfig {
+                angle: 180.0,
+                stops: vec![
+                    ColorStopSource::theme(0.0, 1), // Gold at top
+                    ColorStopSource::theme(1.0, 2), // Copper at bottom
+                ],
+            },
+            font1_family: "Sans Bold".to_string(),
+            font1_size: 14.0,
+            font2_family: "Sans".to_string(),
+            font2_size: 11.0,
+        }
+    }
 }
 
 #[cfg(test)]

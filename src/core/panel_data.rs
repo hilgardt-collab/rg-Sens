@@ -40,6 +40,7 @@ pub use crate::displayers::IndustrialDisplayConfig;
 pub use crate::displayers::RetroTerminalDisplayConfig;
 pub use crate::displayers::FighterHudDisplayConfig;
 pub use crate::displayers::SynthwaveDisplayConfig;
+pub use crate::displayers::ArtDecoDisplayConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -290,6 +291,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "synthwave")]
     Synthwave(SynthwaveDisplayConfig),
+
+    #[serde(rename = "art_deco")]
+    ArtDeco(ArtDecoDisplayConfig),
 }
 
 impl DisplayerConfig {
@@ -312,6 +316,7 @@ impl DisplayerConfig {
             DisplayerConfig::RetroTerminal(_) => "retro_terminal",
             DisplayerConfig::FighterHud(_) => "fighter_hud",
             DisplayerConfig::Synthwave(_) => "synthwave",
+            DisplayerConfig::ArtDeco(_) => "art_deco",
         }
     }
 
@@ -399,6 +404,11 @@ impl DisplayerConfig {
                     map.insert("synthwave_config".to_string(), val);
                 }
             }
+            DisplayerConfig::ArtDeco(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("art_deco_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -422,6 +432,7 @@ impl DisplayerConfig {
             "retro_terminal" => Some(DisplayerConfig::RetroTerminal(RetroTerminalDisplayConfig::default())),
             "fighter_hud" => Some(DisplayerConfig::FighterHud(FighterHudDisplayConfig::default())),
             "synthwave" => Some(DisplayerConfig::Synthwave(SynthwaveDisplayConfig::default())),
+            "art_deco" => Some(DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::default())),
             _ => None,
         }
     }
@@ -477,6 +488,7 @@ impl DisplayerConfig {
             DisplayerConfig::RetroTerminal(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::FighterHud(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Synthwave(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::ArtDeco(c) => serde_json::to_value(c).ok(),
         }
     }
 }

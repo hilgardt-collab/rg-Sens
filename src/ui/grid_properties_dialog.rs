@@ -1339,6 +1339,70 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&synthwave_config_label);
     displayer_tab_box.append(&synthwave_placeholder);
 
+    // === Art Deco Configuration (Lazy Initialization) ===
+    let art_deco_config_label = Label::new(Some("Art Deco Configuration:"));
+    art_deco_config_label.set_halign(gtk4::Align::Start);
+    art_deco_config_label.add_css_class("heading");
+    art_deco_config_label.set_visible(old_displayer_id == "art_deco");
+
+    // Create placeholder box for lazy widget creation
+    let art_deco_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    art_deco_placeholder.set_visible(old_displayer_id == "art_deco");
+
+    // Use Option for lazy initialization - only create widget when needed
+    let art_deco_config_widget: Rc<RefCell<Option<crate::ui::ArtDecoConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Art Deco widget if this is the active displayer (lazy init)
+    if old_displayer_id == "art_deco" {
+        log::info!("=== Creating ArtDecoConfigWidget (lazy init) ===");
+        let widget = crate::ui::ArtDecoConfigWidget::new(available_fields.clone());
+
+        // Load existing Art Deco config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
+        let config_loaded = if let Some(crate::core::DisplayerConfig::ArtDeco(ad_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Art Deco config from displayer.get_typed_config() ===");
+            widget.set_theme(ad_config.frame.theme.clone());
+            widget.set_config(&ad_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("art_deco_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::ArtDecoDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Art Deco config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
+                    widget.set_config(&config);
+                }
+            }
+        }
+
+        // Set up on_change callback to apply config changes immediately
+        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
+        let config_rc_for_change = widget.get_config_rc();
+        let panel_for_art_deco_change = panel.clone();
+        widget.set_on_change(move || {
+            let config = config_rc_for_change.borrow().clone();
+            let panel = panel_for_art_deco_change.clone();
+            glib::idle_add_local_once(move || {
+                if let Ok(config_json) = serde_json::to_value(&config) {
+                    let mut panel_guard = panel.blocking_write();
+                    panel_guard.config.insert("art_deco_config".to_string(), config_json);
+                    let config_clone = panel_guard.config.clone();
+                    if let Err(e) = panel_guard.apply_config(config_clone) {
+                        log::warn!("Failed to apply Art Deco config on change: {}", e);
+                    }
+                }
+            });
+        });
+        art_deco_placeholder.append(widget.widget());
+        *art_deco_config_widget.borrow_mut() = Some(widget);
+    }
+
+    displayer_tab_box.append(&art_deco_config_label);
+    displayer_tab_box.append(&art_deco_placeholder);
+
     // Connect combo_config_widget to update ONLY the active displayer's config widget when sources change
     // Other widgets are updated lazily when the user switches to them (see displayer_combo handlers below)
     {
@@ -1349,6 +1413,7 @@ pub(crate) fn show_panel_properties_dialog(
         let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
         let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
         let synthwave_widget_clone = synthwave_config_widget.clone();
+        let art_deco_widget_clone = art_deco_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
         let panel_for_combo_change = panel.clone();
         combo_config_widget.borrow_mut().set_on_change(move || {
@@ -1463,6 +1528,20 @@ pub(crate) fn show_panel_properties_dialog(
                             }
                         }
                     }
+                    "art_deco" => {
+                        if let Some(ref widget) = *art_deco_widget_clone.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            if let Ok(config_json) = serde_json::to_value(&config) {
+                                panel_guard.config.insert("art_deco_config".to_string(), config_json);
+                                let config_clone = panel_guard.config.clone();
+                                if let Err(e) = panel_guard.apply_config(config_clone) {
+                                    log::warn!("Failed to apply Art Deco config on source change: {}", e);
+                                }
+                            }
+                        }
+                    }
                     _ => {
                         // For non-combo displayers, no update needed
                     }
@@ -1505,6 +1584,10 @@ pub(crate) fn show_panel_properties_dialog(
                 widget.set_source_summaries(summaries.clone());
             }
             if let Some(ref widget) = *synthwave_config_widget.borrow() {
+                widget.set_available_fields(fields.clone());
+                widget.set_source_summaries(summaries.clone());
+            }
+            if let Some(ref widget) = *art_deco_config_widget.borrow() {
                 widget.set_available_fields(fields);
                 widget.set_source_summaries(summaries);
             }
@@ -1522,6 +1605,8 @@ pub(crate) fn show_panel_properties_dialog(
         let industrial_widget_clone = industrial_config_widget.clone();
         let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
         let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
+        let synthwave_widget_clone = synthwave_config_widget.clone();
+        let art_deco_widget_clone = art_deco_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
         source_combo.connect_selected_notify(move |combo| {
@@ -1556,6 +1641,14 @@ pub(crate) fn show_panel_properties_dialog(
                         widget.set_source_summaries(summaries.clone());
                     }
                     if let Some(ref widget) = *fighter_hud_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *synthwave_widget_clone.borrow() {
+                        widget.set_available_fields(fields.clone());
+                        widget.set_source_summaries(summaries.clone());
+                    }
+                    if let Some(ref widget) = *art_deco_widget_clone.borrow() {
                         widget.set_available_fields(fields);
                         widget.set_source_summaries(summaries);
                     }
@@ -1599,6 +1692,8 @@ pub(crate) fn show_panel_properties_dialog(
         let fighter_hud_label_clone = fighter_hud_config_label.clone();
         let synthwave_placeholder_clone = synthwave_placeholder.clone();
         let synthwave_label_clone = synthwave_config_label.clone();
+        let art_deco_placeholder_clone = art_deco_placeholder.clone();
+        let art_deco_label_clone = art_deco_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -1619,6 +1714,7 @@ pub(crate) fn show_panel_properties_dialog(
                 let is_retro_terminal = displayer_id == "retro_terminal";
                 let is_fighter_hud = displayer_id == "fighter_hud";
                 let is_synthwave = displayer_id == "synthwave";
+                let is_art_deco = displayer_id == "art_deco";
                 text_widget_clone.widget().set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_widget_clone.widget().set_visible(is_bar);
@@ -1651,6 +1747,8 @@ pub(crate) fn show_panel_properties_dialog(
                 fighter_hud_label_clone.set_visible(is_fighter_hud);
                 synthwave_placeholder_clone.set_visible(is_synthwave);
                 synthwave_label_clone.set_visible(is_synthwave);
+                art_deco_placeholder_clone.set_visible(is_art_deco);
+                art_deco_label_clone.set_visible(is_art_deco);
             }
         });
     }
@@ -2077,6 +2175,66 @@ pub(crate) fn show_panel_properties_dialog(
 
                             if let Some(ref widget) = *widget_ref {
                                 log::info!("=== Displayer changed to 'synthwave': updating with {} source summaries ===", summaries.len());
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Lazily create and update Art Deco widget when displayer changes to "art_deco" and source is "combination"
+    {
+        let art_deco_widget_clone = art_deco_config_widget.clone();
+        let art_deco_placeholder_clone = art_deco_placeholder.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        let panel_for_art_deco_lazy = panel.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
+                if displayer_id == "art_deco" {
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            let combo_widget = combo_widget_clone.borrow();
+                            let summaries = combo_widget.get_source_summaries();
+                            let fields = combo_widget.get_available_fields();
+                            drop(combo_widget);
+
+                            // Lazily create widget if it doesn't exist
+                            let mut widget_ref = art_deco_widget_clone.borrow_mut();
+                            if widget_ref.is_none() {
+                                log::info!("=== Lazy-creating ArtDecoConfigWidget on displayer switch ===");
+                                let widget = crate::ui::ArtDecoConfigWidget::new(fields.clone());
+                                // Set up on_change callback to apply config changes immediately
+                                // Use idle_add_local_once to defer write lock acquisition
+                                let config_rc_for_change = widget.get_config_rc();
+                                let panel_for_change = panel_for_art_deco_lazy.clone();
+                                widget.set_on_change(move || {
+                                    let config = config_rc_for_change.borrow().clone();
+                                    let panel = panel_for_change.clone();
+                                    glib::idle_add_local_once(move || {
+                                        if let Ok(config_json) = serde_json::to_value(&config) {
+                                            let mut panel_guard = panel.blocking_write();
+                                            panel_guard.config.insert("art_deco_config".to_string(), config_json);
+                                            let config_clone = panel_guard.config.clone();
+                                            if let Err(e) = panel_guard.apply_config(config_clone) {
+                                                log::warn!("Failed to apply Art Deco config on change: {}", e);
+                                            }
+                                        }
+                                    });
+                                });
+                                art_deco_placeholder_clone.append(widget.widget());
+                                *widget_ref = Some(widget);
+                            }
+
+                            if let Some(ref widget) = *widget_ref {
+                                log::info!("=== Displayer changed to 'art_deco': updating with {} source summaries ===", summaries.len());
                                 widget.set_available_fields(fields);
                                 widget.set_source_summaries(summaries);
                             }
