@@ -6,7 +6,7 @@ use crate::ui::theme::ComboThemeConfig;
 use crate::ui::BackgroundConfigWidget;
 use crate::ui::TextLineConfigWidget;
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, CheckButton, Frame, Label, Orientation, Widget};
+use gtk4::{Box as GtkBox, CheckButton, Label, Notebook, Orientation, Widget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -17,8 +17,6 @@ pub struct StaticConfigWidget {
     background_widget: Rc<BackgroundConfigWidget>,
     text_widget: Rc<TextLineConfigWidget>,
     text_enabled_check: CheckButton,
-    #[allow(dead_code)] // Kept alive for GTK widget lifetime
-    text_frame: Frame,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     theme: Rc<RefCell<ComboThemeConfig>>,
 }
@@ -26,19 +24,22 @@ pub struct StaticConfigWidget {
 impl StaticConfigWidget {
     /// Create a new static config widget with available fields for text configuration
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        let widget = GtkBox::new(Orientation::Vertical, 8);
+        let widget = GtkBox::new(Orientation::Vertical, 0);
 
         let config = Rc::new(RefCell::new(StaticDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
 
-        // === Background Configuration Section ===
-        let background_frame = Frame::new(Some("Background"));
-        background_frame.set_margin_top(4);
+        // Create notebook for tabs
+        let notebook = Notebook::new();
+        notebook.set_vexpand(true);
+        widget.append(&notebook);
+
+        // === Tab 1: Background ===
+        let background_page = GtkBox::new(Orientation::Vertical, 0);
 
         let background_widget = Rc::new(BackgroundConfigWidget::new());
-        background_frame.set_child(Some(background_widget.widget()));
-        widget.append(&background_frame);
+        background_page.append(background_widget.widget());
 
         // Connect background widget on_change
         {
@@ -54,72 +55,50 @@ impl StaticConfigWidget {
             });
         }
 
-        // === Text Overlay Section ===
-        let text_frame = Frame::new(Some("Text Overlay"));
-        text_frame.set_margin_top(8);
+        notebook.append_page(&background_page, Some(&Label::new(Some("Background"))));
 
-        let text_box = GtkBox::new(Orientation::Vertical, 6);
-        text_box.set_margin_start(8);
-        text_box.set_margin_end(8);
-        text_box.set_margin_top(8);
-        text_box.set_margin_bottom(8);
+        // === Tab 2: Text Overlay ===
+        let text_page = GtkBox::new(Orientation::Vertical, 12);
+        text_page.set_margin_start(12);
+        text_page.set_margin_end(12);
+        text_page.set_margin_top(12);
+        text_page.set_margin_bottom(12);
 
-        // Enable text overlay checkbox
-        let text_enabled_check = CheckButton::with_label("Enable Text Overlay");
+        let text_enabled_check = CheckButton::with_label("Show Text Overlay");
         text_enabled_check.set_active(false);
-        text_box.append(&text_enabled_check);
+        text_page.append(&text_enabled_check);
 
-        // Info label
-        let info_label = Label::new(Some(
-            "When enabled, text lines will be rendered over the background.\nUse theme fonts and colors for consistent styling.",
-        ));
-        info_label.set_halign(gtk4::Align::Start);
-        info_label.add_css_class("dim-label");
-        info_label.set_margin_top(4);
-        text_box.append(&info_label);
+        let text_widget = TextLineConfigWidget::new(available_fields);
+        text_widget.widget().set_vexpand(true);
+        text_page.append(text_widget.widget());
+        let text_widget = Rc::new(text_widget);
 
-        // Text lines configuration widget
-        let text_widget = Rc::new(TextLineConfigWidget::new(available_fields));
-        text_widget.widget().set_margin_top(8);
-        text_box.append(text_widget.widget());
-
-        // Initially hide text widget if not enabled
-        text_widget.widget().set_visible(false);
-        info_label.set_visible(false);
-
-        text_frame.set_child(Some(&text_box));
-        widget.append(&text_frame);
-
-        // Connect text enabled checkbox
-        {
-            let config_clone = config.clone();
-            let on_change_clone = on_change.clone();
-            let text_widget_clone = text_widget.clone();
-            let info_label_clone = info_label.clone();
-            text_enabled_check.connect_toggled(move |check| {
-                let is_enabled = check.is_active();
-                text_widget_clone.widget().set_visible(is_enabled);
-                info_label_clone.set_visible(is_enabled);
-                config_clone.borrow_mut().text_overlay.enabled = is_enabled;
-                if let Some(cb) = on_change_clone.borrow().as_ref() {
-                    cb();
-                }
-            });
-        }
-
-        // Connect text widget on_change
+        // Connect text config widget changes to trigger on_change callback
         {
             let config_clone = config.clone();
             let on_change_clone = on_change.clone();
             let text_widget_for_cb = text_widget.clone();
             text_widget.set_on_change(move || {
-                let text_config = text_widget_for_cb.get_config();
-                config_clone.borrow_mut().text_overlay.text_config = text_config;
+                config_clone.borrow_mut().text_overlay.text_config = text_widget_for_cb.get_config();
                 if let Some(cb) = on_change_clone.borrow().as_ref() {
                     cb();
                 }
             });
         }
+
+        // Connect text enabled checkbox
+        {
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            text_enabled_check.connect_toggled(move |check| {
+                config_clone.borrow_mut().text_overlay.enabled = check.is_active();
+                if let Some(cb) = on_change_clone.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+
+        notebook.append_page(&text_page, Some(&Label::new(Some("Text Overlay"))));
 
         Self {
             widget,
@@ -127,7 +106,6 @@ impl StaticConfigWidget {
             background_widget,
             text_widget,
             text_enabled_check,
-            text_frame,
             on_change,
             theme,
         }
@@ -148,7 +126,6 @@ impl StaticConfigWidget {
 
         // Update text overlay checkbox and widget
         self.text_enabled_check.set_active(new_config.text_overlay.enabled);
-        self.text_widget.widget().set_visible(new_config.text_overlay.enabled);
         self.text_widget.set_config(new_config.text_overlay.text_config);
     }
 
