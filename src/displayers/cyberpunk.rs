@@ -527,7 +527,7 @@ impl Displayer for CyberpunkDisplayer {
                 }
             }
 
-            // Use optimized cleanup with retain() - separate calls to avoid borrow conflicts
+            // Clean up stale animation entries
             combo_utils::cleanup_bar_values(&mut display_data.bar_values, &prefixes);
             combo_utils::cleanup_core_bar_values(&mut display_data.core_bar_values, &prefixes);
             combo_utils::cleanup_graph_history(&mut display_data.graph_history, &prefixes);

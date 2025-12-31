@@ -247,143 +247,126 @@ pub(crate) fn show_panel_properties_dialog(
     source_box.append(&source_combo);
     source_tab_box.append(&source_box);
 
-    // CPU source configuration widget
-    let cpu_config_widget = crate::ui::CpuSourceConfigWidget::new();
-    cpu_config_widget.widget().set_visible(old_source_id == "cpu");
+    // === Source Config Widgets - Lazy Initialization ===
+    // Only create widgets when their source is selected to speed up dialog opening
 
-    // Populate sensor and core information from cached CPU hardware info
-    cpu_config_widget.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
-    cpu_config_widget.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
-
-    // Load existing CPU config if source is CPU
+    // CPU source configuration widget (lazy)
+    let cpu_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    cpu_placeholder.set_visible(old_source_id == "cpu");
+    source_tab_box.append(&cpu_placeholder);
+    let cpu_config_widget: Rc<RefCell<Option<crate::ui::CpuSourceConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "cpu" {
+        let widget = crate::ui::CpuSourceConfigWidget::new();
+        widget.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
+        widget.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
         if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
             if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
-                cpu_config_widget.set_config(cpu_config);
+                widget.set_config(cpu_config);
             }
         }
+        cpu_placeholder.append(widget.widget());
+        *cpu_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(cpu_config_widget.widget());
-
-    // Wrap cpu_config_widget in Rc for sharing
-    let cpu_config_widget = Rc::new(cpu_config_widget);
-
-    // GPU source configuration widget
-    let gpu_config_widget = crate::ui::GpuSourceConfigWidget::new();
-    gpu_config_widget.widget().set_visible(old_source_id == "gpu");
-
-    // Populate GPU information from cached GPU hardware info
-    let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
-    gpu_config_widget.set_available_gpus(&gpu_names);
-
-    // Load existing GPU config if source is GPU
+    // GPU source configuration widget (lazy)
+    let gpu_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    gpu_placeholder.set_visible(old_source_id == "gpu");
+    source_tab_box.append(&gpu_placeholder);
+    let gpu_config_widget: Rc<RefCell<Option<crate::ui::GpuSourceConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "gpu" {
+        let widget = crate::ui::GpuSourceConfigWidget::new();
+        let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
+        widget.set_available_gpus(&gpu_names);
         if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
             if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
-                gpu_config_widget.set_config(gpu_config);
+                widget.set_config(gpu_config);
             }
         }
+        gpu_placeholder.append(widget.widget());
+        *gpu_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(gpu_config_widget.widget());
-
-    // Wrap gpu_config_widget in Rc for sharing
-    let gpu_config_widget = Rc::new(gpu_config_widget);
-
-    // Memory source configuration widget
-    let memory_config_widget = crate::ui::MemorySourceConfigWidget::new();
-    memory_config_widget.widget().set_visible(old_source_id == "memory");
-
-    // Load existing Memory config if source is Memory
+    // Memory source configuration widget (lazy)
+    let memory_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    memory_placeholder.set_visible(old_source_id == "memory");
+    source_tab_box.append(&memory_placeholder);
+    let memory_config_widget: Rc<RefCell<Option<crate::ui::MemorySourceConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "memory" {
+        let widget = crate::ui::MemorySourceConfigWidget::new();
         if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
             if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
-                memory_config_widget.set_config(memory_config);
+                widget.set_config(memory_config);
             }
         }
+        memory_placeholder.append(widget.widget());
+        *memory_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(memory_config_widget.widget());
-
-    // Wrap memory_config_widget in Rc for sharing
-    let memory_config_widget = Rc::new(memory_config_widget);
-
-    // System Temperature source configuration widget
-    let system_temp_config_widget = crate::ui::SystemTempConfigWidget::new();
-    system_temp_config_widget.widget().set_visible(old_source_id == "system_temp");
-
-    // Load existing System Temp config if source is system_temp
+    // System Temperature source configuration widget (lazy)
+    let system_temp_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    system_temp_placeholder.set_visible(old_source_id == "system_temp");
+    source_tab_box.append(&system_temp_placeholder);
+    let system_temp_config_widget: Rc<RefCell<Option<crate::ui::SystemTempConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "system_temp" {
+        let widget = crate::ui::SystemTempConfigWidget::new();
         if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
             if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
-                system_temp_config_widget.set_config(system_temp_config);
+                widget.set_config(system_temp_config);
             }
         }
+        system_temp_placeholder.append(widget.widget());
+        *system_temp_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(system_temp_config_widget.widget());
-
-    // Wrap system_temp_config_widget in Rc for sharing
-    let system_temp_config_widget = Rc::new(system_temp_config_widget);
-
-    // Fan Speed source configuration widget
-    let fan_speed_config_widget = crate::ui::FanSpeedConfigWidget::new();
-    fan_speed_config_widget.widget().set_visible(old_source_id == "fan_speed");
-
-    // Load existing Fan Speed config if source is fan_speed
+    // Fan Speed source configuration widget (lazy)
+    let fan_speed_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    fan_speed_placeholder.set_visible(old_source_id == "fan_speed");
+    source_tab_box.append(&fan_speed_placeholder);
+    let fan_speed_config_widget: Rc<RefCell<Option<crate::ui::FanSpeedConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "fan_speed" {
+        let widget = crate::ui::FanSpeedConfigWidget::new();
         if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
             if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
-                fan_speed_config_widget.set_config(&fan_speed_config);
+                widget.set_config(&fan_speed_config);
             }
         }
+        fan_speed_placeholder.append(widget.widget());
+        *fan_speed_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(fan_speed_config_widget.widget());
-
-    // Wrap fan_speed_config_widget in Rc for sharing
-    let fan_speed_config_widget = Rc::new(fan_speed_config_widget);
-
-    // Disk source configuration widget
-    let disk_config_widget = crate::ui::DiskSourceConfigWidget::new();
-    disk_config_widget.widget().set_visible(old_source_id == "disk");
-
-    // Populate disk information
-    let disks = crate::sources::DiskSource::get_available_disks();
-    disk_config_widget.set_available_disks(&disks);
-
-    // Load existing Disk config if source is disk
+    // Disk source configuration widget (lazy)
+    let disk_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    disk_placeholder.set_visible(old_source_id == "disk");
+    source_tab_box.append(&disk_placeholder);
+    let disk_config_widget: Rc<RefCell<Option<crate::ui::DiskSourceConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "disk" {
+        let widget = crate::ui::DiskSourceConfigWidget::new();
+        let disks = crate::sources::DiskSource::get_available_disks();
+        widget.set_available_disks(&disks);
         if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
             if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
-                disk_config_widget.set_config(disk_config);
+                widget.set_config(disk_config);
             }
         }
+        disk_placeholder.append(widget.widget());
+        *disk_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(disk_config_widget.widget());
-
-    // Wrap disk_config_widget in Rc for sharing
-    let disk_config_widget = Rc::new(disk_config_widget);
-
-    // Clock source configuration widget
-    let clock_config_widget = crate::ui::ClockSourceConfigWidget::new();
-    clock_config_widget.widget().set_visible(old_source_id == "clock");
-
-    // Load existing Clock config if source is clock
+    // Clock source configuration widget (lazy)
+    let clock_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    clock_placeholder.set_visible(old_source_id == "clock");
+    source_tab_box.append(&clock_placeholder);
+    let clock_config_widget: Rc<RefCell<Option<crate::ui::ClockSourceConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "clock" {
+        let widget = crate::ui::ClockSourceConfigWidget::new();
         if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
             if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
-                clock_config_widget.set_config(&clock_config);
+                widget.set_config(&clock_config);
             }
         }
+        clock_placeholder.append(widget.widget());
+        *clock_config_widget.borrow_mut() = Some(widget);
     }
-
-    source_tab_box.append(clock_config_widget.widget());
-
-    // Wrap clock_config_widget in Rc for sharing
-    let clock_config_widget = Rc::new(clock_config_widget);
 
     // === Combination Source Config ===
     // Use placeholder box + lazy initialization like displayer widgets
@@ -406,177 +389,245 @@ pub(crate) fn show_panel_properties_dialog(
         *combo_config_widget.borrow_mut() = Some(widget);
     }
 
-    // === Test Source Config ===
-    let test_config_widget = crate::ui::TestSourceConfigWidget::new();
-    test_config_widget.widget().set_visible(old_source_id == "test");
-
-    // Load existing Test config if source is test
-    // Priority: saved panel config > global TEST_SOURCE_STATE > defaults
+    // === Test Source Config (lazy) ===
+    let test_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    test_placeholder.set_visible(old_source_id == "test");
+    source_tab_box.append(&test_placeholder);
+    let test_config_widget: Rc<RefCell<Option<crate::ui::TestSourceConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "test" {
+        let widget = crate::ui::TestSourceConfigWidget::new();
+        // Priority: saved panel config > global TEST_SOURCE_STATE > defaults
         let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
             serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
                 .unwrap_or_else(|_| {
-                    // Fallback to global state if parsing fails
                     crate::sources::TEST_SOURCE_STATE.lock()
                         .map(|state| state.config.clone())
                         .unwrap_or_default()
                 })
         } else {
-            // No saved config - use current global state to avoid resetting
             crate::sources::TEST_SOURCE_STATE.lock()
                 .map(|state| state.config.clone())
                 .unwrap_or_default()
         };
-        test_config_widget.set_config(&test_config);
+        widget.set_config(&test_config);
+        test_placeholder.append(widget.widget());
+        *test_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(test_config_widget.widget());
-
-    // Wrap test_config_widget in Rc for sharing
-    let test_config_widget = Rc::new(test_config_widget);
-
-    // === Static Text Source Config ===
-    let static_text_config_widget = crate::ui::StaticTextConfigWidget::new();
-    static_text_config_widget.widget().set_visible(old_source_id == "static_text");
-
-    // Load existing Static Text config if source is static_text
+    // === Static Text Source Config (lazy) ===
+    let static_text_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    static_text_placeholder.set_visible(old_source_id == "static_text");
+    source_tab_box.append(&static_text_placeholder);
+    let static_text_config_widget: Rc<RefCell<Option<crate::ui::StaticTextConfigWidget>>> = Rc::new(RefCell::new(None));
     if old_source_id == "static_text" {
+        let widget = crate::ui::StaticTextConfigWidget::new();
         if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
             if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
-                static_text_config_widget.set_config(&static_text_config);
+                widget.set_config(&static_text_config);
             }
         }
+        static_text_placeholder.append(widget.widget());
+        *static_text_config_widget.borrow_mut() = Some(widget);
     }
 
-    source_tab_box.append(static_text_config_widget.widget());
-
-    // Wrap static_text_config_widget in Rc for sharing
-    let static_text_config_widget = Rc::new(static_text_config_widget);
-
-    // Show/hide source config widgets based on source selection
+    // Show/hide source config widgets based on source selection (using placeholders for lazy widgets)
     {
         let cpu_widget_clone = cpu_config_widget.clone();
+        let cpu_placeholder_clone = cpu_placeholder.clone();
         let gpu_widget_clone = gpu_config_widget.clone();
+        let gpu_placeholder_clone = gpu_placeholder.clone();
         let memory_widget_clone = memory_config_widget.clone();
+        let memory_placeholder_clone = memory_placeholder.clone();
         let system_temp_widget_clone = system_temp_config_widget.clone();
+        let system_temp_placeholder_clone = system_temp_placeholder.clone();
         let fan_speed_widget_clone = fan_speed_config_widget.clone();
+        let fan_speed_placeholder_clone = fan_speed_placeholder.clone();
         let disk_widget_clone = disk_config_widget.clone();
+        let disk_placeholder_clone = disk_placeholder.clone();
         let clock_widget_clone = clock_config_widget.clone();
+        let clock_placeholder_clone = clock_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let combo_placeholder_clone = combo_placeholder.clone();
         let test_widget_clone = test_config_widget.clone();
+        let test_placeholder_clone = test_placeholder.clone();
         let static_text_widget_clone = static_text_config_widget.clone();
+        let static_text_placeholder_clone = static_text_placeholder.clone();
         let sources_clone = sources.clone();
         let panel_clone = panel.clone();
 
         source_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected) {
-                cpu_widget_clone.widget().set_visible(source_id == "cpu");
-                gpu_widget_clone.widget().set_visible(source_id == "gpu");
-                memory_widget_clone.widget().set_visible(source_id == "memory");
-                system_temp_widget_clone.widget().set_visible(source_id == "system_temp");
-                fan_speed_widget_clone.widget().set_visible(source_id == "fan_speed");
-                disk_widget_clone.widget().set_visible(source_id == "disk");
-                clock_widget_clone.widget().set_visible(source_id == "clock");
+                // Use placeholders for visibility (widgets may not exist yet)
+                cpu_placeholder_clone.set_visible(source_id == "cpu");
+                gpu_placeholder_clone.set_visible(source_id == "gpu");
+                memory_placeholder_clone.set_visible(source_id == "memory");
+                system_temp_placeholder_clone.set_visible(source_id == "system_temp");
+                fan_speed_placeholder_clone.set_visible(source_id == "fan_speed");
+                disk_placeholder_clone.set_visible(source_id == "disk");
+                clock_placeholder_clone.set_visible(source_id == "clock");
                 combo_placeholder_clone.set_visible(source_id == "combination");
-                test_widget_clone.widget().set_visible(source_id == "test");
-                static_text_widget_clone.widget().set_visible(source_id == "static_text");
+                test_placeholder_clone.set_visible(source_id == "test");
+                static_text_placeholder_clone.set_visible(source_id == "static_text");
 
-                // Reload config for the selected source
-                {
-                    let panel_guard = panel_clone.blocking_read();
-                    match source_id.as_str() {
-                        "cpu" => {
-                            if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
-                                if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
-                                    cpu_widget_clone.set_config(cpu_config);
+                // Lazy create and load config for the selected source
+                let panel_guard = panel_clone.blocking_read();
+                match source_id.as_str() {
+                    "cpu" => {
+                        if cpu_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::CpuSourceConfigWidget::new();
+                            widget.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
+                            widget.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
+                            cpu_placeholder_clone.append(widget.widget());
+                            *cpu_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
+                            if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+                                if let Some(ref widget) = *cpu_widget_clone.borrow() {
+                                    widget.set_config(cpu_config);
                                 }
                             }
                         }
-                        "gpu" => {
-                            if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
-                                if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
-                                    gpu_widget_clone.set_config(gpu_config);
-                                }
-                            }
-                        }
-                        "memory" => {
-                            if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
-                                if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
-                                    memory_widget_clone.set_config(memory_config);
-                                }
-                            }
-                        }
-                        "system_temp" => {
-                            if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
-                                if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
-                                    system_temp_widget_clone.set_config(system_temp_config);
-                                }
-                            }
-                        }
-                        "fan_speed" => {
-                            if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
-                                if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
-                                    fan_speed_widget_clone.set_config(&fan_speed_config);
-                                }
-                            }
-                        }
-                        "disk" => {
-                            if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
-                                if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
-                                    disk_widget_clone.set_config(disk_config);
-                                }
-                            }
-                        }
-                        "clock" => {
-                            if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
-                                if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
-                                    clock_widget_clone.set_config(&clock_config);
-                                }
-                            }
-                        }
-                        "combination" => {
-                            // Lazy create combo widget if it doesn't exist
-                            if combo_widget_clone.borrow().is_none() {
-                                let widget = crate::ui::ComboSourceConfigWidget::new();
-                                combo_placeholder_clone.append(widget.widget());
-                                *combo_widget_clone.borrow_mut() = Some(widget);
-                            }
-                            if let Some(combo_config_value) = panel_guard.config.get("combo_config") {
-                                if let Ok(combo_config) = serde_json::from_value::<crate::sources::ComboSourceConfig>(combo_config_value.clone()) {
-                                    if let Some(ref widget) = *combo_widget_clone.borrow() {
-                                        widget.set_config(combo_config);
-                                    }
-                                }
-                            }
-                        }
-                        "test" => {
-                            // Load existing config or use current global state to avoid resetting
-                            let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
-                                serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
-                                    .unwrap_or_else(|_| {
-                                        crate::sources::TEST_SOURCE_STATE.lock()
-                                            .map(|state| state.config.clone())
-                                            .unwrap_or_default()
-                                    })
-                            } else {
-                                // No saved config - use current global state
-                                crate::sources::TEST_SOURCE_STATE.lock()
-                                    .map(|state| state.config.clone())
-                                    .unwrap_or_default()
-                            };
-                            test_widget_clone.set_config(&test_config);
-                        }
-                        "static_text" => {
-                            if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
-                                if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
-                                    static_text_widget_clone.set_config(&static_text_config);
-                                }
-                            }
-                        }
-                        _ => {}
                     }
+                    "gpu" => {
+                        if gpu_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::GpuSourceConfigWidget::new();
+                            let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
+                            widget.set_available_gpus(&gpu_names);
+                            gpu_placeholder_clone.append(widget.widget());
+                            *gpu_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
+                            if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+                                if let Some(ref widget) = *gpu_widget_clone.borrow() {
+                                    widget.set_config(gpu_config);
+                                }
+                            }
+                        }
+                    }
+                    "memory" => {
+                        if memory_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::MemorySourceConfigWidget::new();
+                            memory_placeholder_clone.append(widget.widget());
+                            *memory_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
+                            if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
+                                if let Some(ref widget) = *memory_widget_clone.borrow() {
+                                    widget.set_config(memory_config);
+                                }
+                            }
+                        }
+                    }
+                    "system_temp" => {
+                        if system_temp_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::SystemTempConfigWidget::new();
+                            system_temp_placeholder_clone.append(widget.widget());
+                            *system_temp_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
+                            if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
+                                if let Some(ref widget) = *system_temp_widget_clone.borrow() {
+                                    widget.set_config(system_temp_config);
+                                }
+                            }
+                        }
+                    }
+                    "fan_speed" => {
+                        if fan_speed_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::FanSpeedConfigWidget::new();
+                            fan_speed_placeholder_clone.append(widget.widget());
+                            *fan_speed_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
+                            if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
+                                if let Some(ref widget) = *fan_speed_widget_clone.borrow() {
+                                    widget.set_config(&fan_speed_config);
+                                }
+                            }
+                        }
+                    }
+                    "disk" => {
+                        if disk_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::DiskSourceConfigWidget::new();
+                            let disks = crate::sources::DiskSource::get_available_disks();
+                            widget.set_available_disks(&disks);
+                            disk_placeholder_clone.append(widget.widget());
+                            *disk_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
+                            if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
+                                if let Some(ref widget) = *disk_widget_clone.borrow() {
+                                    widget.set_config(disk_config);
+                                }
+                            }
+                        }
+                    }
+                    "clock" => {
+                        if clock_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::ClockSourceConfigWidget::new();
+                            clock_placeholder_clone.append(widget.widget());
+                            *clock_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
+                            if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
+                                if let Some(ref widget) = *clock_widget_clone.borrow() {
+                                    widget.set_config(&clock_config);
+                                }
+                            }
+                        }
+                    }
+                    "combination" => {
+                        if combo_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::ComboSourceConfigWidget::new();
+                            combo_placeholder_clone.append(widget.widget());
+                            *combo_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(combo_config_value) = panel_guard.config.get("combo_config") {
+                            if let Ok(combo_config) = serde_json::from_value::<crate::sources::ComboSourceConfig>(combo_config_value.clone()) {
+                                if let Some(ref widget) = *combo_widget_clone.borrow() {
+                                    widget.set_config(combo_config);
+                                }
+                            }
+                        }
+                    }
+                    "test" => {
+                        if test_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::TestSourceConfigWidget::new();
+                            test_placeholder_clone.append(widget.widget());
+                            *test_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
+                            serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
+                                .unwrap_or_else(|_| {
+                                    crate::sources::TEST_SOURCE_STATE.lock()
+                                        .map(|state| state.config.clone())
+                                        .unwrap_or_default()
+                                })
+                        } else {
+                            crate::sources::TEST_SOURCE_STATE.lock()
+                                .map(|state| state.config.clone())
+                                .unwrap_or_default()
+                        };
+                        if let Some(ref widget) = *test_widget_clone.borrow() {
+                            widget.set_config(&test_config);
+                        }
+                    }
+                    "static_text" => {
+                        if static_text_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::StaticTextConfigWidget::new();
+                            static_text_placeholder_clone.append(widget.widget());
+                            *static_text_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
+                            if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
+                                if let Some(ref widget) = *static_text_widget_clone.borrow() {
+                                    widget.set_config(&static_text_config);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         });
@@ -2766,16 +2817,16 @@ pub(crate) fn show_panel_properties_dialog(
                         // Register with shared source manager for the new source
                         // Get the actual config from the config widget for the new source type
                         let source_config: Option<crate::core::SourceConfig> = match new_source_id.as_str() {
-                            "cpu" => Some(crate::core::SourceConfig::Cpu(cpu_config_widget_clone.get_config())),
-                            "gpu" => Some(crate::core::SourceConfig::Gpu(gpu_config_widget_clone.get_config())),
-                            "memory" => Some(crate::core::SourceConfig::Memory(memory_config_widget_clone.get_config())),
-                            "system_temp" => Some(crate::core::SourceConfig::SystemTemp(system_temp_config_widget_clone.get_config())),
-                            "fan_speed" => Some(crate::core::SourceConfig::FanSpeed(fan_speed_config_widget_clone.get_config())),
-                            "disk" => Some(crate::core::SourceConfig::Disk(disk_config_widget_clone.get_config())),
-                            "clock" => Some(crate::core::SourceConfig::Clock(clock_config_widget_clone.get_config())),
+                            "cpu" => cpu_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Cpu(w.get_config())),
+                            "gpu" => gpu_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Gpu(w.get_config())),
+                            "memory" => memory_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Memory(w.get_config())),
+                            "system_temp" => system_temp_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::SystemTemp(w.get_config())),
+                            "fan_speed" => fan_speed_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::FanSpeed(w.get_config())),
+                            "disk" => disk_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Disk(w.get_config())),
+                            "clock" => clock_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Clock(w.get_config())),
                             "combination" => combo_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Combo(w.get_config())),
-                            "test" => Some(crate::core::SourceConfig::Test(test_config_widget_clone.get_config())),
-                            "static_text" => Some(crate::core::SourceConfig::StaticText(static_text_config_widget_clone.get_config())),
+                            "test" => test_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Test(w.get_config())),
+                            "static_text" => static_text_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::StaticText(w.get_config())),
                             _ => crate::core::SourceConfig::default_for_type(&new_source_id),
                         };
 
@@ -3488,147 +3539,161 @@ pub(crate) fn show_panel_properties_dialog(
 
             // Apply CPU source configuration if CPU source is active
             if new_source_id == "cpu" {
-                let cpu_config = cpu_config_widget_clone.get_config();
-                if let Ok(cpu_config_json) = serde_json::to_value(&cpu_config) {
-                    panel_guard.config.insert("cpu_config".to_string(), cpu_config_json);
+                if let Some(ref widget) = *cpu_config_widget_clone.borrow() {
+                    let cpu_config = widget.get_config();
+                    if let Ok(cpu_config_json) = serde_json::to_value(&cpu_config) {
+                        panel_guard.config.insert("cpu_config".to_string(), cpu_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply CPU config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply CPU config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply GPU source configuration if GPU source is active
             if new_source_id == "gpu" {
-                let gpu_config = gpu_config_widget_clone.get_config();
-                if let Ok(gpu_config_json) = serde_json::to_value(&gpu_config) {
-                    panel_guard.config.insert("gpu_config".to_string(), gpu_config_json);
+                if let Some(ref widget) = *gpu_config_widget_clone.borrow() {
+                    let gpu_config = widget.get_config();
+                    if let Ok(gpu_config_json) = serde_json::to_value(&gpu_config) {
+                        panel_guard.config.insert("gpu_config".to_string(), gpu_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply GPU config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply GPU config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Memory source configuration if Memory source is active
             if new_source_id == "memory" {
-                let memory_config = memory_config_widget_clone.get_config();
-                if let Ok(memory_config_json) = serde_json::to_value(&memory_config) {
-                    panel_guard.config.insert("memory_config".to_string(), memory_config_json);
+                if let Some(ref widget) = *memory_config_widget_clone.borrow() {
+                    let memory_config = widget.get_config();
+                    if let Ok(memory_config_json) = serde_json::to_value(&memory_config) {
+                        panel_guard.config.insert("memory_config".to_string(), memory_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply memory config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply memory config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply System Temperature source configuration if system_temp source is active
             if new_source_id == "system_temp" {
-                let system_temp_config = system_temp_config_widget_clone.get_config();
-                if let Ok(system_temp_config_json) = serde_json::to_value(&system_temp_config) {
-                    panel_guard.config.insert("system_temp_config".to_string(), system_temp_config_json);
+                if let Some(ref widget) = *system_temp_config_widget_clone.borrow() {
+                    let system_temp_config = widget.get_config();
+                    if let Ok(system_temp_config_json) = serde_json::to_value(&system_temp_config) {
+                        panel_guard.config.insert("system_temp_config".to_string(), system_temp_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply system temp config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply system temp config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Fan Speed source configuration if fan_speed source is active
             if new_source_id == "fan_speed" {
-                let fan_speed_config = fan_speed_config_widget_clone.get_config();
-                if let Ok(fan_speed_config_json) = serde_json::to_value(&fan_speed_config) {
-                    panel_guard.config.insert("fan_speed_config".to_string(), fan_speed_config_json);
+                if let Some(ref widget) = *fan_speed_config_widget_clone.borrow() {
+                    let fan_speed_config = widget.get_config();
+                    if let Ok(fan_speed_config_json) = serde_json::to_value(&fan_speed_config) {
+                        panel_guard.config.insert("fan_speed_config".to_string(), fan_speed_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply fan speed config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply fan speed config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Disk source configuration if disk source is active
             if new_source_id == "disk" {
-                let disk_config = disk_config_widget_clone.get_config();
-                if let Ok(disk_config_json) = serde_json::to_value(&disk_config) {
-                    panel_guard.config.insert("disk_config".to_string(), disk_config_json);
+                if let Some(ref widget) = *disk_config_widget_clone.borrow() {
+                    let disk_config = widget.get_config();
+                    if let Ok(disk_config_json) = serde_json::to_value(&disk_config) {
+                        panel_guard.config.insert("disk_config".to_string(), disk_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply disk config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply disk config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Clock source configuration if clock source is active
             if new_source_id == "clock" {
-                let clock_config = clock_config_widget_clone.get_config();
-                if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
-                    panel_guard.config.insert("clock_config".to_string(), clock_config_json);
+                if let Some(ref widget) = *clock_config_widget_clone.borrow() {
+                    let clock_config = widget.get_config();
+                    if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
+                        panel_guard.config.insert("clock_config".to_string(), clock_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply clock config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply clock config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
@@ -3658,42 +3723,46 @@ pub(crate) fn show_panel_properties_dialog(
 
             // Apply Test source configuration if test source is active
             if new_source_id == "test" {
-                let test_config = test_config_widget_clone.get_config();
-                if let Ok(test_config_json) = serde_json::to_value(&test_config) {
-                    panel_guard.config.insert("test_config".to_string(), test_config_json);
+                if let Some(ref widget) = *test_config_widget_clone.borrow() {
+                    let test_config = widget.get_config();
+                    if let Ok(test_config_json) = serde_json::to_value(&test_config) {
+                        panel_guard.config.insert("test_config".to_string(), test_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply test config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply test config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Static Text source configuration if static_text source is active
             if new_source_id == "static_text" {
-                let static_text_config = static_text_config_widget_clone.get_config();
-                if let Ok(static_text_config_json) = serde_json::to_value(&static_text_config) {
-                    panel_guard.config.insert("static_text_config".to_string(), static_text_config_json);
+                if let Some(ref widget) = *static_text_config_widget_clone.borrow() {
+                    let static_text_config = widget.get_config();
+                    if let Ok(static_text_config_json) = serde_json::to_value(&static_text_config) {
+                        panel_guard.config.insert("static_text_config".to_string(), static_text_config_json);
 
-                    // Clone config before applying to avoid borrow checker issues
-                    let config_clone = panel_guard.config.clone();
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
 
-                    // Apply the configuration to the source
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply static_text config to source: {}", e);
-                    }
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply static_text config to source: {}", e);
+                        }
 
-                    // Update the source with new configuration
-                    if let Err(e) = panel_guard.update() {
-                        log::warn!("Failed to update panel after config change: {}", e);
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
                     }
                 }
             }

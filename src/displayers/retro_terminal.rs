@@ -566,7 +566,7 @@ impl Displayer for RetroTerminalDisplayer {
                 }
             }
 
-            // Use optimized cleanup with retain()
+            // Clean up stale animation entries
             combo_utils::cleanup_bar_values(&mut display_data.bar_values, &prefixes);
             combo_utils::cleanup_core_bar_values(&mut display_data.core_bar_values, &prefixes);
             combo_utils::cleanup_graph_history(&mut display_data.graph_history, &prefixes);
