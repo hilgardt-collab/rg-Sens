@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::material_display::{
-    render_material_frame, CardElevation, HeaderStyle, DividerStyle, ThemeVariant,
+    render_material_frame, CardElevation, HeaderStyle, HeaderAlignment, DividerStyle, ThemeVariant,
 };
 use crate::ui::graph_config_widget::GraphConfigWidget;
 use crate::ui::bar_config_widget::BarConfigWidget;
@@ -64,6 +64,8 @@ struct HeaderWidgets {
     show_header_check: CheckButton,
     header_text_entry: Entry,
     header_style_dropdown: DropDown,
+    header_alignment_dropdown: DropDown,
+    header_color_selector: Rc<ThemeColorSelector>,
     header_height_spin: SpinButton,
     header_font_selector: Rc<ThemeFontSelector>,
 }
@@ -338,6 +340,14 @@ impl MaterialConfigWidget {
             Self::refresh_theme_refs(&refreshers_clone);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback for gradient editor
+        let gradient_editor_for_refresh = gradient_editor.clone();
+        let config_for_gradient_refresh = config.clone();
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            let cfg = config_for_gradient_refresh.borrow();
+            gradient_editor_for_refresh.set_theme_config(cfg.frame.theme.clone());
+        }));
 
         gradient_box.append(gradient_editor.widget());
         gradient_frame.set_child(Some(&gradient_box));
@@ -1063,6 +1073,64 @@ impl MaterialConfigWidget {
         });
         page.append(&style_box);
 
+        // Header alignment
+        let align_box = GtkBox::new(Orientation::Horizontal, 6);
+        align_box.append(&Label::new(Some("Alignment:")));
+        let align_list = StringList::new(&["Left", "Center", "Right"]);
+        let header_alignment_dropdown = DropDown::new(Some(align_list), None::<gtk4::Expression>);
+        let align_idx = match config.borrow().frame.header_alignment {
+            HeaderAlignment::Left => 0,
+            HeaderAlignment::Center => 1,
+            HeaderAlignment::Right => 2,
+        };
+        header_alignment_dropdown.set_selected(align_idx);
+        header_alignment_dropdown.set_hexpand(true);
+        align_box.append(&header_alignment_dropdown);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        header_alignment_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            config_clone.borrow_mut().frame.header_alignment = match selected {
+                0 => HeaderAlignment::Left,
+                1 => HeaderAlignment::Center,
+                _ => HeaderAlignment::Right,
+            };
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        page.append(&align_box);
+
+        // Header color (theme-aware, defaults to theme color 3 - accent)
+        let color_box = GtkBox::new(Orientation::Horizontal, 6);
+        color_box.append(&Label::new(Some("Header Color:")));
+        let header_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.accent_color.clone(),
+        ));
+        header_color_selector.set_theme_config(config.borrow().frame.theme.clone());
+        color_box.append(header_color_selector.widget());
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        header_color_selector.set_on_change(move |new_source| {
+            config_clone.borrow_mut().frame.accent_color = new_source;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Register theme refresh callback for header color
+        let header_color_for_refresh = header_color_selector.clone();
+        let config_for_color_refresh = config.clone();
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            let cfg = config_for_color_refresh.borrow();
+            header_color_for_refresh.set_theme_config(cfg.frame.theme.clone());
+        }));
+
+        page.append(&color_box);
+
         // Header height
         let height_box = GtkBox::new(Orientation::Horizontal, 6);
         height_box.append(&Label::new(Some("Header Height:")));
@@ -1107,6 +1175,8 @@ impl MaterialConfigWidget {
             show_header_check,
             header_text_entry,
             header_style_dropdown,
+            header_alignment_dropdown,
+            header_color_selector,
             header_height_spin,
             header_font_selector,
         });
@@ -2172,6 +2242,12 @@ impl MaterialConfigWidget {
                 HeaderStyle::TextOnly => 2,
                 HeaderStyle::None => 3,
             });
+            widgets.header_alignment_dropdown.set_selected(match config.frame.header_alignment {
+                HeaderAlignment::Left => 0,
+                HeaderAlignment::Center => 1,
+                HeaderAlignment::Right => 2,
+            });
+            widgets.header_color_selector.set_source(config.frame.accent_color.clone());
             widgets.header_height_spin.set_value(config.frame.header_height);
             widgets.header_font_selector.set_source(config.frame.header_font.clone());
         }

@@ -74,6 +74,19 @@ pub enum DividerStyle {
     Fade,
 }
 
+/// Header text alignment
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum HeaderAlignment {
+    /// Left-aligned text (default)
+    #[default]
+    Left,
+    /// Center-aligned text
+    Center,
+    /// Right-aligned text
+    Right,
+}
+
 fn default_corner_radius() -> f64 { 12.0 }
 fn default_card_padding() -> f64 { 16.0 }
 fn default_content_padding() -> f64 { 20.0 }
@@ -84,8 +97,8 @@ fn default_shadow_offset_y() -> f64 { 2.0 }
 fn default_divider_spacing() -> f64 { 16.0 }
 fn default_group_count() -> usize { 2 }
 
-fn default_accent_color() -> Color {
-    Color { r: 0.24, g: 0.47, b: 0.96, a: 1.0 } // Material Blue 500
+fn default_accent_color() -> ColorSource {
+    ColorSource::theme(3) // Theme color 3 (accent)
 }
 
 fn default_surface_color_light() -> Color {
@@ -128,8 +141,8 @@ pub struct MaterialFrameConfig {
     // Theme variant (light/dark)
     #[serde(default)]
     pub theme_variant: ThemeVariant,
-    #[serde(default = "default_accent_color")]
-    pub accent_color: Color,
+    #[serde(default = "default_accent_color", deserialize_with = "deserialize_color_or_source")]
+    pub accent_color: ColorSource,
 
     // Card styling
     #[serde(default)]
@@ -174,6 +187,8 @@ pub struct MaterialFrameConfig {
     pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
+    #[serde(default)]
+    pub header_alignment: HeaderAlignment,
 
     // Layout
     #[serde(default = "default_content_padding")]
@@ -240,6 +255,7 @@ impl Default for MaterialFrameConfig {
             header_style: HeaderStyle::default(),
             header_font: default_header_font_source(),
             header_height: default_header_height(),
+            header_alignment: HeaderAlignment::default(),
             content_padding: default_content_padding(),
             item_spacing: default_item_spacing(),
             group_count: default_group_count(),
@@ -282,12 +298,12 @@ impl MaterialFrameConfig {
         }
     }
 
-    /// Get accent color for a specific group
+    /// Get accent color for a specific group (resolved through theme)
     pub fn group_accent(&self, group_idx: usize) -> Color {
         self.group_accent_colors
             .get(group_idx)
             .copied()
-            .unwrap_or(self.accent_color)
+            .unwrap_or_else(|| self.accent_color.resolve(&self.theme))
     }
 
     /// Get header text for a specific group
@@ -309,6 +325,55 @@ fn draw_rounded_rect(cr: &Context, x: f64, y: f64, w: f64, h: f64, radius: f64) 
     cr.arc(x + r, y + h - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
     cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
     cr.close_path();
+}
+
+/// Calculate text x position based on alignment
+fn calculate_aligned_text_x(
+    cr: &Context,
+    text: &str,
+    area_x: f64,
+    area_w: f64,
+    padding: f64,
+    alignment: HeaderAlignment,
+) -> f64 {
+    match alignment {
+        HeaderAlignment::Left => area_x + padding,
+        HeaderAlignment::Center => {
+            if let Ok(extents) = cr.text_extents(text) {
+                area_x + (area_w - extents.width()) / 2.0
+            } else {
+                area_x + padding // fallback to left
+            }
+        }
+        HeaderAlignment::Right => {
+            if let Ok(extents) = cr.text_extents(text) {
+                area_x + area_w - padding - extents.width()
+            } else {
+                area_x + padding // fallback to left
+            }
+        }
+    }
+}
+
+/// Draw a header bar that clips to the card's rounded corners
+/// This ensures the bar's top corners match the card's corner radius exactly
+fn draw_header_bar_clipped(
+    cr: &Context,
+    card_x: f64,
+    card_y: f64,
+    card_w: f64,
+    card_h: f64,
+    bar_h: f64,
+    corner_radius: f64,
+) {
+    cr.save().ok();
+    // Clip to the card's rounded rect shape
+    draw_rounded_rect(cr, card_x, card_y, card_w, card_h, corner_radius);
+    cr.clip();
+    // Draw a simple rectangle for the bar - clipping handles the corners
+    cr.rectangle(card_x, card_y, card_w, bar_h);
+    cr.fill().ok();
+    cr.restore().ok();
 }
 
 /// Draw a card shadow (simulated drop shadow)
@@ -380,15 +445,10 @@ fn draw_group_header(
 
     match config.header_style {
         HeaderStyle::ColorBar => {
-            // Draw a thin colored bar at the top
+            // Draw a thin colored bar at the top, clipped to card's rounded corners
             let bar_h = 4.0;
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
-
-            // Clip to rounded top corners
-            draw_rounded_rect(cr, x, y, w, bar_h + config.corner_radius, config.corner_radius);
-            cr.clip();
-            cr.rectangle(x, y, w, bar_h);
-            cr.fill().ok();
+            draw_header_bar_clipped(cr, x, y, w, h, bar_h, config.corner_radius);
 
             cr.restore().ok();
 
@@ -412,14 +472,9 @@ fn draw_group_header(
             bar_h
         }
         HeaderStyle::Filled => {
-            // Draw filled header background
+            // Draw filled header background, clipped to card's rounded corners
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
-
-            // Clip to rounded top corners only
-            draw_rounded_rect(cr, x, y, w, header_h + config.corner_radius, config.corner_radius);
-            cr.clip();
-            cr.rectangle(x, y, w, header_h);
-            cr.fill().ok();
+            draw_header_bar_clipped(cr, x, y, w, h, header_h, config.corner_radius);
 
             // Draw text in white
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
@@ -563,7 +618,7 @@ pub fn render_material_frame(
 
     // Draw main header if enabled
     let header_height = if config.show_header && !config.header_text.is_empty() {
-        draw_main_header(cr, config, frame_x, frame_y, frame_w)
+        draw_main_header(cr, config, frame_x, frame_y, frame_w, frame_h)
     } else {
         0.0
     };
@@ -586,23 +641,19 @@ fn draw_main_header(
     x: f64,
     y: f64,
     w: f64,
+    h: f64,
 ) -> f64 {
     let header_h = config.header_height;
-    let accent = config.accent_color;
+    let accent = config.accent_color.resolve(&config.theme);
 
     cr.save().ok();
 
     match config.header_style {
         HeaderStyle::ColorBar => {
-            // Thin colored bar at top
+            // Thin colored bar at top, clipped to card's rounded corners
             let bar_h = 4.0;
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
-
-            // Clip to rounded corners
-            draw_rounded_rect(cr, x, y, w, bar_h + config.corner_radius, config.corner_radius);
-            cr.clip();
-            cr.rectangle(x, y, w, bar_h);
-            cr.fill().ok();
+            draw_header_bar_clipped(cr, x, y, w, h, bar_h, config.corner_radius);
 
             cr.restore().ok();
 
@@ -615,18 +666,17 @@ fn draw_main_header(
             cr.set_font_size(font_size + 2.0);
 
             let text_y = y + bar_h + 12.0 + font_size;
-            cr.move_to(x + config.card_padding, text_y);
+            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
+            cr.move_to(text_x, text_y);
             cr.show_text(&config.header_text).ok();
             cr.restore().ok();
 
             bar_h + font_size + 24.0
         }
         HeaderStyle::Filled => {
+            // Filled header, clipped to card's rounded corners
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
-            draw_rounded_rect(cr, x, y, w, header_h + config.corner_radius, config.corner_radius);
-            cr.clip();
-            cr.rectangle(x, y, w, header_h);
-            cr.fill().ok();
+            draw_header_bar_clipped(cr, x, y, w, h, header_h, config.corner_radius);
 
             // White text
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
@@ -635,7 +685,8 @@ fn draw_main_header(
             cr.set_font_size(font_size + 2.0);
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
-            cr.move_to(x + config.card_padding, text_y);
+            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
+            cr.move_to(text_x, text_y);
             cr.show_text(&config.header_text).ok();
 
             cr.restore().ok();
@@ -649,7 +700,8 @@ fn draw_main_header(
             cr.set_font_size(font_size + 2.0);
 
             let text_y = y + config.card_padding + font_size;
-            cr.move_to(x + config.card_padding, text_y);
+            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
+            cr.move_to(text_x, text_y);
             cr.show_text(&config.header_text).ok();
 
             cr.restore().ok();
