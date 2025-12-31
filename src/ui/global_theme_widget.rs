@@ -5,7 +5,7 @@ use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::GradientEditor;
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, Label, Orientation, SpinButton, Widget};
+use gtk4::{Box as GtkBox, Button, Grid, Label, Orientation, SpinButton, Widget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -46,75 +46,41 @@ impl GlobalThemeWidget {
         colors_label.add_css_class("heading");
         widget.append(&colors_label);
 
+        // Use a Grid for aligned color rows
+        let colors_grid = Grid::new();
+        colors_grid.set_row_spacing(6);
+        colors_grid.set_column_spacing(12);
+        colors_grid.set_margin_start(8);
+
         // Color 1 (Primary)
-        let color1_box = GtkBox::new(Orientation::Horizontal, 6);
-        color1_box.append(&Label::new(Some("Color 1 (Primary):")));
+        let color1_label = Label::new(Some("Color 1 (Primary):"));
+        color1_label.set_halign(gtk4::Align::End);
+        colors_grid.attach(&color1_label, 0, 0, 1, 1);
         let color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().color1));
-        color1_box.append(color1_widget.widget());
-        widget.append(&color1_box);
+        colors_grid.attach(color1_widget.widget(), 1, 0, 1, 1);
 
         // Color 2 (Secondary)
-        let color2_box = GtkBox::new(Orientation::Horizontal, 6);
-        color2_box.append(&Label::new(Some("Color 2 (Secondary):")));
+        let color2_label = Label::new(Some("Color 2 (Secondary):"));
+        color2_label.set_halign(gtk4::Align::End);
+        colors_grid.attach(&color2_label, 0, 1, 1, 1);
         let color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().color2));
-        color2_box.append(color2_widget.widget());
-        widget.append(&color2_box);
+        colors_grid.attach(color2_widget.widget(), 1, 1, 1, 1);
 
         // Color 3 (Accent)
-        let color3_box = GtkBox::new(Orientation::Horizontal, 6);
-        color3_box.append(&Label::new(Some("Color 3 (Accent):")));
+        let color3_label = Label::new(Some("Color 3 (Accent):"));
+        color3_label.set_halign(gtk4::Align::End);
+        colors_grid.attach(&color3_label, 0, 2, 1, 1);
         let color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().color3));
-        color3_box.append(color3_widget.widget());
-        widget.append(&color3_box);
+        colors_grid.attach(color3_widget.widget(), 1, 2, 1, 1);
 
         // Color 4 (Highlight)
-        let color4_box = GtkBox::new(Orientation::Horizontal, 6);
-        color4_box.append(&Label::new(Some("Color 4 (Highlight):")));
+        let color4_label = Label::new(Some("Color 4 (Highlight):"));
+        color4_label.set_halign(gtk4::Align::End);
+        colors_grid.attach(&color4_label, 0, 3, 1, 1);
         let color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().color4));
-        color4_box.append(color4_widget.widget());
-        widget.append(&color4_box);
+        colors_grid.attach(color4_widget.widget(), 1, 3, 1, 1);
 
-        // Connect color widget callbacks
-        {
-            let config_c1 = config.clone();
-            let on_change_c1 = on_change.clone();
-            color1_widget.set_on_change(move |color| {
-                config_c1.borrow_mut().color1 = color;
-                if let Some(cb) = on_change_c1.borrow().as_ref() {
-                    cb();
-                }
-            });
-        }
-        {
-            let config_c2 = config.clone();
-            let on_change_c2 = on_change.clone();
-            color2_widget.set_on_change(move |color| {
-                config_c2.borrow_mut().color2 = color;
-                if let Some(cb) = on_change_c2.borrow().as_ref() {
-                    cb();
-                }
-            });
-        }
-        {
-            let config_c3 = config.clone();
-            let on_change_c3 = on_change.clone();
-            color3_widget.set_on_change(move |color| {
-                config_c3.borrow_mut().color3 = color;
-                if let Some(cb) = on_change_c3.borrow().as_ref() {
-                    cb();
-                }
-            });
-        }
-        {
-            let config_c4 = config.clone();
-            let on_change_c4 = on_change.clone();
-            color4_widget.set_on_change(move |color| {
-                config_c4.borrow_mut().color4 = color;
-                if let Some(cb) = on_change_c4.borrow().as_ref() {
-                    cb();
-                }
-            });
-        }
+        widget.append(&colors_grid);
 
         // Theme Gradient section
         let gradient_label = Label::new(Some("Theme Gradient"));
@@ -125,8 +91,70 @@ impl GlobalThemeWidget {
 
         let gradient_editor = Rc::new(GradientEditor::new());
         gradient_editor.set_gradient_source_config(&config.borrow().gradient);
+        // Set initial theme config for the gradient editor
+        gradient_editor.set_theme_config(config.borrow().clone());
         widget.append(gradient_editor.widget());
 
+        // Helper to update gradient editor theme when colors change
+        let update_gradient_theme = {
+            let config_for_theme = config.clone();
+            let gradient_editor_for_theme = gradient_editor.clone();
+            Rc::new(move || {
+                gradient_editor_for_theme.set_theme_config(config_for_theme.borrow().clone());
+            })
+        };
+
+        // Connect color widget callbacks
+        {
+            let config_c1 = config.clone();
+            let on_change_c1 = on_change.clone();
+            let update_theme_c1 = update_gradient_theme.clone();
+            color1_widget.set_on_change(move |color| {
+                config_c1.borrow_mut().color1 = color;
+                update_theme_c1();
+                if let Some(cb) = on_change_c1.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        {
+            let config_c2 = config.clone();
+            let on_change_c2 = on_change.clone();
+            let update_theme_c2 = update_gradient_theme.clone();
+            color2_widget.set_on_change(move |color| {
+                config_c2.borrow_mut().color2 = color;
+                update_theme_c2();
+                if let Some(cb) = on_change_c2.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        {
+            let config_c3 = config.clone();
+            let on_change_c3 = on_change.clone();
+            let update_theme_c3 = update_gradient_theme.clone();
+            color3_widget.set_on_change(move |color| {
+                config_c3.borrow_mut().color3 = color;
+                update_theme_c3();
+                if let Some(cb) = on_change_c3.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        {
+            let config_c4 = config.clone();
+            let on_change_c4 = on_change.clone();
+            let update_theme_c4 = update_gradient_theme.clone();
+            color4_widget.set_on_change(move |color| {
+                config_c4.borrow_mut().color4 = color;
+                update_theme_c4();
+                if let Some(cb) = on_change_c4.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+
+        // Connect gradient editor on_change
         {
             let config_grad = config.clone();
             let on_change_grad = on_change.clone();
@@ -291,7 +319,8 @@ impl GlobalThemeWidget {
         self.color3_widget.set_color(new_config.color3);
         self.color4_widget.set_color(new_config.color4);
 
-        // Update gradient editor
+        // Update gradient editor with theme and config
+        self.gradient_editor.set_theme_config(new_config.clone());
         self.gradient_editor.set_gradient_source_config(&new_config.gradient);
 
         // Update font buttons and size spins
