@@ -24,7 +24,7 @@ use crate::ui::background_config_widget::BackgroundConfigWidget;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 use crate::ui::arc_config_widget::ArcConfigWidget;
 use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
-use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, StaticDisplayConfig, SplitOrientation};
+use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::background::Color;
 use crate::displayers::RetroTerminalDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
@@ -1977,7 +1977,7 @@ impl RetroTerminalConfigWidget {
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())
                 .or_default();
-            item.static_config = StaticDisplayConfig { background: bg_config };
+            item.static_config.background = bg_config;
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });

@@ -19,7 +19,7 @@ use crate::ui::theme_font_selector::ThemeFontSelector;
 use crate::ui::lcars_display::{
     render_lcars_frame, render_content_background, SidebarPosition,
     ExtensionMode, CornerStyle, HeaderPosition, HeaderShape, HeaderAlign, SegmentConfig,
-    DividerCapStyle, SplitOrientation, ContentDisplayType, ContentItemConfig, StaticDisplayConfig,
+    DividerCapStyle, SplitOrientation, ContentDisplayType, ContentItemConfig,
 };
 use crate::ui::background::Color;
 use crate::ui::graph_config_widget::GraphConfigWidget;
@@ -2384,7 +2384,7 @@ impl LcarsConfigWidget {
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())
                 .or_default();
-            item.static_config = StaticDisplayConfig { background: bg_config };
+            item.static_config.background = bg_config;
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });

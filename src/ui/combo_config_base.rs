@@ -18,7 +18,7 @@ use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrien
 use crate::ui::theme::{ComboThemeConfig, FontSource};
 use crate::ui::{
     ArcConfigWidget, BarConfigWidget, CoreBarsConfigWidget, GradientEditor, GraphConfigWidget,
-    SpeedometerConfigWidget, TextLineConfigWidget,
+    SpeedometerConfigWidget, StaticConfigWidget, TextLineConfigWidget,
 };
 
 /// Trait for combo panel frame configurations that support theming
@@ -1048,22 +1048,61 @@ where
     inner_box.append(&speedometer_config_frame);
 
     // === Static Display Configuration Section ===
-    // Static display only has background config which is not commonly edited here
     let static_config_frame = gtk4::Frame::new(Some("Static Display Configuration"));
     static_config_frame.set_margin_top(12);
 
-    let static_inner_box = GtkBox::new(Orientation::Vertical, 8);
-    static_inner_box.set_margin_start(8);
-    static_inner_box.set_margin_end(8);
-    static_inner_box.set_margin_top(8);
-    static_inner_box.set_margin_bottom(8);
+    let static_widget = StaticConfigWidget::new(slot_fields.clone());
+    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
+    {
+        let cfg = config.borrow();
+        static_widget.set_theme(get_theme(&cfg));
+    }
+    let current_static_config = {
+        let cfg = config.borrow();
+        get_content_items(&cfg)
+            .get(slot_name)
+            .map(|item| item.static_config.clone())
+            .unwrap_or_default()
+    };
+    static_widget.set_config(current_static_config);
 
-    let static_info_label = Label::new(Some("Static displays show a fixed background.\nNo additional configuration needed."));
-    static_info_label.set_halign(gtk4::Align::Start);
-    static_info_label.add_css_class("dim-label");
-    static_inner_box.append(&static_info_label);
+    // Connect static widget on_change
+    let static_widget_rc = Rc::new(static_widget);
+    {
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let slot_name_clone = slot_name.to_string();
+        let get_content_items_clone = get_content_items.clone();
+        let set_content_item_clone = set_content_item.clone();
+        let static_widget_for_cb = static_widget_rc.clone();
+        static_widget_rc.set_on_change(move || {
+            let static_config = static_widget_for_cb.get_config();
+            let mut cfg = config_clone.borrow_mut();
+            let mut item = get_content_items_clone(&cfg)
+                .get(&slot_name_clone)
+                .cloned()
+                .unwrap_or_default();
+            item.static_config = static_config;
+            set_content_item_clone(&mut cfg, &slot_name_clone, item);
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+    }
 
-    static_config_frame.set_child(Some(&static_inner_box));
+    // Register theme refresh callback for static widget
+    {
+        let static_widget_for_theme = static_widget_rc.clone();
+        let config_for_static_theme = config.clone();
+        let get_theme_for_static = get_theme.clone();
+        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = get_theme_for_static(&config_for_static_theme.borrow());
+            static_widget_for_theme.set_theme(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+    }
+
+    static_config_frame.set_child(Some(static_widget_rc.widget()));
     inner_box.append(&static_config_frame);
 
     // Show/hide frames based on display type

@@ -16,7 +16,7 @@ use crate::ui::fighter_hud_display::{
     render_fighter_hud_frame, HudColorPreset, HudFrameStyle,
     HudHeaderStyle, HudDividerStyle,
 };
-use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation, StaticDisplayConfig};
+use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::background::Color;
 use crate::ui::{
     BarConfigWidget, GraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
@@ -1915,7 +1915,7 @@ impl FighterHudConfigWidget {
             let item = cfg.frame.content_items
                 .entry(slot_name_clone.clone())
                 .or_default();
-            item.static_config = StaticDisplayConfig { background: bg_config };
+            item.static_config.background = bg_config;
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });

@@ -441,11 +441,25 @@ impl Default for DividerConfig {
     }
 }
 
-/// Configuration for static display (background only, no dynamic data)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+/// Configuration for static display (background with optional text overlay)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StaticDisplayConfig {
     #[serde(default)]
     pub background: BackgroundConfig,
+    #[serde(default)]
+    pub text_overlay: crate::ui::bar_display::TextOverlayConfig,
+}
+
+impl Default for StaticDisplayConfig {
+    fn default() -> Self {
+        Self {
+            background: BackgroundConfig::default(),
+            text_overlay: crate::ui::bar_display::TextOverlayConfig {
+                enabled: false, // Disabled by default for static
+                text_config: Default::default(),
+            },
+        }
+    }
 }
 
 /// Configuration for a content item
@@ -1731,7 +1745,6 @@ pub fn render_content_static(
     w: f64,
     h: f64,
     config: &StaticDisplayConfig,
-    bar_config: &BarDisplayConfig,
     theme: &ComboThemeConfig,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
@@ -1742,13 +1755,13 @@ pub fn render_content_static(
     render_background_with_theme(cr, &config.background, w, h, Some(theme))?;
 
     // Render text overlay if enabled
-    if bar_config.text_overlay.enabled {
+    if config.text_overlay.enabled {
         let values = slot_values.cloned().unwrap_or_default();
         crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             w,
             h,
-            &bar_config.text_overlay.text_config,
+            &config.text_overlay.text_config,
             &values,
             Some(theme),
         );

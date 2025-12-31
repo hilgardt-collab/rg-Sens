@@ -47,6 +47,7 @@ mod indicator_config_widget;
 mod test_source_dialog;
 mod test_source_config_widget;
 mod static_text_config_widget;
+mod static_config_widget;
 pub mod cyberpunk_display;
 mod cyberpunk_config_widget;
 pub mod material_display;
@@ -119,6 +120,7 @@ pub use core_bars_config_widget::CoreBarsConfigWidget;
 pub use indicator_config_widget::IndicatorConfigWidget;
 pub use test_source_config_widget::TestSourceConfigWidget;
 pub use static_text_config_widget::StaticTextConfigWidget;
+pub use static_config_widget::StaticConfigWidget;
 pub use cyberpunk_display::{
     CyberpunkFrameConfig, CornerStyle as CyberpunkCornerStyle, HeaderStyle as CyberpunkHeaderStyle,
     DividerStyle as CyberpunkDividerStyle, render_cyberpunk_frame, calculate_group_layouts, draw_group_dividers,
