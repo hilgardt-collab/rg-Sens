@@ -2546,6 +2546,7 @@ pub(crate) fn show_panel_properties_dialog(
     let retro_terminal_config_widget_clone = retro_terminal_config_widget.clone();
     let fighter_hud_config_widget_clone = fighter_hud_config_widget.clone();
     let synthwave_config_widget_clone = synthwave_config_widget.clone();
+    let art_deco_config_widget_clone = art_deco_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -3462,6 +3463,24 @@ pub(crate) fn show_panel_properties_dialog(
                         // Apply the configuration to the displayer
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply Synthwave config: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Apply Art Deco displayer configuration if Art Deco displayer is active
+            if new_displayer_id == "art_deco" {
+                if let Some(ref widget) = *art_deco_config_widget_clone.borrow() {
+                    let art_deco_config = widget.get_config();
+                    if let Ok(art_deco_config_json) = serde_json::to_value(&art_deco_config) {
+                        panel_guard.config.insert("art_deco_config".to_string(), art_deco_config_json);
+
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Art Deco config: {}", e);
                         }
                     }
                 }
