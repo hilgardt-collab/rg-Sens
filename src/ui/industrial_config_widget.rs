@@ -86,7 +86,7 @@ struct LayoutWidgets {
     item_spacing_spin: SpinButton,
     divider_style_dropdown: DropDown,
     divider_width_spin: SpinButton,
-    divider_color_widget: Rc<ColorButtonWidget>,
+    divider_color_widget: Rc<ThemeColorSelector>,
     group_weights_box: GtkBox,
 }
 
@@ -1108,8 +1108,16 @@ impl IndustrialConfigWidget {
 
         Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
 
-        // Store widget refs - set to None since we changed to ThemeColorSelector
-        *layout_widgets_out.borrow_mut() = None; // TODO: Update LayoutWidgets struct
+        // Store widget refs
+        *layout_widgets_out.borrow_mut() = Some(LayoutWidgets {
+            split_orientation_dropdown,
+            content_padding_spin,
+            item_spacing_spin,
+            divider_style_dropdown,
+            divider_width_spin,
+            divider_color_widget,
+            group_weights_box,
+        });
 
         page
     }
@@ -2515,7 +2523,8 @@ impl IndustrialConfigWidget {
                 DividerStyle::None => 3,
             });
             widgets.divider_width_spin.set_value(config.frame.divider_width);
-            widgets.divider_color_widget.set_color(config.frame.divider_color);
+            widgets.divider_color_widget.set_source(ColorSource::custom(config.frame.divider_color));
+            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
 
             Self::rebuild_group_spinners(
                 &self.config,
