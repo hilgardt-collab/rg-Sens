@@ -446,6 +446,10 @@ fn render_image_background(
 
         cr.save()?;
 
+        // Clip to widget bounds to prevent image from extending outside
+        cr.rectangle(0.0, 0.0, width, height);
+        cr.clip();
+
         match display_mode {
             ImageDisplayMode::Fit => {
                 // Scale to fit (maintain aspect ratio, may have empty space)
