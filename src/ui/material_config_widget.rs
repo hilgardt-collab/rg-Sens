@@ -26,22 +26,14 @@ use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrien
 use crate::displayers::MaterialDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
-use crate::ui::theme::{ColorSource, FontSource};
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::theme_color_selector::ThemeColorSelector;
 
-/// Holds references to Appearance tab widgets (theme variant & surface colors)
-struct AppearanceWidgets {
-    theme_dropdown: DropDown,
-    accent_color_widget: Rc<ColorButtonWidget>,
-    surface_light_widget: Rc<ColorButtonWidget>,
-    surface_dark_widget: Rc<ColorButtonWidget>,
-    bg_light_widget: Rc<ColorButtonWidget>,
-    bg_dark_widget: Rc<ColorButtonWidget>,
-}
-
-/// Holds references to Theme tab widgets (combo theme colors, fonts, gradient)
+/// Holds references to Theme tab widgets (combo theme colors, fonts, gradient, and appearance)
 #[allow(dead_code)]
 struct ThemeWidgets {
+    theme_variant_dropdown: DropDown,
     theme_color1_widget: Rc<ColorButtonWidget>,
     theme_color2_widget: Rc<ColorButtonWidget>,
     theme_color3_widget: Rc<ColorButtonWidget>,
@@ -51,6 +43,10 @@ struct ThemeWidgets {
     font1_size_spin: SpinButton,
     font2_btn: Button,
     font2_size_spin: SpinButton,
+    surface_light_widget: Rc<ColorButtonWidget>,
+    surface_dark_widget: Rc<ColorButtonWidget>,
+    bg_light_widget: Rc<ColorButtonWidget>,
+    bg_dark_widget: Rc<ColorButtonWidget>,
 }
 
 /// Holds references to Card tab widgets
@@ -79,7 +75,7 @@ struct LayoutWidgets {
     item_spacing_spin: SpinButton,
     divider_style_dropdown: DropDown,
     divider_spacing_spin: SpinButton,
-    divider_color_widget: Rc<ColorButtonWidget>,
+    divider_color_widget: Rc<ThemeColorSelector>,
     group_weights_box: GtkBox,
 }
 
@@ -98,13 +94,11 @@ pub struct MaterialConfigWidget {
     content_notebook: Rc<RefCell<Notebook>>,
     source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
-    appearance_widgets: Rc<RefCell<Option<AppearanceWidgets>>>,
     card_widgets: Rc<RefCell<Option<CardWidgets>>>,
     header_widgets: Rc<RefCell<Option<HeaderWidgets>>>,
     layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
     animation_widgets: Rc<RefCell<Option<AnimationWidgets>>>,
-    /// Theme tab widgets
-    #[allow(dead_code)]
+    /// Theme tab widgets (includes appearance settings)
     theme_widgets: Rc<RefCell<Option<ThemeWidgets>>>,
     /// Callbacks to refresh theme reference sections
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
@@ -118,7 +112,6 @@ impl MaterialConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
         let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
-        let appearance_widgets: Rc<RefCell<Option<AppearanceWidgets>>> = Rc::new(RefCell::new(None));
         let card_widgets: Rc<RefCell<Option<CardWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
@@ -153,32 +146,28 @@ impl MaterialConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Tab 1: Theme (combo theme colors, fonts, gradient) - first for visibility
+        // Tab 1: Theme (combo theme colors, fonts, gradient, appearance) - first for visibility
         let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
-        // Tab 2: Appearance (theme variant, surface colors, etc.)
-        let appearance_page = Self::create_appearance_page(&config, &on_change, &preview, &appearance_widgets);
-        notebook.append_page(&appearance_page, Some(&Label::new(Some("Appearance"))));
-
-        // Tab 3: Card
+        // Tab 2: Card
         let card_page = Self::create_card_page(&config, &on_change, &preview, &card_widgets);
         notebook.append_page(&card_page, Some(&Label::new(Some("Card"))));
 
-        // Tab 4: Header
+        // Tab 3: Header
         let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
-        // Tab 5: Layout
-        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
+        // Tab 4: Layout
+        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets, &theme_ref_refreshers);
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 6: Content - with dynamic per-slot notebook
+        // Tab 5: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
         let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
-        // Tab 7: Animation
+        // Tab 6: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
@@ -194,7 +183,6 @@ impl MaterialConfigWidget {
             content_notebook,
             source_summaries,
             available_fields,
-            appearance_widgets,
             card_widgets,
             header_widgets,
             layout_widgets,
@@ -220,147 +208,7 @@ impl MaterialConfigWidget {
         combo_config_base::refresh_theme_refs(refreshers);
     }
 
-    fn create_appearance_page(
-        config: &Rc<RefCell<MaterialDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        appearance_widgets_out: &Rc<RefCell<Option<AppearanceWidgets>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
-
-        // Theme variant
-        let theme_box = GtkBox::new(Orientation::Horizontal, 6);
-        theme_box.append(&Label::new(Some("Theme Variant:")));
-        let theme_list = StringList::new(&["Light", "Dark"]);
-        let theme_dropdown = DropDown::new(Some(theme_list), None::<gtk4::Expression>);
-        let theme_idx = match config.borrow().frame.theme_variant {
-            ThemeVariant::Light => 0,
-            ThemeVariant::Dark => 1,
-        };
-        theme_dropdown.set_selected(theme_idx);
-        theme_dropdown.set_hexpand(true);
-        theme_box.append(&theme_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        theme_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.theme_variant = match selected {
-                0 => ThemeVariant::Light,
-                _ => ThemeVariant::Dark,
-            };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&theme_box);
-
-        // Accent color
-        let accent_box = GtkBox::new(Orientation::Horizontal, 6);
-        accent_box.append(&Label::new(Some("Accent Color:")));
-        let accent_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.accent_color));
-        accent_box.append(accent_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        accent_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.accent_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&accent_box);
-
-        // Surface colors section
-        let surface_label = Label::new(Some("Surface Colors (Card Background)"));
-        surface_label.set_halign(gtk4::Align::Start);
-        surface_label.add_css_class("heading");
-        surface_label.set_margin_top(12);
-        page.append(&surface_label);
-
-        // Light surface
-        let surface_light_box = GtkBox::new(Orientation::Horizontal, 6);
-        surface_light_box.append(&Label::new(Some("Light Theme:")));
-        let surface_light_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.surface_color_light));
-        surface_light_box.append(surface_light_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        surface_light_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.surface_color_light = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&surface_light_box);
-
-        // Dark surface
-        let surface_dark_box = GtkBox::new(Orientation::Horizontal, 6);
-        surface_dark_box.append(&Label::new(Some("Dark Theme:")));
-        let surface_dark_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.surface_color_dark));
-        surface_dark_box.append(surface_dark_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        surface_dark_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.surface_color_dark = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&surface_dark_box);
-
-        // Background colors section
-        let bg_label = Label::new(Some("Background Colors"));
-        bg_label.set_halign(gtk4::Align::Start);
-        bg_label.add_css_class("heading");
-        bg_label.set_margin_top(12);
-        page.append(&bg_label);
-
-        // Light background
-        let bg_light_box = GtkBox::new(Orientation::Horizontal, 6);
-        bg_light_box.append(&Label::new(Some("Light Theme:")));
-        let bg_light_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color_light));
-        bg_light_box.append(bg_light_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bg_light_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.background_color_light = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&bg_light_box);
-
-        // Dark background
-        let bg_dark_box = GtkBox::new(Orientation::Horizontal, 6);
-        bg_dark_box.append(&Label::new(Some("Dark Theme:")));
-        let bg_dark_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color_dark));
-        bg_dark_box.append(bg_dark_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bg_dark_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.background_color_dark = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&bg_dark_box);
-
-        // Store widget refs
-        *appearance_widgets_out.borrow_mut() = Some(AppearanceWidgets {
-            theme_dropdown,
-            accent_color_widget,
-            surface_light_widget,
-            surface_dark_widget,
-            bg_light_widget,
-            bg_dark_widget,
-        });
-
-        page
-    }
-
-    /// Create the Theme configuration page (combo theme colors, fonts, gradient)
+    /// Create the Theme configuration page (combo theme colors, fonts, gradient, appearance)
     fn create_theme_page(
         config: &Rc<RefCell<MaterialDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -380,11 +228,41 @@ impl MaterialConfigWidget {
         let inner_box = GtkBox::new(Orientation::Vertical, 8);
 
         // Info label
-        let info_label = Label::new(Some("Configure theme colors, gradient, and fonts.\nThese can be referenced in content items for consistent styling."));
+        let info_label = Label::new(Some("Configure theme variant, colors, gradient, and fonts.\nThese can be referenced in content items for consistent styling."));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
         info_label.set_wrap(true);
         inner_box.append(&info_label);
+
+        // Theme Variant section (Light/Dark)
+        let variant_frame = gtk4::Frame::new(Some("Theme Variant"));
+        let variant_box = GtkBox::new(Orientation::Vertical, 6);
+        variant_box.set_margin_start(8);
+        variant_box.set_margin_end(8);
+        variant_box.set_margin_top(8);
+        variant_box.set_margin_bottom(8);
+
+        let variant_row = GtkBox::new(Orientation::Horizontal, 8);
+        variant_row.append(&Label::new(Some("Variant:")));
+        let variant_list = StringList::new(&["Light", "Dark"]);
+        let theme_variant_dropdown = DropDown::new(Some(variant_list), None::<gtk4::Expression>);
+        let variant_idx = match config.borrow().frame.theme_variant {
+            ThemeVariant::Light => 0,
+            ThemeVariant::Dark => 1,
+        };
+        theme_variant_dropdown.set_selected(variant_idx);
+        theme_variant_dropdown.set_hexpand(true);
+        variant_row.append(&theme_variant_dropdown);
+        variant_box.append(&variant_row);
+
+        // Info about default colors
+        let variant_info = Label::new(Some("Changing the variant will reset theme colors to defaults."));
+        variant_info.set_halign(gtk4::Align::Start);
+        variant_info.add_css_class("dim-label");
+        variant_box.append(&variant_info);
+
+        variant_frame.set_child(Some(&variant_box));
+        inner_box.append(&variant_frame);
 
         // Theme Colors section
         let colors_frame = gtk4::Frame::new(Some("Theme Colors"));
@@ -447,6 +325,7 @@ impl MaterialConfigWidget {
 
         let gradient_editor = Rc::new(GradientEditor::new());
         gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
+        gradient_editor.set_theme_config(config.borrow().frame.theme.clone());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -649,11 +528,137 @@ impl MaterialConfigWidget {
         preset_frame.set_child(Some(&preset_box));
         inner_box.append(&preset_frame);
 
+        // Surface Colors section (moved from Appearance tab)
+        let surface_frame = gtk4::Frame::new(Some("Surface Colors (Card Background)"));
+        let surface_box = GtkBox::new(Orientation::Vertical, 6);
+        surface_box.set_margin_start(8);
+        surface_box.set_margin_end(8);
+        surface_box.set_margin_top(8);
+        surface_box.set_margin_bottom(8);
+
+        let surface_light_row = GtkBox::new(Orientation::Horizontal, 8);
+        surface_light_row.append(&Label::new(Some("Light Theme:")));
+        let surface_light_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.surface_color_light));
+        surface_light_row.append(surface_light_widget.widget());
+        surface_light_widget.widget().set_hexpand(true);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        surface_light_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.surface_color_light = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        surface_box.append(&surface_light_row);
+
+        let surface_dark_row = GtkBox::new(Orientation::Horizontal, 8);
+        surface_dark_row.append(&Label::new(Some("Dark Theme:")));
+        let surface_dark_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.surface_color_dark));
+        surface_dark_row.append(surface_dark_widget.widget());
+        surface_dark_widget.widget().set_hexpand(true);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        surface_dark_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.surface_color_dark = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        surface_box.append(&surface_dark_row);
+
+        surface_frame.set_child(Some(&surface_box));
+        inner_box.append(&surface_frame);
+
+        // Background Colors section (moved from Appearance tab)
+        let bg_frame = gtk4::Frame::new(Some("Background Colors"));
+        let bg_box = GtkBox::new(Orientation::Vertical, 6);
+        bg_box.set_margin_start(8);
+        bg_box.set_margin_end(8);
+        bg_box.set_margin_top(8);
+        bg_box.set_margin_bottom(8);
+
+        let bg_light_row = GtkBox::new(Orientation::Horizontal, 8);
+        bg_light_row.append(&Label::new(Some("Light Theme:")));
+        let bg_light_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color_light));
+        bg_light_row.append(bg_light_widget.widget());
+        bg_light_widget.widget().set_hexpand(true);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        bg_light_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.background_color_light = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        bg_box.append(&bg_light_row);
+
+        let bg_dark_row = GtkBox::new(Orientation::Horizontal, 8);
+        bg_dark_row.append(&Label::new(Some("Dark Theme:")));
+        let bg_dark_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color_dark));
+        bg_dark_row.append(bg_dark_widget.widget());
+        bg_dark_widget.widget().set_hexpand(true);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        bg_dark_widget.set_on_change(move |color| {
+            config_clone.borrow_mut().frame.background_color_dark = color;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        bg_box.append(&bg_dark_row);
+
+        bg_frame.set_child(Some(&bg_box));
+        inner_box.append(&bg_frame);
+
+        // Connect theme variant dropdown - sets theme defaults when changed
+        let config_for_variant = config.clone();
+        let on_change_for_variant = on_change.clone();
+        let preview_for_variant = preview.clone();
+        let refreshers_for_variant = theme_ref_refreshers.clone();
+        let color_widgets_for_variant = color_widgets.clone();
+        let gradient_editor_for_variant = gradient_editor.clone();
+        let font1_btn_for_variant = font1_btn.clone();
+        let font1_size_spin_for_variant = font1_size_spin.clone();
+        let font2_btn_for_variant = font2_btn.clone();
+        let font2_size_spin_for_variant = font2_size_spin.clone();
+        theme_variant_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            // Set theme variant and default colors
+            let (variant, theme) = match selected {
+                0 => (ThemeVariant::Light, ComboThemeConfig::default_for_material_light()),
+                _ => (ThemeVariant::Dark, ComboThemeConfig::default_for_material_dark()),
+            };
+            {
+                let mut cfg = config_for_variant.borrow_mut();
+                cfg.frame.theme_variant = variant;
+                cfg.frame.theme = theme.clone();
+            }
+            // Update theme color widgets
+            if color_widgets_for_variant.len() >= 4 {
+                color_widgets_for_variant[0].set_color(theme.color1);
+                color_widgets_for_variant[1].set_color(theme.color2);
+                color_widgets_for_variant[2].set_color(theme.color3);
+                color_widgets_for_variant[3].set_color(theme.color4);
+            }
+            gradient_editor_for_variant.set_gradient_source_config(&theme.gradient);
+            gradient_editor_for_variant.set_theme_config(theme.clone());
+            font1_btn_for_variant.set_label(&theme.font1_family);
+            font1_size_spin_for_variant.set_value(theme.font1_size);
+            font2_btn_for_variant.set_label(&theme.font2_family);
+            font2_size_spin_for_variant.set_value(theme.font2_size);
+            Self::refresh_theme_refs(&refreshers_for_variant);
+            Self::queue_redraw(&preview_for_variant, &on_change_for_variant);
+        });
+
         scroll.set_child(Some(&inner_box));
         page.append(&scroll);
 
         // Store theme widgets for later updates
         *theme_widgets_out.borrow_mut() = Some(ThemeWidgets {
+            theme_variant_dropdown: theme_variant_dropdown.clone(),
             theme_color1_widget: color_widgets[0].clone(),
             theme_color2_widget: color_widgets[1].clone(),
             theme_color3_widget: color_widgets[2].clone(),
@@ -663,6 +668,10 @@ impl MaterialConfigWidget {
             font1_size_spin: font1_size_spin.clone(),
             font2_btn: font2_btn.clone(),
             font2_size_spin: font2_size_spin.clone(),
+            surface_light_widget,
+            surface_dark_widget,
+            bg_light_widget,
+            bg_dark_widget,
         });
 
         page
@@ -1110,6 +1119,7 @@ impl MaterialConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -1232,19 +1242,31 @@ impl MaterialConfigWidget {
         });
         page.append(&div_spacing_box);
 
-        // Divider color
+        // Divider color (theme-aware)
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Color:")));
-        let divider_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.divider_color));
+        let divider_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.divider_color.clone(),
+        ));
+        divider_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(divider_color_widget.widget());
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
-        divider_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.divider_color = color;
+        divider_color_widget.set_on_change(move |new_source| {
+            config_clone.borrow_mut().frame.divider_color = new_source;
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register theme refresh callback
+        let divider_color_widget_for_refresh = divider_color_widget.clone();
+        let config_for_divider_refresh = config.clone();
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            let cfg = config_for_divider_refresh.borrow();
+            divider_color_widget_for_refresh.set_theme_config(cfg.frame.theme.clone());
+        }));
+
         page.append(&div_color_box);
 
         // Group weights section
@@ -2100,30 +2122,29 @@ impl MaterialConfigWidget {
     pub fn set_config(&self, config: &MaterialDisplayConfig) {
         *self.config.borrow_mut() = config.clone();
 
-        // Update Appearance widgets (theme variant, surface colors)
-        if let Some(widgets) = self.appearance_widgets.borrow().as_ref() {
-            widgets.theme_dropdown.set_selected(match config.frame.theme_variant {
+        // Update Theme widgets (theme variant, combo theme, surface/background colors)
+        if let Some(widgets) = self.theme_widgets.borrow().as_ref() {
+            // Theme variant dropdown
+            widgets.theme_variant_dropdown.set_selected(match config.frame.theme_variant {
                 ThemeVariant::Light => 0,
                 ThemeVariant::Dark => 1,
             });
-            widgets.accent_color_widget.set_color(config.frame.accent_color);
-            widgets.surface_light_widget.set_color(config.frame.surface_color_light);
-            widgets.surface_dark_widget.set_color(config.frame.surface_color_dark);
-            widgets.bg_light_widget.set_color(config.frame.background_color_light);
-            widgets.bg_dark_widget.set_color(config.frame.background_color_dark);
-        }
-
-        // Update Theme widgets (combo theme)
-        if let Some(widgets) = self.theme_widgets.borrow().as_ref() {
+            // Theme colors
             widgets.theme_color1_widget.set_color(config.frame.theme.color1);
             widgets.theme_color2_widget.set_color(config.frame.theme.color2);
             widgets.theme_color3_widget.set_color(config.frame.theme.color3);
             widgets.theme_color4_widget.set_color(config.frame.theme.color4);
             widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
+            widgets.theme_gradient_editor.set_theme_config(config.frame.theme.clone());
             widgets.font1_btn.set_label(&config.frame.theme.font1_family);
             widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
             widgets.font2_btn.set_label(&config.frame.theme.font2_family);
             widgets.font2_size_spin.set_value(config.frame.theme.font2_size);
+            // Surface and background colors
+            widgets.surface_light_widget.set_color(config.frame.surface_color_light);
+            widgets.surface_dark_widget.set_color(config.frame.surface_color_dark);
+            widgets.bg_light_widget.set_color(config.frame.background_color_light);
+            widgets.bg_dark_widget.set_color(config.frame.background_color_dark);
         }
 
         // Update Card widgets
@@ -2169,7 +2190,7 @@ impl MaterialConfigWidget {
                 DividerStyle::Fade => 2,
             });
             widgets.divider_spacing_spin.set_value(config.frame.divider_spacing);
-            widgets.divider_color_widget.set_color(config.frame.divider_color);
+            widgets.divider_color_widget.set_source(config.frame.divider_color.clone());
 
             Self::rebuild_group_spinners(
                 &self.config,

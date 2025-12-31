@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
-use crate::ui::theme::{FontSource, deserialize_font_or_source};
+use crate::ui::theme::{ColorSource, FontSource, deserialize_color_or_source, deserialize_font_or_source};
 
 // Re-export types we use
 pub use crate::ui::lcars_display::{ContentDisplayType as MaterialContentType, ContentItemConfig as MaterialContentItemConfig};
@@ -116,8 +116,8 @@ fn default_shadow_color() -> Color {
     Color { r: 0.0, g: 0.0, b: 0.0, a: 0.15 } // Subtle black shadow
 }
 
-fn default_divider_color() -> Color {
-    Color { r: 0.5, g: 0.5, b: 0.5, a: 0.2 } // Subtle gray
+fn default_divider_color() -> ColorSource {
+    ColorSource::custom(Color { r: 0.5, g: 0.5, b: 0.5, a: 0.2 }) // Subtle gray
 }
 
 fn default_header_font_source() -> FontSource { FontSource::theme(1, 14.0) } // Theme font 1
@@ -200,8 +200,8 @@ pub struct MaterialFrameConfig {
     // Dividers
     #[serde(default)]
     pub divider_style: DividerStyle,
-    #[serde(default = "default_divider_color")]
-    pub divider_color: Color,
+    #[serde(default = "default_divider_color", deserialize_with = "deserialize_color_or_source")]
+    pub divider_color: ColorSource,
     #[serde(default = "default_divider_spacing")]
     pub divider_spacing: f64,
 
@@ -469,6 +469,9 @@ fn draw_divider(
     length: f64,
     horizontal: bool,
 ) {
+    // Resolve divider color through theme
+    let divider_color = config.divider_color.resolve(&config.theme);
+
     match config.divider_style {
         DividerStyle::Space => {
             // No visible divider, just spacing (handled by layout)
@@ -476,10 +479,10 @@ fn draw_divider(
         DividerStyle::Line => {
             cr.save().ok();
             cr.set_source_rgba(
-                config.divider_color.r,
-                config.divider_color.g,
-                config.divider_color.b,
-                config.divider_color.a,
+                divider_color.r,
+                divider_color.g,
+                divider_color.b,
+                divider_color.a,
             );
             cr.set_line_width(1.0);
 
@@ -498,10 +501,10 @@ fn draw_divider(
 
             if horizontal {
                 let gradient = cairo::LinearGradient::new(x, y, x + length, y);
-                gradient.add_color_stop_rgba(0.0, config.divider_color.r, config.divider_color.g, config.divider_color.b, 0.0);
-                gradient.add_color_stop_rgba(0.3, config.divider_color.r, config.divider_color.g, config.divider_color.b, config.divider_color.a);
-                gradient.add_color_stop_rgba(0.7, config.divider_color.r, config.divider_color.g, config.divider_color.b, config.divider_color.a);
-                gradient.add_color_stop_rgba(1.0, config.divider_color.r, config.divider_color.g, config.divider_color.b, 0.0);
+                gradient.add_color_stop_rgba(0.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
+                gradient.add_color_stop_rgba(0.3, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+                gradient.add_color_stop_rgba(0.7, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+                gradient.add_color_stop_rgba(1.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
 
                 cr.set_source(&gradient).ok();
                 cr.set_line_width(1.0);
@@ -510,10 +513,10 @@ fn draw_divider(
                 cr.stroke().ok();
             } else {
                 let gradient = cairo::LinearGradient::new(x, y, x, y + length);
-                gradient.add_color_stop_rgba(0.0, config.divider_color.r, config.divider_color.g, config.divider_color.b, 0.0);
-                gradient.add_color_stop_rgba(0.3, config.divider_color.r, config.divider_color.g, config.divider_color.b, config.divider_color.a);
-                gradient.add_color_stop_rgba(0.7, config.divider_color.r, config.divider_color.g, config.divider_color.b, config.divider_color.a);
-                gradient.add_color_stop_rgba(1.0, config.divider_color.r, config.divider_color.g, config.divider_color.b, 0.0);
+                gradient.add_color_stop_rgba(0.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
+                gradient.add_color_stop_rgba(0.3, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+                gradient.add_color_stop_rgba(0.7, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+                gradient.add_color_stop_rgba(1.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
 
                 cr.set_source(&gradient).ok();
                 cr.set_line_width(1.0);

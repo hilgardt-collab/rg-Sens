@@ -640,16 +640,42 @@ impl ComboThemeConfig {
 
     /// Default theme for Material Design panels
     pub fn default_for_material() -> Self {
+        Self::default_for_material_light()
+    }
+
+    /// Default theme for Material Design panels (Light variant)
+    pub fn default_for_material_light() -> Self {
         Self {
-            color1: Color::new(0.129, 0.588, 0.953, 1.0), // Blue 500 #2196f3
-            color2: Color::new(0.0, 0.588, 0.533, 1.0),   // Teal #009688
-            color3: Color::new(1.0, 0.596, 0.0, 1.0),     // Orange #ff9800
-            color4: Color::new(0.459, 0.459, 0.459, 1.0), // Gray #757575
+            color1: Color::new(0.129, 0.588, 0.953, 1.0), // Blue 500 #2196f3 - Primary
+            color2: Color::new(0.0, 0.588, 0.533, 1.0),   // Teal #009688 - Secondary
+            color3: Color::new(1.0, 0.596, 0.0, 1.0),     // Orange #ff9800 - Accent
+            color4: Color::new(0.459, 0.459, 0.459, 1.0), // Gray #757575 - Highlight
             gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
                     ColorStopSource::custom(0.0, Color::new(0.98, 0.98, 0.98, 1.0)),
                     ColorStopSource::custom(1.0, Color::new(0.96, 0.96, 0.96, 1.0)),
+                ],
+            },
+            font1_family: "Roboto".to_string(),
+            font1_size: 14.0,
+            font2_family: "Roboto".to_string(),
+            font2_size: 12.0,
+        }
+    }
+
+    /// Default theme for Material Design panels (Dark variant)
+    pub fn default_for_material_dark() -> Self {
+        Self {
+            color1: Color::new(0.565, 0.792, 0.976, 1.0), // Blue 200 #90caf9 - Primary
+            color2: Color::new(0.502, 0.796, 0.769, 1.0), // Teal 200 #80cbc4 - Secondary
+            color3: Color::new(1.0, 0.702, 0.349, 1.0),   // Orange 300 #ffb74d - Accent
+            color4: Color::new(0.741, 0.741, 0.741, 1.0), // Gray 400 #bdbdbd - Highlight
+            gradient: LinearGradientSourceConfig {
+                angle: 180.0,
+                stops: vec![
+                    ColorStopSource::custom(0.0, Color::new(0.188, 0.188, 0.188, 1.0)), // #303030
+                    ColorStopSource::custom(1.0, Color::new(0.141, 0.141, 0.141, 1.0)), // #242424
                 ],
             },
             font1_family: "Roboto".to_string(),
