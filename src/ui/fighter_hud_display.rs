@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
-use crate::ui::theme::{FontSource, deserialize_font_or_source};
+use crate::ui::theme::{ColorSource, FontSource, deserialize_font_or_source};
 
 // Re-export types we use
 pub use crate::ui::lcars_display::{ContentDisplayType as FighterHudContentType, ContentItemConfig as FighterHudContentItemConfig};
@@ -144,6 +144,7 @@ fn default_group_count() -> usize { 1 }
 fn default_glow_intensity() -> f64 { 0.3 }
 fn default_tick_spacing() -> f64 { 8.0 }
 fn default_reticle_size() -> f64 { 0.15 }
+fn default_reticle_color() -> ColorSource { ColorSource::Theme { index: 1 } } // Primary theme color
 
 fn default_background_color() -> Color {
     Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 } // Transparent by default (HUD overlay)
@@ -175,6 +176,8 @@ pub struct FighterHudFrameConfig {
     pub show_center_reticle: bool,
     #[serde(default = "default_reticle_size")]
     pub reticle_size: f64,
+    #[serde(default = "default_reticle_color")]
+    pub reticle_color: ColorSource,
 
     // Header
     #[serde(default = "default_true")]
@@ -243,6 +246,7 @@ impl Default for FighterHudFrameConfig {
 
             show_center_reticle: false,
             reticle_size: default_reticle_size(),
+            reticle_color: default_reticle_color(),
 
             show_header: true,
             header_text: "SYS MONITOR".to_string(),
@@ -370,13 +374,18 @@ fn draw_frame_corners(
             cr.line_to(x + w - bracket_size, y + h);
             cr.stroke().ok();
 
-            // Small targeting pips at corners
+            // Small targeting pips at corners (stroked outlines)
             let pip_size = 3.0;
+            cr.set_line_width(1.5);
+            cr.new_sub_path();
             cr.arc(x + corner_gap / 2.0, y + corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.new_sub_path();
             cr.arc(x + w - corner_gap / 2.0, y + corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.new_sub_path();
             cr.arc(x + corner_gap / 2.0, y + h - corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.new_sub_path();
             cr.arc(x + w - corner_gap / 2.0, y + h - corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
-            cr.fill().ok();
+            cr.stroke().ok();
         }
         HudFrameStyle::TacticalBox => {
             // Full box with corner accents
@@ -461,16 +470,22 @@ fn draw_center_reticle(
         return;
     }
 
-    let color = config.hud_color.to_color();
+    // Resolve the theme-aware reticle color
+    let color = config.reticle_color.resolve(&config.theme);
     let cx = x + w / 2.0;
     let cy = y + h / 2.0;
     let size = w.min(h) * config.reticle_size;
 
     cr.save().ok();
+
+    // Clear any existing path to prevent lines from previous drawing operations
+    cr.new_path();
+
     cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.8);
     cr.set_line_width(config.line_width);
 
     // Center circle
+    cr.new_sub_path();
     cr.arc(cx, cy, size * 0.3, 0.0, std::f64::consts::TAU);
     cr.stroke().ok();
 
@@ -492,10 +507,15 @@ fn draw_center_reticle(
     cr.line_to(cx + line_len, cy);
     cr.stroke().ok();
 
-    // Corner brackets around reticle
+    // Corner brackets around reticle (dimmed version of reticle color)
     let bracket_offset = size * 0.6;
     let bracket_len = size * 0.2;
-    let dim_color = config.hud_color.to_dim_color();
+    let dim_color = Color {
+        r: color.r * 0.5,
+        g: color.g * 0.5,
+        b: color.b * 0.5,
+        a: color.a * 0.6,
+    };
     cr.set_source_rgba(dim_color.r, dim_color.g, dim_color.b, dim_color.a);
     cr.set_line_width(1.0);
 

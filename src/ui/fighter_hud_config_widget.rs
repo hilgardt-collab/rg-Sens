@@ -26,6 +26,7 @@ use crate::displayers::FighterHudDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
 use crate::ui::theme::FontSource;
+use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
 
 /// Holds references to Frame tab widgets
@@ -152,7 +153,7 @@ impl FighterHudConfigWidget {
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Frame
-        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets);
+        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets, &theme_ref_refreshers);
         notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
 
         // Tab 4: Header
@@ -209,6 +210,7 @@ impl FighterHudConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         frame_widgets_out: &Rc<RefCell<Option<FrameWidgets>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
@@ -334,6 +336,33 @@ impl FighterHudConfigWidget {
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&reticle_size_box);
+
+        // Reticle color (theme-aware)
+        let reticle_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        reticle_color_box.append(&Label::new(Some("Reticle Color:")));
+        let reticle_color_selector = ThemeColorSelector::new(config.borrow().frame.reticle_color.clone());
+        reticle_color_selector.set_theme_config(config.borrow().frame.theme.clone());
+        reticle_color_selector.widget().set_hexpand(true);
+        reticle_color_box.append(reticle_color_selector.widget());
+        page.append(&reticle_color_box);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        reticle_color_selector.set_on_change(move |color_source| {
+            config_clone.borrow_mut().frame.reticle_color = color_source;
+            Self::queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Register theme refresh callback for reticle color selector
+        let reticle_color_selector_rc = Rc::new(reticle_color_selector);
+        let reticle_color_selector_for_refresh = reticle_color_selector_rc.clone();
+        let config_for_reticle_refresh = config.clone();
+        let reticle_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_reticle_refresh.borrow().frame.theme.clone();
+            reticle_color_selector_for_refresh.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(reticle_refresh);
 
         // Store widget refs
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
@@ -878,6 +907,7 @@ impl FighterHudConfigWidget {
         gradient_box.set_margin_bottom(8);
 
         let gradient_editor = Rc::new(GradientEditor::new());
+        gradient_editor.set_theme_config(config.borrow().frame.theme.clone());
         gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
 
         let config_clone = config.clone();
@@ -891,6 +921,15 @@ impl FighterHudConfigWidget {
             Self::refresh_theme_refs(&refreshers_clone);
             Self::queue_redraw(&preview_clone, &on_change_clone);
         });
+
+        // Register a theme refresh callback for the gradient editor
+        let gradient_editor_for_refresh = gradient_editor.clone();
+        let config_for_gradient_refresh = config.clone();
+        let gradient_refresh: Rc<dyn Fn()> = Rc::new(move || {
+            let theme = config_for_gradient_refresh.borrow().frame.theme.clone();
+            gradient_editor_for_refresh.set_theme_config(theme);
+        });
+        theme_ref_refreshers.borrow_mut().push(gradient_refresh);
 
         gradient_box.append(gradient_editor.widget());
         gradient_frame.set_child(Some(&gradient_box));

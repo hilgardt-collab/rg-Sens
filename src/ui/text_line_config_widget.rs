@@ -31,6 +31,7 @@ pub struct TextLineConfigWidget {
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     theme: Rc<RefCell<ComboThemeConfig>>,
     fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>>,
+    fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>>,
     font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
 }
 
@@ -89,6 +90,7 @@ impl TextLineConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
         let fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>> = Rc::new(RefCell::new(Vec::new()));
+        let fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>> = Rc::new(RefCell::new(Vec::new()));
         let font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Set up add button - uses a self-contained rebuild callback
@@ -109,6 +111,7 @@ impl TextLineConfigWidget {
             let theme_inner = theme.clone();
             let font_selectors_inner = font_selectors.clone();
             let fill_color_selectors_inner = fill_color_selectors.clone();
+            let fill_gradient_editors_inner = fill_gradient_editors.clone();
 
             move || {
                 // Save current visible page name before rebuild
@@ -122,6 +125,7 @@ impl TextLineConfigWidget {
                 // Clear font and color selectors when rebuilding
                 font_selectors_inner.borrow_mut().clear();
                 fill_color_selectors_inner.borrow_mut().clear();
+                fill_gradient_editors_inner.borrow_mut().clear();
 
                 // Rebuild all pages with the same rebuild callback
                 let lines_data = lines_inner.borrow().clone();
@@ -138,6 +142,7 @@ impl TextLineConfigWidget {
                         theme_inner.clone(),
                         font_selectors_inner.clone(),
                         fill_color_selectors_inner.clone(),
+                        fill_gradient_editors_inner.clone(),
                     );
                 }
 
@@ -201,6 +206,7 @@ impl TextLineConfigWidget {
         let theme_for_paste = theme.clone();
         let font_selectors_for_paste = font_selectors.clone();
         let fill_color_selectors_for_paste = fill_color_selectors.clone();
+        let fill_gradient_editors_for_paste = fill_gradient_editors.clone();
         paste_btn.connect_clicked(move |_| {
             let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 clipboard.paste_text_display()
@@ -215,6 +221,7 @@ impl TextLineConfigWidget {
                 // Clear font and color selectors when rebuilding
                 font_selectors_for_paste.borrow_mut().clear();
                 fill_color_selectors_for_paste.borrow_mut().clear();
+                fill_gradient_editors_for_paste.borrow_mut().clear();
 
                 // Rebuild stack
                 while let Some(child) = stack_for_paste.first_child() {
@@ -234,6 +241,7 @@ impl TextLineConfigWidget {
                         theme_for_paste.clone(),
                         font_selectors_for_paste.clone(),
                         fill_color_selectors_for_paste.clone(),
+                        fill_gradient_editors_for_paste.clone(),
                     );
                 }
 
@@ -253,6 +261,7 @@ impl TextLineConfigWidget {
             on_change,
             theme,
             fill_color_selectors,
+            fill_gradient_editors,
             font_selectors,
         }
     }
@@ -269,6 +278,7 @@ impl TextLineConfigWidget {
         theme: Rc<RefCell<ComboThemeConfig>>,
         font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
         fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>>,
+        fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -634,6 +644,10 @@ impl TextLineConfigWidget {
         // Gradient fill container
         let gradient_fill_box = GtkBox::new(Orientation::Vertical, 6);
         let fill_gradient_editor = Rc::new(GradientEditor::new());
+        // Set theme config on gradient editor so theme colors show correctly
+        fill_gradient_editor.set_theme_config(theme.borrow().clone());
+        // Store in fill_gradient_editors for theme updates
+        fill_gradient_editors.borrow_mut().push(fill_gradient_editor.clone());
         // Initialize gradient editor with current value or defaults
         match &line_config.fill {
             TextFillType::LinearGradient { stops, angle } => {
@@ -790,6 +804,10 @@ impl TextLineConfigWidget {
         // Background gradient container
         let bg_gradient_box = GtkBox::new(Orientation::Vertical, 6);
         let bg_gradient_editor = Rc::new(GradientEditor::new());
+        // Set theme config on gradient editor so theme colors show correctly
+        bg_gradient_editor.set_theme_config(theme.borrow().clone());
+        // Store in fill_gradient_editors for theme updates (also used for background gradients)
+        fill_gradient_editors.borrow_mut().push(bg_gradient_editor.clone());
         match &line_config.text_background.background {
             TextBackgroundType::LinearGradient { stops, angle } => {
                 bg_gradient_editor.set_gradient(&LinearGradientConfig {
@@ -1300,6 +1318,7 @@ impl TextLineConfigWidget {
         // Clear font and color selectors when rebuilding
         self.font_selectors.borrow_mut().clear();
         self.fill_color_selectors.borrow_mut().clear();
+        self.fill_gradient_editors.borrow_mut().clear();
 
         // Create rebuild callback for delete buttons
         let stack_clone = self.stack.clone();
@@ -1309,6 +1328,7 @@ impl TextLineConfigWidget {
         let theme_clone = self.theme.clone();
         let font_selectors_clone = self.font_selectors.clone();
         let fill_color_selectors_clone = self.fill_color_selectors.clone();
+        let fill_gradient_editors_clone = self.fill_gradient_editors.clone();
 
         // Create rebuild function as Rc<RefCell> to allow self-reference
         let rebuild_fn: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
@@ -1317,6 +1337,7 @@ impl TextLineConfigWidget {
         let theme_for_rebuild = theme_clone.clone();
         let font_selectors_for_rebuild = font_selectors_clone.clone();
         let fill_color_selectors_for_rebuild = fill_color_selectors_clone.clone();
+        let fill_gradient_editors_for_rebuild = fill_gradient_editors_clone.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
             // Save current visible page name before rebuild
@@ -1330,6 +1351,7 @@ impl TextLineConfigWidget {
             // Clear font and color selectors when rebuilding
             font_selectors_for_rebuild.borrow_mut().clear();
             fill_color_selectors_for_rebuild.borrow_mut().clear();
+            fill_gradient_editors_for_rebuild.borrow_mut().clear();
 
             // Rebuild all pages with the same rebuild callback
             let lines_data = lines_clone.borrow().clone();
@@ -1346,6 +1368,7 @@ impl TextLineConfigWidget {
                     theme_for_rebuild.clone(),
                     font_selectors_for_rebuild.clone(),
                     fill_color_selectors_for_rebuild.clone(),
+                    fill_gradient_editors_for_rebuild.clone(),
                 );
             }
 
@@ -1374,6 +1397,7 @@ impl TextLineConfigWidget {
                 theme_clone.clone(),
                 font_selectors_clone.clone(),
                 fill_color_selectors_clone.clone(),
+                fill_gradient_editors_clone.clone(),
             );
         }
 
@@ -1414,6 +1438,10 @@ impl TextLineConfigWidget {
         // Update all fill color selectors
         for selector in self.fill_color_selectors.borrow().iter() {
             selector.set_theme_config(theme.clone());
+        }
+        // Update all fill gradient editors
+        for editor in self.fill_gradient_editors.borrow().iter() {
+            editor.set_theme_config(theme.clone());
         }
         // Update all font selectors
         for selector in self.font_selectors.borrow().iter() {
