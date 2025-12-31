@@ -98,11 +98,11 @@ pub fn register_all() {
         || Box::new(ClockSource::new()),
     );
 
-    // Register Combination source - compatible with LCARS, Cyberpunk, Material, Industrial, Retro Terminal, Fighter HUD, Synthwave and Art Deco displayers
+    // Register Combination source - compatible with LCARS, Cyberpunk, Material, Industrial, Retro Terminal, Fighter HUD, Synthwave, Art Deco and Art Nouveau displayers
     global_registry().register_source_with_info(
         "combination",
         "Combination",
-        &["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco"],
+        &["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau"],
         || Box::new(ComboSource::new()),
     );
 

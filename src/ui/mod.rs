@@ -61,6 +61,8 @@ pub mod synthwave_display;
 mod synthwave_config_widget;
 pub mod art_deco_display;
 mod art_deco_config_widget;
+pub mod art_nouveau_display;
+mod art_nouveau_config_widget;
 pub mod combo_config_base;
 pub mod theme;
 mod theme_color_selector;
@@ -158,6 +160,14 @@ pub use synthwave_display::{
 };
 pub use synthwave_config_widget::SynthwaveConfigWidget;
 pub use art_deco_config_widget::ArtDecoConfigWidget;
+pub use art_nouveau_display::{
+    ArtNouveauFrameConfig, BorderStyle as ArtNouveauBorderStyle,
+    CornerStyle as ArtNouveauCornerStyle, BackgroundPattern as ArtNouveauBackgroundPattern,
+    HeaderStyle as ArtNouveauHeaderStyle, DividerStyle as ArtNouveauDividerStyle,
+    render_art_nouveau_frame, calculate_group_layouts as art_nouveau_calculate_group_layouts,
+    draw_group_dividers as art_nouveau_draw_group_dividers,
+};
+pub use art_nouveau_config_widget::ArtNouveauConfigWidget;
 pub use theme_color_selector::ThemeColorSelector;
 pub use theme_font_selector::ThemeFontSelector;
 

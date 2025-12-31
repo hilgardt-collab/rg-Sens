@@ -768,6 +768,27 @@ impl ComboThemeConfig {
             font2_size: 11.0,
         }
     }
+
+    /// Default theme for Art Nouveau style - organic, flowing, nature-inspired
+    pub fn default_for_art_nouveau() -> Self {
+        Self {
+            color1: Color::new(0.420, 0.557, 0.137, 1.0), // Olive green #6B8E23
+            color2: Color::new(0.855, 0.647, 0.125, 1.0), // Goldenrod #DAA520
+            color3: Color::new(0.961, 0.961, 0.863, 1.0), // Beige/Cream #F5F5DC
+            color4: Color::new(0.180, 0.310, 0.180, 1.0), // Dark olive #2E4F2E
+            gradient: LinearGradientSourceConfig {
+                angle: 180.0,
+                stops: vec![
+                    ColorStopSource::theme(0.0, 1), // Olive at top
+                    ColorStopSource::theme(1.0, 4), // Dark olive at bottom
+                ],
+            },
+            font1_family: "Serif".to_string(),
+            font1_size: 14.0,
+            font2_family: "Serif".to_string(),
+            font2_size: 11.0,
+        }
+    }
 }
 
 #[cfg(test)]

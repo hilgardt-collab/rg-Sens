@@ -41,6 +41,7 @@ pub use crate::displayers::RetroTerminalDisplayConfig;
 pub use crate::displayers::FighterHudDisplayConfig;
 pub use crate::displayers::SynthwaveDisplayConfig;
 pub use crate::displayers::ArtDecoDisplayConfig;
+pub use crate::displayers::ArtNouveauDisplayConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -294,6 +295,9 @@ pub enum DisplayerConfig {
 
     #[serde(rename = "art_deco")]
     ArtDeco(ArtDecoDisplayConfig),
+
+    #[serde(rename = "art_nouveau")]
+    ArtNouveau(ArtNouveauDisplayConfig),
 }
 
 impl DisplayerConfig {
@@ -317,6 +321,7 @@ impl DisplayerConfig {
             DisplayerConfig::FighterHud(_) => "fighter_hud",
             DisplayerConfig::Synthwave(_) => "synthwave",
             DisplayerConfig::ArtDeco(_) => "art_deco",
+            DisplayerConfig::ArtNouveau(_) => "art_nouveau",
         }
     }
 
@@ -409,6 +414,11 @@ impl DisplayerConfig {
                     map.insert("art_deco_config".to_string(), val);
                 }
             }
+            DisplayerConfig::ArtNouveau(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("art_nouveau_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -433,6 +443,7 @@ impl DisplayerConfig {
             "fighter_hud" => Some(DisplayerConfig::FighterHud(FighterHudDisplayConfig::default())),
             "synthwave" => Some(DisplayerConfig::Synthwave(SynthwaveDisplayConfig::default())),
             "art_deco" => Some(DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::default())),
+            "art_nouveau" => Some(DisplayerConfig::ArtNouveau(ArtNouveauDisplayConfig::default())),
             _ => None,
         }
     }
@@ -464,6 +475,8 @@ impl DisplayerConfig {
             "retro_terminal" => serde_json::from_value(value).ok().map(DisplayerConfig::RetroTerminal),
             "fighter_hud" => serde_json::from_value(value).ok().map(DisplayerConfig::FighterHud),
             "synthwave" => serde_json::from_value(value).ok().map(DisplayerConfig::Synthwave),
+            "art_deco" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtDeco),
+            "art_nouveau" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtNouveau),
             _ => None,
         }
     }
@@ -489,6 +502,7 @@ impl DisplayerConfig {
             DisplayerConfig::FighterHud(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::Synthwave(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::ArtDeco(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::ArtNouveau(c) => serde_json::to_value(c).ok(),
         }
     }
 }

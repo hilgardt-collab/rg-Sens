@@ -85,6 +85,7 @@ mod retro_terminal;
 mod fighter_hud;
 mod synthwave;
 mod art_deco;
+mod art_nouveau;
 pub mod combo_utils;
 // mod level_bar;
 
@@ -110,6 +111,7 @@ pub use retro_terminal::{RetroTerminalDisplayer, RetroTerminalDisplayConfig};
 pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
 pub use synthwave::{SynthwaveDisplayer, SynthwaveDisplayConfig};
 pub use art_deco::{ArtDecoDisplayer, ArtDecoDisplayConfig};
+pub use art_nouveau::{ArtNouveauDisplayer, ArtNouveauDisplayConfig};
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -236,6 +238,13 @@ pub fn register_all() {
         "art_deco",
         "Art Deco",
         || Box::new(ArtDecoDisplayer::new()),
+    );
+
+    // Register Art Nouveau displayer
+    global_registry().register_displayer_with_info(
+        "art_nouveau",
+        "Art Nouveau",
+        || Box::new(ArtNouveauDisplayer::new()),
     );
 
     // TODO: Register more displayers
