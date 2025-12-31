@@ -643,6 +643,17 @@ pub fn show_window_settings_dialog<F>(
     window_mode_scroll.set_child(Some(&window_mode_tab_box));
     notebook.append_page(&window_mode_scroll, Some(&Label::new(Some("Window Mode"))));
 
+    // === Tab 4: Global Theme ===
+    let theme_scroll = gtk4::ScrolledWindow::new();
+    theme_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    theme_scroll.set_vexpand(true);
+
+    let global_theme_widget = Rc::new(crate::ui::GlobalThemeWidget::new());
+    global_theme_widget.set_config(app_config.borrow().global_theme.clone());
+    theme_scroll.set_child(Some(global_theme_widget.widget()));
+
+    notebook.append_page(&theme_scroll, Some(&Label::new(Some("Global Theme"))));
+
     vbox.append(&notebook);
 
     // Buttons
@@ -685,6 +696,8 @@ pub fn show_window_settings_dialog<F>(
     let panel_width_spin_clone = panel_width_spin.clone();
     let panel_height_spin_clone = panel_height_spin.clone();
     let default_bg_widget_clone = default_bg_widget.clone();
+    // Clone for global theme
+    let global_theme_widget_clone = global_theme_widget.clone();
 
     let apply_changes = Rc::new(move || {
         let new_background = background_widget_clone.get_config();
@@ -743,6 +756,8 @@ pub fn show_window_settings_dialog<F>(
         cfg.window.auto_scroll_whole_pages = whole_pages_check_clone.is_active();
         cfg.window.viewport_width = viewport_width_spin_clone.value() as i32;
         cfg.window.viewport_height = viewport_height_spin_clone.value() as i32;
+        // Save global theme
+        cfg.global_theme = global_theme_widget_clone.get_config();
 
         // Calculate effective viewport size (use window size if set to 0)
         let vp_width = if cfg.window.viewport_width > 0 {

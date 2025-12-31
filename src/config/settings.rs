@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ui::background::BackgroundConfig;
+use crate::ui::theme::ComboThemeConfig;
 use crate::core::{
     AlarmConfig, PanelBorderConfig, PanelGeometry, PanelData, PanelAppearance, SourceConfig,
     DisplayerConfig, TimerConfig,
@@ -43,6 +44,9 @@ pub struct AppConfig {
     /// Global timer sound configuration (used for all timers)
     #[serde(default)]
     pub global_timer_sound: AlarmSoundConfig,
+    /// Global theme for non-combo panels (colors, fonts, gradient)
+    #[serde(default)]
+    pub global_theme: ComboThemeConfig,
 }
 
 fn default_version() -> u32 {
@@ -83,6 +87,7 @@ impl AppConfig {
                 timers: loaded.timers,
                 alarms: loaded.alarms,
                 global_timer_sound: loaded.global_timer_sound,
+                global_theme: loaded.global_theme,
             })
         } else {
             // V1 format - load and migrate
@@ -170,6 +175,7 @@ impl AppConfig {
             timers: self.timers.clone(),
             alarms: self.alarms.clone(),
             global_timer_sound: self.global_timer_sound.clone(),
+            global_theme: self.global_theme.clone(),
         }
     }
 
@@ -200,6 +206,7 @@ impl Default for AppConfig {
             timers: Vec::new(),
             alarms: Vec::new(),
             global_timer_sound: AlarmSoundConfig::default(),
+            global_theme: ComboThemeConfig::default(),
         }
     }
 }
@@ -226,6 +233,7 @@ impl AppConfigV1 {
             timers: Vec::new(), // V1 configs don't have global timers
             alarms: Vec::new(), // V1 configs don't have global alarms
             global_timer_sound: AlarmSoundConfig::default(),
+            global_theme: ComboThemeConfig::default(),
         }
     }
 }
@@ -240,6 +248,7 @@ struct AppConfigSave {
     pub timers: Vec<TimerConfig>,
     pub alarms: Vec<AlarmConfig>,
     pub global_timer_sound: AlarmSoundConfig,
+    pub global_theme: ComboThemeConfig,
 }
 
 /// Config format for loading v2 configs
@@ -257,6 +266,8 @@ struct AppConfigLoad {
     pub alarms: Vec<AlarmConfig>,
     #[serde(default)]
     pub global_timer_sound: AlarmSoundConfig,
+    #[serde(default)]
+    pub global_theme: ComboThemeConfig,
 }
 
 /// Window configuration
