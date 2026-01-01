@@ -113,11 +113,7 @@ impl ThemeColorSelector {
             let selected_clone = selected_index.clone();
             let custom_color_clone = custom_color.clone();
             let theme_drawings_clone: Vec<DrawingArea> = theme_drawings.to_vec();
-            let color_button_ref = Rc::new(RefCell::new(None::<Button>));
             let color_drawing_ref = Rc::new(RefCell::new(None::<DrawingArea>));
-
-            // We'll set these after creating the color button
-            let color_button_ref_clone = color_button_ref.clone();
             let color_drawing_ref_clone = color_drawing_ref.clone();
             let idx = (i + 1) as u8;
 
@@ -131,11 +127,6 @@ impl ThemeColorSelector {
                     let new_source = ColorSource::Custom { color: custom };
                     *source_clone.borrow_mut() = new_source.clone();
 
-                    // Enable custom color button
-                    if let Some(ref btn) = *color_button_ref_clone.borrow() {
-                        btn.set_sensitive(true);
-                    }
-
                     if let Some(ref callback) = *on_change_clone.borrow() {
                         callback(new_source);
                     }
@@ -144,11 +135,6 @@ impl ThemeColorSelector {
                     *selected_clone.borrow_mut() = Some(idx);
                     let new_source = ColorSource::Theme { index: idx };
                     *source_clone.borrow_mut() = new_source.clone();
-
-                    // Dim custom color button
-                    if let Some(ref btn) = *color_button_ref_clone.borrow() {
-                        btn.set_sensitive(false);
-                    }
 
                     if let Some(ref callback) = *on_change_clone.borrow() {
                         callback(new_source);
@@ -191,11 +177,6 @@ impl ThemeColorSelector {
 
         color_button.set_child(Some(&color_drawing_area));
 
-        // Dim color button if theme is selected
-        if initial_source.is_theme() {
-            color_button.set_sensitive(false);
-        }
-
         // Now update the button references in the theme button handlers
         // We need to reconnect the handlers with the actual button references
         // This is a bit awkward but necessary since we created the handlers before the button
@@ -220,7 +201,6 @@ impl ThemeColorSelector {
         let selected_for_click = selected_index.clone();
         let color_drawing_for_click = color_drawing_area.clone();
         let theme_drawings_for_click: Vec<DrawingArea> = theme_drawings.to_vec();
-        let color_button_for_click = color_button.clone();
 
         color_button.connect_clicked(move |btn| {
             let current_custom = *custom_color_clone.borrow();
@@ -234,7 +214,6 @@ impl ThemeColorSelector {
             let selected_clone2 = selected_for_click.clone();
             let color_drawing_clone2 = color_drawing_for_click.clone();
             let theme_drawings_clone2 = theme_drawings_for_click.clone();
-            let color_button_clone2 = color_button_for_click.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 if let Some(new_color) =
@@ -246,7 +225,6 @@ impl ThemeColorSelector {
 
                     // Switch to custom mode
                     *selected_clone2.borrow_mut() = None;
-                    color_button_clone2.set_sensitive(true);
 
                     // Redraw all
                     color_drawing_clone2.queue_draw();
@@ -285,7 +263,6 @@ impl ThemeColorSelector {
         let selected_for_paste = selected_index.clone();
         let color_drawing_for_paste = color_drawing_area.clone();
         let theme_drawings_for_paste: Vec<DrawingArea> = theme_drawings.to_vec();
-        let color_button_for_paste = color_button.clone();
 
         paste_button.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -297,7 +274,6 @@ impl ThemeColorSelector {
 
                     // Switch to custom mode
                     *selected_for_paste.borrow_mut() = None;
-                    color_button_for_paste.set_sensitive(true);
 
                     // Redraw all
                     color_drawing_for_paste.queue_draw();
@@ -346,12 +322,10 @@ impl ThemeColorSelector {
         match &source {
             ColorSource::Theme { index } => {
                 *self.selected_index.borrow_mut() = Some(*index);
-                self.color_button.set_sensitive(false);
             }
             ColorSource::Custom { color } => {
                 *self.selected_index.borrow_mut() = None;
                 *self.custom_color.borrow_mut() = *color;
-                self.color_button.set_sensitive(true);
             }
         }
 

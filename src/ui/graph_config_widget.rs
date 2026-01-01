@@ -1645,28 +1645,18 @@ impl LazyGraphConfigWidget {
                 }
                 container_clone.append(widget.widget());
 
-                // Register theme refresher
-                let widget_rc = Rc::new(widget);
-                let widget_for_theme = widget_rc.clone();
+                // Store the widget BEFORE setting up theme refresher
+                *inner_widget_clone.borrow_mut() = Some(widget);
+
+                // Register theme refresher that uses the stored widget
+                let inner_widget_for_theme = inner_widget_clone.clone();
                 let theme_for_refresh = deferred_theme_clone.clone();
                 let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-                    widget_for_theme.set_theme(theme_for_refresh.borrow().clone());
+                    if let Some(ref w) = *inner_widget_for_theme.borrow() {
+                        w.set_theme(theme_for_refresh.borrow().clone());
+                    }
                 });
                 theme_refreshers_clone.borrow_mut().push(theme_refresh_callback);
-
-                // Store the widget (extract from Rc for storage)
-                // We need to move the widget out of the Rc - but we can't because it's now shared
-                // Instead, we'll use a different approach: store the Rc
-                // This requires changing inner_widget type, but for simplicity we'll just
-                // note that the widget is now in the container and mark as created
-
-                // Actually, we need to store it for get_config() to work
-                // Let's recreate without the Rc wrapper since we only need it temporarily
-                drop(widget_rc);
-
-                // Re-create for storage (this is a bit wasteful but ensures proper ownership)
-                // Actually, better approach: just mark as initialized and read config from UI
-                // But that's complex. For now, let's use a simpler approach with Option<Rc<GraphConfigWidget>>
             }
         });
 
