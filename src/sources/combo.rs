@@ -399,6 +399,10 @@ impl DataSource for ComboSource {
         self.values.clone()
     }
 
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
+    }
+
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Look for combo_config in the configuration
         if let Some(combo_config_value) = config.get("combo_config") {

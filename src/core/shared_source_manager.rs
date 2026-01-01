@@ -54,7 +54,12 @@ impl SharedSource {
     /// Update the source and cache the values
     pub fn update(&mut self) -> Result<()> {
         self.source.update()?;
-        self.cached_values = Arc::new(self.source.get_values());
+        // Use values_ref if available to avoid cloning (e.g., for ComboSource)
+        self.cached_values = if let Some(values) = self.source.values_ref() {
+            Arc::new(values.clone())
+        } else {
+            Arc::new(self.source.get_values())
+        };
         Ok(())
     }
 

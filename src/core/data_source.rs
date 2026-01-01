@@ -49,9 +49,23 @@ pub trait DataSource: Send + Sync {
     /// those listed in metadata().available_keys.
     fn get_values(&self) -> HashMap<String, Value>;
 
+    /// Get a reference to the internal values HashMap (if available)
+    ///
+    /// This is an optimization for sources that maintain an internal HashMap.
+    /// It avoids cloning on every access. Sources that don't maintain an
+    /// internal HashMap can use the default implementation which clones.
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        None
+    }
+
     /// Get a specific value by key
     fn get_value(&self, key: &str) -> Option<Value> {
-        self.get_values().get(key).cloned()
+        // Use values_ref if available to avoid full HashMap clone
+        if let Some(values) = self.values_ref() {
+            values.get(key).cloned()
+        } else {
+            self.get_values().get(key).cloned()
+        }
     }
 
     /// Check if this source is available on the current system
