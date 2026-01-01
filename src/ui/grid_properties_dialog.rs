@@ -1561,142 +1561,182 @@ pub(crate) fn show_panel_properties_dialog(
                 let summaries = widget.get_source_summaries();
                 let fields = widget.get_available_fields();
 
-                // Only update the ACTIVE displayer's config widget to avoid expensive rebuilds
-                // Other widgets will be updated when the user switches to them
-                if let Ok(mut panel_guard) = panel_for_callback.try_write() {
-                    let displayer_id = panel_guard.displayer.id().to_string();
+                // Get displayer ID with read lock (non-blocking)
+                let displayer_id = match panel_for_callback.try_read() {
+                    Ok(panel_guard) => panel_guard.displayer.id().to_string(),
+                    Err(_) => {
+                        log::debug!("ComboSource on_change: couldn't get read lock on panel, skipping update");
+                        return;
+                    }
+                };
 
-                    // Update and apply config for the active displayer only (if widget exists)
-                    match displayer_id.as_str() {
-                        "industrial" => {
-                            if let Some(ref widget) = *industrial_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                // Update the ACTIVE displayer's config widget immediately (UI updates don't need panel lock)
+                // Then defer the panel config write using idle_add_local_once
+                match displayer_id.as_str() {
+                    "industrial" => {
+                        if let Some(ref widget) = *industrial_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("industrial_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Industrial config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "lcars" => {
-                            if let Some(ref widget) = *lcars_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "lcars" => {
+                        if let Some(ref widget) = *lcars_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("lcars_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply LCARS config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "cyberpunk" => {
-                            if let Some(ref widget) = *cyberpunk_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "cyberpunk" => {
+                        if let Some(ref widget) = *cyberpunk_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "material" => {
-                            if let Some(ref widget) = *material_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "material" => {
+                        if let Some(ref widget) = *material_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("material_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Material config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "retro_terminal" => {
-                            if let Some(ref widget) = *retro_terminal_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "retro_terminal" => {
+                        if let Some(ref widget) = *retro_terminal_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Retro Terminal config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "fighter_hud" => {
-                            if let Some(ref widget) = *fighter_hud_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "fighter_hud" => {
+                        if let Some(ref widget) = *fighter_hud_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("fighter_hud_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Fighter HUD config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "synthwave" => {
-                            if let Some(ref widget) = *synthwave_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "synthwave" => {
+                        if let Some(ref widget) = *synthwave_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("synthwave_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Synthwave config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "art_deco" => {
-                            if let Some(ref widget) = *art_deco_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "art_deco" => {
+                        if let Some(ref widget) = *art_deco_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("art_deco_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Art Deco config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        "art_nouveau" => {
-                            if let Some(ref widget) = *art_nouveau_w.borrow() {
-                                widget.set_available_fields(fields);
-                                widget.set_source_summaries(summaries);
-                                let config = widget.get_config();
+                    }
+                    "art_nouveau" => {
+                        if let Some(ref widget) = *art_nouveau_w.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                            let config = widget.get_config();
+                            let panel_clone = panel_for_callback.clone();
+                            glib::idle_add_local_once(move || {
                                 if let Ok(config_json) = serde_json::to_value(&config) {
+                                    let mut panel_guard = panel_clone.blocking_write();
                                     panel_guard.config.insert("art_nouveau_config".to_string(), config_json);
                                     let config_clone = panel_guard.config.clone();
                                     if let Err(e) = panel_guard.apply_config(config_clone) {
                                         log::warn!("Failed to apply Art Nouveau config on source change: {}", e);
                                     }
                                 }
-                            }
+                            });
                         }
-                        _ => {
-                            // For non-combo displayers, no update needed
-                        }
+                    }
+                    _ => {
+                        // For non-combo displayers, no update needed
                     }
                 }
             });

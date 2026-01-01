@@ -221,6 +221,8 @@ impl ComboSource {
                                         .map(|(k, v)| (k.clone(), v.clone()))
                                         .collect()
                                 );
+                                log::info!("ComboSource: Configuring '{}' for slot '{}' with config: {:?}",
+                                    slot_config.source_id, slot_name, config_obj);
                                 config_map.insert(config_key, config_obj);
                                 if let Err(e) = source.configure(&config_map) {
                                     log::warn!("ComboSource: Failed to configure '{}' for slot '{}': {}",
@@ -293,6 +295,14 @@ impl ComboSource {
         for (slot_name, source) in &self.child_sources {
             let source_values = source.get_values();
             let slot_config = self.config.slots.get(slot_name);
+
+            // Log limit values for debugging
+            if let Some(min) = source_values.get("min_limit") {
+                log::debug!("ComboSource: slot '{}' min_limit = {:?}", slot_name, min);
+            }
+            if let Some(max) = source_values.get("max_limit") {
+                log::debug!("ComboSource: slot '{}' max_limit = {:?}", slot_name, max);
+            }
 
             // Prefix all keys with the slot name
             for (key, value) in source_values {
