@@ -1,6 +1,8 @@
 //! Abstract GPU backend trait
 
 use anyhow::Result;
+use super::nvidia::NvidiaBackend;
+use super::amd::AmdBackend;
 
 /// GPU information structure
 #[derive(Debug, Clone)]
@@ -67,4 +69,44 @@ pub trait GpuBackend: Send + Sync {
     /// Check if this backend is available/functional
     #[allow(dead_code)]
     fn is_available(&self) -> bool;
+}
+
+/// Concrete GPU backend enum - eliminates Box<dyn GpuBackend> indirection
+///
+/// This enum wraps the concrete backend types, allowing us to use
+/// Arc<Mutex<GpuBackendEnum>> instead of Arc<Mutex<Box<dyn GpuBackend>>>.
+/// This eliminates one level of pointer indirection in hot paths.
+pub enum GpuBackendEnum {
+    Nvidia(NvidiaBackend),
+    Amd(AmdBackend),
+}
+
+impl GpuBackend for GpuBackendEnum {
+    fn info(&self) -> &GpuInfo {
+        match self {
+            GpuBackendEnum::Nvidia(b) => b.info(),
+            GpuBackendEnum::Amd(b) => b.info(),
+        }
+    }
+
+    fn update(&mut self) -> Result<()> {
+        match self {
+            GpuBackendEnum::Nvidia(b) => b.update(),
+            GpuBackendEnum::Amd(b) => b.update(),
+        }
+    }
+
+    fn metrics(&self) -> &GpuMetrics {
+        match self {
+            GpuBackendEnum::Nvidia(b) => b.metrics(),
+            GpuBackendEnum::Amd(b) => b.metrics(),
+        }
+    }
+
+    fn is_available(&self) -> bool {
+        match self {
+            GpuBackendEnum::Nvidia(b) => b.is_available(),
+            GpuBackendEnum::Amd(b) => b.is_available(),
+        }
+    }
 }

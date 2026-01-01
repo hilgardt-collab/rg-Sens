@@ -193,9 +193,27 @@ impl GridLayout {
         *self.on_borderless_drag.borrow_mut() = Some(Box::new(callback));
     }
 
-    /// Get the list of panels
+    /// Get the list of panels (clones the Vec of Arcs)
     pub fn get_panels(&self) -> Vec<Arc<RwLock<Panel>>> {
         self.panels.borrow().clone()
+    }
+
+    /// Access panels without cloning the Vec
+    ///
+    /// Use this when you need to iterate over panels but don't need to store the list.
+    /// The closure receives a slice reference, avoiding the Vec clone.
+    #[inline]
+    pub fn with_panels<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&[Arc<RwLock<Panel>>]) -> R,
+    {
+        f(&self.panels.borrow())
+    }
+
+    /// Get the number of panels without cloning
+    #[inline]
+    pub fn panels_len(&self) -> usize {
+        self.panels.borrow().len()
     }
 
     /// Find an available position for a panel with the given dimensions

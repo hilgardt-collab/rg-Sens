@@ -269,11 +269,18 @@ impl Panel {
 
     /// Sync certain live values from source to panel.config for UI access
     /// Used by alarm/timer displayers to persist state across updates
+    ///
+    /// Optimized to only insert when value differs, avoiding allocations
+    /// when values haven't changed (common case for alarm/timer state).
     #[inline]
     fn sync_keys_to_config(&mut self, values: &HashMap<String, serde_json::Value>) {
         for key in SYNC_KEYS {
             if let Some(value) = values.get(*key) {
-                self.config.insert(key.to_string(), value.clone());
+                // Only insert if value differs from current (avoids to_string + clone)
+                let should_insert = self.config.get(*key).map_or(true, |existing| existing != value);
+                if should_insert {
+                    self.config.insert((*key).to_string(), value.clone());
+                }
             }
         }
     }

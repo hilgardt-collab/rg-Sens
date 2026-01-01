@@ -5,7 +5,7 @@ mod nvidia;
 mod amd;
 mod detector;
 
-pub use backend::{GpuBackend, GpuInfo};
+pub use backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use detector::detect_gpus;
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
@@ -34,7 +34,8 @@ static GPU_NAMES: Lazy<Vec<String>> = Lazy::new(|| {
 
 /// GPU manager holding all detected GPU backends
 struct GpuManager {
-    backends: Vec<Arc<Mutex<Box<dyn GpuBackend>>>>,
+    /// Backends using enum instead of Box<dyn> for single indirection
+    backends: Vec<Arc<Mutex<GpuBackendEnum>>>,
     gpu_info: Vec<GpuInfo>,
 }
 
@@ -42,7 +43,8 @@ struct GpuManager {
 pub struct GpuSource {
     metadata: SourceMetadata,
     config: GpuSourceConfig,
-    backend: Option<Arc<Mutex<Box<dyn GpuBackend>>>>,
+    /// Backend using enum for single indirection (no Box overhead)
+    backend: Option<Arc<Mutex<GpuBackendEnum>>>,
 
     // Cached static info (doesn't change, avoids mutex lock in hot paths)
     cached_vendor: String,

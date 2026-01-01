@@ -1,18 +1,18 @@
 //! GPU detection and backend management
 
-use super::backend::{GpuBackend, GpuInfo};
+use super::backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use super::nvidia::NvidiaBackend;
 use super::amd::AmdBackend;
 
 /// GPU detection result
 pub struct DetectedGpus {
-    pub gpus: Vec<Box<dyn GpuBackend>>,
+    pub gpus: Vec<GpuBackendEnum>,
     pub info: Vec<GpuInfo>,
 }
 
 /// Detect all available GPUs and create backends
 pub fn detect_gpus() -> DetectedGpus {
-    let mut gpus: Vec<Box<dyn GpuBackend>> = Vec::new();
+    let mut gpus: Vec<GpuBackendEnum> = Vec::new();
     let mut info: Vec<GpuInfo> = Vec::new();
 
     log::warn!("=== Detecting GPUs ===");
@@ -37,7 +37,7 @@ pub fn detect_gpus() -> DetectedGpus {
 }
 
 /// Detect NVIDIA GPUs using NVML
-fn detect_nvidia_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInfo>) {
+fn detect_nvidia_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
     #[cfg(feature = "nvidia")]
     {
         use nvml_wrapper::Nvml;
@@ -53,7 +53,7 @@ fn detect_nvidia_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInf
                                     let gpu_info = backend.info().clone();
                                     log::info!("  NVIDIA GPU {}: {}", i, gpu_info.name);
                                     info.push(gpu_info);
-                                    gpus.push(Box::new(backend));
+                                    gpus.push(GpuBackendEnum::Nvidia(backend));
                                 }
                                 Err(e) => {
                                     log::warn!("  Failed to initialize NVIDIA GPU {}: {}", i, e);
@@ -79,7 +79,7 @@ fn detect_nvidia_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInf
 }
 
 /// Detect AMD GPUs using sysfs
-fn detect_amd_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInfo>) {
+fn detect_amd_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
     log::info!("Detecting AMD GPUs via sysfs...");
 
     // Try up to 16 DRM cards (card0 through card15)
@@ -90,7 +90,7 @@ fn detect_amd_gpus(gpus: &mut Vec<Box<dyn GpuBackend>>, info: &mut Vec<GpuInfo>)
                 let gpu_info = backend.info().clone();
                 log::info!("  AMD GPU {}: {}", i, gpu_info.name);
                 info.push(gpu_info);
-                gpus.push(Box::new(backend));
+                gpus.push(GpuBackendEnum::Amd(backend));
                 amd_count += 1;
             }
             Err(_) => {
