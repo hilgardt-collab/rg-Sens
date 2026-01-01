@@ -73,6 +73,9 @@ struct DisplayData {
     last_update: Instant,
     transform: PanelTransform,
     dirty: bool,
+    /// Cached prefixes per group to avoid format! allocations in draw loop
+    /// group_prefixes[0] = ["group1_1", "group1_2", ...], etc.
+    group_prefixes: Vec<Vec<String>>,
 }
 
 impl Default for DisplayData {
@@ -87,6 +90,7 @@ impl Default for DisplayData {
             last_update: Instant::now(),
             transform: PanelTransform::default(),
             dirty: true,
+            group_prefixes: Vec::new(),
         }
     }
 }
@@ -108,6 +112,7 @@ impl LcarsComboDisplayer {
     }
 
     /// Draw content items in a given area
+    /// `cached_prefixes` contains pre-computed prefixes like ["group1_1", "group1_2", ...]
     #[allow(clippy::too_many_arguments)]
     fn draw_content_items(
         cr: &Context,
@@ -115,8 +120,7 @@ impl LcarsComboDisplayer {
         y: f64,
         w: f64,
         h: f64,
-        base_prefix: &str,
-        count: u32,
+        cached_prefixes: &[String],
         group_idx: usize,
         config: &LcarsDisplayConfig,
         values: &HashMap<String, Value>,
@@ -124,6 +128,7 @@ impl LcarsComboDisplayer {
         core_bar_values: &HashMap<String, Vec<AnimatedValue>>,
         graph_history: &HashMap<String, VecDeque<DataPoint>>,
     ) -> Result<(), cairo::Error> {
+        let count = cached_prefixes.len() as u32;
         if count == 0 || w <= 0.0 || h <= 0.0 {
             return Ok(());
         }
@@ -137,9 +142,8 @@ impl LcarsComboDisplayer {
         // Determine fixed sizes for items that need them
         // Items with auto_height=false, Graph, or LevelBar display type get fixed sizes
         let mut fixed_sizes: HashMap<usize, f64> = HashMap::new();
-        for i in 0..count as usize {
-            let prefix = format!("{}{}", base_prefix, i + 1);
-            let item_config = config.frame.content_items.get(&prefix);
+        for (i, prefix) in cached_prefixes.iter().enumerate() {
+            let item_config = config.frame.content_items.get(prefix);
             if let Some(cfg) = item_config {
                 // Use fixed size if auto_height is disabled or for Graph/LevelBar display types
                 if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph | ContentDisplayType::LevelBar) {
@@ -153,21 +157,26 @@ impl LcarsComboDisplayer {
             x, y, w, h, count, config.frame.item_spacing, &fixed_sizes, item_orientation
         );
 
+        // Pre-allocate bar_key buffer to avoid repeated allocations
+        let mut bar_key_buf = String::with_capacity(32);
+
         // Draw each item
         for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
-            let prefix = format!("{}{}", base_prefix, i + 1);
-            let item_data = combo_utils::get_item_data(values, &prefix);
-            let slot_values = combo_utils::get_slot_values(values, &prefix);
+            let prefix = &cached_prefixes[i];
+            let item_data = combo_utils::get_item_data(values, prefix);
+            let slot_values = combo_utils::get_slot_values(values, prefix);
 
             // Get item config (or use default)
-            let item_config = config.frame.content_items.get(&prefix)
+            let item_config = config.frame.content_items.get(prefix)
                 .cloned()
                 .unwrap_or_default();
 
-            // Get animated percent
-            let bar_key = format!("{}_bar", prefix);
+            // Get animated percent - reuse buffer for bar_key
+            bar_key_buf.clear();
+            bar_key_buf.push_str(prefix);
+            bar_key_buf.push_str("_bar");
             let animated_percent = bar_values
-                .get(&bar_key)
+                .get(bar_key_buf.as_str())
                 .map(|av| av.current)
                 .unwrap_or_else(|| item_data.percent());
 
@@ -247,7 +256,7 @@ impl LcarsComboDisplayer {
                 ContentDisplayType::CoreBars => {
                     // Use animated core values if available, otherwise fall back to raw values
                     let core_bars_config = &item_config.core_bars_config;
-                    let core_values: Vec<f64> = if let Some(animated) = core_bar_values.get(&prefix) {
+                    let core_values: Vec<f64> = if let Some(animated) = core_bar_values.get(prefix) {
                         // Use animated current values
                         animated.iter().map(|av| av.current).collect()
                     } else {
@@ -393,15 +402,14 @@ impl Displayer for LcarsComboDisplayer {
                     // No groups configured
                 } else if group_count == 1 {
                     // Single group - no dividers needed
-                    let item_count = data.config.frame.group_item_counts[0];
+                    let prefixes = data.group_prefixes.first().map(|v| v.as_slice()).unwrap_or(&[]);
                     let _ = Self::draw_content_items(
                         cr,
                         content_x,
                         content_y,
                         content_w,
                         content_h,
-                        "group1_",
-                        item_count,
+                        prefixes,
                         0, // group_idx
                         &data.config,
                         &data.values,
@@ -428,20 +436,19 @@ impl Displayer for LcarsComboDisplayer {
                             let available_w = content_w - num_dividers * total_divider_space;
 
                             let mut current_x = content_x;
-                            for (group_idx, &item_count) in data.config.frame.group_item_counts.iter().enumerate() {
-                                let group_num = group_idx + 1;
+                            for (group_idx, _) in data.config.frame.group_item_counts.iter().enumerate() {
                                 let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
                                 let group_w = (weight / total_weight) * available_w;
 
-                                // Draw group content
+                                // Draw group content using cached prefixes
+                                let prefixes = data.group_prefixes.get(group_idx).map(|v| v.as_slice()).unwrap_or(&[]);
                                 let _ = Self::draw_content_items(
                                     cr,
                                     current_x,
                                     content_y,
                                     group_w,
                                     content_h,
-                                    &format!("group{}_", group_num),
-                                    item_count,
+                                    prefixes,
                                     group_idx,
                                     &data.config,
                                     &data.values,
@@ -474,20 +481,19 @@ impl Displayer for LcarsComboDisplayer {
                             let available_h = content_h - num_dividers * total_divider_space;
 
                             let mut current_y = content_y;
-                            for (group_idx, &item_count) in data.config.frame.group_item_counts.iter().enumerate() {
-                                let group_num = group_idx + 1;
+                            for (group_idx, _) in data.config.frame.group_item_counts.iter().enumerate() {
                                 let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
                                 let group_h = (weight / total_weight) * available_h;
 
-                                // Draw group content
+                                // Draw group content using cached prefixes
+                                let prefixes = data.group_prefixes.get(group_idx).map(|v| v.as_slice()).unwrap_or(&[]);
                                 let _ = Self::draw_content_items(
                                     cr,
                                     content_x,
                                     current_y,
                                     content_w,
                                     group_h,
-                                    &format!("group{}_", group_num),
-                                    item_count,
+                                    prefixes,
                                     group_idx,
                                     &data.config,
                                     &data.values,
@@ -606,30 +612,47 @@ impl Displayer for LcarsComboDisplayer {
             let animation_enabled = display_data.config.animation_enabled;
             let timestamp = display_data.graph_start_time.elapsed().as_secs_f64();
 
-            // Clone config data to avoid borrow conflicts (convert u32 to usize)
+            // Convert group_item_counts to usize for generate_prefixes
             let group_item_counts: Vec<usize> = display_data.config.frame.group_item_counts.iter().map(|&x| x as usize).collect();
-            let content_items = display_data.config.frame.content_items.clone();
 
             // Generate prefixes and filter values using optimized utils
             let prefixes = combo_utils::generate_prefixes(&group_item_counts);
             display_data.values = combo_utils::filter_values_by_prefixes(data, &prefixes);
+
+            // Cache per-group prefixes for efficient draw loop (avoids format! allocations)
+            // Only rebuild if group structure changed
+            let needs_rebuild = display_data.group_prefixes.len() != group_item_counts.len()
+                || display_data.group_prefixes.iter().zip(group_item_counts.iter())
+                    .any(|(cached, &count)| cached.len() != count);
+            if needs_rebuild {
+                display_data.group_prefixes = group_item_counts.iter().enumerate()
+                    .map(|(group_idx, &count)| {
+                        let group_num = group_idx + 1;
+                        (1..=count).map(|item_idx| format!("group{}_{}", group_num, item_idx)).collect()
+                    })
+                    .collect();
+            }
 
             // Update each item
             for prefix in &prefixes {
                 let item_data = combo_utils::get_item_data(data, prefix);
                 combo_utils::update_bar_animation(&mut display_data.bar_values, prefix, item_data.percent(), animation_enabled);
 
+                // Get item config and extract what we need before mutable borrows
                 let default_config = ContentItemConfig::default();
-                let item_config = content_items.get(prefix).unwrap_or(&default_config);
+                let item_config = display_data.config.frame.content_items.get(prefix).unwrap_or(&default_config);
+                let display_as = item_config.display_as;
+                let graph_max_points = item_config.graph_config.max_data_points;
+                let core_bars_config = item_config.core_bars_config.clone();
 
-                match item_config.display_as {
+                match display_as {
                     ContentDisplayType::Graph => {
                         combo_utils::update_graph_history(
                             &mut display_data.graph_history,
                             prefix,
                             item_data.numerical_value,
                             timestamp,
-                            item_config.graph_config.max_data_points,
+                            graph_max_points,
                         );
                     }
                     ContentDisplayType::CoreBars => {
@@ -637,7 +660,7 @@ impl Displayer for LcarsComboDisplayer {
                             data,
                             &mut display_data.core_bar_values,
                             prefix,
-                            &item_config.core_bars_config,
+                            &core_bars_config,
                             animation_enabled,
                         );
                     }

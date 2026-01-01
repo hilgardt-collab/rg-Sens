@@ -27,6 +27,11 @@ static GPU_MANAGER: Lazy<GpuManager> = Lazy::new(|| {
     }
 });
 
+/// Cached GPU names (computed once from GPU_MANAGER)
+static GPU_NAMES: Lazy<Vec<String>> = Lazy::new(|| {
+    GPU_MANAGER.gpu_info.iter().map(|info| info.name.clone()).collect()
+});
+
 /// GPU manager holding all detected GPU backends
 struct GpuManager {
     backends: Vec<Arc<Mutex<Box<dyn GpuBackend>>>>,
@@ -102,9 +107,9 @@ impl GpuSource {
         GPU_MANAGER.gpu_info.len() as u32
     }
 
-    /// Get cached GPU names
+    /// Get cached GPU names (returns clone of pre-computed names)
     pub fn get_cached_gpu_names() -> Vec<String> {
-        GPU_MANAGER.gpu_info.iter().map(|info| info.name.clone()).collect()
+        GPU_NAMES.clone()
     }
 
     /// Set configuration
