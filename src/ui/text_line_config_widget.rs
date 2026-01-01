@@ -1588,8 +1588,16 @@ impl LazyTextLineConfigWidget {
     /// Set the theme for the text widget
     pub fn set_theme(&self, theme: ComboThemeConfig) {
         *self.deferred_theme.borrow_mut() = theme.clone();
+        // Note: TextDisplayerConfig doesn't have a theme field - theme is stored separately
+        // in deferred_theme and applied to individual lines when widget is created
+
         if let Some(ref widget) = *self.inner_widget.borrow() {
             widget.set_theme(theme);
+        } else {
+            // Even if inner widget doesn't exist, trigger on_change so stored config is updated
+            if let Some(ref callback) = *self.on_change.borrow() {
+                callback();
+            }
         }
     }
 

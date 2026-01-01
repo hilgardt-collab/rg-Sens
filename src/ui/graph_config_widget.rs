@@ -1701,8 +1701,16 @@ impl LazyGraphConfigWidget {
     /// Set the theme for the graph widget
     pub fn set_theme(&self, theme: ComboThemeConfig) {
         *self.deferred_theme.borrow_mut() = theme.clone();
+        // Also update the theme in deferred_config so get_config() returns the updated theme
+        self.deferred_config.borrow_mut().theme = theme.clone();
+
         if let Some(ref widget) = *self.inner_widget.borrow() {
             widget.set_theme(theme);
+        } else {
+            // Even if inner widget doesn't exist, trigger on_change so stored config is updated
+            if let Some(ref callback) = *self.on_change.borrow() {
+                callback();
+            }
         }
     }
 
