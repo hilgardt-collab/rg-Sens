@@ -19,7 +19,7 @@ use crate::ui::fighter_hud_display::{
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::background::Color;
 use crate::ui::{
-    BarConfigWidget, GraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
+    BarConfigWidget, LazyGraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
     BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget,
 };
 use crate::displayers::FighterHudDisplayConfig;
@@ -1750,7 +1750,7 @@ impl FighterHudConfigWidget {
         let graph_config_frame = gtk4::Frame::new(Some("Graph Configuration"));
         graph_config_frame.set_margin_top(12);
 
-        let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+        let graph_widget = LazyGraphConfigWidget::new(slot_fields.clone());
         let current_graph_config = {
             let cfg = config.borrow();
             cfg.frame.content_items

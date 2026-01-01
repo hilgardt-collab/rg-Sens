@@ -99,7 +99,7 @@ pub use arc_config_widget::ArcConfigWidget;
 pub use speedometer_display::{SpeedometerConfig, NeedleStyle, NeedleTailStyle, TickStyle, BezelStyle, ValueZone, TextOverlayConfig, TickLabelConfig, render_speedometer};
 pub use speedometer_config_widget::SpeedometerConfigWidget;
 pub use graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode, AxisConfig, Margin, DataPoint, render_graph};
-pub use graph_config_widget::GraphConfigWidget;
+pub use graph_config_widget::{GraphConfigWidget, LazyGraphConfigWidget};
 pub use clipboard::{PanelStyle, CLIPBOARD};
 pub use clock_display::{AnalogClockConfig, HandStyle, FaceStyle, TickStyle as ClockTickStyle, render_analog_clock};
 pub use clock_source_config_widget::ClockSourceConfigWidget;

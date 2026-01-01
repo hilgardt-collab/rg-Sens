@@ -378,13 +378,12 @@ pub(crate) fn show_panel_properties_dialog(
     let combo_config_widget: Rc<RefCell<Option<crate::ui::ComboSourceConfigWidget>>> = Rc::new(RefCell::new(None));
 
     // Only create widget if source is combination (lazy init)
+    // Use with_config to avoid double-building tabs (new() + set_config() would build twice)
     if old_source_id == "combination" {
-        let widget = crate::ui::ComboSourceConfigWidget::new();
-        if let Some(combo_config_value) = panel_guard.config.get("combo_config") {
-            if let Ok(combo_config) = serde_json::from_value::<crate::sources::ComboSourceConfig>(combo_config_value.clone()) {
-                widget.set_config(combo_config);
-            }
-        }
+        let combo_config = panel_guard.config.get("combo_config")
+            .and_then(|v| serde_json::from_value::<crate::sources::ComboSourceConfig>(v.clone()).ok())
+            .unwrap_or_default();
+        let widget = crate::ui::ComboSourceConfigWidget::with_config(combo_config);
         combo_placeholder.append(widget.widget());
         *combo_config_widget.borrow_mut() = Some(widget);
     }
@@ -578,17 +577,14 @@ pub(crate) fn show_panel_properties_dialog(
                         }
                     }
                     "combination" => {
+                        // Use with_config to avoid double-building tabs
                         if combo_widget_clone.borrow().is_none() {
-                            let widget = crate::ui::ComboSourceConfigWidget::new();
+                            let combo_config = panel_guard.config.get("combo_config")
+                                .and_then(|v| serde_json::from_value::<crate::sources::ComboSourceConfig>(v.clone()).ok())
+                                .unwrap_or_default();
+                            let widget = crate::ui::ComboSourceConfigWidget::with_config(combo_config);
                             combo_placeholder_clone.append(widget.widget());
                             *combo_widget_clone.borrow_mut() = Some(widget);
-                        }
-                        if let Some(combo_config_value) = panel_guard.config.get("combo_config") {
-                            if let Ok(combo_config) = serde_json::from_value::<crate::sources::ComboSourceConfig>(combo_config_value.clone()) {
-                                if let Some(ref widget) = *combo_widget_clone.borrow() {
-                                    widget.set_config(combo_config);
-                                }
-                            }
                         }
                     }
                     "test" => {

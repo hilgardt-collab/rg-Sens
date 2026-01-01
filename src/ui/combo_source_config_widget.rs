@@ -15,10 +15,15 @@ use gtk4::{
     Box as GtkBox, DropDown, Entry, Frame, Label, Notebook, Orientation, ScrolledWindow,
     SpinButton, StringList, Widget,
 };
+use gtk4::glib;
 use serde_json::Value;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Duration;
+
+/// Debounce delay for spinner changes (milliseconds)
+const SPINNER_DEBOUNCE_MS: u64 = 150;
 
 /// Enum to hold different source config widget types
 enum SourceConfigWidgetType {
@@ -157,6 +162,33 @@ impl SourceConfigWidgetType {
     }
 }
 
+/// Cached source information to avoid repeated registry lookups
+struct CachedSources {
+    source_ids: Vec<String>,
+    source_names: Vec<String>,
+}
+
+impl CachedSources {
+    fn new() -> Self {
+        let registry = global_registry();
+        let all_sources = registry.list_sources_with_info();
+        let available_sources: Vec<_> = all_sources
+            .into_iter()
+            .filter(|s| s.id != "combination")
+            .collect();
+
+        // Add "None" option at the start
+        let mut source_ids = vec!["none".to_string()];
+        let mut source_names = vec!["None".to_string()];
+        for source in &available_sources {
+            source_ids.push(source.id.clone());
+            source_names.push(source.display_name.clone());
+        }
+
+        Self { source_ids, source_names }
+    }
+}
+
 /// Widget for configuring a Combination data source
 pub struct ComboSourceConfigWidget {
     container: GtkBox,
@@ -169,6 +201,10 @@ pub struct ComboSourceConfigWidget {
     /// Maps slot name (e.g., "group1_1") to its widgets
     slot_widgets: Rc<RefCell<HashMap<String, SlotWidgets>>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    /// Cached source registry info (computed once)
+    cached_sources: Rc<CachedSources>,
+    /// Debounce counter for group count spinner
+    group_debounce_id: Rc<Cell<u32>>,
 }
 
 /// Widgets for a single slot configuration
@@ -182,8 +218,24 @@ struct SlotWidgets {
 }
 
 impl ComboSourceConfigWidget {
+    /// Create a new widget with default config (builds tabs once)
     pub fn new() -> Self {
-        let config = Rc::new(RefCell::new(ComboSourceConfig::default()));
+        Self::create_internal(ComboSourceConfig::default())
+    }
+
+    /// Create a new widget with the given config (builds tabs once, avoiding double-build)
+    /// Use this when you already have a config to load - it's more efficient than
+    /// calling new() followed by set_config().
+    pub fn with_config(config: ComboSourceConfig) -> Self {
+        Self::create_internal(config)
+    }
+
+    /// Internal constructor - builds the widget with the given config exactly once
+    fn create_internal(mut initial_config: ComboSourceConfig) -> Self {
+        // Migrate legacy format if needed
+        initial_config.migrate_legacy();
+
+        let config = Rc::new(RefCell::new(initial_config));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         let container = GtkBox::new(Orientation::Vertical, 12);
@@ -236,6 +288,12 @@ impl ComboSourceConfigWidget {
         let slot_widgets: Rc<RefCell<HashMap<String, SlotWidgets>>> =
             Rc::new(RefCell::new(HashMap::new()));
 
+        // Cache source registry info once (avoid repeated lookups)
+        let cached_sources = Rc::new(CachedSources::new());
+
+        // Debounce counter for group count spinner
+        let group_debounce_id = Rc::new(Cell::new(0u32));
+
         let widget = Self {
             container,
             config,
@@ -244,23 +302,28 @@ impl ComboSourceConfigWidget {
             notebook,
             slot_widgets,
             on_change,
+            cached_sources,
+            group_debounce_id,
         };
 
-        // Build initial tabs
+        // Build tabs once with the initial config
         widget.rebuild_tabs();
 
-        // Connect group count spinner change
+        // Connect group count spinner change with debouncing
         {
             let config_clone = widget.config.clone();
             let notebook_clone = widget.notebook.clone();
             let slot_widgets_clone = widget.slot_widgets.clone();
             let on_change_clone = widget.on_change.clone();
+            let cached_sources_clone = widget.cached_sources.clone();
+            let debounce_id = widget.group_debounce_id.clone();
 
             widget.group_count_spin.connect_value_changed(move |spin| {
                 let new_count = spin.value() as usize;
+
+                // Update config immediately (cheap operation)
                 {
                     let mut cfg = config_clone.borrow_mut();
-                    // Adjust groups vector
                     while cfg.groups.len() < new_count {
                         cfg.groups.push(crate::sources::GroupConfig { item_count: 2, ..Default::default() });
                     }
@@ -268,10 +331,33 @@ impl ComboSourceConfigWidget {
                         cfg.groups.pop();
                     }
                 }
-                Self::rebuild_tabs_internal(&config_clone, &notebook_clone, &slot_widgets_clone, &on_change_clone);
-                if let Some(cb) = on_change_clone.borrow().as_ref() {
-                    cb();
-                }
+
+                // Debounce the expensive rebuild operation
+                let current_id = debounce_id.get().wrapping_add(1);
+                debounce_id.set(current_id);
+
+                let config_for_rebuild = config_clone.clone();
+                let notebook_for_rebuild = notebook_clone.clone();
+                let slot_widgets_for_rebuild = slot_widgets_clone.clone();
+                let on_change_for_rebuild = on_change_clone.clone();
+                let cached_for_rebuild = cached_sources_clone.clone();
+                let debounce_check = debounce_id.clone();
+
+                glib::timeout_add_local_once(Duration::from_millis(SPINNER_DEBOUNCE_MS), move || {
+                    // Only rebuild if this is still the latest change
+                    if debounce_check.get() == current_id {
+                        Self::rebuild_tabs_internal(
+                            &config_for_rebuild,
+                            &notebook_for_rebuild,
+                            &slot_widgets_for_rebuild,
+                            &on_change_for_rebuild,
+                            &cached_for_rebuild,
+                        );
+                        if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
+                            cb();
+                        }
+                    }
+                });
             });
         }
 
@@ -379,6 +465,7 @@ impl ComboSourceConfigWidget {
             &self.notebook,
             &self.slot_widgets,
             &self.on_change,
+            &self.cached_sources,
         );
     }
 
@@ -387,6 +474,7 @@ impl ComboSourceConfigWidget {
         notebook: &Notebook,
         slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        cached_sources: &Rc<CachedSources>,
     ) {
         // IMPORTANT: Before clearing widgets, save their current values back to config
         // This preserves settings when group/item counts change
@@ -418,36 +506,24 @@ impl ComboSourceConfigWidget {
             }
         }
 
-        // Clear existing tabs
+        // Clear existing tabs - remove all pages at once
         while notebook.n_pages() > 0 {
             notebook.remove_page(Some(0));
         }
         slot_widgets.borrow_mut().clear();
 
-        let cfg = config.borrow();
-
-        // Get available sources (excluding combination - it would cause recursion)
-        let registry = global_registry();
-        let all_sources = registry.list_sources_with_info();
-        let available_sources: Vec<_> = all_sources
-            .into_iter()
-            .filter(|s| s.id != "combination")
-            .collect();
-
-        // Add "None" option at the start
-        let mut source_ids = vec!["none".to_string()];
-        let mut source_names = vec!["None".to_string()];
-        for source in &available_sources {
-            source_ids.push(source.id.clone());
-            source_names.push(source.display_name.clone());
-        }
+        // Use cached source info instead of querying registry
+        let source_ids = &cached_sources.source_ids;
+        let source_names = &cached_sources.source_names;
 
         // Collect group info before releasing borrow
-        let groups_info: Vec<(usize, u32)> = cfg.groups.iter()
-            .enumerate()
-            .map(|(idx, g)| (idx + 1, g.item_count))
-            .collect();
-        drop(cfg);
+        let groups_info: Vec<(usize, u32)> = {
+            let cfg = config.borrow();
+            cfg.groups.iter()
+                .enumerate()
+                .map(|(idx, g)| (idx + 1, g.item_count))
+                .collect()
+        };
 
         // Create a tab for each group with nested items notebook
         for (group_num, item_count) in groups_info {
@@ -458,8 +534,9 @@ impl ComboSourceConfigWidget {
                 config,
                 group_num,
                 item_count,
-                &source_ids,
-                &source_names,
+                source_ids,
+                source_names,
+                cached_sources,
             );
         }
     }
@@ -474,6 +551,7 @@ impl ComboSourceConfigWidget {
         item_count: u32,
         source_ids: &[String],
         source_names: &[String],
+        cached_sources: &Rc<CachedSources>,
     ) {
         let group_box = GtkBox::new(Orientation::Vertical, 8);
         group_box.set_margin_start(8);
@@ -513,21 +591,24 @@ impl ComboSourceConfigWidget {
 
         group_box.append(&items_notebook);
 
-        // Connect item count spinner change
+        // Debounce counter for this group's item count spinner
+        let item_debounce_id = Rc::new(Cell::new(0u32));
+
+        // Connect item count spinner change with debouncing
         {
             let config_clone = config.clone();
             let items_notebook_clone = items_notebook.clone();
             let slot_widgets_clone = slot_widgets.clone();
             let on_change_clone = on_change.clone();
-            let source_ids_clone = source_ids.to_vec();
-            let source_names_clone = source_names.to_vec();
+            let cached_sources_clone = cached_sources.clone();
             let group_num_copy = group_num;
+            let debounce_id = item_debounce_id.clone();
 
             item_count_spin.connect_value_changed(move |spin| {
                 let new_item_count = spin.value() as u32;
                 let group_idx = group_num_copy - 1;
 
-                // Update config
+                // Update config immediately (cheap operation)
                 {
                     let mut cfg = config_clone.borrow_mut();
                     if group_idx < cfg.groups.len() {
@@ -535,21 +616,36 @@ impl ComboSourceConfigWidget {
                     }
                 }
 
-                // Rebuild items in this group's notebook
-                Self::rebuild_items_notebook(
-                    &items_notebook_clone,
-                    &slot_widgets_clone,
-                    &on_change_clone,
-                    &config_clone,
-                    group_num_copy,
-                    new_item_count,
-                    &source_ids_clone,
-                    &source_names_clone,
-                );
+                // Debounce the expensive rebuild operation
+                let current_id = debounce_id.get().wrapping_add(1);
+                debounce_id.set(current_id);
 
-                if let Some(cb) = on_change_clone.borrow().as_ref() {
-                    cb();
-                }
+                let config_for_rebuild = config_clone.clone();
+                let notebook_for_rebuild = items_notebook_clone.clone();
+                let slot_widgets_for_rebuild = slot_widgets_clone.clone();
+                let on_change_for_rebuild = on_change_clone.clone();
+                let cached_for_rebuild = cached_sources_clone.clone();
+                let debounce_check = debounce_id.clone();
+
+                glib::timeout_add_local_once(Duration::from_millis(SPINNER_DEBOUNCE_MS), move || {
+                    // Only rebuild if this is still the latest change
+                    if debounce_check.get() == current_id {
+                        Self::rebuild_items_notebook(
+                            &notebook_for_rebuild,
+                            &slot_widgets_for_rebuild,
+                            &on_change_for_rebuild,
+                            &config_for_rebuild,
+                            group_num_copy,
+                            new_item_count,
+                            &cached_for_rebuild.source_ids,
+                            &cached_for_rebuild.source_names,
+                        );
+
+                        if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
+                            cb();
+                        }
+                    }
+                });
             });
         }
 
@@ -570,12 +666,14 @@ impl ComboSourceConfigWidget {
         source_names: &[String],
     ) {
         // Save current values for this group's slots before clearing
+        // Only iterate over slots that actually exist in slot_widgets (not hardcoded 1-8)
         {
             let mut cfg = config.borrow_mut();
             let slot_widgets_ref = slot_widgets.borrow();
-            for item_idx in 1..=8 {
-                let slot_name = format!("group{}_{}", group_num, item_idx);
-                if let Some(widgets) = slot_widgets_ref.get(&slot_name) {
+            let group_prefix = format!("group{}_", group_num);
+
+            for (slot_name, widgets) in slot_widgets_ref.iter() {
+                if slot_name.starts_with(&group_prefix) {
                     let slot_config = cfg.slots.entry(slot_name.clone()).or_default();
 
                     let selected_idx = widgets.source_dropdown.selected() as usize;

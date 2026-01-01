@@ -18,7 +18,7 @@ use crate::ui::synthwave_display::{
 };
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::{
-    BarConfigWidget, GraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
+    BarConfigWidget, LazyGraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
     BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget, GradientEditor,
     ThemeFontSelector,
 };
@@ -1679,11 +1679,11 @@ impl SynthwaveConfigWidget {
         bar_config_frame.set_child(Some(bar_widget_rc.widget()));
         inner_box.append(&bar_config_frame);
 
-        // === Graph Configuration Section ===
+        // === Graph Configuration Section (Lazy-loaded for performance) ===
         let graph_config_frame = gtk4::Frame::new(Some("Graph Configuration"));
         graph_config_frame.set_margin_top(12);
 
-        let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+        let graph_widget = LazyGraphConfigWidget::new(slot_fields.clone());
         // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
         graph_widget.set_theme(config.borrow().frame.theme.clone());
         let current_graph_config = {

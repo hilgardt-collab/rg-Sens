@@ -16,7 +16,7 @@ use crate::ui::industrial_display::{
     render_industrial_frame, SurfaceTexture, RivetStyle, WarningStripePosition,
     HeaderStyle, DividerStyle,
 };
-use crate::ui::graph_config_widget::GraphConfigWidget;
+use crate::ui::graph_config_widget::LazyGraphConfigWidget;
 use crate::ui::bar_config_widget::BarConfigWidget;
 use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
 use crate::ui::background_config_widget::BackgroundConfigWidget;
@@ -1955,7 +1955,7 @@ impl IndustrialConfigWidget {
         let graph_config_frame = gtk4::Frame::new(Some("Graph Configuration"));
         graph_config_frame.set_margin_top(12);
 
-        let graph_widget = GraphConfigWidget::new(slot_fields.clone());
+        let graph_widget = LazyGraphConfigWidget::new(slot_fields.clone());
         let current_graph_config = {
             let cfg = config.borrow();
             cfg.frame.content_items
