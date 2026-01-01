@@ -99,6 +99,7 @@ fn notify_change_static(on_change: &OnChangeCallback) {
 
 impl GraphConfigWidget {
     pub fn new(available_fields: Vec<crate::core::FieldMetadata>) -> Self {
+        let start = std::time::Instant::now();
         log::info!("=== GraphConfigWidget::new() called with {} available fields ===", available_fields.len());
         let widget = GtkBox::new(Orientation::Vertical, 0);
         let config = Rc::new(RefCell::new(GraphDisplayConfig::default()));
@@ -113,24 +114,35 @@ impl GraphConfigWidget {
         notebook.set_scrollable(true);
 
         // === Tab 1: Graph Style ===
+        let t0 = std::time::Instant::now();
         let style_page = create_style_page(config.clone(), on_change.clone());
         notebook.append_page(&style_page.widget, Some(&Label::new(Some("Style"))));
+        log::debug!("  GraphConfigWidget: style_page took {:?}", t0.elapsed());
 
         // === Tab 2: Data & Scaling ===
+        let t0 = std::time::Instant::now();
         let data_page = create_data_page(config.clone(), on_change.clone());
         notebook.append_page(&data_page.widget, Some(&Label::new(Some("Data"))));
+        log::debug!("  GraphConfigWidget: data_page took {:?}", t0.elapsed());
 
         // === Tab 3: Axes ===
+        let t0 = std::time::Instant::now();
         let axes_page = create_axes_page(config.clone(), on_change.clone());
         notebook.append_page(&axes_page.widget, Some(&Label::new(Some("Axes"))));
+        log::debug!("  GraphConfigWidget: axes_page took {:?}", t0.elapsed());
 
         // === Tab 4: Layout ===
+        let t0 = std::time::Instant::now();
         let layout_page = create_layout_page(config.clone(), on_change.clone());
         notebook.append_page(&layout_page.widget, Some(&Label::new(Some("Layout"))));
+        log::debug!("  GraphConfigWidget: layout_page took {:?}", t0.elapsed());
 
         // === Tab 5: Text Overlay ===
+        let t0 = std::time::Instant::now();
         let text_page = create_text_overlay_page(config.clone(), available_fields, on_change.clone());
         notebook.append_page(&text_page.widget, Some(&Label::new(Some("Text"))));
+        log::debug!("  GraphConfigWidget: text_page took {:?}", t0.elapsed());
+        log::info!("  GraphConfigWidget::new() total time: {:?}", start.elapsed());
 
         // === Copy/Paste buttons for entire graph config ===
         let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);

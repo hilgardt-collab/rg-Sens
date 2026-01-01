@@ -85,7 +85,7 @@ pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearG
 pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
 pub use image_picker::ImagePicker;
-pub use text_line_config_widget::TextLineConfigWidget;
+pub use text_line_config_widget::{TextLineConfigWidget, LazyTextLineConfigWidget};
 pub use cpu_source_config_widget::{CpuSourceConfigWidget, CpuSourceConfig, CpuField, TemperatureUnit, FrequencyUnit, CoreSelection};
 pub use gpu_source_config_widget::{GpuSourceConfigWidget, GpuSourceConfig, GpuField, MemoryUnit, FrequencyUnit as GpuFrequencyUnit};
 pub use memory_source_config_widget::{MemorySourceConfigWidget, MemorySourceConfig, MemoryField};
@@ -93,7 +93,7 @@ pub use system_temp_config_widget::SystemTempConfigWidget;
 pub use fan_speed_config_widget::FanSpeedConfigWidget;
 pub use disk_source_config_widget::{DiskSourceConfigWidget, DiskSourceConfig, DiskField, DiskUnit};
 pub use bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig, render_bar};
-pub use bar_config_widget::BarConfigWidget;
+pub use bar_config_widget::{BarConfigWidget, LazyBarConfigWidget};
 pub use arc_display::{ArcDisplayConfig, ArcCapStyle, ArcTaperStyle, ColorTransitionStyle, ColorApplicationMode, render_arc};
 pub use arc_config_widget::ArcConfigWidget;
 pub use speedometer_display::{SpeedometerConfig, NeedleStyle, NeedleTailStyle, TickStyle, BezelStyle, ValueZone, TextOverlayConfig, TickLabelConfig, render_speedometer};

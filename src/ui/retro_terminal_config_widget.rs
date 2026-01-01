@@ -18,10 +18,10 @@ use crate::ui::retro_terminal_display::{
     TerminalHeaderStyle, TerminalDividerStyle,
 };
 use crate::ui::graph_config_widget::LazyGraphConfigWidget;
-use crate::ui::bar_config_widget::BarConfigWidget;
+use crate::ui::bar_config_widget::LazyBarConfigWidget;
 use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
 use crate::ui::background_config_widget::BackgroundConfigWidget;
-use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::text_line_config_widget::LazyTextLineConfigWidget;
 use crate::ui::arc_config_widget::ArcConfigWidget;
 use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
@@ -1763,11 +1763,11 @@ impl RetroTerminalConfigWidget {
         }
         drop(source_fields);
 
-        // === Bar Configuration Section ===
+        // === Bar Configuration Section (Lazy-loaded) ===
         let bar_config_frame = gtk4::Frame::new(Some("Bar Configuration"));
         bar_config_frame.set_margin_top(12);
 
-        let bar_widget = BarConfigWidget::new(slot_fields.clone());
+        let bar_widget = LazyBarConfigWidget::new(slot_fields.clone());
         let current_bar_config = {
             let cfg = config.borrow();
             cfg.frame.content_items
@@ -1853,11 +1853,11 @@ impl RetroTerminalConfigWidget {
         });
         theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
 
-        // === Text Configuration Section ===
+        // === Text Configuration Section (Lazy-loaded) ===
         let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
         text_config_frame.set_margin_top(12);
 
-        let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+        let text_widget = LazyTextLineConfigWidget::new(slot_fields.clone());
         let current_text_config = {
             let cfg = config.borrow();
             cfg.frame.content_items

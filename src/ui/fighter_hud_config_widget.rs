@@ -19,7 +19,7 @@ use crate::ui::fighter_hud_display::{
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::background::Color;
 use crate::ui::{
-    BarConfigWidget, LazyGraphConfigWidget, TextLineConfigWidget, CoreBarsConfigWidget,
+    LazyBarConfigWidget, LazyGraphConfigWidget, LazyTextLineConfigWidget, CoreBarsConfigWidget,
     BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget,
 };
 use crate::displayers::FighterHudDisplayConfig;
@@ -1701,11 +1701,11 @@ impl FighterHudConfigWidget {
             ];
         }
 
-        // === Bar Configuration Section ===
+        // === Bar Configuration Section (Lazy-loaded) ===
         let bar_config_frame = gtk4::Frame::new(Some("Bar Configuration"));
         bar_config_frame.set_margin_top(12);
 
-        let bar_widget = BarConfigWidget::new(slot_fields.clone());
+        let bar_widget = LazyBarConfigWidget::new(slot_fields.clone());
         let current_bar_config = {
             let cfg = config.borrow();
             cfg.frame.content_items
@@ -1791,11 +1791,11 @@ impl FighterHudConfigWidget {
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
-        // === Text Configuration Section ===
+        // === Text Configuration Section (Lazy-loaded) ===
         let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
         text_config_frame.set_margin_top(12);
 
-        let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+        let text_widget = LazyTextLineConfigWidget::new(slot_fields.clone());
         let current_text_config = {
             let cfg = config.borrow();
             cfg.frame.content_items

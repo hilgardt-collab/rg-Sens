@@ -23,9 +23,10 @@ use crate::ui::lcars_display::{
 };
 use crate::ui::background::Color;
 use crate::ui::graph_config_widget::LazyGraphConfigWidget;
-use crate::ui::bar_config_widget::BarConfigWidget;
+use crate::ui::bar_config_widget::LazyBarConfigWidget;
 use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
 use crate::ui::background_config_widget::BackgroundConfigWidget;
+use crate::ui::text_line_config_widget::LazyTextLineConfigWidget;
 use crate::displayers::LcarsDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 use crate::ui::combo_config_base;
@@ -2126,8 +2127,8 @@ impl LcarsConfigWidget {
         }
         drop(source_fields);
 
-        // Create BarConfigWidget for bar configuration
-        let bar_widget = BarConfigWidget::new(lcars_fields.clone());
+        // Create LazyBarConfigWidget for bar configuration (Lazy-loaded)
+        let bar_widget = LazyBarConfigWidget::new(lcars_fields.clone());
 
         // Initialize with current config if exists
         let current_bar_config = {
@@ -2246,13 +2247,13 @@ impl LcarsConfigWidget {
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
-        // === Text Configuration Section (for Text display type) ===
+        // === Text Configuration Section (for Text display type, Lazy-loaded) ===
         // Shows only text-related settings without bar-specific options
         let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
         text_config_frame.set_margin_top(12);
 
-        // Use TextLineConfigWidget for text-only display configuration
-        let text_widget = crate::ui::TextLineConfigWidget::new(lcars_fields.clone());
+        // Use LazyTextLineConfigWidget for text-only display configuration
+        let text_widget = LazyTextLineConfigWidget::new(lcars_fields.clone());
 
         // Initialize with current config if exists (convert from bar_config's text_overlay)
         let current_text_config = {

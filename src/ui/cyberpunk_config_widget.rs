@@ -18,10 +18,10 @@ use crate::ui::cyberpunk_display::{
     render_cyberpunk_frame, CornerStyle, HeaderStyle, DividerStyle,
 };
 use crate::ui::graph_config_widget::LazyGraphConfigWidget;
-use crate::ui::bar_config_widget::BarConfigWidget;
+use crate::ui::bar_config_widget::LazyBarConfigWidget;
 use crate::ui::core_bars_config_widget::CoreBarsConfigWidget;
 use crate::ui::background_config_widget::BackgroundConfigWidget;
-use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::text_line_config_widget::LazyTextLineConfigWidget;
 use crate::ui::arc_config_widget::ArcConfigWidget;
 use crate::ui::speedometer_config_widget::SpeedometerConfigWidget;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
@@ -1690,11 +1690,11 @@ impl CyberpunkConfigWidget {
         }
         drop(source_fields);
 
-        // === Bar Configuration Section ===
+        // === Bar Configuration Section (Lazy-loaded) ===
         let bar_config_frame = gtk4::Frame::new(Some("Bar Configuration"));
         bar_config_frame.set_margin_top(12);
 
-        let bar_widget = BarConfigWidget::new(slot_fields.clone());
+        let bar_widget = LazyBarConfigWidget::new(slot_fields.clone());
 
         // Initialize with current config
         let current_bar_config = {
@@ -1786,11 +1786,11 @@ impl CyberpunkConfigWidget {
         graph_config_frame.set_child(Some(graph_widget_rc.widget()));
         inner_box.append(&graph_config_frame);
 
-        // === Text Configuration Section ===
+        // === Text Configuration Section (Lazy-loaded) ===
         let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
         text_config_frame.set_margin_top(12);
 
-        let text_widget = TextLineConfigWidget::new(slot_fields.clone());
+        let text_widget = LazyTextLineConfigWidget::new(slot_fields.clone());
 
         // Initialize with current config
         let current_text_config = {
