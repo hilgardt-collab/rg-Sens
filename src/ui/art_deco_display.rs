@@ -14,6 +14,7 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
+use crate::ui::combo_config_base::LayoutFrameConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
 
@@ -202,6 +203,9 @@ pub struct ArtDecoFrameConfig {
     pub group_size_weights: Vec<f64>,
     #[serde(default)]
     pub split_orientation: SplitOrientation,
+    /// Item orientation within each group - defaults to same as split_orientation
+    #[serde(default)]
+    pub group_item_orientations: Vec<SplitOrientation>,
 
     // Dividers
     #[serde(default)]
@@ -247,6 +251,7 @@ impl Default for ArtDecoFrameConfig {
             group_item_counts: vec![1, 1],
             group_size_weights: vec![1.0, 1.0],
             split_orientation: SplitOrientation::default(),
+            group_item_orientations: Vec::new(),
             divider_style: DividerStyle::default(),
             divider_color: default_divider_color_source(),
             divider_width: default_divider_width(),
@@ -254,6 +259,32 @@ impl Default for ArtDecoFrameConfig {
             content_items: HashMap::new(),
             theme: default_art_deco_theme(),
         }
+    }
+}
+
+impl LayoutFrameConfig for ArtDecoFrameConfig {
+    fn group_count(&self) -> usize {
+        self.group_count
+    }
+
+    fn group_size_weights(&self) -> &Vec<f64> {
+        &self.group_size_weights
+    }
+
+    fn group_size_weights_mut(&mut self) -> &mut Vec<f64> {
+        &mut self.group_size_weights
+    }
+
+    fn group_item_orientations(&self) -> &Vec<SplitOrientation> {
+        &self.group_item_orientations
+    }
+
+    fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
+        &mut self.group_item_orientations
+    }
+
+    fn split_orientation(&self) -> SplitOrientation {
+        self.split_orientation
     }
 }
 

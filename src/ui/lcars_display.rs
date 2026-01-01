@@ -12,6 +12,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::{BackgroundConfig, Color, render_background_with_theme};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
+use crate::ui::combo_config_base::LayoutFrameConfig;
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
@@ -589,6 +590,11 @@ pub struct LcarsFrameConfig {
     #[serde(default)]
     pub layout_orientation: SplitOrientation,
 
+    /// Item orientation within each group - defaults to same as layout_orientation
+    /// Vertical = items stacked top to bottom, Horizontal = items side by side
+    #[serde(default)]
+    pub group_item_orientations: Vec<SplitOrientation>,
+
     // Divider settings - dividers between groups
     #[serde(default)]
     pub divider_config: DividerConfig,
@@ -708,11 +714,38 @@ impl Default for LcarsFrameConfig {
             secondary_count: 0,
             content_items: HashMap::new(),
             layout_orientation: SplitOrientation::default(),
+            group_item_orientations: Vec::new(), // Empty = use layout_orientation for all
             divider_config: DividerConfig::default(),
             item_spacing: default_item_spacing(),
             sync_segments_to_groups: false,
             theme: default_lcars_theme(),
         }
+    }
+}
+
+impl LayoutFrameConfig for LcarsFrameConfig {
+    fn group_count(&self) -> usize {
+        self.group_count as usize
+    }
+
+    fn group_size_weights(&self) -> &Vec<f64> {
+        &self.group_size_weights
+    }
+
+    fn group_size_weights_mut(&mut self) -> &mut Vec<f64> {
+        &mut self.group_size_weights
+    }
+
+    fn group_item_orientations(&self) -> &Vec<SplitOrientation> {
+        &self.group_item_orientations
+    }
+
+    fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
+        &mut self.group_item_orientations
+    }
+
+    fn split_orientation(&self) -> SplitOrientation {
+        self.layout_orientation
     }
 }
 
@@ -1629,6 +1662,8 @@ pub fn render_content_text(
 }
 
 /// Calculate layout positions for content items
+/// If orientation is Horizontal, items are laid out side by side (left to right).
+/// If orientation is Vertical (default), items are stacked top to bottom.
 pub fn calculate_item_layouts(
     content_x: f64,
     content_y: f64,
@@ -1636,7 +1671,32 @@ pub fn calculate_item_layouts(
     content_h: f64,
     item_count: u32,
     item_spacing: f64,
-    fixed_heights: &HashMap<usize, f64>, // Index -> fixed height (for graph/level_bar)
+    fixed_sizes: &HashMap<usize, f64>, // Index -> fixed size (height for vertical, width for horizontal)
+) -> Vec<(f64, f64, f64, f64)> {
+    calculate_item_layouts_with_orientation(
+        content_x,
+        content_y,
+        content_w,
+        content_h,
+        item_count,
+        item_spacing,
+        fixed_sizes,
+        SplitOrientation::Vertical, // Default to vertical for backwards compatibility
+    )
+}
+
+/// Calculate layout positions for content items with explicit orientation
+/// If orientation is Horizontal, items are laid out side by side (left to right).
+/// If orientation is Vertical, items are stacked top to bottom.
+pub fn calculate_item_layouts_with_orientation(
+    content_x: f64,
+    content_y: f64,
+    content_w: f64,
+    content_h: f64,
+    item_count: u32,
+    item_spacing: f64,
+    fixed_sizes: &HashMap<usize, f64>, // Index -> fixed size (height for vertical, width for horizontal)
+    orientation: SplitOrientation,
 ) -> Vec<(f64, f64, f64, f64)> {
     if item_count == 0 {
         return Vec::new();
@@ -1647,30 +1707,57 @@ pub fn calculate_item_layouts(
     let mut flex_count = 0u32;
 
     for i in 0..item_count as usize {
-        if let Some(&fixed_h) = fixed_heights.get(&i) {
-            fixed_total += fixed_h;
+        if let Some(&fixed_s) = fixed_sizes.get(&i) {
+            fixed_total += fixed_s;
         } else {
             flex_count += 1;
         }
     }
 
     let total_spacing = (item_count - 1) as f64 * item_spacing;
-    let flex_total = (content_h - fixed_total - total_spacing).max(0.0);
-    let flex_height = if flex_count > 0 {
-        flex_total / flex_count as f64
-    } else {
-        0.0
-    };
 
-    let mut current_y = content_y;
+    match orientation {
+        SplitOrientation::Vertical => {
+            // Stack items top to bottom
+            let flex_total = (content_h - fixed_total - total_spacing).max(0.0);
+            let flex_size = if flex_count > 0 {
+                flex_total / flex_count as f64
+            } else {
+                0.0
+            };
 
-    for i in 0..item_count as usize {
-        let item_h = fixed_heights.get(&i).copied().unwrap_or(flex_height);
-        let item_h = item_h.min(content_h - (current_y - content_y));
+            let mut current_y = content_y;
 
-        if item_h > 0.0 {
-            layouts.push((content_x, current_y, content_w, item_h));
-            current_y += item_h + item_spacing;
+            for i in 0..item_count as usize {
+                let item_h = fixed_sizes.get(&i).copied().unwrap_or(flex_size);
+                let item_h = item_h.min(content_h - (current_y - content_y));
+
+                if item_h > 0.0 {
+                    layouts.push((content_x, current_y, content_w, item_h));
+                    current_y += item_h + item_spacing;
+                }
+            }
+        }
+        SplitOrientation::Horizontal => {
+            // Lay items side by side (left to right)
+            let flex_total = (content_w - fixed_total - total_spacing).max(0.0);
+            let flex_size = if flex_count > 0 {
+                flex_total / flex_count as f64
+            } else {
+                0.0
+            };
+
+            let mut current_x = content_x;
+
+            for i in 0..item_count as usize {
+                let item_w = fixed_sizes.get(&i).copied().unwrap_or(flex_size);
+                let item_w = item_w.min(content_w - (current_x - content_x));
+
+                if item_w > 0.0 {
+                    layouts.push((current_x, content_y, item_w, content_h));
+                    current_x += item_w + item_spacing;
+                }
+            }
         }
     }
 

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
 use crate::ui::background::Color;
+use crate::ui::combo_config_base::LayoutFrameConfig;
 use crate::ui::lcars_display::SplitOrientation;
 
 /// Surface texture style
@@ -136,6 +137,9 @@ pub struct IndustrialFrameConfig {
     pub group_item_counts: Vec<usize>,
     pub group_size_weights: Vec<f64>,
     pub split_orientation: SplitOrientation,
+    /// Item orientation within each group - defaults to same as split_orientation
+    #[serde(default)]
+    pub group_item_orientations: Vec<SplitOrientation>,
 
     // Dividers
     pub divider_style: DividerStyle,
@@ -201,6 +205,7 @@ impl Default for IndustrialFrameConfig {
             group_item_counts: vec![3],
             group_size_weights: vec![1.0],
             split_orientation: SplitOrientation::Horizontal,
+            group_item_orientations: Vec::new(),
 
             // Dividers
             divider_style: DividerStyle::Groove,
@@ -210,6 +215,32 @@ impl Default for IndustrialFrameConfig {
             content_items: std::collections::HashMap::new(),
             theme: default_industrial_theme(),
         }
+    }
+}
+
+impl LayoutFrameConfig for IndustrialFrameConfig {
+    fn group_count(&self) -> usize {
+        self.group_count
+    }
+
+    fn group_size_weights(&self) -> &Vec<f64> {
+        &self.group_size_weights
+    }
+
+    fn group_size_weights_mut(&mut self) -> &mut Vec<f64> {
+        &mut self.group_size_weights
+    }
+
+    fn group_item_orientations(&self) -> &Vec<SplitOrientation> {
+        &self.group_item_orientations
+    }
+
+    fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
+        &mut self.group_item_orientations
+    }
+
+    fn split_orientation(&self) -> SplitOrientation {
+        self.split_orientation
     }
 }
 

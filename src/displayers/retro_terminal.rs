@@ -24,7 +24,7 @@ use crate::ui::retro_terminal_display::{
 };
 use crate::ui::lcars_display::{
     render_content_bar, render_content_text, render_content_graph,
-    render_content_core_bars, render_content_static, calculate_item_layouts,
+    render_content_core_bars, render_content_static, calculate_item_layouts_with_orientation,
     ContentDisplayType, ContentItemConfig,
 };
 use crate::ui::arc_display::render_arc;
@@ -125,6 +125,7 @@ impl RetroTerminalDisplayer {
         h: f64,
         base_prefix: &str,
         count: u32,
+        group_idx: usize,
         config: &RetroTerminalDisplayConfig,
         values: &HashMap<String, Value>,
         bar_values: &HashMap<String, AnimatedValue>,
@@ -135,20 +136,28 @@ impl RetroTerminalDisplayer {
             return Ok(());
         }
 
-        // Determine fixed heights for items that need them
-        let mut fixed_heights: HashMap<usize, f64> = HashMap::new();
+        // Get item orientation for this group (default to split orientation)
+        let item_orientation = config.frame.group_item_orientations
+            .get(group_idx)
+            .copied()
+            .unwrap_or(config.frame.split_orientation);
+
+        // Determine fixed sizes for items that need them
+        let mut fixed_sizes: HashMap<usize, f64> = HashMap::new();
         for i in 0..count as usize {
             let prefix = format!("{}{}", base_prefix, i + 1);
             let item_config = config.frame.content_items.get(&prefix);
             if let Some(cfg) = item_config {
                 if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
-                    fixed_heights.insert(i, cfg.item_height);
+                    fixed_sizes.insert(i, cfg.item_height);
                 }
             }
         }
 
-        // Calculate layouts (item spacing of 4.0)
-        let layouts = calculate_item_layouts(x, y, w, h, count, 4.0, &fixed_heights);
+        // Calculate layouts with orientation (item spacing of 4.0)
+        let layouts = calculate_item_layouts_with_orientation(
+            x, y, w, h, count, 4.0, &fixed_sizes, item_orientation
+        );
 
         // Get phosphor color for terminal styling
         let phosphor = get_phosphor_color(&config.frame);
@@ -420,6 +429,7 @@ impl Displayer for RetroTerminalDisplayer {
                         gh,
                         &format!("group{}_", group_num),
                         item_count,
+                        group_idx,
                         &data.config,
                         &data.values,
                         &data.bar_values,

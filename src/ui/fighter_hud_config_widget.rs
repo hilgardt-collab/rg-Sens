@@ -56,6 +56,7 @@ struct LayoutWidgets {
     divider_padding_spin: SpinButton,
     tick_spacing_spin: SpinButton,
     group_weights_box: GtkBox,
+    item_orientations_box: GtkBox,
 }
 
 /// Holds references to Animation tab widgets
@@ -649,6 +650,31 @@ impl FighterHudConfigWidget {
         let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
         page.append(&group_weights_box);
 
+        // Item Orientations section
+        let item_orient_label = Label::new(Some("Item Orientation per Group"));
+        item_orient_label.set_halign(gtk4::Align::Start);
+        item_orient_label.add_css_class("heading");
+        item_orient_label.set_margin_top(12);
+        page.append(&item_orient_label);
+
+        let item_orient_info = Label::new(Some(
+            "Choose how items within each group are arranged",
+        ));
+        item_orient_info.set_halign(gtk4::Align::Start);
+        item_orient_info.add_css_class("dim-label");
+        page.append(&item_orient_info);
+
+        let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
+        item_orientations_box.set_margin_top(4);
+        combo_config_base::rebuild_item_orientation_dropdowns(
+            &item_orientations_box,
+            config,
+            |c: &mut FighterHudDisplayConfig| &mut c.frame,
+            on_change,
+            preview,
+        );
+        page.append(&item_orientations_box);
+
         // Store widget refs
         *layout_widgets_out.borrow_mut() = Some(LayoutWidgets {
             split_orientation_dropdown,
@@ -657,6 +683,7 @@ impl FighterHudConfigWidget {
             divider_padding_spin,
             tick_spacing_spin,
             group_weights_box,
+            item_orientations_box,
         });
 
         page
@@ -2297,13 +2324,20 @@ impl FighterHudConfigWidget {
 
         *self.source_summaries.borrow_mut() = summaries;
 
-        // Rebuild group spinners in Layout tab (lesson #4)
+        // Rebuild group spinners and item orientation dropdowns in Layout tab
         if let Some(ref widgets) = *self.layout_widgets.borrow() {
             Self::rebuild_group_spinners(
                 &self.config,
                 &self.on_change,
                 &self.preview,
                 &widgets.group_weights_box,
+            );
+            combo_config_base::rebuild_item_orientation_dropdowns(
+                &widgets.item_orientations_box,
+                &self.config,
+                |c: &mut FighterHudDisplayConfig| &mut c.frame,
+                &self.on_change,
+                &self.preview,
             );
         }
 

@@ -113,7 +113,8 @@ pub use lcars_display::{
     HeaderWidthMode, HeaderPosition, DividerCapStyle, SplitOrientation, ContentDisplayType,
     SegmentConfig, HeaderConfig, DividerConfig, ContentItemConfig,
     ContentItemData, render_lcars_frame, render_content_background, render_divider,
-    render_content_bar, render_content_text, render_content_core_bars, get_content_bounds, calculate_item_layouts,
+    render_content_bar, render_content_text, render_content_core_bars, get_content_bounds,
+    calculate_item_layouts, calculate_item_layouts_with_orientation,
 };
 pub use lcars_config_widget::LcarsConfigWidget;
 pub use core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};

@@ -33,6 +33,22 @@ pub trait ThemedFrameConfig {
     fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig>;
 }
 
+/// Trait for combo panel frame configurations that support layout/grouping
+pub trait LayoutFrameConfig {
+    /// Get the number of groups
+    fn group_count(&self) -> usize;
+    /// Get reference to group size weights
+    fn group_size_weights(&self) -> &Vec<f64>;
+    /// Get mutable reference to group size weights
+    fn group_size_weights_mut(&mut self) -> &mut Vec<f64>;
+    /// Get reference to per-group item orientations
+    fn group_item_orientations(&self) -> &Vec<SplitOrientation>;
+    /// Get mutable reference to per-group item orientations
+    fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation>;
+    /// Get the split orientation (used as default for item orientations)
+    fn split_orientation(&self) -> SplitOrientation;
+}
+
 /// Common layout widgets found across combo panels
 #[allow(dead_code)]
 pub struct CommonLayoutWidgets {
@@ -41,6 +57,7 @@ pub struct CommonLayoutWidgets {
     pub item_spacing_spin: SpinButton,
     pub divider_padding_spin: SpinButton,
     pub group_weights_box: GtkBox,
+    pub item_orientations_box: GtkBox,
 }
 
 /// Common animation widgets found across combo panels
@@ -71,6 +88,227 @@ pub fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
     for refresher in refreshers.borrow().iter() {
         refresher();
     }
+}
+
+/// Rebuild group weight spinners for any combo panel config that implements LayoutFrameConfig.
+///
+/// This is a generic function that can be used by all themed config widgets.
+pub fn rebuild_group_spinners<C, L, F>(
+    container: &GtkBox,
+    config: &Rc<RefCell<C>>,
+    get_frame: F,
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    preview: &DrawingArea,
+) where
+    C: 'static,
+    L: LayoutFrameConfig + ?Sized,
+    for<'a> F: Fn(&'a mut C) -> &'a mut L,
+    F: Clone + 'static,
+{
+    // Clear existing children
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+
+    let group_count = {
+        let cfg = config.borrow();
+        let get_frame_clone = get_frame.clone();
+        // We need to get group_count without mutable borrow
+        // Use a temporary approach - read config, get count
+        drop(cfg);
+        let mut cfg = config.borrow_mut();
+        get_frame_clone(&mut cfg).group_count()
+    };
+
+    if group_count <= 1 {
+        let label = Label::new(Some("Group weights not applicable for single group."));
+        label.add_css_class("dim-label");
+        container.append(&label);
+        return;
+    }
+
+    // Get current weights
+    let weights: Vec<f64> = {
+        let mut cfg = config.borrow_mut();
+        let frame = get_frame(&mut cfg);
+        (0..group_count)
+            .map(|i| frame.group_size_weights().get(i).copied().unwrap_or(1.0))
+            .collect()
+    };
+
+    // Create spinners for each group
+    for (i, weight) in weights.into_iter().enumerate() {
+        let row = GtkBox::new(Orientation::Horizontal, 6);
+        row.append(&Label::new(Some(&format!("Group {} Weight:", i + 1))));
+
+        let spin = SpinButton::with_range(0.1, 10.0, 0.1);
+        spin.set_digits(1);
+        spin.set_value(weight);
+        spin.set_hexpand(true);
+        row.append(&spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let get_frame_clone = get_frame.clone();
+        let idx = i;
+        spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            let frame = get_frame_clone(&mut cfg);
+            let weights = frame.group_size_weights_mut();
+            while weights.len() <= idx {
+                weights.push(1.0);
+            }
+            weights[idx] = spin.value();
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        container.append(&row);
+    }
+}
+
+/// Rebuild item orientation dropdowns for any combo panel config that implements LayoutFrameConfig.
+///
+/// This is a generic function that can be used by all themed config widgets.
+pub fn rebuild_item_orientation_dropdowns<C, L, F>(
+    container: &GtkBox,
+    config: &Rc<RefCell<C>>,
+    get_frame: F,
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    preview: &DrawingArea,
+) where
+    C: 'static,
+    L: LayoutFrameConfig + ?Sized,
+    for<'a> F: Fn(&'a mut C) -> &'a mut L,
+    F: Clone + 'static,
+{
+    // Clear existing children
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+
+    let (group_count, orientations, default_orientation) = {
+        let mut cfg = config.borrow_mut();
+        let frame = get_frame(&mut cfg);
+        let count = frame.group_count();
+        let orients: Vec<Option<SplitOrientation>> = (0..count)
+            .map(|i| frame.group_item_orientations().get(i).copied())
+            .collect();
+        let default = frame.split_orientation();
+        (count, orients, default)
+    };
+
+    if group_count <= 1 {
+        let label = Label::new(Some("Item orientation not applicable for single group."));
+        label.add_css_class("dim-label");
+        container.append(&label);
+        return;
+    }
+
+    // Create dropdown for each group
+    for (group_idx, current) in orientations.into_iter().enumerate() {
+        let row = GtkBox::new(Orientation::Horizontal, 8);
+        row.append(&Label::new(Some(&format!("Group {}:", group_idx + 1))));
+
+        let options = StringList::new(&["Vertical (stacked)", "Horizontal (side-by-side)", "Default"]);
+        let dropdown = DropDown::new(Some(options), gtk4::Expression::NONE);
+        dropdown.set_hexpand(true);
+
+        // Determine current selection
+        let selected = match current {
+            Some(SplitOrientation::Vertical) => 0,
+            Some(SplitOrientation::Horizontal) => 1,
+            None => 2, // Default
+        };
+        dropdown.set_selected(selected);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let get_frame_clone = get_frame.clone();
+        let default_orient = default_orientation;
+        dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            let mut cfg = config_clone.borrow_mut();
+            let frame = get_frame_clone(&mut cfg);
+            let orientations = frame.group_item_orientations_mut();
+
+            // Ensure the orientations vector is long enough
+            while orientations.len() < group_idx {
+                orientations.push(default_orient);
+            }
+
+            match selected {
+                0 => {
+                    // Vertical
+                    if orientations.len() <= group_idx {
+                        orientations.push(SplitOrientation::Vertical);
+                    } else {
+                        orientations[group_idx] = SplitOrientation::Vertical;
+                    }
+                }
+                1 => {
+                    // Horizontal
+                    if orientations.len() <= group_idx {
+                        orientations.push(SplitOrientation::Horizontal);
+                    } else {
+                        orientations[group_idx] = SplitOrientation::Horizontal;
+                    }
+                }
+                _ => {
+                    // Default - remove explicit orientation if present
+                    if orientations.len() > group_idx {
+                        orientations.truncate(group_idx);
+                    }
+                }
+            }
+
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        row.append(&dropdown);
+        container.append(&row);
+    }
+}
+
+/// Create the group weights section UI with header and container box.
+/// Returns the container box that should be passed to rebuild_group_spinners.
+pub fn create_group_weights_section(page: &GtkBox) -> GtkBox {
+    let weights_label = Label::new(Some("Group Size Weights"));
+    weights_label.set_halign(gtk4::Align::Start);
+    weights_label.add_css_class("heading");
+    weights_label.set_margin_top(12);
+    page.append(&weights_label);
+
+    let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
+    page.append(&group_weights_box);
+
+    group_weights_box
+}
+
+/// Create the item orientation section UI with header, info label, and container box.
+/// Returns the container box that should be passed to rebuild_item_orientation_dropdowns.
+pub fn create_item_orientation_section(page: &GtkBox) -> GtkBox {
+    let item_orient_label = Label::new(Some("Item Orientation per Group"));
+    item_orient_label.set_halign(gtk4::Align::Start);
+    item_orient_label.add_css_class("heading");
+    item_orient_label.set_margin_top(12);
+    page.append(&item_orient_label);
+
+    let item_orient_info = Label::new(Some(
+        "Choose how items within each group are arranged",
+    ));
+    item_orient_info.set_halign(gtk4::Align::Start);
+    item_orient_info.add_css_class("dim-label");
+    page.append(&item_orient_info);
+
+    let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
+    item_orientations_box.set_margin_top(4);
+    page.append(&item_orientations_box);
+
+    item_orientations_box
 }
 
 /// Create a theme reference section showing current theme colors, gradient, and fonts

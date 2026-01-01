@@ -25,7 +25,7 @@ use crate::ui::synthwave_display::{
 };
 use crate::ui::lcars_display::{
     render_content_bar, render_content_text, render_content_graph,
-    render_content_core_bars, render_content_static, calculate_item_layouts,
+    render_content_core_bars, render_content_static, calculate_item_layouts_with_orientation,
     ContentDisplayType, ContentItemConfig,
 };
 use crate::ui::arc_display::render_arc;
@@ -122,6 +122,7 @@ impl SynthwaveDisplayer {
         h: f64,
         base_prefix: &str,
         count: u32,
+        group_idx: usize,
         config: &SynthwaveDisplayConfig,
         values: &HashMap<String, Value>,
         bar_values: &HashMap<String, AnimatedValue>,
@@ -132,20 +133,28 @@ impl SynthwaveDisplayer {
             return Ok(());
         }
 
-        // Determine fixed heights for items that need them
-        let mut fixed_heights: HashMap<usize, f64> = HashMap::new();
+        // Get item orientation for this group (default to split orientation)
+        let item_orientation = config.frame.group_item_orientations
+            .get(group_idx)
+            .copied()
+            .unwrap_or(config.frame.split_orientation);
+
+        // Determine fixed sizes for items that need them
+        let mut fixed_sizes: HashMap<usize, f64> = HashMap::new();
         for i in 0..count as usize {
             let prefix = format!("{}{}", base_prefix, i + 1);
             let item_config = config.frame.content_items.get(&prefix);
             if let Some(cfg) = item_config {
                 if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
-                    fixed_heights.insert(i, cfg.item_height);
+                    fixed_sizes.insert(i, cfg.item_height);
                 }
             }
         }
 
-        // Calculate layouts
-        let layouts = calculate_item_layouts(x, y, w, h, count, config.frame.item_spacing, &fixed_heights);
+        // Calculate layouts with orientation
+        let layouts = calculate_item_layouts_with_orientation(
+            x, y, w, h, count, config.frame.item_spacing, &fixed_sizes, item_orientation
+        );
 
         // Get synthwave colors for styling
         let (primary, secondary, accent) = get_synthwave_colors(&config.frame);
@@ -421,6 +430,7 @@ impl Displayer for SynthwaveDisplayer {
                         gh,
                         &format!("group{}_", group_num),
                         item_count,
+                        group_idx,
                         &data.config,
                         &data.values,
                         &data.bar_values,

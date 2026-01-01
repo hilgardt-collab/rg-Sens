@@ -92,6 +92,8 @@ struct SplitWidgets {
     end_cap_dropdown: DropDown,
     /// Container for group size weight spinners (rebuilt when groups change)
     group_weights_box: GtkBox,
+    /// Container for per-group item orientation dropdowns (rebuilt when groups change)
+    item_orientations_box: GtkBox,
     /// Checkbox for syncing segments with groups
     sync_segments_check: CheckButton,
 }
@@ -2688,6 +2690,30 @@ impl LcarsConfigWidget {
         Self::rebuild_group_weight_spinners(&group_weights_box, config, on_change, preview);
         page.append(&group_weights_box);
 
+        // Item Orientations section header
+        let item_orient_header = Label::new(Some("Item Orientations"));
+        item_orient_header.set_halign(gtk4::Align::Start);
+        item_orient_header.add_css_class("heading");
+        item_orient_header.set_margin_top(12);
+        page.append(&item_orient_header);
+
+        let item_orient_info = Label::new(Some("Set item arrangement for each group. Default matches group layout."));
+        item_orient_info.set_halign(gtk4::Align::Start);
+        item_orient_info.add_css_class("dim-label");
+        page.append(&item_orient_info);
+
+        // Container for per-group item orientation dropdowns (rebuilt dynamically)
+        let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
+        item_orientations_box.set_margin_top(4);
+        combo_config_base::rebuild_item_orientation_dropdowns(
+            &item_orientations_box,
+            config,
+            |c: &mut LcarsDisplayConfig| &mut c.frame,
+            on_change,
+            preview,
+        );
+        page.append(&item_orientations_box);
+
         // Store widget references for updating when config changes
         *split_widgets_out.borrow_mut() = Some(SplitWidgets {
             orient_dropdown: orient_dropdown.clone(),
@@ -2696,6 +2722,7 @@ impl LcarsConfigWidget {
             start_cap_dropdown: start_cap_dropdown.clone(),
             end_cap_dropdown: end_cap_dropdown.clone(),
             group_weights_box: group_weights_box.clone(),
+            item_orientations_box: item_orientations_box.clone(),
             sync_segments_check: sync_segments_check.clone(),
         });
 
@@ -3128,6 +3155,13 @@ impl LcarsConfigWidget {
             Self::rebuild_group_weight_spinners(
                 &widgets.group_weights_box,
                 &self.config,
+                &self.on_change,
+                &self.preview,
+            );
+            combo_config_base::rebuild_item_orientation_dropdowns(
+                &widgets.item_orientations_box,
+                &self.config,
+                |c: &mut LcarsDisplayConfig| &mut c.frame,
                 &self.on_change,
                 &self.preview,
             );

@@ -14,6 +14,7 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
+use crate::ui::combo_config_base::LayoutFrameConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 
 // Re-export types we use
@@ -258,6 +259,9 @@ pub struct SynthwaveFrameConfig {
     pub group_size_weights: Vec<f64>,
     #[serde(default)]
     pub split_orientation: SplitOrientation,
+    /// Item orientation within each group - defaults to same as split_orientation
+    #[serde(default)]
+    pub group_item_orientations: Vec<SplitOrientation>,
     #[serde(default)]
     pub item_spacing: f64,
 
@@ -318,6 +322,7 @@ impl Default for SynthwaveFrameConfig {
             group_item_counts: vec![4],
             group_size_weights: vec![1.0],
             split_orientation: SplitOrientation::Vertical,
+            group_item_orientations: Vec::new(),
             item_spacing: 8.0,
 
             divider_style: SynthwaveDividerStyle::NeonLine,
@@ -330,6 +335,32 @@ impl Default for SynthwaveFrameConfig {
 
             theme: default_synthwave_theme(),
         }
+    }
+}
+
+impl LayoutFrameConfig for SynthwaveFrameConfig {
+    fn group_count(&self) -> usize {
+        self.group_count
+    }
+
+    fn group_size_weights(&self) -> &Vec<f64> {
+        &self.group_size_weights
+    }
+
+    fn group_size_weights_mut(&mut self) -> &mut Vec<f64> {
+        &mut self.group_size_weights
+    }
+
+    fn group_item_orientations(&self) -> &Vec<SplitOrientation> {
+        &self.group_item_orientations
+    }
+
+    fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
+        &mut self.group_item_orientations
+    }
+
+    fn split_orientation(&self) -> SplitOrientation {
+        self.split_orientation
     }
 }
 

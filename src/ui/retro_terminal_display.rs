@@ -14,6 +14,7 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
+use crate::ui::combo_config_base::LayoutFrameConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{FontSource, deserialize_font_or_source};
 
@@ -191,6 +192,9 @@ pub struct RetroTerminalFrameConfig {
     pub group_size_weights: Vec<f64>,
     #[serde(default)]
     pub split_orientation: SplitOrientation,
+    /// Item orientation within each group - defaults to same as split_orientation
+    #[serde(default)]
+    pub group_item_orientations: Vec<SplitOrientation>,
 
     // Dividers
     #[serde(default)]
@@ -252,6 +256,7 @@ impl Default for RetroTerminalFrameConfig {
             group_item_counts: vec![4],
             group_size_weights: vec![1.0],
             split_orientation: SplitOrientation::Vertical,
+            group_item_orientations: Vec::new(),
 
             divider_style: TerminalDividerStyle::Dashed,
             divider_padding: default_divider_padding(),
@@ -264,6 +269,32 @@ impl Default for RetroTerminalFrameConfig {
 
             theme: default_retro_terminal_theme(),
         }
+    }
+}
+
+impl LayoutFrameConfig for RetroTerminalFrameConfig {
+    fn group_count(&self) -> usize {
+        self.group_count
+    }
+
+    fn group_size_weights(&self) -> &Vec<f64> {
+        &self.group_size_weights
+    }
+
+    fn group_size_weights_mut(&mut self) -> &mut Vec<f64> {
+        &mut self.group_size_weights
+    }
+
+    fn group_item_orientations(&self) -> &Vec<SplitOrientation> {
+        &self.group_item_orientations
+    }
+
+    fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
+        &mut self.group_item_orientations
+    }
+
+    fn split_orientation(&self) -> SplitOrientation {
+        self.split_orientation
     }
 }
 
