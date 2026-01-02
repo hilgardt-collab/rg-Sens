@@ -5,7 +5,7 @@
 
 use crate::core::Panel;
 use crate::ui::theme::ComboThemeConfig;
-use gtk4::glib::{self, WeakRef};
+use gtk4::glib::WeakRef;
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Fixed, ScrolledWindow, Window};
 use std::cell::RefCell;
@@ -951,24 +951,9 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_lcars_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_lcars_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("lcars_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply LCARS config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        // This prevents expensive panel reconfiguration on each UI interaction
+        widget.set_on_change(|| {});
 
         lcars_placeholder.append(widget.widget());
         *lcars_config_widget.borrow_mut() = Some(widget);
@@ -1082,24 +1067,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_cyberpunk_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_cyberpunk_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Cyberpunk config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
 
         cyberpunk_placeholder.append(widget.widget());
         *cyberpunk_config_widget.borrow_mut() = Some(widget);
@@ -1147,24 +1116,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_material_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_material_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("material_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Material config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
 
         material_placeholder.append(widget.widget());
         *material_config_widget.borrow_mut() = Some(widget);
@@ -1211,24 +1164,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_industrial_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_industrial_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("industrial_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Industrial config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
 
         industrial_placeholder.append(widget.widget());
         *industrial_config_widget.borrow_mut() = Some(widget);
@@ -1275,24 +1212,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_retro_terminal_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_retro_terminal_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Retro Terminal config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
 
         retro_terminal_placeholder.append(widget.widget());
         *retro_terminal_config_widget.borrow_mut() = Some(widget);
@@ -1339,24 +1260,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_fighter_hud_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_fighter_hud_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("fighter_hud_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Fighter HUD config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
 
         fighter_hud_placeholder.append(widget.widget());
         *fighter_hud_config_widget.borrow_mut() = Some(widget);
@@ -1404,24 +1309,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_synthwave_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_synthwave_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("synthwave_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Synthwave config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
         synthwave_placeholder.append(widget.widget());
         *synthwave_config_widget.borrow_mut() = Some(widget);
     }
@@ -1468,24 +1357,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_art_deco_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_art_deco_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("art_deco_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Art Deco config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
         art_deco_placeholder.append(widget.widget());
         *art_deco_config_widget.borrow_mut() = Some(widget);
     }
@@ -1532,24 +1405,8 @@ pub(crate) fn show_panel_properties_dialog(
             }
         }
 
-        // Set up on_change callback to apply config changes immediately
-        // Use idle_add_local_once to defer write lock acquisition (avoids deadlock with read lock held during dialog setup)
-        let config_rc_for_change = widget.get_config_rc();
-        let panel_for_art_nouveau_change = panel.clone();
-        widget.set_on_change(move || {
-            let config = config_rc_for_change.borrow().clone();
-            let panel = panel_for_art_nouveau_change.clone();
-            glib::idle_add_local_once(move || {
-                if let Ok(config_json) = serde_json::to_value(&config) {
-                    let mut panel_guard = panel.blocking_write();
-                    panel_guard.config.insert("art_nouveau_config".to_string(), config_json);
-                    let config_clone = panel_guard.config.clone();
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Art Nouveau config on change: {}", e);
-                    }
-                }
-            });
-        });
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
         art_nouveau_placeholder.append(widget.widget());
         *art_nouveau_config_widget.borrow_mut() = Some(widget);
     }
@@ -1572,281 +1429,128 @@ pub(crate) fn show_panel_properties_dialog(
         let combo_widget_for_lcars = combo_config_widget.clone();
         let panel_for_combo_change = panel.clone();
 
-        // Only set up on_change callback if the widget exists (lazy init)
+        // Only set up callbacks if the widget exists (lazy init)
         if let Some(ref widget) = *combo_config_widget.borrow() {
             // IMPORTANT: Use Weak reference to break circular reference cycle.
-            // The closure captures combo_widget_for_callback, and the widget stores
-            // the closure in on_change. Using Rc would create: Rc -> Widget -> on_change -> Rc
             let combo_widget_weak = Rc::downgrade(&combo_widget_for_lcars);
-            let panel_for_callback = panel_for_combo_change.clone();
-            let lcars_w = lcars_widget_clone.clone();
-            let cyberpunk_w = cyberpunk_widget_clone.clone();
-            let material_w = material_widget_clone.clone();
-            let industrial_w = industrial_widget_clone.clone();
-            let retro_terminal_w = retro_terminal_widget_clone.clone();
-            let fighter_hud_w = fighter_hud_widget_clone.clone();
-            let synthwave_w = synthwave_widget_clone.clone();
-            let art_deco_w = art_deco_widget_clone.clone();
-            let art_nouveau_w = art_nouveau_widget_clone.clone();
 
+            // Set up the on_fields_updated callback to update displayer widgets when fields are ready.
+            // This is called asynchronously after fields are computed in background.
+            {
+                let combo_widget_weak_fields = Rc::downgrade(&combo_widget_for_lcars);
+                let panel_for_fields = panel_for_combo_change.clone();
+                let lcars_w = lcars_widget_clone.clone();
+                let cyberpunk_w = cyberpunk_widget_clone.clone();
+                let material_w = material_widget_clone.clone();
+                let industrial_w = industrial_widget_clone.clone();
+                let retro_terminal_w = retro_terminal_widget_clone.clone();
+                let fighter_hud_w = fighter_hud_widget_clone.clone();
+                let synthwave_w = synthwave_widget_clone.clone();
+                let art_deco_w = art_deco_widget_clone.clone();
+                let art_nouveau_w = art_nouveau_widget_clone.clone();
+
+                widget.set_on_fields_updated(move |fields| {
+                    // Get summaries from combo widget (now that fields are ready)
+                    let Some(combo_widget_rc) = combo_widget_weak_fields.upgrade() else { return };
+                    let Some(ref combo_widget) = *combo_widget_rc.borrow() else { return };
+                    let summaries = combo_widget.get_source_summaries();
+
+                    // Get displayer ID with read lock (non-blocking)
+                    let displayer_id = match panel_for_fields.try_read() {
+                        Ok(panel_guard) => panel_guard.displayer.id().to_string(),
+                        Err(_) => {
+                            log::debug!("on_fields_updated: couldn't get read lock on panel, skipping");
+                            return;
+                        }
+                    };
+
+                    log::debug!("on_fields_updated: updating '{}' with {} fields, {} summaries",
+                        displayer_id, fields.len(), summaries.len());
+
+                    // Update the ACTIVE displayer's config widget
+                    // NOTE: We do NOT apply config to the panel here - that only happens on Apply/Accept
+                    match displayer_id.as_str() {
+                        "industrial" => {
+                            if let Some(ref widget) = *industrial_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "lcars" => {
+                            if let Some(ref widget) = *lcars_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "cyberpunk" => {
+                            if let Some(ref widget) = *cyberpunk_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "material" => {
+                            if let Some(ref widget) = *material_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "retro_terminal" => {
+                            if let Some(ref widget) = *retro_terminal_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "fighter_hud" => {
+                            if let Some(ref widget) = *fighter_hud_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "synthwave" => {
+                            if let Some(ref widget) = *synthwave_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "art_deco" => {
+                            if let Some(ref widget) = *art_deco_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "art_nouveau" => {
+                            if let Some(ref widget) = *art_nouveau_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        _ => {
+                            // For non-combo displayers, no update needed
+                        }
+                    }
+                });
+            }
+
+            // The on_change callback now just triggers an async field update.
+            // This is called when sources are selected/changed in combo config.
+            // The actual displayer updates happen in on_fields_updated above.
             widget.set_on_change(move || {
-                // Get source summaries from combo config
-                // Use Weak::upgrade to get a temporary strong reference (returns None if dropped)
+                // Trigger async field update - this will call on_fields_updated when done
                 let Some(combo_widget_rc) = combo_widget_weak.upgrade() else { return };
                 let Some(ref widget) = *combo_widget_rc.borrow() else { return };
-                let summaries = widget.get_source_summaries();
-                let fields = widget.get_available_fields();
-
-                // Get displayer ID with read lock (non-blocking)
-                let displayer_id = match panel_for_callback.try_read() {
-                    Ok(panel_guard) => panel_guard.displayer.id().to_string(),
-                    Err(_) => {
-                        log::debug!("ComboSource on_change: couldn't get read lock on panel, skipping update");
-                        return;
-                    }
-                };
-
-                // Update the ACTIVE displayer's config widget immediately (UI updates don't need panel lock)
-                // Then defer the panel config write using idle_add_local_once
-                match displayer_id.as_str() {
-                    "industrial" => {
-                        if let Some(ref widget) = *industrial_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("industrial_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Industrial config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "lcars" => {
-                        if let Some(ref widget) = *lcars_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("lcars_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply LCARS config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "cyberpunk" => {
-                        if let Some(ref widget) = *cyberpunk_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Cyberpunk config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "material" => {
-                        if let Some(ref widget) = *material_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("material_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Material config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "retro_terminal" => {
-                        if let Some(ref widget) = *retro_terminal_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Retro Terminal config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "fighter_hud" => {
-                        if let Some(ref widget) = *fighter_hud_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("fighter_hud_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Fighter HUD config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "synthwave" => {
-                        if let Some(ref widget) = *synthwave_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("synthwave_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Synthwave config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "art_deco" => {
-                        if let Some(ref widget) = *art_deco_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("art_deco_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Art Deco config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    "art_nouveau" => {
-                        if let Some(ref widget) = *art_nouveau_w.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                            let config = widget.get_config();
-                            let panel_clone = panel_for_callback.clone();
-                            glib::idle_add_local_once(move || {
-                                if let Ok(config_json) = serde_json::to_value(&config) {
-                                    let mut panel_guard = panel_clone.blocking_write();
-                                    panel_guard.config.insert("art_nouveau_config".to_string(), config_json);
-                                    let config_clone = panel_guard.config.clone();
-                                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                                        log::warn!("Failed to apply Art Nouveau config on source change: {}", e);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    _ => {
-                        // For non-combo displayers, no update needed
-                    }
-                }
+                widget.update_fields_cache_async();
             });
         }
 
         // Initialize ONLY the ACTIVE combo config widget with current source summaries if combo source is selected
         // Other widgets will be initialized when switched to (lazy init)
+        // Use async field update to avoid blocking the UI
         if old_source_id == "combination" {
             if let Some(ref combo_widget) = *combo_config_widget.borrow() {
-                let summaries = combo_widget.get_source_summaries();
-                let fields = combo_widget.get_available_fields();
-                log::info!("=== Initializing active combo widget '{}' at startup: {} summaries, {} fields ===",
-                    old_displayer_id, summaries.len(), fields.len());
-
-                // Only initialize the ACTIVE displayer widget (based on old_displayer_id)
-                match old_displayer_id.as_str() {
-                    "lcars" => {
-                        if let Some(ref widget) = *lcars_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "cyberpunk" => {
-                        if let Some(ref widget) = *cyberpunk_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "material" => {
-                        if let Some(ref widget) = *material_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "industrial" => {
-                        if let Some(ref widget) = *industrial_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "retro_terminal" => {
-                        if let Some(ref widget) = *retro_terminal_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "fighter_hud" => {
-                        if let Some(ref widget) = *fighter_hud_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "synthwave" => {
-                        if let Some(ref widget) = *synthwave_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "art_deco" => {
-                        if let Some(ref widget) = *art_deco_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    "art_nouveau" => {
-                        if let Some(ref widget) = *art_nouveau_config_widget.borrow() {
-                            widget.set_available_fields(fields);
-                            widget.set_source_summaries(summaries);
-                        }
-                    }
-                    _ => {
-                        log::debug!("=== Displayer '{}' doesn't need source summaries ===", old_displayer_id);
-                    }
-                }
+                log::info!("=== Triggering async field update for combo widget '{}' at startup ===", old_displayer_id);
+                // Trigger async field update - the on_fields_updated callback set above will
+                // update the appropriate displayer widget when fields are ready
+                combo_widget.update_fields_cache_async();
             }
         } else {
             log::info!("=== Skipping combo widget init: old_source_id='{}' (need 'combination') ===", old_source_id);
@@ -1855,95 +1559,18 @@ pub(crate) fn show_panel_properties_dialog(
 
     // Update combo config widgets when source dropdown changes to "combination"
     // Only updates the ACTIVE displayer widget (lazy init means only active one is created)
+    // Uses async field updates to avoid blocking the UI
     {
-        let lcars_widget_clone = lcars_config_widget.clone();
-        let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
-        let material_widget_clone = material_config_widget.clone();
-        let industrial_widget_clone = industrial_config_widget.clone();
-        let retro_terminal_widget_clone = retro_terminal_config_widget.clone();
-        let fighter_hud_widget_clone = fighter_hud_config_widget.clone();
-        let synthwave_widget_clone = synthwave_config_widget.clone();
-        let art_deco_widget_clone = art_deco_config_widget.clone();
-        let art_nouveau_widget_clone = art_nouveau_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
-        let displayers_for_source = displayers.clone();
-        let displayer_combo_clone = displayer_combo.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected_idx) {
                 if source_id == "combination" {
-                    // Get current displayer ID
-                    let displayer_idx = displayer_combo_clone.selected() as usize;
-                    let current_displayer = displayers_for_source.borrow()
-                        .get(displayer_idx)
-                        .cloned()
-                        .unwrap_or_default();
-
-                    // Update ONLY the active combo widget with source summaries
+                    // Trigger async field update - the on_fields_updated callback will update widgets
                     if let Some(ref combo_widget) = *combo_widget_clone.borrow() {
-                        let summaries = combo_widget.get_source_summaries();
-                        let fields = combo_widget.get_available_fields();
-                        log::info!("=== Source changed to 'combination': updating displayer '{}' with {} source summaries ===",
-                            current_displayer, summaries.len());
-
-                        match current_displayer.as_str() {
-                            "lcars" => {
-                                if let Some(ref widget) = *lcars_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "cyberpunk" => {
-                                if let Some(ref widget) = *cyberpunk_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "material" => {
-                                if let Some(ref widget) = *material_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "industrial" => {
-                                if let Some(ref widget) = *industrial_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "retro_terminal" => {
-                                if let Some(ref widget) = *retro_terminal_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "fighter_hud" => {
-                                if let Some(ref widget) = *fighter_hud_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "synthwave" => {
-                                if let Some(ref widget) = *synthwave_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "art_deco" => {
-                                if let Some(ref widget) = *art_deco_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            "art_nouveau" => {
-                                if let Some(ref widget) = *art_nouveau_widget_clone.borrow() {
-                                    widget.set_available_fields(fields);
-                                    widget.set_source_summaries(summaries);
-                                }
-                            }
-                            _ => {}
-                        }
+                        log::info!("=== Source changed to 'combination': triggering async field update ===");
+                        combo_widget.update_fields_cache_async();
                     }
                 }
             }
@@ -2185,7 +1812,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_lcars_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2203,24 +1829,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Lazy-creating LcarsConfigWidget on displayer switch ===");
                                     let widget = crate::ui::LcarsConfigWidget::new(fields.clone());
 
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_lcars_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("lcars_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply LCARS config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
 
                                     lcars_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
@@ -2247,7 +1857,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_cyberpunk_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2265,24 +1874,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Lazy-creating CyberpunkConfigWidget on displayer switch ===");
                                     let widget = crate::ui::CyberpunkConfigWidget::new(fields.clone());
 
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_cyberpunk_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("cyberpunk_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Cyberpunk config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
 
                                     cyberpunk_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
@@ -2309,7 +1902,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_material_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2327,24 +1919,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Lazy-creating MaterialConfigWidget on displayer switch ===");
                                     let widget = crate::ui::MaterialConfigWidget::new(fields.clone());
 
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_material_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("material_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Material config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
 
                                     material_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
@@ -2371,7 +1947,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_industrial_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2389,24 +1964,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Lazy-creating IndustrialConfigWidget on displayer switch ===");
                                     let widget = crate::ui::IndustrialConfigWidget::new(fields.clone());
 
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_industrial_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("industrial_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Industrial config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
 
                                     industrial_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
@@ -2433,7 +1992,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_retro_terminal_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2451,24 +2009,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Lazy-creating RetroTerminalConfigWidget on displayer switch ===");
                                     let widget = crate::ui::RetroTerminalConfigWidget::new(fields.clone());
 
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_retro_terminal_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("retro_terminal_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Retro Terminal config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
 
                                     retro_terminal_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
@@ -2495,7 +2037,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_fighter_hud_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2513,24 +2054,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Lazy-creating FighterHudConfigWidget on displayer switch ===");
                                     let widget = crate::ui::FighterHudConfigWidget::new(fields.clone());
 
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_fighter_hud_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("fighter_hud_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Fighter HUD config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
 
                                     fighter_hud_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
@@ -2557,7 +2082,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_synthwave_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2574,24 +2098,8 @@ pub(crate) fn show_panel_properties_dialog(
                                 if widget_ref.is_none() {
                                     log::info!("=== Lazy-creating SynthwaveConfigWidget on displayer switch ===");
                                     let widget = crate::ui::SynthwaveConfigWidget::new(fields.clone());
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_synthwave_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("synthwave_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Synthwave config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
                                     synthwave_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
                                 }
@@ -2617,7 +2125,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_art_deco_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2634,24 +2141,8 @@ pub(crate) fn show_panel_properties_dialog(
                                 if widget_ref.is_none() {
                                     log::info!("=== Lazy-creating ArtDecoConfigWidget on displayer switch ===");
                                     let widget = crate::ui::ArtDecoConfigWidget::new(fields.clone());
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_art_deco_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("art_deco_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Art Deco config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
                                     art_deco_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
                                 }
@@ -2677,7 +2168,6 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
-        let panel_for_art_nouveau_lazy = panel.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2694,24 +2184,8 @@ pub(crate) fn show_panel_properties_dialog(
                                 if widget_ref.is_none() {
                                     log::info!("=== Lazy-creating ArtNouveauConfigWidget on displayer switch ===");
                                     let widget = crate::ui::ArtNouveauConfigWidget::new(fields.clone());
-                                    // Set up on_change callback to apply config changes immediately
-                                    // Use idle_add_local_once to defer write lock acquisition
-                                    let config_rc_for_change = widget.get_config_rc();
-                                    let panel_for_change = panel_for_art_nouveau_lazy.clone();
-                                    widget.set_on_change(move || {
-                                        let config = config_rc_for_change.borrow().clone();
-                                        let panel = panel_for_change.clone();
-                                        glib::idle_add_local_once(move || {
-                                            if let Ok(config_json) = serde_json::to_value(&config) {
-                                                let mut panel_guard = panel.blocking_write();
-                                                panel_guard.config.insert("art_nouveau_config".to_string(), config_json);
-                                                let config_clone = panel_guard.config.clone();
-                                                if let Err(e) = panel_guard.apply_config(config_clone) {
-                                                    log::warn!("Failed to apply Art Nouveau config on change: {}", e);
-                                                }
-                                            }
-                                        });
-                                    });
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
                                     art_nouveau_placeholder_clone.append(widget.widget());
                                     *widget_ref = Some(widget);
                                 }

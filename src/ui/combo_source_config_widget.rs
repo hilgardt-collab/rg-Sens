@@ -205,6 +205,14 @@ pub struct ComboSourceConfigWidget {
     cached_sources: Rc<CachedSources>,
     /// Debounce counter for group count spinner
     group_debounce_id: Rc<Cell<u32>>,
+    /// Generation counter to cancel stale async operations
+    rebuild_generation: Rc<Cell<u32>>,
+    /// Cached fields (updated asynchronously when sources change)
+    cached_fields: Rc<RefCell<Vec<crate::core::FieldMetadata>>>,
+    /// Generation counter for field updates (to cancel stale updates)
+    fields_generation: Rc<Cell<u32>>,
+    /// Callback to invoke when fields are updated asynchronously
+    on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>>,
 }
 
 /// Widgets for a single slot configuration
@@ -294,6 +302,15 @@ impl ComboSourceConfigWidget {
         // Debounce counter for group count spinner
         let group_debounce_id = Rc::new(Cell::new(0u32));
 
+        // Generation counter to cancel stale async operations
+        let rebuild_generation = Rc::new(Cell::new(0u32));
+
+        // Cached fields and generation counter
+        let cached_fields = Rc::new(RefCell::new(Vec::new()));
+        let fields_generation = Rc::new(Cell::new(0u32));
+        let on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>> =
+            Rc::new(RefCell::new(None));
+
         let widget = Self {
             container,
             config,
@@ -304,6 +321,10 @@ impl ComboSourceConfigWidget {
             on_change,
             cached_sources,
             group_debounce_id,
+            rebuild_generation,
+            cached_fields,
+            fields_generation,
+            on_fields_updated,
         };
 
         // Build tabs once with the initial config
@@ -317,6 +338,7 @@ impl ComboSourceConfigWidget {
             let on_change_clone = widget.on_change.clone();
             let cached_sources_clone = widget.cached_sources.clone();
             let debounce_id = widget.group_debounce_id.clone();
+            let rebuild_generation_clone = widget.rebuild_generation.clone();
 
             widget.group_count_spin.connect_value_changed(move |spin| {
                 let new_count = spin.value() as usize;
@@ -342,16 +364,23 @@ impl ComboSourceConfigWidget {
                 let on_change_for_rebuild = on_change_clone.clone();
                 let cached_for_rebuild = cached_sources_clone.clone();
                 let debounce_check = debounce_id.clone();
+                let rebuild_gen_for_rebuild = rebuild_generation_clone.clone();
 
                 glib::timeout_add_local_once(Duration::from_millis(SPINNER_DEBOUNCE_MS), move || {
                     // Only rebuild if this is still the latest change
                     if debounce_check.get() == current_id {
+                        // Increment generation to cancel any pending async operations
+                        let generation = rebuild_gen_for_rebuild.get().wrapping_add(1);
+                        rebuild_gen_for_rebuild.set(generation);
+
                         Self::rebuild_tabs_internal(
                             &config_for_rebuild,
                             &notebook_for_rebuild,
                             &slot_widgets_for_rebuild,
                             &on_change_for_rebuild,
                             &cached_for_rebuild,
+                            &rebuild_gen_for_rebuild,
+                            generation,
                         );
                         if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
                             cb();
@@ -460,12 +489,18 @@ impl ComboSourceConfigWidget {
 
     /// Rebuild the notebook tabs based on current configuration
     fn rebuild_tabs(&self) {
+        // Increment generation to cancel any pending async operations
+        let generation = self.rebuild_generation.get().wrapping_add(1);
+        self.rebuild_generation.set(generation);
+
         Self::rebuild_tabs_internal(
             &self.config,
             &self.notebook,
             &self.slot_widgets,
             &self.on_change,
             &self.cached_sources,
+            &self.rebuild_generation,
+            generation,
         );
     }
 
@@ -475,6 +510,8 @@ impl ComboSourceConfigWidget {
         slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         cached_sources: &Rc<CachedSources>,
+        rebuild_generation: &Rc<Cell<u32>>,
+        current_generation: u32,
     ) {
         // IMPORTANT: Before clearing widgets, save their current values back to config
         // This preserves settings when group/item counts change
@@ -512,10 +549,6 @@ impl ComboSourceConfigWidget {
         }
         slot_widgets.borrow_mut().clear();
 
-        // Use cached source info instead of querying registry
-        let source_ids = &cached_sources.source_ids;
-        let source_names = &cached_sources.source_names;
-
         // Collect group info before releasing borrow
         let groups_info: Vec<(usize, u32)> = {
             let cfg = config.borrow();
@@ -525,20 +558,81 @@ impl ComboSourceConfigWidget {
                 .collect()
         };
 
-        // Create a tab for each group with nested items notebook
-        for (group_num, item_count) in groups_info {
-            Self::create_group_tab(
-                notebook,
-                slot_widgets,
-                on_change,
-                config,
-                group_num,
-                item_count,
-                source_ids,
-                source_names,
-                cached_sources,
-            );
+        // If no groups, nothing more to do
+        if groups_info.is_empty() {
+            return;
         }
+
+        // Show loading indicator while creating tabs asynchronously
+        let loading_box = GtkBox::new(Orientation::Vertical, 12);
+        loading_box.set_halign(gtk4::Align::Center);
+        loading_box.set_valign(gtk4::Align::Center);
+        loading_box.set_vexpand(true);
+
+        let spinner = gtk4::Spinner::new();
+        spinner.set_size_request(32, 32);
+        spinner.start();
+        loading_box.append(&spinner);
+
+        let loading_label = Label::new(Some("Loading groups..."));
+        loading_label.add_css_class("dim-label");
+        loading_box.append(&loading_label);
+
+        // Add loading indicator as a temporary page
+        let loading_tab_label = Label::new(Some("Loading..."));
+        notebook.append_page(&loading_box, Some(&loading_tab_label));
+
+        // Create tabs incrementally using idle callbacks to keep UI responsive
+        let groups_queue = Rc::new(RefCell::new(groups_info.into_iter().collect::<std::collections::VecDeque<_>>()));
+        let config_clone = config.clone();
+        let notebook_clone = notebook.clone();
+        let slot_widgets_clone = slot_widgets.clone();
+        let on_change_clone = on_change.clone();
+        let cached_sources_clone = cached_sources.clone();
+        let loading_box_clone = loading_box.clone();
+        let is_first = Rc::new(Cell::new(true));
+        let generation_ref = rebuild_generation.clone();
+
+        glib::idle_add_local(move || {
+            // Check if this operation has been superseded by a newer rebuild
+            if generation_ref.get() != current_generation {
+                return glib::ControlFlow::Break;
+            }
+
+            // Get next group to create
+            let next_group = groups_queue.borrow_mut().pop_front();
+
+            if let Some((group_num, item_count)) = next_group {
+                // Remove loading indicator on first actual tab creation
+                if is_first.get() {
+                    is_first.set(false);
+                    // Remove the loading page
+                    if let Some(page_num) = notebook_clone.page_num(&loading_box_clone) {
+                        notebook_clone.remove_page(Some(page_num));
+                    }
+                }
+
+                Self::create_group_tab(
+                    &notebook_clone,
+                    &slot_widgets_clone,
+                    &on_change_clone,
+                    &config_clone,
+                    group_num,
+                    item_count,
+                    &cached_sources_clone.source_ids,
+                    &cached_sources_clone.source_names,
+                    &cached_sources_clone,
+                );
+
+                glib::ControlFlow::Continue
+            } else {
+                // All groups created - remove loading indicator if still present
+                if let Some(page_num) = notebook_clone.page_num(&loading_box_clone) {
+                    notebook_clone.remove_page(Some(page_num));
+                }
+                glib::ControlFlow::Break
+            }
+        });
     }
 
     /// Create a group tab containing an item count spinner and nested items notebook
@@ -593,6 +687,8 @@ impl ComboSourceConfigWidget {
 
         // Debounce counter for this group's item count spinner
         let item_debounce_id = Rc::new(Cell::new(0u32));
+        // Generation counter for cancelling stale async operations
+        let item_rebuild_generation = Rc::new(Cell::new(0u32));
 
         // Connect item count spinner change with debouncing
         {
@@ -603,6 +699,7 @@ impl ComboSourceConfigWidget {
             let cached_sources_clone = cached_sources.clone();
             let group_num_copy = group_num;
             let debounce_id = item_debounce_id.clone();
+            let rebuild_gen = item_rebuild_generation.clone();
 
             item_count_spin.connect_value_changed(move |spin| {
                 let new_item_count = spin.value() as u32;
@@ -626,10 +723,15 @@ impl ComboSourceConfigWidget {
                 let on_change_for_rebuild = on_change_clone.clone();
                 let cached_for_rebuild = cached_sources_clone.clone();
                 let debounce_check = debounce_id.clone();
+                let rebuild_gen_for_rebuild = rebuild_gen.clone();
 
                 glib::timeout_add_local_once(Duration::from_millis(SPINNER_DEBOUNCE_MS), move || {
                     // Only rebuild if this is still the latest change
                     if debounce_check.get() == current_id {
+                        // Increment generation to cancel any pending async operations
+                        let generation = rebuild_gen_for_rebuild.get().wrapping_add(1);
+                        rebuild_gen_for_rebuild.set(generation);
+
                         Self::rebuild_items_notebook(
                             &notebook_for_rebuild,
                             &slot_widgets_for_rebuild,
@@ -639,6 +741,8 @@ impl ComboSourceConfigWidget {
                             new_item_count,
                             &cached_for_rebuild.source_ids,
                             &cached_for_rebuild.source_names,
+                            &rebuild_gen_for_rebuild,
+                            generation,
                         );
 
                         if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
@@ -664,6 +768,8 @@ impl ComboSourceConfigWidget {
         item_count: u32,
         source_ids: &[String],
         source_names: &[String],
+        rebuild_generation: &Rc<Cell<u32>>,
+        current_generation: u32,
     ) {
         // Save current values for this group's slots before clearing
         // Only iterate over slots that actually exist in slot_widgets (not hardcoded 1-8)
@@ -712,21 +818,82 @@ impl ComboSourceConfigWidget {
             }
         }
 
-        // Create tabs for new item count
-        for item_idx in 1..=item_count {
-            let slot_name = format!("group{}_{}", group_num, item_idx);
-            let tab_label = format!("Item {}", item_idx);
-            Self::create_slot_tab(
-                notebook,
-                slot_widgets,
-                on_change,
-                config,
-                &slot_name,
-                &tab_label,
-                source_ids,
-                source_names,
-            );
+        // If no items, nothing more to do
+        if item_count == 0 {
+            return;
         }
+
+        // Show loading indicator while creating tabs asynchronously
+        let loading_box = GtkBox::new(Orientation::Vertical, 12);
+        loading_box.set_halign(gtk4::Align::Center);
+        loading_box.set_valign(gtk4::Align::Center);
+        loading_box.set_vexpand(true);
+
+        let spinner = gtk4::Spinner::new();
+        spinner.set_size_request(24, 24);
+        spinner.start();
+        loading_box.append(&spinner);
+
+        let loading_label = Label::new(Some("Loading items..."));
+        loading_label.add_css_class("dim-label");
+        loading_box.append(&loading_label);
+
+        // Add loading indicator as a temporary page
+        let loading_tab_label = Label::new(Some("..."));
+        notebook.append_page(&loading_box, Some(&loading_tab_label));
+
+        // Create tabs incrementally using idle callbacks to keep UI responsive
+        let items_queue = Rc::new(RefCell::new((1..=item_count).collect::<std::collections::VecDeque<_>>()));
+        let config_clone = config.clone();
+        let notebook_clone = notebook.clone();
+        let slot_widgets_clone = slot_widgets.clone();
+        let on_change_clone = on_change.clone();
+        let source_ids_clone = source_ids.to_vec();
+        let source_names_clone = source_names.to_vec();
+        let loading_box_clone = loading_box.clone();
+        let is_first = Rc::new(Cell::new(true));
+        let generation_ref = rebuild_generation.clone();
+
+        glib::idle_add_local(move || {
+            // Check if this operation has been superseded by a newer rebuild
+            if generation_ref.get() != current_generation {
+                return glib::ControlFlow::Break;
+            }
+
+            // Get next item to create
+            let next_item = items_queue.borrow_mut().pop_front();
+
+            if let Some(item_idx) = next_item {
+                // Remove loading indicator on first actual tab creation
+                if is_first.get() {
+                    is_first.set(false);
+                    if let Some(page_num) = notebook_clone.page_num(&loading_box_clone) {
+                        notebook_clone.remove_page(Some(page_num));
+                    }
+                }
+
+                let slot_name = format!("group{}_{}", group_num, item_idx);
+                let tab_label = format!("Item {}", item_idx);
+                Self::create_slot_tab(
+                    &notebook_clone,
+                    &slot_widgets_clone,
+                    &on_change_clone,
+                    &config_clone,
+                    &slot_name,
+                    &tab_label,
+                    &source_ids_clone,
+                    &source_names_clone,
+                );
+
+                glib::ControlFlow::Continue
+            } else {
+                // All items created - remove loading indicator if still present
+                if let Some(page_num) = notebook_clone.page_num(&loading_box_clone) {
+                    notebook_clone.remove_page(Some(page_num));
+                }
+                glib::ControlFlow::Break
+            }
+        });
     }
 
     /// Create the appropriate source config widget for a source type
@@ -1124,13 +1291,102 @@ impl ComboSourceConfigWidget {
             .collect()
     }
 
-    /// Get the available fields from the configured combo source
-    /// Creates a temporary source instance to get the actual fields from child sources
+    /// Get the available fields from the cached fields
+    /// Returns cached fields immediately (non-blocking). Call `update_fields_cache_async()`
+    /// to refresh the cache when source configuration changes.
     pub fn get_available_fields(&self) -> Vec<crate::core::FieldMetadata> {
+        self.cached_fields.borrow().clone()
+    }
+
+    /// Set a callback to be called when fields are updated asynchronously.
+    /// This allows displayer config widgets to update their UI when field data arrives.
+    pub fn set_on_fields_updated<F: Fn(Vec<crate::core::FieldMetadata>) + 'static>(&self, callback: F) {
+        *self.on_fields_updated.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Update the cached fields asynchronously (non-blocking).
+    /// Creates a ComboSource in a background thread and updates the cache when done.
+    /// Calls the `on_fields_updated` callback when the cache is updated.
+    pub fn update_fields_cache_async(&self) {
+        // Increment generation to cancel any pending updates
+        let generation = self.fields_generation.get().wrapping_add(1);
+        self.fields_generation.set(generation);
+
+        let config = self.config.borrow().clone();
+
+        // Use Arc for thread-safe references
+        let cached_fields = self.cached_fields.clone();
+        let fields_generation = self.fields_generation.clone();
+        let on_fields_updated = self.on_fields_updated.clone();
+
+        // Create a channel to send results back to main thread
+        let (tx, rx) = std::sync::mpsc::channel::<(u32, Vec<crate::core::FieldMetadata>)>();
+
+        // Spawn background thread for expensive ComboSource creation
+        std::thread::spawn(move || {
+            use crate::core::DataSource;
+            use crate::sources::ComboSource;
+            use serde_json::Value;
+
+            let start = std::time::Instant::now();
+            let mut source = ComboSource::new();
+
+            // Configure the source
+            let combo_config_value = serde_json::to_value(&config).unwrap_or(Value::Null);
+            let mut config_map: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+            config_map.insert("combo_config".to_string(), combo_config_value);
+
+            let fields = if source.configure(&config_map).is_ok() {
+                source.fields()
+            } else {
+                Vec::new()
+            };
+
+            log::debug!("Fields computed in background thread in {:?} with {} fields", start.elapsed(), fields.len());
+
+            // Send results back via channel
+            let _ = tx.send((generation, fields));
+        });
+
+        // Set up receiver on main thread to process results
+        glib::idle_add_local(move || {
+            match rx.try_recv() {
+                Ok((gen, fields)) => {
+                    // Check if this update is still valid (not superseded by newer request)
+                    if fields_generation.get() != gen {
+                        log::debug!("Skipping stale fields update (gen {} vs current {})", gen, fields_generation.get());
+                        return glib::ControlFlow::Break;
+                    }
+
+                    // Update the cache
+                    *cached_fields.borrow_mut() = fields.clone();
+
+                    // Notify listeners
+                    if let Some(ref callback) = *on_fields_updated.borrow() {
+                        callback(fields);
+                    }
+
+                    glib::ControlFlow::Break
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    // Results not ready yet, keep polling
+                    glib::ControlFlow::Continue
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // Channel closed (thread panicked or finished without sending)
+                    log::warn!("Fields computation thread disconnected without sending results");
+                    glib::ControlFlow::Break
+                }
+            }
+        });
+    }
+
+    /// Compute available fields synchronously (expensive - only use for Apply/Accept)
+    /// This is the original implementation that creates all child sources.
+    pub fn compute_fields_sync(&self) -> Vec<crate::core::FieldMetadata> {
         use crate::core::DataSource;
         use crate::sources::ComboSource;
         use serde_json::Value;
-        use std::collections::HashMap;
 
         let config = self.config.borrow().clone();
         let mut source = ComboSource::new();
