@@ -357,6 +357,20 @@ fn build_ui(app: &Application) {
     // Ensure proper z-ordering after all panels are loaded
     grid_layout.reorder_panels_by_z_index();
 
+    // Apply global theme to all panels (displayers need the theme for color resolution)
+    {
+        let global_theme = app_config.borrow().global_theme.clone();
+        let theme_value = serde_json::to_value(&global_theme).unwrap_or_default();
+        let mut theme_config = std::collections::HashMap::new();
+        theme_config.insert("global_theme".to_string(), theme_value);
+
+        for panel in &panels {
+            if let Ok(mut panel_guard) = panel.try_write() {
+                let _ = panel_guard.displayer.apply_config(&theme_config);
+            }
+        }
+    }
+
     // Debug: Print shared source statistics to verify source sharing
     if let Some(manager) = rg_sens::core::global_shared_source_manager() {
         manager.debug_print_sources();
