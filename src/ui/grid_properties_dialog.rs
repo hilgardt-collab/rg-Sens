@@ -3732,6 +3732,10 @@ pub(crate) fn show_panel_properties_dialog(
                     let clock_config = widget.get_config();
                     if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
                         panel_guard.config.insert("clock_analog_config".to_string(), clock_config_json);
+                        // Add global theme for theme-aware rendering
+                        if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
+                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                        }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply analog clock config: {}", e);

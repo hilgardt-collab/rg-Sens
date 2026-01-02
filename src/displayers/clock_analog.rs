@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
-use crate::ui::clock_display::{render_analog_clock, AnalogClockConfig};
+use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
+use crate::ui::theme::ComboThemeConfig;
 
 /// Analog clock displayer
 pub struct ClockAnalogDisplayer {
@@ -20,6 +21,7 @@ pub struct ClockAnalogDisplayer {
 #[derive(Clone)]
 struct DisplayData {
     config: AnalogClockConfig,
+    theme: ComboThemeConfig,
     hour: f64,
     minute: f64,
     second: f64,
@@ -37,6 +39,7 @@ impl ClockAnalogDisplayer {
     pub fn new() -> Self {
         let data = Arc::new(Mutex::new(DisplayData {
             config: AnalogClockConfig::default(),
+            theme: ComboThemeConfig::default(),
             hour: 0.0,
             minute: 0.0,
             second: 0.0,
@@ -123,7 +126,7 @@ impl Displayer for ClockAnalogDisplayer {
                     cr.translate(offset_x, clock_offset_y);
                 }
 
-                let _ = render_analog_clock(
+                let _ = render_analog_clock_with_theme(
                     cr,
                     &data.config,
                     hour,
@@ -131,6 +134,7 @@ impl Displayer for ClockAnalogDisplayer {
                     second,
                     clock_width,
                     clock_height,
+                    Some(&data.theme),
                 );
 
                 // Flash effect when alarm/timer triggers
@@ -363,7 +367,7 @@ impl Displayer for ClockAnalogDisplayer {
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
             data.transform.apply(cr, width, height);
-            render_analog_clock(
+            render_analog_clock_with_theme(
                 cr,
                 &data.config,
                 data.hour,
@@ -371,6 +375,7 @@ impl Displayer for ClockAnalogDisplayer {
                 data.second,
                 width,
                 height,
+                Some(&data.theme),
             )?;
             data.transform.restore(cr);
         }
@@ -428,6 +433,13 @@ impl Displayer for ClockAnalogDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Ok(mut data) = self.data.lock() {
+            // Check for global_theme in config
+            if let Some(theme_value) = config.get("global_theme") {
+                if let Ok(theme) = serde_json::from_value(theme_value.clone()) {
+                    data.theme = theme;
+                }
+            }
+
             // Check for clock_analog_config (new format from PanelData)
             if let Some(cfg) = config.get("clock_analog_config") {
                 if let Ok(new_config) = serde_json::from_value(cfg.clone()) {

@@ -329,7 +329,7 @@ pub fn render_analog_clock_with_theme(
     let radius = (width.min(height) / 2.0) - 10.0;
 
     // Draw face
-    draw_face(cr, config, center_x, center_y, radius)?;
+    draw_face(cr, config, center_x, center_y, radius, theme)?;
 
     // Draw tick marks
     draw_ticks(cr, config, center_x, center_y, radius)?;
@@ -393,6 +393,7 @@ fn draw_face(
     cx: f64,
     cy: f64,
     radius: f64,
+    theme: Option<&ComboThemeConfig>,
 ) -> Result<(), cairo::Error> {
     // Draw face background with circular clip
     cr.save()?;
@@ -402,10 +403,10 @@ fn draw_face(
     // Translate to top-left of the face area so render_background draws correctly
     cr.translate(cx - radius, cy - radius);
 
-    // Render background using common background system
+    // Render background using common background system with theme
     let face_width = radius * 2.0;
     let face_height = radius * 2.0;
-    let _ = crate::ui::render_background(cr, &config.face_background, face_width, face_height);
+    let _ = crate::ui::render_background_with_theme(cr, &config.face_background, face_width, face_height, theme);
 
     cr.restore()?; // Restores both clip and translation
 

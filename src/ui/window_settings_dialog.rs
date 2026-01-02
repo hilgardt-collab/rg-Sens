@@ -204,6 +204,7 @@ pub fn show_window_settings_dialog<F>(
     defaults_tab_box.append(&bg_label);
 
     let default_bg_widget = BackgroundConfigWidget::new();
+    default_bg_widget.set_theme_config(app_config.borrow().global_theme.clone());
     default_bg_widget.set_config(defaults_config.borrow().general.default_background.clone());
     let default_bg_widget_box = GtkBox::new(Orientation::Vertical, 0);
     default_bg_widget_box.set_margin_start(12);
@@ -323,6 +324,7 @@ pub fn show_window_settings_dialog<F>(
     bg_tab_box.set_margin_bottom(12);
 
     let background_widget = BackgroundConfigWidget::new();
+    background_widget.set_theme_config(app_config.borrow().global_theme.clone());
     background_widget.set_config(app_config.borrow().window.background.clone());
     bg_tab_box.append(background_widget.widget());
 
