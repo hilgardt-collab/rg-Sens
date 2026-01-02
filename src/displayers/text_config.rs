@@ -196,12 +196,47 @@ pub enum TextBackgroundType {
     #[default]
     None,
     #[serde(rename = "solid")]
-    Solid { color: Color },
+    Solid { color: ColorSource },
     #[serde(rename = "linear_gradient")]
     LinearGradient {
         stops: Vec<ColorStop>,
         angle: f64,
     },
+}
+
+impl TextBackgroundType {
+    /// Resolve the background color against a theme
+    pub fn resolved_color(&self, theme: Option<&ComboThemeConfig>) -> Option<Color> {
+        match self {
+            TextBackgroundType::None => None,
+            TextBackgroundType::Solid { color } => {
+                Some(if let Some(theme) = theme {
+                    color.resolve(theme)
+                } else {
+                    match color {
+                        ColorSource::Custom { color } => *color,
+                        ColorSource::Theme { index } => {
+                            // Fallback colors when no theme
+                            match index {
+                                1 => Color::new(1.0, 0.5, 0.0, 0.5),
+                                2 => Color::new(0.0, 0.8, 1.0, 0.5),
+                                3 => Color::new(1.0, 0.0, 0.5, 0.5),
+                                _ => Color::new(0.5, 1.0, 0.0, 0.5),
+                            }
+                        }
+                    }
+                })
+            }
+            TextBackgroundType::LinearGradient { stops, .. } => {
+                stops.first().map(|s| s.color)
+            }
+        }
+    }
+
+    /// Check if this background type is None
+    pub fn is_none(&self) -> bool {
+        matches!(self, TextBackgroundType::None)
+    }
 }
 
 fn default_bg_padding() -> f64 {

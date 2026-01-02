@@ -223,12 +223,27 @@ fn render_combined_parts(
         cr.translate(base_x + offset_x, base_y + offset_y);
     }
 
+    // Check if any part has a background configured - use first non-None background for group
+    // For grouped text, we render a single background for the entire bounding box
+    let group_bg_config = parts.iter()
+        .map(|(config, _)| &config.text_background)
+        .find(|bg| !bg.background.is_none());
+
+    // Render group background if any part has one configured
+    if let Some(bg_config) = group_bg_config {
+        // Render background for entire combined bounding box
+        render_text_background(cr, bg_config, 0.0, 0.0, combined_width, combined_height, theme);
+    }
+
     // Extract alignment components from TextPosition
     let (align_v, align_h) = alignment.to_positions();
 
     // Render each part based on direction and alignment
     // Note: y_offset is calculated as position of text TOP, but render_text_part
     // expects baseline position. We convert by subtracting y_bearing (which is negative).
+    // Skip individual backgrounds since we rendered the group background above
+    let skip_individual_bg = group_bg_config.is_some();
+
     match direction {
         CombineDirection::Horizontal => {
             let mut current_x = 0.0;
@@ -245,7 +260,7 @@ fn render_combined_parts(
                 // (y_bearing is negative, so we subtract it to go down to baseline)
                 let baseline_y = top_offset - ext.y_bearing();
 
-                render_text_part(cr, config, text, current_x, baseline_y, ext, theme);
+                render_text_part(cr, config, text, current_x, baseline_y, ext, theme, skip_individual_bg);
 
                 current_x += ext.width();
                 if i < parts.len() - 1 {
@@ -267,7 +282,7 @@ fn render_combined_parts(
                 // Convert top position to baseline position
                 let baseline_y = current_top - ext.y_bearing();
 
-                render_text_part(cr, config, text, x_offset, baseline_y, ext, theme);
+                render_text_part(cr, config, text, x_offset, baseline_y, ext, theme, skip_individual_bg);
 
                 current_top += ext.height();
                 if i < parts.len() - 1 {
@@ -281,6 +296,8 @@ fn render_combined_parts(
 }
 
 /// Render a single text part with background and fill support
+/// If `skip_background` is true, doesn't render individual background (used for grouped text
+/// where the group background is rendered separately)
 fn render_text_part(
     cr: &Context,
     config: &TextLineConfig,
@@ -289,6 +306,7 @@ fn render_text_part(
     y: f64,
     extents: &cairo::TextExtents,
     theme: Option<&ComboThemeConfig>,
+    skip_background: bool,
 ) {
     cr.save().ok();
 
@@ -311,8 +329,10 @@ fn render_text_part(
     cr.select_font_face(&font_family, font_slant, font_weight);
     cr.set_font_size(font_size);
 
-    // Render background if configured
-    render_text_background(cr, &config.text_background, x, y + extents.y_bearing(), extents.width(), extents.height());
+    // Render background if configured (skip when rendering grouped text - group renders its own background)
+    if !skip_background {
+        render_text_background(cr, &config.text_background, x, y + extents.y_bearing(), extents.width(), extents.height(), theme);
+    }
 
     // Position for text
     cr.move_to(x, y);
@@ -323,7 +343,7 @@ fn render_text_part(
     cr.restore().ok();
 }
 
-/// Render text background (solid or gradient)
+/// Render text background (solid or gradient) with theme support
 fn render_text_background(
     cr: &Context,
     bg_config: &TextBackgroundConfig,
@@ -331,6 +351,7 @@ fn render_text_background(
     y: f64,
     width: f64,
     height: f64,
+    theme: Option<&ComboThemeConfig>,
 ) {
     match &bg_config.background {
         TextBackgroundType::None => {}
@@ -339,9 +360,22 @@ fn render_text_background(
             let padding = bg_config.padding;
             let radius = bg_config.corner_radius;
 
+            // Resolve color against theme
+            let resolved = if let Some(theme) = theme {
+                color.resolve(theme)
+            } else {
+                match color {
+                    crate::ui::theme::ColorSource::Custom { color } => *color,
+                    crate::ui::theme::ColorSource::Theme { .. } => {
+                        // Fallback to semi-transparent gray when no theme
+                        crate::ui::background::Color::new(0.3, 0.3, 0.3, 0.5)
+                    }
+                }
+            };
+
             // Draw rounded rectangle
             draw_rounded_rect(cr, x - padding, y - padding, width + padding * 2.0, height + padding * 2.0, radius);
-            cr.set_source_rgba(color.r, color.g, color.b, color.a);
+            cr.set_source_rgba(resolved.r, resolved.g, resolved.b, resolved.a);
             cr.fill().ok();
             cr.restore().ok();
         }
@@ -531,7 +565,7 @@ fn render_text_with_config(
         let draw_y = -extents.y_bearing() - text_h / 2.0;
 
         // Render background
-        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
+        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h, theme);
 
         // Render text with fill
         render_text_fill(cr, config, text, draw_x, draw_y, &extents, theme);
@@ -542,7 +576,7 @@ fn render_text_with_config(
         let draw_y = baseline_y + offset_y;
 
         // Render background (use actual text extents for background sizing)
-        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h);
+        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h, theme);
 
         // Render text with fill
         render_text_fill(cr, config, text, draw_x, draw_y, &extents, theme);

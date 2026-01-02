@@ -6,10 +6,9 @@ use crate::displayers::{
     TextFillType, TextLineConfig,
 };
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::gradient_editor::GradientEditor;
 use crate::ui::position_grid_widget::PositionGridWidget;
-use crate::ui::theme::{ComboThemeConfig, FontSource};
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
 use gtk4::prelude::*;
@@ -789,14 +788,17 @@ impl TextLineConfigWidget {
         bg_params_box.set_visible(initial_bg_type_index != 0);
         bg_box.append(&bg_params_box);
 
-        // Background solid color container
+        // Background solid color container (theme-aware)
         let bg_solid_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_solid_box.append(&Label::new(Some("Color:")));
-        let bg_solid_color = match &line_config.text_background.background {
-            TextBackgroundType::Solid { color } => *color,
-            _ => Color::new(0.0, 0.0, 0.0, 0.5),
+        let bg_color_source = match &line_config.text_background.background {
+            TextBackgroundType::Solid { color } => color.clone(),
+            _ => ColorSource::Custom { color: Color::new(0.0, 0.0, 0.0, 0.5) },
         };
-        let bg_color_widget = Rc::new(ColorButtonWidget::new(bg_solid_color));
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(bg_color_source));
+        // Set theme config and store in fill_color_selectors for theme updates
+        bg_color_widget.set_theme_config(theme.borrow().clone());
+        fill_color_selectors.borrow_mut().push(bg_color_widget.clone());
         bg_solid_box.append(bg_color_widget.widget());
         bg_solid_box.set_visible(initial_bg_type_index == 1);
         bg_box.append(&bg_solid_box);
@@ -854,7 +856,7 @@ impl TextLineConfigWidget {
                     let bg_type = match selected {
                         0 => TextBackgroundType::None,
                         1 => TextBackgroundType::Solid {
-                            color: bg_color_widget_clone.color(),
+                            color: bg_color_widget_clone.source(),
                         },
                         2 => {
                             let grad = bg_gradient_editor_clone.get_gradient();
@@ -878,17 +880,17 @@ impl TextLineConfigWidget {
             });
         }
 
-        // Connect background color change handler
+        // Connect background color change handler (theme-aware)
         {
             let lines_clone = lines.clone();
             let bg_padding_spin_clone = bg_padding_spin.clone();
             let bg_radius_spin_clone = bg_radius_spin.clone();
             let on_change_bg_color = on_change.clone();
-            bg_color_widget.set_on_change(move |new_color| {
+            bg_color_widget.set_on_change(move |new_source| {
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.text_background = TextBackgroundConfig {
-                        background: TextBackgroundType::Solid { color: new_color },
+                        background: TextBackgroundType::Solid { color: new_source },
                         padding: bg_padding_spin_clone.value(),
                         corner_radius: bg_radius_spin_clone.value(),
                     };
