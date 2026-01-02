@@ -366,6 +366,36 @@ pub fn render_background_with_source(
     Ok(())
 }
 
+/// Render a background with source values and theme support
+pub fn render_background_with_source_and_theme(
+    cr: &cairo::Context,
+    config: &BackgroundConfig,
+    width: f64,
+    height: f64,
+    source_values: &std::collections::HashMap<String, serde_json::Value>,
+    theme: Option<&ComboThemeConfig>,
+) -> Result<(), cairo::Error> {
+    match &config.background {
+        BackgroundType::Indicator(indicator) => {
+            // Get value from source based on value_field
+            let value = if !indicator.value_field.is_empty() {
+                source_values
+                    .get(&indicator.value_field)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(indicator.static_value)
+            } else {
+                indicator.static_value
+            };
+            render_indicator_background_with_value(cr, indicator, value, width, height)?;
+        }
+        // For non-indicator backgrounds, render with theme
+        _ => {
+            render_background_with_theme(cr, config, width, height, theme)?;
+        }
+    }
+    Ok(())
+}
+
 /// Render a linear gradient
 fn render_linear_gradient(
     cr: &cairo::Context,

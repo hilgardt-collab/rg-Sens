@@ -774,6 +774,7 @@ impl GridLayout {
 
         // Setup background rendering
         let panel_clone_bg = panel.clone();
+        let app_config_bg = self.app_config.clone();
         let background_area_weak = background_area.downgrade();
         background_area.set_draw_func(move |_, cr, w, h| {
             match panel_clone_bg.try_read() {
@@ -797,9 +798,10 @@ impl GridLayout {
                     // Render background with clipping
                     cr.save().ok();
                     cr.clip();
-                    // Get source values for indicator backgrounds
+                    // Get source values for indicator backgrounds and theme for color resolution
                     let source_values = panel_guard.source.get_values();
-                    if let Err(e) = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values) {
+                    let theme = app_config_bg.borrow().global_theme.clone();
+                    if let Err(e) = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme)) {
                         log::warn!("Failed to render background: {}", e);
                     }
                     cr.restore().ok();
@@ -1825,6 +1827,7 @@ impl GridLayout {
 
                                 // Setup background rendering
                                 let panel_clone_bg = new_panel.clone();
+                                let app_config_bg = app_config_for_copy.clone();
                                 let background_area_weak = background_area.downgrade();
                                 background_area.set_draw_func(move |_, cr, w, h| {
                                     match panel_clone_bg.try_read() {
@@ -1849,7 +1852,8 @@ impl GridLayout {
                                             cr.save().ok();
                                             cr.clip();
                                             let source_values = panel_guard.source.get_values();
-                                            if let Err(e) = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values) {
+                                            let theme = app_config_bg.borrow().global_theme.clone();
+                                            if let Err(e) = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme)) {
                                                 log::warn!("Failed to render background: {}", e);
                                             }
                                             cr.restore().ok();
@@ -2642,6 +2646,7 @@ impl GridLayout {
 
                                                             // Setup background rendering
                                                             let panel_clone_bg = new_panel.clone();
+                                                            let app_config_bg = app_config_drag_end.clone();
                                                             let background_area_weak = background_area.downgrade();
                                                             background_area.set_draw_func(move |_, cr, w, h| {
                                                                 match panel_clone_bg.try_read() {
@@ -2664,7 +2669,8 @@ impl GridLayout {
                                                                         cr.save().ok();
                                                                         cr.clip();
                                                                         let source_values = panel_guard.source.get_values();
-                                                                        if let Err(e) = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values) {
+                                                                        let theme = app_config_bg.borrow().global_theme.clone();
+                                                                        if let Err(e) = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme)) {
                                                                             log::warn!("Failed to render background: {}", e);
                                                                         }
                                                                         cr.restore().ok();
@@ -3744,6 +3750,7 @@ fn setup_copied_panel_interaction(
                                 new_background_area.set_size_request(width, height);
 
                                 let panel_clone_bg = new_panel.clone();
+                                let app_config_bg = app_config_end.clone();
                                 let background_area_weak = new_background_area.downgrade();
                                 new_background_area.set_draw_func(move |_, cr, w, h| {
                                     if let Ok(panel_guard) = panel_clone_bg.try_read() {
@@ -3765,7 +3772,8 @@ fn setup_copied_panel_interaction(
                                         cr.save().ok();
                                         cr.clip();
                                         let source_values = panel_guard.source.get_values();
-                                        let _ = crate::ui::render_background_with_source(cr, &panel_guard.background, width, height, &source_values);
+                                        let theme = app_config_bg.borrow().global_theme.clone();
+                                        let _ = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme));
                                         cr.restore().ok();
 
                                         if panel_guard.border.enabled {

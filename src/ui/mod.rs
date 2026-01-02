@@ -81,7 +81,7 @@ pub use color_button_widget::ColorButtonWidget;
 pub use grid_layout::{GridConfig, GridLayout, BorderlessDragCallback};
 pub use config_dialog::ConfigDialog;
 pub use color_picker::ColorPickerDialog;
-pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background, render_background_with_source, render_background_with_theme, ImageDisplayMode, IndicatorBackgroundConfig, IndicatorBackgroundShape, render_indicator_background_with_value};
+pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background, render_background_with_source, render_background_with_theme, render_background_with_source_and_theme, ImageDisplayMode, IndicatorBackgroundConfig, IndicatorBackgroundShape, render_indicator_background_with_value};
 pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
 pub use image_picker::ImagePicker;
