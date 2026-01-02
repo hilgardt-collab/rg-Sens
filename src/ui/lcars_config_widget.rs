@@ -1728,6 +1728,11 @@ impl LcarsConfigWidget {
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) {
+        // CRITICAL: Clear stale theme refresh callbacks before rebuilding tabs.
+        // Each content item adds multiple callbacks, and without clearing,
+        // these accumulate on every rebuild causing memory leaks and CPU explosion.
+        theme_ref_refreshers.borrow_mut().clear();
+
         let notebook = content_notebook.borrow();
 
         // Clear existing tabs
