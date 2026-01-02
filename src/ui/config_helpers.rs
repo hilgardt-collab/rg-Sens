@@ -43,9 +43,10 @@ pub fn show_save_dialog(
             Ok(2) => {
                 // Save button (index 2)
                 info!("User chose to save configuration");
-                // Get current panels from GridLayout (not a stale clone)
-                let current_panels = grid_layout_clone.borrow().get_panels();
-                save_config_with_app_config(&mut app_config_clone.borrow_mut(), &window_clone, &current_panels);
+                // Use with_panels to avoid cloning the Vec
+                grid_layout_clone.borrow().with_panels(|panels| {
+                    save_config_with_app_config(&mut app_config_clone.borrow_mut(), &window_clone, panels);
+                });
                 window_clone.destroy(); // Use destroy to bypass close handler
             }
             Ok(0) => {

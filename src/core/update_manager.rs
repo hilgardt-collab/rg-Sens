@@ -159,18 +159,17 @@ fn compute_config_hash_from_data(source_config: &SourceConfig) -> u64 {
 /// Compute a simple hash of the config keys that affect update interval (legacy fallback)
 ///
 /// OPTIMIZATION: Only extract and hash update_interval_ms from config structs.
-/// Avoids full JSON serialization.
+/// Avoids full JSON serialization. Iterates through actual config keys instead of
+/// searching for each possible key.
 fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
     use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
 
     let mut hasher = DefaultHasher::new();
 
-    // Hash only the update_interval_ms from each config type (no full serialization)
-    for key in ["cpu_config", "gpu_config", "memory_config", "system_temp_config",
-                "fan_speed_config", "disk_config", "clock_config", "combo_config",
-                "static_text_config", "test_config"] {
-        if let Some(value) = config.get(key) {
+    // Iterate through actual keys in config (typically just 1-2 keys)
+    for (key, value) in config.iter() {
+        if key.ends_with("_config") {
             key.hash(&mut hasher);
             // Only hash the update_interval_ms field, not the entire config
             if let Some(interval) = value.get("update_interval_ms").and_then(|v| v.as_u64()) {
@@ -185,17 +184,12 @@ fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
 /// Extract update interval from panel config
 ///
 /// Optimized to directly extract `update_interval_ms` field from JSON without
-/// deserializing the entire config struct.
+/// deserializing the entire config struct. Iterates through actual config keys
+/// instead of searching for each possible key.
 fn extract_update_interval(config: &HashMap<String, serde_json::Value>, _panel_id: &str) -> Duration {
-    // All source configs have update_interval_ms as a field
-    // Instead of deserializing the full struct, just extract the field directly
-    const CONFIG_KEYS: &[&str] = &[
-        "cpu_config", "gpu_config", "memory_config", "system_temp_config",
-        "fan_speed_config", "disk_config", "clock_config", "combo_config",
-    ];
-
-    for key in CONFIG_KEYS {
-        if let Some(config_value) = config.get(*key) {
+    // Iterate through actual keys in config (typically just 1-2 keys)
+    for (key, config_value) in config.iter() {
+        if key.ends_with("_config") {
             if let Some(obj) = config_value.as_object() {
                 if let Some(interval) = obj.get("update_interval_ms") {
                     if let Some(ms) = interval.as_u64() {

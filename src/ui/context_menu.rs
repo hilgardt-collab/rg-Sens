@@ -269,8 +269,10 @@ pub fn show_context_menu<F>(
     save_layout_btn.connect_clicked(move |_| {
         popover_for_save.popdown();
         info!("Save layout requested");
-        let current_panels = grid_layout_for_save.borrow().get_panels();
-        config_helpers::save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, &current_panels);
+        // Use with_panels to avoid cloning the Vec
+        grid_layout_for_save.borrow().with_panels(|panels| {
+            config_helpers::save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, panels);
+        });
         config_dirty_for_save.store(false, Ordering::Relaxed);
     });
 
@@ -327,16 +329,17 @@ pub fn show_context_menu<F>(
                     if let Some(path) = file.path() {
                         info!("Saving layout to {:?}", path);
 
-                        let current_panels = grid_layout.borrow().get_panels();
                         let (width, height) = (window.default_width(), window.default_height());
-                        // Use blocking_read to ensure all panels are saved
-                        let panel_data_list: Vec<PanelData> = current_panels
-                            .iter()
-                            .map(|panel| {
-                                let panel_guard = panel.blocking_read();
-                                panel_guard.to_data()
-                            })
-                            .collect();
+                        // Use with_panels to avoid cloning the Vec
+                        let panel_data_list: Vec<PanelData> = grid_layout.borrow().with_panels(|panels| {
+                            panels
+                                .iter()
+                                .map(|panel| {
+                                    let panel_guard = panel.blocking_read();
+                                    panel_guard.to_data()
+                                })
+                                .collect()
+                        });
 
                         // Update config in place instead of cloning
                         {
@@ -477,18 +480,19 @@ pub fn show_context_menu<F>(
         let grid_layout = grid_layout_for_test.clone();
         let config_dirty = config_dirty_for_test.clone();
         let save_callback: crate::ui::TestSourceSaveCallback = Box::new(move |test_config| {
-            // Save to all panels that use test source
-            let panels = grid_layout.borrow().get_panels();
-            for panel in panels {
-                if let Ok(mut panel_guard) = panel.try_write() {
-                    if panel_guard.source.metadata().id == "test" {
-                        if let Ok(config_json) = serde_json::to_value(test_config) {
-                            panel_guard.config.insert("test_config".to_string(), config_json);
-                            log::debug!("Saved test source config to panel {}", panel_guard.id);
+            // Save to all panels that use test source (use with_panels to avoid Vec clone)
+            grid_layout.borrow().with_panels(|panels| {
+                for panel in panels {
+                    if let Ok(mut panel_guard) = panel.try_write() {
+                        if panel_guard.source.metadata().id == "test" {
+                            if let Ok(config_json) = serde_json::to_value(test_config) {
+                                panel_guard.config.insert("test_config".to_string(), config_json);
+                                log::debug!("Saved test source config to panel {}", panel_guard.id);
+                            }
                         }
                     }
                 }
-            }
+            });
             // Mark config as dirty so it gets saved
             config_dirty.store(true, Ordering::Relaxed);
         });
