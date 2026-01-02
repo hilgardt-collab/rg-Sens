@@ -144,11 +144,15 @@ impl ClockAnalogConfigWidget {
         number_box.append(&show_numbers_check);
 
         // Font selector (theme-aware)
+        // Note: Clock stores font size as fraction of radius (0.12 = 12%), but
+        // ThemeFontSelector uses percentage values (12). Convert between them.
         let font_row = GtkBox::new(Orientation::Horizontal, 6);
         font_row.append(&Label::new(Some("Font:")));
 
         let initial_font = config.borrow().number_font.clone();
-        let number_font_selector = Rc::new(ThemeFontSelector::new(initial_font));
+        // Convert fraction to percentage for display (0.12 -> 12)
+        let initial_font_for_selector = initial_font.with_size(initial_font.size() * 100.0);
+        let number_font_selector = Rc::new(ThemeFontSelector::new(initial_font_for_selector));
         number_font_selector.set_theme_config(theme_config.borrow().clone());
         number_font_selector.widget().set_hexpand(true);
         font_row.append(number_font_selector.widget());
@@ -177,9 +181,11 @@ impl ClockAnalogConfigWidget {
         number_box.append(&color_row);
 
         // Connect font selector callback
+        // Convert percentage back to fraction for storage (12 -> 0.12)
         let config_for_font = config.clone();
         number_font_selector.set_on_change(move |font_source| {
-            config_for_font.borrow_mut().number_font = font_source;
+            let font_as_fraction = font_source.with_size(font_source.size() / 100.0);
+            config_for_font.borrow_mut().number_font = font_as_fraction;
         });
 
         // Connect color selector callback
@@ -619,8 +625,9 @@ impl ClockAnalogConfigWidget {
             HandStyle::Fancy => 3,
         });
 
-        // Font settings
-        self.number_font_selector.set_source(config.number_font.clone());
+        // Font settings - convert fraction to percentage for display (0.12 -> 12)
+        let font_as_percentage = config.number_font.with_size(config.number_font.size() * 100.0);
+        self.number_font_selector.set_source(font_as_percentage);
         self.number_bold_check.set_active(config.number_bold);
         self.number_italic_check.set_active(config.number_italic);
 
