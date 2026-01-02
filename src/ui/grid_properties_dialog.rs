@@ -1574,7 +1574,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Only set up on_change callback if the widget exists (lazy init)
         if let Some(ref widget) = *combo_config_widget.borrow() {
-            let combo_widget_for_callback = combo_widget_for_lcars.clone();
+            // IMPORTANT: Use Weak reference to break circular reference cycle.
+            // The closure captures combo_widget_for_callback, and the widget stores
+            // the closure in on_change. Using Rc would create: Rc -> Widget -> on_change -> Rc
+            let combo_widget_weak = Rc::downgrade(&combo_widget_for_lcars);
             let panel_for_callback = panel_for_combo_change.clone();
             let lcars_w = lcars_widget_clone.clone();
             let cyberpunk_w = cyberpunk_widget_clone.clone();
@@ -1588,7 +1591,9 @@ pub(crate) fn show_panel_properties_dialog(
 
             widget.set_on_change(move || {
                 // Get source summaries from combo config
-                let Some(ref widget) = *combo_widget_for_callback.borrow() else { return };
+                // Use Weak::upgrade to get a temporary strong reference (returns None if dropped)
+                let Some(combo_widget_rc) = combo_widget_weak.upgrade() else { return };
+                let Some(ref widget) = *combo_widget_rc.borrow() else { return };
                 let summaries = widget.get_source_summaries();
                 let fields = widget.get_available_fields();
 
