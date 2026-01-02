@@ -336,6 +336,16 @@ impl Displayer for CpuCoresDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+        // Check for global_theme update (always apply, regardless of other config)
+        if let Some(theme_value) = config.get("global_theme") {
+            if let Ok(theme) = serde_json::from_value(theme_value.clone()) {
+                if let Ok(mut display_data) = self.data.lock() {
+                    display_data.theme = theme;
+                    display_data.dirty = true;
+                }
+            }
+        }
+
         // Check for full core_bars_config first
         if let Some(config_value) = config.get("core_bars_config") {
             if let Ok(bars_config) = serde_json::from_value::<CoreBarsConfig>(config_value.clone()) {

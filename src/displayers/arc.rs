@@ -224,6 +224,15 @@ impl Displayer for ArcDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+        // Check for global_theme update (always apply, regardless of other config)
+        if let Some(theme_value) = config.get("global_theme") {
+            if let Ok(theme) = serde_json::from_value(theme_value.clone()) {
+                if let Ok(mut display_data) = self.data.lock() {
+                    display_data.config.theme = theme;
+                }
+            }
+        }
+
         // Check for full arc_config first
         if let Some(arc_config_value) = config.get("arc_config") {
             if let Ok(arc_config) = serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone()) {

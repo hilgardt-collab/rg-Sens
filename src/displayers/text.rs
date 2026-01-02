@@ -2,6 +2,7 @@
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, STATIC_POLL_INTERVAL};
 use crate::displayers::TextDisplayerConfig;
+use crate::ui::theme::ComboThemeConfig;
 use anyhow::Result;
 use cairo::Context;
 use gtk4::{glib, prelude::*, DrawingArea, Widget};
@@ -24,6 +25,8 @@ struct DisplayData {
     values: HashMap<String, Value>,
     /// Text display configuration
     config: TextDisplayerConfig,
+    /// Theme configuration for resolving theme colors/fonts
+    theme: ComboThemeConfig,
     /// Panel transform (scale and translate)
     transform: PanelTransform,
     /// Flag to indicate data has changed and needs redraw
@@ -35,6 +38,7 @@ impl TextDisplayer {
         let data = Arc::new(Mutex::new(DisplayData {
             values: HashMap::new(),
             config: TextDisplayerConfig::default(),
+            theme: ComboThemeConfig::default(),
             transform: PanelTransform::default(),
             dirty: true,
         }));
@@ -52,13 +56,14 @@ impl TextDisplayer {
         // Apply panel transform (scale and translate)
         data.transform.apply(cr, width as f64, height as f64);
 
-        // Use shared text renderer
-        crate::ui::text_renderer::render_text_lines(
+        // Use shared text renderer with theme support
+        crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             width as f64,
             height as f64,
             &data.config,
             &data.values,
+            Some(&data.theme),
         );
 
         // Restore transform
@@ -173,6 +178,15 @@ impl Displayer for TextDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
+        // Check for global_theme update (always apply, regardless of other config)
+        if let Some(theme_value) = config.get("global_theme") {
+            if let Ok(theme) = serde_json::from_value(theme_value.clone()) {
+                if let Ok(mut data) = self.data.lock() {
+                    data.theme = theme;
+                }
+            }
+        }
+
         // Check for full text_config first (new format from PanelData)
         if let Some(text_config_value) = config.get("text_config") {
             if let Ok(text_config) = serde_json::from_value::<TextDisplayerConfig>(text_config_value.clone()) {
