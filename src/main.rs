@@ -889,8 +889,13 @@ fn build_ui(app: &Application) {
     let grid_layout_for_menu = grid_layout_for_settings.clone();
     let config_dirty_for_menu = config_dirty.clone();
     let start_auto_scroll_for_menu = start_auto_scroll.clone();
+    let scrolled_window_for_menu = scrolled_window.clone();
 
     gesture_click.connect_pressed(move |gesture, _, x, y| {
+        // Get scroll offsets to convert window coordinates to grid coordinates
+        let scroll_x = scrolled_window_for_menu.hadjustment().value();
+        let scroll_y = scrolled_window_for_menu.vadjustment().value();
+
         context_menu::show_context_menu(
             &window_for_menu,
             &app_config_for_menu,
@@ -900,6 +905,8 @@ fn build_ui(app: &Application) {
             &start_auto_scroll_for_menu,
             x,
             y,
+            scroll_x,
+            scroll_y,
         );
         gesture.set_state(gtk4::EventSequenceState::Claimed);
     });

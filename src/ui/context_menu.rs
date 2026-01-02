@@ -29,6 +29,8 @@ pub fn show_context_menu<F>(
     start_auto_scroll: &Rc<F>,
     x: f64,
     y: f64,
+    scroll_x: f64,
+    scroll_y: f64,
 ) where
     F: Fn() + 'static,
 {
@@ -111,18 +113,19 @@ pub fn show_context_menu<F>(
     let grid_layout_for_new = grid_layout.clone();
     let config_dirty_for_new = config_dirty.clone();
     let app_config_for_new = app_config.clone();
-    let mouse_x = x;
-    let mouse_y = y;
+    // Add scroll offset to mouse coordinates to get grid-relative position
+    let grid_x = x + scroll_x;
+    let grid_y = y + scroll_y;
     let popover_for_new = popover_ref.clone();
     new_panel_btn.connect_clicked(move |_| {
         popover_for_new.popdown();
-        info!("New panel requested at ({}, {})", mouse_x, mouse_y);
+        info!("New panel requested at grid position ({}, {})", grid_x, grid_y);
         new_panel_dialog::show_new_panel_dialog(
             &window_for_new,
             &grid_layout_for_new,
             &config_dirty_for_new,
             &app_config_for_new,
-            Some((mouse_x, mouse_y)),
+            Some((grid_x, grid_y)),
         );
     });
 
@@ -132,8 +135,9 @@ pub fn show_context_menu<F>(
     let config_dirty_for_load_panel = config_dirty.clone();
     let app_config_for_load_panel = app_config.clone();
     let popover_for_load_panel = popover_ref.clone();
-    let load_mouse_x = x;
-    let load_mouse_y = y;
+    // Add scroll offset to mouse coordinates to get grid-relative position
+    let load_grid_x = x + scroll_x;
+    let load_grid_y = y + scroll_y;
     load_panel_btn.connect_clicked(move |_| {
         popover_for_load_panel.popdown();
         info!("Load panel from file requested");
@@ -141,8 +145,8 @@ pub fn show_context_menu<F>(
         let grid_layout = grid_layout_for_load_panel.clone();
         let config_dirty = config_dirty_for_load_panel.clone();
         let app_config = app_config_for_load_panel.clone();
-        let mouse_x = load_mouse_x;
-        let mouse_y = load_mouse_y;
+        let mouse_x = load_grid_x;
+        let mouse_y = load_grid_y;
 
         gtk4::glib::MainContext::default().spawn_local(async move {
             use gtk4::FileDialog;
