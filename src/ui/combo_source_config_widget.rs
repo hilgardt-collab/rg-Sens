@@ -851,35 +851,69 @@ impl ComboSourceConfigWidget {
         config_frame.set_child(Some(&config_container));
         tab_box.append(&config_frame);
 
-        // Create initial source config widget if source is selected
+        // Create initial source config widget LAZILY - only show placeholder initially
+        // Widget will be created when tab is mapped (becomes visible)
         let source_config_widget: Rc<RefCell<Option<SourceConfigWidgetType>>> =
             Rc::new(RefCell::new(None));
 
-        if !current_source_id.is_empty() && current_source_id != "none" {
-            if let Some(source_widget) = Self::create_source_config_widget(&current_source_id) {
-                // Load existing config
-                source_widget.set_config_from_json(&current_source_config);
+        // Track whether widget has been initialized
+        let widget_initialized = Rc::new(RefCell::new(false));
 
-                let widget_gtk = source_widget.widget();
-                config_container.append(&widget_gtk);
-                *source_config_widget.borrow_mut() = Some(source_widget);
-            } else {
-                let no_config_label = Label::new(Some("No additional configuration available for this source."));
-                no_config_label.set_halign(gtk4::Align::Start);
-                no_config_label.set_margin_start(12);
-                no_config_label.set_margin_top(8);
-                no_config_label.set_margin_bottom(8);
-                no_config_label.add_css_class("dim-label");
-                config_container.append(&no_config_label);
-            }
-        } else {
-            let select_source_label = Label::new(Some("Select a data source above to see configuration options."));
-            select_source_label.set_halign(gtk4::Align::Start);
-            select_source_label.set_margin_start(12);
-            select_source_label.set_margin_top(8);
-            select_source_label.set_margin_bottom(8);
-            select_source_label.add_css_class("dim-label");
-            config_container.append(&select_source_label);
+        // Show placeholder initially
+        let placeholder_label = Label::new(Some("Loading source configuration..."));
+        placeholder_label.set_halign(gtk4::Align::Start);
+        placeholder_label.set_margin_start(12);
+        placeholder_label.set_margin_top(8);
+        placeholder_label.set_margin_bottom(8);
+        placeholder_label.add_css_class("dim-label");
+        config_container.append(&placeholder_label);
+
+        // Set up lazy initialization when tab becomes visible
+        {
+            let config_container_clone = config_container.clone();
+            let source_config_widget_clone = source_config_widget.clone();
+            let widget_initialized_clone = widget_initialized.clone();
+            let current_source_id_clone = current_source_id.clone();
+            let current_source_config_clone = current_source_config.clone();
+
+            tab_scrolled.connect_map(move |_| {
+                // Only initialize once
+                if *widget_initialized_clone.borrow() {
+                    return;
+                }
+                *widget_initialized_clone.borrow_mut() = true;
+
+                // Remove placeholder
+                while let Some(child) = config_container_clone.first_child() {
+                    config_container_clone.remove(&child);
+                }
+
+                // Create the actual source config widget
+                if !current_source_id_clone.is_empty() && current_source_id_clone != "none" {
+                    if let Some(source_widget) = Self::create_source_config_widget(&current_source_id_clone) {
+                        source_widget.set_config_from_json(&current_source_config_clone);
+                        let widget_gtk = source_widget.widget();
+                        config_container_clone.append(&widget_gtk);
+                        *source_config_widget_clone.borrow_mut() = Some(source_widget);
+                    } else {
+                        let no_config_label = Label::new(Some("No additional configuration available for this source."));
+                        no_config_label.set_halign(gtk4::Align::Start);
+                        no_config_label.set_margin_start(12);
+                        no_config_label.set_margin_top(8);
+                        no_config_label.set_margin_bottom(8);
+                        no_config_label.add_css_class("dim-label");
+                        config_container_clone.append(&no_config_label);
+                    }
+                } else {
+                    let select_source_label = Label::new(Some("Select a data source above to see configuration options."));
+                    select_source_label.set_halign(gtk4::Align::Start);
+                    select_source_label.set_margin_start(12);
+                    select_source_label.set_margin_top(8);
+                    select_source_label.set_margin_bottom(8);
+                    select_source_label.add_css_class("dim-label");
+                    config_container_clone.append(&select_source_label);
+                }
+            });
         }
 
         // Copy source config handler
@@ -952,8 +986,11 @@ impl ComboSourceConfigWidget {
             let source_ids_clone = source_ids.to_vec();
             let config_container_clone = config_container.clone();
             let source_config_widget_clone = source_config_widget.clone();
+            let widget_initialized_clone = widget_initialized.clone();
 
             source_dropdown.connect_selected_notify(move |dropdown| {
+                // Mark as initialized since user is now interacting
+                *widget_initialized_clone.borrow_mut() = true;
                 let selected_idx = dropdown.selected() as usize;
                 if selected_idx < source_ids_clone.len() {
                     let source_id = &source_ids_clone[selected_idx];

@@ -1764,59 +1764,83 @@ pub(crate) fn show_panel_properties_dialog(
             });
         }
 
-        // Initialize the ACTIVE combo config widget with current source summaries if combo source is selected
-        // (Other widgets are created lazily and will be initialized when switched to)
+        // Initialize ONLY the ACTIVE combo config widget with current source summaries if combo source is selected
+        // Other widgets will be initialized when switched to (lazy init)
         if old_source_id == "combination" {
-            if let Some(ref widget) = *combo_config_widget.borrow() {
-                let summaries = widget.get_source_summaries();
-                let fields = widget.get_available_fields();
-                log::info!("=== Initializing active combo widget at startup: {} summaries, {} fields ===", summaries.len(), fields.len());
+            if let Some(ref combo_widget) = *combo_config_widget.borrow() {
+                let summaries = combo_widget.get_source_summaries();
+                let fields = combo_widget.get_available_fields();
+                log::info!("=== Initializing active combo widget '{}' at startup: {} summaries, {} fields ===",
+                    old_displayer_id, summaries.len(), fields.len());
 
-            // Only initialize the widget that exists (the active one)
-            if let Some(ref widget) = *lcars_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
+                // Only initialize the ACTIVE displayer widget (based on old_displayer_id)
+                match old_displayer_id.as_str() {
+                    "lcars" => {
+                        if let Some(ref widget) = *lcars_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "cyberpunk" => {
+                        if let Some(ref widget) = *cyberpunk_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "material" => {
+                        if let Some(ref widget) = *material_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "industrial" => {
+                        if let Some(ref widget) = *industrial_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "retro_terminal" => {
+                        if let Some(ref widget) = *retro_terminal_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "fighter_hud" => {
+                        if let Some(ref widget) = *fighter_hud_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "synthwave" => {
+                        if let Some(ref widget) = *synthwave_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "art_deco" => {
+                        if let Some(ref widget) = *art_deco_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    "art_nouveau" => {
+                        if let Some(ref widget) = *art_nouveau_config_widget.borrow() {
+                            widget.set_available_fields(fields);
+                            widget.set_source_summaries(summaries);
+                        }
+                    }
+                    _ => {
+                        log::debug!("=== Displayer '{}' doesn't need source summaries ===", old_displayer_id);
+                    }
+                }
             }
-            if let Some(ref widget) = *cyberpunk_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *material_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *industrial_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *retro_terminal_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *fighter_hud_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *synthwave_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *art_deco_config_widget.borrow() {
-                widget.set_available_fields(fields.clone());
-                widget.set_source_summaries(summaries.clone());
-            }
-            if let Some(ref widget) = *art_nouveau_config_widget.borrow() {
-                widget.set_available_fields(fields);
-                widget.set_source_summaries(summaries);
-            }
-            } // end if let Some(ref widget) = *combo_config_widget.borrow()
         } else {
             log::info!("=== Skipping combo widget init: old_source_id='{}' (need 'combination') ===", old_source_id);
         }
     }
 
     // Update combo config widgets when source dropdown changes to "combination"
-    // Only updates widgets that exist (lazy init means only active one is created)
+    // Only updates the ACTIVE displayer widget (lazy init means only active one is created)
     {
         let lcars_widget_clone = lcars_config_widget.clone();
         let cyberpunk_widget_clone = cyberpunk_config_widget.clone();
@@ -1829,53 +1853,84 @@ pub(crate) fn show_panel_properties_dialog(
         let art_nouveau_widget_clone = art_nouveau_config_widget.clone();
         let combo_widget_clone = combo_config_widget.clone();
         let sources_clone = sources.clone();
+        let displayers_for_source = displayers.clone();
+        let displayer_combo_clone = displayer_combo.clone();
         source_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(source_id) = sources_clone.get(selected_idx) {
                 if source_id == "combination" {
-                    // Update existing combo widgets with source summaries
-                    if let Some(ref widget) = *combo_widget_clone.borrow() {
-                        let summaries = widget.get_source_summaries();
-                        let fields = widget.get_available_fields();
-                        log::info!("=== Source changed to 'combination': updating existing combo widgets with {} source summaries ===", summaries.len());
+                    // Get current displayer ID
+                    let displayer_idx = displayer_combo_clone.selected() as usize;
+                    let current_displayer = displayers_for_source.borrow()
+                        .get(displayer_idx)
+                        .cloned()
+                        .unwrap_or_default();
 
-                        if let Some(ref widget) = *lcars_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
+                    // Update ONLY the active combo widget with source summaries
+                    if let Some(ref combo_widget) = *combo_widget_clone.borrow() {
+                        let summaries = combo_widget.get_source_summaries();
+                        let fields = combo_widget.get_available_fields();
+                        log::info!("=== Source changed to 'combination': updating displayer '{}' with {} source summaries ===",
+                            current_displayer, summaries.len());
+
+                        match current_displayer.as_str() {
+                            "lcars" => {
+                                if let Some(ref widget) = *lcars_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "cyberpunk" => {
+                                if let Some(ref widget) = *cyberpunk_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "material" => {
+                                if let Some(ref widget) = *material_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "industrial" => {
+                                if let Some(ref widget) = *industrial_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "retro_terminal" => {
+                                if let Some(ref widget) = *retro_terminal_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "fighter_hud" => {
+                                if let Some(ref widget) = *fighter_hud_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "synthwave" => {
+                                if let Some(ref widget) = *synthwave_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "art_deco" => {
+                                if let Some(ref widget) = *art_deco_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            "art_nouveau" => {
+                                if let Some(ref widget) = *art_nouveau_widget_clone.borrow() {
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+                                }
+                            }
+                            _ => {}
+                        }
                     }
-                    if let Some(ref widget) = *cyberpunk_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *material_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *industrial_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *retro_terminal_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *fighter_hud_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *synthwave_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *art_deco_widget_clone.borrow() {
-                        widget.set_available_fields(fields.clone());
-                        widget.set_source_summaries(summaries.clone());
-                    }
-                    if let Some(ref widget) = *art_nouveau_widget_clone.borrow() {
-                        widget.set_available_fields(fields);
-                        widget.set_source_summaries(summaries);
-                    }
-                    } // end if let Some(ref widget) = *combo_widget_clone.borrow()
                 }
             }
         });
