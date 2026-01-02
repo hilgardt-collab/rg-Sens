@@ -18,7 +18,7 @@ use crate::ui::synthwave_display::{
 };
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::{
-    LazyBarConfigWidget, LazyGraphConfigWidget, LazyTextLineConfigWidget, CoreBarsConfigWidget,
+    LazyBarConfigWidget, LazyGraphConfigWidget, LazyTextOverlayConfigWidget, CoreBarsConfigWidget,
     BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget, GradientEditor,
     ThemeFontSelector,
 };
@@ -1752,20 +1752,20 @@ impl SynthwaveConfigWidget {
         inner_box.append(&graph_config_frame);
 
         // === Text Configuration Section (Lazy-loaded) ===
-        let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
+        let text_config_frame = gtk4::Frame::new(Some("Text Overlay"));
         text_config_frame.set_margin_top(12);
 
-        let text_widget = LazyTextLineConfigWidget::new(slot_fields.clone());
+        let text_widget = LazyTextOverlayConfigWidget::new(slot_fields.clone());
         // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
         text_widget.set_theme(config.borrow().frame.theme.clone());
-        let current_text_config = {
+        let current_text_overlay = {
             let cfg = config.borrow();
             cfg.frame.content_items
                 .get(slot_name)
-                .map(|item| item.bar_config.text_overlay.text_config.clone())
+                .map(|item| item.bar_config.text_overlay.clone())
                 .unwrap_or_default()
         };
-        text_widget.set_config(current_text_config);
+        text_widget.set_config(current_text_overlay);
 
         // Only save when Text display mode is active to avoid overwriting BarConfigWidget's changes
         let slot_name_clone = slot_name.to_string();
@@ -1782,9 +1782,7 @@ impl SynthwaveConfigWidget {
             // Only update if Text mode is active (not Bar mode which has its own text widget)
             let is_text_mode = matches!(item.display_as, ContentDisplayType::Text | ContentDisplayType::Static);
             if is_text_mode {
-                let text_config = text_widget_for_callback.get_config();
-                item.bar_config.text_overlay.enabled = true;
-                item.bar_config.text_overlay.text_config = text_config;
+                item.bar_config.text_overlay = text_widget_for_callback.get_config();
             }
             drop(cfg);
             Self::queue_redraw(&preview_clone, &on_change_clone);

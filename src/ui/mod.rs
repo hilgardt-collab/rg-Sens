@@ -87,7 +87,7 @@ pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
 pub use image_picker::ImagePicker;
 pub use text_line_config_widget::{TextLineConfigWidget, LazyTextLineConfigWidget};
-pub use text_overlay_config_widget::{TextOverlayConfig, TextOverlayConfigWidget};
+pub use text_overlay_config_widget::{LazyTextOverlayConfigWidget, TextOverlayConfig, TextOverlayConfigWidget};
 pub use cpu_source_config_widget::{CpuSourceConfigWidget, CpuSourceConfig, CpuField, TemperatureUnit, FrequencyUnit, CoreSelection};
 pub use gpu_source_config_widget::{GpuSourceConfigWidget, GpuSourceConfig, GpuField, MemoryUnit, FrequencyUnit as GpuFrequencyUnit};
 pub use memory_source_config_widget::{MemorySourceConfigWidget, MemorySourceConfig, MemoryField};

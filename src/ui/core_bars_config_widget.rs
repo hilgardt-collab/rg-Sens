@@ -18,7 +18,7 @@ use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::GradientEditor;
-use crate::ui::TextLineConfigWidget;
+use crate::ui::TextOverlayConfigWidget;
 
 /// Core bars configuration widget
 pub struct CoreBarsConfigWidget {
@@ -82,7 +82,7 @@ pub struct CoreBarsConfigWidget {
     gradient_spans_bars_check: CheckButton,
 
     // Text overlay
-    text_config_widget: Option<Rc<TextLineConfigWidget>>,
+    text_overlay_widget: Rc<TextOverlayConfigWidget>,
 }
 
 impl CoreBarsConfigWidget {
@@ -146,53 +146,26 @@ impl CoreBarsConfigWidget {
         let preview = DrawingArea::new();
 
         // === Tab 6: Text Overlay ===
-        // Always show Text tab - when no fields are provided, manual entry is still possible
-        let text_page = GtkBox::new(Orientation::Vertical, 8);
-        text_page.set_margin_start(8);
-        text_page.set_margin_end(8);
-        text_page.set_margin_top(8);
-        text_page.set_margin_bottom(8);
+        // Use TextOverlayConfigWidget for consistent text overlay handling
+        let text_overlay_widget = Rc::new(TextOverlayConfigWidget::new(fields.clone()));
+        text_overlay_widget.set_config(config.borrow().text_overlay.clone());
+        text_overlay_widget.set_theme(theme.borrow().clone());
+        text_overlay_widget.widget().set_vexpand(true);
 
-        // Enable text overlay checkbox
-        let text_check = CheckButton::with_label("Enable Text Overlay");
-        text_check.set_active(config.borrow().text_overlay.enabled);
-        text_page.append(&text_check);
-
-        let text_widget = TextLineConfigWidget::new(fields.clone());
-        text_widget.widget().set_vexpand(true);
-        text_page.append(text_widget.widget());
-        let text_widget = Rc::new(text_widget);
-
-        // Connect text config change
+        // Connect text overlay change
         let config_for_text = config.clone();
         let preview_for_text = preview.clone();
         let on_change_for_text = on_change.clone();
-        let text_widget_for_change = text_widget.clone();
-        text_widget.set_on_change(move || {
-            config_for_text.borrow_mut().text_overlay.text_config = text_widget_for_change.get_config();
+        let text_overlay_for_change = text_overlay_widget.clone();
+        text_overlay_widget.set_on_change(move || {
+            config_for_text.borrow_mut().text_overlay = text_overlay_for_change.get_config();
             preview_for_text.queue_draw();
             if let Some(callback) = on_change_for_text.borrow().as_ref() {
                 callback();
             }
         });
 
-        // Connect enable checkbox
-        let config_for_check = config.clone();
-        let on_change_for_check = on_change.clone();
-        let preview_for_check = preview.clone();
-        let text_widget_for_check = text_widget.widget().clone();
-        text_check.connect_toggled(move |check| {
-            let enabled = check.is_active();
-            text_widget_for_check.set_sensitive(enabled);
-            config_for_check.borrow_mut().text_overlay.enabled = enabled;
-            preview_for_check.queue_draw();
-            if let Some(callback) = on_change_for_check.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        notebook.append_page(&text_page, Some(&Label::new(Some("Text"))));
-        let text_config_widget = Some(text_widget);
+        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text"))));
 
         // Preview configuration
         preview.set_content_height(150);
@@ -261,7 +234,7 @@ impl CoreBarsConfigWidget {
             animate_check,
             animation_speed_scale,
             gradient_spans_bars_check,
-            text_config_widget,
+            text_overlay_widget,
         }
     }
 
@@ -1251,10 +1224,8 @@ impl CoreBarsConfigWidget {
     pub fn get_config(&self) -> CoreBarsConfig {
         let mut config = self.config.borrow().clone();
 
-        // Update text config from widget
-        if let Some(ref text_widget) = self.text_config_widget {
-            config.text_overlay.text_config = text_widget.get_config();
-        }
+        // Update text overlay from widget
+        config.text_overlay = self.text_overlay_widget.get_config();
 
         config
     }
@@ -1361,9 +1332,7 @@ impl CoreBarsConfigWidget {
         self.gradient_spans_bars_check.set_visible(is_gradient);
 
         // Text overlay
-        if let Some(ref text_widget) = self.text_config_widget {
-            text_widget.set_config(config.text_overlay.text_config.clone());
-        }
+        self.text_overlay_widget.set_config(config.text_overlay.clone());
 
         // Store config
         *self.config.borrow_mut() = config;
@@ -1399,10 +1368,8 @@ impl CoreBarsConfigWidget {
         self.bg_gradient_editor.set_theme_config(theme.clone());
         self.border_color_widget.set_theme_config(theme.clone());
         self.label_color_widget.set_theme_config(theme.clone());
-        // Update text config widget if present
-        if let Some(ref text_widget) = self.text_config_widget {
-            text_widget.set_theme(theme);
-        }
+        // Update text overlay widget
+        self.text_overlay_widget.set_theme(theme);
         self.preview.queue_draw();
         // Notify parent to refresh with new theme colors
         if let Some(callback) = self.on_change.borrow().as_ref() {

@@ -18,7 +18,7 @@ use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrien
 use crate::ui::theme::{ComboThemeConfig, FontSource};
 use crate::ui::{
     ArcConfigWidget, CoreBarsConfigWidget, GradientEditor, LazyBarConfigWidget,
-    LazyGraphConfigWidget, LazyTextLineConfigWidget, SpeedometerConfigWidget, StaticConfigWidget,
+    LazyGraphConfigWidget, LazyTextOverlayConfigWidget, SpeedometerConfigWidget, StaticConfigWidget,
 };
 
 /// Trait for combo panel frame configurations that support theming
@@ -1055,25 +1055,25 @@ where
     graph_config_frame.set_child(Some(graph_widget_rc.widget()));
     inner_box.append(&graph_config_frame);
 
-    // === Text Configuration Section (Lazy-loaded for performance) ===
-    let text_config_frame = gtk4::Frame::new(Some("Text Configuration"));
+    // === Text Overlay Section (Lazy-loaded for performance) ===
+    let text_config_frame = gtk4::Frame::new(Some("Text Overlay"));
     text_config_frame.set_margin_top(12);
 
-    // Use LazyTextLineConfigWidget to defer expensive widget creation until user clicks
-    let text_widget = LazyTextLineConfigWidget::new(slot_fields.clone());
+    // Use LazyTextOverlayConfigWidget to defer expensive widget creation until user clicks
+    let text_widget = LazyTextOverlayConfigWidget::new(slot_fields.clone());
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
         text_widget.set_theme(get_theme(&cfg));
     }
-    let current_text_config = {
+    let current_text_overlay = {
         let cfg = config.borrow();
         get_content_items(&cfg)
             .get(slot_name)
-            .map(|item| item.bar_config.text_overlay.text_config.clone())
+            .map(|item| item.bar_config.text_overlay.clone())
             .unwrap_or_default()
     };
-    text_widget.set_config(current_text_config);
+    text_widget.set_config(current_text_overlay);
 
     // Connect text widget on_change
     let text_widget_rc = Rc::new(text_widget);
@@ -1095,8 +1095,7 @@ where
             // Only update if Text mode is active (not Bar mode which has its own text widget)
             let is_text_mode = matches!(item.display_as, ContentDisplayType::Text | ContentDisplayType::Static);
             if is_text_mode {
-                let text_config = text_widget_for_cb.get_config();
-                item.bar_config.text_overlay.text_config = text_config;
+                item.bar_config.text_overlay = text_widget_for_cb.get_config();
             }
             set_content_item_clone(&mut cfg, &slot_name_clone, item);
             drop(cfg);
