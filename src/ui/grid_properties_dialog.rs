@@ -679,19 +679,25 @@ pub(crate) fn show_panel_properties_dialog(
     let text_config_label = Label::new(Some("Text Configuration"));
     text_config_label.add_css_class("heading");
     text_config_label.set_margin_top(12);
-
-    // Get available fields from the current data source
-    let available_fields = panel_guard.source.fields();
-
-    let text_config_widget = crate::ui::TextLineConfigWidget::new(available_fields.clone());
-    text_config_widget.widget().set_visible(old_displayer_id == "text");
     text_config_label.set_visible(old_displayer_id == "text");
 
-    // Load existing text config if displayer is text
-    // Prefer getting config directly from displayer (most up-to-date), fall back to panel config
+    // Get available fields from the current data source - use Rc to avoid cloning
+    let available_fields = Rc::new(panel_guard.source.fields());
+
+    // Create placeholder box for lazy widget creation
+    let text_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    text_placeholder.set_visible(old_displayer_id == "text");
+
+    // Use Option for lazy initialization - only create widget when needed
+    let text_config_widget: Rc<RefCell<Option<crate::ui::TextLineConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create text widget if this is the active displayer (lazy init)
     if old_displayer_id == "text" {
+        let widget = crate::ui::TextLineConfigWidget::new((*available_fields).clone());
+
+        // Load existing text config
         let config_loaded = if let Some(crate::core::DisplayerConfig::Text(text_config)) = panel_guard.displayer.get_typed_config() {
-            text_config_widget.set_config(text_config);
+            widget.set_config(text_config);
             true
         } else {
             false
@@ -700,108 +706,111 @@ pub(crate) fn show_panel_properties_dialog(
         // Fall back to panel config hashmap if get_typed_config didn't work
         if !config_loaded {
             let text_config = if let Some(lines_value) = panel_guard.config.get("lines") {
-                // Load from saved config
                 serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
                     serde_json::json!({ "lines": lines_value })
                 ).unwrap_or_default()
             } else {
-                // Use default config if no saved config exists
                 crate::displayers::TextDisplayerConfig::default()
             };
-            text_config_widget.set_config(text_config);
+            widget.set_config(text_config);
         }
+
+        text_placeholder.append(widget.widget());
+        *text_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&text_config_label);
-    displayer_tab_box.append(text_config_widget.widget());
-
-    // Wrap text_config_widget in Rc for sharing
-    let text_config_widget = Rc::new(text_config_widget);
+    displayer_tab_box.append(&text_placeholder);
 
     // Bar displayer configuration (shown only when bar displayer is selected)
     let bar_config_label = Label::new(Some("Bar Configuration"));
     bar_config_label.add_css_class("heading");
     bar_config_label.set_margin_top(12);
-
-    // Get available fields from the current data source (same as text displayer)
-    let bar_config_widget = crate::ui::BarConfigWidget::new(available_fields.clone());
-    bar_config_widget.widget().set_visible(old_displayer_id == "bar");
     bar_config_label.set_visible(old_displayer_id == "bar");
 
-    // Load existing bar config if displayer is bar, or use default
+    // Create placeholder box for lazy widget creation
+    let bar_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    bar_placeholder.set_visible(old_displayer_id == "bar");
+
+    // Use Option for lazy initialization - only create widget when needed
+    let bar_config_widget: Rc<RefCell<Option<crate::ui::BarConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create bar widget if this is the active displayer (lazy init)
     if old_displayer_id == "bar" {
+        let widget = crate::ui::BarConfigWidget::new((*available_fields).clone());
         let bar_config = if let Some(bar_config_value) = panel_guard.config.get("bar_config") {
-            // Use saved config if available
             serde_json::from_value::<crate::ui::BarDisplayConfig>(bar_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::BarDisplayConfig::default())
         } else {
-            // Use default config (includes caption, value, unit text lines)
             crate::ui::BarDisplayConfig::default()
         };
-        bar_config_widget.set_config(bar_config);
+        widget.set_config(bar_config);
+        bar_placeholder.append(widget.widget());
+        *bar_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&bar_config_label);
-    displayer_tab_box.append(bar_config_widget.widget());
-
-    // Wrap bar_config_widget in Rc for sharing
-    let bar_config_widget = Rc::new(bar_config_widget);
+    displayer_tab_box.append(&bar_placeholder);
 
     // Arc displayer configuration (shown only when arc displayer is selected)
     let arc_config_label = Label::new(Some("Arc Gauge Configuration"));
     arc_config_label.add_css_class("heading");
     arc_config_label.set_margin_top(12);
-
-    let arc_config_widget = crate::ui::ArcConfigWidget::new(available_fields.clone());
-    arc_config_widget.widget().set_visible(old_displayer_id == "arc");
     arc_config_label.set_visible(old_displayer_id == "arc");
 
-    // Load existing arc config if displayer is arc, or use default
+    // Create placeholder box for lazy widget creation
+    let arc_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    arc_placeholder.set_visible(old_displayer_id == "arc");
+
+    // Use Option for lazy initialization
+    let arc_config_widget: Rc<RefCell<Option<crate::ui::ArcConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create arc widget if this is the active displayer (lazy init)
     if old_displayer_id == "arc" {
+        let widget = crate::ui::ArcConfigWidget::new((*available_fields).clone());
         let arc_config = if let Some(arc_config_value) = panel_guard.config.get("arc_config") {
-            // Use saved config if available
             serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::ArcDisplayConfig::default())
         } else {
-            // Use default config
             crate::ui::ArcDisplayConfig::default()
         };
-        arc_config_widget.set_config(arc_config);
+        widget.set_config(arc_config);
+        arc_placeholder.append(widget.widget());
+        *arc_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&arc_config_label);
-    displayer_tab_box.append(arc_config_widget.widget());
-
-    // Wrap arc_config_widget in Rc for sharing
-    let arc_config_widget = Rc::new(arc_config_widget);
+    displayer_tab_box.append(&arc_placeholder);
 
     // Speedometer displayer configuration (shown only when speedometer displayer is selected)
     let speedometer_config_label = Label::new(Some("Speedometer Gauge Configuration"));
     speedometer_config_label.add_css_class("heading");
     speedometer_config_label.set_margin_top(12);
-
-    let speedometer_config_widget = crate::ui::SpeedometerConfigWidget::new(available_fields.clone());
-    speedometer_config_widget.widget().set_visible(old_displayer_id == "speedometer");
     speedometer_config_label.set_visible(old_displayer_id == "speedometer");
 
-    // Load existing speedometer config if displayer is speedometer, or use default
+    // Create placeholder box for lazy widget creation
+    let speedometer_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    speedometer_placeholder.set_visible(old_displayer_id == "speedometer");
+
+    // Use Option for lazy initialization
+    let speedometer_config_widget: Rc<RefCell<Option<crate::ui::SpeedometerConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create speedometer widget if this is the active displayer (lazy init)
     if old_displayer_id == "speedometer" {
+        let widget = crate::ui::SpeedometerConfigWidget::new((*available_fields).clone());
         let speedometer_config = if let Some(speedometer_config_value) = panel_guard.config.get("speedometer_config") {
-            // Use saved config if available
             serde_json::from_value::<crate::ui::SpeedometerConfig>(speedometer_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::SpeedometerConfig::default())
         } else {
-            // Use default config
             crate::ui::SpeedometerConfig::default()
         };
-        speedometer_config_widget.set_config(&speedometer_config);
+        widget.set_config(&speedometer_config);
+        speedometer_placeholder.append(widget.widget());
+        *speedometer_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&speedometer_config_label);
-    displayer_tab_box.append(speedometer_config_widget.widget());
-
-    // Wrap speedometer_config_widget in Rc for sharing
-    let speedometer_config_widget = Rc::new(speedometer_config_widget);
+    displayer_tab_box.append(&speedometer_placeholder);
 
     // Graph displayer configuration widget
     let graph_config_label = Label::new(Some("Graph Configuration:"));
@@ -809,27 +818,29 @@ pub(crate) fn show_panel_properties_dialog(
     graph_config_label.add_css_class("heading");
     graph_config_label.set_visible(old_displayer_id == "graph");
 
-    let graph_config_widget = crate::ui::GraphConfigWidget::new(available_fields.clone());
-    graph_config_widget.widget().set_visible(old_displayer_id == "graph");
+    // Create placeholder box for lazy widget creation
+    let graph_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    graph_placeholder.set_visible(old_displayer_id == "graph");
 
-    // Load existing graph config if displayer is graph, or use default
+    // Use Option for lazy initialization
+    let graph_config_widget: Rc<RefCell<Option<crate::ui::GraphConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create graph widget if this is the active displayer (lazy init)
     if old_displayer_id == "graph" {
+        let widget = crate::ui::GraphConfigWidget::new((*available_fields).clone());
         let graph_config = if let Some(graph_config_value) = panel_guard.config.get("graph_config") {
-            // Use saved config if available
             serde_json::from_value::<crate::ui::GraphDisplayConfig>(graph_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::GraphDisplayConfig::default())
         } else {
-            // Use default config
             crate::ui::GraphDisplayConfig::default()
         };
-        graph_config_widget.set_config(graph_config);
+        widget.set_config(graph_config);
+        graph_placeholder.append(widget.widget());
+        *graph_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&graph_config_label);
-    displayer_tab_box.append(graph_config_widget.widget());
-
-    // Wrap graph_config_widget in Rc for sharing
-    let graph_config_widget = Rc::new(graph_config_widget);
+    displayer_tab_box.append(&graph_placeholder);
 
     // Analog Clock displayer configuration widget
     let clock_analog_config_label = Label::new(Some("Analog Clock Configuration:"));
@@ -837,26 +848,30 @@ pub(crate) fn show_panel_properties_dialog(
     clock_analog_config_label.add_css_class("heading");
     clock_analog_config_label.set_visible(old_displayer_id == "clock_analog");
 
-    let clock_analog_config_widget = crate::ui::ClockAnalogConfigWidget::new();
-    clock_analog_config_widget.widget().set_visible(old_displayer_id == "clock_analog");
+    // Create placeholder box for lazy widget creation
+    let clock_analog_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    clock_analog_placeholder.set_visible(old_displayer_id == "clock_analog");
 
-    // Load existing analog clock config if displayer is clock_analog
+    // Use Option for lazy initialization
+    let clock_analog_config_widget: Rc<RefCell<Option<crate::ui::ClockAnalogConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create clock_analog widget if this is the active displayer (lazy init)
     if old_displayer_id == "clock_analog" {
+        let widget = crate::ui::ClockAnalogConfigWidget::new();
         // Try new key first, then legacy key for backwards compatibility
         let config_value = panel_guard.config.get("clock_analog_config")
             .or_else(|| panel_guard.config.get("analog_clock_config"));
         if let Some(config_value) = config_value {
             if let Ok(config) = serde_json::from_value::<crate::ui::AnalogClockConfig>(config_value.clone()) {
-                clock_analog_config_widget.set_config(config);
+                widget.set_config(config);
             }
         }
+        clock_analog_placeholder.append(widget.widget());
+        *clock_analog_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&clock_analog_config_label);
-    displayer_tab_box.append(clock_analog_config_widget.widget());
-
-    // Wrap clock_analog_config_widget in Rc for sharing
-    let clock_analog_config_widget = Rc::new(clock_analog_config_widget);
+    displayer_tab_box.append(&clock_analog_placeholder);
 
     // Digital Clock displayer configuration widget
     let clock_digital_config_label = Label::new(Some("Digital Clock Configuration:"));
@@ -864,26 +879,30 @@ pub(crate) fn show_panel_properties_dialog(
     clock_digital_config_label.add_css_class("heading");
     clock_digital_config_label.set_visible(old_displayer_id == "clock_digital");
 
-    let clock_digital_config_widget = crate::ui::ClockDigitalConfigWidget::new();
-    clock_digital_config_widget.widget().set_visible(old_displayer_id == "clock_digital");
+    // Create placeholder box for lazy widget creation
+    let clock_digital_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    clock_digital_placeholder.set_visible(old_displayer_id == "clock_digital");
 
-    // Load existing digital clock config if displayer is clock_digital
+    // Use Option for lazy initialization
+    let clock_digital_config_widget: Rc<RefCell<Option<crate::ui::ClockDigitalConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create clock_digital widget if this is the active displayer (lazy init)
     if old_displayer_id == "clock_digital" {
+        let widget = crate::ui::ClockDigitalConfigWidget::new();
         // Try new key first, then legacy key for backwards compatibility
         let config_value = panel_guard.config.get("clock_digital_config")
             .or_else(|| panel_guard.config.get("digital_clock_config"));
         if let Some(config_value) = config_value {
             if let Ok(config) = serde_json::from_value::<crate::displayers::DigitalClockConfig>(config_value.clone()) {
-                clock_digital_config_widget.set_config(config);
+                widget.set_config(config);
             }
         }
+        clock_digital_placeholder.append(widget.widget());
+        *clock_digital_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&clock_digital_config_label);
-    displayer_tab_box.append(clock_digital_config_widget.widget());
-
-    // Wrap clock_digital_config_widget in Rc for sharing
-    let clock_digital_config_widget = Rc::new(clock_digital_config_widget);
+    displayer_tab_box.append(&clock_digital_placeholder);
 
     // === LCARS Configuration (Lazy Initialization) ===
     let lcars_config_label = Label::new(Some("LCARS Configuration:"));
@@ -901,7 +920,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create LCARS widget if this is the active displayer (lazy init)
     if old_displayer_id == "lcars" {
         log::info!("=== Creating LcarsConfigWidget (lazy init), old_displayer='{}', old_source='{}' ===", old_displayer_id, old_source_id);
-        let widget = crate::ui::LcarsConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::LcarsConfigWidget::new((*available_fields).clone());
 
         // Load existing LCARS config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
@@ -950,67 +969,70 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&lcars_config_label);
     displayer_tab_box.append(&lcars_placeholder);
 
-    // === CPU Cores Configuration ===
+    // === CPU Cores Configuration (Lazy Initialization) ===
     let cpu_cores_config_label = Label::new(Some("CPU Cores Configuration:"));
     cpu_cores_config_label.set_halign(gtk4::Align::Start);
     cpu_cores_config_label.add_css_class("heading");
     cpu_cores_config_label.set_visible(old_displayer_id == "cpu_cores");
 
-    let cpu_cores_config_widget = crate::ui::CoreBarsConfigWidget::new();
-    cpu_cores_config_widget.widget().set_visible(old_displayer_id == "cpu_cores");
+    // Create placeholder box for lazy widget creation
+    let cpu_cores_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    cpu_cores_placeholder.set_visible(old_displayer_id == "cpu_cores");
 
-    // Load existing CPU cores config if displayer is cpu_cores
+    // Use Option for lazy initialization
+    let cpu_cores_config_widget: Rc<RefCell<Option<crate::ui::CoreBarsConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create cpu_cores widget if this is the active displayer (lazy init)
     if old_displayer_id == "cpu_cores" {
+        let widget = crate::ui::CoreBarsConfigWidget::new();
         if let Some(config_value) = panel_guard.config.get("core_bars_config") {
             if let Ok(config) = serde_json::from_value::<crate::ui::CoreBarsConfig>(config_value.clone()) {
-                cpu_cores_config_widget.set_config(config);
+                widget.set_config(config);
             }
         }
-    }
-
-    // Count available CPU cores from source fields (e.g., "core0_usage", "core1_usage", ...)
-    let core_count = available_fields.iter()
-        .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
-        .count();
-    if core_count > 0 {
-        cpu_cores_config_widget.set_max_cores(core_count);
+        // Count available CPU cores from source fields
+        let core_count = available_fields.iter()
+            .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
+            .count();
+        if core_count > 0 {
+            widget.set_max_cores(core_count);
+        }
+        widget.set_on_change(|| {});
+        cpu_cores_placeholder.append(widget.widget());
+        *cpu_cores_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&cpu_cores_config_label);
-    displayer_tab_box.append(cpu_cores_config_widget.widget());
+    displayer_tab_box.append(&cpu_cores_placeholder);
 
-    // Set up change callback so the internal preview updates
-    cpu_cores_config_widget.set_on_change(|| {});
-
-    // Wrap cpu_cores_config_widget in Rc for sharing
-    let cpu_cores_config_widget = Rc::new(cpu_cores_config_widget);
-
-    // === Indicator Configuration ===
+    // === Indicator Configuration (Lazy Initialization) ===
     let indicator_config_label = Label::new(Some("Indicator Configuration:"));
     indicator_config_label.set_halign(gtk4::Align::Start);
     indicator_config_label.add_css_class("heading");
     indicator_config_label.set_visible(old_displayer_id == "indicator");
 
-    let indicator_config_widget = crate::ui::IndicatorConfigWidget::new(available_fields.clone());
-    indicator_config_widget.widget().set_visible(old_displayer_id == "indicator");
+    // Create placeholder box for lazy widget creation
+    let indicator_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    indicator_placeholder.set_visible(old_displayer_id == "indicator");
 
-    // Load existing Indicator config if displayer is indicator
+    // Use Option for lazy initialization
+    let indicator_config_widget: Rc<RefCell<Option<crate::ui::IndicatorConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create indicator widget if this is the active displayer (lazy init)
     if old_displayer_id == "indicator" {
+        let widget = crate::ui::IndicatorConfigWidget::new((*available_fields).clone());
         if let Some(config_value) = panel_guard.config.get("indicator_config") {
             if let Ok(config) = serde_json::from_value::<crate::displayers::IndicatorConfig>(config_value.clone()) {
-                indicator_config_widget.set_config(&config);
+                widget.set_config(&config);
             }
         }
+        widget.set_on_change(|| {});
+        indicator_placeholder.append(widget.widget());
+        *indicator_config_widget.borrow_mut() = Some(widget);
     }
 
     displayer_tab_box.append(&indicator_config_label);
-    displayer_tab_box.append(indicator_config_widget.widget());
-
-    // Set up change callback
-    indicator_config_widget.set_on_change(|| {});
-
-    // Wrap indicator_config_widget in Rc for sharing
-    let indicator_config_widget = Rc::new(indicator_config_widget);
+    displayer_tab_box.append(&indicator_placeholder);
 
     // === Cyberpunk Configuration (Lazy Initialization) ===
     let cyberpunk_config_label = Label::new(Some("Cyberpunk HUD Configuration:"));
@@ -1028,7 +1050,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Cyberpunk widget if this is the active displayer (lazy init)
     if old_displayer_id == "cyberpunk" {
         log::info!("=== Creating CyberpunkConfigWidget (lazy init) ===");
-        let widget = crate::ui::CyberpunkConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::CyberpunkConfigWidget::new((*available_fields).clone());
 
         // Load existing Cyberpunk config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
@@ -1093,7 +1115,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Material widget if this is the active displayer (lazy init)
     if old_displayer_id == "material" {
         log::info!("=== Creating MaterialConfigWidget (lazy init) ===");
-        let widget = crate::ui::MaterialConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::MaterialConfigWidget::new((*available_fields).clone());
 
         // Load existing Material config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
@@ -1158,7 +1180,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Industrial widget if this is the active displayer (lazy init)
     if old_displayer_id == "industrial" {
         log::info!("=== Creating IndustrialConfigWidget (lazy init) ===");
-        let widget = crate::ui::IndustrialConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::IndustrialConfigWidget::new((*available_fields).clone());
 
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Industrial(industrial_config)) = panel_guard.displayer.get_typed_config() {
@@ -1222,7 +1244,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Retro Terminal widget if this is the active displayer (lazy init)
     if old_displayer_id == "retro_terminal" {
         log::info!("=== Creating RetroTerminalConfigWidget (lazy init) ===");
-        let widget = crate::ui::RetroTerminalConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::RetroTerminalConfigWidget::new((*available_fields).clone());
 
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::RetroTerminal(retro_config)) = panel_guard.displayer.get_typed_config() {
@@ -1286,7 +1308,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Fighter HUD widget if this is the active displayer (lazy init)
     if old_displayer_id == "fighter_hud" {
         log::info!("=== Creating FighterHudConfigWidget (lazy init) ===");
-        let widget = crate::ui::FighterHudConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::FighterHudConfigWidget::new((*available_fields).clone());
 
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::FighterHud(hud_config)) = panel_guard.displayer.get_typed_config() {
@@ -1350,7 +1372,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Synthwave widget if this is the active displayer (lazy init)
     if old_displayer_id == "synthwave" {
         log::info!("=== Creating SynthwaveConfigWidget (lazy init) ===");
-        let widget = crate::ui::SynthwaveConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::SynthwaveConfigWidget::new((*available_fields).clone());
 
         // Load existing Synthwave config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
@@ -1414,7 +1436,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Art Deco widget if this is the active displayer (lazy init)
     if old_displayer_id == "art_deco" {
         log::info!("=== Creating ArtDecoConfigWidget (lazy init) ===");
-        let widget = crate::ui::ArtDecoConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::ArtDecoConfigWidget::new((*available_fields).clone());
 
         // Load existing Art Deco config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
@@ -1478,7 +1500,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create Art Nouveau widget if this is the active displayer (lazy init)
     if old_displayer_id == "art_nouveau" {
         log::info!("=== Creating ArtNouveauConfigWidget (lazy init) ===");
-        let widget = crate::ui::ArtNouveauConfigWidget::new(available_fields.clone());
+        let widget = crate::ui::ArtNouveauConfigWidget::new((*available_fields).clone());
 
         // Load existing Art Nouveau config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
@@ -1860,27 +1882,27 @@ pub(crate) fn show_panel_properties_dialog(
     }
 
     // Show/hide config widgets based on displayer selection
-    // For combo widgets, use placeholder boxes (they contain the lazily-created widgets)
+    // All widgets now use placeholder boxes (they contain the lazily-created widgets)
     {
-        let text_widget_clone = text_config_widget.clone();
+        let text_placeholder_clone = text_placeholder.clone();
         let text_label_clone = text_config_label.clone();
-        let bar_widget_clone = bar_config_widget.clone();
+        let bar_placeholder_clone = bar_placeholder.clone();
         let bar_label_clone = bar_config_label.clone();
-        let arc_widget_clone = arc_config_widget.clone();
+        let arc_placeholder_clone = arc_placeholder.clone();
         let arc_label_clone = arc_config_label.clone();
-        let speedometer_widget_clone = speedometer_config_widget.clone();
+        let speedometer_placeholder_clone = speedometer_placeholder.clone();
         let speedometer_label_clone = speedometer_config_label.clone();
-        let graph_widget_clone = graph_config_widget.clone();
+        let graph_placeholder_clone = graph_placeholder.clone();
         let graph_label_clone = graph_config_label.clone();
-        let clock_analog_widget_clone = clock_analog_config_widget.clone();
+        let clock_analog_placeholder_clone = clock_analog_placeholder.clone();
         let clock_analog_label_clone = clock_analog_config_label.clone();
-        let clock_digital_widget_clone = clock_digital_config_widget.clone();
+        let clock_digital_placeholder_clone = clock_digital_placeholder.clone();
         let clock_digital_label_clone = clock_digital_config_label.clone();
         let lcars_placeholder_clone = lcars_placeholder.clone();
         let lcars_label_clone = lcars_config_label.clone();
-        let cpu_cores_widget_clone = cpu_cores_config_widget.clone();
+        let cpu_cores_placeholder_clone = cpu_cores_placeholder.clone();
         let cpu_cores_label_clone = cpu_cores_config_label.clone();
-        let indicator_widget_clone = indicator_config_widget.clone();
+        let indicator_placeholder_clone = indicator_placeholder.clone();
         let indicator_label_clone = indicator_config_label.clone();
         let cyberpunk_placeholder_clone = cyberpunk_placeholder.clone();
         let cyberpunk_label_clone = cyberpunk_config_label.clone();
@@ -1920,25 +1942,25 @@ pub(crate) fn show_panel_properties_dialog(
                 let is_synthwave = displayer_id == "synthwave";
                 let is_art_deco = displayer_id == "art_deco";
                 let is_art_nouveau = displayer_id == "art_nouveau";
-                text_widget_clone.widget().set_visible(is_text);
+                text_placeholder_clone.set_visible(is_text);
                 text_label_clone.set_visible(is_text);
-                bar_widget_clone.widget().set_visible(is_bar);
+                bar_placeholder_clone.set_visible(is_bar);
                 bar_label_clone.set_visible(is_bar);
-                arc_widget_clone.widget().set_visible(is_arc);
+                arc_placeholder_clone.set_visible(is_arc);
                 arc_label_clone.set_visible(is_arc);
-                speedometer_widget_clone.widget().set_visible(is_speedometer);
+                speedometer_placeholder_clone.set_visible(is_speedometer);
                 speedometer_label_clone.set_visible(is_speedometer);
-                graph_widget_clone.widget().set_visible(is_graph);
+                graph_placeholder_clone.set_visible(is_graph);
                 graph_label_clone.set_visible(is_graph);
-                clock_analog_widget_clone.widget().set_visible(is_clock_analog);
+                clock_analog_placeholder_clone.set_visible(is_clock_analog);
                 clock_analog_label_clone.set_visible(is_clock_analog);
-                clock_digital_widget_clone.widget().set_visible(is_clock_digital);
+                clock_digital_placeholder_clone.set_visible(is_clock_digital);
                 clock_digital_label_clone.set_visible(is_clock_digital);
                 lcars_placeholder_clone.set_visible(is_lcars);
                 lcars_label_clone.set_visible(is_lcars);
-                cpu_cores_widget_clone.widget().set_visible(is_cpu_cores);
+                cpu_cores_placeholder_clone.set_visible(is_cpu_cores);
                 cpu_cores_label_clone.set_visible(is_cpu_cores);
-                indicator_widget_clone.widget().set_visible(is_indicator);
+                indicator_placeholder_clone.set_visible(is_indicator);
                 indicator_label_clone.set_visible(is_indicator);
                 cyberpunk_placeholder_clone.set_visible(is_cyberpunk);
                 cyberpunk_label_clone.set_visible(is_cyberpunk);
@@ -1956,6 +1978,124 @@ pub(crate) fn show_panel_properties_dialog(
                 art_deco_label_clone.set_visible(is_art_deco);
                 art_nouveau_placeholder_clone.set_visible(is_art_nouveau);
                 art_nouveau_label_clone.set_visible(is_art_nouveau);
+            }
+        });
+    }
+
+    // Lazily create simple displayer widgets when selected (these don't need source summaries)
+    {
+        let text_widget_clone = text_config_widget.clone();
+        let text_placeholder_clone = text_placeholder.clone();
+        let bar_widget_clone = bar_config_widget.clone();
+        let bar_placeholder_clone = bar_placeholder.clone();
+        let arc_widget_clone = arc_config_widget.clone();
+        let arc_placeholder_clone = arc_placeholder.clone();
+        let speedometer_widget_clone = speedometer_config_widget.clone();
+        let speedometer_placeholder_clone = speedometer_placeholder.clone();
+        let graph_widget_clone = graph_config_widget.clone();
+        let graph_placeholder_clone = graph_placeholder.clone();
+        let clock_analog_widget_clone = clock_analog_config_widget.clone();
+        let clock_analog_placeholder_clone = clock_analog_placeholder.clone();
+        let clock_digital_widget_clone = clock_digital_config_widget.clone();
+        let clock_digital_placeholder_clone = clock_digital_placeholder.clone();
+        let cpu_cores_widget_clone = cpu_cores_config_widget.clone();
+        let cpu_cores_placeholder_clone = cpu_cores_placeholder.clone();
+        let indicator_widget_clone = indicator_config_widget.clone();
+        let indicator_placeholder_clone = indicator_placeholder.clone();
+        let displayers_clone = displayers.clone();
+        let available_fields_clone = available_fields.clone();
+        let panel_for_lazy = panel.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
+                let fields = (*available_fields_clone).clone();
+                let panel_clone = panel_for_lazy.clone();
+
+                match displayer_id.as_str() {
+                    "text" => {
+                        let mut widget_ref = text_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::TextLineConfigWidget::new(fields);
+                            text_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "bar" => {
+                        let mut widget_ref = bar_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::BarConfigWidget::new(fields);
+                            bar_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "arc" => {
+                        let mut widget_ref = arc_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::ArcConfigWidget::new(fields);
+                            arc_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "speedometer" => {
+                        let mut widget_ref = speedometer_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::SpeedometerConfigWidget::new(fields);
+                            speedometer_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "graph" => {
+                        let mut widget_ref = graph_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::GraphConfigWidget::new(fields);
+                            graph_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "clock_analog" => {
+                        let mut widget_ref = clock_analog_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::ClockAnalogConfigWidget::new();
+                            clock_analog_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "clock_digital" => {
+                        let mut widget_ref = clock_digital_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::ClockDigitalConfigWidget::new();
+                            clock_digital_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "cpu_cores" => {
+                        let mut widget_ref = cpu_cores_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::CoreBarsConfigWidget::new();
+                            // Count available CPU cores
+                            let core_count = fields.iter()
+                                .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
+                                .count();
+                            if core_count > 0 {
+                                widget.set_max_cores(core_count);
+                            }
+                            widget.set_on_change(|| {});
+                            cpu_cores_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    "indicator" => {
+                        let mut widget_ref = indicator_widget_clone.borrow_mut();
+                        if widget_ref.is_none() {
+                            let widget = crate::ui::IndicatorConfigWidget::new(fields);
+                            widget.set_on_change(|| {});
+                            indicator_placeholder_clone.append(widget.widget());
+                            *widget_ref = Some(widget);
+                        }
+                    }
+                    _ => {}
+                }
+                let _ = panel_clone; // Suppress unused warning
             }
         });
     }
@@ -2587,7 +2727,7 @@ pub(crate) fn show_panel_properties_dialog(
     let background_widget = crate::ui::BackgroundConfigWidget::new();
     background_widget.set_config(panel_guard.background.clone());
     // Set source fields for indicator background configuration
-    background_widget.set_source_fields(available_fields.clone());
+    background_widget.set_source_fields((*available_fields).clone());
     background_widget.set_is_combo_source(old_source_id == "combination");
     background_tab_box.append(background_widget.widget());
 
@@ -3442,112 +3582,98 @@ pub(crate) fn show_panel_properties_dialog(
 
             // Apply text configuration if text displayer is active
             if new_displayer_id == "text" {
-                let text_config = text_config_widget_clone.get_config();
-                if let Ok(text_config_json) = serde_json::to_value(&text_config) {
-                    panel_guard.config.insert("text_config".to_string(), text_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply text config: {}", e);
+                if let Some(ref widget) = *text_config_widget_clone.borrow() {
+                    let text_config = widget.get_config();
+                    if let Ok(text_config_json) = serde_json::to_value(&text_config) {
+                        panel_guard.config.insert("text_config".to_string(), text_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply text config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply bar configuration if bar displayer is active
             if new_displayer_id == "bar" {
-                let bar_config = bar_config_widget_clone.get_config();
-                if let Ok(bar_config_json) = serde_json::to_value(&bar_config) {
-                    panel_guard.config.insert("bar_config".to_string(), bar_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply bar config: {}", e);
+                if let Some(ref widget) = *bar_config_widget_clone.borrow() {
+                    let bar_config = widget.get_config();
+                    if let Ok(bar_config_json) = serde_json::to_value(&bar_config) {
+                        panel_guard.config.insert("bar_config".to_string(), bar_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply bar config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply arc configuration if arc displayer is active
             if new_displayer_id == "arc" {
-                let arc_config = arc_config_widget_clone.get_config();
-                if let Ok(arc_config_json) = serde_json::to_value(&arc_config) {
-                    panel_guard.config.insert("arc_config".to_string(), arc_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply arc config: {}", e);
+                if let Some(ref widget) = *arc_config_widget_clone.borrow() {
+                    let arc_config = widget.get_config();
+                    if let Ok(arc_config_json) = serde_json::to_value(&arc_config) {
+                        panel_guard.config.insert("arc_config".to_string(), arc_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply arc config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply speedometer configuration if speedometer displayer is active
             if new_displayer_id == "speedometer" {
-                let speedometer_config = speedometer_config_widget_clone.get_config();
-                if let Ok(speedometer_config_json) = serde_json::to_value(&speedometer_config) {
-                    panel_guard.config.insert("speedometer_config".to_string(), speedometer_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply speedometer config: {}", e);
+                if let Some(ref widget) = *speedometer_config_widget_clone.borrow() {
+                    let speedometer_config = widget.get_config();
+                    if let Ok(speedometer_config_json) = serde_json::to_value(&speedometer_config) {
+                        panel_guard.config.insert("speedometer_config".to_string(), speedometer_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply speedometer config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply graph configuration if graph displayer is active
             if new_displayer_id == "graph" {
-                let graph_config = graph_config_widget_clone.get_config();
-                if let Ok(graph_config_json) = serde_json::to_value(&graph_config) {
-                    panel_guard.config.insert("graph_config".to_string(), graph_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply graph config: {}", e);
+                if let Some(ref widget) = *graph_config_widget_clone.borrow() {
+                    let graph_config = widget.get_config();
+                    if let Ok(graph_config_json) = serde_json::to_value(&graph_config) {
+                        panel_guard.config.insert("graph_config".to_string(), graph_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply graph config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply analog clock configuration if clock_analog displayer is active
             if new_displayer_id == "clock_analog" {
-                let clock_config = clock_analog_config_widget_clone.get_config();
-                if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
-                    panel_guard.config.insert("clock_analog_config".to_string(), clock_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply analog clock config: {}", e);
+                if let Some(ref widget) = *clock_analog_config_widget_clone.borrow() {
+                    let clock_config = widget.get_config();
+                    if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
+                        panel_guard.config.insert("clock_analog_config".to_string(), clock_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply analog clock config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply digital clock configuration if clock_digital displayer is active
             if new_displayer_id == "clock_digital" {
-                let clock_config = clock_digital_config_widget_clone.get_config();
-                if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
-                    panel_guard.config.insert("clock_digital_config".to_string(), clock_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply digital clock config: {}", e);
+                if let Some(ref widget) = *clock_digital_config_widget_clone.borrow() {
+                    let clock_config = widget.get_config();
+                    if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
+                        panel_guard.config.insert("clock_digital_config".to_string(), clock_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply digital clock config: {}", e);
+                        }
                     }
                 }
             }
@@ -3572,32 +3698,28 @@ pub(crate) fn show_panel_properties_dialog(
 
             // Apply CPU Cores configuration if cpu_cores displayer is active
             if new_displayer_id == "cpu_cores" {
-                let core_bars_config = cpu_cores_config_widget_clone.get_config();
-                if let Ok(core_bars_config_json) = serde_json::to_value(&core_bars_config) {
-                    panel_guard.config.insert("core_bars_config".to_string(), core_bars_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply CPU Cores config: {}", e);
+                if let Some(ref widget) = *cpu_cores_config_widget_clone.borrow() {
+                    let core_bars_config = widget.get_config();
+                    if let Ok(core_bars_config_json) = serde_json::to_value(&core_bars_config) {
+                        panel_guard.config.insert("core_bars_config".to_string(), core_bars_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply CPU Cores config: {}", e);
+                        }
                     }
                 }
             }
 
             // Apply Indicator configuration if indicator displayer is active
             if new_displayer_id == "indicator" {
-                let indicator_config = indicator_config_widget_clone.get_config();
-                if let Ok(indicator_config_json) = serde_json::to_value(&indicator_config) {
-                    panel_guard.config.insert("indicator_config".to_string(), indicator_config_json);
-
-                    // Clone config before applying
-                    let config_clone = panel_guard.config.clone();
-
-                    // Apply the configuration to the displayer
-                    if let Err(e) = panel_guard.apply_config(config_clone) {
-                        log::warn!("Failed to apply Indicator config: {}", e);
+                if let Some(ref widget) = *indicator_config_widget_clone.borrow() {
+                    let indicator_config = widget.get_config();
+                    if let Ok(indicator_config_json) = serde_json::to_value(&indicator_config) {
+                        panel_guard.config.insert("indicator_config".to_string(), indicator_config_json);
+                        let config_clone = panel_guard.config.clone();
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Indicator config: {}", e);
+                        }
                     }
                 }
             }
