@@ -1529,8 +1529,6 @@ pub struct LazyGraphConfigWidget {
     available_fields: Vec<crate::core::FieldMetadata>,
     /// Callback to invoke on config changes
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    /// Theme refresh callbacks that need to be registered
-    theme_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
 }
 
 impl LazyGraphConfigWidget {
@@ -1544,7 +1542,6 @@ impl LazyGraphConfigWidget {
         let deferred_config = Rc::new(RefCell::new(GraphDisplayConfig::default()));
         let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let theme_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
 
         // Create placeholder with loading indicator
         let placeholder = GtkBox::new(Orientation::Vertical, 8);
@@ -1566,7 +1563,6 @@ impl LazyGraphConfigWidget {
             let deferred_theme_clone = deferred_theme.clone();
             let available_fields_clone = available_fields.clone();
             let on_change_clone = on_change.clone();
-            let theme_refreshers_clone = theme_refreshers.clone();
 
             Rc::new(move || {
                 // Only create if not already created
@@ -1596,18 +1592,8 @@ impl LazyGraphConfigWidget {
                     }
                     container_clone.append(widget.widget());
 
-                    // Store the widget BEFORE setting up theme refresher
+                    // Store the widget
                     *inner_widget_clone.borrow_mut() = Some(widget);
-
-                    // Register theme refresher that uses the stored widget
-                    let inner_widget_for_theme = inner_widget_clone.clone();
-                    let theme_for_refresh = deferred_theme_clone.clone();
-                    let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-                        if let Some(ref w) = *inner_widget_for_theme.borrow() {
-                            w.set_theme(theme_for_refresh.borrow().clone());
-                        }
-                    });
-                    theme_refreshers_clone.borrow_mut().push(theme_refresh_callback);
                 }
             })
         };
@@ -1627,7 +1613,6 @@ impl LazyGraphConfigWidget {
             deferred_theme,
             available_fields,
             on_change,
-            theme_refreshers,
         }
     }
 

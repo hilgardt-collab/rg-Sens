@@ -23,6 +23,7 @@ pub struct ThemeColorSelector {
     #[allow(dead_code)]
     theme_buttons: [Button; 4],
     theme_drawings: [DrawingArea; 4],
+    #[allow(dead_code)] // Stored to keep Button alive for GTK
     color_button: Button,
     color_drawing_area: DrawingArea,
     #[allow(dead_code)]
