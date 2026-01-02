@@ -24,6 +24,8 @@ struct CpuHardwareInfo {
     core_count: usize,
     /// Pre-computed per-core usage key names (avoids format! allocation in hot path)
     core_usage_keys: Vec<String>,
+    /// Pre-computed per-core field metadata (avoids format! allocation in fields())
+    core_field_metadata: Vec<FieldMetadata>,
 }
 
 /// Global cache for CPU hardware info (discovered once at startup)
@@ -45,12 +47,24 @@ static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
         .map(|i| format!("core{}_usage", i))
         .collect();
 
+    // Pre-compute per-core field metadata to avoid format! allocation in fields()
+    let core_field_metadata: Vec<FieldMetadata> = (0..core_count)
+        .map(|i| FieldMetadata::new(
+            format!("core{}_usage", i),
+            format!("Core {} Usage", i),
+            format!("CPU core {} usage percentage", i),
+            FieldType::Percentage,
+            FieldPurpose::Value,
+        ))
+        .collect();
+
     log::warn!("CPU hardware discovery complete: {} sensors, {} cores", sensors.len(), core_count);
 
     CpuHardwareInfo {
         sensors,
         core_count,
         core_usage_keys,
+        core_field_metadata,
     }
 });
 
@@ -346,16 +360,8 @@ impl DataSource for CpuSource {
             ),
         ];
 
-        // Add per-core usage fields
-        for i in 0..self.per_core_usage.len() {
-            fields.push(FieldMetadata::new(
-                format!("core{}_usage", i),
-                format!("Core {} Usage", i),
-                format!("CPU core {} usage percentage", i),
-                FieldType::Percentage,
-                FieldPurpose::Value,
-            ));
-        }
+        // Add per-core usage fields from cached metadata (avoids format! allocations)
+        fields.extend(CPU_HARDWARE_INFO.core_field_metadata.iter().cloned());
 
         fields
     }

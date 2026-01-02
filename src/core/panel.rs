@@ -11,6 +11,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use crate::ui::{BackgroundConfig, Color};
 
+/// Helper macro to extract and deserialize config from HashMap, reducing boilerplate.
+/// Returns the deserialized config variant or a default if not found/invalid.
+macro_rules! extract_config {
+    ($config:expr, $key:expr, $variant:path, $default_type:expr) => {{
+        let result = $config.get($key)
+            .and_then(|val| serde_json::from_value(val.clone()).ok())
+            .map(|cfg| $variant(cfg));
+        match result {
+            Some(cfg) => cfg,
+            None => $default_type.unwrap_or_default(),
+        }
+    }};
+}
+
 /// Keys to sync from source values to panel.config for UI access
 /// Used by alarm/timer displayers to persist state
 const SYNC_KEYS: &[&str] = &[
@@ -439,86 +453,16 @@ impl Panel {
     /// Extract source config from the legacy config HashMap
     fn extract_source_config(&self, source_type: &str) -> SourceConfig {
         match source_type {
-            "cpu" => {
-                if let Some(val) = self.config.get("cpu_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Cpu(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("cpu").unwrap_or_default()
-            }
-            "gpu" => {
-                if let Some(val) = self.config.get("gpu_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Gpu(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("gpu").unwrap_or_default()
-            }
-            "memory" => {
-                if let Some(val) = self.config.get("memory_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Memory(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("memory").unwrap_or_default()
-            }
-            "disk" => {
-                if let Some(val) = self.config.get("disk_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Disk(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("disk").unwrap_or_default()
-            }
-            "clock" => {
-                if let Some(val) = self.config.get("clock_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Clock(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("clock").unwrap_or_default()
-            }
-            "combination" => {
-                if let Some(val) = self.config.get("combo_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Combo(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("combination").unwrap_or_default()
-            }
-            "system_temp" => {
-                if let Some(val) = self.config.get("system_temp_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::SystemTemp(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("system_temp").unwrap_or_default()
-            }
-            "fan_speed" => {
-                if let Some(val) = self.config.get("fan_speed_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::FanSpeed(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("fan_speed").unwrap_or_default()
-            }
-            "test" => {
-                if let Some(val) = self.config.get("test_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::Test(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("test").unwrap_or_default()
-            }
-            "static_text" => {
-                if let Some(val) = self.config.get("static_text_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return SourceConfig::StaticText(cfg);
-                    }
-                }
-                SourceConfig::default_for_type("static_text").unwrap_or_default()
-            }
+            "cpu" => extract_config!(self.config, "cpu_config", SourceConfig::Cpu, SourceConfig::default_for_type("cpu")),
+            "gpu" => extract_config!(self.config, "gpu_config", SourceConfig::Gpu, SourceConfig::default_for_type("gpu")),
+            "memory" => extract_config!(self.config, "memory_config", SourceConfig::Memory, SourceConfig::default_for_type("memory")),
+            "disk" => extract_config!(self.config, "disk_config", SourceConfig::Disk, SourceConfig::default_for_type("disk")),
+            "clock" => extract_config!(self.config, "clock_config", SourceConfig::Clock, SourceConfig::default_for_type("clock")),
+            "combination" => extract_config!(self.config, "combo_config", SourceConfig::Combo, SourceConfig::default_for_type("combination")),
+            "system_temp" => extract_config!(self.config, "system_temp_config", SourceConfig::SystemTemp, SourceConfig::default_for_type("system_temp")),
+            "fan_speed" => extract_config!(self.config, "fan_speed_config", SourceConfig::FanSpeed, SourceConfig::default_for_type("fan_speed")),
+            "test" => extract_config!(self.config, "test_config", SourceConfig::Test, SourceConfig::default_for_type("test")),
+            "static_text" => extract_config!(self.config, "static_text_config", SourceConfig::StaticText, SourceConfig::default_for_type("static_text")),
             _ => SourceConfig::default()
         }
     }
@@ -526,86 +470,16 @@ impl Panel {
     /// Extract displayer config from the legacy config HashMap
     fn extract_displayer_config(&self, displayer_type: &str) -> DisplayerConfig {
         match displayer_type {
-            "text" => {
-                if let Some(val) = self.config.get("text_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Text(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("text").unwrap_or_default()
-            }
-            "bar" => {
-                if let Some(val) = self.config.get("bar_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Bar(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("bar").unwrap_or_default()
-            }
-            "arc" => {
-                if let Some(val) = self.config.get("arc_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Arc(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("arc").unwrap_or_default()
-            }
-            "speedometer" => {
-                if let Some(val) = self.config.get("speedometer_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Speedometer(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("speedometer").unwrap_or_default()
-            }
-            "graph" => {
-                if let Some(val) = self.config.get("graph_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Graph(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("graph").unwrap_or_default()
-            }
-            "clock_analog" => {
-                if let Some(val) = self.config.get("clock_analog_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::ClockAnalog(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("clock_analog").unwrap_or_default()
-            }
-            "clock_digital" => {
-                if let Some(val) = self.config.get("clock_digital_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::ClockDigital(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("clock_digital").unwrap_or_default()
-            }
-            "lcars" => {
-                if let Some(val) = self.config.get("lcars_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Lcars(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("lcars").unwrap_or_default()
-            }
-            "cpu_cores" => {
-                if let Some(val) = self.config.get("core_bars_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::CpuCores(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("cpu_cores").unwrap_or_default()
-            }
-            "indicator" => {
-                if let Some(val) = self.config.get("indicator_config") {
-                    if let Ok(cfg) = serde_json::from_value(val.clone()) {
-                        return DisplayerConfig::Indicator(cfg);
-                    }
-                }
-                DisplayerConfig::default_for_type("indicator").unwrap_or_default()
-            }
+            "text" => extract_config!(self.config, "text_config", DisplayerConfig::Text, DisplayerConfig::default_for_type("text")),
+            "bar" => extract_config!(self.config, "bar_config", DisplayerConfig::Bar, DisplayerConfig::default_for_type("bar")),
+            "arc" => extract_config!(self.config, "arc_config", DisplayerConfig::Arc, DisplayerConfig::default_for_type("arc")),
+            "speedometer" => extract_config!(self.config, "speedometer_config", DisplayerConfig::Speedometer, DisplayerConfig::default_for_type("speedometer")),
+            "graph" => extract_config!(self.config, "graph_config", DisplayerConfig::Graph, DisplayerConfig::default_for_type("graph")),
+            "clock_analog" => extract_config!(self.config, "clock_analog_config", DisplayerConfig::ClockAnalog, DisplayerConfig::default_for_type("clock_analog")),
+            "clock_digital" => extract_config!(self.config, "clock_digital_config", DisplayerConfig::ClockDigital, DisplayerConfig::default_for_type("clock_digital")),
+            "lcars" => extract_config!(self.config, "lcars_config", DisplayerConfig::Lcars, DisplayerConfig::default_for_type("lcars")),
+            "cpu_cores" => extract_config!(self.config, "core_bars_config", DisplayerConfig::CpuCores, DisplayerConfig::default_for_type("cpu_cores")),
+            "indicator" => extract_config!(self.config, "indicator_config", DisplayerConfig::Indicator, DisplayerConfig::default_for_type("indicator")),
             _ => DisplayerConfig::default()
         }
     }
