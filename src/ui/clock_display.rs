@@ -49,13 +49,15 @@ pub enum FaceStyle {
 pub enum TickStyle {
     #[serde(rename = "none")]
     None,
-    #[serde(rename = "dots")]
-    Dots,
+    #[serde(rename = "squares")]
+    Squares,
     #[serde(rename = "lines")]
     #[default]
     Lines,
-    #[serde(rename = "mixed")]
-    Mixed, // Lines for hours, dots for minutes
+    #[serde(rename = "dots")]
+    Dots,
+    #[serde(rename = "triangles")]
+    Triangles,
 }
 
 
@@ -68,19 +70,29 @@ pub struct AnalogClockConfig {
     #[serde(default)]
     pub face_style: FaceStyle,
     #[serde(default = "default_border_color")]
-    pub border_color: Color,
+    pub border_color: ColorSource,
     #[serde(default = "default_border_width")]
     pub border_width: f64,
 
-    // Tick marks
+    // Hour tick marks
     #[serde(default)]
-    pub tick_style: TickStyle,
+    pub hour_tick_style: TickStyle,
     #[serde(default = "default_tick_color")]
-    pub tick_color: Color,
-    #[serde(default = "default_hour_tick_length")]
-    pub hour_tick_length: f64,
-    #[serde(default = "default_minute_tick_length")]
-    pub minute_tick_length: f64,
+    pub hour_tick_color: ColorSource,
+    #[serde(default = "default_hour_tick_outer_percent")]
+    pub hour_tick_outer_percent: f64,
+    #[serde(default = "default_hour_tick_inner_percent")]
+    pub hour_tick_inner_percent: f64,
+
+    // Minute tick marks
+    #[serde(default)]
+    pub minute_tick_style: TickStyle,
+    #[serde(default = "default_tick_color")]
+    pub minute_tick_color: ColorSource,
+    #[serde(default = "default_minute_tick_outer_percent")]
+    pub minute_tick_outer_percent: f64,
+    #[serde(default = "default_minute_tick_inner_percent")]
+    pub minute_tick_inner_percent: f64,
 
     // Numbers
     #[serde(default = "default_true")]
@@ -98,7 +110,7 @@ pub struct AnalogClockConfig {
     #[serde(default)]
     pub hour_hand_style: HandStyle,
     #[serde(default = "default_hour_hand_color")]
-    pub hour_hand_color: Color,
+    pub hour_hand_color: ColorSource,
     #[serde(default = "default_hour_hand_width")]
     pub hour_hand_width: f64,
     #[serde(default = "default_hour_hand_length")]
@@ -108,7 +120,7 @@ pub struct AnalogClockConfig {
     #[serde(default)]
     pub minute_hand_style: HandStyle,
     #[serde(default = "default_minute_hand_color")]
-    pub minute_hand_color: Color,
+    pub minute_hand_color: ColorSource,
     #[serde(default = "default_minute_hand_width")]
     pub minute_hand_width: f64,
     #[serde(default = "default_minute_hand_length")]
@@ -120,7 +132,7 @@ pub struct AnalogClockConfig {
     #[serde(default)]
     pub second_hand_style: HandStyle,
     #[serde(default = "default_second_hand_color")]
-    pub second_hand_color: Color,
+    pub second_hand_color: ColorSource,
     #[serde(default = "default_second_hand_width")]
     pub second_hand_width: f64,
     #[serde(default = "default_second_hand_length")]
@@ -130,7 +142,7 @@ pub struct AnalogClockConfig {
     #[serde(default = "default_true")]
     pub show_center_hub: bool,
     #[serde(default = "default_center_hub_color")]
-    pub center_hub_color: Color,
+    pub center_hub_color: ColorSource,
     #[serde(default = "default_center_hub_size")]
     pub center_hub_size: f64,
 
@@ -161,24 +173,32 @@ fn default_face_color() -> Color {
     Color::new(0.15, 0.15, 0.15, 1.0)
 }
 
-fn default_border_color() -> Color {
-    Color::new(0.5, 0.5, 0.5, 1.0)
+fn default_border_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.5, 0.5, 0.5, 1.0))
 }
 
 fn default_border_width() -> f64 {
     3.0
 }
 
-fn default_tick_color() -> Color {
-    Color::new(0.7, 0.7, 0.7, 1.0)
+fn default_tick_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.7, 0.7, 0.7, 1.0))
 }
 
-fn default_hour_tick_length() -> f64 {
-    0.1 // As fraction of radius
+fn default_hour_tick_outer_percent() -> f64 {
+    95.0 // As percentage of radius
 }
 
-fn default_minute_tick_length() -> f64 {
-    0.05
+fn default_hour_tick_inner_percent() -> f64 {
+    85.0
+}
+
+fn default_minute_tick_outer_percent() -> f64 {
+    95.0
+}
+
+fn default_minute_tick_inner_percent() -> f64 {
+    90.0
 }
 
 fn default_true() -> bool {
@@ -193,8 +213,8 @@ fn default_number_font() -> FontSource {
     FontSource::custom("Sans".to_string(), 0.12) // Size as fraction of radius
 }
 
-fn default_hour_hand_color() -> Color {
-    Color::new(0.9, 0.9, 0.9, 1.0)
+fn default_hour_hand_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.9, 0.9, 0.9, 1.0))
 }
 
 fn default_hour_hand_width() -> f64 {
@@ -205,8 +225,8 @@ fn default_hour_hand_length() -> f64 {
     0.5 // As fraction of radius
 }
 
-fn default_minute_hand_color() -> Color {
-    Color::new(0.9, 0.9, 0.9, 1.0)
+fn default_minute_hand_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.9, 0.9, 0.9, 1.0))
 }
 
 fn default_minute_hand_width() -> f64 {
@@ -217,8 +237,8 @@ fn default_minute_hand_length() -> f64 {
     0.75
 }
 
-fn default_second_hand_color() -> Color {
-    Color::new(1.0, 0.3, 0.3, 1.0)
+fn default_second_hand_color() -> ColorSource {
+    ColorSource::custom(Color::new(1.0, 0.3, 0.3, 1.0))
 }
 
 fn default_second_hand_width() -> f64 {
@@ -229,8 +249,8 @@ fn default_second_hand_length() -> f64 {
     0.85
 }
 
-fn default_center_hub_color() -> Color {
-    Color::new(0.8, 0.8, 0.8, 1.0)
+fn default_center_hub_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.8, 0.8, 0.8, 1.0))
 }
 
 fn default_center_hub_size() -> f64 {
@@ -242,7 +262,7 @@ fn default_icon_text() -> String {
 }
 
 fn default_icon_font() -> String {
-    "Sans".to_string()
+    "Noto Color Emoji".to_string()
 }
 
 fn default_icon_size() -> f64 {
@@ -263,10 +283,14 @@ impl Default for AnalogClockConfig {
             face_style: FaceStyle::default(),
             border_color: default_border_color(),
             border_width: default_border_width(),
-            tick_style: TickStyle::default(),
-            tick_color: default_tick_color(),
-            hour_tick_length: default_hour_tick_length(),
-            minute_tick_length: default_minute_tick_length(),
+            hour_tick_style: TickStyle::default(),
+            hour_tick_color: default_tick_color(),
+            hour_tick_outer_percent: default_hour_tick_outer_percent(),
+            hour_tick_inner_percent: default_hour_tick_inner_percent(),
+            minute_tick_style: TickStyle::default(),
+            minute_tick_color: default_tick_color(),
+            minute_tick_outer_percent: default_minute_tick_outer_percent(),
+            minute_tick_inner_percent: default_minute_tick_inner_percent(),
             show_numbers: true,
             number_color: default_number_color(),
             number_font: default_number_font(),
@@ -332,7 +356,7 @@ pub fn render_analog_clock_with_theme(
     draw_face(cr, config, center_x, center_y, radius, theme)?;
 
     // Draw tick marks
-    draw_ticks(cr, config, center_x, center_y, radius)?;
+    draw_ticks(cr, config, center_x, center_y, radius, theme)?;
 
     // Draw numbers
     if config.show_numbers {
@@ -353,6 +377,7 @@ pub fn render_analog_clock_with_theme(
         radius * config.hour_hand_length,
         config.hour_hand_width,
         &config.hour_hand_color,
+        theme,
     )?;
 
     draw_hand(
@@ -364,6 +389,7 @@ pub fn render_analog_clock_with_theme(
         radius * config.minute_hand_length,
         config.minute_hand_width,
         &config.minute_hand_color,
+        theme,
     )?;
 
     if config.show_second_hand {
@@ -376,12 +402,13 @@ pub fn render_analog_clock_with_theme(
             radius * config.second_hand_length,
             config.second_hand_width,
             &config.second_hand_color,
+            theme,
         )?;
     }
 
     // Draw center hub
     if config.show_center_hub {
-        draw_center_hub(cr, config, center_x, center_y, radius)?;
+        draw_center_hub(cr, config, center_x, center_y, radius, theme)?;
     }
 
     Ok(())
@@ -414,11 +441,14 @@ fn draw_face(
     if config.border_width > 0.0 {
         cr.save()?;
         cr.arc(cx, cy, radius - config.border_width / 2.0, 0.0, 2.0 * PI);
+        let default_theme = ComboThemeConfig::default();
+        let theme_ref = theme.unwrap_or(&default_theme);
+        let border_color = config.border_color.resolve(theme_ref);
         cr.set_source_rgba(
-            config.border_color.r,
-            config.border_color.g,
-            config.border_color.b,
-            config.border_color.a,
+            border_color.r,
+            border_color.g,
+            border_color.b,
+            border_color.a,
         );
         cr.set_line_width(config.border_width);
         cr.stroke()?;
@@ -434,77 +464,116 @@ fn draw_ticks(
     cx: f64,
     cy: f64,
     radius: f64,
+    theme: Option<&ComboThemeConfig>,
 ) -> Result<(), cairo::Error> {
-    if config.tick_style == TickStyle::None {
-        return Ok(());
-    }
+    let default_theme = ComboThemeConfig::default();
+    let theme_ref = theme.unwrap_or(&default_theme);
 
-    cr.save()?;
-    cr.set_source_rgba(
-        config.tick_color.r,
-        config.tick_color.g,
-        config.tick_color.b,
-        config.tick_color.a,
-    );
+    // Draw minute ticks first (so hour ticks are on top)
+    if config.minute_tick_style != TickStyle::None {
+        let minute_color = config.minute_tick_color.resolve(theme_ref);
+        cr.save()?;
+        cr.set_source_rgba(minute_color.r, minute_color.g, minute_color.b, minute_color.a);
 
-    for i in 0..60 {
-        let angle = (i as f64 / 60.0) * 2.0 * PI - PI / 2.0;
-        let is_hour = i % 5 == 0;
+        let outer_r = radius * (config.minute_tick_outer_percent / 100.0);
+        let inner_r = radius * (config.minute_tick_inner_percent / 100.0);
 
-        let tick_length = if is_hour {
-            radius * config.hour_tick_length
-        } else {
-            radius * config.minute_tick_length
-        };
-
-        let inner_radius = radius - tick_length - 5.0;
-        let outer_radius = radius - 5.0;
-
-        let cos_angle = angle.cos();
-        let sin_angle = angle.sin();
-
-        match config.tick_style {
-            TickStyle::Lines => {
-                cr.set_line_width(if is_hour { 3.0 } else { 1.0 });
-                cr.move_to(cx + inner_radius * cos_angle, cy + inner_radius * sin_angle);
-                cr.line_to(cx + outer_radius * cos_angle, cy + outer_radius * sin_angle);
-                cr.stroke()?;
+        for i in 0..60 {
+            // Skip hour positions (every 5 minutes)
+            if i % 5 == 0 {
+                continue;
             }
-            TickStyle::Dots => {
-                let dot_radius = if is_hour { 4.0 } else { 2.0 };
-                let dot_pos = radius - 10.0;
-                cr.arc(
-                    cx + dot_pos * cos_angle,
-                    cy + dot_pos * sin_angle,
-                    dot_radius,
-                    0.0,
-                    2.0 * PI,
-                );
-                cr.fill()?;
-            }
-            TickStyle::Mixed => {
-                if is_hour {
-                    cr.set_line_width(3.0);
-                    cr.move_to(cx + inner_radius * cos_angle, cy + inner_radius * sin_angle);
-                    cr.line_to(cx + outer_radius * cos_angle, cy + outer_radius * sin_angle);
-                    cr.stroke()?;
-                } else {
-                    let dot_pos = radius - 8.0;
-                    cr.arc(
-                        cx + dot_pos * cos_angle,
-                        cy + dot_pos * sin_angle,
-                        1.5,
-                        0.0,
-                        2.0 * PI,
-                    );
-                    cr.fill()?;
-                }
-            }
-            TickStyle::None => {}
+
+            let angle = (i as f64 / 60.0) * 2.0 * PI - PI / 2.0;
+            draw_single_tick(cr, config.minute_tick_style, cx, cy, angle, outer_r, inner_r, 1.0)?;
         }
+        cr.restore()?;
     }
 
-    cr.restore()?;
+    // Draw hour ticks (12 positions)
+    if config.hour_tick_style != TickStyle::None {
+        let hour_color = config.hour_tick_color.resolve(theme_ref);
+        cr.save()?;
+        cr.set_source_rgba(hour_color.r, hour_color.g, hour_color.b, hour_color.a);
+
+        let outer_r = radius * (config.hour_tick_outer_percent / 100.0);
+        let inner_r = radius * (config.hour_tick_inner_percent / 100.0);
+
+        for i in 0..12 {
+            let angle = (i as f64 / 12.0) * 2.0 * PI - PI / 2.0;
+            draw_single_tick(cr, config.hour_tick_style, cx, cy, angle, outer_r, inner_r, 3.0)?;
+        }
+        cr.restore()?;
+    }
+
+    Ok(())
+}
+
+/// Draw a single tick mark at the given angle
+fn draw_single_tick(
+    cr: &cairo::Context,
+    style: TickStyle,
+    cx: f64,
+    cy: f64,
+    angle: f64,
+    outer_radius: f64,
+    inner_radius: f64,
+    line_width: f64,
+) -> Result<(), cairo::Error> {
+    let cos_angle = angle.cos();
+    let sin_angle = angle.sin();
+
+    let outer_x = cx + outer_radius * cos_angle;
+    let outer_y = cy + outer_radius * sin_angle;
+    let inner_x = cx + inner_radius * cos_angle;
+    let inner_y = cy + inner_radius * sin_angle;
+
+    match style {
+        TickStyle::Lines => {
+            cr.set_line_width(line_width);
+            cr.move_to(inner_x, inner_y);
+            cr.line_to(outer_x, outer_y);
+            cr.stroke()?;
+        }
+        TickStyle::Dots => {
+            let mid_r = (outer_radius + inner_radius) / 2.0;
+            let mid_x = cx + mid_r * cos_angle;
+            let mid_y = cy + mid_r * sin_angle;
+            let dot_radius = line_width * 1.5;
+            cr.arc(mid_x, mid_y, dot_radius, 0.0, 2.0 * PI);
+            cr.fill()?;
+        }
+        TickStyle::Squares => {
+            let mid_r = (outer_radius + inner_radius) / 2.0;
+            let mid_x = cx + mid_r * cos_angle;
+            let mid_y = cy + mid_r * sin_angle;
+            let size = line_width * 2.5;
+
+            cr.save()?;
+            cr.translate(mid_x, mid_y);
+            cr.rotate(angle + PI / 2.0);
+            cr.rectangle(-size / 2.0, -size / 2.0, size, size);
+            cr.fill()?;
+            cr.restore()?;
+        }
+        TickStyle::Triangles => {
+            let mid_r = (outer_radius + inner_radius) / 2.0;
+            let size = line_width * 3.0;
+
+            cr.save()?;
+            cr.translate(cx, cy);
+            cr.rotate(angle + PI / 2.0);
+            // Triangle pointing outward
+            cr.move_to(mid_r - size / 2.0, 0.0);
+            cr.line_to(mid_r + size / 2.0, -size / 2.0);
+            cr.line_to(mid_r + size / 2.0, size / 2.0);
+            cr.close_path();
+            cr.fill()?;
+            cr.restore()?;
+        }
+        TickStyle::None => {}
+    }
+
     Ok(())
 }
 
@@ -579,11 +648,15 @@ fn draw_hand(
     angle: f64,
     length: f64,
     width: f64,
-    color: &Color,
+    color: &ColorSource,
+    theme: Option<&ComboThemeConfig>,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
 
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
+    let default_theme = ComboThemeConfig::default();
+    let theme_ref = theme.unwrap_or(&default_theme);
+    let resolved_color = color.resolve(theme_ref);
+    cr.set_source_rgba(resolved_color.r, resolved_color.g, resolved_color.b, resolved_color.a);
     cr.set_line_cap(cairo::LineCap::Round);
     cr.set_line_join(cairo::LineJoin::Round);
 
@@ -677,18 +750,17 @@ fn draw_center_hub(
     cx: f64,
     cy: f64,
     radius: f64,
+    theme: Option<&ComboThemeConfig>,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
 
     let hub_radius = radius * config.center_hub_size;
 
     cr.arc(cx, cy, hub_radius, 0.0, 2.0 * PI);
-    cr.set_source_rgba(
-        config.center_hub_color.r,
-        config.center_hub_color.g,
-        config.center_hub_color.b,
-        config.center_hub_color.a,
-    );
+    let default_theme = ComboThemeConfig::default();
+    let theme_ref = theme.unwrap_or(&default_theme);
+    let hub_color = config.center_hub_color.resolve(theme_ref);
+    cr.set_source_rgba(hub_color.r, hub_color.g, hub_color.b, hub_color.a);
     cr.fill()?;
 
     cr.restore()?;

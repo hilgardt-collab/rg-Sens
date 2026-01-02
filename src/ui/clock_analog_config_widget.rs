@@ -11,7 +11,6 @@ use std::rc::Rc;
 use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyle};
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::BackgroundConfigWidget;
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
@@ -22,32 +21,38 @@ pub struct ClockAnalogConfigWidget {
     config: Rc<RefCell<AnalogClockConfig>>,
     theme_config: Rc<RefCell<ComboThemeConfig>>,
     background_widget: BackgroundConfigWidget,
-    // Font selector and controls for updating UI on set_config
+    // Numbers tab
+    face_dropdown: DropDown,
     number_font_selector: Rc<ThemeFontSelector>,
     number_bold_check: CheckButton,
     number_italic_check: CheckButton,
-    // Style dropdowns for updating UI on set_config
-    face_dropdown: DropDown,
-    tick_dropdown: DropDown,
-    hand_dropdown: DropDown,
-    // Checkboxes for updating UI on set_config
+    number_color_selector: Rc<ThemeColorSelector>,
     show_numbers_check: CheckButton,
+    // Ticks tab - hour ticks
+    hour_tick_style_dropdown: DropDown,
+    hour_tick_color_selector: Rc<ThemeColorSelector>,
+    hour_tick_outer_spin: SpinButton,
+    hour_tick_inner_spin: SpinButton,
+    // Ticks tab - minute ticks
+    minute_tick_style_dropdown: DropDown,
+    minute_tick_color_selector: Rc<ThemeColorSelector>,
+    minute_tick_outer_spin: SpinButton,
+    minute_tick_inner_spin: SpinButton,
+    // Hands tab
+    hand_dropdown: DropDown,
     show_second_hand_check: CheckButton,
     smooth_seconds_check: CheckButton,
     show_center_hub_check: CheckButton,
-    // Size spinners for updating UI on set_config
+    border_color_selector: Rc<ThemeColorSelector>,
     border_width_spin: SpinButton,
+    hour_color_selector: Rc<ThemeColorSelector>,
     hour_width_spin: SpinButton,
+    minute_color_selector: Rc<ThemeColorSelector>,
     minute_width_spin: SpinButton,
+    second_color_selector: Rc<ThemeColorSelector>,
     second_width_spin: SpinButton,
-    // Color buttons for updating on set_config
-    tick_color_widget: Rc<ColorButtonWidget>,
-    border_color_widget: Rc<ColorButtonWidget>,
-    number_color_selector: Rc<ThemeColorSelector>,
-    hour_color_widget: Rc<ColorButtonWidget>,
-    minute_color_widget: Rc<ColorButtonWidget>,
-    second_color_widget: Rc<ColorButtonWidget>,
-    // Icon config
+    center_hub_color_selector: Rc<ThemeColorSelector>,
+    // Icon tab
     show_icon_check: CheckButton,
     icon_text_entry: gtk4::Entry,
     icon_font_button: Button,
@@ -79,47 +84,6 @@ impl ClockAnalogConfigWidget {
         face_frame.set_child(Some(background_widget.widget()));
         appearance_box.append(&face_frame);
 
-        // Style Section
-        let style_frame = Frame::new(Some("Styles"));
-        let style_box = GtkBox::new(Orientation::Vertical, 6);
-        style_box.set_margin_start(8);
-        style_box.set_margin_end(8);
-        style_box.set_margin_top(8);
-        style_box.set_margin_bottom(8);
-
-        // Face Style
-        let face_box = GtkBox::new(Orientation::Horizontal, 6);
-        face_box.append(&Label::new(Some("Face Style:")));
-        let face_options = StringList::new(&["Minimal", "Classic", "Modern", "Roman", "Numbers"]);
-        let face_dropdown = DropDown::new(Some(face_options), Option::<gtk4::Expression>::None);
-        face_dropdown.set_selected(1); // Classic
-        face_dropdown.set_hexpand(true);
-        face_box.append(&face_dropdown);
-        style_box.append(&face_box);
-
-        // Tick Style
-        let tick_box = GtkBox::new(Orientation::Horizontal, 6);
-        tick_box.append(&Label::new(Some("Tick Style:")));
-        let tick_options = StringList::new(&["None", "Dots", "Lines", "Mixed"]);
-        let tick_dropdown = DropDown::new(Some(tick_options), Option::<gtk4::Expression>::None);
-        tick_dropdown.set_selected(2); // Lines
-        tick_dropdown.set_hexpand(true);
-        tick_box.append(&tick_dropdown);
-        style_box.append(&tick_box);
-
-        // Hand Style
-        let hand_box = GtkBox::new(Orientation::Horizontal, 6);
-        hand_box.append(&Label::new(Some("Hand Style:")));
-        let hand_options = StringList::new(&["Line", "Arrow", "Sword", "Fancy"]);
-        let hand_dropdown = DropDown::new(Some(hand_options), Option::<gtk4::Expression>::None);
-        hand_dropdown.set_selected(0); // Line
-        hand_dropdown.set_hexpand(true);
-        hand_box.append(&hand_dropdown);
-        style_box.append(&hand_box);
-
-        style_frame.set_child(Some(&style_box));
-        appearance_box.append(&style_frame);
-
         // Add Appearance tab to notebook
         notebook.append_page(&appearance_box, Some(&Label::new(Some("Appearance"))));
 
@@ -130,7 +94,7 @@ impl ClockAnalogConfigWidget {
         numbers_box.set_margin_top(8);
         numbers_box.set_margin_bottom(8);
 
-        // Number Font Section
+        // Number Style Section
         let number_frame = Frame::new(Some("Clock Numbers"));
         let number_box = GtkBox::new(Orientation::Vertical, 6);
         number_box.set_margin_start(8);
@@ -138,14 +102,22 @@ impl ClockAnalogConfigWidget {
         number_box.set_margin_top(8);
         number_box.set_margin_bottom(8);
 
-        // Show Numbers checkbox
+        // Face Style (moved from Appearance)
+        let face_box = GtkBox::new(Orientation::Horizontal, 6);
+        face_box.append(&Label::new(Some("Number Style:")));
+        let face_options = StringList::new(&["None", "Minimal", "Classic", "Roman"]);
+        let face_dropdown = DropDown::new(Some(face_options), Option::<gtk4::Expression>::None);
+        face_dropdown.set_selected(2); // Classic
+        face_dropdown.set_hexpand(true);
+        face_box.append(&face_dropdown);
+        number_box.append(&face_box);
+
+        // Show Numbers checkbox (depends on face style)
         let show_numbers_check = CheckButton::with_label("Show Numbers");
         show_numbers_check.set_active(true);
         number_box.append(&show_numbers_check);
 
         // Font selector (theme-aware)
-        // Note: Clock stores font size as fraction of radius (0.12 = 12%), but
-        // ThemeFontSelector uses percentage values (12). Convert between them.
         let font_row = GtkBox::new(Orientation::Horizontal, 6);
         font_row.append(&Label::new(Some("Font:")));
 
@@ -180,8 +152,7 @@ impl ClockAnalogConfigWidget {
         color_row.append(number_color_selector.widget());
         number_box.append(&color_row);
 
-        // Connect font selector callback
-        // Convert percentage back to fraction for storage (12 -> 0.12)
+        // Connect font selector callback - convert percentage back to fraction for storage (12 -> 0.12)
         let config_for_font = config.clone();
         number_font_selector.set_on_change(move |font_source| {
             let font_as_fraction = font_source.with_size(font_source.size() / 100.0);
@@ -200,121 +171,291 @@ impl ClockAnalogConfigWidget {
         // Add Numbers tab to notebook
         notebook.append_page(&numbers_box, Some(&Label::new(Some("Numbers"))));
 
-        // ============ TAB 3: Hands ============
+        // ============ TAB 3: Ticks ============
+        let ticks_box = GtkBox::new(Orientation::Vertical, 8);
+        ticks_box.set_margin_start(8);
+        ticks_box.set_margin_end(8);
+        ticks_box.set_margin_top(8);
+        ticks_box.set_margin_bottom(8);
+
+        // Hour Ticks Section
+        let hour_tick_frame = Frame::new(Some("Hour Ticks"));
+        let hour_tick_box = GtkBox::new(Orientation::Vertical, 6);
+        hour_tick_box.set_margin_start(8);
+        hour_tick_box.set_margin_end(8);
+        hour_tick_box.set_margin_top(8);
+        hour_tick_box.set_margin_bottom(8);
+
+        // Hour tick style
+        let hour_style_row = GtkBox::new(Orientation::Horizontal, 6);
+        hour_style_row.append(&Label::new(Some("Type:")));
+        let hour_tick_options = StringList::new(&["None", "Squares", "Lines", "Dots", "Triangles"]);
+        let hour_tick_style_dropdown = DropDown::new(Some(hour_tick_options), Option::<gtk4::Expression>::None);
+        hour_tick_style_dropdown.set_selected(2); // Lines
+        hour_tick_style_dropdown.set_hexpand(true);
+        hour_style_row.append(&hour_tick_style_dropdown);
+        hour_tick_box.append(&hour_style_row);
+
+        // Hour tick color (theme-aware)
+        let hour_color_row = GtkBox::new(Orientation::Horizontal, 6);
+        hour_color_row.append(&Label::new(Some("Color:")));
+        let hour_tick_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().hour_tick_color.clone()));
+        hour_tick_color_selector.set_theme_config(theme_config.borrow().clone());
+        hour_color_row.append(hour_tick_color_selector.widget());
+        hour_tick_box.append(&hour_color_row);
+
+        // Hour tick radii
+        let hour_outer_row = GtkBox::new(Orientation::Horizontal, 6);
+        hour_outer_row.append(&Label::new(Some("Outer Radius %:")));
+        let hour_outer_adj = Adjustment::new(95.0, 50.0, 100.0, 1.0, 5.0, 0.0);
+        let hour_tick_outer_spin = SpinButton::new(Some(&hour_outer_adj), 1.0, 0);
+        hour_tick_outer_spin.set_hexpand(true);
+        hour_outer_row.append(&hour_tick_outer_spin);
+        hour_tick_box.append(&hour_outer_row);
+
+        let hour_inner_row = GtkBox::new(Orientation::Horizontal, 6);
+        hour_inner_row.append(&Label::new(Some("Inner Radius %:")));
+        let hour_inner_adj = Adjustment::new(85.0, 50.0, 100.0, 1.0, 5.0, 0.0);
+        let hour_tick_inner_spin = SpinButton::new(Some(&hour_inner_adj), 1.0, 0);
+        hour_tick_inner_spin.set_hexpand(true);
+        hour_inner_row.append(&hour_tick_inner_spin);
+        hour_tick_box.append(&hour_inner_row);
+
+        hour_tick_frame.set_child(Some(&hour_tick_box));
+        ticks_box.append(&hour_tick_frame);
+
+        // Minute Ticks Section
+        let minute_tick_frame = Frame::new(Some("Minute Ticks"));
+        let minute_tick_box = GtkBox::new(Orientation::Vertical, 6);
+        minute_tick_box.set_margin_start(8);
+        minute_tick_box.set_margin_end(8);
+        minute_tick_box.set_margin_top(8);
+        minute_tick_box.set_margin_bottom(8);
+
+        // Minute tick style
+        let minute_style_row = GtkBox::new(Orientation::Horizontal, 6);
+        minute_style_row.append(&Label::new(Some("Type:")));
+        let minute_tick_options = StringList::new(&["None", "Squares", "Lines", "Dots", "Triangles"]);
+        let minute_tick_style_dropdown = DropDown::new(Some(minute_tick_options), Option::<gtk4::Expression>::None);
+        minute_tick_style_dropdown.set_selected(2); // Lines
+        minute_tick_style_dropdown.set_hexpand(true);
+        minute_style_row.append(&minute_tick_style_dropdown);
+        minute_tick_box.append(&minute_style_row);
+
+        // Minute tick color (theme-aware)
+        let minute_color_row = GtkBox::new(Orientation::Horizontal, 6);
+        minute_color_row.append(&Label::new(Some("Color:")));
+        let minute_tick_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().minute_tick_color.clone()));
+        minute_tick_color_selector.set_theme_config(theme_config.borrow().clone());
+        minute_color_row.append(minute_tick_color_selector.widget());
+        minute_tick_box.append(&minute_color_row);
+
+        // Minute tick radii
+        let minute_outer_row = GtkBox::new(Orientation::Horizontal, 6);
+        minute_outer_row.append(&Label::new(Some("Outer Radius %:")));
+        let minute_outer_adj = Adjustment::new(95.0, 50.0, 100.0, 1.0, 5.0, 0.0);
+        let minute_tick_outer_spin = SpinButton::new(Some(&minute_outer_adj), 1.0, 0);
+        minute_tick_outer_spin.set_hexpand(true);
+        minute_outer_row.append(&minute_tick_outer_spin);
+        minute_tick_box.append(&minute_outer_row);
+
+        let minute_inner_row = GtkBox::new(Orientation::Horizontal, 6);
+        minute_inner_row.append(&Label::new(Some("Inner Radius %:")));
+        let minute_inner_adj = Adjustment::new(90.0, 50.0, 100.0, 1.0, 5.0, 0.0);
+        let minute_tick_inner_spin = SpinButton::new(Some(&minute_inner_adj), 1.0, 0);
+        minute_tick_inner_spin.set_hexpand(true);
+        minute_inner_row.append(&minute_tick_inner_spin);
+        minute_tick_box.append(&minute_inner_row);
+
+        minute_tick_frame.set_child(Some(&minute_tick_box));
+        ticks_box.append(&minute_tick_frame);
+
+        // Connect tick callbacks
+        let config_for_hour_tick_style = config.clone();
+        hour_tick_style_dropdown.connect_selected_notify(move |dropdown| {
+            config_for_hour_tick_style.borrow_mut().hour_tick_style = tick_style_from_index(dropdown.selected());
+        });
+
+        let config_for_hour_tick_color = config.clone();
+        hour_tick_color_selector.set_on_change(move |color_source| {
+            config_for_hour_tick_color.borrow_mut().hour_tick_color = color_source;
+        });
+
+        let config_for_hour_tick_outer = config.clone();
+        hour_tick_outer_spin.connect_value_changed(move |spin| {
+            config_for_hour_tick_outer.borrow_mut().hour_tick_outer_percent = spin.value();
+        });
+
+        let config_for_hour_tick_inner = config.clone();
+        hour_tick_inner_spin.connect_value_changed(move |spin| {
+            config_for_hour_tick_inner.borrow_mut().hour_tick_inner_percent = spin.value();
+        });
+
+        let config_for_minute_tick_style = config.clone();
+        minute_tick_style_dropdown.connect_selected_notify(move |dropdown| {
+            config_for_minute_tick_style.borrow_mut().minute_tick_style = tick_style_from_index(dropdown.selected());
+        });
+
+        let config_for_minute_tick_color = config.clone();
+        minute_tick_color_selector.set_on_change(move |color_source| {
+            config_for_minute_tick_color.borrow_mut().minute_tick_color = color_source;
+        });
+
+        let config_for_minute_tick_outer = config.clone();
+        minute_tick_outer_spin.connect_value_changed(move |spin| {
+            config_for_minute_tick_outer.borrow_mut().minute_tick_outer_percent = spin.value();
+        });
+
+        let config_for_minute_tick_inner = config.clone();
+        minute_tick_inner_spin.connect_value_changed(move |spin| {
+            config_for_minute_tick_inner.borrow_mut().minute_tick_inner_percent = spin.value();
+        });
+
+        // Add Ticks tab to notebook
+        notebook.append_page(&ticks_box, Some(&Label::new(Some("Ticks"))));
+
+        // ============ TAB 4: Hands ============
         let hands_tab_box = GtkBox::new(Orientation::Vertical, 8);
         hands_tab_box.set_margin_start(8);
         hands_tab_box.set_margin_end(8);
         hands_tab_box.set_margin_top(8);
         hands_tab_box.set_margin_bottom(8);
 
-        // Hands Section
-        let hands_frame = Frame::new(Some("Clock Hands"));
-        let hands_box = GtkBox::new(Orientation::Vertical, 6);
-        hands_box.set_margin_start(8);
-        hands_box.set_margin_end(8);
-        hands_box.set_margin_top(8);
-        hands_box.set_margin_bottom(8);
+        // Hand Style Section
+        let style_frame = Frame::new(Some("Hand Style"));
+        let style_box = GtkBox::new(Orientation::Vertical, 6);
+        style_box.set_margin_start(8);
+        style_box.set_margin_end(8);
+        style_box.set_margin_top(8);
+        style_box.set_margin_bottom(8);
+
+        // Hand Style
+        let hand_box = GtkBox::new(Orientation::Horizontal, 6);
+        hand_box.append(&Label::new(Some("Hand Style:")));
+        let hand_options = StringList::new(&["Line", "Arrow", "Sword", "Fancy"]);
+        let hand_dropdown = DropDown::new(Some(hand_options), Option::<gtk4::Expression>::None);
+        hand_dropdown.set_selected(0); // Line
+        hand_dropdown.set_hexpand(true);
+        hand_box.append(&hand_dropdown);
+        style_box.append(&hand_box);
 
         // Show checkboxes
         let show_second_hand_check = CheckButton::with_label("Show Second Hand");
         show_second_hand_check.set_active(true);
-        hands_box.append(&show_second_hand_check);
+        style_box.append(&show_second_hand_check);
 
         let smooth_seconds_check = CheckButton::with_label("Smooth Second Hand");
         smooth_seconds_check.set_active(true);
-        hands_box.append(&smooth_seconds_check);
+        style_box.append(&smooth_seconds_check);
 
         let show_center_hub_check = CheckButton::with_label("Show Center Hub");
         show_center_hub_check.set_active(true);
-        hands_box.append(&show_center_hub_check);
+        style_box.append(&show_center_hub_check);
 
-        // Tick color
-        let tick_row = GtkBox::new(Orientation::Horizontal, 6);
-        tick_row.append(&Label::new(Some("Tick Marks:")));
-        let tick_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().tick_color));
-        tick_row.append(tick_color_widget.widget());
-        hands_box.append(&tick_row);
+        style_frame.set_child(Some(&style_box));
+        hands_tab_box.append(&style_frame);
 
-        let config_for_tick_c = config.clone();
-        tick_color_widget.set_on_change(move |color| {
-            config_for_tick_c.borrow_mut().tick_color = color;
-        });
+        // Colors Section
+        let colors_frame = Frame::new(Some("Colors"));
+        let colors_box = GtkBox::new(Orientation::Vertical, 6);
+        colors_box.set_margin_start(8);
+        colors_box.set_margin_end(8);
+        colors_box.set_margin_top(8);
+        colors_box.set_margin_bottom(8);
 
         // Border color and width
         let border_row = GtkBox::new(Orientation::Horizontal, 6);
         border_row.append(&Label::new(Some("Border:")));
-        let border_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().border_color));
-        border_row.append(border_color_widget.widget());
+        let border_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().border_color.clone()));
+        border_color_selector.set_theme_config(theme_config.borrow().clone());
+        border_row.append(border_color_selector.widget());
         border_row.append(&Label::new(Some("Width:")));
         let border_width_adj = Adjustment::new(3.0, 0.0, 20.0, 0.5, 1.0, 0.0);
         let border_width_spin = SpinButton::new(Some(&border_width_adj), 0.5, 1);
         border_width_spin.set_hexpand(true);
         border_row.append(&border_width_spin);
-        hands_box.append(&border_row);
-
-        let config_for_border_c = config.clone();
-        border_color_widget.set_on_change(move |color| {
-            config_for_border_c.borrow_mut().border_color = color;
-        });
+        colors_box.append(&border_row);
 
         // Hour hand
         let hour_row = GtkBox::new(Orientation::Horizontal, 6);
         hour_row.append(&Label::new(Some("Hour Hand:")));
-        let hour_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().hour_hand_color));
-        hour_row.append(hour_color_widget.widget());
+        let hour_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().hour_hand_color.clone()));
+        hour_color_selector.set_theme_config(theme_config.borrow().clone());
+        hour_row.append(hour_color_selector.widget());
         hour_row.append(&Label::new(Some("Width:")));
         let hour_width_adj = Adjustment::new(6.0, 1.0, 20.0, 0.5, 1.0, 0.0);
         let hour_width_spin = SpinButton::new(Some(&hour_width_adj), 0.5, 1);
         hour_width_spin.set_hexpand(true);
         hour_row.append(&hour_width_spin);
-        hands_box.append(&hour_row);
-
-        let config_for_hour_c = config.clone();
-        hour_color_widget.set_on_change(move |color| {
-            config_for_hour_c.borrow_mut().hour_hand_color = color;
-        });
+        colors_box.append(&hour_row);
 
         // Minute hand
         let minute_row = GtkBox::new(Orientation::Horizontal, 6);
         minute_row.append(&Label::new(Some("Minute Hand:")));
-        let minute_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().minute_hand_color));
-        minute_row.append(minute_color_widget.widget());
+        let minute_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().minute_hand_color.clone()));
+        minute_color_selector.set_theme_config(theme_config.borrow().clone());
+        minute_row.append(minute_color_selector.widget());
         minute_row.append(&Label::new(Some("Width:")));
         let minute_width_adj = Adjustment::new(4.0, 1.0, 20.0, 0.5, 1.0, 0.0);
         let minute_width_spin = SpinButton::new(Some(&minute_width_adj), 0.5, 1);
         minute_width_spin.set_hexpand(true);
         minute_row.append(&minute_width_spin);
-        hands_box.append(&minute_row);
-
-        let config_for_minute_c = config.clone();
-        minute_color_widget.set_on_change(move |color| {
-            config_for_minute_c.borrow_mut().minute_hand_color = color;
-        });
+        colors_box.append(&minute_row);
 
         // Second hand
         let second_row = GtkBox::new(Orientation::Horizontal, 6);
         second_row.append(&Label::new(Some("Second Hand:")));
-        let second_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().second_hand_color));
-        second_row.append(second_color_widget.widget());
+        let second_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().second_hand_color.clone()));
+        second_color_selector.set_theme_config(theme_config.borrow().clone());
+        second_row.append(second_color_selector.widget());
         second_row.append(&Label::new(Some("Width:")));
         let second_width_adj = Adjustment::new(2.0, 0.5, 10.0, 0.5, 1.0, 0.0);
         let second_width_spin = SpinButton::new(Some(&second_width_adj), 0.5, 1);
         second_width_spin.set_hexpand(true);
         second_row.append(&second_width_spin);
-        hands_box.append(&second_row);
+        colors_box.append(&second_row);
 
-        let config_for_second_c = config.clone();
-        second_color_widget.set_on_change(move |color| {
-            config_for_second_c.borrow_mut().second_hand_color = color;
+        // Center hub color
+        let hub_row = GtkBox::new(Orientation::Horizontal, 6);
+        hub_row.append(&Label::new(Some("Center Hub:")));
+        let center_hub_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().center_hub_color.clone()));
+        center_hub_color_selector.set_theme_config(theme_config.borrow().clone());
+        hub_row.append(center_hub_color_selector.widget());
+        colors_box.append(&hub_row);
+
+        colors_frame.set_child(Some(&colors_box));
+        hands_tab_box.append(&colors_frame);
+
+        // Connect hand color callbacks
+        let config_for_border_c = config.clone();
+        border_color_selector.set_on_change(move |color_source| {
+            config_for_border_c.borrow_mut().border_color = color_source;
         });
 
-        hands_frame.set_child(Some(&hands_box));
-        hands_tab_box.append(&hands_frame);
+        let config_for_hour_c = config.clone();
+        hour_color_selector.set_on_change(move |color_source| {
+            config_for_hour_c.borrow_mut().hour_hand_color = color_source;
+        });
+
+        let config_for_minute_c = config.clone();
+        minute_color_selector.set_on_change(move |color_source| {
+            config_for_minute_c.borrow_mut().minute_hand_color = color_source;
+        });
+
+        let config_for_second_c = config.clone();
+        second_color_selector.set_on_change(move |color_source| {
+            config_for_second_c.borrow_mut().second_hand_color = color_source;
+        });
+
+        let config_for_hub_c = config.clone();
+        center_hub_color_selector.set_on_change(move |color_source| {
+            config_for_hub_c.borrow_mut().center_hub_color = color_source;
+        });
 
         // Add Hands tab to notebook
         notebook.append_page(&hands_tab_box, Some(&Label::new(Some("Hands"))));
 
-        // ============ TAB 4: Icon ============
+        // ============ TAB 5: Icon ============
         let icon_tab_box = GtkBox::new(Orientation::Vertical, 8);
         icon_tab_box.set_margin_start(8);
         icon_tab_box.set_margin_end(8);
@@ -404,30 +545,22 @@ impl ClockAnalogConfigWidget {
             config_for_italic.borrow_mut().number_italic = check.is_active();
         });
 
-        // Style dropdowns
+        // Face style dropdown (now in Numbers tab)
         let config_for_face = config.clone();
         face_dropdown.connect_selected_notify(move |dropdown| {
             let mut cfg = config_for_face.borrow_mut();
             cfg.face_style = match dropdown.selected() {
-                0 => FaceStyle::Minimal,
-                1 => FaceStyle::Classic,
-                2 => FaceStyle::Modern,
+                0 => FaceStyle::Minimal, // None - shows no numbers
+                1 => FaceStyle::Minimal,
+                2 => FaceStyle::Classic,
                 3 => FaceStyle::Roman,
-                _ => FaceStyle::Numbers,
+                _ => FaceStyle::Classic,
             };
+            // When "None" is selected, hide numbers
+            cfg.show_numbers = dropdown.selected() != 0;
         });
 
-        let config_for_tick = config.clone();
-        tick_dropdown.connect_selected_notify(move |dropdown| {
-            let mut cfg = config_for_tick.borrow_mut();
-            cfg.tick_style = match dropdown.selected() {
-                0 => TickStyle::None,
-                1 => TickStyle::Dots,
-                2 => TickStyle::Lines,
-                _ => TickStyle::Mixed,
-            };
-        });
-
+        // Hand style dropdown
         let config_for_hand = config.clone();
         hand_dropdown.connect_selected_notify(move |dropdown| {
             let mut cfg = config_for_hand.borrow_mut();
@@ -511,7 +644,7 @@ impl ClockAnalogConfigWidget {
                 gtk4::glib::MainContext::default().spawn_local(async move {
                     match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
                         Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Noto Color Emoji".to_string());
                             config_clone.borrow_mut().icon_font = family.clone();
                             let size_pct = size_spin.value();
                             font_btn.set_label(&format!("{} {:.0}%", family, size_pct));
@@ -557,26 +690,33 @@ impl ClockAnalogConfigWidget {
             config,
             theme_config,
             background_widget,
+            face_dropdown,
             number_font_selector,
             number_bold_check,
             number_italic_check,
-            face_dropdown,
-            tick_dropdown,
-            hand_dropdown,
+            number_color_selector,
             show_numbers_check,
+            hour_tick_style_dropdown,
+            hour_tick_color_selector,
+            hour_tick_outer_spin,
+            hour_tick_inner_spin,
+            minute_tick_style_dropdown,
+            minute_tick_color_selector,
+            minute_tick_outer_spin,
+            minute_tick_inner_spin,
+            hand_dropdown,
             show_second_hand_check,
             smooth_seconds_check,
             show_center_hub_check,
+            border_color_selector,
             border_width_spin,
+            hour_color_selector,
             hour_width_spin,
+            minute_color_selector,
             minute_width_spin,
+            second_color_selector,
             second_width_spin,
-            tick_color_widget,
-            border_color_widget,
-            number_color_selector,
-            hour_color_widget,
-            minute_color_widget,
-            second_color_widget,
+            center_hub_color_selector,
             show_icon_check,
             icon_text_entry,
             icon_font_button,
@@ -602,22 +742,37 @@ impl ClockAnalogConfigWidget {
         // Set background widget
         self.background_widget.set_config(config.face_background.clone());
 
-        // Update UI elements to match config
-        self.face_dropdown.set_selected(match config.face_style {
-            FaceStyle::Minimal => 0,
-            FaceStyle::Classic => 1,
-            FaceStyle::Modern => 2,
+        // Face style in Numbers tab - map to new options (None, Minimal, Classic, Roman)
+        let face_index = match config.face_style {
+            FaceStyle::Minimal => if config.show_numbers { 1 } else { 0 },
+            FaceStyle::Classic => 2,
             FaceStyle::Roman => 3,
-            FaceStyle::Numbers => 4,
-        });
+            FaceStyle::Modern => 2, // Map old Modern to Classic
+            FaceStyle::Numbers => 2, // Map old Numbers to Classic
+        };
+        self.face_dropdown.set_selected(face_index);
+        self.show_numbers_check.set_active(config.show_numbers);
 
-        self.tick_dropdown.set_selected(match config.tick_style {
-            TickStyle::None => 0,
-            TickStyle::Dots => 1,
-            TickStyle::Lines => 2,
-            TickStyle::Mixed => 3,
-        });
+        // Number font - convert fraction to percentage for display (0.12 -> 12)
+        let font_as_percentage = config.number_font.with_size(config.number_font.size() * 100.0);
+        self.number_font_selector.set_source(font_as_percentage);
+        self.number_bold_check.set_active(config.number_bold);
+        self.number_italic_check.set_active(config.number_italic);
+        self.number_color_selector.set_source(config.number_color.clone());
 
+        // Hour ticks
+        self.hour_tick_style_dropdown.set_selected(tick_style_to_index(config.hour_tick_style));
+        self.hour_tick_color_selector.set_source(config.hour_tick_color.clone());
+        self.hour_tick_outer_spin.set_value(config.hour_tick_outer_percent);
+        self.hour_tick_inner_spin.set_value(config.hour_tick_inner_percent);
+
+        // Minute ticks
+        self.minute_tick_style_dropdown.set_selected(tick_style_to_index(config.minute_tick_style));
+        self.minute_tick_color_selector.set_source(config.minute_tick_color.clone());
+        self.minute_tick_outer_spin.set_value(config.minute_tick_outer_percent);
+        self.minute_tick_inner_spin.set_value(config.minute_tick_inner_percent);
+
+        // Hand style
         self.hand_dropdown.set_selected(match config.hour_hand_style {
             HandStyle::Line => 0,
             HandStyle::Arrow => 1,
@@ -625,14 +780,7 @@ impl ClockAnalogConfigWidget {
             HandStyle::Fancy => 3,
         });
 
-        // Font settings - convert fraction to percentage for display (0.12 -> 12)
-        let font_as_percentage = config.number_font.with_size(config.number_font.size() * 100.0);
-        self.number_font_selector.set_source(font_as_percentage);
-        self.number_bold_check.set_active(config.number_bold);
-        self.number_italic_check.set_active(config.number_italic);
-
         // Checkboxes
-        self.show_numbers_check.set_active(config.show_numbers);
         self.show_second_hand_check.set_active(config.show_second_hand);
         self.smooth_seconds_check.set_active(config.smooth_seconds);
         self.show_center_hub_check.set_active(config.show_center_hub);
@@ -643,13 +791,12 @@ impl ClockAnalogConfigWidget {
         self.minute_width_spin.set_value(config.minute_hand_width);
         self.second_width_spin.set_value(config.second_hand_width);
 
-        // Color widgets
-        self.tick_color_widget.set_color(config.tick_color);
-        self.border_color_widget.set_color(config.border_color);
-        self.number_color_selector.set_source(config.number_color.clone());
-        self.hour_color_widget.set_color(config.hour_hand_color);
-        self.minute_color_widget.set_color(config.minute_hand_color);
-        self.second_color_widget.set_color(config.second_hand_color);
+        // Color selectors
+        self.border_color_selector.set_source(config.border_color.clone());
+        self.hour_color_selector.set_source(config.hour_hand_color.clone());
+        self.minute_color_selector.set_source(config.minute_hand_color.clone());
+        self.second_color_selector.set_source(config.second_hand_color.clone());
+        self.center_hub_color_selector.set_source(config.center_hub_color.clone());
 
         // Icon config
         self.show_icon_check.set_active(config.show_icon);
@@ -669,12 +816,42 @@ impl ClockAnalogConfigWidget {
         *self.theme_config.borrow_mut() = theme.clone();
         self.background_widget.set_theme_config(theme.clone());
         self.number_font_selector.set_theme_config(theme.clone());
-        self.number_color_selector.set_theme_config(theme);
+        self.number_color_selector.set_theme_config(theme.clone());
+        self.hour_tick_color_selector.set_theme_config(theme.clone());
+        self.minute_tick_color_selector.set_theme_config(theme.clone());
+        self.border_color_selector.set_theme_config(theme.clone());
+        self.hour_color_selector.set_theme_config(theme.clone());
+        self.minute_color_selector.set_theme_config(theme.clone());
+        self.second_color_selector.set_theme_config(theme.clone());
+        self.center_hub_color_selector.set_theme_config(theme);
     }
 }
 
 impl Default for ClockAnalogConfigWidget {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Convert dropdown index to TickStyle
+fn tick_style_from_index(index: u32) -> TickStyle {
+    match index {
+        0 => TickStyle::None,
+        1 => TickStyle::Squares,
+        2 => TickStyle::Lines,
+        3 => TickStyle::Dots,
+        4 => TickStyle::Triangles,
+        _ => TickStyle::Lines,
+    }
+}
+
+/// Convert TickStyle to dropdown index
+fn tick_style_to_index(style: TickStyle) -> u32 {
+    match style {
+        TickStyle::None => 0,
+        TickStyle::Squares => 1,
+        TickStyle::Lines => 2,
+        TickStyle::Dots => 3,
+        TickStyle::Triangles => 4,
     }
 }
