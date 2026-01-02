@@ -1581,8 +1581,8 @@ pub struct LazyGraphConfigWidget {
 impl LazyGraphConfigWidget {
     /// Create a new lazy graph config widget
     ///
-    /// The actual GraphConfigWidget is NOT created here - only when the user
-    /// clicks the "Configure Graph..." button.
+    /// The actual GraphConfigWidget is NOT created here - it's created automatically
+    /// when the widget becomes visible (mapped), or when explicitly initialized.
     pub fn new(available_fields: Vec<crate::core::FieldMetadata>) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 0);
         let inner_widget: Rc<RefCell<Option<GraphConfigWidget>>> = Rc::new(RefCell::new(None));
@@ -1591,74 +1591,79 @@ impl LazyGraphConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let theme_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
 
-        // Create placeholder with expand button
+        // Create placeholder with loading indicator
         let placeholder = GtkBox::new(Orientation::Vertical, 8);
         placeholder.set_margin_top(12);
         placeholder.set_margin_bottom(12);
         placeholder.set_margin_start(12);
         placeholder.set_margin_end(12);
 
-        let expand_button = Button::with_label("Configure Graph...");
-        expand_button.add_css_class("suggested-action");
-
-        let info_label = Label::new(Some("Click to load graph configuration options"));
+        let info_label = Label::new(Some("Loading graph configuration..."));
         info_label.add_css_class("dim-label");
-
-        placeholder.append(&expand_button);
         placeholder.append(&info_label);
         container.append(&placeholder);
 
-        // Set up the expand button click handler
-        let container_clone = container.clone();
-        let inner_widget_clone = inner_widget.clone();
-        let deferred_config_clone = deferred_config.clone();
-        let deferred_theme_clone = deferred_theme.clone();
-        let available_fields_clone = available_fields.clone();
-        let on_change_clone = on_change.clone();
-        let theme_refreshers_clone = theme_refreshers.clone();
+        // Create a shared initialization closure
+        let init_widget = {
+            let container_clone = container.clone();
+            let inner_widget_clone = inner_widget.clone();
+            let deferred_config_clone = deferred_config.clone();
+            let deferred_theme_clone = deferred_theme.clone();
+            let available_fields_clone = available_fields.clone();
+            let on_change_clone = on_change.clone();
+            let theme_refreshers_clone = theme_refreshers.clone();
 
-        expand_button.connect_clicked(move |_| {
-            // Only create if not already created
-            if inner_widget_clone.borrow().is_none() {
-                log::info!("LazyGraphConfigWidget: Creating actual GraphConfigWidget on demand");
+            Rc::new(move || {
+                // Only create if not already created
+                if inner_widget_clone.borrow().is_none() {
+                    log::info!("LazyGraphConfigWidget: Creating actual GraphConfigWidget on map");
 
-                // Create the actual widget
-                let widget = GraphConfigWidget::new(available_fields_clone.clone());
+                    // Create the actual widget
+                    let widget = GraphConfigWidget::new(available_fields_clone.clone());
 
-                // Apply deferred theme first (before config, as config may trigger UI updates)
-                widget.set_theme(deferred_theme_clone.borrow().clone());
+                    // Apply deferred theme first (before config, as config may trigger UI updates)
+                    widget.set_theme(deferred_theme_clone.borrow().clone());
 
-                // Apply deferred config
-                widget.set_config(deferred_config_clone.borrow().clone());
+                    // Apply deferred config
+                    widget.set_config(deferred_config_clone.borrow().clone());
 
-                // Connect on_change callback
-                let on_change_inner = on_change_clone.clone();
-                widget.set_on_change(move || {
-                    if let Some(ref callback) = *on_change_inner.borrow() {
-                        callback();
+                    // Connect on_change callback
+                    let on_change_inner = on_change_clone.clone();
+                    widget.set_on_change(move || {
+                        if let Some(ref callback) = *on_change_inner.borrow() {
+                            callback();
+                        }
+                    });
+
+                    // Remove placeholder and add actual widget
+                    while let Some(child) = container_clone.first_child() {
+                        container_clone.remove(&child);
                     }
-                });
+                    container_clone.append(widget.widget());
 
-                // Remove placeholder and add actual widget
-                while let Some(child) = container_clone.first_child() {
-                    container_clone.remove(&child);
+                    // Store the widget BEFORE setting up theme refresher
+                    *inner_widget_clone.borrow_mut() = Some(widget);
+
+                    // Register theme refresher that uses the stored widget
+                    let inner_widget_for_theme = inner_widget_clone.clone();
+                    let theme_for_refresh = deferred_theme_clone.clone();
+                    let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+                        if let Some(ref w) = *inner_widget_for_theme.borrow() {
+                            w.set_theme(theme_for_refresh.borrow().clone());
+                        }
+                    });
+                    theme_refreshers_clone.borrow_mut().push(theme_refresh_callback);
                 }
-                container_clone.append(widget.widget());
+            })
+        };
 
-                // Store the widget BEFORE setting up theme refresher
-                *inner_widget_clone.borrow_mut() = Some(widget);
-
-                // Register theme refresher that uses the stored widget
-                let inner_widget_for_theme = inner_widget_clone.clone();
-                let theme_for_refresh = deferred_theme_clone.clone();
-                let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-                    if let Some(ref w) = *inner_widget_for_theme.borrow() {
-                        w.set_theme(theme_for_refresh.borrow().clone());
-                    }
-                });
-                theme_refreshers_clone.borrow_mut().push(theme_refresh_callback);
-            }
-        });
+        // Auto-initialize when the widget becomes visible (mapped)
+        {
+            let init_widget_clone = init_widget.clone();
+            container.connect_map(move |_| {
+                init_widget_clone();
+            });
+        }
 
         Self {
             container,
