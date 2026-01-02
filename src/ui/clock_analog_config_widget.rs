@@ -2,7 +2,7 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Frame, Label, Notebook, Orientation,
+    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Frame, Grid, Label, Notebook, Orientation,
     SpinButton, StringList,
 };
 use std::cell::RefCell;
@@ -52,6 +52,7 @@ pub struct ClockAnalogConfigWidget {
     second_color_selector: Rc<ThemeColorSelector>,
     second_width_spin: SpinButton,
     center_hub_color_selector: Rc<ThemeColorSelector>,
+    center_hub_size_spin: SpinButton,
     // Icon tab
     show_icon_check: CheckButton,
     icon_text_entry: gtk4::Entry,
@@ -355,75 +356,95 @@ impl ClockAnalogConfigWidget {
         style_frame.set_child(Some(&style_box));
         hands_tab_box.append(&style_frame);
 
-        // Colors Section
+        // Colors Section - using Grid for alignment
         let colors_frame = Frame::new(Some("Colors"));
-        let colors_box = GtkBox::new(Orientation::Vertical, 6);
-        colors_box.set_margin_start(8);
-        colors_box.set_margin_end(8);
-        colors_box.set_margin_top(8);
-        colors_box.set_margin_bottom(8);
+        let colors_grid = Grid::new();
+        colors_grid.set_row_spacing(6);
+        colors_grid.set_column_spacing(8);
+        colors_grid.set_margin_start(8);
+        colors_grid.set_margin_end(8);
+        colors_grid.set_margin_top(8);
+        colors_grid.set_margin_bottom(8);
 
-        // Border color and width
-        let border_row = GtkBox::new(Orientation::Horizontal, 6);
-        border_row.append(&Label::new(Some("Border:")));
+        // Column 0: Labels (right-aligned), Column 1: Color selectors, Column 2: "Width:" labels, Column 3: Spinners
+        let label_width = 90;
+
+        // Border row
+        let border_label = Label::new(Some("Border:"));
+        border_label.set_xalign(1.0);
+        border_label.set_width_request(label_width);
+        colors_grid.attach(&border_label, 0, 0, 1, 1);
         let border_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().border_color.clone()));
         border_color_selector.set_theme_config(theme_config.borrow().clone());
-        border_row.append(border_color_selector.widget());
-        border_row.append(&Label::new(Some("Width:")));
+        colors_grid.attach(border_color_selector.widget(), 1, 0, 1, 1);
+        let border_width_label = Label::new(Some("Width:"));
+        colors_grid.attach(&border_width_label, 2, 0, 1, 1);
         let border_width_adj = Adjustment::new(3.0, 0.0, 20.0, 0.5, 1.0, 0.0);
         let border_width_spin = SpinButton::new(Some(&border_width_adj), 0.5, 1);
         border_width_spin.set_hexpand(true);
-        border_row.append(&border_width_spin);
-        colors_box.append(&border_row);
+        colors_grid.attach(&border_width_spin, 3, 0, 1, 1);
 
-        // Hour hand
-        let hour_row = GtkBox::new(Orientation::Horizontal, 6);
-        hour_row.append(&Label::new(Some("Hour Hand:")));
+        // Hour hand row
+        let hour_label = Label::new(Some("Hour Hand:"));
+        hour_label.set_xalign(1.0);
+        hour_label.set_width_request(label_width);
+        colors_grid.attach(&hour_label, 0, 1, 1, 1);
         let hour_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().hour_hand_color.clone()));
         hour_color_selector.set_theme_config(theme_config.borrow().clone());
-        hour_row.append(hour_color_selector.widget());
-        hour_row.append(&Label::new(Some("Width:")));
+        colors_grid.attach(hour_color_selector.widget(), 1, 1, 1, 1);
+        let hour_width_label = Label::new(Some("Width:"));
+        colors_grid.attach(&hour_width_label, 2, 1, 1, 1);
         let hour_width_adj = Adjustment::new(6.0, 1.0, 20.0, 0.5, 1.0, 0.0);
         let hour_width_spin = SpinButton::new(Some(&hour_width_adj), 0.5, 1);
         hour_width_spin.set_hexpand(true);
-        hour_row.append(&hour_width_spin);
-        colors_box.append(&hour_row);
+        colors_grid.attach(&hour_width_spin, 3, 1, 1, 1);
 
-        // Minute hand
-        let minute_row = GtkBox::new(Orientation::Horizontal, 6);
-        minute_row.append(&Label::new(Some("Minute Hand:")));
+        // Minute hand row
+        let minute_label = Label::new(Some("Minute Hand:"));
+        minute_label.set_xalign(1.0);
+        minute_label.set_width_request(label_width);
+        colors_grid.attach(&minute_label, 0, 2, 1, 1);
         let minute_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().minute_hand_color.clone()));
         minute_color_selector.set_theme_config(theme_config.borrow().clone());
-        minute_row.append(minute_color_selector.widget());
-        minute_row.append(&Label::new(Some("Width:")));
+        colors_grid.attach(minute_color_selector.widget(), 1, 2, 1, 1);
+        let minute_width_label = Label::new(Some("Width:"));
+        colors_grid.attach(&minute_width_label, 2, 2, 1, 1);
         let minute_width_adj = Adjustment::new(4.0, 1.0, 20.0, 0.5, 1.0, 0.0);
         let minute_width_spin = SpinButton::new(Some(&minute_width_adj), 0.5, 1);
         minute_width_spin.set_hexpand(true);
-        minute_row.append(&minute_width_spin);
-        colors_box.append(&minute_row);
+        colors_grid.attach(&minute_width_spin, 3, 2, 1, 1);
 
-        // Second hand
-        let second_row = GtkBox::new(Orientation::Horizontal, 6);
-        second_row.append(&Label::new(Some("Second Hand:")));
+        // Second hand row
+        let second_label = Label::new(Some("Second Hand:"));
+        second_label.set_xalign(1.0);
+        second_label.set_width_request(label_width);
+        colors_grid.attach(&second_label, 0, 3, 1, 1);
         let second_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().second_hand_color.clone()));
         second_color_selector.set_theme_config(theme_config.borrow().clone());
-        second_row.append(second_color_selector.widget());
-        second_row.append(&Label::new(Some("Width:")));
+        colors_grid.attach(second_color_selector.widget(), 1, 3, 1, 1);
+        let second_width_label = Label::new(Some("Width:"));
+        colors_grid.attach(&second_width_label, 2, 3, 1, 1);
         let second_width_adj = Adjustment::new(2.0, 0.5, 10.0, 0.5, 1.0, 0.0);
         let second_width_spin = SpinButton::new(Some(&second_width_adj), 0.5, 1);
         second_width_spin.set_hexpand(true);
-        second_row.append(&second_width_spin);
-        colors_box.append(&second_row);
+        colors_grid.attach(&second_width_spin, 3, 3, 1, 1);
 
-        // Center hub color
-        let hub_row = GtkBox::new(Orientation::Horizontal, 6);
-        hub_row.append(&Label::new(Some("Center Hub:")));
+        // Center hub row
+        let hub_label = Label::new(Some("Center Hub:"));
+        hub_label.set_xalign(1.0);
+        hub_label.set_width_request(label_width);
+        colors_grid.attach(&hub_label, 0, 4, 1, 1);
         let center_hub_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().center_hub_color.clone()));
         center_hub_color_selector.set_theme_config(theme_config.borrow().clone());
-        hub_row.append(center_hub_color_selector.widget());
-        colors_box.append(&hub_row);
+        colors_grid.attach(center_hub_color_selector.widget(), 1, 4, 1, 1);
+        let hub_size_label = Label::new(Some("Size %:"));
+        colors_grid.attach(&hub_size_label, 2, 4, 1, 1);
+        let hub_size_adj = Adjustment::new(config.borrow().center_hub_size * 100.0, 1.0, 20.0, 0.5, 1.0, 0.0);
+        let center_hub_size_spin = SpinButton::new(Some(&hub_size_adj), 0.5, 1);
+        center_hub_size_spin.set_hexpand(true);
+        colors_grid.attach(&center_hub_size_spin, 3, 4, 1, 1);
 
-        colors_frame.set_child(Some(&colors_box));
+        colors_frame.set_child(Some(&colors_grid));
         hands_tab_box.append(&colors_frame);
 
         // Connect hand color callbacks
@@ -450,6 +471,12 @@ impl ClockAnalogConfigWidget {
         let config_for_hub_c = config.clone();
         center_hub_color_selector.set_on_change(move |color_source| {
             config_for_hub_c.borrow_mut().center_hub_color = color_source;
+        });
+
+        let config_for_hub_size = config.clone();
+        center_hub_size_spin.connect_value_changed(move |spin| {
+            // Convert from percentage to fraction (5% -> 0.05)
+            config_for_hub_size.borrow_mut().center_hub_size = spin.value() / 100.0;
         });
 
         // Add Hands tab to notebook
@@ -717,6 +744,7 @@ impl ClockAnalogConfigWidget {
             second_color_selector,
             second_width_spin,
             center_hub_color_selector,
+            center_hub_size_spin,
             show_icon_check,
             icon_text_entry,
             icon_font_button,
@@ -797,6 +825,8 @@ impl ClockAnalogConfigWidget {
         self.minute_color_selector.set_source(config.minute_hand_color.clone());
         self.second_color_selector.set_source(config.second_hand_color.clone());
         self.center_hub_color_selector.set_source(config.center_hub_color.clone());
+        // Convert fraction to percentage (0.05 -> 5%)
+        self.center_hub_size_spin.set_value(config.center_hub_size * 100.0);
 
         // Icon config
         self.show_icon_check.set_active(config.show_icon);
