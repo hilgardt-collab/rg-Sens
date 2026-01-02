@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
 use crate::ui::background::Color;
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 
 /// Clock hand style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -85,11 +86,9 @@ pub struct AnalogClockConfig {
     #[serde(default = "default_true")]
     pub show_numbers: bool,
     #[serde(default = "default_number_color")]
-    pub number_color: Color,
+    pub number_color: ColorSource,
     #[serde(default = "default_number_font")]
-    pub number_font: String,
-    #[serde(default = "default_number_size")]
-    pub number_size: f64,
+    pub number_font: FontSource,
     #[serde(default)]
     pub number_bold: bool,
     #[serde(default)]
@@ -186,16 +185,12 @@ fn default_true() -> bool {
     true
 }
 
-fn default_number_color() -> Color {
-    Color::new(0.9, 0.9, 0.9, 1.0)
+fn default_number_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.9, 0.9, 0.9, 1.0))
 }
 
-fn default_number_font() -> String {
-    "Sans".to_string()
-}
-
-fn default_number_size() -> f64 {
-    0.12 // As fraction of radius
+fn default_number_font() -> FontSource {
+    FontSource::custom("Sans".to_string(), 0.12) // Size as fraction of radius
 }
 
 fn default_hour_hand_color() -> Color {
@@ -259,7 +254,7 @@ impl Default for AnalogClockConfig {
         // Create a default circular background with dark color
         let face_background = crate::ui::BackgroundConfig {
             background: crate::ui::BackgroundType::Solid {
-                color: default_face_color(),
+                color: ColorSource::custom(default_face_color()),
             },
         };
 
@@ -275,7 +270,6 @@ impl Default for AnalogClockConfig {
             show_numbers: true,
             number_color: default_number_color(),
             number_font: default_number_font(),
-            number_size: default_number_size(),
             number_bold: true,
             number_italic: false,
             hour_hand_style: HandStyle::default(),
@@ -316,6 +310,20 @@ pub fn render_analog_clock(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
+    render_analog_clock_with_theme(cr, config, hour, minute, second, width, height, None)
+}
+
+/// Render an analog clock with theme support
+pub fn render_analog_clock_with_theme(
+    cr: &cairo::Context,
+    config: &AnalogClockConfig,
+    hour: f64,
+    minute: f64,
+    second: f64,
+    width: f64,
+    height: f64,
+    theme: Option<&ComboThemeConfig>,
+) -> Result<(), cairo::Error> {
     let center_x = width / 2.0;
     let center_y = height / 2.0;
     let radius = (width.min(height) / 2.0) - 10.0;
@@ -328,7 +336,7 @@ pub fn render_analog_clock(
 
     // Draw numbers
     if config.show_numbers {
-        draw_numbers(cr, config, center_x, center_y, radius)?;
+        draw_numbers(cr, config, center_x, center_y, radius, theme)?;
     }
 
     // Draw hands (hour first, then minute, then second on top)
@@ -505,17 +513,24 @@ fn draw_numbers(
     cx: f64,
     cy: f64,
     radius: f64,
+    theme: Option<&ComboThemeConfig>,
 ) -> Result<(), cairo::Error> {
     cr.save()?;
 
+    // Resolve number color using theme
+    let default_theme = ComboThemeConfig::default();
+    let theme_ref = theme.unwrap_or(&default_theme);
+    let number_color = config.number_color.resolve(theme_ref);
     cr.set_source_rgba(
-        config.number_color.r,
-        config.number_color.g,
-        config.number_color.b,
-        config.number_color.a,
+        number_color.r,
+        number_color.g,
+        number_color.b,
+        number_color.a,
     );
 
-    let font_size = radius * config.number_size;
+    // Resolve font using theme
+    let (font_family, font_size_fraction) = config.number_font.resolve(theme_ref);
+    let font_size = radius * font_size_fraction;
     let slant = if config.number_italic {
         cairo::FontSlant::Italic
     } else {
@@ -526,7 +541,7 @@ fn draw_numbers(
     } else {
         cairo::FontWeight::Normal
     };
-    cr.select_font_face(&config.number_font, slant, weight);
+    cr.select_font_face(&font_family, slant, weight);
     cr.set_font_size(font_size);
 
     let number_radius = radius * 0.75;

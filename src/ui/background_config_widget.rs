@@ -7,7 +7,6 @@ use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig, IndicatorBackgroundConfig};
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
 use crate::ui::theme::{ColorSource, ComboThemeConfig};
@@ -22,7 +21,7 @@ pub struct BackgroundConfigWidget {
     type_dropdown: DropDown,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     type_dropdown_handler_id: gtk4::glib::SignalHandlerId,
-    solid_color_widget: Rc<ColorButtonWidget>,
+    solid_color_selector: Rc<ThemeColorSelector>,
     linear_gradient_editor: Rc<GradientEditor>,
     radial_gradient_editor: Rc<GradientEditor>,
     indicator_gradient_editor: Rc<GradientEditor>,
@@ -99,7 +98,7 @@ impl BackgroundConfigWidget {
         config_stack.set_vexpand(true);
 
         // Solid color configuration
-        let (solid_page, solid_color_widget) = Self::create_solid_config(&config, &preview, &on_change);
+        let (solid_page, solid_color_selector) = Self::create_solid_config(&config, &preview, &on_change, &theme_config);
         config_stack.add_named(&solid_page, Some("solid"));
 
         // Linear gradient configuration
@@ -174,7 +173,7 @@ impl BackgroundConfigWidget {
             if selected != current_type_index {
                 let background_type = match selected {
                     0 => BackgroundType::Solid {
-                        color: Color::new(0.15, 0.15, 0.15, 1.0),
+                        color: ColorSource::custom(Color::new(0.15, 0.15, 0.15, 1.0)),
                     },
                     1 => BackgroundType::LinearGradient(LinearGradientConfig::default()),
                     2 => BackgroundType::RadialGradient(RadialGradientConfig::default()),
@@ -245,7 +244,7 @@ impl BackgroundConfigWidget {
             type_dropdown,
             on_change,
             type_dropdown_handler_id,
-            solid_color_widget,
+            solid_color_selector,
             linear_gradient_editor,
             radial_gradient_editor,
             indicator_gradient_editor,
@@ -267,34 +266,36 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> (GtkBox, Rc<ColorButtonWidget>) {
+        theme_config: &Rc<RefCell<ComboThemeConfig>>,
+    ) -> (GtkBox, Rc<ThemeColorSelector>) {
         let page = GtkBox::new(Orientation::Vertical, 6);
 
-        // Solid color - using ColorButtonWidget
+        // Solid color - using ThemeColorSelector (theme-aware)
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Color:")));
 
-        let initial_color = if let BackgroundType::Solid { color } = config.borrow().background {
-            color
+        let initial_color_source = if let BackgroundType::Solid { color } = &config.borrow().background {
+            color.clone()
         } else {
-            Color::default()
+            ColorSource::custom(Color::default())
         };
-        let color_widget = Rc::new(ColorButtonWidget::new(initial_color));
-        color_box.append(color_widget.widget());
+        let color_selector = Rc::new(ThemeColorSelector::new(initial_color_source));
+        color_selector.set_theme_config(theme_config.borrow().clone());
+        color_box.append(color_selector.widget());
         page.append(&color_box);
 
         let config_clone = config.clone();
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
-        color_widget.set_on_change(move |new_color| {
-            config_clone.borrow_mut().background = BackgroundType::Solid { color: new_color };
+        color_selector.set_on_change(move |new_color_source| {
+            config_clone.borrow_mut().background = BackgroundType::Solid { color: new_color_source };
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
         });
 
-        (page, color_widget)
+        (page, color_selector)
     }
 
     fn create_linear_gradient_config(
@@ -1089,8 +1090,8 @@ impl BackgroundConfigWidget {
         };
 
         // Load data into widgets if applicable
-        if let BackgroundType::Solid { color } = new_config.background {
-            self.solid_color_widget.set_color(color);
+        if let BackgroundType::Solid { ref color } = new_config.background {
+            self.solid_color_selector.set_source(color.clone());
         }
         if let BackgroundType::LinearGradient(ref grad) = new_config.background {
             self.linear_gradient_editor.set_gradient(grad);
@@ -1234,10 +1235,13 @@ impl BackgroundConfigWidget {
         self.indicator_field_entry.set_text(&current_value);
     }
 
-    /// Set theme config for all gradient editors and polygon color selectors in this widget
+    /// Set theme config for all gradient editors, solid color, and polygon color selectors in this widget
     pub fn set_theme_config(&self, theme: crate::ui::theme::ComboThemeConfig) {
         // Store theme for preview rendering
         *self.theme_config.borrow_mut() = theme.clone();
+
+        // Update solid color selector
+        self.solid_color_selector.set_theme_config(theme.clone());
 
         // Update gradient editors
         self.linear_gradient_editor.set_theme_config(theme.clone());

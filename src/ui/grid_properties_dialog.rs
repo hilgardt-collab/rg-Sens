@@ -865,6 +865,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create clock_analog widget if this is the active displayer (lazy init)
     if old_displayer_id == "clock_analog" {
         let widget = crate::ui::ClockAnalogConfigWidget::new();
+        widget.set_theme(global_theme.clone());
         // Try new key first, then legacy key for backwards compatibility
         let config_value = panel_guard.config.get("clock_analog_config")
             .or_else(|| panel_guard.config.get("analog_clock_config"));
@@ -2125,6 +2126,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = clock_analog_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::ClockAnalogConfigWidget::new();
+                            widget.set_theme(global_theme_lazy.clone());
                             clock_analog_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
                         }
@@ -2795,6 +2797,7 @@ pub(crate) fn show_panel_properties_dialog(
     background_tab_box.set_margin_end(12);
 
     let background_widget = crate::ui::BackgroundConfigWidget::new();
+    background_widget.set_theme_config(global_theme.clone());
     background_widget.set_config(panel_guard.background.clone());
     // Set source fields for indicator background configuration
     background_widget.set_source_fields((*available_fields).clone());

@@ -162,7 +162,7 @@ pub enum ImageDisplayMode {
 #[serde(tag = "type")]
 pub enum BackgroundType {
     #[serde(rename = "solid")]
-    Solid { color: Color },
+    Solid { color: ColorSource },
     #[serde(rename = "linear_gradient")]
     LinearGradient(LinearGradientConfig),
     #[serde(rename = "radial_gradient")]
@@ -276,7 +276,7 @@ fn default_alpha() -> f64 {
 impl Default for BackgroundType {
     fn default() -> Self {
         Self::Solid {
-            color: Color::new(0.15, 0.15, 0.15, 1.0),
+            color: ColorSource::custom(Color::new(0.15, 0.15, 0.15, 1.0)),
         }
     }
 }
@@ -309,7 +309,12 @@ pub fn render_background_with_theme(
 ) -> Result<(), cairo::Error> {
     match &config.background {
         BackgroundType::Solid { color } => {
-            color.apply_to_cairo(cr);
+            let resolved_color = if let Some(t) = theme {
+                color.resolve(t)
+            } else {
+                color.resolve(&ComboThemeConfig::default())
+            };
+            resolved_color.apply_to_cairo(cr);
             cr.rectangle(0.0, 0.0, width, height);
             cr.fill()?;
         }

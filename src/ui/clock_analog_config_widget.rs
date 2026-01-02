@@ -12,15 +12,18 @@ use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyl
 use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::BackgroundConfigWidget;
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::theme::ComboThemeConfig;
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::theme_font_selector::ThemeFontSelector;
 
 /// Widget for configuring Analog Clock displayer
 pub struct ClockAnalogConfigWidget {
     widget: Notebook,
     config: Rc<RefCell<AnalogClockConfig>>,
+    theme_config: Rc<RefCell<ComboThemeConfig>>,
     background_widget: BackgroundConfigWidget,
-    // Font button and controls for updating UI on set_config
-    number_font_button: Button,
-    number_size_spin: SpinButton,
+    // Font selector and controls for updating UI on set_config
+    number_font_selector: Rc<ThemeFontSelector>,
     number_bold_check: CheckButton,
     number_italic_check: CheckButton,
     // Style dropdowns for updating UI on set_config
@@ -40,7 +43,7 @@ pub struct ClockAnalogConfigWidget {
     // Color buttons for updating on set_config
     tick_color_widget: Rc<ColorButtonWidget>,
     border_color_widget: Rc<ColorButtonWidget>,
-    number_color_widget: Rc<ColorButtonWidget>,
+    number_color_selector: Rc<ThemeColorSelector>,
     hour_color_widget: Rc<ColorButtonWidget>,
     minute_color_widget: Rc<ColorButtonWidget>,
     second_color_widget: Rc<ColorButtonWidget>,
@@ -57,6 +60,7 @@ pub struct ClockAnalogConfigWidget {
 impl ClockAnalogConfigWidget {
     pub fn new() -> Self {
         let config = Rc::new(RefCell::new(AnalogClockConfig::default()));
+        let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
@@ -139,58 +143,49 @@ impl ClockAnalogConfigWidget {
         show_numbers_check.set_active(true);
         number_box.append(&show_numbers_check);
 
-        // Font row: Font Button + Size + Bold/Italic + Copy/Paste
-        let font_box = GtkBox::new(Orientation::Horizontal, 6);
-        font_box.append(&Label::new(Some("Font:")));
+        // Font selector (theme-aware)
+        let font_row = GtkBox::new(Orientation::Horizontal, 6);
+        font_row.append(&Label::new(Some("Font:")));
 
         let initial_font = config.borrow().number_font.clone();
-        let initial_size = config.borrow().number_size;
-        let number_font_button = Button::with_label(&format!("{} {:.0}%", initial_font, initial_size * 100.0));
-        number_font_button.set_hexpand(true);
-        font_box.append(&number_font_button);
-
-        // Size spinner (as percentage of clock radius)
-        font_box.append(&Label::new(Some("Size:")));
-        let number_size_adj = Adjustment::new(12.0, 5.0, 30.0, 1.0, 5.0, 0.0);
-        let number_size_spin = SpinButton::new(Some(&number_size_adj), 1.0, 0);
-        number_size_spin.set_width_chars(4);
-        font_box.append(&number_size_spin);
-        font_box.append(&Label::new(Some("%")));
+        let number_font_selector = Rc::new(ThemeFontSelector::new(initial_font));
+        number_font_selector.set_theme_config(theme_config.borrow().clone());
+        number_font_selector.widget().set_hexpand(true);
+        font_row.append(number_font_selector.widget());
 
         // Bold checkbox
         let number_bold_check = CheckButton::with_label("B");
         number_bold_check.set_tooltip_text(Some("Bold"));
-        number_bold_check.set_active(true);
-        font_box.append(&number_bold_check);
+        number_bold_check.set_active(config.borrow().number_bold);
+        font_row.append(&number_bold_check);
 
         // Italic checkbox
         let number_italic_check = CheckButton::with_label("I");
         number_italic_check.set_tooltip_text(Some("Italic"));
-        number_italic_check.set_active(false);
-        font_box.append(&number_italic_check);
+        number_italic_check.set_active(config.borrow().number_italic);
+        font_row.append(&number_italic_check);
 
-        // Copy font button
-        let copy_font_btn = Button::with_label("Copy");
-        copy_font_btn.set_tooltip_text(Some("Copy font settings"));
-        font_box.append(&copy_font_btn);
+        number_box.append(&font_row);
 
-        // Paste font button
-        let paste_font_btn = Button::with_label("Paste");
-        paste_font_btn.set_tooltip_text(Some("Paste font settings"));
-        font_box.append(&paste_font_btn);
+        // Number color (theme-aware)
+        let color_row = GtkBox::new(Orientation::Horizontal, 6);
+        color_row.append(&Label::new(Some("Color:")));
+        let initial_color = config.borrow().number_color.clone();
+        let number_color_selector = Rc::new(ThemeColorSelector::new(initial_color));
+        number_color_selector.set_theme_config(theme_config.borrow().clone());
+        color_row.append(number_color_selector.widget());
+        number_box.append(&color_row);
 
-        number_box.append(&font_box);
+        // Connect font selector callback
+        let config_for_font = config.clone();
+        number_font_selector.set_on_change(move |font_source| {
+            config_for_font.borrow_mut().number_font = font_source;
+        });
 
-        // Number color
-        let color_box = GtkBox::new(Orientation::Horizontal, 6);
-        color_box.append(&Label::new(Some("Color:")));
-        let number_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().number_color));
-        color_box.append(number_color_widget.widget());
-        number_box.append(&color_box);
-
+        // Connect color selector callback
         let config_for_num_color = config.clone();
-        number_color_widget.set_on_change(move |color| {
-            config_for_num_color.borrow_mut().number_color = color;
+        number_color_selector.set_on_change(move |color_source| {
+            config_for_num_color.borrow_mut().number_color = color_source;
         });
 
         number_frame.set_child(Some(&number_box));
@@ -391,45 +386,6 @@ impl ClockAnalogConfigWidget {
 
         // ============ Connect Signals ============
 
-        // Font button - opens font dialog
-        let config_for_font = config.clone();
-        let font_btn_clone = number_font_button.clone();
-        let size_spin_clone = number_size_spin.clone();
-        number_font_button.connect_clicked(move |btn| {
-            let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            let _current_font = config_for_font.borrow().number_font.clone();
-            let config_clone = config_for_font.clone();
-            let font_btn = font_btn_clone.clone();
-            let size_spin = size_spin_clone.clone();
-
-            if let Some(win) = window {
-                let font_dialog = shared_font_dialog();
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
-                        Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                            config_clone.borrow_mut().number_font = family.clone();
-                            let size_percent = size_spin.value();
-                            font_btn.set_label(&format!("{} {:.0}%", family, size_percent));
-                        }
-                        Err(_) => {} // User cancelled
-                    }
-                });
-            }
-        });
-
-        // Size spinner
-        let config_for_size = config.clone();
-        let font_btn_for_size = number_font_button.clone();
-        number_size_spin.connect_value_changed(move |spin| {
-            let size_percent = spin.value();
-            let mut cfg = config_for_size.borrow_mut();
-            cfg.number_size = size_percent / 100.0; // Convert to fraction
-            let family = cfg.number_font.clone();
-            drop(cfg);
-            font_btn_for_size.set_label(&format!("{} {:.0}%", family, size_percent));
-        });
-
         // Bold checkbox
         let config_for_bold = config.clone();
         number_bold_check.connect_toggled(move |check| {
@@ -440,44 +396,6 @@ impl ClockAnalogConfigWidget {
         let config_for_italic = config.clone();
         number_italic_check.connect_toggled(move |check| {
             config_for_italic.borrow_mut().number_italic = check.is_active();
-        });
-
-        // Copy font button
-        let config_for_copy = config.clone();
-        copy_font_btn.connect_clicked(move |_| {
-            let cfg = config_for_copy.borrow();
-            if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                clipboard.copy_font(
-                    cfg.number_font.clone(),
-                    cfg.number_size * 100.0, // Store as percentage
-                    cfg.number_bold,
-                    cfg.number_italic,
-                );
-            }
-        });
-
-        // Paste font button
-        let config_for_paste = config.clone();
-        let font_btn_for_paste = number_font_button.clone();
-        let size_spin_for_paste = number_size_spin.clone();
-        let bold_check_for_paste = number_bold_check.clone();
-        let italic_check_for_paste = number_italic_check.clone();
-        paste_font_btn.connect_clicked(move |_| {
-            if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
-                if let Some((family, size, bold, italic)) = clipboard.paste_font() {
-                    let mut cfg = config_for_paste.borrow_mut();
-                    cfg.number_font = family.clone();
-                    cfg.number_size = size / 100.0; // Convert from percentage to fraction
-                    cfg.number_bold = bold;
-                    cfg.number_italic = italic;
-                    drop(cfg);
-
-                    font_btn_for_paste.set_label(&format!("{} {:.0}%", family, size));
-                    size_spin_for_paste.set_value(size);
-                    bold_check_for_paste.set_active(bold);
-                    italic_check_for_paste.set_active(italic);
-                }
-            }
         });
 
         // Style dropdowns
@@ -631,9 +549,9 @@ impl ClockAnalogConfigWidget {
         Self {
             widget: notebook,
             config,
+            theme_config,
             background_widget,
-            number_font_button,
-            number_size_spin,
+            number_font_selector,
             number_bold_check,
             number_italic_check,
             face_dropdown,
@@ -649,7 +567,7 @@ impl ClockAnalogConfigWidget {
             second_width_spin,
             tick_color_widget,
             border_color_widget,
-            number_color_widget,
+            number_color_selector,
             hour_color_widget,
             minute_color_widget,
             second_color_widget,
@@ -702,9 +620,7 @@ impl ClockAnalogConfigWidget {
         });
 
         // Font settings
-        let size_percent = config.number_size * 100.0;
-        self.number_font_button.set_label(&format!("{} {:.0}%", config.number_font, size_percent));
-        self.number_size_spin.set_value(size_percent);
+        self.number_font_selector.set_source(config.number_font.clone());
         self.number_bold_check.set_active(config.number_bold);
         self.number_italic_check.set_active(config.number_italic);
 
@@ -723,7 +639,7 @@ impl ClockAnalogConfigWidget {
         // Color widgets
         self.tick_color_widget.set_color(config.tick_color);
         self.border_color_widget.set_color(config.border_color);
-        self.number_color_widget.set_color(config.number_color);
+        self.number_color_selector.set_source(config.number_color.clone());
         self.hour_color_widget.set_color(config.hour_hand_color);
         self.minute_color_widget.set_color(config.minute_hand_color);
         self.second_color_widget.set_color(config.second_hand_color);
@@ -739,6 +655,14 @@ impl ClockAnalogConfigWidget {
 
         // Store config
         *self.config.borrow_mut() = config;
+    }
+
+    /// Set the theme configuration for theme-aware selectors
+    pub fn set_theme(&self, theme: ComboThemeConfig) {
+        *self.theme_config.borrow_mut() = theme.clone();
+        self.background_widget.set_theme_config(theme.clone());
+        self.number_font_selector.set_theme_config(theme.clone());
+        self.number_color_selector.set_theme_config(theme);
     }
 }
 
