@@ -1,5 +1,6 @@
 //! Grid layout manager for panels with advanced features
 
+use crate::config::AppConfig;
 use crate::core::Panel;
 use gtk4::gdk::ModifierType;
 use gtk4::{prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
@@ -126,11 +127,13 @@ pub struct GridLayout {
     on_borderless_drag: Rc<RefCell<Option<BorderlessDragCallback>>>,
     /// Viewport (window) dimensions for auto-scroll boundary visualization
     viewport_size: Rc<RefCell<(i32, i32)>>,
+    /// Application config for accessing global theme
+    app_config: Rc<RefCell<AppConfig>>,
 }
 
 impl GridLayout {
-    /// Create a new grid layout
-    pub fn new(config: GridConfig) -> Self {
+    /// Create a new grid layout with access to app configuration for global theme
+    pub fn new(config: GridConfig, app_config: Rc<RefCell<AppConfig>>) -> Self {
         let overlay = Overlay::new();
         let container = Fixed::new();
 
@@ -169,6 +172,7 @@ impl GridLayout {
             on_change: Rc::new(RefCell::new(None)),
             on_borderless_drag: Rc::new(RefCell::new(None)),
             viewport_size: Rc::new(RefCell::new((800, 600))), // Default, updated by main window
+            app_config,
         };
 
         grid_layout.setup_drop_zone_drawing();
@@ -1065,6 +1069,7 @@ impl GridLayout {
         let container = self.container.clone();
         let on_change = self.on_change.clone();
         let drop_zone = self.drop_zone_layer.clone();
+        let app_config_props = self.app_config.clone();
 
         let properties_action = gio::SimpleAction::new("properties", None);
         let selected_panels_props = self.selected_panels.clone();
@@ -1083,6 +1088,7 @@ impl GridLayout {
                 registry,
                 selected_panels_props.clone(),
                 panels_props.clone(),
+                app_config_props.borrow().global_theme.clone(),
             );
         });
         action_group.add_action(&properties_action);
@@ -1570,6 +1576,7 @@ impl GridLayout {
         let panels_for_copy = self.panels.clone();
         let cached_geometries_end = cached_geometries.clone();
         let cached_ignore_collision_end = cached_ignore_collision.clone();
+        let app_config_for_copy = self.app_config.clone();
 
         drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
             let config = config_for_end.borrow();
@@ -1932,6 +1939,7 @@ impl GridLayout {
                                 let container_props = container_for_copy.clone();
                                 let selected_panels_props = selected_panels_end.clone();
                                 let panels_props = panels_for_copy.clone();
+                                let app_config_props = app_config_for_copy.clone();
 
                                 properties_action.connect_activate(move |_, _| {
                                     log::info!("Opening properties dialog for copied panel: {}", panel_id_props);
@@ -1947,6 +1955,7 @@ impl GridLayout {
                                         registry,
                                         selected_panels_props.clone(),
                                         panels_props.clone(),
+                                        app_config_props.borrow().global_theme.clone(),
                                     );
                                 });
                                 action_group.add_action(&properties_action);
@@ -2424,6 +2433,7 @@ impl GridLayout {
                                 let drop_zone_drag_end = drop_zone_layer_end.clone();
                                 let on_change_drag_end = on_change_end.clone();
                                 let panels_drag_end = panels_for_copy.clone();
+                                let app_config_drag_end = app_config_for_copy.clone();
 
                                 drag_gesture_copy.connect_drag_end(move |gesture, offset_x, offset_y| {
                                     let config = config_drag_end.borrow();
@@ -2727,6 +2737,7 @@ impl GridLayout {
                                                             let panels_for_interaction = panels_drag_end.clone();
                                                             let is_dragging_for_interaction = is_dragging_drag_end.clone();
                                                             let drag_preview_cells_for_interaction = drag_preview_cells_drag_end.clone();
+                                                            let app_config_for_interaction = app_config_drag_end.clone();
 
                                                             gtk4::glib::idle_add_local_once(move || {
                                                                 setup_copied_panel_interaction(
@@ -2744,6 +2755,7 @@ impl GridLayout {
                                                                     panels_for_interaction,
                                                                     is_dragging_for_interaction,
                                                                     drag_preview_cells_for_interaction,
+                                                                    app_config_for_interaction,
                                                                 );
                                                             });
 
@@ -3088,6 +3100,7 @@ fn setup_copied_panel_interaction(
     panels: Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
     is_dragging: Rc<RefCell<bool>>,
     drag_preview_cells: Rc<RefCell<Vec<(u32, u32, u32, u32)>>>,
+    app_config: Rc<RefCell<crate::config::AppConfig>>,
 ) {
     use gtk4::gio;
 
@@ -3152,6 +3165,7 @@ fn setup_copied_panel_interaction(
     let selected_panels_props = selected_panels.clone();
     let panels_props = panels.clone();
     let panel_id_props = panel_id.clone();
+    let app_config_props = app_config.clone();
 
     properties_action.connect_activate(move |_, _| {
         log::info!("Opening properties dialog for panel: {}", panel_id_props);
@@ -3167,6 +3181,7 @@ fn setup_copied_panel_interaction(
             registry,
             selected_panels_props.clone(),
             panels_props.clone(),
+            app_config_props.borrow().global_theme.clone(),
         );
     });
     action_group.add_action(&properties_action);
@@ -3529,6 +3544,7 @@ fn setup_copied_panel_interaction(
     let on_change_end = on_change.clone();
     let container_end = container.clone();
     let panels_end = panels.clone();
+    let app_config_end = app_config.clone();
 
     drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
         let cfg = config_end.borrow();
@@ -3806,13 +3822,14 @@ fn setup_copied_panel_interaction(
                                 let panels_i = panels_end.clone();
                                 let is_dragging_i = is_dragging_end.clone();
                                 let drag_preview_i = drag_preview_cells_end.clone();
+                                let app_config_i = app_config_end.clone();
 
                                 gtk4::glib::idle_add_local_once(move || {
                                     setup_copied_panel_interaction(
                                         &widget_i, &frame_i, panel_i, id_i,
                                         states_i, selected_i, occupied_i, config_i,
                                         container_i, on_change_i, drop_zone_i, panels_i,
-                                        is_dragging_i, drag_preview_i,
+                                        is_dragging_i, drag_preview_i, app_config_i,
                                     );
                                 });
 
@@ -3931,6 +3948,6 @@ pub(crate) fn delete_selected_panels(
 
 impl Default for GridLayout {
     fn default() -> Self {
-        Self::new(GridConfig::default())
+        Self::new(GridConfig::default(), Rc::new(RefCell::new(crate::config::AppConfig::default())))
     }
 }

@@ -4,6 +4,7 @@
 //! from grid_layout.rs for better code organization.
 
 use crate::core::Panel;
+use crate::ui::theme::ComboThemeConfig;
 use gtk4::glib::{self, WeakRef};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Fixed, ScrolledWindow, Window};
@@ -44,6 +45,7 @@ pub(crate) fn show_panel_properties_dialog(
     registry: &'static crate::core::Registry,
     selected_panels: Rc<RefCell<HashSet<String>>>,
     panels: Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
+    global_theme: ComboThemeConfig,
 ) {
     use gtk4::{Box as GtkBox, Button, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
 
@@ -694,6 +696,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create text widget if this is the active displayer (lazy init)
     if old_displayer_id == "text" {
         let widget = crate::ui::TextLineConfigWidget::new((*available_fields).clone());
+        widget.set_theme(global_theme.clone());
 
         // Load existing text config
         let config_loaded = if let Some(crate::core::DisplayerConfig::Text(text_config)) = panel_guard.displayer.get_typed_config() {
@@ -738,6 +741,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create bar widget if this is the active displayer (lazy init)
     if old_displayer_id == "bar" {
         let widget = crate::ui::BarConfigWidget::new((*available_fields).clone());
+        widget.set_theme(global_theme.clone());
         let bar_config = if let Some(bar_config_value) = panel_guard.config.get("bar_config") {
             serde_json::from_value::<crate::ui::BarDisplayConfig>(bar_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::BarDisplayConfig::default())
@@ -768,6 +772,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create arc widget if this is the active displayer (lazy init)
     if old_displayer_id == "arc" {
         let widget = crate::ui::ArcConfigWidget::new((*available_fields).clone());
+        widget.set_theme(global_theme.clone());
         let arc_config = if let Some(arc_config_value) = panel_guard.config.get("arc_config") {
             serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::ArcDisplayConfig::default())
@@ -798,6 +803,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create speedometer widget if this is the active displayer (lazy init)
     if old_displayer_id == "speedometer" {
         let widget = crate::ui::SpeedometerConfigWidget::new((*available_fields).clone());
+        widget.set_theme(global_theme.clone());
         let speedometer_config = if let Some(speedometer_config_value) = panel_guard.config.get("speedometer_config") {
             serde_json::from_value::<crate::ui::SpeedometerConfig>(speedometer_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::SpeedometerConfig::default())
@@ -828,6 +834,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create graph widget if this is the active displayer (lazy init)
     if old_displayer_id == "graph" {
         let widget = crate::ui::GraphConfigWidget::new((*available_fields).clone());
+        widget.set_theme(global_theme.clone());
         let graph_config = if let Some(graph_config_value) = panel_guard.config.get("graph_config") {
             serde_json::from_value::<crate::ui::GraphDisplayConfig>(graph_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::GraphDisplayConfig::default())
@@ -985,6 +992,7 @@ pub(crate) fn show_panel_properties_dialog(
     // Only create cpu_cores widget if this is the active displayer (lazy init)
     if old_displayer_id == "cpu_cores" {
         let widget = crate::ui::CoreBarsConfigWidget::new();
+        widget.set_theme(global_theme.clone());
         if let Some(config_value) = panel_guard.config.get("core_bars_config") {
             if let Ok(config) = serde_json::from_value::<crate::ui::CoreBarsConfig>(config_value.clone()) {
                 widget.set_config(config);
@@ -2060,6 +2068,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let available_fields_clone = available_fields.clone();
         let panel_for_lazy = panel.clone();
+        let global_theme_lazy = global_theme.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2071,6 +2080,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = text_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::TextLineConfigWidget::new(fields);
+                            widget.set_theme(global_theme_lazy.clone());
                             text_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
                         }
@@ -2079,6 +2089,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = bar_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::BarConfigWidget::new(fields);
+                            widget.set_theme(global_theme_lazy.clone());
                             bar_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
                         }
@@ -2087,6 +2098,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = arc_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::ArcConfigWidget::new(fields);
+                            widget.set_theme(global_theme_lazy.clone());
                             arc_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
                         }
@@ -2095,6 +2107,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = speedometer_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::SpeedometerConfigWidget::new(fields);
+                            widget.set_theme(global_theme_lazy.clone());
                             speedometer_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
                         }
@@ -2103,6 +2116,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = graph_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::GraphConfigWidget::new(fields);
+                            widget.set_theme(global_theme_lazy.clone());
                             graph_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
                         }
@@ -2127,6 +2141,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let mut widget_ref = cpu_cores_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
                             let widget = crate::ui::CoreBarsConfigWidget::new();
+                            widget.set_theme(global_theme_lazy.clone());
                             // Count available CPU cores
                             let core_count = fields.iter()
                                 .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
@@ -3003,6 +3018,7 @@ pub(crate) fn show_panel_properties_dialog(
     let occupied_cells_for_apply = occupied_cells.clone();
     let container_for_apply = _container.clone();
     let panels_for_apply = panels.clone();
+    let global_theme_for_apply = global_theme.clone();
 
     let apply_changes = Rc::new(move || {
         let new_width = width_spin.value() as u32;
@@ -3364,6 +3380,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let drop_zone_props = drop_zone.clone();
                         let selected_panels_props = selected_panels_for_apply.clone();
                         let panels_props = panels_for_apply.clone();
+                        let global_theme_props = global_theme_for_apply.clone();
 
                         let properties_action = gio::SimpleAction::new("properties", None);
                         properties_action.connect_activate(move |_, _| {
@@ -3380,6 +3397,7 @@ pub(crate) fn show_panel_properties_dialog(
                                 registry,
                                 selected_panels_props.clone(),
                                 panels_props.clone(),
+                                global_theme_props.clone(),
                             );
                         });
                         action_group.add_action(&properties_action);

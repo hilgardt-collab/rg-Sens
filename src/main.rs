@@ -297,7 +297,7 @@ fn build_ui(app: &Application) {
     }
 
     // Create grid layout
-    let mut grid_layout = GridLayout::new(grid_config);
+    let mut grid_layout = GridLayout::new(grid_config, app_config.clone());
 
     // Create registry
     let registry = rg_sens::core::global_registry();
