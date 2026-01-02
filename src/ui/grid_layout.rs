@@ -3025,6 +3025,15 @@ impl GridLayout {
         self.drop_zone_layer.queue_draw();
     }
 
+    /// Trigger redraw of all panels (useful when global theme changes)
+    pub fn queue_redraw_all_panels(&self) {
+        let states = self.panel_states.borrow();
+        for state in states.values() {
+            state.background_area.queue_draw();
+            state.widget.queue_draw();
+        }
+    }
+
     /// Show or hide the grid overlay (cell grid and viewport boundaries)
     /// Used for space bar hold and window resize visualization
     pub fn set_grid_visible(&self, visible: bool) {

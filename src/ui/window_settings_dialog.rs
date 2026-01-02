@@ -816,6 +816,24 @@ pub fn show_window_settings_dialog<F>(
         // Update grid layout
         grid_layout_clone.borrow_mut().update_grid_size(new_cell_width, new_cell_height, new_spacing);
 
+        // Apply global theme to all panel displayers
+        {
+            let global_theme = app_config_clone.borrow().global_theme.clone();
+            let theme_value = serde_json::to_value(&global_theme).unwrap_or_default();
+            let mut theme_config = std::collections::HashMap::new();
+            theme_config.insert("global_theme".to_string(), theme_value);
+
+            let panels = grid_layout_clone.borrow().get_panels();
+            for panel in &panels {
+                if let Ok(mut panel_guard) = panel.try_write() {
+                    let _ = panel_guard.displayer.apply_config(&theme_config);
+                }
+            }
+        }
+
+        // Trigger all panels to redraw with new theme
+        grid_layout_clone.borrow().queue_redraw_all_panels();
+
         // Mark config as dirty
         config_dirty_clone.store(true, Ordering::Relaxed);
 
