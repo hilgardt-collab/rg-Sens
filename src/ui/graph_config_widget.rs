@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use super::color_button_widget::ColorButtonWidget;
 use super::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
-use super::text_line_config_widget::TextLineConfigWidget;
+use super::text_overlay_config_widget::TextOverlayConfigWidget;
 use super::theme::ComboThemeConfig;
 use super::theme_color_selector::ThemeColorSelector;
 
@@ -81,7 +81,7 @@ pub struct GraphConfigWidget {
     animate_new_points_check: CheckButton,
 
     // Text overlay
-    text_config_widgets: Vec<Rc<TextLineConfigWidget>>,
+    text_overlay_widget: Rc<TextOverlayConfigWidget>,
 
     // Change callback
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -139,8 +139,20 @@ impl GraphConfigWidget {
 
         // === Tab 5: Text Overlay ===
         let t0 = std::time::Instant::now();
-        let text_page = create_text_overlay_page(config.clone(), available_fields, on_change.clone());
-        notebook.append_page(&text_page.widget, Some(&Label::new(Some("Text"))));
+        let text_overlay_widget = Rc::new(TextOverlayConfigWidget::new(available_fields));
+        text_overlay_widget.set_config(config.borrow().text_overlay.clone());
+        {
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            let text_widget_for_callback = text_overlay_widget.clone();
+            text_overlay_widget.set_on_change(move || {
+                config_clone.borrow_mut().text_overlay = text_widget_for_callback.get_config();
+                if let Some(cb) = on_change_clone.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text"))));
         log::debug!("  GraphConfigWidget: text_page took {:?}", t0.elapsed());
         log::info!("  GraphConfigWidget::new() total time: {:?}", start.elapsed());
 
@@ -218,8 +230,8 @@ impl GraphConfigWidget {
         let margin_left_spin_p = layout_page.margin_left_spin.clone();
         let background_color_widget_p = layout_page.background_color_widget.clone();
         let plot_background_color_widget_p = layout_page.plot_background_color_widget.clone();
-        // Text page widgets
-        let text_config_widgets_p = text_page.text_config_widgets.clone();
+        // Text overlay widget
+        let text_overlay_widget_p = text_overlay_widget.clone();
 
         paste_btn.connect_clicked(move |_| {
             let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
@@ -296,13 +308,8 @@ impl GraphConfigWidget {
                 background_color_widget_p.set_color(cfg.background_color);
                 plot_background_color_widget_p.set_color(cfg.plot_background_color);
 
-                // Update text overlay - pass all lines to the single widget
-                if !text_config_widgets_p.is_empty() {
-                    let text_displayer_config = crate::displayers::TextDisplayerConfig {
-                        lines: cfg.text_overlay.clone(),
-                    };
-                    text_config_widgets_p[0].set_config(text_displayer_config);
-                }
+                // Update text overlay widget
+                text_overlay_widget_p.set_config(cfg.text_overlay.clone());
 
                 // Trigger on_change
                 if let Some(ref callback) = *on_change_for_paste.borrow() {
@@ -359,7 +366,7 @@ impl GraphConfigWidget {
             plot_background_color_widget: layout_page.plot_background_color_widget,
             smooth_lines_check: style_page.smooth_lines_check,
             animate_new_points_check: style_page.animate_new_points_check,
-            text_config_widgets: text_page.text_config_widgets,
+            text_overlay_widget,
             on_change,
         }
     }
@@ -371,20 +378,14 @@ impl GraphConfigWidget {
     pub fn get_config(&self) -> GraphDisplayConfig {
         let mut config = self.config.borrow().clone();
 
-        // Update text overlay from widgets
-        config.text_overlay = self.text_config_widgets
-            .iter()
-            .flat_map(|w| {
-                let lines = w.get_config().lines;
-                log::debug!("GraphConfigWidget::get_config - widget has {} text lines", lines.len());
-                lines
-            })
-            .collect();
+        // Update text overlay from widget
+        config.text_overlay = self.text_overlay_widget.get_config();
 
         // Include current theme in config
         config.theme = self.theme.borrow().clone();
 
-        log::debug!("GraphConfigWidget::get_config - total text_overlay lines: {}", config.text_overlay.len());
+        log::debug!("GraphConfigWidget::get_config - text_overlay enabled: {}, lines: {}",
+            config.text_overlay.enabled, config.text_overlay.text_config.lines.len());
         config
     }
 
@@ -470,18 +471,13 @@ impl GraphConfigWidget {
         self.smooth_lines_check.set_active(config.smooth_lines);
         self.animate_new_points_check.set_active(config.animate_new_points);
 
-        // Set text overlay configs - pass all lines to the single widget
+        // Set text overlay config
         log::debug!(
-            "GraphConfigWidget::set_config: text_overlay has {} lines, text_config_widgets count: {}",
-            config.text_overlay.len(),
-            self.text_config_widgets.len()
+            "GraphConfigWidget::set_config: text_overlay enabled: {}, lines: {}",
+            config.text_overlay.enabled,
+            config.text_overlay.text_config.lines.len()
         );
-        if !self.text_config_widgets.is_empty() {
-            let text_displayer_config = crate::displayers::TextDisplayerConfig {
-                lines: config.text_overlay.clone(),
-            };
-            self.text_config_widgets[0].set_config(text_displayer_config);
-        }
+        self.text_overlay_widget.set_config(config.text_overlay.clone());
 
         *self.config.borrow_mut() = config;
     }
@@ -508,10 +504,8 @@ impl GraphConfigWidget {
         self.x_axis_grid_color_widget.set_theme_config(theme.clone());
         self.x_axis_label_color_widget.set_theme_config(theme.clone());
 
-        // Update text overlay config widgets
-        for text_widget in &self.text_config_widgets {
-            text_widget.set_theme(theme.clone());
-        }
+        // Update text overlay widget
+        self.text_overlay_widget.set_theme(theme);
 
         // Notify parent to refresh preview with new theme colors
         notify_change_static(&self.on_change);
@@ -583,11 +577,6 @@ struct LayoutPageWidgets {
     margin_left_spin: SpinButton,
     background_color_widget: Rc<ColorButtonWidget>,
     plot_background_color_widget: Rc<ColorButtonWidget>,
-}
-
-struct TextOverlayPageWidgets {
-    widget: GtkBox,
-    text_config_widgets: Vec<Rc<TextLineConfigWidget>>,
 }
 
 fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChangeCallback) -> StylePageWidgets {
@@ -1515,40 +1504,6 @@ fn create_layout_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChan
         margin_left_spin,
         background_color_widget,
         plot_background_color_widget,
-    }
-}
-
-fn create_text_overlay_page(_config: Rc<RefCell<GraphDisplayConfig>>, available_fields: Vec<crate::core::FieldMetadata>, on_change: OnChangeCallback) -> TextOverlayPageWidgets {
-    let page = GtkBox::new(Orientation::Vertical, 12);
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
-
-    let label = Label::new(Some("Text Overlay Lines:"));
-    label.set_halign(gtk4::Align::Start);
-    page.append(&label);
-
-    // Create 1 text line config widget (it has built-in multi-line support via add button)
-    let mut text_config_widgets = Vec::new();
-    let text_widget = Rc::new(TextLineConfigWidget::new(available_fields.clone()));
-
-    // Connect the text widget's on_change to propagate changes up
-    let on_change_clone = on_change.clone();
-    text_widget.set_on_change(move || {
-        if let Some(ref callback) = *on_change_clone.borrow() {
-            callback();
-        }
-        // Note: callback may be None during initialization - this is expected
-    });
-
-    page.append(text_widget.widget());
-
-    text_config_widgets.push(text_widget);
-
-    TextOverlayPageWidgets {
-        widget: page,
-        text_config_widgets,
     }
 }
 

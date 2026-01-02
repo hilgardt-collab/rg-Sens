@@ -8,7 +8,7 @@ use crate::ui::theme::{
     deserialize_color_or_source, deserialize_color_stops_vec,
     ColorSource, ColorStopSource, ComboThemeConfig,
 };
-use crate::displayers::TextDisplayerConfig;
+use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 
 /// Arc end cap style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -122,23 +122,6 @@ pub struct ArcDisplayConfig {
     // Theme configuration for resolving theme color/font references
     #[serde(default)]
     pub theme: ComboThemeConfig,
-}
-
-/// Text overlay configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TextOverlayConfig {
-    pub enabled: bool,
-    #[serde(default)]
-    pub text_config: TextDisplayerConfig,
-}
-
-impl Default for TextOverlayConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            text_config: TextDisplayerConfig::default(),
-        }
-    }
 }
 
 fn default_start_angle() -> f64 {

@@ -10,7 +10,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig, TextOverlayConfig};
+use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig};
+use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 use crate::ui::text_renderer::render_text_lines_with_theme;
 use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 

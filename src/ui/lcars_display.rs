@@ -448,14 +448,14 @@ pub struct StaticDisplayConfig {
     #[serde(default)]
     pub background: BackgroundConfig,
     #[serde(default)]
-    pub text_overlay: crate::ui::bar_display::TextOverlayConfig,
+    pub text_overlay: crate::ui::TextOverlayConfig,
 }
 
 impl Default for StaticDisplayConfig {
     fn default() -> Self {
         Self {
             background: BackgroundConfig::default(),
-            text_overlay: crate::ui::bar_display::TextOverlayConfig {
+            text_overlay: crate::ui::TextOverlayConfig {
                 enabled: false, // Disabled by default for static
                 text_config: Default::default(),
             },
@@ -1776,12 +1776,13 @@ pub fn render_content_graph(
     source_values: &HashMap<String, serde_json::Value>,
 ) -> anyhow::Result<()> {
     log::debug!(
-        "LCARS render_content_graph: text_overlay has {} lines, source_values keys: {:?}",
-        config.text_overlay.len(),
+        "LCARS render_content_graph: text_overlay enabled={}, lines={}, source_values keys: {:?}",
+        config.text_overlay.enabled,
+        config.text_overlay.text_config.lines.len(),
         source_values.keys().collect::<Vec<_>>()
     );
-    if !config.text_overlay.is_empty() {
-        for (i, line) in config.text_overlay.iter().enumerate() {
+    if config.text_overlay.enabled && !config.text_overlay.text_config.lines.is_empty() {
+        for (i, line) in config.text_overlay.text_config.lines.iter().enumerate() {
             log::debug!("  text_overlay[{}]: field_id='{}', found={}",
                 i, line.field_id, source_values.contains_key(&line.field_id));
         }

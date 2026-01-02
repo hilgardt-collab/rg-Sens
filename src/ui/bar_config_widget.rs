@@ -15,7 +15,7 @@ use crate::ui::bar_display::{
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
-use crate::ui::TextLineConfigWidget;
+use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::core::FieldMetadata;
@@ -77,7 +77,7 @@ pub struct BarConfigWidget {
     animation_speed_spin: SpinButton,
 
     // Text overlay
-    text_config_widget: Option<Rc<TextLineConfigWidget>>,
+    text_overlay_widget: Rc<TextOverlayConfigWidget>,
 }
 
 impl BarConfigWidget {
@@ -370,36 +370,22 @@ impl BarConfigWidget {
         notebook.append_page(&options_page, Some(&Label::new(Some("Style Options"))));
 
         // === Tab 5: Text Overlay ===
-        let text_page = GtkBox::new(Orientation::Vertical, 12);
-        text_page.set_margin_start(12);
-        text_page.set_margin_end(12);
-        text_page.set_margin_top(12);
-        text_page.set_margin_bottom(12);
-
-        let text_check = CheckButton::with_label("Show Text Overlay");
-        text_check.set_active(true);
-        text_page.append(&text_check);
-
-        let text_config_widget = TextLineConfigWidget::new(available_fields);
-        text_config_widget.widget().set_vexpand(true);
-        text_page.append(text_config_widget.widget());
-        let text_config_widget = Rc::new(text_config_widget);
-
-        // Connect text config widget changes to trigger on_change callback
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let config_clone = config.clone();
-        let text_widget_for_change = text_config_widget.clone();
-        text_config_widget.set_on_change(move || {
-            // Update the stored text config when text widget changes
-            config_clone.borrow_mut().text_overlay.text_config = text_widget_for_change.get_config();
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        notebook.append_page(&text_page, Some(&Label::new(Some("Text Overlay"))));
+        let text_overlay_widget = Rc::new(TextOverlayConfigWidget::new(available_fields));
+        text_overlay_widget.set_config(config.borrow().text_overlay.clone());
+        {
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            let preview_clone = preview.clone();
+            let text_widget_for_callback = text_overlay_widget.clone();
+            text_overlay_widget.set_on_change(move || {
+                config_clone.borrow_mut().text_overlay = text_widget_for_callback.get_config();
+                preview_clone.queue_draw();
+                if let Some(cb) = on_change_clone.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text Overlay"))));
 
         // === Tab 6: Border ===
         let border_page = GtkBox::new(Orientation::Vertical, 12);
@@ -580,27 +566,6 @@ impl BarConfigWidget {
             bg_paste_gradient_btn.clone(),
         );
 
-        // Text overlay checkbox handler
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        let text_widget_clone = text_config_widget.clone();
-
-        text_check.connect_toggled(move |check| {
-            let enabled = check.is_active();
-            text_widget_clone.widget().set_sensitive(enabled);
-
-            let mut cfg = config_clone.borrow_mut();
-            cfg.text_overlay.enabled = enabled;
-            drop(cfg);
-
-            preview_clone.queue_draw();
-
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
         // Border handlers
         let config_clone = config.clone();
         let preview_clone = preview.clone();
@@ -704,7 +669,7 @@ impl BarConfigWidget {
         let border_check_paste = border_check.clone();
         let border_width_spin_paste = border_width_spin.clone();
         let border_color_widget_paste = border_color_widget.clone();
-        let text_widget_paste = text_config_widget.clone();
+        let text_overlay_widget_paste = text_overlay_widget.clone();
         let theme_for_paste = theme.clone();
 
         paste_btn.connect_clicked(move |_| {
@@ -795,7 +760,7 @@ impl BarConfigWidget {
                 border_color_widget_paste.set_source(cfg.border.color.clone());
 
                 // Text overlay
-                text_widget_paste.set_config(cfg.text_overlay.text_config.clone());
+                text_overlay_widget_paste.set_config(cfg.text_overlay.clone());
 
                 preview_for_paste.queue_draw();
                 if let Some(callback) = on_change_for_paste.borrow().as_ref() {
@@ -840,7 +805,7 @@ impl BarConfigWidget {
             border_width_spin,
             animate_check,
             animation_speed_spin,
-            text_config_widget: Some(text_config_widget),
+            text_overlay_widget,
         }
     }
 
@@ -1490,10 +1455,8 @@ impl BarConfigWidget {
         // Update border color
         self.border_color_widget.set_source(new_config.border.color.clone());
 
-        // Update text config widget
-        if let Some(ref text_widget) = self.text_config_widget {
-            text_widget.set_config(new_config.text_overlay.text_config);
-        }
+        // Update text overlay widget
+        self.text_overlay_widget.set_config(new_config.text_overlay);
 
         self.preview.queue_draw();
     }
@@ -1501,10 +1464,8 @@ impl BarConfigWidget {
     pub fn get_config(&self) -> BarDisplayConfig {
         let mut config = self.config.borrow().clone();
 
-        // Update text config from widget
-        if let Some(ref text_widget) = self.text_config_widget {
-            config.text_overlay.text_config = text_widget.get_config();
-        }
+        // Update text overlay from widget
+        config.text_overlay = self.text_overlay_widget.get_config();
 
         // Include current theme in config
         config.theme = self.theme.borrow().clone();
@@ -1522,10 +1483,8 @@ impl BarConfigWidget {
         // Update gradient editors with new theme
         self.fg_gradient_editor.set_theme_config(theme.clone());
         self.bg_gradient_editor.set_theme_config(theme.clone());
-        // Update text config widget with new theme (for font selectors)
-        if let Some(ref text_widget) = self.text_config_widget {
-            text_widget.set_theme(theme);
-        }
+        // Update text overlay widget with new theme
+        self.text_overlay_widget.set_theme(theme);
         self.preview.queue_draw();
         // Notify parent to refresh with new theme colors
         if let Some(callback) = self.on_change.borrow().as_ref() {

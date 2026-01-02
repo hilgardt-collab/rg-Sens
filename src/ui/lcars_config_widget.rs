@@ -2304,9 +2304,10 @@ impl LcarsConfigWidget {
         // Debug: Log text_overlay for each content item
         for (slot_name, item) in &new_config.frame.content_items {
             log::debug!(
-                "LcarsConfigWidget::set_config - slot '{}' has {} text_overlay lines in graph_config",
+                "LcarsConfigWidget::set_config - slot '{}' has text_overlay enabled={}, lines={} in graph_config",
                 slot_name,
-                item.graph_config.text_overlay.len()
+                item.graph_config.text_overlay.enabled,
+                item.graph_config.text_overlay.text_config.lines.len()
             );
         }
 
@@ -2476,11 +2477,11 @@ impl LcarsConfigWidget {
         let config = self.config.borrow().clone();
         // Debug log text_overlay for each content item
         for (slot_name, item) in &config.frame.content_items {
-            if !item.graph_config.text_overlay.is_empty() {
+            if item.graph_config.text_overlay.enabled && !item.graph_config.text_overlay.text_config.lines.is_empty() {
                 log::debug!(
                     "LcarsConfigWidget::get_config - slot '{}' has {} text_overlay lines",
                     slot_name,
-                    item.graph_config.text_overlay.len()
+                    item.graph_config.text_overlay.text_config.lines.len()
                 );
             }
         }

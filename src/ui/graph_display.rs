@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 use super::background::Color;
 use super::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 use crate::displayers::TextLineConfig;
+use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 
 // Thread-local buffer for graph points to avoid allocation per frame
 // Pre-sized for 128 points which covers most use cases (typical max is 60-120)
@@ -16,10 +17,10 @@ thread_local! {
     static POINTS_BUFFER: RefCell<Vec<(f64, f64)>> = RefCell::new(Vec::with_capacity(128));
 }
 
-/// Custom deserializer for text_overlay that handles both formats:
-/// - New format: Vec<TextLineConfig> directly
-/// - Old format: { enabled: bool, text_config: { lines: Vec<TextLineConfig> } }
-fn deserialize_text_overlay<'de, D>(deserializer: D) -> Result<Vec<TextLineConfig>, D::Error>
+/// Custom deserializer for text_overlay that handles multiple formats:
+/// - New format: TextOverlayConfig { enabled: bool, text_config: TextDisplayerConfig }
+/// - Legacy format: Vec<TextLineConfig> directly (converted to TextOverlayConfig with enabled=true)
+fn deserialize_text_overlay<'de, D>(deserializer: D) -> Result<TextOverlayConfig, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -29,42 +30,49 @@ where
     struct TextOverlayVisitor;
 
     impl<'de> Visitor<'de> for TextOverlayVisitor {
-        type Value = Vec<TextLineConfig>;
+        type Value = TextOverlayConfig;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a sequence of TextLineConfig or an object with text_config.lines")
+            formatter.write_str("a TextOverlayConfig object or a sequence of TextLineConfig")
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
         where
             A: SeqAccess<'de>,
         {
+            // Legacy format: Vec<TextLineConfig> - convert to TextOverlayConfig
             let mut lines = Vec::new();
             while let Some(line) = seq.next_element()? {
                 lines.push(line);
             }
-            Ok(lines)
+            // If there are lines, enable the overlay; if empty, disable
+            let enabled = !lines.is_empty();
+            Ok(TextOverlayConfig {
+                enabled,
+                text_config: crate::displayers::TextDisplayerConfig { lines },
+            })
         }
 
         fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
         where
             M: MapAccess<'de>,
         {
-            // Old format: { enabled: bool, text_config: { lines: [...] } }
+            // New format: { enabled: bool, text_config: { lines: [...] } }
+            let mut enabled = true;
             let mut lines = Vec::new();
             while let Some(key) = map.next_key::<String>()? {
                 match key.as_str() {
                     "text_config" => {
                         #[derive(Deserialize)]
                         struct TextConfig {
+                            #[serde(default)]
                             lines: Vec<TextLineConfig>,
                         }
                         let config: TextConfig = map.next_value()?;
                         lines = config.lines;
                     }
                     "enabled" => {
-                        // Skip the enabled field, we don't need it for graphs
-                        let _: bool = map.next_value()?;
+                        enabled = map.next_value()?;
                     }
                     _ => {
                         // Skip unknown fields
@@ -72,7 +80,10 @@ where
                     }
                 }
             }
-            Ok(lines)
+            Ok(TextOverlayConfig {
+                enabled,
+                text_config: crate::displayers::TextDisplayerConfig { lines },
+            })
         }
     }
 
@@ -229,9 +240,9 @@ pub struct GraphDisplayConfig {
     #[serde(default = "default_update_interval")]
     pub update_interval: f64, // Expected time between data updates in seconds (for smooth scrolling)
 
-    // Text overlay - supports both Vec<TextLineConfig> and legacy TextOverlayConfig format
+    // Text overlay - supports both new TextOverlayConfig and legacy Vec<TextLineConfig> format
     #[serde(default, deserialize_with = "deserialize_text_overlay")]
-    pub text_overlay: Vec<TextLineConfig>,
+    pub text_overlay: TextOverlayConfig,
 
     // Theme configuration for resolving theme color/font references
     #[serde(default)]
@@ -278,7 +289,7 @@ impl Default for GraphDisplayConfig {
             animate_new_points: false,
             update_interval: default_update_interval(),
 
-            text_overlay: Vec::new(),
+            text_overlay: TextOverlayConfig::default(),
             theme: ComboThemeConfig::default(),
         }
     }
@@ -724,26 +735,23 @@ pub fn render_graph_with_theme(
         cr.restore()?;
     }
 
-    // Draw text overlay
-    if !config.text_overlay.is_empty() {
+    // Draw text overlay if enabled
+    if config.text_overlay.enabled {
         log::debug!(
             "Graph text overlay: {} lines, source_values keys: {:?}",
-            config.text_overlay.len(),
+            config.text_overlay.text_config.lines.len(),
             source_values.keys().collect::<Vec<_>>()
         );
-        let text_config = crate::displayers::TextDisplayerConfig {
-            lines: config.text_overlay.clone(),
-        };
         crate::ui::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,
-            &text_config,
+            &config.text_overlay.text_config,
             source_values,
             Some(theme),
         );
     } else {
-        log::debug!("Graph text overlay is empty, source_values keys: {:?}", source_values.keys().collect::<Vec<_>>());
+        log::debug!("Graph text overlay is disabled, source_values keys: {:?}", source_values.keys().collect::<Vec<_>>());
     }
 
     Ok(())

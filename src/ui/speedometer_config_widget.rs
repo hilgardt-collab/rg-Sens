@@ -15,7 +15,7 @@ use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::GradientEditor;
 use crate::displayers::FieldMetadata;
-use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::theme_color_selector::ThemeColorSelector;
 
@@ -91,8 +91,7 @@ pub struct SpeedometerConfigWidget {
     bounce_animation_check: CheckButton,
 
     // Text overlay
-    enable_text_overlay_check: CheckButton,
-    text_config_widget: Rc<TextLineConfigWidget>,
+    text_overlay_widget: Rc<TextOverlayConfigWidget>,
 }
 
 impl SpeedometerConfigWidget {
@@ -166,9 +165,22 @@ impl SpeedometerConfigWidget {
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
         // === Tab 7: Text Overlay ===
-        let (text_page, enable_text_overlay_check, text_config_widget) =
-            Self::create_text_overlay_page(&config, &on_change, &preview, available_fields);
-        notebook.append_page(&text_page, Some(&Label::new(Some("Text Overlay"))));
+        let text_overlay_widget = Rc::new(TextOverlayConfigWidget::new(available_fields));
+        text_overlay_widget.set_config(config.borrow().text_overlay.clone());
+        {
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            let preview_clone = preview.clone();
+            let text_widget_for_callback = text_overlay_widget.clone();
+            text_overlay_widget.set_on_change(move || {
+                config_clone.borrow_mut().text_overlay = text_widget_for_callback.get_config();
+                preview_clone.queue_draw();
+                if let Some(cb) = on_change_clone.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text Overlay"))));
 
         container.append(&preview);
 
@@ -242,8 +254,7 @@ impl SpeedometerConfigWidget {
         let animate_check_paste = animate_check.clone();
         let animation_duration_spin_paste = animation_duration_spin.clone();
         let bounce_animation_check_paste = bounce_animation_check.clone();
-        let enable_text_overlay_check_paste = enable_text_overlay_check.clone();
-        let text_config_widget_paste = text_config_widget.clone();
+        let text_overlay_widget_paste = text_overlay_widget.clone();
 
         paste_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -338,8 +349,7 @@ impl SpeedometerConfigWidget {
                     bounce_animation_check_paste.set_active(new_config.bounce_animation);
 
                     // Update text overlay
-                    enable_text_overlay_check_paste.set_active(new_config.text_overlay.enabled);
-                    text_config_widget_paste.set_config(new_config.text_overlay.text_config.clone());
+                    text_overlay_widget_paste.set_config(new_config.text_overlay.clone());
 
                     preview_for_paste.queue_draw();
                     if let Some(cb) = on_change_for_paste.borrow().as_ref() {
@@ -399,8 +409,7 @@ impl SpeedometerConfigWidget {
             animate_check,
             animation_duration_spin,
             bounce_animation_check,
-            enable_text_overlay_check,
-            text_config_widget,
+            text_overlay_widget,
         }
     }
 
@@ -1468,53 +1477,6 @@ impl SpeedometerConfigWidget {
         )
     }
 
-    fn create_text_overlay_page(
-        config: &Rc<RefCell<SpeedometerConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        available_fields: Vec<FieldMetadata>,
-    ) -> (GtkBox, CheckButton, Rc<TextLineConfigWidget>) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
-
-        // Enable text overlay
-        let enable_check = CheckButton::with_label("Enable Text Overlay");
-        enable_check.set_active(config.borrow().text_overlay.enabled);
-        page.append(&enable_check);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        enable_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().text_overlay.enabled = check.is_active();
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Text configuration widget
-        let text_config_widget = TextLineConfigWidget::new(available_fields);
-        text_config_widget.set_config(config.borrow().text_overlay.text_config.clone());
-
-        // Connect text widget on_change to update config and trigger parent callback
-        let config_for_text = config.clone();
-        let on_change_for_text = on_change.clone();
-        let preview_for_text = preview.clone();
-        let text_widget_rc = Rc::new(text_config_widget);
-        let text_widget_for_callback = text_widget_rc.clone();
-        text_widget_rc.set_on_change(move || {
-            // Update config with new text settings
-            config_for_text.borrow_mut().text_overlay.text_config = text_widget_for_callback.get_config();
-            // Trigger parent on_change
-            Self::queue_preview_redraw(&preview_for_text, &on_change_for_text);
-        });
-
-        page.append(text_widget_rc.widget());
-
-        (page, enable_check, text_widget_rc)
-    }
-
     pub fn widget(&self) -> &GtkBox {
         &self.container
     }
@@ -1522,9 +1484,8 @@ impl SpeedometerConfigWidget {
     pub fn get_config(&self) -> SpeedometerConfig {
         let mut config = self.config.borrow().clone();
 
-        // Update text overlay config from widget
-        config.text_overlay.enabled = self.enable_text_overlay_check.is_active();
-        config.text_overlay.text_config = self.text_config_widget.get_config();
+        // Update text overlay from widget
+        config.text_overlay = self.text_overlay_widget.get_config();
 
         config
     }
@@ -1586,8 +1547,7 @@ impl SpeedometerConfigWidget {
         self.animation_duration_spin.set_value(new_config.animation_duration);
         self.bounce_animation_check.set_active(new_config.bounce_animation);
 
-        self.enable_text_overlay_check.set_active(new_config.text_overlay.enabled);
-        self.text_config_widget.set_config(new_config.text_overlay.text_config.clone());
+        self.text_overlay_widget.set_config(new_config.text_overlay.clone());
 
         self.preview.queue_draw();
     }
@@ -1616,8 +1576,8 @@ impl SpeedometerConfigWidget {
         // Propagate theme to bezel background widget for theme-aware gradients
         self.bezel_background_widget.set_theme_config(theme.clone());
 
-        // Propagate theme to text config widget for T1/T2 font selectors
-        self.text_config_widget.set_theme(theme);
+        // Propagate theme to text overlay widget for T1/T2 font selectors
+        self.text_overlay_widget.set_theme(theme);
 
         // Redraw preview with new theme
         self.preview.queue_draw();

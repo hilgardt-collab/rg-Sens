@@ -8,7 +8,7 @@ use crate::ui::theme::{
     ColorSource, ColorStopSource, ComboThemeConfig,
     deserialize_color_or_source, deserialize_color_stops_vec,
 };
-use crate::displayers::TextDisplayerConfig;
+use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 
 /// Bar display style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -183,23 +183,6 @@ pub enum ResolvedBarBackground {
     Transparent,
 }
 
-
-/// Text overlay configuration - uses full TextDisplayer config
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TextOverlayConfig {
-    pub enabled: bool,
-    #[serde(default)]
-    pub text_config: TextDisplayerConfig,
-}
-
-impl Default for TextOverlayConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            text_config: TextDisplayerConfig::default(),
-        }
-    }
-}
 
 /// Border configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

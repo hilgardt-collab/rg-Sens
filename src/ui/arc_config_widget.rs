@@ -19,7 +19,7 @@ use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::background::ColorStop;
 use crate::ui::GradientEditor;
 use crate::displayers::FieldMetadata;
-use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 
 /// Arc gauge configuration widget
 pub struct ArcConfigWidget {
@@ -60,7 +60,7 @@ pub struct ArcConfigWidget {
     animation_duration_spin: SpinButton,
 
     // Text overlay
-    text_config_widget: Option<Rc<TextLineConfigWidget>>,
+    text_overlay_widget: Rc<TextOverlayConfigWidget>,
 }
 
 /// Convert ColorStopSource to ColorStop for gradient editor display
@@ -129,8 +129,22 @@ impl ArcConfigWidget {
         notebook.append_page(&color_page, Some(&Label::new(Some("Colors"))));
 
         // === Tab 4: Text Overlay ===
-        let (text_page, text_config_widget) = Self::create_text_page(&config, &on_change, available_fields);
-        notebook.append_page(&text_page, Some(&Label::new(Some("Text"))));
+        let text_overlay_widget = Rc::new(TextOverlayConfigWidget::new(available_fields));
+        text_overlay_widget.set_config(config.borrow().text_overlay.clone());
+        {
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            let preview_clone = preview.clone();
+            let text_widget_for_callback = text_overlay_widget.clone();
+            text_overlay_widget.set_on_change(move || {
+                config_clone.borrow_mut().text_overlay = text_widget_for_callback.get_config();
+                preview_clone.queue_draw();
+                if let Some(cb) = on_change_clone.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text"))));
 
         container.append(&preview);
 
@@ -177,7 +191,7 @@ impl ArcConfigWidget {
         let overlay_bg_check_paste = overlay_bg_check.clone();
         let animate_check_paste = animate_check.clone();
         let animation_duration_spin_paste = animation_duration_spin.clone();
-        let text_config_widget_paste = text_config_widget.clone();
+        let text_overlay_widget_paste = text_overlay_widget.clone();
 
         paste_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -231,9 +245,7 @@ impl ArcConfigWidget {
                     gradient_editor_paste.set_stops_source(new_config.color_stops.clone());
 
                     // Update text overlay config widget
-                    if let Some(ref text_widget) = text_config_widget_paste {
-                        text_widget.set_config(new_config.text_overlay.text_config.clone());
-                    }
+                    text_overlay_widget_paste.set_config(new_config.text_overlay.clone());
 
                     preview_for_paste.queue_draw();
                     if let Some(cb) = on_change_for_paste.borrow().as_ref() {
@@ -267,7 +279,7 @@ impl ArcConfigWidget {
             bg_color_widget,
             animate_check,
             animation_duration_spin,
-            text_config_widget,
+            text_overlay_widget,
         }
     }
 
@@ -795,56 +807,6 @@ impl ArcConfigWidget {
         (page, transition_dropdown, mode_dropdown, gradient_editor_ref)
     }
 
-    fn create_text_page(
-        config: &Rc<RefCell<ArcDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        available_fields: Vec<FieldMetadata>,
-    ) -> (GtkBox, Option<Rc<TextLineConfigWidget>>) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
-
-        // Enable text overlay checkbox
-        let text_check = CheckButton::with_label("Show Text Overlay");
-        text_check.set_active(config.borrow().text_overlay.enabled);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        text_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().text_overlay.enabled = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
-        page.append(&text_check);
-
-        // Text configuration widget
-        let text_widget = TextLineConfigWidget::new(available_fields);
-        text_widget.set_config(config.borrow().text_overlay.text_config.clone());
-
-        // Connect text widget on_change to update config and trigger parent callback
-        let config_for_text = config.clone();
-        let on_change_for_text = on_change.clone();
-        let text_widget_rc = Rc::new(text_widget);
-        let text_widget_for_callback = text_widget_rc.clone();
-        text_widget_rc.set_on_change(move || {
-            // Update config with new text settings
-            config_for_text.borrow_mut().text_overlay.text_config = text_widget_for_callback.get_config();
-            // Trigger parent on_change
-            if let Some(cb) = on_change_for_text.borrow().as_ref() {
-                cb();
-            }
-        });
-
-        page.append(text_widget_rc.widget());
-
-        // Return the widget so set_config can update it when loading saved configs
-        (page, Some(text_widget_rc))
-    }
-
     pub fn widget(&self) -> &GtkBox {
         &self.container
     }
@@ -899,9 +861,8 @@ impl ArcConfigWidget {
         // Update gradient editor with theme-aware color stops
         self.gradient_editor.set_stops_source(new_config.color_stops.clone());
 
-        if let Some(text_widget) = &self.text_config_widget {
-            text_widget.set_config(new_config.text_overlay.text_config);
-        }
+        // Update text overlay widget
+        self.text_overlay_widget.set_config(new_config.text_overlay);
 
         // Update preview
         self.preview.queue_draw();
@@ -913,10 +874,8 @@ impl ArcConfigWidget {
         // Update color stops from gradient editor (preserves theme references)
         config.color_stops = self.gradient_editor.get_stops_source();
 
-        // Update text config from widget if available
-        if let Some(text_widget) = &self.text_config_widget {
-            config.text_overlay.text_config = text_widget.get_config();
-        }
+        // Update text overlay from widget
+        config.text_overlay = self.text_overlay_widget.get_config();
 
         // Include current theme in config
         config.theme = self.theme.borrow().clone();
@@ -936,9 +895,7 @@ impl ArcConfigWidget {
         // Update gradient editor with new theme
         self.gradient_editor.set_theme_config(new_theme.clone());
         // Update text overlay config widget with new theme
-        if let Some(text_widget) = &self.text_config_widget {
-            text_widget.set_theme(new_theme);
-        }
+        self.text_overlay_widget.set_theme(new_theme);
         self.preview.queue_draw();
         // Notify parent to refresh with new theme colors
         if let Some(callback) = self.on_change.borrow().as_ref() {
