@@ -364,10 +364,11 @@ fn build_ui(app: &Application) {
 
     // Create window background - sized to match grid content
     let window_background = gtk4::DrawingArea::new();
-    let window_bg_config = app_config.borrow().window.background.clone();
+    let app_config_for_bg = app_config.clone();
     window_background.set_draw_func(move |_, cr, width, height| {
-        use rg_sens::ui::background::render_background;
-        let _ = render_background(cr, &window_bg_config, width as f64, height as f64);
+        use rg_sens::ui::background::render_background_with_theme;
+        let cfg = app_config_for_bg.borrow();
+        let _ = render_background_with_theme(cr, &cfg.window.background, width as f64, height as f64, Some(&cfg.global_theme));
     });
 
     // Set initial background size to match grid content size

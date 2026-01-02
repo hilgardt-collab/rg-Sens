@@ -810,12 +810,7 @@ pub fn show_window_settings_dialog<F>(
             parent_window_clone.unfullscreen();
         }
 
-        // Update window background rendering
-        let bg_config = new_background;
-        window_background_clone.set_draw_func(move |_, cr, width, height| {
-            use crate::ui::background::render_background;
-            let _ = render_background(cr, &bg_config, width as f64, height as f64);
-        });
+        // Trigger window background redraw (draw func reads config dynamically)
         window_background_clone.queue_draw();
 
         // Update grid layout
