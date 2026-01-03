@@ -74,28 +74,27 @@ fn set_app_icon() {
 
     let icon_theme = gtk4::IconTheme::for_display(&display);
 
-    // Add search paths for the icon (directory containing rg-sens.png)
-    // The icon file should be named "rg-sens.png" for icon name "rg-sens"
+    // Add search paths for the icon theme
+    // GTK expects: {search_path}/hicolor/{size}/apps/rg-sens.png
     let search_paths = [
-        concat!(env!("CARGO_MANIFEST_DIR")),  // Development: project root
-        "/usr/share/icons/hicolor/256x256/apps",
-        "/usr/local/share/icons/hicolor/256x256/apps",
-        ".",  // Current directory
+        concat!(env!("CARGO_MANIFEST_DIR"), "/data/icons"),  // Development: data/icons
+        "/usr/share/icons",
+        "/usr/local/share/icons",
     ];
 
     for path in &search_paths {
         icon_theme.add_search_path(path);
+        info!("Added icon search path: {}", path);
     }
 
     // Set the default icon name for all windows
-    // GTK will look for "rg-sens.png" or "rg-sens.svg" in the search paths
     gtk4::Window::set_default_icon_name("rg-sens");
 
     // Check if icon is available
     if icon_theme.has_icon("rg-sens") {
         info!("Application icon 'rg-sens' found in icon theme");
     } else {
-        warn!("Application icon 'rg-sens' not found in icon theme search paths");
+        warn!("Application icon 'rg-sens' not found. Search paths: {:?}", search_paths);
     }
 }
 
