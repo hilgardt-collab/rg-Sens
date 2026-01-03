@@ -262,40 +262,53 @@ impl SynthwaveConfigWidget {
         scheme_box.append(&color_scheme_dropdown);
         page.append(&scheme_box);
 
-        // Theme Colors section
+        // Theme Colors section - 2x2 grid layout
         let colors_label = Label::new(Some("Theme Colors"));
         colors_label.set_halign(gtk4::Align::Start);
         colors_label.add_css_class("heading");
         colors_label.set_margin_top(8);
         page.append(&colors_label);
 
-        // Color 1 (Primary)
-        let color1_box = GtkBox::new(Orientation::Horizontal, 6);
-        color1_box.append(&Label::new(Some("Color 1 (Primary):")));
+        let colors_grid = gtk4::Grid::new();
+        colors_grid.set_row_spacing(6);
+        colors_grid.set_column_spacing(8);
+        colors_grid.set_margin_start(6);
+
+        // Color 1 (Primary) - row 0, col 0-1
+        let color1_label = Label::new(Some("C1 (Primary):"));
+        color1_label.set_halign(gtk4::Align::End);
+        color1_label.set_width_chars(14);
+        colors_grid.attach(&color1_label, 0, 0, 1, 1);
         let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
-        color1_box.append(theme_color1_widget.widget());
-        page.append(&color1_box);
+        colors_grid.attach(theme_color1_widget.widget(), 1, 0, 1, 1);
 
-        // Color 2 (Secondary)
-        let color2_box = GtkBox::new(Orientation::Horizontal, 6);
-        color2_box.append(&Label::new(Some("Color 2 (Secondary):")));
+        // Color 2 (Secondary) - row 0, col 2-3
+        let color2_label = Label::new(Some("C2 (Secondary):"));
+        color2_label.set_halign(gtk4::Align::End);
+        color2_label.set_width_chars(14);
+        color2_label.set_margin_start(12);
+        colors_grid.attach(&color2_label, 2, 0, 1, 1);
         let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
-        color2_box.append(theme_color2_widget.widget());
-        page.append(&color2_box);
+        colors_grid.attach(theme_color2_widget.widget(), 3, 0, 1, 1);
 
-        // Color 3 (Accent)
-        let color3_box = GtkBox::new(Orientation::Horizontal, 6);
-        color3_box.append(&Label::new(Some("Color 3 (Accent):")));
+        // Color 3 (Accent) - row 1, col 0-1
+        let color3_label = Label::new(Some("C3 (Accent):"));
+        color3_label.set_halign(gtk4::Align::End);
+        color3_label.set_width_chars(14);
+        colors_grid.attach(&color3_label, 0, 1, 1, 1);
         let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
-        color3_box.append(theme_color3_widget.widget());
-        page.append(&color3_box);
+        colors_grid.attach(theme_color3_widget.widget(), 1, 1, 1, 1);
 
-        // Color 4 (Highlight)
-        let color4_box = GtkBox::new(Orientation::Horizontal, 6);
-        color4_box.append(&Label::new(Some("Color 4 (Highlight):")));
+        // Color 4 (Highlight) - row 1, col 2-3
+        let color4_label = Label::new(Some("C4 (Highlight):"));
+        color4_label.set_halign(gtk4::Align::End);
+        color4_label.set_width_chars(14);
+        color4_label.set_margin_start(12);
+        colors_grid.attach(&color4_label, 2, 1, 1, 1);
         let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
-        color4_box.append(theme_color4_widget.widget());
-        page.append(&color4_box);
+        colors_grid.attach(theme_color4_widget.widget(), 3, 1, 1, 1);
+
+        page.append(&colors_grid);
 
         // Connect color widget callbacks
         let config_c1 = config.clone();

@@ -776,55 +776,99 @@ impl FighterHudConfigWidget {
         hud_scheme_frame.set_child(Some(&hud_scheme_box));
         inner_box.append(&hud_scheme_frame);
 
-        // Theme Colors section
+        // Theme Colors section - 2x2 grid layout
         let colors_frame = gtk4::Frame::new(Some("Theme Colors"));
-        let colors_box = GtkBox::new(Orientation::Vertical, 6);
-        colors_box.set_margin_start(8);
-        colors_box.set_margin_end(8);
-        colors_box.set_margin_top(8);
-        colors_box.set_margin_bottom(8);
+        let colors_grid = gtk4::Grid::new();
+        colors_grid.set_row_spacing(6);
+        colors_grid.set_column_spacing(8);
+        colors_grid.set_margin_start(8);
+        colors_grid.set_margin_end(8);
+        colors_grid.set_margin_top(8);
+        colors_grid.set_margin_bottom(8);
 
-        let color_labels = ["Color 1 (Primary):", "Color 2 (Secondary):", "Color 3 (Accent):", "Color 4 (Highlight):"];
         let mut color_widgets: Vec<Rc<ColorButtonWidget>> = Vec::new();
 
-        for (i, label_text) in color_labels.iter().enumerate() {
-            let row = GtkBox::new(Orientation::Horizontal, 8);
-            row.append(&Label::new(Some(label_text)));
+        // Color 1 (Primary) - row 0, col 0-1
+        let color1_label = Label::new(Some("C1 (Primary):"));
+        color1_label.set_halign(gtk4::Align::End);
+        color1_label.set_width_chars(14);
+        colors_grid.attach(&color1_label, 0, 0, 1, 1);
+        let color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
+        colors_grid.attach(color1_widget.widget(), 1, 0, 1, 1);
 
-            let color = match i {
-                0 => config.borrow().frame.theme.color1,
-                1 => config.borrow().frame.theme.color2,
-                2 => config.borrow().frame.theme.color3,
-                _ => config.borrow().frame.theme.color4,
-            };
+        // Color 2 (Secondary) - row 0, col 2-3
+        let color2_label = Label::new(Some("C2 (Secondary):"));
+        color2_label.set_halign(gtk4::Align::End);
+        color2_label.set_width_chars(14);
+        color2_label.set_margin_start(12);
+        colors_grid.attach(&color2_label, 2, 0, 1, 1);
+        let color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
+        colors_grid.attach(color2_widget.widget(), 3, 0, 1, 1);
 
-            let color_widget = Rc::new(ColorButtonWidget::new(color));
-            color_widget.widget().set_hexpand(true);
+        // Color 3 (Accent) - row 1, col 0-1
+        let color3_label = Label::new(Some("C3 (Accent):"));
+        color3_label.set_halign(gtk4::Align::End);
+        color3_label.set_width_chars(14);
+        colors_grid.attach(&color3_label, 0, 1, 1, 1);
+        let color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
+        colors_grid.attach(color3_widget.widget(), 1, 1, 1, 1);
 
-            let config_clone = config.clone();
-            let on_change_clone = on_change.clone();
-            let preview_clone = preview.clone();
-            let refreshers_clone = theme_ref_refreshers.clone();
-            let color_idx = i;
-            color_widget.set_on_change(move |new_color| {
-                let mut cfg = config_clone.borrow_mut();
-                match color_idx {
-                    0 => cfg.frame.theme.color1 = new_color,
-                    1 => cfg.frame.theme.color2 = new_color,
-                    2 => cfg.frame.theme.color3 = new_color,
-                    _ => cfg.frame.theme.color4 = new_color,
-                }
-                drop(cfg);
-                Self::refresh_theme_refs(&refreshers_clone);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
-            });
+        // Color 4 (Highlight) - row 1, col 2-3
+        let color4_label = Label::new(Some("C4 (Highlight):"));
+        color4_label.set_halign(gtk4::Align::End);
+        color4_label.set_width_chars(14);
+        color4_label.set_margin_start(12);
+        colors_grid.attach(&color4_label, 2, 1, 1, 1);
+        let color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
+        colors_grid.attach(color4_widget.widget(), 3, 1, 1, 1);
 
-            row.append(color_widget.widget());
-            color_widgets.push(color_widget);
-            colors_box.append(&row);
-        }
+        // Connect callbacks for each color
+        let config_c1 = config.clone();
+        let on_change_c1 = on_change.clone();
+        let preview_c1 = preview.clone();
+        let refreshers_c1 = theme_ref_refreshers.clone();
+        color1_widget.set_on_change(move |new_color| {
+            config_c1.borrow_mut().frame.theme.color1 = new_color;
+            Self::refresh_theme_refs(&refreshers_c1);
+            Self::queue_redraw(&preview_c1, &on_change_c1);
+        });
 
-        colors_frame.set_child(Some(&colors_box));
+        let config_c2 = config.clone();
+        let on_change_c2 = on_change.clone();
+        let preview_c2 = preview.clone();
+        let refreshers_c2 = theme_ref_refreshers.clone();
+        color2_widget.set_on_change(move |new_color| {
+            config_c2.borrow_mut().frame.theme.color2 = new_color;
+            Self::refresh_theme_refs(&refreshers_c2);
+            Self::queue_redraw(&preview_c2, &on_change_c2);
+        });
+
+        let config_c3 = config.clone();
+        let on_change_c3 = on_change.clone();
+        let preview_c3 = preview.clone();
+        let refreshers_c3 = theme_ref_refreshers.clone();
+        color3_widget.set_on_change(move |new_color| {
+            config_c3.borrow_mut().frame.theme.color3 = new_color;
+            Self::refresh_theme_refs(&refreshers_c3);
+            Self::queue_redraw(&preview_c3, &on_change_c3);
+        });
+
+        let config_c4 = config.clone();
+        let on_change_c4 = on_change.clone();
+        let preview_c4 = preview.clone();
+        let refreshers_c4 = theme_ref_refreshers.clone();
+        color4_widget.set_on_change(move |new_color| {
+            config_c4.borrow_mut().frame.theme.color4 = new_color;
+            Self::refresh_theme_refs(&refreshers_c4);
+            Self::queue_redraw(&preview_c4, &on_change_c4);
+        });
+
+        color_widgets.push(color1_widget);
+        color_widgets.push(color2_widget);
+        color_widgets.push(color3_widget);
+        color_widgets.push(color4_widget);
+
+        colors_frame.set_child(Some(&colors_grid));
         inner_box.append(&colors_frame);
 
         // === HUD Scheme Callbacks (now that color_widgets exist) ===

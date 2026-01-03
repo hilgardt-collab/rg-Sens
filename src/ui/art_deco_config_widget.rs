@@ -421,88 +421,101 @@ impl ArtDecoConfigWidget {
         info_label.add_css_class("dim-label");
         inner_box.append(&info_label);
 
-        // Theme colors section
+        // Theme colors section - 2x2 grid layout
         let colors_label = Label::new(Some("Theme Colors"));
         colors_label.set_halign(gtk4::Align::Start);
         colors_label.add_css_class("heading");
         colors_label.set_margin_top(8);
         inner_box.append(&colors_label);
 
-        // Color 1
-        let color1_box = GtkBox::new(Orientation::Horizontal, 6);
-        color1_box.append(&Label::new(Some("Color 1 (Primary):")));
+        let colors_grid = gtk4::Grid::new();
+        colors_grid.set_row_spacing(6);
+        colors_grid.set_column_spacing(8);
+        colors_grid.set_margin_start(6);
+
+        // Color 1 (Primary) - row 0, col 0-1
+        let color1_label = Label::new(Some("C1 (Primary):"));
+        color1_label.set_halign(gtk4::Align::End);
+        color1_label.set_width_chars(14);
+        colors_grid.attach(&color1_label, 0, 0, 1, 1);
         let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
-        color1_box.append(theme_color1_widget.widget());
-        inner_box.append(&color1_box);
+        colors_grid.attach(theme_color1_widget.widget(), 1, 0, 1, 1);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let refreshers_clone = theme_ref_refreshers.clone();
-        let preset_dropdown_clone = preset_dropdown.clone();
-        theme_color1_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.theme.color1 = color;
-            // Switch to Custom when manually changing colors
-            preset_dropdown_clone.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Color 2
-        let color2_box = GtkBox::new(Orientation::Horizontal, 6);
-        color2_box.append(&Label::new(Some("Color 2 (Secondary):")));
+        // Color 2 (Secondary) - row 0, col 2-3
+        let color2_label = Label::new(Some("C2 (Secondary):"));
+        color2_label.set_halign(gtk4::Align::End);
+        color2_label.set_width_chars(14);
+        color2_label.set_margin_start(12);
+        colors_grid.attach(&color2_label, 2, 0, 1, 1);
         let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
-        color2_box.append(theme_color2_widget.widget());
-        inner_box.append(&color2_box);
+        colors_grid.attach(theme_color2_widget.widget(), 3, 0, 1, 1);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let refreshers_clone = theme_ref_refreshers.clone();
-        let preset_dropdown_clone = preset_dropdown.clone();
-        theme_color2_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.theme.color2 = color;
-            preset_dropdown_clone.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Color 3
-        let color3_box = GtkBox::new(Orientation::Horizontal, 6);
-        color3_box.append(&Label::new(Some("Color 3 (Tertiary):")));
+        // Color 3 (Tertiary) - row 1, col 0-1
+        let color3_label = Label::new(Some("C3 (Tertiary):"));
+        color3_label.set_halign(gtk4::Align::End);
+        color3_label.set_width_chars(14);
+        colors_grid.attach(&color3_label, 0, 1, 1, 1);
         let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
-        color3_box.append(theme_color3_widget.widget());
-        inner_box.append(&color3_box);
+        colors_grid.attach(theme_color3_widget.widget(), 1, 1, 1, 1);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let refreshers_clone = theme_ref_refreshers.clone();
-        let preset_dropdown_clone = preset_dropdown.clone();
-        theme_color3_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.theme.color3 = color;
-            preset_dropdown_clone.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+        // Color 4 (Background) - row 1, col 2-3
+        let color4_label = Label::new(Some("C4 (Background):"));
+        color4_label.set_halign(gtk4::Align::End);
+        color4_label.set_width_chars(14);
+        color4_label.set_margin_start(12);
+        colors_grid.attach(&color4_label, 2, 1, 1, 1);
+        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
+        colors_grid.attach(theme_color4_widget.widget(), 3, 1, 1, 1);
+
+        inner_box.append(&colors_grid);
+
+        // Connect callbacks for each color (switch to Custom when manually changing)
+        let config_c1 = config.clone();
+        let on_change_c1 = on_change.clone();
+        let preview_c1 = preview.clone();
+        let refreshers_c1 = theme_ref_refreshers.clone();
+        let preset_dropdown_c1 = preset_dropdown.clone();
+        theme_color1_widget.set_on_change(move |color| {
+            config_c1.borrow_mut().frame.theme.color1 = color;
+            preset_dropdown_c1.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
+            Self::refresh_theme_refs(&refreshers_c1);
+            Self::queue_redraw(&preview_c1, &on_change_c1);
         });
 
-        // Color 4
-        let color4_box = GtkBox::new(Orientation::Horizontal, 6);
-        color4_box.append(&Label::new(Some("Color 4 (Background):")));
-        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
-        color4_box.append(theme_color4_widget.widget());
-        inner_box.append(&color4_box);
+        let config_c2 = config.clone();
+        let on_change_c2 = on_change.clone();
+        let preview_c2 = preview.clone();
+        let refreshers_c2 = theme_ref_refreshers.clone();
+        let preset_dropdown_c2 = preset_dropdown.clone();
+        theme_color2_widget.set_on_change(move |color| {
+            config_c2.borrow_mut().frame.theme.color2 = color;
+            preset_dropdown_c2.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
+            Self::refresh_theme_refs(&refreshers_c2);
+            Self::queue_redraw(&preview_c2, &on_change_c2);
+        });
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let refreshers_clone = theme_ref_refreshers.clone();
-        let preset_dropdown_clone = preset_dropdown.clone();
+        let config_c3 = config.clone();
+        let on_change_c3 = on_change.clone();
+        let preview_c3 = preview.clone();
+        let refreshers_c3 = theme_ref_refreshers.clone();
+        let preset_dropdown_c3 = preset_dropdown.clone();
+        theme_color3_widget.set_on_change(move |color| {
+            config_c3.borrow_mut().frame.theme.color3 = color;
+            preset_dropdown_c3.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
+            Self::refresh_theme_refs(&refreshers_c3);
+            Self::queue_redraw(&preview_c3, &on_change_c3);
+        });
+
+        let config_c4 = config.clone();
+        let on_change_c4 = on_change.clone();
+        let preview_c4 = preview.clone();
+        let refreshers_c4 = theme_ref_refreshers.clone();
+        let preset_dropdown_c4 = preset_dropdown.clone();
         theme_color4_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.theme.color4 = color;
-            preset_dropdown_clone.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            config_c4.borrow_mut().frame.theme.color4 = color;
+            preset_dropdown_c4.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
+            Self::refresh_theme_refs(&refreshers_c4);
+            Self::queue_redraw(&preview_c4, &on_change_c4);
         });
 
         // Preset dropdown change handler - updates all colors

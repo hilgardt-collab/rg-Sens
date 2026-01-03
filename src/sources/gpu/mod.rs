@@ -429,10 +429,19 @@ impl DataSource for GpuSource {
             }
             GpuField::Utilization | GpuField::MemoryPercent | GpuField::FanSpeed => (0.0, 100.0),
             GpuField::MemoryUsed => {
-                if let Some(total) = self.memory_total {
-                    (0.0, self.convert_memory(total))
+                if self.config.auto_detect_limits {
+                    if let Some(total) = self.memory_total {
+                        (0.0, self.convert_memory(total))
+                    } else {
+                        (0.0, 100.0)
+                    }
                 } else {
-                    (0.0, 100.0)
+                    let default_max = if let Some(total) = self.memory_total {
+                        self.convert_memory(total)
+                    } else {
+                        100.0
+                    };
+                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
                 }
             }
             GpuField::PowerUsage => {
@@ -443,10 +452,19 @@ impl DataSource for GpuSource {
                 }
             }
             GpuField::MemoryTotal => {
-                if let Some(total) = self.memory_total {
-                    (0.0, self.convert_memory(total))
+                if self.config.auto_detect_limits {
+                    if let Some(total) = self.memory_total {
+                        (0.0, self.convert_memory(total))
+                    } else {
+                        (0.0, 100.0)
+                    }
                 } else {
-                    (0.0, 100.0)
+                    let default_max = if let Some(total) = self.memory_total {
+                        self.convert_memory(total)
+                    } else {
+                        100.0
+                    };
+                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
                 }
             }
             GpuField::ClockCore => {
