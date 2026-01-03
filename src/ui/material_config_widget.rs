@@ -1854,6 +1854,41 @@ impl MaterialConfigWidget {
     pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
         *self.available_fields.borrow_mut() = fields;
     }
+
+    /// Extract transferable configuration (layout, content items, animation settings).
+    pub fn get_transferable_config(&self) -> crate::ui::combo_config_base::TransferableComboConfig {
+        let config = self.config.borrow();
+        crate::ui::combo_config_base::TransferableComboConfig {
+            group_count: config.frame.group_count,
+            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_size_weights: config.frame.group_size_weights.clone(),
+            group_item_orientations: config.frame.group_item_orientations.clone(),
+            layout_orientation: config.frame.split_orientation.clone(),
+            content_items: config.frame.content_items.clone(),
+            content_padding: config.frame.content_padding,
+            item_spacing: config.frame.item_spacing,
+            animation_enabled: config.animation_enabled,
+            animation_speed: config.animation_speed,
+        }
+    }
+
+    /// Apply transferable configuration from another combo panel.
+    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+        {
+            let mut config = self.config.borrow_mut();
+            config.frame.group_count = transfer.group_count;
+            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_size_weights = transfer.group_size_weights.clone();
+            config.frame.group_item_orientations = transfer.group_item_orientations.clone();
+            config.frame.split_orientation = transfer.layout_orientation.clone();
+            config.frame.content_items = transfer.content_items.clone();
+            config.frame.content_padding = transfer.content_padding;
+            config.frame.item_spacing = transfer.item_spacing;
+            config.animation_enabled = transfer.animation_enabled;
+            config.animation_speed = transfer.animation_speed;
+        }
+        self.preview.queue_draw();
+    }
 }
 
 impl Default for MaterialConfigWidget {

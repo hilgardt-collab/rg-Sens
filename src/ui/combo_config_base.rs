@@ -50,6 +50,40 @@ pub trait LayoutFrameConfig {
     fn split_orientation(&self) -> SplitOrientation;
 }
 
+/// Transferable configuration that can be preserved when switching between combo panel types.
+/// This excludes theme-specific settings (colors, fonts, frame styles) but includes
+/// layout and content configuration.
+#[derive(Debug, Clone, Default)]
+pub struct TransferableComboConfig {
+    /// Number of groups
+    pub group_count: usize,
+    /// Number of items in each group
+    pub group_item_counts: Vec<u32>,
+    /// Size weight for each group
+    pub group_size_weights: Vec<f64>,
+    /// Item orientation within each group
+    pub group_item_orientations: Vec<SplitOrientation>,
+    /// Layout orientation (how groups are arranged)
+    pub layout_orientation: SplitOrientation,
+    /// Content items configuration (keyed by slot name like "group1_1")
+    pub content_items: HashMap<String, ContentItemConfig>,
+    /// Content padding
+    pub content_padding: f64,
+    /// Item spacing within groups
+    pub item_spacing: f64,
+    /// Animation enabled
+    pub animation_enabled: bool,
+    /// Animation speed
+    pub animation_speed: f64,
+}
+
+impl TransferableComboConfig {
+    /// Check if this config has meaningful content to transfer
+    pub fn has_content(&self) -> bool {
+        self.group_count > 0 || !self.content_items.is_empty()
+    }
+}
+
 /// Common layout widgets found across combo panels
 #[allow(dead_code)]
 pub struct CommonLayoutWidgets {

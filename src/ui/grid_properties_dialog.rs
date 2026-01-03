@@ -1577,6 +1577,83 @@ pub(crate) fn show_panel_properties_dialog(
         });
     }
 
+    // Shared storage for transferring config between combo panel types
+    let combo_panel_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau"];
+    let is_combo_panel = |id: &str| combo_panel_ids.contains(&id);
+    let previous_combo_displayer: Rc<RefCell<String>> = Rc::new(RefCell::new(
+        if is_combo_panel(&old_displayer_id) { old_displayer_id.clone() } else { String::new() }
+    ));
+    let pending_transfer_config: Rc<RefCell<Option<crate::ui::combo_config_base::TransferableComboConfig>>> = Rc::new(RefCell::new(None));
+
+    // Helper: Extract transferable config from whichever combo widget is active
+    fn extract_combo_config(
+        displayer_id: &str,
+        lcars: &Rc<RefCell<Option<crate::ui::LcarsConfigWidget>>>,
+        cyberpunk: &Rc<RefCell<Option<crate::ui::CyberpunkConfigWidget>>>,
+        material: &Rc<RefCell<Option<crate::ui::MaterialConfigWidget>>>,
+        industrial: &Rc<RefCell<Option<crate::ui::IndustrialConfigWidget>>>,
+        retro_terminal: &Rc<RefCell<Option<crate::ui::RetroTerminalConfigWidget>>>,
+        fighter_hud: &Rc<RefCell<Option<crate::ui::FighterHudConfigWidget>>>,
+        synthwave: &Rc<RefCell<Option<crate::ui::SynthwaveConfigWidget>>>,
+        art_deco: &Rc<RefCell<Option<crate::ui::ArtDecoConfigWidget>>>,
+        art_nouveau: &Rc<RefCell<Option<crate::ui::ArtNouveauConfigWidget>>>,
+    ) -> Option<crate::ui::combo_config_base::TransferableComboConfig> {
+        match displayer_id {
+            "lcars" => lcars.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "cyberpunk" => cyberpunk.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "material" => material.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "industrial" => industrial.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "retro_terminal" => retro_terminal.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "fighter_hud" => fighter_hud.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "synthwave" => synthwave.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "art_deco" => art_deco.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "art_nouveau" => art_nouveau.borrow().as_ref().map(|w| w.get_transferable_config()),
+            _ => None,
+        }
+    }
+
+    // Callback to extract config from the previous combo widget before switching
+    {
+        let previous_combo_clone = previous_combo_displayer.clone();
+        let pending_config_clone = pending_transfer_config.clone();
+        let lcars_clone = lcars_config_widget.clone();
+        let cyberpunk_clone = cyberpunk_config_widget.clone();
+        let material_clone = material_config_widget.clone();
+        let industrial_clone = industrial_config_widget.clone();
+        let retro_terminal_clone = retro_terminal_config_widget.clone();
+        let fighter_hud_clone = fighter_hud_config_widget.clone();
+        let synthwave_clone = synthwave_config_widget.clone();
+        let art_deco_clone = art_deco_config_widget.clone();
+        let art_nouveau_clone = art_nouveau_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(new_displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
+                let prev_id = previous_combo_clone.borrow().clone();
+                let combo_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau"];
+                let new_is_combo = combo_ids.contains(&new_displayer_id.as_str());
+                let prev_is_combo = !prev_id.is_empty() && combo_ids.contains(&prev_id.as_str());
+
+                // If switching from one combo type to another, extract config from the old widget
+                if prev_is_combo && new_is_combo && prev_id != new_displayer_id {
+                    let config = extract_combo_config(
+                        &prev_id,
+                        &lcars_clone, &cyberpunk_clone, &material_clone, &industrial_clone,
+                        &retro_terminal_clone, &fighter_hud_clone, &synthwave_clone,
+                        &art_deco_clone, &art_nouveau_clone,
+                    );
+                    if let Some(cfg) = config {
+                        log::info!("=== Extracted transferable config from '{}' for transfer to '{}' ===", prev_id, new_displayer_id);
+                        *pending_config_clone.borrow_mut() = Some(cfg);
+                    }
+                }
+
+                // Update tracker to new combo displayer (or clear if not a combo type)
+                *previous_combo_clone.borrow_mut() = if new_is_combo { new_displayer_id } else { String::new() };
+            }
+        });
+    }
+
     // Show/hide config widgets based on displayer selection
     // All widgets now use placeholder boxes (they contain the lazily-created widgets)
     {
@@ -1812,6 +1889,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -1840,6 +1918,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'lcars': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'lcars' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -1857,6 +1941,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -1885,6 +1970,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'cyberpunk': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'cyberpunk' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -1902,6 +1993,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -1930,6 +2022,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'material': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'material' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -1947,6 +2045,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -1975,6 +2074,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'industrial': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'industrial' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -1992,6 +2097,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2020,6 +2126,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'retro_terminal': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'retro_terminal' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -2037,6 +2149,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2065,6 +2178,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'fighter_hud': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'fighter_hud' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -2082,6 +2201,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2108,6 +2228,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'synthwave': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'synthwave' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -2125,6 +2251,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2151,6 +2278,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'art_deco': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'art_deco' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
@@ -2168,6 +2301,7 @@ pub(crate) fn show_panel_properties_dialog(
         let displayers_clone = displayers.clone();
         let sources_clone = sources.clone();
         let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
@@ -2194,6 +2328,12 @@ pub(crate) fn show_panel_properties_dialog(
                                     log::info!("=== Displayer changed to 'art_nouveau': updating with {} source summaries ===", summaries.len());
                                     widget.set_available_fields(fields);
                                     widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'art_nouveau' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
                                 }
                             }
                         }
