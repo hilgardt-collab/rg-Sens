@@ -2311,6 +2311,11 @@ impl LcarsConfigWidget {
             );
         }
 
+        // IMPORTANT: Temporarily disable on_change callback to prevent signal cascade.
+        // When we call set_value() on widgets, their signal handlers fire and call on_change.
+        // This causes redundant updates since we're setting the config directly anyway.
+        let saved_callback = self.on_change.borrow_mut().take();
+
         // First update the internal config with the new values
         let config_to_use = new_config.clone();
 
@@ -2470,6 +2475,10 @@ impl LcarsConfigWidget {
         }
 
         *self.config.borrow_mut() = new_config;
+
+        // Restore the on_change callback now that widget updates are complete
+        *self.on_change.borrow_mut() = saved_callback;
+
         self.preview.queue_draw();
     }
 
@@ -2607,20 +2616,13 @@ impl LcarsConfigWidget {
         }
     }
 
-    /// Update the available fields and rebuild the content notebook tabs
-    /// Call this when the source configuration changes (e.g., combo source is reconfigured)
+    /// Update the available fields for content configuration.
+    /// NOTE: This only stores the fields - it does NOT rebuild tabs.
+    /// Call set_source_summaries() after this to trigger the rebuild.
+    /// This avoids double-rebuilding when both methods are called together.
     pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
         *self.available_fields.borrow_mut() = fields;
-        // Rebuild tabs to use new fields
-        Self::rebuild_content_notebook_tabs(
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-        );
+        // Don't rebuild here - set_source_summaries() will be called next and will rebuild
     }
 }
 

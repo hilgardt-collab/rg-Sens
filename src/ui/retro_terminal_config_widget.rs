@@ -1734,6 +1734,9 @@ impl RetroTerminalConfigWidget {
     }
 
     pub fn set_config(&self, config: &RetroTerminalDisplayConfig) {
+        // IMPORTANT: Temporarily disable on_change callback to prevent signal cascade.
+        let saved_callback = self.on_change.borrow_mut().take();
+
         *self.config.borrow_mut() = config.clone();
 
         // Update Colors widgets
@@ -1855,6 +1858,9 @@ impl RetroTerminalConfigWidget {
             &self.theme_ref_refreshers,
         );
 
+        // Restore the on_change callback now that widget updates are complete
+        *self.on_change.borrow_mut() = saved_callback;
+
         self.preview.queue_draw();
     }
 
@@ -1922,19 +1928,12 @@ impl RetroTerminalConfigWidget {
         }
     }
 
+    /// Update the available fields for content configuration.
+    /// NOTE: This only stores the fields - it does NOT rebuild tabs.
+    /// Call set_source_summaries() after this to trigger the rebuild.
     pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
         *self.available_fields.borrow_mut() = fields;
-
-        // Rebuild content tabs to reflect new field options
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-        );
+        // Don't rebuild here - set_source_summaries() will be called next and will rebuild
     }
 }
 

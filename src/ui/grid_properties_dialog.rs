@@ -3672,8 +3672,8 @@ pub(crate) fn show_panel_properties_dialog(
                 let config = config_for_apply.borrow();
 
                 for (panel_id, state) in states.iter() {
-                    let z_idx = state.panel.blocking_read().z_index;
                     let panel_guard = state.panel.blocking_read();
+                    let z_idx = panel_guard.z_index;
                     let x = panel_guard.geometry.x as f64 * (config.cell_width + config.spacing) as f64;
                     let y = panel_guard.geometry.y as f64 * (config.cell_height + config.spacing) as f64;
                     panel_info.push((panel_id.clone(), z_idx, x, y));

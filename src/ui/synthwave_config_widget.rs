@@ -2062,6 +2062,9 @@ impl SynthwaveConfigWidget {
     }
 
     pub fn set_config(&self, config: SynthwaveDisplayConfig) {
+        // IMPORTANT: Temporarily disable on_change callback to prevent signal cascade.
+        let saved_callback = self.on_change.borrow_mut().take();
+
         // Extract all values we need BEFORE updating the config
         // Color scheme
         let color_scheme_idx = match &config.frame.color_scheme {
@@ -2205,6 +2208,9 @@ impl SynthwaveConfigWidget {
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
         }
+
+        // Restore the on_change callback now that widget updates are complete
+        *self.on_change.borrow_mut() = saved_callback;
 
         self.preview.queue_draw();
     }

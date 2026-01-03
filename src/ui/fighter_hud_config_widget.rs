@@ -1526,6 +1526,9 @@ impl FighterHudConfigWidget {
     }
 
     pub fn set_config(&self, config: FighterHudDisplayConfig) {
+        // IMPORTANT: Temporarily disable on_change callback to prevent signal cascade.
+        let saved_callback = self.on_change.borrow_mut().take();
+
         // Extract all values we need BEFORE updating the config
         // This prevents RefCell borrow conflicts when GTK callbacks fire synchronously
         let color_idx = match &config.frame.hud_color {
@@ -1668,6 +1671,9 @@ impl FighterHudConfigWidget {
             &self.available_fields,
             &self.theme_ref_refreshers,
         );
+
+        // Restore the on_change callback now that widget updates are complete
+        *self.on_change.borrow_mut() = saved_callback;
 
         self.preview.queue_draw();
     }

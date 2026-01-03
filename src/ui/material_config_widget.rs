@@ -1622,6 +1622,11 @@ impl MaterialConfigWidget {
     }
 
     pub fn set_config(&self, config: &MaterialDisplayConfig) {
+        // IMPORTANT: Temporarily disable on_change callback to prevent signal cascade.
+        // When we call set_value() on widgets, their signal handlers fire and call on_change.
+        // This causes redundant updates since we're setting the config directly anyway.
+        let saved_callback = self.on_change.borrow_mut().take();
+
         *self.config.borrow_mut() = config.clone();
 
         // Update Theme widgets (theme variant, combo theme, surface/background colors)
@@ -1731,6 +1736,9 @@ impl MaterialConfigWidget {
             &self.available_fields,
             &self.theme_ref_refreshers,
         );
+
+        // Restore the on_change callback now that widget updates are complete
+        *self.on_change.borrow_mut() = saved_callback;
 
         self.preview.queue_draw();
     }

@@ -3,6 +3,7 @@
 //! This module provides common types and helper functions used by all combo panel
 //! config widgets (Synthwave, LCARS, Cyberpunk, Material, Industrial, RetroTerminal, FighterHUD).
 
+use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
@@ -649,7 +650,11 @@ where
     page
 }
 
+/// Generation counter for canceling stale content tab rebuilds
+static CONTENT_REBUILD_GENERATION: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 /// Rebuild the content tabs based on source summaries.
+/// This function builds tabs incrementally to avoid freezing the UI.
 pub fn rebuild_content_tabs<C, F, S, G>(
     config: &Rc<RefCell<C>>,
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -667,6 +672,9 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     S: Fn(&mut C, &str, ContentItemConfig) + Clone + 'static,
     G: Fn(&C) -> ComboThemeConfig + Clone + 'static,
 {
+    // Increment generation to cancel any pending incremental builds
+    let generation = CONTENT_REBUILD_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+
     // CRITICAL: Clear stale theme refresh callbacks before rebuilding tabs.
     // Each content item adds multiple callbacks, and without clearing,
     // these accumulate on every rebuild causing memory leaks and CPU explosion.
@@ -707,6 +715,10 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     let mut group_nums: Vec<usize> = groups.keys().cloned().collect();
     group_nums.sort();
 
+    // Collect all items to create, along with their group structure
+    // Format: Vec<(group_num, items_notebook, Vec<(slot_name, tab_label)>)>
+    let mut work_items: Vec<(usize, Notebook, GtkBox, Vec<(String, String)>)> = Vec::new();
+
     for group_num in group_nums {
         if let Some(items) = groups.get(&group_num) {
             let group_box = GtkBox::new(Orientation::Vertical, 4);
@@ -721,20 +733,26 @@ pub fn rebuild_content_tabs<C, F, S, G>(
             let mut sorted_items = items.clone();
             sorted_items.sort_by_key(|(_, _, idx)| *idx);
 
-            for (slot_name, summary, item_idx) in sorted_items {
-                let tab_label = format!("Item {} : {}", item_idx, summary);
-                let tab_box = create_content_item_config(
-                    config,
-                    on_change,
-                    preview,
-                    &slot_name,
-                    available_fields.borrow().clone(),
-                    get_content_items.clone(),
-                    set_content_item.clone(),
-                    theme_ref_refreshers,
-                    get_theme.clone(),
-                );
-                items_notebook.append_page(&tab_box, Some(&Label::new(Some(&tab_label))));
+            let item_list: Vec<(String, String)> = sorted_items
+                .iter()
+                .map(|(slot_name, summary, item_idx)| {
+                    (slot_name.clone(), format!("Item {} : {}", item_idx, summary))
+                })
+                .collect();
+
+            // Add placeholder tabs immediately (cheap operation)
+            for (_, tab_label) in &item_list {
+                let placeholder = GtkBox::new(Orientation::Vertical, 8);
+                placeholder.set_margin_top(12);
+                placeholder.set_halign(gtk4::Align::Center);
+                placeholder.set_valign(gtk4::Align::Center);
+                let spinner = gtk4::Spinner::new();
+                spinner.start();
+                placeholder.append(&spinner);
+                let label = Label::new(Some("Loading..."));
+                label.add_css_class("dim-label");
+                placeholder.append(&label);
+                items_notebook.append_page(&placeholder, Some(&Label::new(Some(tab_label))));
             }
 
             group_box.append(&items_notebook);
@@ -742,8 +760,74 @@ pub fn rebuild_content_tabs<C, F, S, G>(
                 &group_box,
                 Some(&Label::new(Some(&format!("Group {}", group_num)))),
             );
+
+            work_items.push((group_num, items_notebook, group_box, item_list));
         }
     }
+
+    // Release borrow before starting async work
+    drop(summaries);
+    drop(notebook);
+
+    // Build content items incrementally using idle callbacks
+    let work_queue: Rc<RefCell<Vec<(Notebook, usize, String, String)>>> = Rc::new(RefCell::new(Vec::new()));
+
+    // Flatten work items into a queue of individual items to create
+    for (_group_num, items_notebook, _group_box, item_list) in work_items {
+        for (idx, (slot_name, tab_label)) in item_list.into_iter().enumerate() {
+            work_queue.borrow_mut().push((items_notebook.clone(), idx, slot_name, tab_label));
+        }
+    }
+
+    // If no work to do, return early
+    if work_queue.borrow().is_empty() {
+        return;
+    }
+
+    // Start incremental building
+    let config_clone = config.clone();
+    let on_change_clone = on_change.clone();
+    let preview_clone = preview.clone();
+    let available_fields_clone = available_fields.clone();
+    let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
+
+    glib::idle_add_local(move || {
+        // Check if this build has been superseded
+        if CONTENT_REBUILD_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation {
+            return glib::ControlFlow::Break;
+        }
+
+        // Get next item to create
+        let next_item = work_queue.borrow_mut().pop();
+
+        if let Some((items_notebook, page_idx, slot_name, _tab_label)) = next_item {
+            // Create the actual content item config
+            let tab_box = create_content_item_config(
+                &config_clone,
+                &on_change_clone,
+                &preview_clone,
+                &slot_name,
+                available_fields_clone.borrow().clone(),
+                get_content_items.clone(),
+                set_content_item.clone(),
+                &theme_ref_refreshers_clone,
+                get_theme.clone(),
+            );
+
+            // Replace the placeholder with the actual content
+            // Get the current page at this index and remove it, then insert new one
+            if let Some(page) = items_notebook.nth_page(Some(page_idx as u32)) {
+                let tab_label_widget = items_notebook.tab_label(&page);
+                items_notebook.remove_page(Some(page_idx as u32));
+                items_notebook.insert_page(&tab_box, tab_label_widget.as_ref(), Some(page_idx as u32));
+            }
+
+            glib::ControlFlow::Continue
+        } else {
+            // All items created
+            glib::ControlFlow::Break
+        }
+    });
 }
 
 /// Create configuration UI for a single content item.

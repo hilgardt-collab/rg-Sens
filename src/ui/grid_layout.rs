@@ -955,9 +955,8 @@ impl GridLayout {
         let config = self.config.borrow();
 
         for (panel_id, state) in states.iter() {
-            let z_index = state.panel.blocking_read().z_index;
-            // Get current position from geometry
             let panel_guard = state.panel.blocking_read();
+            let z_index = panel_guard.z_index;
             let x = panel_guard.geometry.x as f64 * (config.cell_width + config.spacing) as f64;
             let y = panel_guard.geometry.y as f64 * (config.cell_height + config.spacing) as f64;
             panel_info.push((panel_id.clone(), z_index, x, y));

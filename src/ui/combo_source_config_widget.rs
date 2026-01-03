@@ -1349,7 +1349,9 @@ impl ComboSourceConfigWidget {
         });
 
         // Set up receiver on main thread to process results
-        glib::idle_add_local(move || {
+        // Use timeout_add_local instead of idle_add_local to avoid busy-polling
+        // which causes high CPU usage and UI unresponsiveness
+        glib::timeout_add_local(Duration::from_millis(50), move || {
             match rx.try_recv() {
                 Ok((gen, fields)) => {
                     // Check if this update is still valid (not superseded by newer request)
@@ -1369,7 +1371,7 @@ impl ComboSourceConfigWidget {
                     glib::ControlFlow::Break
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    // Results not ready yet, keep polling
+                    // Results not ready yet, check again in 50ms
                     glib::ControlFlow::Continue
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
