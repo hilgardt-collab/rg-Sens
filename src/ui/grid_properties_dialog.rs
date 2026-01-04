@@ -2988,6 +2988,14 @@ pub(crate) fn show_panel_properties_dialog(
                         popover_menu.set_parent(&new_widget);
                         popover_menu.set_has_arrow(false);
 
+                        // Ensure popover is unparented when widget is destroyed
+                        let popover_weak = popover_menu.downgrade();
+                        new_widget.connect_destroy(move |_| {
+                            if let Some(p) = popover_weak.upgrade() {
+                                p.unparent();
+                            }
+                        });
+
                         // Setup action group for this panel
                         let action_group = gio::SimpleActionGroup::new();
 

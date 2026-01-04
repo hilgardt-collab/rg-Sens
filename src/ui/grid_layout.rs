@@ -1058,6 +1058,14 @@ impl GridLayout {
         popover.set_parent(widget);
         popover.set_has_arrow(false);
 
+        // Ensure popover is unparented when widget is destroyed to avoid GTK warnings
+        let popover_weak = popover.downgrade();
+        widget.connect_destroy(move |_| {
+            if let Some(p) = popover_weak.upgrade() {
+                p.unparent();
+            }
+        });
+
         // Setup action group for this panel
         let action_group = gio::SimpleActionGroup::new();
 
@@ -2279,6 +2287,14 @@ impl GridLayout {
                                 popover.set_parent(&widget_for_menu);
                                 popover.set_has_arrow(false);
 
+                                // Ensure popover is unparented when widget is destroyed
+                                let popover_weak = popover.downgrade();
+                                widget_for_menu.connect_destroy(move |_| {
+                                    if let Some(p) = popover_weak.upgrade() {
+                                        p.unparent();
+                                    }
+                                });
+
                                 gesture_secondary.connect_pressed(move |_gesture, _, x, y| {
                                     popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
                                         x as i32,
@@ -3417,6 +3433,14 @@ fn setup_copied_panel_interaction(
     let popover = PopoverMenu::from_model(Some(&menu));
     popover.set_parent(widget);
     popover.set_has_arrow(false);
+
+    // Ensure popover is unparented when widget is destroyed
+    let popover_weak = popover.downgrade();
+    widget.connect_destroy(move |_| {
+        if let Some(p) = popover_weak.upgrade() {
+            p.unparent();
+        }
+    });
 
     gesture_secondary.connect_pressed(move |_gesture, _, x, y| {
         popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
