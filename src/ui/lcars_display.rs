@@ -1034,8 +1034,7 @@ pub fn render_lcars_frame(
 
     // Draw segment labels without transform (so text isn't mirrored)
     for label_info in &labels {
-        cr.select_font_face(&label_info.font, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        cr.set_font_size(label_info.font_size);
+        crate::ui::render_cache::apply_cached_font(cr, &label_info.font, cairo::FontSlant::Normal, cairo::FontWeight::Normal, label_info.font_size);
 
         if let Ok(text_extents) = cr.text_extents(&label_info.text) {
             label_info.color.apply_to_cairo(cr);
@@ -1203,8 +1202,7 @@ fn render_header_bar(
     } else {
         cairo::FontWeight::Normal
     };
-    cr.select_font_face(&font_family, cairo::FontSlant::Normal, font_weight);
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, font_weight, font_size);
     let text_extents = cr.text_extents(&text)?;
 
     // Calculate available space for width calculations
@@ -1371,8 +1369,7 @@ fn render_sidebar_segments(
         if !segment.label.is_empty() {
             let label_text = segment.label.to_uppercase();
             let (font_family, font_size) = segment.font.resolve(&config.theme);
-            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-            cr.set_font_size(font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
 
             let text_extents = cr.text_extents(&label_text)?;
             segment.label_color.resolve(&config.theme).apply_to_cairo(cr);

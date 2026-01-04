@@ -735,12 +735,7 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
 
     cr.save().ok();
 
-    cr.select_font_face(
-        &config.header_font,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    cr.set_font_size(config.header_font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
     let text = if config.header_text.is_empty() {
         "SYNTHWAVE"

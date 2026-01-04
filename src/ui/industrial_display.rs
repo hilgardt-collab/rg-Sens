@@ -819,8 +819,7 @@ fn draw_header(
             // Text
             let c = &config.header_color;
             cr.set_source_rgba(c.r, c.g, c.b, c.a);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             let extents = cr.text_extents(&config.header_text)?;
             let text_x = plate_x + (plate_w - extents.width()) / 2.0;
@@ -838,8 +837,7 @@ fn draw_header(
         }
         HeaderStyle::Stencil => {
             // Stenciled text look
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             let extents = cr.text_extents(&config.header_text)?;
             let text_x = x + (w - extents.width()) / 2.0;
@@ -870,8 +868,7 @@ fn draw_header(
 
             // Text
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
-            cr.select_font_face(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(config.header_font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             let extents = cr.text_extents(&config.header_text)?;
             let text_x = label_x + (label_w - extents.width()) / 2.0;

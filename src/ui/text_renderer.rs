@@ -323,11 +323,10 @@ fn render_text_part(
         }
     }
 
-    // Set font
+    // Set font using cached ScaledFont to prevent memory leaks
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    cr.select_font_face(&font_family, font_slant, font_weight);
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, font_slant, font_weight, font_size);
 
     // Render background if configured (skip when rendering grouped text - group renders its own background)
     if !skip_background {
@@ -501,11 +500,10 @@ fn render_text_with_config(
     // Resolve font using theme if available
     let (font_family, font_size) = config.resolved_font(theme);
 
-    // Set font
+    // Set font using cached ScaledFont to prevent memory leaks
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    cr.select_font_face(&font_family, font_slant, font_weight);
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, font_slant, font_weight, font_size);
 
     // Get text dimensions
     let extents = TEXT_EXTENTS_CACHE

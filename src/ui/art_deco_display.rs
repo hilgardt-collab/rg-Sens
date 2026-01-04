@@ -677,12 +677,7 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
 
     cr.save().ok();
 
-    cr.select_font_face(
-        &font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
     let text_extents = cr.text_extents(&config.header_text).ok();
     let (text_width, text_height) = text_extents.map(|e| (e.width(), e.height())).unwrap_or((0.0, 0.0));

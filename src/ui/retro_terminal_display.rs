@@ -612,12 +612,7 @@ fn draw_header(
 
     // Resolve the theme-aware font
     let (font_family, font_size) = config.header_font.resolve(&config.theme);
-    cr.select_font_face(
-        &font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
     let text = if config.header_text.is_empty() {
         "TERMINAL"

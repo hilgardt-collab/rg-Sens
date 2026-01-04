@@ -290,8 +290,7 @@ fn calculate_label_space(cr: &cairo::Context, config: &CoreBarsConfig, num_bars:
         cairo::FontWeight::Normal
     };
 
-    cr.select_font_face(&config.label_font, cairo::FontSlant::Normal, font_weight);
-    cr.set_font_size(config.label_size);
+    crate::ui::render_cache::apply_cached_font(cr, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
 
     // Calculate max label width/height
     let max_index = config.start_core + num_bars - 1;
@@ -696,8 +695,7 @@ fn render_label(
         cairo::FontWeight::Normal
     };
 
-    cr.select_font_face(&config.label_font, cairo::FontSlant::Normal, font_weight);
-    cr.set_font_size(config.label_size);
+    crate::ui::render_cache::apply_cached_font(cr, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
     let label_color = config.label_color.resolve(theme);
     label_color.apply_to_cairo(cr);
 

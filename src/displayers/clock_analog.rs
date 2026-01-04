@@ -156,8 +156,7 @@ impl Displayer for ClockAnalogDisplayer {
                 // Draw indicator
                 if data.config.show_icon {
                     let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
-                    cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
-                    cr.set_font_size(font_size);
+                    crate::ui::render_cache::apply_cached_font(cr, icon_font, cairo::FontSlant::Normal, font_weight, font_size);
 
                     // Build display text based on state
                     let display_text = if timer_active && !data.timer_display.is_empty() {

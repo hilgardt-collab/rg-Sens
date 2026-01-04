@@ -489,8 +489,7 @@ fn draw_group_header(
                 let text_color = config.text_color();
                 cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
                 let (font_family, font_size) = config.header_font.resolve(&config.theme);
-                cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                cr.set_font_size(font_size);
+                crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
                 let text_y = y + bar_h + 8.0 + font_size;
                 cr.move_to(x + config.card_padding, text_y);
@@ -510,8 +509,7 @@ fn draw_group_header(
             // Draw text in white
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
             cr.move_to(x + config.card_padding, text_y);
@@ -529,8 +527,7 @@ fn draw_group_header(
             // Draw colored text
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             let text_y = y + config.card_padding + font_size;
             cr.move_to(x + config.card_padding, text_y);
@@ -693,8 +690,7 @@ fn draw_main_header(
             let text_color = config.text_color();
             cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(font_size + 2.0);
+            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size + 2.0);
 
             let text_y = y + bar_h + 12.0 + font_size;
             let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
@@ -712,8 +708,7 @@ fn draw_main_header(
             // White text
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(font_size + 2.0);
+            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size + 2.0);
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
             let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
@@ -727,8 +722,7 @@ fn draw_main_header(
             let text_color = config.text_color();
             cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            cr.set_font_size(font_size + 2.0);
+            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size + 2.0);
 
             let text_y = y + config.card_padding + font_size;
             let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);

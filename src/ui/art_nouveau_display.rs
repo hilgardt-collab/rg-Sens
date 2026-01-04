@@ -750,8 +750,7 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
     cr.save().ok();
 
     // Measure text
-    cr.select_font_face(&font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
     let header_height = font_size + 20.0;
 
     let (text_width, text_height) = if let Ok(extents) = cr.text_extents(&config.header_text) {

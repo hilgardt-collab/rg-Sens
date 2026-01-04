@@ -755,8 +755,7 @@ fn draw_tick_label(
         cairo::FontWeight::Normal
     };
 
-    cr.select_font_face(&label_config.font_family, font_slant, font_weight);
-    cr.set_font_size(label_config.font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &label_config.font_family, font_slant, font_weight, label_config.font_size);
     cr.set_source_rgba(resolved_color.r, resolved_color.g, resolved_color.b, resolved_color.a);
 
     let extents = cr.text_extents(text)?;

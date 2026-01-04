@@ -692,8 +692,7 @@ pub fn render_graph_with_theme(
             } else {
                 cairo::FontWeight::Normal
             };
-            cr.select_font_face(&config.y_axis.label_font_family, font_slant, font_weight);
-            cr.set_font_size(config.y_axis.label_font_size);
+            crate::ui::render_cache::apply_cached_font(cr, &config.y_axis.label_font_family, font_slant, font_weight, config.y_axis.label_font_size);
 
             let num_labels = 5;
             for i in 0..=num_labels {

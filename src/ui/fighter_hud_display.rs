@@ -591,12 +591,7 @@ fn draw_header(
 
     // Resolve header font from FontSource using theme
     let (header_font_family, header_font_size) = config.header_font.resolve(&config.theme);
-    cr.select_font_face(
-        &header_font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-    );
-    cr.set_font_size(header_font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
 
     let text = if config.header_text.is_empty() {
         "HUD"

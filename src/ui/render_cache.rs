@@ -368,6 +368,97 @@ impl Default for TextExtentsCache {
 pub static TEXT_EXTENTS_CACHE: once_cell::sync::Lazy<Mutex<TextExtentsCache>> =
     once_cell::sync::Lazy::new(|| Mutex::new(TextExtentsCache::new()));
 
+// Thread-local scaled font cache to prevent Cairo font memory leaks
+thread_local! {
+    static SCALED_FONT_CACHE: RefCell<ScaledFontCache> = RefCell::new(ScaledFontCache::new());
+}
+
+/// Cache for Cairo ScaledFont objects to prevent unbounded font memory growth
+/// Cairo's select_font_face creates internal font caches that never get released.
+/// By caching ScaledFont objects ourselves, we control the lifecycle and limit memory usage.
+struct ScaledFontCache {
+    /// Cached fonts keyed by (family, slant as u8, weight as u8, size * 10 as i32)
+    cache: HashMap<(String, u8, u8, i32), (cairo::ScaledFont, Instant)>,
+    max_entries: usize,
+}
+
+impl ScaledFontCache {
+    fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+            max_entries: 32, // Limit to 32 unique font configurations
+        }
+    }
+
+    fn get_or_create(
+        &mut self,
+        family: &str,
+        slant: cairo::FontSlant,
+        weight: cairo::FontWeight,
+        size: f64,
+    ) -> Option<cairo::ScaledFont> {
+        let slant_u8 = match slant {
+            cairo::FontSlant::Normal => 0,
+            cairo::FontSlant::Italic => 1,
+            cairo::FontSlant::Oblique => 2,
+            _ => 0,
+        };
+        let weight_u8 = match weight {
+            cairo::FontWeight::Normal => 0,
+            cairo::FontWeight::Bold => 1,
+            _ => 0,
+        };
+        let size_key = (size * 10.0) as i32;
+        let key = (family.to_string(), slant_u8, weight_u8, size_key);
+
+        // Check cache
+        if let Some((font, access_time)) = self.cache.get_mut(&key) {
+            *access_time = Instant::now();
+            return Some(font.clone());
+        }
+
+        // Create new ScaledFont
+        let font_face = cairo::FontFace::toy_create(family, slant, weight).ok()?;
+        let matrix = cairo::Matrix::new(size, 0.0, 0.0, size, 0.0, 0.0);
+        let ctm = cairo::Matrix::identity();
+        let options = cairo::FontOptions::new().ok()?;
+        let scaled_font = cairo::ScaledFont::new(&font_face, &matrix, &ctm, &options).ok()?;
+
+        // Evict LRU if full
+        if self.cache.len() >= self.max_entries {
+            if let Some(oldest_key) = self.cache.iter()
+                .min_by_key(|(_, (_, time))| *time)
+                .map(|(k, _)| k.clone())
+            {
+                self.cache.remove(&oldest_key);
+            }
+        }
+
+        self.cache.insert(key, (scaled_font.clone(), Instant::now()));
+        Some(scaled_font)
+    }
+}
+
+/// Apply a cached scaled font to a Cairo context
+/// This prevents Cairo's internal font cache from growing unboundedly
+pub fn apply_cached_font(
+    cr: &cairo::Context,
+    family: &str,
+    slant: cairo::FontSlant,
+    weight: cairo::FontWeight,
+    size: f64,
+) {
+    SCALED_FONT_CACHE.with(|cache| {
+        if let Some(scaled_font) = cache.borrow_mut().get_or_create(family, slant, weight, size) {
+            cr.set_scaled_font(&scaled_font);
+        } else {
+            // Fallback to toy API if ScaledFont creation fails
+            cr.select_font_face(family, slant, weight);
+            cr.set_font_size(size);
+        }
+    });
+}
+
 // Thread-local gradient LUT cache
 thread_local! {
     static GRADIENT_LUT_CACHE: RefCell<GradientLUTCache> = RefCell::new(GradientLUTCache::new());

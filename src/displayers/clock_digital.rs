@@ -274,8 +274,7 @@ impl Displayer for ClockDigitalDisplayer {
                         cr.save().ok();
 
                         let font_size = icon_size_px.min(height as f64 * 0.2);
-                        cr.select_font_face(icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                        cr.set_font_size(font_size);
+                        crate::ui::render_cache::apply_cached_font(cr, icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
                         let (text_w, text_h) = if let Ok(te) = cr.text_extents(&data.timer_display) {
                             (te.width(), te.height())
@@ -316,8 +315,7 @@ impl Displayer for ClockDigitalDisplayer {
                         cr.save().ok();
 
                         let icon_size = icon_size_px.min(height as f64 * 0.25);
-                        cr.select_font_face(icon_font, cairo::FontSlant::Normal, font_weight);
-                        cr.set_font_size(icon_size);
+                        crate::ui::render_cache::apply_cached_font(cr, icon_font, cairo::FontSlant::Normal, font_weight, icon_size);
 
                         // Build display text: icon + optional next alarm time
                         let display_text = if let Some(ref next_time) = data.next_alarm_time {
@@ -608,8 +606,7 @@ fn render_digital_clock(
 
     match config.style {
         DigitalStyle::Simple => {
-            cr.select_font_face(&config.time_font, time_slant, font_weight);
-            cr.set_font_size(config.time_size);
+            crate::ui::render_cache::apply_cached_font(cr, &config.time_font, time_slant, font_weight, config.time_size);
             cr.set_source_rgba(
                 config.time_color.r,
                 config.time_color.g,
@@ -644,8 +641,7 @@ fn render_digital_clock(
         } else {
             cairo::FontWeight::Normal
         };
-        cr.select_font_face(&config.date_font, date_slant, date_weight);
-        cr.set_font_size(config.date_size);
+        crate::ui::render_cache::apply_cached_font(cr, &config.date_font, date_slant, date_weight, config.date_size);
         cr.set_source_rgba(
             config.date_color.r,
             config.date_color.g,
@@ -680,8 +676,7 @@ fn render_digital_clock(
             config.timer_color
         };
 
-        cr.select_font_face(&config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        cr.set_font_size(config.date_size * 1.2);
+        crate::ui::render_cache::apply_cached_font(cr, &config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.date_size * 1.2);
         cr.set_source_rgba(timer_color.r, timer_color.g, timer_color.b, timer_color.a);
 
         let timer_text = format!("⏱ {}", data.timer_display);
@@ -703,8 +698,7 @@ fn render_digital_clock(
         };
 
         cr.set_source_rgba(alarm_color.r, alarm_color.g, alarm_color.b, alarm_color.a);
-        cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        cr.set_font_size(14.0);
+        crate::ui::render_cache::apply_cached_font(cr, "Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal, 14.0);
         cr.move_to(width - 25.0, 20.0);
         cr.show_text("🔔")?;
     }
@@ -731,8 +725,7 @@ fn draw_segment_text(
     } else {
         cairo::FontWeight::Normal
     };
-    cr.select_font_face(&config.time_font, time_slant, time_weight);
-    cr.set_font_size(config.time_size);
+    crate::ui::render_cache::apply_cached_font(cr, &config.time_font, time_slant, time_weight, config.time_size);
 
     let extents = cr.text_extents(text)?;
     let x = (width - extents.width()) / 2.0;

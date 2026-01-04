@@ -611,8 +611,7 @@ fn draw_numbers(
     } else {
         cairo::FontWeight::Normal
     };
-    cr.select_font_face(&font_family, slant, weight);
-    cr.set_font_size(font_size);
+    crate::ui::render_cache::apply_cached_font(cr, &font_family, slant, weight, font_size);
 
     let number_radius = radius * 0.75;
 
