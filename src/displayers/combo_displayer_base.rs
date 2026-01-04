@@ -1,0 +1,444 @@
+//! Shared base functionality for combo-style displayers
+//!
+//! This module provides common structures, traits, and helper functions
+//! for combo displayers (Cyberpunk, Material, Industrial, Fighter HUD,
+//! Retro Terminal, Synthwave, Art Deco, Art Nouveau, LCARS).
+//!
+//! Using this module eliminates ~400 lines of duplicate code per displayer.
+
+use anyhow::Result;
+use cairo::Context;
+use gtk4::{glib, prelude::*, DrawingArea};
+use serde_json::Value;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+use crate::core::{PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::displayers::combo_utils::{self, AnimatedValue};
+use crate::ui::arc_display::render_arc;
+use crate::ui::graph_display::DataPoint;
+use crate::ui::lcars_display::{
+    calculate_item_layouts_with_orientation, render_content_bar, render_content_core_bars,
+    render_content_graph, render_content_static, render_content_text, ContentDisplayType,
+    ContentItemConfig, SplitOrientation,
+};
+use crate::ui::speedometer_display::render_speedometer_with_theme;
+use crate::ui::theme::ComboThemeConfig;
+
+// Re-export the existing traits from combo_config_base for convenience
+pub use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+
+/// Parameters needed for drawing content items.
+/// This struct collects all the data needed by draw_content_items_generic.
+pub struct ContentDrawParams<'a> {
+    pub values: &'a HashMap<String, Value>,
+    pub bar_values: &'a HashMap<String, AnimatedValue>,
+    pub core_bar_values: &'a HashMap<String, Vec<AnimatedValue>>,
+    pub graph_history: &'a HashMap<String, VecDeque<DataPoint>>,
+    pub content_items: &'a HashMap<String, ContentItemConfig>,
+    pub group_item_orientations: &'a [SplitOrientation],
+    pub split_orientation: SplitOrientation,
+    pub theme: &'a ComboThemeConfig,
+}
+
+/// Draw content items in a given area.
+/// This is the shared implementation used by all combo displayers.
+///
+/// The `draw_item_frame` closure is called for each item to draw style-specific framing.
+/// Pass `|_, _, _, _, _| {}` if no item framing is needed.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_content_items_generic<F>(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    base_prefix: &str,
+    count: u32,
+    group_idx: usize,
+    params: &ContentDrawParams,
+    draw_item_frame: F,
+) -> Result<(), cairo::Error>
+where
+    F: Fn(&Context, f64, f64, f64, f64),
+{
+    if count == 0 || w <= 0.0 || h <= 0.0 {
+        return Ok(());
+    }
+
+    // Get item orientation for this group (default to split orientation)
+    let item_orientation = params
+        .group_item_orientations
+        .get(group_idx)
+        .copied()
+        .unwrap_or(params.split_orientation);
+
+    // Determine fixed sizes for items that need them
+    let mut fixed_sizes: HashMap<usize, f64> = HashMap::new();
+    for i in 0..count as usize {
+        let prefix = format!("{}{}", base_prefix, i + 1);
+        if let Some(cfg) = params.content_items.get(&prefix) {
+            if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
+                fixed_sizes.insert(i, cfg.item_height);
+            }
+        }
+    }
+
+    // Calculate layouts with orientation
+    let layouts =
+        calculate_item_layouts_with_orientation(x, y, w, h, count, 4.0, &fixed_sizes, item_orientation);
+
+    // Draw each item
+    for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
+        let prefix = format!("{}{}", base_prefix, i + 1);
+        let item_data = combo_utils::get_item_data(params.values, &prefix);
+        let slot_values = combo_utils::get_slot_values(params.values, &prefix);
+
+        // Get item config (or use default)
+        let item_config = params
+            .content_items
+            .get(&prefix)
+            .cloned()
+            .unwrap_or_default();
+
+        // Draw item frame using the provided closure
+        draw_item_frame(cr, item_x, item_y, item_w, item_h);
+
+        // Get animated percent
+        let bar_key = format!("{}_bar", prefix);
+        let animated_percent = params
+            .bar_values
+            .get(&bar_key)
+            .map(|av| av.current)
+            .unwrap_or_else(|| item_data.percent());
+
+        match item_config.display_as {
+            ContentDisplayType::Bar => {
+                render_content_bar(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    &item_config.bar_config,
+                    params.theme,
+                    &item_data,
+                    animated_percent,
+                    Some(&slot_values),
+                )?;
+            }
+            ContentDisplayType::Text => {
+                render_content_text(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    &item_config.bar_config,
+                    params.theme,
+                    &item_data,
+                    Some(&slot_values),
+                )?;
+            }
+            ContentDisplayType::Graph => {
+                let graph_key = format!("{}_graph", prefix);
+                let empty_history = VecDeque::new();
+                let history = params.graph_history.get(&graph_key).unwrap_or(&empty_history);
+
+                if let Err(e) = render_content_graph(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    &item_config.graph_config,
+                    history,
+                    &slot_values,
+                ) {
+                    log::warn!("Failed to render graph for {}: {}", prefix, e);
+                    render_content_text(
+                        cr,
+                        item_x,
+                        item_y,
+                        item_w,
+                        item_h,
+                        &item_config.bar_config,
+                        params.theme,
+                        &item_data,
+                        Some(&slot_values),
+                    )?;
+                }
+            }
+            ContentDisplayType::LevelBar => {
+                render_content_text(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    &item_config.bar_config,
+                    params.theme,
+                    &item_data,
+                    Some(&slot_values),
+                )?;
+            }
+            ContentDisplayType::CoreBars => {
+                let core_bars_config = &item_config.core_bars_config;
+                let core_values: Vec<f64> = if let Some(animated) = params.core_bar_values.get(&prefix) {
+                    animated.iter().map(|av| av.current).collect()
+                } else {
+                    let capacity =
+                        core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
+                    let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
+                    for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
+                        let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                        let value = params.values.get(&core_key).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        raw_values.push(value / 100.0);
+                    }
+
+                    if raw_values.is_empty() {
+                        for core_idx in 0..128 {
+                            let core_key = format!("{}_core{}_usage", prefix, core_idx);
+                            if let Some(v) = params.values.get(&core_key).and_then(|v| v.as_f64()) {
+                                raw_values.push(v / 100.0);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    raw_values
+                };
+
+                render_content_core_bars(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    core_bars_config,
+                    params.theme,
+                    &core_values,
+                    Some(&slot_values),
+                )?;
+            }
+            ContentDisplayType::Static => {
+                render_content_static(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    &item_config.static_config,
+                    params.theme,
+                    Some(&slot_values),
+                )?;
+            }
+            ContentDisplayType::Arc => {
+                cr.save()?;
+                cr.translate(item_x, item_y);
+                render_arc(
+                    cr,
+                    &item_config.arc_config,
+                    params.theme,
+                    animated_percent,
+                    &slot_values,
+                    item_w,
+                    item_h,
+                )?;
+                cr.restore()?;
+            }
+            ContentDisplayType::Speedometer => {
+                cr.save()?;
+                cr.translate(item_x, item_y);
+                if let Err(e) = render_speedometer_with_theme(
+                    cr,
+                    &item_config.speedometer_config,
+                    animated_percent,
+                    &slot_values,
+                    item_w,
+                    item_h,
+                    params.theme,
+                ) {
+                    log::warn!("Failed to render speedometer for {}: {}", prefix, e);
+                }
+                cr.restore()?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Shared display data for all combo displayers.
+/// This can be used by displayers that want to use a common data structure.
+#[derive(Clone)]
+pub struct ComboDisplayData {
+    pub values: HashMap<String, Value>,
+    pub bar_values: HashMap<String, AnimatedValue>,
+    pub core_bar_values: HashMap<String, Vec<AnimatedValue>>,
+    pub graph_history: HashMap<String, VecDeque<DataPoint>>,
+    pub graph_start_time: Instant,
+    pub last_update: Instant,
+    pub transform: PanelTransform,
+    pub dirty: bool,
+}
+
+impl Default for ComboDisplayData {
+    fn default() -> Self {
+        Self {
+            values: HashMap::new(),
+            bar_values: HashMap::new(),
+            core_bar_values: HashMap::new(),
+            graph_history: HashMap::new(),
+            graph_start_time: Instant::now(),
+            last_update: Instant::now(),
+            transform: PanelTransform::default(),
+            dirty: true,
+        }
+    }
+}
+
+/// Set up the animation timer for a combo displayer.
+/// Returns a function that performs the animation tick.
+/// Call this after creating the drawing area.
+pub fn setup_combo_animation_timer<F, G>(
+    drawing_area: &DrawingArea,
+    data: Arc<Mutex<ComboDisplayData>>,
+    animation_enabled: F,
+    animation_speed: G,
+) where
+    F: Fn(&ComboDisplayData) -> bool + 'static,
+    G: Fn(&ComboDisplayData) -> f64 + 'static,
+{
+    glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
+        let drawing_area_weak = drawing_area.downgrade();
+        move || {
+            let Some(drawing_area) = drawing_area_weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+
+            if !drawing_area.is_mapped() {
+                return glib::ControlFlow::Continue;
+            }
+
+            let needs_redraw = if let Ok(mut data) = data.try_lock() {
+                let mut redraw = data.dirty;
+                if data.dirty {
+                    data.dirty = false;
+                }
+
+                if animation_enabled(&data) {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                    data.last_update = now;
+
+                    let speed = animation_speed(&data);
+
+                    // Animate bar values
+                    for anim in data.bar_values.values_mut() {
+                        if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                            let delta = (anim.target - anim.current) * speed * elapsed;
+                            anim.current += delta;
+
+                            if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                anim.current = anim.target;
+                            }
+                            redraw = true;
+                        }
+                    }
+
+                    // Animate core bar values
+                    for core_anims in data.core_bar_values.values_mut() {
+                        for anim in core_anims.iter_mut() {
+                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                let delta = (anim.target - anim.current) * speed * elapsed;
+                                anim.current += delta;
+
+                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    anim.current = anim.target;
+                                }
+                                redraw = true;
+                            }
+                        }
+                    }
+                }
+
+                redraw
+            } else {
+                false
+            };
+
+            if needs_redraw {
+                drawing_area.queue_draw();
+            }
+
+            glib::ControlFlow::Continue
+        }
+    });
+}
+
+/// Handle update_data for a combo displayer.
+/// This updates values, animations, and graph history.
+pub fn handle_combo_update_data(
+    data: &mut ComboDisplayData,
+    input: &HashMap<String, Value>,
+    group_item_counts: &[usize],
+    content_items: &HashMap<String, ContentItemConfig>,
+    animation_enabled: bool,
+) {
+    let timestamp = data.graph_start_time.elapsed().as_secs_f64();
+
+    // Generate prefixes and filter values using optimized utils
+    let prefixes = combo_utils::generate_prefixes(group_item_counts);
+    data.values = combo_utils::filter_values_by_prefixes(input, &prefixes);
+
+    // Update each item
+    for prefix in &prefixes {
+        let item_data = combo_utils::get_item_data(input, prefix);
+        combo_utils::update_bar_animation(
+            &mut data.bar_values,
+            prefix,
+            item_data.percent(),
+            animation_enabled,
+        );
+
+        let default_config = ContentItemConfig::default();
+        let item_config = content_items.get(prefix).unwrap_or(&default_config);
+
+        match item_config.display_as {
+            ContentDisplayType::Graph => {
+                combo_utils::update_graph_history(
+                    &mut data.graph_history,
+                    prefix,
+                    item_data.numerical_value,
+                    timestamp,
+                    item_config.graph_config.max_data_points,
+                );
+            }
+            ContentDisplayType::CoreBars => {
+                combo_utils::update_core_bars(
+                    input,
+                    &mut data.core_bar_values,
+                    prefix,
+                    &item_config.core_bars_config,
+                    animation_enabled,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    // Clean up stale animation entries
+    combo_utils::cleanup_bar_values(&mut data.bar_values, &prefixes);
+    combo_utils::cleanup_core_bar_values(&mut data.core_bar_values, &prefixes);
+    combo_utils::cleanup_graph_history(&mut data.graph_history, &prefixes);
+
+    data.transform = PanelTransform::from_values(input);
+    data.dirty = true;
+}
+
+/// Helper to check if a combo displayer needs redraw.
+pub fn combo_needs_redraw(data: &Arc<Mutex<ComboDisplayData>>) -> bool {
+    data.try_lock().map(|data| data.dirty).unwrap_or(true)
+}

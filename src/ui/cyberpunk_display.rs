@@ -13,7 +13,7 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
-use crate::ui::combo_config_base::LayoutFrameConfig;
+use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
 
@@ -263,6 +263,24 @@ impl LayoutFrameConfig for CyberpunkFrameConfig {
 
     fn split_orientation(&self) -> SplitOrientation {
         self.split_orientation
+    }
+}
+
+impl ThemedFrameConfig for CyberpunkFrameConfig {
+    fn theme(&self) -> &ComboThemeConfig {
+        &self.theme
+    }
+
+    fn theme_mut(&mut self) -> &mut ComboThemeConfig {
+        &mut self.theme
+    }
+
+    fn content_items(&self) -> &HashMap<String, ContentItemConfig> {
+        &self.content_items
+    }
+
+    fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig> {
+        &mut self.content_items
     }
 }
 

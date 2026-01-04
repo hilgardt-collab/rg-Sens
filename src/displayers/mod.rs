@@ -87,6 +87,7 @@ mod synthwave;
 mod art_deco;
 mod art_nouveau;
 pub mod combo_utils;
+pub mod combo_displayer_base;
 // mod level_bar;
 
 pub use text::TextDisplayer;
