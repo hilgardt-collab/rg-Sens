@@ -37,6 +37,34 @@ fn filter_source_config_keys(config: &mut HashMap<String, serde_json::Value>) {
     }
 }
 
+/// Remove all event controllers from a widget to prevent memory leaks.
+/// This should be called before removing a widget from the container.
+fn cleanup_widget_controllers(widget: &impl IsA<Widget>) {
+    let widget_ref = widget.as_ref();
+
+    // Remove the action group to drop closure references
+    widget_ref.insert_action_group("panel", None::<&gtk4::gio::ActionGroup>);
+
+    // Get list of all controllers and remove them
+    let controllers = widget_ref.observe_controllers();
+    let n = controllers.n_items();
+
+    // Collect controllers first to avoid modifying while iterating
+    let mut to_remove = Vec::new();
+    for i in 0..n {
+        if let Some(obj) = controllers.item(i) {
+            if let Ok(controller) = obj.downcast::<gtk4::EventController>() {
+                to_remove.push(controller);
+            }
+        }
+    }
+
+    // Now remove all collected controllers
+    for controller in to_remove {
+        widget_ref.remove_controller(&controller);
+    }
+}
+
 /// Create the standard panel context menu model.
 /// Returns a Menu with Properties, Copy/Paste Style, Save to File, and Delete sections.
 fn create_panel_context_menu() -> gtk4::gio::Menu {
@@ -2951,6 +2979,11 @@ impl GridLayout {
 
             // Remove from states and container
             if let Some(state) = self.panel_states.borrow_mut().remove(panel_id) {
+                // Clean up event controllers and action groups to prevent memory leaks
+                cleanup_widget_controllers(&state.widget);
+                cleanup_widget_controllers(&state.frame);
+                cleanup_widget_controllers(&state.background_area);
+
                 self.container.remove(&state.frame);
 
                 // Clear occupied cells (only if panel participated in collision detection)
@@ -3949,6 +3982,11 @@ pub(crate) fn delete_selected_panels(
 
         // Remove from panel states and UI
         if let Some(state) = panel_states.borrow_mut().remove(panel_id) {
+            // Clean up event controllers and action groups to prevent memory leaks
+            cleanup_widget_controllers(&state.widget);
+            cleanup_widget_controllers(&state.frame);
+            cleanup_widget_controllers(&state.background_area);
+
             container.remove(&state.frame);
 
             // Clear occupied cells (only if panel participated in collision detection)
