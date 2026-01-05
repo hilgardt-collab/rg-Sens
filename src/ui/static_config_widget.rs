@@ -3,6 +3,7 @@
 use crate::core::FieldMetadata;
 use crate::ui::lcars_display::StaticDisplayConfig;
 use crate::ui::theme::ComboThemeConfig;
+use crate::ui::widget_builder::create_page_container;
 use crate::ui::BackgroundConfigWidget;
 use crate::ui::TextLineConfigWidget;
 use gtk4::prelude::*;
@@ -58,11 +59,7 @@ impl StaticConfigWidget {
         notebook.append_page(&background_page, Some(&Label::new(Some("Background"))));
 
         // === Tab 2: Text Overlay ===
-        let text_page = GtkBox::new(Orientation::Vertical, 12);
-        text_page.set_margin_start(12);
-        text_page.set_margin_end(12);
-        text_page.set_margin_top(12);
-        text_page.set_margin_bottom(12);
+        let text_page = create_page_container();
 
         let text_enabled_check = CheckButton::with_label("Show Text Overlay");
         text_enabled_check.set_active(false);

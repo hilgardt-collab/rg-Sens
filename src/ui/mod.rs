@@ -1,6 +1,7 @@
 //! UI components
 
 mod render_utils;
+pub mod widget_builder;
 mod main_window;
 mod grid_layout;
 mod grid_properties_dialog;

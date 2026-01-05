@@ -14,6 +14,7 @@ use crate::ui::render_utils::render_checkerboard;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::gradient_editor::GradientEditor;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
+use crate::ui::widget_builder::{create_page_container, create_labeled_row};
 
 /// Indicator configuration widget
 pub struct IndicatorConfigWidget {
@@ -107,16 +108,9 @@ impl IndicatorConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, DropDown, SpinButton, Scale, SpinButton) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Shape selection
-        let shape_box = GtkBox::new(Orientation::Horizontal, 12);
-        shape_box.append(&Label::new(Some("Shape:")));
-
         let shape_list = StringList::new(&[
             "Fill",
             "Circle",
@@ -128,36 +122,34 @@ impl IndicatorConfigWidget {
             "Octagon (8)",
         ]);
         let shape_dropdown = DropDown::new(Some(shape_list), gtk4::Expression::NONE);
-        shape_dropdown.set_hexpand(true);
-        shape_box.append(&shape_dropdown);
-        page.append(&shape_box);
+        let shape_row = create_labeled_row("Shape:", &shape_dropdown);
+        page.append(&shape_row);
 
         // Polygon sides (for custom polygon)
-        let sides_box = GtkBox::new(Orientation::Horizontal, 12);
-        sides_box.append(&Label::new(Some("Custom Sides:")));
         let polygon_sides_spin = SpinButton::with_range(3.0, 20.0, 1.0);
         polygon_sides_spin.set_value(6.0);
-        sides_box.append(&polygon_sides_spin);
-        page.append(&sides_box);
+        polygon_sides_spin.set_hexpand(false);
+        let sides_row = create_labeled_row("Custom Sides:", &polygon_sides_spin);
+        page.append(&sides_row);
 
         // Shape size
-        let size_box = GtkBox::new(Orientation::Horizontal, 12);
-        size_box.append(&Label::new(Some("Size:")));
         let shape_size_scale = Scale::with_range(Orientation::Horizontal, 0.1, 1.0, 0.05);
         shape_size_scale.set_value(0.8);
+        let size_box = GtkBox::new(Orientation::Horizontal, 12);
+        size_box.append(&Label::new(Some("Size:")));
         shape_size_scale.set_hexpand(true);
         size_box.append(&shape_size_scale);
-
         let size_label = Label::new(Some("80%"));
         size_box.append(&size_label);
         page.append(&size_box);
 
         // Rotation
-        let rotation_box = GtkBox::new(Orientation::Horizontal, 12);
-        rotation_box.append(&Label::new(Some("Rotation:")));
         let rotation_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         rotation_spin.set_value(0.0);
         rotation_spin.set_digits(0);
+        rotation_spin.set_hexpand(false);
+        let rotation_box = GtkBox::new(Orientation::Horizontal, 12);
+        rotation_box.append(&Label::new(Some("Rotation:")));
         rotation_box.append(&rotation_spin);
         rotation_box.append(&Label::new(Some("°")));
         page.append(&rotation_box);
@@ -238,11 +230,7 @@ impl IndicatorConfigWidget {
         use gtk4::Button;
         use crate::ui::clipboard::CLIPBOARD;
 
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Explanation label
         let label = Label::new(Some("Configure the color gradient for value mapping.\n0% position = minimum value, 100% = maximum value"));
@@ -319,28 +307,21 @@ impl IndicatorConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, SpinButton, ColorButtonWidget) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Border width
-        let border_box = GtkBox::new(Orientation::Horizontal, 12);
-        border_box.append(&Label::new(Some("Border Width:")));
         let border_width_spin = SpinButton::with_range(0.0, 20.0, 0.5);
         border_width_spin.set_value(0.0);
         border_width_spin.set_digits(1);
-        border_box.append(&border_width_spin);
-        page.append(&border_box);
+        border_width_spin.set_hexpand(false);
+        let border_row = create_labeled_row("Border Width:", &border_width_spin);
+        page.append(&border_row);
 
         // Border color
-        let border_color_box = GtkBox::new(Orientation::Horizontal, 12);
-        border_color_box.append(&Label::new(Some("Border Color:")));
         let border_color = config.borrow().border_color;
         let border_color_widget = ColorButtonWidget::new(border_color);
-        border_color_box.append(border_color_widget.widget());
-        page.append(&border_color_box);
+        let color_row = create_labeled_row("Border Color:", border_color_widget.widget());
+        page.append(&color_row);
 
         // Connect handlers
         let config_clone = config.clone();
@@ -373,11 +354,7 @@ impl IndicatorConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         available_fields: Vec<FieldMetadata>,
     ) -> (GtkBox, CheckButton, Option<TextLineConfigWidget>) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Show text overlay checkbox
         let show_text_check = CheckButton::with_label("Show Text Overlay");
