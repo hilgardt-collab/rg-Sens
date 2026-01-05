@@ -11,7 +11,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::clipboard::CLIPBOARD;
-use crate::ui::shared_font_dialog::shared_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme::{ColorSource, FontSource};
@@ -101,15 +100,7 @@ struct AnimationWidgets {
 
 /// Holds references to Theme tab widgets for updating when config changes
 struct ThemeWidgets {
-    theme_color1_widget: Rc<ColorButtonWidget>,
-    theme_color2_widget: Rc<ColorButtonWidget>,
-    theme_color3_widget: Rc<ColorButtonWidget>,
-    theme_color4_widget: Rc<ColorButtonWidget>,
-    theme_gradient_editor: Rc<crate::ui::gradient_editor::GradientEditor>,
-    font1_btn: Button,
-    font1_size_spin: SpinButton,
-    font2_btn: Button,
-    font2_size_spin: SpinButton,
+    common: combo_config_base::CommonThemeWidgets,
 }
 
 /// LCARS configuration widget
@@ -264,277 +255,29 @@ impl LcarsConfigWidget {
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
-        use crate::ui::gradient_editor::GradientEditor;
-
         let page = GtkBox::new(Orientation::Vertical, 8);
         Self::set_page_margins(&page);
 
-        // Theme Colors section
-        let colors_label = Label::new(Some("Theme Colors"));
-        colors_label.set_halign(gtk4::Align::Start);
-        colors_label.add_css_class("heading");
-        page.append(&colors_label);
+        // Create common theme widgets using the shared helper
+        let config_for_change = config.clone();
+        let on_change_for_redraw = on_change.clone();
+        let preview_for_redraw = preview.clone();
+        let refreshers_for_redraw = theme_ref_refreshers.clone();
 
-        // Create a 2x2 grid for theme colors with proper alignment
-        let colors_grid = gtk4::Grid::new();
-        colors_grid.set_row_spacing(6);
-        colors_grid.set_column_spacing(8);
-        colors_grid.set_margin_start(6);
-
-        // Color 1 (Primary) - row 0, col 0-1
-        let color1_label = Label::new(Some("C1 (Primary):"));
-        color1_label.set_halign(gtk4::Align::End);
-        color1_label.set_width_chars(14);
-        colors_grid.attach(&color1_label, 0, 0, 1, 1);
-        let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
-        colors_grid.attach(theme_color1_widget.widget(), 1, 0, 1, 1);
-
-        // Color 2 (Secondary) - row 0, col 2-3
-        let color2_label = Label::new(Some("C2 (Secondary):"));
-        color2_label.set_halign(gtk4::Align::End);
-        color2_label.set_width_chars(14);
-        color2_label.set_margin_start(12);
-        colors_grid.attach(&color2_label, 2, 0, 1, 1);
-        let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
-        colors_grid.attach(theme_color2_widget.widget(), 3, 0, 1, 1);
-
-        // Color 3 (Accent) - row 1, col 0-1
-        let color3_label = Label::new(Some("C3 (Accent):"));
-        color3_label.set_halign(gtk4::Align::End);
-        color3_label.set_width_chars(14);
-        colors_grid.attach(&color3_label, 0, 1, 1, 1);
-        let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
-        colors_grid.attach(theme_color3_widget.widget(), 1, 1, 1, 1);
-
-        // Color 4 (Highlight) - row 1, col 2-3
-        let color4_label = Label::new(Some("C4 (Highlight):"));
-        color4_label.set_halign(gtk4::Align::End);
-        color4_label.set_width_chars(14);
-        color4_label.set_margin_start(12);
-        colors_grid.attach(&color4_label, 2, 1, 1, 1);
-        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
-        colors_grid.attach(theme_color4_widget.widget(), 3, 1, 1, 1);
-
-        page.append(&colors_grid);
-
-        // Theme Gradient section
-        let gradient_label = Label::new(Some("Theme Gradient"));
-        gradient_label.set_halign(gtk4::Align::Start);
-        gradient_label.add_css_class("heading");
-        gradient_label.set_margin_top(12);
-        page.append(&gradient_label);
-
-        let theme_gradient_editor = Rc::new(GradientEditor::new());
-        // Set theme config so T1-T4 buttons show correct theme colors
-        theme_gradient_editor.set_theme_config(config.borrow().frame.theme.clone());
-        theme_gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
-        page.append(theme_gradient_editor.widget());
-
-        let config_grad = config.clone();
-        let on_change_grad = on_change.clone();
-        let preview_grad = preview.clone();
-        let refreshers_grad = theme_ref_refreshers.clone();
-        let gradient_editor_clone = theme_gradient_editor.clone();
-        theme_gradient_editor.set_on_change(move || {
-            config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient_source_config();
-            Self::queue_redraw(&preview_grad, &on_change_grad);
-            Self::refresh_theme_refs(&refreshers_grad);
-        });
-
-        // Connect color widget callbacks (after gradient editor is created so we can update it)
-        let config_c1 = config.clone();
-        let on_change_c1 = on_change.clone();
-        let preview_c1 = preview.clone();
-        let refreshers_c1 = theme_ref_refreshers.clone();
-        let gradient_editor_c1 = theme_gradient_editor.clone();
-        theme_color1_widget.set_on_change(move |color| {
-            {
-                let mut cfg = config_c1.borrow_mut();
-                cfg.frame.theme.color1 = color;
-                gradient_editor_c1.set_theme_config(cfg.frame.theme.clone());
-            }
-            Self::queue_redraw(&preview_c1, &on_change_c1);
-            Self::refresh_theme_refs(&refreshers_c1);
-        });
-
-        let config_c2 = config.clone();
-        let on_change_c2 = on_change.clone();
-        let preview_c2 = preview.clone();
-        let refreshers_c2 = theme_ref_refreshers.clone();
-        let gradient_editor_c2 = theme_gradient_editor.clone();
-        theme_color2_widget.set_on_change(move |color| {
-            {
-                let mut cfg = config_c2.borrow_mut();
-                cfg.frame.theme.color2 = color;
-                gradient_editor_c2.set_theme_config(cfg.frame.theme.clone());
-            }
-            Self::queue_redraw(&preview_c2, &on_change_c2);
-            Self::refresh_theme_refs(&refreshers_c2);
-        });
-
-        let config_c3 = config.clone();
-        let on_change_c3 = on_change.clone();
-        let preview_c3 = preview.clone();
-        let refreshers_c3 = theme_ref_refreshers.clone();
-        let gradient_editor_c3 = theme_gradient_editor.clone();
-        theme_color3_widget.set_on_change(move |color| {
-            {
-                let mut cfg = config_c3.borrow_mut();
-                cfg.frame.theme.color3 = color;
-                gradient_editor_c3.set_theme_config(cfg.frame.theme.clone());
-            }
-            Self::queue_redraw(&preview_c3, &on_change_c3);
-            Self::refresh_theme_refs(&refreshers_c3);
-        });
-
-        let config_c4 = config.clone();
-        let on_change_c4 = on_change.clone();
-        let preview_c4 = preview.clone();
-        let refreshers_c4 = theme_ref_refreshers.clone();
-        let gradient_editor_c4 = theme_gradient_editor.clone();
-        theme_color4_widget.set_on_change(move |color| {
-            {
-                let mut cfg = config_c4.borrow_mut();
-                cfg.frame.theme.color4 = color;
-                gradient_editor_c4.set_theme_config(cfg.frame.theme.clone());
-            }
-            Self::queue_redraw(&preview_c4, &on_change_c4);
-            Self::refresh_theme_refs(&refreshers_c4);
-        });
-
-        // Theme Fonts section
-        let fonts_label = Label::new(Some("Theme Fonts"));
-        fonts_label.set_halign(gtk4::Align::Start);
-        fonts_label.add_css_class("heading");
-        fonts_label.set_margin_top(12);
-        page.append(&fonts_label);
-
-        // Font 1
-        let font1_box = GtkBox::new(Orientation::Horizontal, 6);
-        font1_box.append(&Label::new(Some("Font 1:")));
-        let font1_btn = Button::with_label(&config.borrow().frame.theme.font1_family);
-        font1_btn.set_hexpand(true);
-        font1_box.append(&font1_btn);
-        font1_box.append(&Label::new(Some("Size:")));
-        let font1_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        font1_size_spin.set_value(config.borrow().frame.theme.font1_size);
-        font1_box.append(&font1_size_spin);
-        page.append(&font1_box);
-
-        // Font 1 button click handler
-        let config_f1 = config.clone();
-        let on_change_f1 = on_change.clone();
-        let preview_f1 = preview.clone();
-        let refreshers_f1 = theme_ref_refreshers.clone();
-        let font1_btn_clone = font1_btn.clone();
-        font1_btn.connect_clicked(move |button| {
-            let config_for_cb = config_f1.clone();
-            let on_change_for_cb = on_change_f1.clone();
-            let preview_for_cb = preview_f1.clone();
-            let refreshers_for_cb = refreshers_f1.clone();
-            let font_btn_for_cb = font1_btn_clone.clone();
-            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
-                let current_font = config_for_cb.borrow().frame.theme.font1_family.clone();
-                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            let family = font_desc.family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
-                            config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
-                            font_btn_for_cb.set_label(&family);
-                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                            Self::refresh_theme_refs(&refreshers_for_cb);
-                        }
-                    },
-                );
-            }
-        });
-
-        // Font 1 size spin handler
-        let config_f1s = config.clone();
-        let on_change_f1s = on_change.clone();
-        let preview_f1s = preview.clone();
-        let refreshers_f1s = theme_ref_refreshers.clone();
-        font1_size_spin.connect_value_changed(move |spin| {
-            config_f1s.borrow_mut().frame.theme.font1_size = spin.value();
-            Self::queue_redraw(&preview_f1s, &on_change_f1s);
-            Self::refresh_theme_refs(&refreshers_f1s);
-        });
-
-        // Font 2
-        let font2_box = GtkBox::new(Orientation::Horizontal, 6);
-        font2_box.append(&Label::new(Some("Font 2:")));
-        let font2_btn = Button::with_label(&config.borrow().frame.theme.font2_family);
-        font2_btn.set_hexpand(true);
-        font2_box.append(&font2_btn);
-        font2_box.append(&Label::new(Some("Size:")));
-        let font2_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        font2_size_spin.set_value(config.borrow().frame.theme.font2_size);
-        font2_box.append(&font2_size_spin);
-        page.append(&font2_box);
-
-        // Font 2 button click handler
-        let config_f2 = config.clone();
-        let on_change_f2 = on_change.clone();
-        let preview_f2 = preview.clone();
-        let refreshers_f2 = theme_ref_refreshers.clone();
-        let font2_btn_clone = font2_btn.clone();
-        font2_btn.connect_clicked(move |button| {
-            let config_for_cb = config_f2.clone();
-            let on_change_for_cb = on_change_f2.clone();
-            let preview_for_cb = preview_f2.clone();
-            let refreshers_for_cb = refreshers_f2.clone();
-            let font_btn_for_cb = font2_btn_clone.clone();
-            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
-                let current_font = config_for_cb.borrow().frame.theme.font2_family.clone();
-                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            let family = font_desc.family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
-                            config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
-                            font_btn_for_cb.set_label(&family);
-                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                            Self::refresh_theme_refs(&refreshers_for_cb);
-                        }
-                    },
-                );
-            }
-        });
-
-        // Font 2 size spin handler
-        let config_f2s = config.clone();
-        let on_change_f2s = on_change.clone();
-        let preview_f2s = preview.clone();
-        let refreshers_f2s = theme_ref_refreshers.clone();
-        font2_size_spin.connect_value_changed(move |spin| {
-            config_f2s.borrow_mut().frame.theme.font2_size = spin.value();
-            Self::queue_redraw(&preview_f2s, &on_change_f2s);
-            Self::refresh_theme_refs(&refreshers_f2s);
-        });
+        let common = combo_config_base::create_common_theme_widgets(
+            &page,
+            &config.borrow().frame.theme,
+            move |mutator| {
+                mutator(&mut config_for_change.borrow_mut().frame.theme);
+            },
+            move || {
+                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                Self::refresh_theme_refs(&refreshers_for_redraw);
+            },
+        );
 
         // Store widget refs
-        *theme_widgets_out.borrow_mut() = Some(ThemeWidgets {
-            theme_color1_widget,
-            theme_color2_widget,
-            theme_color3_widget,
-            theme_color4_widget,
-            theme_gradient_editor,
-            font1_btn,
-            font1_size_spin,
-            font2_btn,
-            font2_size_spin,
-        });
+        *theme_widgets_out.borrow_mut() = Some(ThemeWidgets { common });
 
         page
     }
@@ -2469,15 +2212,15 @@ impl LcarsConfigWidget {
 
         // Update theme widgets (fonts and colors)
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.theme_color1_widget.set_color(new_config.frame.theme.color1);
-            widgets.theme_color2_widget.set_color(new_config.frame.theme.color2);
-            widgets.theme_color3_widget.set_color(new_config.frame.theme.color3);
-            widgets.theme_color4_widget.set_color(new_config.frame.theme.color4);
-            widgets.theme_gradient_editor.set_gradient_source_config(&new_config.frame.theme.gradient);
-            widgets.font1_btn.set_label(&new_config.frame.theme.font1_family);
-            widgets.font1_size_spin.set_value(new_config.frame.theme.font1_size);
-            widgets.font2_btn.set_label(&new_config.frame.theme.font2_family);
-            widgets.font2_size_spin.set_value(new_config.frame.theme.font2_size);
+            widgets.common.color1_widget.set_color(new_config.frame.theme.color1);
+            widgets.common.color2_widget.set_color(new_config.frame.theme.color2);
+            widgets.common.color3_widget.set_color(new_config.frame.theme.color3);
+            widgets.common.color4_widget.set_color(new_config.frame.theme.color4);
+            widgets.common.gradient_editor.set_gradient_source_config(&new_config.frame.theme.gradient);
+            widgets.common.font1_btn.set_label(&new_config.frame.theme.font1_family);
+            widgets.common.font1_size_spin.set_value(new_config.frame.theme.font1_size);
+            widgets.common.font2_btn.set_label(&new_config.frame.theme.font2_family);
+            widgets.common.font2_size_spin.set_value(new_config.frame.theme.font2_size);
         }
 
         *self.config.borrow_mut() = new_config;
@@ -2518,7 +2261,7 @@ impl LcarsConfigWidget {
         self.config.borrow_mut().frame.theme = theme.clone();
         // Update gradient editor with new theme colors
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.theme_gradient_editor.set_theme_config(theme.clone());
+            widgets.common.gradient_editor.set_theme_config(theme.clone());
         }
         // Update header widgets with new theme colors and fonts
         if let Some(ref widgets) = *self.headers_widgets.borrow() {

@@ -10,8 +10,6 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::shared_font_dialog::shared_font_dialog;
-use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::synthwave_display::{
     render_synthwave_frame, SynthwaveFrameStyle,
     GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle, SynthwaveColorScheme,
@@ -19,7 +17,7 @@ use crate::ui::synthwave_display::{
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::{
     LazyBarConfigWidget, LazyGraphConfigWidget, LazyTextOverlayConfigWidget, CoreBarsConfigWidget,
-    BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget, GradientEditor,
+    BackgroundConfigWidget, ArcConfigWidget, SpeedometerConfigWidget,
     ThemeFontSelector,
 };
 use crate::ui::theme::FontSource;
@@ -29,21 +27,10 @@ use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
 /// Holds references to Theme tab widgets
 struct ThemeWidgets {
+    common: combo_config_base::CommonThemeWidgets,
     // Color scheme preset dropdown
     color_scheme_dropdown: DropDown,
-    // Theme colors
-    theme_color1_widget: Rc<ColorButtonWidget>,
-    theme_color2_widget: Rc<ColorButtonWidget>,
-    theme_color3_widget: Rc<ColorButtonWidget>,
-    theme_color4_widget: Rc<ColorButtonWidget>,
-    // Theme gradient
-    theme_gradient_editor: Rc<GradientEditor>,
-    // Theme fonts
-    font1_btn: Button,
-    font1_size_spin: SpinButton,
-    font2_btn: Button,
-    font2_size_spin: SpinButton,
-    // Neon glow (keep this for synthwave-specific effect)
+    // Neon glow (synthwave-specific effect)
     glow_scale: Scale,
 }
 
@@ -262,104 +249,35 @@ impl SynthwaveConfigWidget {
         scheme_box.append(&color_scheme_dropdown);
         page.append(&scheme_box);
 
-        // Theme Colors section - 2x2 grid layout
-        let colors_label = Label::new(Some("Theme Colors"));
-        colors_label.set_halign(gtk4::Align::Start);
-        colors_label.add_css_class("heading");
-        colors_label.set_margin_top(8);
-        page.append(&colors_label);
+        // Create an inner box for common theme widgets
+        let inner_box = GtkBox::new(Orientation::Vertical, 8);
+        page.append(&inner_box);
 
-        let colors_grid = gtk4::Grid::new();
-        colors_grid.set_row_spacing(6);
-        colors_grid.set_column_spacing(8);
-        colors_grid.set_margin_start(6);
+        // Create clones for callbacks
+        let config_for_change = config.clone();
+        let preview_for_redraw = preview.clone();
+        let on_change_for_redraw = on_change.clone();
+        let refreshers_for_redraw = theme_ref_refreshers.clone();
 
-        // Color 1 (Primary) - row 0, col 0-1
-        let color1_label = Label::new(Some("C1 (Primary):"));
-        color1_label.set_halign(gtk4::Align::End);
-        color1_label.set_width_chars(14);
-        colors_grid.attach(&color1_label, 0, 0, 1, 1);
-        let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
-        colors_grid.attach(theme_color1_widget.widget(), 1, 0, 1, 1);
-
-        // Color 2 (Secondary) - row 0, col 2-3
-        let color2_label = Label::new(Some("C2 (Secondary):"));
-        color2_label.set_halign(gtk4::Align::End);
-        color2_label.set_width_chars(14);
-        color2_label.set_margin_start(12);
-        colors_grid.attach(&color2_label, 2, 0, 1, 1);
-        let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
-        colors_grid.attach(theme_color2_widget.widget(), 3, 0, 1, 1);
-
-        // Color 3 (Accent) - row 1, col 0-1
-        let color3_label = Label::new(Some("C3 (Accent):"));
-        color3_label.set_halign(gtk4::Align::End);
-        color3_label.set_width_chars(14);
-        colors_grid.attach(&color3_label, 0, 1, 1, 1);
-        let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
-        colors_grid.attach(theme_color3_widget.widget(), 1, 1, 1, 1);
-
-        // Color 4 (Highlight) - row 1, col 2-3
-        let color4_label = Label::new(Some("C4 (Highlight):"));
-        color4_label.set_halign(gtk4::Align::End);
-        color4_label.set_width_chars(14);
-        color4_label.set_margin_start(12);
-        colors_grid.attach(&color4_label, 2, 1, 1, 1);
-        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
-        colors_grid.attach(theme_color4_widget.widget(), 3, 1, 1, 1);
-
-        page.append(&colors_grid);
-
-        // Connect color widget callbacks
-        let config_c1 = config.clone();
-        let on_change_c1 = on_change.clone();
-        let preview_c1 = preview.clone();
-        let refreshers_c1 = theme_ref_refreshers.clone();
-        theme_color1_widget.set_on_change(move |color| {
-            config_c1.borrow_mut().frame.theme.color1 = color;
-            Self::queue_redraw(&preview_c1, &on_change_c1);
-            Self::refresh_theme_refs(&refreshers_c1);
-        });
-
-        let config_c2 = config.clone();
-        let on_change_c2 = on_change.clone();
-        let preview_c2 = preview.clone();
-        let refreshers_c2 = theme_ref_refreshers.clone();
-        theme_color2_widget.set_on_change(move |color| {
-            config_c2.borrow_mut().frame.theme.color2 = color;
-            Self::queue_redraw(&preview_c2, &on_change_c2);
-            Self::refresh_theme_refs(&refreshers_c2);
-        });
-
-        let config_c3 = config.clone();
-        let on_change_c3 = on_change.clone();
-        let preview_c3 = preview.clone();
-        let refreshers_c3 = theme_ref_refreshers.clone();
-        theme_color3_widget.set_on_change(move |color| {
-            config_c3.borrow_mut().frame.theme.color3 = color;
-            Self::queue_redraw(&preview_c3, &on_change_c3);
-            Self::refresh_theme_refs(&refreshers_c3);
-        });
-
-        let config_c4 = config.clone();
-        let on_change_c4 = on_change.clone();
-        let preview_c4 = preview.clone();
-        let refreshers_c4 = theme_ref_refreshers.clone();
-        theme_color4_widget.set_on_change(move |color| {
-            config_c4.borrow_mut().frame.theme.color4 = color;
-            Self::queue_redraw(&preview_c4, &on_change_c4);
-            Self::refresh_theme_refs(&refreshers_c4);
-        });
+        // Use shared helper for common theme widgets
+        let common = combo_config_base::create_common_theme_widgets(
+            &inner_box,
+            &config.borrow().frame.theme,
+            move |mutator| {
+                mutator(&mut config_for_change.borrow_mut().frame.theme);
+            },
+            move || {
+                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                Self::refresh_theme_refs(&refreshers_for_redraw);
+            },
+        );
 
         // Connect color scheme dropdown - auto-populate theme colors when preset selected
         let config_scheme = config.clone();
         let on_change_scheme = on_change.clone();
         let preview_scheme = preview.clone();
         let refreshers_scheme = theme_ref_refreshers.clone();
-        let color1_widget_for_scheme = theme_color1_widget.clone();
-        let color2_widget_for_scheme = theme_color2_widget.clone();
-        let color3_widget_for_scheme = theme_color3_widget.clone();
-        let color4_widget_for_scheme = theme_color4_widget.clone();
+        let common_for_scheme = common.clone();
         color_scheme_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
@@ -407,156 +325,13 @@ impl SynthwaveConfigWidget {
             }
 
             // Update color widget displays
-            color1_widget_for_scheme.set_color(primary);
-            color2_widget_for_scheme.set_color(secondary);
-            color3_widget_for_scheme.set_color(accent);
-            color4_widget_for_scheme.set_color(bg_top);
+            common_for_scheme.color1_widget.set_color(primary);
+            common_for_scheme.color2_widget.set_color(secondary);
+            common_for_scheme.color3_widget.set_color(accent);
+            common_for_scheme.color4_widget.set_color(bg_top);
 
             Self::queue_redraw(&preview_scheme, &on_change_scheme);
             Self::refresh_theme_refs(&refreshers_scheme);
-        });
-
-        // Theme Gradient section
-        let gradient_label = Label::new(Some("Theme Gradient"));
-        gradient_label.set_halign(gtk4::Align::Start);
-        gradient_label.add_css_class("heading");
-        gradient_label.set_margin_top(12);
-        page.append(&gradient_label);
-
-        let theme_gradient_editor = Rc::new(GradientEditor::new());
-        theme_gradient_editor.set_gradient_source_config(&config.borrow().frame.theme.gradient);
-        page.append(theme_gradient_editor.widget());
-
-        let config_grad = config.clone();
-        let on_change_grad = on_change.clone();
-        let preview_grad = preview.clone();
-        let refreshers_grad = theme_ref_refreshers.clone();
-        let gradient_editor_clone = theme_gradient_editor.clone();
-        theme_gradient_editor.set_on_change(move || {
-            config_grad.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient_source_config();
-            Self::queue_redraw(&preview_grad, &on_change_grad);
-            Self::refresh_theme_refs(&refreshers_grad);
-        });
-
-        // Theme Fonts section
-        let fonts_label = Label::new(Some("Theme Fonts"));
-        fonts_label.set_halign(gtk4::Align::Start);
-        fonts_label.add_css_class("heading");
-        fonts_label.set_margin_top(12);
-        page.append(&fonts_label);
-
-        // Font 1
-        let font1_box = GtkBox::new(Orientation::Horizontal, 6);
-        font1_box.append(&Label::new(Some("Font 1:")));
-        let font1_btn = Button::with_label(&config.borrow().frame.theme.font1_family);
-        font1_btn.set_hexpand(true);
-        font1_box.append(&font1_btn);
-        font1_box.append(&Label::new(Some("Size:")));
-        let font1_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        font1_size_spin.set_value(config.borrow().frame.theme.font1_size);
-        font1_box.append(&font1_size_spin);
-        page.append(&font1_box);
-
-        // Font 1 button click handler
-        let config_f1 = config.clone();
-        let on_change_f1 = on_change.clone();
-        let preview_f1 = preview.clone();
-        let refreshers_f1 = theme_ref_refreshers.clone();
-        let font1_btn_clone = font1_btn.clone();
-        font1_btn.connect_clicked(move |button| {
-            let config_for_cb = config_f1.clone();
-            let on_change_for_cb = on_change_f1.clone();
-            let preview_for_cb = preview_f1.clone();
-            let refreshers_for_cb = refreshers_f1.clone();
-            let font_btn_for_cb = font1_btn_clone.clone();
-            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
-                let current_font = config_for_cb.borrow().frame.theme.font1_family.clone();
-                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            let family = font_desc.family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
-                            config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
-                            font_btn_for_cb.set_label(&family);
-                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                            Self::refresh_theme_refs(&refreshers_for_cb);
-                        }
-                    },
-                );
-            }
-        });
-
-        // Font 1 size spin handler
-        let config_f1s = config.clone();
-        let on_change_f1s = on_change.clone();
-        let preview_f1s = preview.clone();
-        let refreshers_f1s = theme_ref_refreshers.clone();
-        font1_size_spin.connect_value_changed(move |spin| {
-            config_f1s.borrow_mut().frame.theme.font1_size = spin.value();
-            Self::queue_redraw(&preview_f1s, &on_change_f1s);
-            Self::refresh_theme_refs(&refreshers_f1s);
-        });
-
-        // Font 2
-        let font2_box = GtkBox::new(Orientation::Horizontal, 6);
-        font2_box.append(&Label::new(Some("Font 2:")));
-        let font2_btn = Button::with_label(&config.borrow().frame.theme.font2_family);
-        font2_btn.set_hexpand(true);
-        font2_box.append(&font2_btn);
-        font2_box.append(&Label::new(Some("Size:")));
-        let font2_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
-        font2_size_spin.set_value(config.borrow().frame.theme.font2_size);
-        font2_box.append(&font2_size_spin);
-        page.append(&font2_box);
-
-        // Font 2 button click handler
-        let config_f2 = config.clone();
-        let on_change_f2 = on_change.clone();
-        let preview_f2 = preview.clone();
-        let refreshers_f2 = theme_ref_refreshers.clone();
-        let font2_btn_clone = font2_btn.clone();
-        font2_btn.connect_clicked(move |button| {
-            let config_for_cb = config_f2.clone();
-            let on_change_for_cb = on_change_f2.clone();
-            let preview_for_cb = preview_f2.clone();
-            let refreshers_for_cb = refreshers_f2.clone();
-            let font_btn_for_cb = font2_btn_clone.clone();
-            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
-                let current_font = config_for_cb.borrow().frame.theme.font2_family.clone();
-                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            let family = font_desc.family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
-                            config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
-                            font_btn_for_cb.set_label(&family);
-                            Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                            Self::refresh_theme_refs(&refreshers_for_cb);
-                        }
-                    },
-                );
-            }
-        });
-
-        // Font 2 size spin handler
-        let config_f2s = config.clone();
-        let on_change_f2s = on_change.clone();
-        let preview_f2s = preview.clone();
-        let refreshers_f2s = theme_ref_refreshers.clone();
-        font2_size_spin.connect_value_changed(move |spin| {
-            config_f2s.borrow_mut().frame.theme.font2_size = spin.value();
-            Self::queue_redraw(&preview_f2s, &on_change_f2s);
-            Self::refresh_theme_refs(&refreshers_f2s);
         });
 
         // Effects section (Neon glow - Synthwave-specific)
@@ -585,16 +360,8 @@ impl SynthwaveConfigWidget {
 
         // Store widget refs
         *theme_widgets_out.borrow_mut() = Some(ThemeWidgets {
+            common,
             color_scheme_dropdown,
-            theme_color1_widget,
-            theme_color2_widget,
-            theme_color3_widget,
-            theme_color4_widget,
-            theme_gradient_editor,
-            font1_btn,
-            font1_size_spin,
-            font2_btn,
-            font2_size_spin,
             glow_scale,
         });
 
@@ -2162,15 +1929,15 @@ impl SynthwaveConfigWidget {
         // Update UI widgets
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
             widgets.color_scheme_dropdown.set_selected(color_scheme_idx);
-            widgets.theme_color1_widget.set_color(theme_color1);
-            widgets.theme_color2_widget.set_color(theme_color2);
-            widgets.theme_color3_widget.set_color(theme_color3);
-            widgets.theme_color4_widget.set_color(theme_color4);
-            widgets.theme_gradient_editor.set_gradient_source_config(&theme_gradient);
-            widgets.font1_btn.set_label(&theme_font1_family);
-            widgets.font1_size_spin.set_value(theme_font1_size);
-            widgets.font2_btn.set_label(&theme_font2_family);
-            widgets.font2_size_spin.set_value(theme_font2_size);
+            widgets.common.color1_widget.set_color(theme_color1);
+            widgets.common.color2_widget.set_color(theme_color2);
+            widgets.common.color3_widget.set_color(theme_color3);
+            widgets.common.color4_widget.set_color(theme_color4);
+            widgets.common.gradient_editor.set_gradient_source_config(&theme_gradient);
+            widgets.common.font1_btn.set_label(&theme_font1_family);
+            widgets.common.font1_size_spin.set_value(theme_font1_size);
+            widgets.common.font2_btn.set_label(&theme_font2_family);
+            widgets.common.font2_size_spin.set_value(theme_font2_size);
             widgets.glow_scale.set_value(neon_glow);
         }
 

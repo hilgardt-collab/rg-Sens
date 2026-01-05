@@ -5,10 +5,39 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DropDown, Label, Orientation, SpinButton, StringList, Widget,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Label, Orientation, SpinButton, StringList,
+    Widget,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
+
+/// Type alias for the common on_change callback pattern
+pub type OnChangeCallback = Rc<RefCell<Option<Box<dyn Fn()>>>>;
+
+/// Queue preview redraw and invoke change callback.
+///
+/// This is the standard pattern used after config changes in widgets with a preview:
+/// ```ignore
+/// preview.queue_draw();
+/// if let Some(cb) = on_change.borrow().as_ref() {
+///     cb();
+/// }
+/// ```
+pub fn queue_redraw(preview: &DrawingArea, on_change: &OnChangeCallback) {
+    preview.queue_draw();
+    if let Some(cb) = on_change.borrow().as_ref() {
+        cb();
+    }
+}
+
+/// Invoke change callback without preview redraw.
+///
+/// Use this for config widgets that don't have a preview (e.g., data source configs).
+pub fn notify_change(on_change: &OnChangeCallback) {
+    if let Some(cb) = on_change.borrow().as_ref() {
+        cb();
+    }
+}
 
 /// Default margin used for page containers
 pub const DEFAULT_MARGIN: i32 = 12;

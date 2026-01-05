@@ -18,10 +18,14 @@ use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{ComboThemeConfig, FontSource};
 use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
+
+// Re-export for convenience - combo config widgets can import from here
+pub use crate::ui::widget_builder::{queue_redraw, notify_change, OnChangeCallback};
 use crate::ui::{
-    ArcConfigWidget, CoreBarsConfigWidget, GradientEditor, LazyBarConfigWidget,
+    ArcConfigWidget, ColorButtonWidget, CoreBarsConfigWidget, GradientEditor, LazyBarConfigWidget,
     LazyGraphConfigWidget, LazyTextOverlayConfigWidget, SpeedometerConfigWidget, StaticConfigWidget,
 };
+use crate::ui::shared_font_dialog::shared_font_dialog;
 
 /// Trait for combo panel frame configurations that support theming
 pub trait ThemedFrameConfig {
@@ -103,6 +107,25 @@ pub struct CommonAnimationWidgets {
     pub speed_spin: SpinButton,
 }
 
+/// Common theme widgets shared across all combo panel configs.
+///
+/// This struct contains the 9 widgets that appear in every combo panel's theme tab:
+/// - 4 color button widgets (C1-C4)
+/// - 1 gradient editor
+/// - 2 font buttons + 2 font size spinners
+#[derive(Clone)]
+pub struct CommonThemeWidgets {
+    pub color1_widget: Rc<ColorButtonWidget>,
+    pub color2_widget: Rc<ColorButtonWidget>,
+    pub color3_widget: Rc<ColorButtonWidget>,
+    pub color4_widget: Rc<ColorButtonWidget>,
+    pub gradient_editor: Rc<GradientEditor>,
+    pub font1_btn: Button,
+    pub font1_size_spin: SpinButton,
+    pub font2_btn: Button,
+    pub font2_size_spin: SpinButton,
+}
+
 /// Set standard margins on a page box
 pub fn set_page_margins(page: &GtkBox) {
     page.set_margin_start(DEFAULT_MARGIN);
@@ -111,18 +134,304 @@ pub fn set_page_margins(page: &GtkBox) {
     page.set_margin_bottom(DEFAULT_MARGIN);
 }
 
-/// Queue preview redraw and invoke change callback
-pub fn queue_redraw(preview: &DrawingArea, on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>) {
-    preview.queue_draw();
-    if let Some(cb) = on_change.borrow().as_ref() {
-        cb();
-    }
-}
 
 /// Invoke all theme reference refreshers
 pub fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
     for refresher in refreshers.borrow().iter() {
         refresher();
+    }
+}
+
+/// Creates the common theme widgets (colors, gradient, fonts) and appends them to the page.
+///
+/// This function creates and connects:
+/// - 4 color button widgets in a 2x2 grid
+/// - 1 gradient editor
+/// - 2 font buttons with size spinners
+///
+/// # Arguments
+/// * `page` - The container to append widgets to
+/// * `theme` - The current theme config to initialize widgets from
+/// * `on_theme_change` - Callback invoked when any theme property changes, receives the updated theme
+/// * `on_redraw` - Callback to trigger preview redraw and refresh theme refs
+///
+/// # Returns
+/// A `CommonThemeWidgets` struct containing all created widgets for later reference.
+pub fn create_common_theme_widgets<F, R>(
+    page: &GtkBox,
+    theme: &ComboThemeConfig,
+    on_theme_change: F,
+    on_redraw: R,
+) -> CommonThemeWidgets
+where
+    F: Fn(Box<dyn FnOnce(&mut ComboThemeConfig)>) + Clone + 'static,
+    R: Fn() + Clone + 'static,
+{
+    // Store current colors for gradient editor sync
+    let current_colors = Rc::new(RefCell::new((theme.color1, theme.color2, theme.color3, theme.color4)));
+
+    // Theme Colors section - 2x2 grid layout
+    let colors_label = Label::new(Some("Theme Colors"));
+    colors_label.set_halign(gtk4::Align::Start);
+    colors_label.add_css_class("heading");
+    colors_label.set_margin_top(8);
+    page.append(&colors_label);
+
+    let colors_grid = gtk4::Grid::new();
+    colors_grid.set_row_spacing(6);
+    colors_grid.set_column_spacing(8);
+    colors_grid.set_margin_start(6);
+
+    // Color 1 (Primary) - row 0, col 0-1
+    let color1_label = Label::new(Some("C1 (Primary):"));
+    color1_label.set_halign(gtk4::Align::End);
+    color1_label.set_width_chars(14);
+    colors_grid.attach(&color1_label, 0, 0, 1, 1);
+    let color1_widget = Rc::new(ColorButtonWidget::new(theme.color1));
+    colors_grid.attach(color1_widget.widget(), 1, 0, 1, 1);
+
+    // Color 2 (Secondary) - row 0, col 2-3
+    let color2_label = Label::new(Some("C2 (Secondary):"));
+    color2_label.set_halign(gtk4::Align::End);
+    color2_label.set_width_chars(14);
+    color2_label.set_margin_start(12);
+    colors_grid.attach(&color2_label, 2, 0, 1, 1);
+    let color2_widget = Rc::new(ColorButtonWidget::new(theme.color2));
+    colors_grid.attach(color2_widget.widget(), 3, 0, 1, 1);
+
+    // Color 3 (Accent) - row 1, col 0-1
+    let color3_label = Label::new(Some("C3 (Accent):"));
+    color3_label.set_halign(gtk4::Align::End);
+    color3_label.set_width_chars(14);
+    colors_grid.attach(&color3_label, 0, 1, 1, 1);
+    let color3_widget = Rc::new(ColorButtonWidget::new(theme.color3));
+    colors_grid.attach(color3_widget.widget(), 1, 1, 1, 1);
+
+    // Color 4 (Highlight) - row 1, col 2-3
+    let color4_label = Label::new(Some("C4 (Highlight):"));
+    color4_label.set_halign(gtk4::Align::End);
+    color4_label.set_width_chars(14);
+    color4_label.set_margin_start(12);
+    colors_grid.attach(&color4_label, 2, 1, 1, 1);
+    let color4_widget = Rc::new(ColorButtonWidget::new(theme.color4));
+    colors_grid.attach(color4_widget.widget(), 3, 1, 1, 1);
+
+    page.append(&colors_grid);
+
+    // Theme Gradient section (create before color callbacks so we can reference it)
+    let gradient_label = Label::new(Some("Theme Gradient"));
+    gradient_label.set_halign(gtk4::Align::Start);
+    gradient_label.add_css_class("heading");
+    gradient_label.set_margin_top(12);
+    page.append(&gradient_label);
+
+    let gradient_editor = Rc::new(GradientEditor::new());
+    gradient_editor.set_theme_config(theme.clone());
+    gradient_editor.set_gradient_source_config(&theme.gradient);
+    page.append(gradient_editor.widget());
+
+    // Helper to sync gradient editor's theme colors
+    fn sync_gradient_theme(
+        gradient_editor: &GradientEditor,
+        colors: &Rc<RefCell<(crate::ui::Color, crate::ui::Color, crate::ui::Color, crate::ui::Color)>>,
+    ) {
+        let (c1, c2, c3, c4) = *colors.borrow();
+        let mut theme = ComboThemeConfig::default();
+        theme.color1 = c1;
+        theme.color2 = c2;
+        theme.color3 = c3;
+        theme.color4 = c4;
+        gradient_editor.set_theme_config(theme);
+    }
+
+    // Connect color widget callbacks
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let colors = current_colors.clone();
+        let ge = gradient_editor.clone();
+        color1_widget.set_on_change(move |color| {
+            colors.borrow_mut().0 = color;
+            on_theme_change(Box::new(move |t| t.color1 = color));
+            sync_gradient_theme(&ge, &colors);
+            on_redraw();
+        });
+    }
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let colors = current_colors.clone();
+        let ge = gradient_editor.clone();
+        color2_widget.set_on_change(move |color| {
+            colors.borrow_mut().1 = color;
+            on_theme_change(Box::new(move |t| t.color2 = color));
+            sync_gradient_theme(&ge, &colors);
+            on_redraw();
+        });
+    }
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let colors = current_colors.clone();
+        let ge = gradient_editor.clone();
+        color3_widget.set_on_change(move |color| {
+            colors.borrow_mut().2 = color;
+            on_theme_change(Box::new(move |t| t.color3 = color));
+            sync_gradient_theme(&ge, &colors);
+            on_redraw();
+        });
+    }
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let colors = current_colors.clone();
+        let ge = gradient_editor.clone();
+        color4_widget.set_on_change(move |color| {
+            colors.borrow_mut().3 = color;
+            on_theme_change(Box::new(move |t| t.color4 = color));
+            sync_gradient_theme(&ge, &colors);
+            on_redraw();
+        });
+    }
+
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let gradient_editor_clone = gradient_editor.clone();
+        gradient_editor.set_on_change(move || {
+            let gradient = gradient_editor_clone.get_gradient_source_config();
+            on_theme_change(Box::new(move |t| t.gradient = gradient));
+            on_redraw();
+        });
+    }
+
+    // Theme Fonts section
+    let fonts_label = Label::new(Some("Theme Fonts"));
+    fonts_label.set_halign(gtk4::Align::Start);
+    fonts_label.add_css_class("heading");
+    fonts_label.set_margin_top(12);
+    page.append(&fonts_label);
+
+    // Font 1
+    let font1_box = GtkBox::new(Orientation::Horizontal, 6);
+    font1_box.append(&Label::new(Some("Font 1:")));
+    let font1_btn = Button::with_label(&theme.font1_family);
+    font1_btn.set_hexpand(true);
+    font1_box.append(&font1_btn);
+    font1_box.append(&Label::new(Some("Size:")));
+    let font1_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
+    font1_size_spin.set_value(theme.font1_size);
+    font1_box.append(&font1_size_spin);
+    page.append(&font1_box);
+
+    // Font 1 button click handler
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let font1_btn_clone = font1_btn.clone();
+        font1_btn.connect_clicked(move |button| {
+            let on_theme_change = on_theme_change.clone();
+            let on_redraw = on_redraw.clone();
+            let font_btn = font1_btn_clone.clone();
+            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                let current_font = font_btn.label().map(|s| s.to_string()).unwrap_or_default();
+                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+                shared_font_dialog().choose_font(
+                    Some(&window),
+                    Some(&font_desc),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            let family = font_desc.family()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "sans-serif".to_string());
+                            font_btn.set_label(&family);
+                            let family_clone = family.clone();
+                            on_theme_change(Box::new(move |t| t.font1_family = family_clone));
+                            on_redraw();
+                        }
+                    },
+                );
+            }
+        });
+    }
+
+    // Font 1 size spin handler
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        font1_size_spin.connect_value_changed(move |spin| {
+            let size = spin.value();
+            on_theme_change(Box::new(move |t| t.font1_size = size));
+            on_redraw();
+        });
+    }
+
+    // Font 2
+    let font2_box = GtkBox::new(Orientation::Horizontal, 6);
+    font2_box.append(&Label::new(Some("Font 2:")));
+    let font2_btn = Button::with_label(&theme.font2_family);
+    font2_btn.set_hexpand(true);
+    font2_box.append(&font2_btn);
+    font2_box.append(&Label::new(Some("Size:")));
+    let font2_size_spin = SpinButton::with_range(6.0, 72.0, 1.0);
+    font2_size_spin.set_value(theme.font2_size);
+    font2_box.append(&font2_size_spin);
+    page.append(&font2_box);
+
+    // Font 2 button click handler
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        let font2_btn_clone = font2_btn.clone();
+        font2_btn.connect_clicked(move |button| {
+            let on_theme_change = on_theme_change.clone();
+            let on_redraw = on_redraw.clone();
+            let font_btn = font2_btn_clone.clone();
+            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                let current_font = font_btn.label().map(|s| s.to_string()).unwrap_or_default();
+                let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
+                shared_font_dialog().choose_font(
+                    Some(&window),
+                    Some(&font_desc),
+                    gtk4::gio::Cancellable::NONE,
+                    move |result| {
+                        if let Ok(font_desc) = result {
+                            let family = font_desc.family()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "sans-serif".to_string());
+                            font_btn.set_label(&family);
+                            let family_clone = family.clone();
+                            on_theme_change(Box::new(move |t| t.font2_family = family_clone));
+                            on_redraw();
+                        }
+                    },
+                );
+            }
+        });
+    }
+
+    // Font 2 size spin handler
+    {
+        let on_theme_change = on_theme_change.clone();
+        let on_redraw = on_redraw.clone();
+        font2_size_spin.connect_value_changed(move |spin| {
+            let size = spin.value();
+            on_theme_change(Box::new(move |t| t.font2_size = size));
+            on_redraw();
+        });
+    }
+
+    CommonThemeWidgets {
+        color1_widget,
+        color2_widget,
+        color3_widget,
+        color4_widget,
+        gradient_editor,
+        font1_btn,
+        font1_size_spin,
+        font2_btn,
+        font2_size_spin,
     }
 }
 
