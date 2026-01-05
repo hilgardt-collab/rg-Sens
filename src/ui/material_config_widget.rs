@@ -22,6 +22,7 @@ use crate::ui::combo_config_base;
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 use crate::ui::theme_font_selector::ThemeFontSelector;
 use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::widget_builder::{ConfigWidgetBuilder, ConfigWidgetBuilderColorExt, ConfigWidgetBuilderThemeSelectorExt, create_section_header};
 
 /// Holds references to Theme tab widgets (combo theme colors, fonts, gradient, and appearance)
 #[allow(dead_code)]
@@ -886,128 +887,69 @@ impl MaterialConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Elevation
-        let elevation_box = GtkBox::new(Orientation::Horizontal, 6);
-        elevation_box.append(&Label::new(Some("Card Elevation:")));
-        let elevation_list = StringList::new(&["Flat", "Low", "Medium", "High"]);
-        let elevation_dropdown = DropDown::new(Some(elevation_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
+        // Elevation dropdown
         let elevation_idx = match config.borrow().frame.elevation {
             CardElevation::Flat => 0,
             CardElevation::Low => 1,
             CardElevation::Medium => 2,
             CardElevation::High => 3,
         };
-        elevation_dropdown.set_selected(elevation_idx);
-        elevation_dropdown.set_hexpand(true);
-        elevation_box.append(&elevation_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        elevation_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.elevation = match selected {
-                0 => CardElevation::Flat,
-                1 => CardElevation::Low,
-                2 => CardElevation::Medium,
-                _ => CardElevation::High,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&elevation_box);
+        let elevation_dropdown = builder.dropdown_row(
+            &page,
+            "Card Elevation:",
+            &["Flat", "Low", "Medium", "High"],
+            elevation_idx,
+            |cfg, idx| {
+                cfg.frame.elevation = match idx {
+                    0 => CardElevation::Flat,
+                    1 => CardElevation::Low,
+                    2 => CardElevation::Medium,
+                    _ => CardElevation::High,
+                };
+            },
+        );
 
         // Corner radius
-        let radius_box = GtkBox::new(Orientation::Horizontal, 6);
-        radius_box.append(&Label::new(Some("Corner Radius:")));
-        let corner_radius_spin = SpinButton::with_range(0.0, 32.0, 2.0);
-        corner_radius_spin.set_value(config.borrow().frame.corner_radius);
-        corner_radius_spin.set_hexpand(true);
-        radius_box.append(&corner_radius_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_radius_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.corner_radius = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&radius_box);
+        let corner_radius_spin = builder.spin_row(
+            &page, "Corner Radius:", 0.0, 32.0, 2.0,
+            config.borrow().frame.corner_radius,
+            |cfg, val| cfg.frame.corner_radius = val,
+        );
 
         // Card padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Card Padding:")));
-        let card_padding_spin = SpinButton::with_range(4.0, 48.0, 2.0);
-        card_padding_spin.set_value(config.borrow().frame.card_padding);
-        card_padding_spin.set_hexpand(true);
-        padding_box.append(&card_padding_spin);
+        let card_padding_spin = builder.spin_row(
+            &page, "Card Padding:", 4.0, 48.0, 2.0,
+            config.borrow().frame.card_padding,
+            |cfg, val| cfg.frame.card_padding = val,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        card_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.card_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_box);
-
-        // Shadow section
-        let shadow_label = Label::new(Some("Shadow Settings"));
-        shadow_label.set_halign(gtk4::Align::Start);
-        shadow_label.add_css_class("heading");
+        // Shadow section header
+        let shadow_label = create_section_header("Shadow Settings");
         shadow_label.set_margin_top(12);
         page.append(&shadow_label);
 
         // Shadow blur
-        let blur_box = GtkBox::new(Orientation::Horizontal, 6);
-        blur_box.append(&Label::new(Some("Shadow Blur:")));
-        let shadow_blur_spin = SpinButton::with_range(0.0, 32.0, 2.0);
-        shadow_blur_spin.set_value(config.borrow().frame.shadow_blur);
-        shadow_blur_spin.set_hexpand(true);
-        blur_box.append(&shadow_blur_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        shadow_blur_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.shadow_blur = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&blur_box);
+        let shadow_blur_spin = builder.spin_row(
+            &page, "Shadow Blur:", 0.0, 32.0, 2.0,
+            config.borrow().frame.shadow_blur,
+            |cfg, val| cfg.frame.shadow_blur = val,
+        );
 
         // Shadow offset
-        let offset_box = GtkBox::new(Orientation::Horizontal, 6);
-        offset_box.append(&Label::new(Some("Shadow Offset Y:")));
-        let shadow_offset_spin = SpinButton::with_range(0.0, 16.0, 1.0);
-        shadow_offset_spin.set_value(config.borrow().frame.shadow_offset_y);
-        shadow_offset_spin.set_hexpand(true);
-        offset_box.append(&shadow_offset_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        shadow_offset_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.shadow_offset_y = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&offset_box);
+        let shadow_offset_spin = builder.spin_row(
+            &page, "Shadow Offset Y:", 0.0, 16.0, 1.0,
+            config.borrow().frame.shadow_offset_y,
+            |cfg, val| cfg.frame.shadow_offset_y = val,
+        );
 
         // Shadow color
-        let shadow_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        shadow_color_box.append(&Label::new(Some("Shadow Color:")));
-        let shadow_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.shadow_color));
-        shadow_color_box.append(shadow_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        shadow_color_widget.set_on_change(move |color| {
-            config_clone.borrow_mut().frame.shadow_color = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&shadow_color_box);
+        let shadow_color_widget = builder.color_row(
+            &page, "Shadow Color:",
+            config.borrow().frame.shadow_color,
+            |cfg, color| cfg.frame.shadow_color = color,
+        );
 
         // Store widget refs
         *card_widgets_out.borrow_mut() = Some(CardWidgets {
@@ -1032,165 +974,98 @@ impl MaterialConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Show header
-        let show_header_check = CheckButton::with_label("Show Header");
-        show_header_check.set_active(config.borrow().frame.show_header);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_header_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_header = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_header_check);
+        // Show header checkbox
+        let show_header_check = builder.check_button(
+            &page, "Show Header",
+            config.borrow().frame.show_header,
+            |cfg, active| cfg.frame.show_header = active,
+        );
 
-        // Header text
-        let text_box = GtkBox::new(Orientation::Horizontal, 6);
-        text_box.append(&Label::new(Some("Header Text:")));
-        let header_text_entry = Entry::new();
-        header_text_entry.set_text(&config.borrow().frame.header_text);
-        header_text_entry.set_hexpand(true);
-        text_box.append(&header_text_entry);
+        // Header text entry
+        let header_text_entry = builder.entry_row(
+            &page, "Header Text:",
+            &config.borrow().frame.header_text,
+            |cfg, text| cfg.frame.header_text = text,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_text_entry.connect_changed(move |entry| {
-            config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&text_box);
-
-        // Header style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Style:")));
-        let style_list = StringList::new(&["Color Bar", "Filled", "Text Only", "None"]);
-        let header_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
+        // Header style dropdown
         let style_idx = match config.borrow().frame.header_style {
             HeaderStyle::ColorBar => 0,
             HeaderStyle::Filled => 1,
             HeaderStyle::TextOnly => 2,
             HeaderStyle::None => 3,
         };
-        header_style_dropdown.set_selected(style_idx);
-        header_style_dropdown.set_hexpand(true);
-        style_box.append(&header_style_dropdown);
+        let header_style_dropdown = builder.dropdown_row(
+            &page, "Style:",
+            &["Color Bar", "Filled", "Text Only", "None"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.header_style = match idx {
+                    0 => HeaderStyle::ColorBar,
+                    1 => HeaderStyle::Filled,
+                    2 => HeaderStyle::TextOnly,
+                    _ => HeaderStyle::None,
+                };
+            },
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.header_style = match selected {
-                0 => HeaderStyle::ColorBar,
-                1 => HeaderStyle::Filled,
-                2 => HeaderStyle::TextOnly,
-                _ => HeaderStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
-
-        // Header alignment
-        let align_box = GtkBox::new(Orientation::Horizontal, 6);
-        align_box.append(&Label::new(Some("Alignment:")));
-        let align_list = StringList::new(&["Left", "Center", "Right"]);
-        let header_alignment_dropdown = DropDown::new(Some(align_list), None::<gtk4::Expression>);
+        // Header alignment dropdown
         let align_idx = match config.borrow().frame.header_alignment {
             HeaderAlignment::Left => 0,
             HeaderAlignment::Center => 1,
             HeaderAlignment::Right => 2,
         };
-        header_alignment_dropdown.set_selected(align_idx);
-        header_alignment_dropdown.set_hexpand(true);
-        align_box.append(&header_alignment_dropdown);
+        let header_alignment_dropdown = builder.dropdown_row(
+            &page, "Alignment:",
+            &["Left", "Center", "Right"],
+            align_idx,
+            |cfg, idx| {
+                cfg.frame.header_alignment = match idx {
+                    0 => HeaderAlignment::Left,
+                    1 => HeaderAlignment::Center,
+                    _ => HeaderAlignment::Right,
+                };
+            },
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_alignment_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.header_alignment = match selected {
-                0 => HeaderAlignment::Left,
-                1 => HeaderAlignment::Center,
-                _ => HeaderAlignment::Right,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&align_box);
-
-        // Header color (theme-aware, defaults to theme color 3 - accent)
-        let color_box = GtkBox::new(Orientation::Horizontal, 6);
-        color_box.append(&Label::new(Some("Header Color:")));
-        let header_color_selector = Rc::new(ThemeColorSelector::new(
+        // Header color (theme-aware)
+        let header_color_selector = builder.theme_color_selector_row(
+            &page, "Header Color:",
             config.borrow().frame.accent_color.clone(),
-        ));
-        header_color_selector.set_theme_config(config.borrow().frame.theme.clone());
-        color_box.append(header_color_selector.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_color_selector.set_on_change(move |new_source| {
-            config_clone.borrow_mut().frame.accent_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.accent_color = source,
+        );
 
         // Register theme refresh callback for header color
         let header_color_for_refresh = header_color_selector.clone();
         let config_for_color_refresh = config.clone();
         theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
-            let cfg = config_for_color_refresh.borrow();
-            header_color_for_refresh.set_theme_config(cfg.frame.theme.clone());
+            header_color_for_refresh.set_theme_config(config_for_color_refresh.borrow().frame.theme.clone());
         }));
 
-        page.append(&color_box);
-
         // Header height
-        let height_box = GtkBox::new(Orientation::Horizontal, 6);
-        height_box.append(&Label::new(Some("Header Height:")));
-        let header_height_spin = SpinButton::with_range(24.0, 72.0, 4.0);
-        header_height_spin.set_value(config.borrow().frame.header_height);
-        header_height_spin.set_hexpand(true);
-        height_box.append(&header_height_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_height_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_height = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&height_box);
+        let header_height_spin = builder.spin_row(
+            &page, "Header Height:", 24.0, 72.0, 4.0,
+            config.borrow().frame.header_height,
+            |cfg, val| cfg.frame.header_height = val,
+        );
 
         // Header font selector (theme-aware)
-        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
-        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
-        page.append(header_font_selector.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_font_selector.set_on_change(move |font_source| {
-            config_clone.borrow_mut().frame.header_font = font_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
+        let header_font_selector = builder.theme_font_selector_row(
+            &page, "Header Font:",
+            config.borrow().frame.header_font.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.header_font = source,
+        );
 
         // Register theme refresh callback for the font selector
         let selector_for_refresh = header_font_selector.clone();
         let config_for_refresh = config.clone();
-        let font_refresh: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = config_for_refresh.borrow().frame.theme.clone();
-            selector_for_refresh.set_theme_config(theme);
-        });
-        theme_ref_refreshers.borrow_mut().push(font_refresh);
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            selector_for_refresh.set_theme_config(config_for_refresh.borrow().frame.theme.clone());
+        }));
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {

@@ -342,3 +342,474 @@ pub fn create_section_header(text: &str) -> Label {
 pub fn create_separator() -> gtk4::Separator {
     gtk4::Separator::new(Orientation::Horizontal)
 }
+
+/// Builder for creating config widgets with automatic callback wiring.
+///
+/// This builder provides methods to create common widget patterns (spin buttons,
+/// dropdowns, color pickers, etc.) with automatic connection to config updates
+/// and preview redraws. All methods return the widget for storage in *Widgets structs.
+///
+/// # Example
+/// ```ignore
+/// let builder = ConfigWidgetBuilder::new(&config, &preview, &on_change);
+///
+/// // Create a spin button, connect it, append to page, and get the widget back
+/// let corner_spin = builder.spin_row(
+///     &page,
+///     "Corner Radius:",
+///     0.0, 32.0, 1.0,
+///     config.borrow().frame.corner_radius,
+///     |cfg, val| cfg.frame.corner_radius = val,
+/// );
+/// ```
+pub struct ConfigWidgetBuilder<T: 'static> {
+    config: Rc<RefCell<T>>,
+    preview: DrawingArea,
+    on_change: OnChangeCallback,
+    theme_refreshers: Option<Rc<RefCell<Vec<Rc<dyn Fn()>>>>>,
+}
+
+impl<T: 'static> ConfigWidgetBuilder<T> {
+    /// Create a new builder without theme refreshers.
+    pub fn new(
+        config: &Rc<RefCell<T>>,
+        preview: &DrawingArea,
+        on_change: &OnChangeCallback,
+    ) -> Self {
+        Self {
+            config: config.clone(),
+            preview: preview.clone(),
+            on_change: on_change.clone(),
+            theme_refreshers: None,
+        }
+    }
+
+    /// Create a new builder with theme refreshers support.
+    pub fn with_theme_refreshers(
+        config: &Rc<RefCell<T>>,
+        preview: &DrawingArea,
+        on_change: &OnChangeCallback,
+        theme_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    ) -> Self {
+        Self {
+            config: config.clone(),
+            preview: preview.clone(),
+            on_change: on_change.clone(),
+            theme_refreshers: Some(theme_refreshers.clone()),
+        }
+    }
+
+    /// Queue preview redraw and invoke change callback.
+    fn queue_redraw(&self) {
+        self.preview.queue_draw();
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
+    }
+
+    /// Creates a spin button row, connects it, appends to container, and returns the SpinButton.
+    pub fn spin_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        min: f64,
+        max: f64,
+        step: f64,
+        initial: f64,
+        update_fn: F,
+    ) -> SpinButton
+    where
+        F: Fn(&mut T, f64) + 'static,
+    {
+        let (row, spin) = create_spin_row_with_value(label, min, max, step, initial);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        spin.connect_value_changed(move |spin| {
+            update_fn(&mut config.borrow_mut(), spin.value());
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        spin
+    }
+
+    /// Creates an integer spin button row.
+    pub fn int_spin_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        min: i32,
+        max: i32,
+        initial: i32,
+        update_fn: F,
+    ) -> SpinButton
+    where
+        F: Fn(&mut T, i32) + 'static,
+    {
+        let (row, spin) = create_int_spin_row_with_value(label, min, max, initial);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        spin.connect_value_changed(move |spin| {
+            update_fn(&mut config.borrow_mut(), spin.value() as i32);
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        spin
+    }
+
+    /// Creates a dropdown row, connects it, appends to container, and returns the DropDown.
+    ///
+    /// The `update_fn` receives the selected index (validated, not INVALID_LIST_POSITION).
+    pub fn dropdown_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        options: &[&str],
+        initial: u32,
+        update_fn: F,
+    ) -> DropDown
+    where
+        F: Fn(&mut T, u32) + 'static,
+    {
+        let (row, dropdown) = create_dropdown_row_with_selected(label, options, initial);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            if selected == gtk4::INVALID_LIST_POSITION {
+                return;
+            }
+            update_fn(&mut config.borrow_mut(), selected);
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        dropdown
+    }
+
+    /// Creates a check button, connects it, appends to container, and returns the CheckButton.
+    pub fn check_button<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: bool,
+        update_fn: F,
+    ) -> CheckButton
+    where
+        F: Fn(&mut T, bool) + 'static,
+    {
+        let check = create_check_button(label, initial);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        check.connect_toggled(move |check| {
+            update_fn(&mut config.borrow_mut(), check.is_active());
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&check);
+        check
+    }
+
+    /// Creates an entry row, connects it, appends to container, and returns the Entry.
+    pub fn entry_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: &str,
+        update_fn: F,
+    ) -> gtk4::Entry
+    where
+        F: Fn(&mut T, String) + 'static,
+    {
+        let entry = gtk4::Entry::new();
+        entry.set_text(initial);
+        entry.set_hexpand(true);
+
+        let row = create_labeled_row(label, &entry);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        entry.connect_changed(move |entry| {
+            update_fn(&mut config.borrow_mut(), entry.text().to_string());
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        entry
+    }
+
+    /// Creates a scale (slider) row, connects it, appends to container, and returns the Scale.
+    pub fn scale_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        min: f64,
+        max: f64,
+        step: f64,
+        initial: f64,
+        update_fn: F,
+    ) -> gtk4::Scale
+    where
+        F: Fn(&mut T, f64) + 'static,
+    {
+        let scale = gtk4::Scale::with_range(Orientation::Horizontal, min, max, step);
+        scale.set_value(initial);
+        scale.set_hexpand(true);
+        scale.set_draw_value(true);
+
+        let row = create_labeled_row(label, &scale);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        scale.connect_value_changed(move |scale| {
+            update_fn(&mut config.borrow_mut(), scale.value());
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        scale
+    }
+}
+
+/// Extension trait for ConfigWidgetBuilder to add ColorButtonWidget support.
+///
+/// This is separate because ColorButtonWidget is in a different module and
+/// we want to avoid circular dependencies.
+pub trait ConfigWidgetBuilderColorExt<T: 'static> {
+    /// Creates a color button row using ColorButtonWidget.
+    fn color_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::background::Color,
+        update_fn: F,
+    ) -> Rc<crate::ui::color_button_widget::ColorButtonWidget>
+    where
+        F: Fn(&mut T, crate::ui::background::Color) + 'static;
+
+    /// Creates a color button row that also triggers theme refreshers.
+    fn theme_color_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::background::Color,
+        update_fn: F,
+    ) -> Rc<crate::ui::color_button_widget::ColorButtonWidget>
+    where
+        F: Fn(&mut T, crate::ui::background::Color) + 'static;
+}
+
+impl<T: 'static> ConfigWidgetBuilderColorExt<T> for ConfigWidgetBuilder<T> {
+    fn color_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::background::Color,
+        update_fn: F,
+    ) -> Rc<crate::ui::color_button_widget::ColorButtonWidget>
+    where
+        F: Fn(&mut T, crate::ui::background::Color) + 'static,
+    {
+        use crate::ui::color_button_widget::ColorButtonWidget;
+
+        let row = GtkBox::new(Orientation::Horizontal, ROW_SPACING);
+        row.append(&Label::new(Some(label)));
+
+        let color_widget = Rc::new(ColorButtonWidget::new(initial));
+        row.append(color_widget.widget());
+        color_widget.widget().set_hexpand(true);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        color_widget.set_on_change(move |color| {
+            update_fn(&mut config.borrow_mut(), color);
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        color_widget
+    }
+
+    fn theme_color_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::background::Color,
+        update_fn: F,
+    ) -> Rc<crate::ui::color_button_widget::ColorButtonWidget>
+    where
+        F: Fn(&mut T, crate::ui::background::Color) + 'static,
+    {
+        use crate::ui::color_button_widget::ColorButtonWidget;
+        use crate::ui::combo_config_base;
+
+        let row = GtkBox::new(Orientation::Horizontal, ROW_SPACING);
+        row.append(&Label::new(Some(label)));
+
+        let color_widget = Rc::new(ColorButtonWidget::new(initial));
+        row.append(color_widget.widget());
+        color_widget.widget().set_hexpand(true);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+        let refreshers = self.theme_refreshers.clone();
+
+        color_widget.set_on_change(move |color| {
+            update_fn(&mut config.borrow_mut(), color);
+            if let Some(ref r) = refreshers {
+                combo_config_base::refresh_theme_refs(r);
+            }
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        color_widget
+    }
+}
+
+/// Extension trait for ConfigWidgetBuilder to add ThemeColorSelector support.
+pub trait ConfigWidgetBuilderThemeSelectorExt<T: 'static> {
+    /// Creates a theme color selector row.
+    fn theme_color_selector_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::theme::ColorSource,
+        theme: crate::ui::theme::ComboThemeConfig,
+        update_fn: F,
+    ) -> Rc<crate::ui::theme_color_selector::ThemeColorSelector>
+    where
+        F: Fn(&mut T, crate::ui::theme::ColorSource) + 'static;
+
+    /// Creates a theme font selector row.
+    fn theme_font_selector_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::theme::FontSource,
+        theme: crate::ui::theme::ComboThemeConfig,
+        update_fn: F,
+    ) -> Rc<crate::ui::theme_font_selector::ThemeFontSelector>
+    where
+        F: Fn(&mut T, crate::ui::theme::FontSource) + 'static;
+}
+
+impl<T: 'static> ConfigWidgetBuilderThemeSelectorExt<T> for ConfigWidgetBuilder<T> {
+    fn theme_color_selector_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::theme::ColorSource,
+        theme: crate::ui::theme::ComboThemeConfig,
+        update_fn: F,
+    ) -> Rc<crate::ui::theme_color_selector::ThemeColorSelector>
+    where
+        F: Fn(&mut T, crate::ui::theme::ColorSource) + 'static,
+    {
+        use crate::ui::theme_color_selector::ThemeColorSelector;
+
+        let row = GtkBox::new(Orientation::Horizontal, ROW_SPACING);
+        row.append(&Label::new(Some(label)));
+
+        let selector = Rc::new(ThemeColorSelector::new(initial));
+        selector.set_theme_config(theme);
+        row.append(selector.widget());
+        selector.widget().set_hexpand(true);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        selector.set_on_change(move |source| {
+            update_fn(&mut config.borrow_mut(), source);
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        selector
+    }
+
+    fn theme_font_selector_row<F>(
+        &self,
+        container: &GtkBox,
+        label: &str,
+        initial: crate::ui::theme::FontSource,
+        theme: crate::ui::theme::ComboThemeConfig,
+        update_fn: F,
+    ) -> Rc<crate::ui::theme_font_selector::ThemeFontSelector>
+    where
+        F: Fn(&mut T, crate::ui::theme::FontSource) + 'static,
+    {
+        use crate::ui::theme_font_selector::ThemeFontSelector;
+
+        let row = GtkBox::new(Orientation::Horizontal, ROW_SPACING);
+        row.append(&Label::new(Some(label)));
+
+        let selector = Rc::new(ThemeFontSelector::new(initial));
+        selector.set_theme_config(theme);
+        row.append(selector.widget());
+        selector.widget().set_hexpand(true);
+
+        let config = self.config.clone();
+        let preview = self.preview.clone();
+        let on_change = self.on_change.clone();
+
+        selector.set_on_change(move |source| {
+            update_fn(&mut config.borrow_mut(), source);
+            preview.queue_draw();
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        container.append(&row);
+        selector
+    }
+}
