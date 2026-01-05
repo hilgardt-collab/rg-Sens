@@ -20,6 +20,7 @@ use crate::displayers::CyberpunkDisplayConfig;
 use crate::core::FieldMetadata;
 use crate::ui::combo_config_base;
 use crate::ui::theme::{ColorSource, FontSource};
+use crate::ui::widget_builder::{ConfigWidgetBuilder, ConfigWidgetBuilderThemeSelectorExt, create_section_header};
 
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {
@@ -210,142 +211,76 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         frame_widgets_out: &Rc<RefCell<Option<FrameWidgets>>>,
-        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Border width
-        let border_box = GtkBox::new(Orientation::Horizontal, 6);
-        border_box.append(&Label::new(Some("Border Width:")));
-        let border_width_spin = SpinButton::with_range(0.5, 10.0, 0.5);
-        border_width_spin.set_value(config.borrow().frame.border_width);
-        border_width_spin.set_hexpand(true);
-        border_box.append(&border_width_spin);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        border_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.border_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&border_box);
+        // Border width
+        let border_width_spin = builder.spin_row(
+            &page, "Border Width:", 0.5, 10.0, 0.5,
+            config.borrow().frame.border_width,
+            |cfg, val| cfg.frame.border_width = val,
+        );
 
         // Border color (theme-aware)
-        let color_box = GtkBox::new(Orientation::Horizontal, 6);
-        color_box.append(&Label::new(Some("Border Color:")));
-        let border_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.border_color.clone()));
-        border_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        color_box.append(border_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        border_color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().frame.border_color = color_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&color_box);
+        let border_color_widget = builder.theme_color_selector_row(
+            &page, "Border Color:",
+            config.borrow().frame.border_color.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.border_color = source,
+        );
 
         // Glow intensity
-        let glow_box = GtkBox::new(Orientation::Horizontal, 6);
-        glow_box.append(&Label::new(Some("Glow Intensity:")));
-        let glow_spin = SpinButton::with_range(0.0, 1.0, 0.1);
+        let glow_spin = builder.spin_row(
+            &page, "Glow Intensity:", 0.0, 1.0, 0.1,
+            config.borrow().frame.glow_intensity,
+            |cfg, val| cfg.frame.glow_intensity = val,
+        );
         glow_spin.set_digits(2);
-        glow_spin.set_value(config.borrow().frame.glow_intensity);
-        glow_spin.set_hexpand(true);
-        glow_box.append(&glow_spin);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        glow_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.glow_intensity = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&glow_box);
-
-        // Corner style
-        let corner_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        corner_style_box.append(&Label::new(Some("Corner Style:")));
-        let corner_list = StringList::new(&["Chamfer (45°)", "Bracket [ ]", "Angular"]);
-        let corner_style_dropdown = DropDown::new(Some(corner_list), None::<gtk4::Expression>);
+        // Corner style dropdown
         let corner_idx = match config.borrow().frame.corner_style {
             CornerStyle::Chamfer => 0,
             CornerStyle::Bracket => 1,
             CornerStyle::Angular => 2,
         };
-        corner_style_dropdown.set_selected(corner_idx);
-        corner_style_dropdown.set_hexpand(true);
-        corner_style_box.append(&corner_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.corner_style = match selected {
-                0 => CornerStyle::Chamfer,
-                1 => CornerStyle::Bracket,
-                _ => CornerStyle::Angular,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&corner_style_box);
+        let corner_style_dropdown = builder.dropdown_row(
+            &page, "Corner Style:",
+            &["Chamfer (45°)", "Bracket [ ]", "Angular"],
+            corner_idx,
+            |cfg, idx| {
+                cfg.frame.corner_style = match idx {
+                    0 => CornerStyle::Chamfer,
+                    1 => CornerStyle::Bracket,
+                    _ => CornerStyle::Angular,
+                };
+            },
+        );
 
         // Corner size
-        let corner_size_box = GtkBox::new(Orientation::Horizontal, 6);
-        corner_size_box.append(&Label::new(Some("Corner Size:")));
-        let corner_size_spin = SpinButton::with_range(4.0, 50.0, 2.0);
-        corner_size_spin.set_value(config.borrow().frame.corner_size);
-        corner_size_spin.set_hexpand(true);
-        corner_size_box.append(&corner_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.corner_size = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&corner_size_box);
+        let corner_size_spin = builder.spin_row(
+            &page, "Corner Size:", 4.0, 50.0, 2.0,
+            config.borrow().frame.corner_size,
+            |cfg, val| cfg.frame.corner_size = val,
+        );
 
         // Background color (theme-aware)
-        let bg_box = GtkBox::new(Orientation::Horizontal, 6);
-        bg_box.append(&Label::new(Some("Background:")));
-        let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.background_color.clone()));
-        bg_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        bg_box.append(bg_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bg_color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().frame.background_color = color_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&bg_box);
+        let bg_color_widget = builder.theme_color_selector_row(
+            &page, "Background:",
+            config.borrow().frame.background_color.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.background_color = source,
+        );
 
         // Content padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Content Padding:")));
-        let padding_spin = SpinButton::with_range(0.0, 50.0, 2.0);
-        padding_spin.set_value(config.borrow().frame.content_padding);
-        padding_spin.set_hexpand(true);
-        padding_box.append(&padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_box);
+        let padding_spin = builder.spin_row(
+            &page, "Content Padding:", 0.0, 50.0, 2.0,
+            config.borrow().frame.content_padding,
+            |cfg, val| cfg.frame.content_padding = val,
+        );
 
         // Store widget refs
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
@@ -362,12 +297,11 @@ impl CyberpunkConfigWidget {
         let border_color_for_refresh = border_color_widget.clone();
         let bg_color_for_refresh = bg_color_widget.clone();
         let config_for_refresh = config.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
             let theme = config_for_refresh.borrow().frame.theme.clone();
             border_color_for_refresh.set_theme_config(theme.clone());
             bg_color_for_refresh.set_theme_config(theme);
-        });
-        _theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        }));
 
         page
     }
@@ -382,144 +316,71 @@ impl CyberpunkConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         // Grid section
-        let grid_label = Label::new(Some("Grid Pattern"));
-        grid_label.set_halign(gtk4::Align::Start);
-        grid_label.add_css_class("heading");
-        page.append(&grid_label);
+        page.append(&create_section_header("Grid Pattern"));
 
-        // Show grid
-        let show_grid_check = CheckButton::with_label("Show Grid");
-        show_grid_check.set_active(config.borrow().frame.show_grid);
+        let show_grid_check = builder.check_button(
+            &page, "Show Grid",
+            config.borrow().frame.show_grid,
+            |cfg, active| cfg.frame.show_grid = active,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_grid_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_grid = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_grid_check);
+        let grid_color_widget = builder.theme_color_selector_row(
+            &page, "Grid Color:",
+            config.borrow().frame.grid_color.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.grid_color = source,
+        );
 
-        // Grid color (theme-aware)
-        let grid_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        grid_color_box.append(&Label::new(Some("Grid Color:")));
-        let grid_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.grid_color.clone()));
-        grid_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        grid_color_box.append(grid_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        grid_color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().frame.grid_color = color_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&grid_color_box);
-
-        // Grid spacing
-        let grid_spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        grid_spacing_box.append(&Label::new(Some("Grid Spacing:")));
-        let grid_spacing_spin = SpinButton::with_range(5.0, 100.0, 5.0);
-        grid_spacing_spin.set_value(config.borrow().frame.grid_spacing);
-        grid_spacing_spin.set_hexpand(true);
-        grid_spacing_box.append(&grid_spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        grid_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.grid_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&grid_spacing_box);
+        let grid_spacing_spin = builder.spin_row(
+            &page, "Grid Spacing:", 5.0, 100.0, 5.0,
+            config.borrow().frame.grid_spacing,
+            |cfg, val| cfg.frame.grid_spacing = val,
+        );
 
         // Scanlines section
-        let scanline_label = Label::new(Some("Scanlines (CRT Effect)"));
-        scanline_label.set_halign(gtk4::Align::Start);
-        scanline_label.add_css_class("heading");
+        let scanline_label = create_section_header("Scanlines (CRT Effect)");
         scanline_label.set_margin_top(12);
         page.append(&scanline_label);
 
-        // Show scanlines
-        let show_scanlines_check = CheckButton::with_label("Show Scanlines");
-        show_scanlines_check.set_active(config.borrow().frame.show_scanlines);
+        let show_scanlines_check = builder.check_button(
+            &page, "Show Scanlines",
+            config.borrow().frame.show_scanlines,
+            |cfg, active| cfg.frame.show_scanlines = active,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_scanlines_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_scanlines = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_scanlines_check);
-
-        // Scanline opacity
-        let scanline_opacity_box = GtkBox::new(Orientation::Horizontal, 6);
-        scanline_opacity_box.append(&Label::new(Some("Opacity:")));
-        let scanline_opacity_spin = SpinButton::with_range(0.0, 0.5, 0.02);
+        let scanline_opacity_spin = builder.spin_row(
+            &page, "Opacity:", 0.0, 0.5, 0.02,
+            config.borrow().frame.scanline_opacity,
+            |cfg, val| cfg.frame.scanline_opacity = val,
+        );
         scanline_opacity_spin.set_digits(2);
-        scanline_opacity_spin.set_value(config.borrow().frame.scanline_opacity);
-        scanline_opacity_spin.set_hexpand(true);
-        scanline_opacity_box.append(&scanline_opacity_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        scanline_opacity_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.scanline_opacity = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&scanline_opacity_box);
 
         // Item frames section
-        let item_frame_label = Label::new(Some("Content Item Frames"));
-        item_frame_label.set_halign(gtk4::Align::Start);
-        item_frame_label.add_css_class("heading");
+        let item_frame_label = create_section_header("Content Item Frames");
         item_frame_label.set_margin_top(12);
         page.append(&item_frame_label);
 
-        // Enable item frames
-        let item_frame_check = CheckButton::with_label("Show Item Frames");
-        item_frame_check.set_active(config.borrow().frame.item_frame_enabled);
+        let item_frame_check = builder.check_button(
+            &page, "Show Item Frames",
+            config.borrow().frame.item_frame_enabled,
+            |cfg, active| cfg.frame.item_frame_enabled = active,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        item_frame_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.item_frame_enabled = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&item_frame_check);
+        let item_frame_color_widget = builder.theme_color_selector_row(
+            &page, "Frame Color:",
+            config.borrow().frame.item_frame_color.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.item_frame_color = source,
+        );
 
-        // Item frame color (theme-aware)
-        let item_frame_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        item_frame_color_box.append(&Label::new(Some("Frame Color:")));
-        let item_frame_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.item_frame_color.clone()));
-        item_frame_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        item_frame_color_box.append(item_frame_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        item_frame_color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().frame.item_frame_color = color_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&item_frame_color_box);
-
-        // Item frame glow
-        let item_glow_check = CheckButton::with_label("Item Frame Glow");
-        item_glow_check.set_active(config.borrow().frame.item_glow_enabled);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        item_glow_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.item_glow_enabled = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&item_glow_check);
+        let item_glow_check = builder.check_button(
+            &page, "Item Frame Glow",
+            config.borrow().frame.item_glow_enabled,
+            |cfg, active| cfg.frame.item_glow_enabled = active,
+        );
 
         // Store widget refs
         *effects_widgets_out.borrow_mut() = Some(EffectsWidgets {
@@ -537,12 +398,11 @@ impl CyberpunkConfigWidget {
         let grid_color_for_refresh = grid_color_widget.clone();
         let item_frame_color_for_refresh = item_frame_color_widget.clone();
         let config_for_refresh = config.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
             let theme = config_for_refresh.borrow().frame.theme.clone();
             grid_color_for_refresh.set_theme_config(theme.clone());
             item_frame_color_for_refresh.set_theme_config(theme);
-        });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        }));
 
         page
     }
@@ -552,105 +412,63 @@ impl CyberpunkConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
-        _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Show header
-        let show_header_check = CheckButton::with_label("Show Header");
-        show_header_check.set_active(config.borrow().frame.show_header);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_header_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_header = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_header_check);
+        // Show header checkbox
+        let show_header_check = builder.check_button(
+            &page, "Show Header",
+            config.borrow().frame.show_header,
+            |cfg, active| cfg.frame.show_header = active,
+        );
 
-        // Header text
-        let text_box = GtkBox::new(Orientation::Horizontal, 6);
-        text_box.append(&Label::new(Some("Header Text:")));
-        let header_text_entry = Entry::new();
-        header_text_entry.set_text(&config.borrow().frame.header_text);
-        header_text_entry.set_hexpand(true);
-        text_box.append(&header_text_entry);
+        // Header text entry
+        let header_text_entry = builder.entry_row(
+            &page, "Header Text:",
+            &config.borrow().frame.header_text,
+            |cfg, text| cfg.frame.header_text = text,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_text_entry.connect_changed(move |entry| {
-            config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&text_box);
-
-        // Header style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Style:")));
-        let style_list = StringList::new(&["Brackets", "Underline", "Box", "None"]);
-        let header_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
+        // Header style dropdown
         let style_idx = match config.borrow().frame.header_style {
             HeaderStyle::Brackets => 0,
             HeaderStyle::Underline => 1,
             HeaderStyle::Box => 2,
             HeaderStyle::None => 3,
         };
-        header_style_dropdown.set_selected(style_idx);
-        header_style_dropdown.set_hexpand(true);
-        style_box.append(&header_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.header_style = match selected {
-                0 => HeaderStyle::Brackets,
-                1 => HeaderStyle::Underline,
-                2 => HeaderStyle::Box,
-                _ => HeaderStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
+        let header_style_dropdown = builder.dropdown_row(
+            &page, "Style:",
+            &["Brackets", "Underline", "Box", "None"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.header_style = match idx {
+                    0 => HeaderStyle::Brackets,
+                    1 => HeaderStyle::Underline,
+                    2 => HeaderStyle::Box,
+                    _ => HeaderStyle::None,
+                };
+            },
+        );
 
         // Header color (theme-aware)
-        let color_box = GtkBox::new(Orientation::Horizontal, 6);
-        color_box.append(&Label::new(Some("Text Color:")));
-        let header_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.header_color.clone()));
-        header_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        color_box.append(header_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().frame.header_color = color_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&color_box);
+        let header_color_widget = builder.theme_color_selector_row(
+            &page, "Text Color:",
+            config.borrow().frame.header_color.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.header_color = source,
+        );
 
         // Header font (theme-aware)
-        let font_box = GtkBox::new(Orientation::Horizontal, 6);
-        font_box.append(&Label::new(Some("Font:")));
-        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
-        header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
-        font_box.append(header_font_selector.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_font_selector.set_on_change(move |font_source| {
-            config_clone.borrow_mut().frame.header_font = font_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&font_box);
+        let header_font_selector = builder.theme_font_selector_row(
+            &page, "Font:",
+            config.borrow().frame.header_font.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.header_font = source,
+        );
 
         // Store widget refs
         *header_widgets_out.borrow_mut() = Some(HeaderWidgets {
@@ -665,12 +483,11 @@ impl CyberpunkConfigWidget {
         let header_color_for_refresh = header_color_widget.clone();
         let header_font_for_refresh = header_font_selector.clone();
         let config_for_refresh = config.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
             let theme = config_for_refresh.borrow().frame.theme.clone();
             header_color_for_refresh.set_theme_config(theme.clone());
             header_font_for_refresh.set_theme_config(theme);
-        });
-        _theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        }));
 
         page
     }
@@ -685,48 +502,24 @@ impl CyberpunkConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Layout section
-        let layout_label = Label::new(Some("Layout"));
-        layout_label.set_halign(gtk4::Align::Start);
-        layout_label.add_css_class("heading");
-        page.append(&layout_label);
+        let builder = ConfigWidgetBuilder::with_theme_refreshers(config, preview, on_change, theme_ref_refreshers);
 
-        // Orientation
-        let orient_box = GtkBox::new(Orientation::Horizontal, 6);
-        orient_box.append(&Label::new(Some("Split Direction:")));
-        let orient_list = StringList::new(&["Vertical", "Horizontal"]);
-        let orientation_dropdown = DropDown::new(Some(orient_list), None::<gtk4::Expression>);
+        // Layout section
+        page.append(&create_section_header("Layout"));
+
         let orient_idx = match config.borrow().frame.split_orientation {
             SplitOrientation::Vertical => 0,
             SplitOrientation::Horizontal => 1,
         };
-        orientation_dropdown.set_selected(orient_idx);
-        orientation_dropdown.set_hexpand(true);
-        orient_box.append(&orientation_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        orientation_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.split_orientation = match selected {
-                0 => SplitOrientation::Vertical,
-                _ => SplitOrientation::Horizontal,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&orient_box);
+        let orientation_dropdown = builder.dropdown_row(
+            &page, "Split Direction:", &["Vertical", "Horizontal"], orient_idx,
+            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
+        );
 
         // Group weights section
-        let weights_label = Label::new(Some("Group Size Weights"));
-        weights_label.set_halign(gtk4::Align::Start);
-        weights_label.add_css_class("heading");
-        weights_label.set_margin_top(12);
-        page.append(&weights_label);
-
+        let weights_header = create_section_header("Group Size Weights");
+        weights_header.set_margin_top(12);
+        page.append(&weights_header);
         let weights_info = Label::new(Some("Groups are configured in the Data Sources tab."));
         weights_info.set_halign(gtk4::Align::Start);
         weights_info.add_css_class("dim-label");
@@ -736,17 +529,10 @@ impl CyberpunkConfigWidget {
         page.append(&group_weights_box);
 
         // Dividers section
-        let dividers_label = Label::new(Some("Dividers"));
-        dividers_label.set_halign(gtk4::Align::Start);
-        dividers_label.add_css_class("heading");
-        dividers_label.set_margin_top(12);
-        page.append(&dividers_label);
+        let dividers_header = create_section_header("Dividers");
+        dividers_header.set_margin_top(12);
+        page.append(&dividers_header);
 
-        // Divider style
-        let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_style_box.append(&Label::new(Some("Style:")));
-        let div_style_list = StringList::new(&["Line", "Dashed", "Glow", "Dots", "None"]);
-        let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
         let div_style_idx = match config.borrow().frame.divider_style {
             DividerStyle::Line => 0,
             DividerStyle::Dashed => 1,
@@ -754,101 +540,47 @@ impl CyberpunkConfigWidget {
             DividerStyle::Dots => 3,
             DividerStyle::None => 4,
         };
-        divider_style_dropdown.set_selected(div_style_idx);
-        divider_style_dropdown.set_hexpand(true);
-        div_style_box.append(&divider_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.divider_style = match selected {
+        let divider_style_dropdown = builder.dropdown_row(
+            &page, "Style:", &["Line", "Dashed", "Glow", "Dots", "None"], div_style_idx,
+            |cfg, idx| cfg.frame.divider_style = match idx {
                 0 => DividerStyle::Line,
                 1 => DividerStyle::Dashed,
                 2 => DividerStyle::Glow,
                 3 => DividerStyle::Dots,
                 _ => DividerStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_style_box);
+            },
+        );
 
-        // Divider color (theme-aware)
-        let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_color_box.append(&Label::new(Some("Color:")));
-        let divider_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.divider_color.clone()));
-        divider_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        div_color_box.append(divider_color_widget.widget());
+        let divider_color_widget = builder.theme_color_selector_row(
+            &page, "Color:",
+            config.borrow().frame.divider_color.clone(),
+            config.borrow().frame.theme.clone(),
+            |cfg, color| cfg.frame.divider_color = color,
+        );
+        // Register theme refresh callback
+        let divider_color_for_theme = divider_color_widget.clone();
+        let config_for_theme = config.clone();
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            divider_color_for_theme.set_theme_config(config_for_theme.borrow().frame.theme.clone());
+        }));
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().frame.divider_color = color_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_color_box);
-
-        // Register theme refresh callback for divider color
-        let divider_color_widget_for_theme = divider_color_widget.clone();
-        let config_for_divider_theme = config.clone();
-        let divider_color_refresh: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = config_for_divider_theme.borrow().frame.theme.clone();
-            divider_color_widget_for_theme.set_theme_config(theme);
-        });
-        theme_ref_refreshers.borrow_mut().push(divider_color_refresh);
-
-        // Divider width
-        let div_width_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_width_box.append(&Label::new(Some("Width:")));
-        let divider_width_spin = SpinButton::with_range(0.5, 5.0, 0.5);
-        divider_width_spin.set_value(config.borrow().frame.divider_width);
-        divider_width_spin.set_hexpand(true);
-        div_width_box.append(&divider_width_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_width_box);
-
-        // Divider padding
-        let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_padding_box.append(&Label::new(Some("Padding:")));
-        let divider_padding_spin = SpinButton::with_range(0.0, 20.0, 1.0);
-        divider_padding_spin.set_value(config.borrow().frame.divider_padding);
-        divider_padding_spin.set_hexpand(true);
-        div_padding_box.append(&divider_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_padding_box);
+        let divider_width_spin = builder.spin_row(
+            &page, "Width:", 0.5, 5.0, 0.5, config.borrow().frame.divider_width,
+            |cfg, v| cfg.frame.divider_width = v,
+        );
+        let divider_padding_spin = builder.spin_row(
+            &page, "Padding:", 0.0, 20.0, 1.0, config.borrow().frame.divider_padding,
+            |cfg, v| cfg.frame.divider_padding = v,
+        );
 
         // Initial build of group weight spinners
         Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
 
         // Item Orientations section
-        let item_orient_label = Label::new(Some("Item Orientation per Group"));
-        item_orient_label.set_halign(gtk4::Align::Start);
-        item_orient_label.add_css_class("heading");
-        item_orient_label.set_margin_top(12);
-        page.append(&item_orient_label);
-
-        let item_orient_info = Label::new(Some(
-            "Choose how items within each group are arranged",
-        ));
+        let item_header = create_section_header("Item Orientation per Group");
+        item_header.set_margin_top(12);
+        page.append(&item_header);
+        let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
         item_orient_info.set_halign(gtk4::Align::Start);
         item_orient_info.add_css_class("dim-label");
         page.append(&item_orient_info);

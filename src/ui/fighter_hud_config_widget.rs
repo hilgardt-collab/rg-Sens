@@ -21,6 +21,7 @@ use crate::ui::background::Color;
 use crate::displayers::FighterHudDisplayConfig;
 use crate::core::FieldMetadata;
 use crate::ui::combo_config_base;
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
 use crate::ui::theme::FontSource;
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;

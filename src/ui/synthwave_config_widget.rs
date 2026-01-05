@@ -22,6 +22,7 @@ use crate::ui::{
 };
 use crate::ui::theme::FontSource;
 use crate::ui::combo_config_base;
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
 use crate::displayers::SynthwaveDisplayConfig;
 use crate::core::{FieldMetadata, FieldType, FieldPurpose};
 
@@ -361,11 +362,8 @@ impl SynthwaveConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Frame style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Frame Style:")));
-        let style_list = StringList::new(&["Neon Border", "Chrome", "Minimal", "Retro Double", "None"]);
-        let style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         let style_idx = match config.borrow().frame.frame_style {
             SynthwaveFrameStyle::NeonBorder => 0,
             SynthwaveFrameStyle::Chrome => 1,
@@ -373,62 +371,26 @@ impl SynthwaveConfigWidget {
             SynthwaveFrameStyle::RetroDouble => 3,
             SynthwaveFrameStyle::None => 4,
         };
-        style_dropdown.set_selected(style_idx);
-        style_dropdown.set_hexpand(true);
-        style_box.append(&style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.frame_style = match selected {
+        let style_dropdown = builder.dropdown_row(
+            &page, "Frame Style:", &["Neon Border", "Chrome", "Minimal", "Retro Double", "None"], style_idx,
+            |cfg, idx| cfg.frame.frame_style = match idx {
                 0 => SynthwaveFrameStyle::NeonBorder,
                 1 => SynthwaveFrameStyle::Chrome,
                 2 => SynthwaveFrameStyle::Minimal,
                 3 => SynthwaveFrameStyle::RetroDouble,
                 _ => SynthwaveFrameStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
+            },
+        );
 
-        // Frame width
-        let width_box = GtkBox::new(Orientation::Horizontal, 6);
-        width_box.append(&Label::new(Some("Frame Width:")));
-        let frame_width_spin = SpinButton::with_range(0.5, 6.0, 0.5);
-        frame_width_spin.set_value(config.borrow().frame.frame_width);
-        frame_width_spin.set_hexpand(true);
-        width_box.append(&frame_width_spin);
+        let frame_width_spin = builder.spin_row(
+            &page, "Frame Width:", 0.5, 6.0, 0.5, config.borrow().frame.frame_width,
+            |cfg, v| cfg.frame.frame_width = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        frame_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.frame_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&width_box);
-
-        // Corner radius
-        let radius_box = GtkBox::new(Orientation::Horizontal, 6);
-        radius_box.append(&Label::new(Some("Corner Radius:")));
-        let corner_radius_spin = SpinButton::with_range(0.0, 30.0, 2.0);
-        corner_radius_spin.set_value(config.borrow().frame.corner_radius);
-        corner_radius_spin.set_hexpand(true);
-        radius_box.append(&corner_radius_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_radius_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.corner_radius = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&radius_box);
+        let corner_radius_spin = builder.spin_row(
+            &page, "Corner Radius:", 0.0, 30.0, 2.0, config.borrow().frame.corner_radius,
+            |cfg, v| cfg.frame.corner_radius = v,
+        );
 
         // Store widget refs
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
@@ -449,24 +411,13 @@ impl SynthwaveConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Show grid
-        let show_grid_check = CheckButton::with_label("Show Grid");
-        show_grid_check.set_active(config.borrow().frame.show_grid);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_grid_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_grid = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_grid_check);
+        let show_grid_check = builder.check_button(
+            &page, "Show Grid", config.borrow().frame.show_grid,
+            |cfg, v| cfg.frame.show_grid = v,
+        );
 
-        // Grid style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Grid Style:")));
-        let style_list = StringList::new(&["Perspective", "Flat", "Hexagon", "Scanlines", "None"]);
-        let grid_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
         let style_idx = match config.borrow().frame.grid_style {
             GridStyle::Perspective => 0,
             GridStyle::Flat => 1,
@@ -474,135 +425,51 @@ impl SynthwaveConfigWidget {
             GridStyle::Scanlines => 3,
             GridStyle::None => 4,
         };
-        grid_style_dropdown.set_selected(style_idx);
-        grid_style_dropdown.set_hexpand(true);
-        style_box.append(&grid_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        grid_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.grid_style = match selected {
+        let grid_style_dropdown = builder.dropdown_row(
+            &page, "Grid Style:", &["Perspective", "Flat", "Hexagon", "Scanlines", "None"], style_idx,
+            |cfg, idx| cfg.frame.grid_style = match idx {
                 0 => GridStyle::Perspective,
                 1 => GridStyle::Flat,
                 2 => GridStyle::Hexagon,
                 3 => GridStyle::Scanlines,
                 _ => GridStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
+            },
+        );
 
-        // Grid spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Grid Spacing:")));
-        let grid_spacing_spin = SpinButton::with_range(10.0, 100.0, 5.0);
-        grid_spacing_spin.set_value(config.borrow().frame.grid_spacing);
-        grid_spacing_spin.set_hexpand(true);
-        spacing_box.append(&grid_spacing_spin);
+        let grid_spacing_spin = builder.spin_row(
+            &page, "Grid Spacing:", 10.0, 100.0, 5.0, config.borrow().frame.grid_spacing,
+            |cfg, v| cfg.frame.grid_spacing = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        grid_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.grid_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&spacing_box);
+        let grid_line_width_spin = builder.spin_row(
+            &page, "Line Width:", 0.5, 4.0, 0.5, config.borrow().frame.grid_line_width,
+            |cfg, v| cfg.frame.grid_line_width = v,
+        );
 
-        // Grid line width
-        let line_box = GtkBox::new(Orientation::Horizontal, 6);
-        line_box.append(&Label::new(Some("Line Width:")));
-        let grid_line_width_spin = SpinButton::with_range(0.5, 4.0, 0.5);
-        grid_line_width_spin.set_value(config.borrow().frame.grid_line_width);
-        grid_line_width_spin.set_hexpand(true);
-        line_box.append(&grid_line_width_spin);
+        let horizon_scale = builder.scale_row(
+            &page, "Horizon:", 0.1, 0.9, 0.05, config.borrow().frame.grid_horizon,
+            |cfg, v| cfg.frame.grid_horizon = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        grid_line_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.grid_line_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&line_box);
-
-        // Horizon position
-        let horizon_box = GtkBox::new(Orientation::Horizontal, 6);
-        horizon_box.append(&Label::new(Some("Horizon:")));
-        let horizon_scale = Scale::with_range(Orientation::Horizontal, 0.1, 0.9, 0.05);
-        horizon_scale.set_value(config.borrow().frame.grid_horizon);
-        horizon_scale.set_hexpand(true);
-        horizon_scale.set_draw_value(true);
-        horizon_box.append(&horizon_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        horizon_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.grid_horizon = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&horizon_box);
-
-        // Perspective intensity
-        let perspective_box = GtkBox::new(Orientation::Horizontal, 6);
-        perspective_box.append(&Label::new(Some("Perspective:")));
-        let perspective_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1);
-        perspective_scale.set_value(config.borrow().frame.grid_perspective);
-        perspective_scale.set_hexpand(true);
-        perspective_scale.set_draw_value(true);
-        perspective_box.append(&perspective_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        perspective_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.grid_perspective = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&perspective_box);
+        let perspective_scale = builder.scale_row(
+            &page, "Perspective:", 0.0, 1.0, 0.1, config.borrow().frame.grid_perspective,
+            |cfg, v| cfg.frame.grid_perspective = v,
+        );
 
         // Sun section
-        let sun_label = Label::new(Some("Sun Effect"));
-        sun_label.set_halign(gtk4::Align::Start);
-        sun_label.add_css_class("heading");
+        let sun_label = create_section_header("Sun Effect");
         sun_label.set_margin_top(12);
         page.append(&sun_label);
 
-        let show_sun_check = CheckButton::with_label("Show Sun");
-        show_sun_check.set_active(config.borrow().frame.show_sun);
+        let show_sun_check = builder.check_button(
+            &page, "Show Sun", config.borrow().frame.show_sun,
+            |cfg, v| cfg.frame.show_sun = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_sun_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_sun = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_sun_check);
-
-        // Sun position
-        let sun_pos_box = GtkBox::new(Orientation::Horizontal, 6);
-        sun_pos_box.append(&Label::new(Some("Sun Position:")));
-        let sun_position_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1);
-        sun_position_scale.set_value(config.borrow().frame.sun_position);
-        sun_position_scale.set_hexpand(true);
-        sun_position_scale.set_draw_value(true);
-        sun_pos_box.append(&sun_position_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        sun_position_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.sun_position = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&sun_pos_box);
+        let sun_position_scale = builder.scale_row(
+            &page, "Sun Position:", 0.0, 1.0, 0.1, config.borrow().frame.sun_position,
+            |cfg, v| cfg.frame.sun_position = v,
+        );
 
         // Store widget refs
         *grid_widgets_out.borrow_mut() = Some(GridWidgets {
@@ -628,41 +495,18 @@ impl SynthwaveConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Show header
-        let show_header_check = CheckButton::with_label("Show Header");
-        show_header_check.set_active(config.borrow().frame.show_header);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_header_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_header = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_header_check);
+        let show_header_check = builder.check_button(
+            &page, "Show Header", config.borrow().frame.show_header,
+            |cfg, v| cfg.frame.show_header = v,
+        );
 
-        // Header text
-        let text_box = GtkBox::new(Orientation::Horizontal, 6);
-        text_box.append(&Label::new(Some("Header Text:")));
-        let header_text_entry = Entry::new();
-        header_text_entry.set_text(&config.borrow().frame.header_text);
-        header_text_entry.set_hexpand(true);
-        text_box.append(&header_text_entry);
+        let header_text_entry = builder.entry_row(
+            &page, "Header Text:", &config.borrow().frame.header_text,
+            |cfg, v| cfg.frame.header_text = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_text_entry.connect_changed(move |entry| {
-            config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&text_box);
-
-        // Header style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Header Style:")));
-        let style_list = StringList::new(&["Chrome", "Neon", "Outline", "Simple", "None"]);
-        let header_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
         let style_idx = match config.borrow().frame.header_style {
             SynthwaveHeaderStyle::Chrome => 0,
             SynthwaveHeaderStyle::Neon => 1,
@@ -670,68 +514,38 @@ impl SynthwaveConfigWidget {
             SynthwaveHeaderStyle::Simple => 3,
             SynthwaveHeaderStyle::None => 4,
         };
-        header_style_dropdown.set_selected(style_idx);
-        header_style_dropdown.set_hexpand(true);
-        style_box.append(&header_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.header_style = match selected {
+        let header_style_dropdown = builder.dropdown_row(
+            &page, "Header Style:", &["Chrome", "Neon", "Outline", "Simple", "None"], style_idx,
+            |cfg, idx| cfg.frame.header_style = match idx {
                 0 => SynthwaveHeaderStyle::Chrome,
                 1 => SynthwaveHeaderStyle::Neon,
                 2 => SynthwaveHeaderStyle::Outline,
                 3 => SynthwaveHeaderStyle::Simple,
                 _ => SynthwaveHeaderStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
+            },
+        );
 
-        // Header height
-        let height_box = GtkBox::new(Orientation::Horizontal, 6);
-        height_box.append(&Label::new(Some("Header Height:")));
-        let header_height_spin = SpinButton::with_range(20.0, 60.0, 2.0);
-        header_height_spin.set_value(config.borrow().frame.header_height);
-        header_height_spin.set_hexpand(true);
-        height_box.append(&header_height_spin);
+        let header_height_spin = builder.spin_row(
+            &page, "Header Height:", 20.0, 60.0, 2.0, config.borrow().frame.header_height,
+            |cfg, v| cfg.frame.header_height = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_height_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.header_height = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&height_box);
-
-        // Font section with theme selector
-        let font_label = Label::new(Some("Font"));
-        font_label.set_halign(gtk4::Align::Start);
-        font_label.add_css_class("heading");
+        // Font section
+        let font_label = create_section_header("Font");
         font_label.set_margin_top(12);
         page.append(&font_label);
 
-        // Create ThemeFontSelector with current font as custom
         let current_font = config.borrow().frame.header_font.clone();
         let current_size = config.borrow().frame.header_font_size;
         let header_font_selector = Rc::new(ThemeFontSelector::new(
             FontSource::Custom { family: current_font, size: current_size }
         ));
-
-        // Set theme config so selector can show theme font names
         header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
 
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
         font_box.append(header_font_selector.widget());
         page.append(&font_box);
 
-        // Connect font selector callback
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
@@ -773,81 +587,32 @@ impl SynthwaveConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Split orientation
-        let orient_box = GtkBox::new(Orientation::Horizontal, 6);
-        orient_box.append(&Label::new(Some("Split Orientation:")));
-        let orient_list = StringList::new(&["Vertical", "Horizontal"]);
-        let split_orientation_dropdown = DropDown::new(Some(orient_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         let orient_idx = match config.borrow().frame.split_orientation {
             SplitOrientation::Vertical => 0,
             SplitOrientation::Horizontal => 1,
         };
-        split_orientation_dropdown.set_selected(orient_idx);
-        split_orientation_dropdown.set_hexpand(true);
-        orient_box.append(&split_orientation_dropdown);
+        let split_orientation_dropdown = builder.dropdown_row(
+            &page, "Split Orientation:", &["Vertical", "Horizontal"], orient_idx,
+            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        split_orientation_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.split_orientation = match selected {
-                0 => SplitOrientation::Vertical,
-                _ => SplitOrientation::Horizontal,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&orient_box);
+        let content_padding_spin = builder.spin_row(
+            &page, "Content Padding:", 4.0, 32.0, 2.0, config.borrow().frame.content_padding,
+            |cfg, v| cfg.frame.content_padding = v,
+        );
 
-        // Content padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Content Padding:")));
-        let content_padding_spin = SpinButton::with_range(4.0, 32.0, 2.0);
-        content_padding_spin.set_value(config.borrow().frame.content_padding);
-        content_padding_spin.set_hexpand(true);
-        padding_box.append(&content_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        content_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_box);
-
-        // Item spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Item Spacing:")));
-        let item_spacing_spin = SpinButton::with_range(0.0, 20.0, 1.0);
-        item_spacing_spin.set_value(config.borrow().frame.item_spacing);
-        item_spacing_spin.set_hexpand(true);
-        spacing_box.append(&item_spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        item_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.item_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&spacing_box);
+        let item_spacing_spin = builder.spin_row(
+            &page, "Item Spacing:", 0.0, 20.0, 1.0, config.borrow().frame.item_spacing,
+            |cfg, v| cfg.frame.item_spacing = v,
+        );
 
         // Divider section
-        let divider_label = Label::new(Some("Dividers"));
-        divider_label.set_halign(gtk4::Align::Start);
-        divider_label.add_css_class("heading");
+        let divider_label = create_section_header("Dividers");
         divider_label.set_margin_top(12);
         page.append(&divider_label);
 
-        // Divider style
-        let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_style_box.append(&Label::new(Some("Divider Style:")));
-        let div_style_list = StringList::new(&["Neon Line", "Gradient", "Neon Dots", "Line", "None"]);
-        let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
         let div_style_idx = match config.borrow().frame.divider_style {
             SynthwaveDividerStyle::NeonLine => 0,
             SynthwaveDividerStyle::Gradient => 1,
@@ -855,50 +620,24 @@ impl SynthwaveConfigWidget {
             SynthwaveDividerStyle::Line => 3,
             SynthwaveDividerStyle::None => 4,
         };
-        divider_style_dropdown.set_selected(div_style_idx);
-        divider_style_dropdown.set_hexpand(true);
-        div_style_box.append(&divider_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.divider_style = match selected {
+        let divider_style_dropdown = builder.dropdown_row(
+            &page, "Divider Style:", &["Neon Line", "Gradient", "Neon Dots", "Line", "None"], div_style_idx,
+            |cfg, idx| cfg.frame.divider_style = match idx {
                 0 => SynthwaveDividerStyle::NeonLine,
                 1 => SynthwaveDividerStyle::Gradient,
                 2 => SynthwaveDividerStyle::NeonDots,
                 3 => SynthwaveDividerStyle::Line,
                 _ => SynthwaveDividerStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_style_box);
+            },
+        );
 
-        // Divider padding
-        let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_padding_box.append(&Label::new(Some("Divider Padding:")));
-        let divider_padding_spin = SpinButton::with_range(2.0, 20.0, 1.0);
-        divider_padding_spin.set_value(config.borrow().frame.divider_padding);
-        divider_padding_spin.set_hexpand(true);
-        div_padding_box.append(&divider_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_padding_box);
+        let divider_padding_spin = builder.spin_row(
+            &page, "Divider Padding:", 2.0, 20.0, 1.0, config.borrow().frame.divider_padding,
+            |cfg, v| cfg.frame.divider_padding = v,
+        );
 
         // Group weights section
-        let weights_label = Label::new(Some("Group Size Weights"));
-        weights_label.set_halign(gtk4::Align::Start);
-        weights_label.add_css_class("heading");
+        let weights_label = create_section_header("Group Size Weights");
         weights_label.set_margin_top(12);
         page.append(&weights_label);
 
@@ -906,15 +645,11 @@ impl SynthwaveConfigWidget {
         page.append(&group_weights_box);
 
         // Item Orientations section
-        let item_orient_label = Label::new(Some("Item Orientation per Group"));
-        item_orient_label.set_halign(gtk4::Align::Start);
-        item_orient_label.add_css_class("heading");
+        let item_orient_label = create_section_header("Item Orientation per Group");
         item_orient_label.set_margin_top(12);
         page.append(&item_orient_label);
 
-        let item_orient_info = Label::new(Some(
-            "Choose how items within each group are arranged",
-        ));
+        let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
         item_orient_info.set_halign(gtk4::Align::Start);
         item_orient_info.add_css_class("dim-label");
         page.append(&item_orient_info);
@@ -952,49 +687,38 @@ impl SynthwaveConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Enable animation
+        // Animation page doesn't need preview, use simpler callback pattern
         let enable_check = CheckButton::with_label("Enable Animations");
         enable_check.set_active(config.borrow().animation_enabled);
-
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         enable_check.connect_toggled(move |check| {
             config_clone.borrow_mut().animation_enabled = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
         page.append(&enable_check);
 
-        // Animation speed
         let speed_box = GtkBox::new(Orientation::Horizontal, 6);
         speed_box.append(&Label::new(Some("Animation Speed:")));
         let speed_spin = SpinButton::with_range(1.0, 20.0, 1.0);
         speed_spin.set_value(config.borrow().animation_speed);
         speed_spin.set_hexpand(true);
         speed_box.append(&speed_spin);
-
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         speed_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().animation_speed = spin.value();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
         page.append(&speed_box);
 
-        // Scanline effect
         let scanline_check = CheckButton::with_label("Scanline Effect");
         scanline_check.set_active(config.borrow().frame.scanline_effect);
-
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         scanline_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.scanline_effect = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
         page.append(&scanline_check);
 

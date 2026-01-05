@@ -20,7 +20,7 @@ use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::{GradientEditor, ThemeFontSelector};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::combo_config_base;
-use crate::ui::widget_builder::create_page_container;
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_page_container, create_section_header};
 use crate::ui::background::Color;
 use crate::ui::theme::{ComboThemeConfig, LinearGradientSourceConfig, ColorStopSource};
 use crate::displayers::ArtDecoDisplayConfig;

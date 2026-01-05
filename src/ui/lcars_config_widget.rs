@@ -24,6 +24,7 @@ use crate::ui::background::Color;
 use crate::displayers::LcarsDisplayConfig;
 use crate::core::FieldMetadata;
 use crate::ui::combo_config_base;
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
 
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {

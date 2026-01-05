@@ -20,6 +20,7 @@ use crate::ui::background::Color;
 use crate::displayers::RetroTerminalDisplayConfig;
 use crate::core::FieldMetadata;
 use crate::ui::combo_config_base;
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
 use crate::ui::theme::{ColorSource, FontSource};
 use crate::ui::theme_font_selector::ThemeFontSelector;
 
@@ -210,120 +211,45 @@ impl RetroTerminalConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         // Scanlines section
-        let scanline_label = Label::new(Some("Scanlines"));
-        scanline_label.set_halign(gtk4::Align::Start);
-        scanline_label.add_css_class("heading");
-        page.append(&scanline_label);
+        page.append(&create_section_header("Scanlines"));
 
-        // Scanline intensity
-        let intensity_box = GtkBox::new(Orientation::Horizontal, 6);
-        intensity_box.append(&Label::new(Some("Intensity:")));
-        let scanline_intensity_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
-        scanline_intensity_scale.set_value(config.borrow().frame.scanline_intensity);
-        scanline_intensity_scale.set_hexpand(true);
-        scanline_intensity_scale.set_draw_value(true);
-        intensity_box.append(&scanline_intensity_scale);
+        let scanline_intensity_scale = builder.scale_row(
+            &page, "Intensity:", 0.0, 1.0, 0.05, config.borrow().frame.scanline_intensity,
+            |cfg, v| cfg.frame.scanline_intensity = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        scanline_intensity_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.scanline_intensity = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&intensity_box);
-
-        // Scanline spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Spacing:")));
-        let scanline_spacing_spin = SpinButton::with_range(1.0, 8.0, 0.5);
-        scanline_spacing_spin.set_value(config.borrow().frame.scanline_spacing);
-        scanline_spacing_spin.set_hexpand(true);
-        spacing_box.append(&scanline_spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        scanline_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.scanline_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&spacing_box);
+        let scanline_spacing_spin = builder.spin_row(
+            &page, "Spacing:", 1.0, 8.0, 0.5, config.borrow().frame.scanline_spacing,
+            |cfg, v| cfg.frame.scanline_spacing = v,
+        );
 
         // CRT Effects section
-        let crt_label = Label::new(Some("CRT Effects"));
-        crt_label.set_halign(gtk4::Align::Start);
-        crt_label.add_css_class("heading");
+        let crt_label = create_section_header("CRT Effects");
         crt_label.set_margin_top(12);
         page.append(&crt_label);
 
-        // Curvature
-        let curvature_box = GtkBox::new(Orientation::Horizontal, 6);
-        curvature_box.append(&Label::new(Some("Curvature:")));
-        let curvature_scale = Scale::with_range(Orientation::Horizontal, 0.0, 0.1, 0.01);
-        curvature_scale.set_value(config.borrow().frame.curvature_amount);
-        curvature_scale.set_hexpand(true);
-        curvature_scale.set_draw_value(true);
-        curvature_box.append(&curvature_scale);
+        let curvature_scale = builder.scale_row(
+            &page, "Curvature:", 0.0, 0.1, 0.01, config.borrow().frame.curvature_amount,
+            |cfg, v| cfg.frame.curvature_amount = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        curvature_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.curvature_amount = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&curvature_box);
+        let vignette_scale = builder.scale_row(
+            &page, "Vignette:", 0.0, 1.0, 0.05, config.borrow().frame.vignette_intensity,
+            |cfg, v| cfg.frame.vignette_intensity = v,
+        );
 
-        // Vignette
-        let vignette_box = GtkBox::new(Orientation::Horizontal, 6);
-        vignette_box.append(&Label::new(Some("Vignette:")));
-        let vignette_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
-        vignette_scale.set_value(config.borrow().frame.vignette_intensity);
-        vignette_scale.set_hexpand(true);
-        vignette_scale.set_draw_value(true);
-        vignette_box.append(&vignette_scale);
+        let glow_scale = builder.scale_row(
+            &page, "Screen Glow:", 0.0, 1.0, 0.05, config.borrow().frame.screen_glow,
+            |cfg, v| cfg.frame.screen_glow = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        vignette_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.vignette_intensity = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&vignette_box);
-
-        // Screen glow
-        let glow_box = GtkBox::new(Orientation::Horizontal, 6);
-        glow_box.append(&Label::new(Some("Screen Glow:")));
-        let glow_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
-        glow_scale.set_value(config.borrow().frame.screen_glow);
-        glow_scale.set_hexpand(true);
-        glow_scale.set_draw_value(true);
-        glow_box.append(&glow_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        glow_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().frame.screen_glow = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&glow_box);
-
-        // Flicker
-        let flicker_check = CheckButton::with_label("Enable Screen Flicker");
-        flicker_check.set_active(config.borrow().frame.flicker_enabled);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        flicker_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.flicker_enabled = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&flicker_check);
+        let flicker_check = builder.check_button(
+            &page, "Enable Screen Flicker", config.borrow().frame.flicker_enabled,
+            |cfg, v| cfg.frame.flicker_enabled = v,
+        );
 
         // Store widget refs
         *effects_widgets_out.borrow_mut() = Some(EffectsWidgets {
