@@ -77,8 +77,8 @@ pub trait GpuBackend: Send + Sync {
 /// Arc<Mutex<GpuBackendEnum>> instead of Arc<Mutex<Box<dyn GpuBackend>>>.
 /// This eliminates one level of pointer indirection in hot paths.
 pub enum GpuBackendEnum {
-    Nvidia(NvidiaBackend),
-    Amd(AmdBackend),
+    Nvidia(Box<NvidiaBackend>),
+    Amd(Box<AmdBackend>),
 }
 
 impl GpuBackend for GpuBackendEnum {

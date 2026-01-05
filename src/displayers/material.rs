@@ -59,19 +59,12 @@ impl Default for MaterialDisplayConfig {
 
 /// Internal display data combining config with shared combo data
 #[derive(Clone)]
+#[derive(Default)]
 struct DisplayData {
     config: MaterialDisplayConfig,
     combo: ComboDisplayData,
 }
 
-impl Default for DisplayData {
-    fn default() -> Self {
-        Self {
-            config: MaterialDisplayConfig::default(),
-            combo: ComboDisplayData::default(),
-        }
-    }
-}
 
 /// Material Design Cards Displayer
 pub struct MaterialDisplayer {

@@ -44,19 +44,12 @@ impl Default for IndustrialDisplayConfig {
 
 /// Display data for rendering
 #[derive(Clone)]
+#[derive(Default)]
 struct DisplayData {
     config: IndustrialDisplayConfig,
     combo: ComboDisplayData,
 }
 
-impl Default for DisplayData {
-    fn default() -> Self {
-        Self {
-            config: IndustrialDisplayConfig::default(),
-            combo: ComboDisplayData::default(),
-        }
-    }
-}
 
 /// Industrial/Gauge Panel displayer
 pub struct IndustrialDisplayer {

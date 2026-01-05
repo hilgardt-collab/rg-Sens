@@ -236,11 +236,13 @@ where
         colors: &Rc<RefCell<(crate::ui::Color, crate::ui::Color, crate::ui::Color, crate::ui::Color)>>,
     ) {
         let (c1, c2, c3, c4) = *colors.borrow();
-        let mut theme = ComboThemeConfig::default();
-        theme.color1 = c1;
-        theme.color2 = c2;
-        theme.color3 = c3;
-        theme.color4 = c4;
+        let theme = ComboThemeConfig {
+            color1: c1,
+            color2: c2,
+            color3: c3,
+            color4: c4,
+            ..Default::default()
+        };
         gradient_editor.set_theme_config(theme);
     }
 

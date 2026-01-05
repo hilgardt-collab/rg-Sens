@@ -58,19 +58,12 @@ impl Default for CyberpunkDisplayConfig {
 
 /// Internal display data combining config with shared combo data
 #[derive(Clone)]
+#[derive(Default)]
 struct DisplayData {
     config: CyberpunkDisplayConfig,
     combo: ComboDisplayData,
 }
 
-impl Default for DisplayData {
-    fn default() -> Self {
-        Self {
-            config: CyberpunkDisplayConfig::default(),
-            combo: ComboDisplayData::default(),
-        }
-    }
-}
 
 /// Cyberpunk/Neon HUD Displayer
 pub struct CyberpunkDisplayer {

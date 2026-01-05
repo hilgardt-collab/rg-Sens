@@ -291,7 +291,7 @@ impl Panel {
         for key in SYNC_KEYS {
             if let Some(value) = values.get(*key) {
                 // Only insert if value differs from current (avoids to_string + clone)
-                let should_insert = self.config.get(*key).map_or(true, |existing| existing != value);
+                let should_insert = self.config.get(*key) != Some(value);
                 if should_insert {
                     self.config.insert((*key).to_string(), value.clone());
                 }

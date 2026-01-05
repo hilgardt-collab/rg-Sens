@@ -1628,7 +1628,7 @@ impl RetroTerminalConfigWidget {
             group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
-            layout_orientation: config.frame.split_orientation.clone(),
+            layout_orientation: config.frame.split_orientation,
             content_items: config.frame.content_items.clone(),
             content_padding: config.frame.content_padding,
             item_spacing: 8.0, // Not configurable in Retro Terminal, use default
@@ -1645,7 +1645,7 @@ impl RetroTerminalConfigWidget {
             config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
-            config.frame.split_orientation = transfer.layout_orientation.clone();
+            config.frame.split_orientation = transfer.layout_orientation;
             config.frame.content_items = transfer.content_items.clone();
             config.frame.content_padding = transfer.content_padding;
             // item_spacing not configurable in Retro Terminal

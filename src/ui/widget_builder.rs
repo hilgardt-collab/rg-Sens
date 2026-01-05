@@ -399,14 +399,6 @@ impl<T: 'static> ConfigWidgetBuilder<T> {
         }
     }
 
-    /// Queue preview redraw and invoke change callback.
-    fn queue_redraw(&self) {
-        self.preview.queue_draw();
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
     /// Creates a spin button row, connects it, appends to container, and returns the SpinButton.
     pub fn spin_row<F>(
         &self,

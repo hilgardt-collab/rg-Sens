@@ -59,19 +59,12 @@ impl Default for ArtNouveauDisplayConfig {
 
 /// Internal display data combining config with shared combo data
 #[derive(Clone)]
+#[derive(Default)]
 struct DisplayData {
     config: ArtNouveauDisplayConfig,
     combo: ComboDisplayData,
 }
 
-impl Default for DisplayData {
-    fn default() -> Self {
-        Self {
-            config: ArtNouveauDisplayConfig::default(),
-            combo: ComboDisplayData::default(),
-        }
-    }
-}
 
 /// Art Nouveau Displayer
 pub struct ArtNouveauDisplayer {

@@ -53,7 +53,7 @@ fn detect_nvidia_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
                                     let gpu_info = backend.info().clone();
                                     log::info!("  NVIDIA GPU {}: {}", i, gpu_info.name);
                                     info.push(gpu_info);
-                                    gpus.push(GpuBackendEnum::Nvidia(backend));
+                                    gpus.push(GpuBackendEnum::Nvidia(Box::new(backend)));
                                 }
                                 Err(e) => {
                                     log::warn!("  Failed to initialize NVIDIA GPU {}: {}", i, e);
@@ -90,7 +90,7 @@ fn detect_amd_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
                 let gpu_info = backend.info().clone();
                 log::info!("  AMD GPU {}: {}", i, gpu_info.name);
                 info.push(gpu_info);
-                gpus.push(GpuBackendEnum::Amd(backend));
+                gpus.push(GpuBackendEnum::Amd(Box::new(backend)));
                 amd_count += 1;
             }
             Err(_) => {
