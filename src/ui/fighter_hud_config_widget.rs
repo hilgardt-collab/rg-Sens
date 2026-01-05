@@ -202,11 +202,8 @@ impl FighterHudConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Frame style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Frame Style:")));
-        let style_list = StringList::new(&["Corner Brackets", "Targeting Reticle", "Tactical Box", "Minimal", "None"]);
-        let style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         let style_idx = match config.borrow().frame.frame_style {
             HudFrameStyle::CornerBrackets => 0,
             HudFrameStyle::TargetingReticle => 1,
@@ -214,115 +211,46 @@ impl FighterHudConfigWidget {
             HudFrameStyle::Minimal => 3,
             HudFrameStyle::None => 4,
         };
-        style_dropdown.set_selected(style_idx);
-        style_dropdown.set_hexpand(true);
-        style_box.append(&style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.frame_style = match selected {
+        let style_dropdown = builder.dropdown_row(
+            &page, "Frame Style:", &["Corner Brackets", "Targeting Reticle", "Tactical Box", "Minimal", "None"], style_idx,
+            |cfg, idx| cfg.frame.frame_style = match idx {
                 0 => HudFrameStyle::CornerBrackets,
                 1 => HudFrameStyle::TargetingReticle,
                 2 => HudFrameStyle::TacticalBox,
                 3 => HudFrameStyle::Minimal,
                 _ => HudFrameStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
+            },
+        );
 
-        // Line width
-        let line_box = GtkBox::new(Orientation::Horizontal, 6);
-        line_box.append(&Label::new(Some("Line Width:")));
-        let line_width_spin = SpinButton::with_range(0.5, 5.0, 0.5);
-        line_width_spin.set_value(config.borrow().frame.line_width);
-        line_width_spin.set_hexpand(true);
-        line_box.append(&line_width_spin);
+        let line_width_spin = builder.spin_row(
+            &page, "Line Width:", 0.5, 5.0, 0.5, config.borrow().frame.line_width,
+            |cfg, v| cfg.frame.line_width = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        line_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.line_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&line_box);
+        let bracket_size_spin = builder.spin_row(
+            &page, "Bracket Size:", 10.0, 60.0, 2.0, config.borrow().frame.bracket_size,
+            |cfg, v| cfg.frame.bracket_size = v,
+        );
 
-        // Bracket size
-        let bracket_box = GtkBox::new(Orientation::Horizontal, 6);
-        bracket_box.append(&Label::new(Some("Bracket Size:")));
-        let bracket_size_spin = SpinButton::with_range(10.0, 60.0, 2.0);
-        bracket_size_spin.set_value(config.borrow().frame.bracket_size);
-        bracket_size_spin.set_hexpand(true);
-        bracket_box.append(&bracket_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bracket_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.bracket_size = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&bracket_box);
-
-        // Bracket thickness
-        let thickness_box = GtkBox::new(Orientation::Horizontal, 6);
-        thickness_box.append(&Label::new(Some("Bracket Thickness:")));
-        let bracket_thickness_spin = SpinButton::with_range(1.0, 6.0, 0.5);
-        bracket_thickness_spin.set_value(config.borrow().frame.bracket_thickness);
-        bracket_thickness_spin.set_hexpand(true);
-        thickness_box.append(&bracket_thickness_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bracket_thickness_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.bracket_thickness = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&thickness_box);
+        let bracket_thickness_spin = builder.spin_row(
+            &page, "Bracket Thickness:", 1.0, 6.0, 0.5, config.borrow().frame.bracket_thickness,
+            |cfg, v| cfg.frame.bracket_thickness = v,
+        );
 
         // Center reticle section
-        let reticle_label = Label::new(Some("Center Reticle"));
-        reticle_label.set_halign(gtk4::Align::Start);
-        reticle_label.add_css_class("heading");
+        let reticle_label = create_section_header("Center Reticle");
         reticle_label.set_margin_top(12);
         page.append(&reticle_label);
 
-        let show_reticle_check = CheckButton::with_label("Show Center Reticle");
-        show_reticle_check.set_active(config.borrow().frame.show_center_reticle);
+        let show_reticle_check = builder.check_button(
+            &page, "Show Center Reticle", config.borrow().frame.show_center_reticle,
+            |cfg, v| cfg.frame.show_center_reticle = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_reticle_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_center_reticle = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_reticle_check);
-
-        // Reticle size
-        let reticle_size_box = GtkBox::new(Orientation::Horizontal, 6);
-        reticle_size_box.append(&Label::new(Some("Reticle Size:")));
-        let reticle_size_spin = SpinButton::with_range(0.05, 0.5, 0.05);
-        reticle_size_spin.set_value(config.borrow().frame.reticle_size);
-        reticle_size_spin.set_hexpand(true);
-        reticle_size_box.append(&reticle_size_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        reticle_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.reticle_size = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&reticle_size_box);
+        let reticle_size_spin = builder.spin_row(
+            &page, "Reticle Size:", 0.05, 0.5, 0.05, config.borrow().frame.reticle_size,
+            |cfg, v| cfg.frame.reticle_size = v,
+        );
 
         // Reticle color (theme-aware)
         let reticle_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -341,15 +269,12 @@ impl FighterHudConfigWidget {
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Register theme refresh callback for reticle color selector
         let reticle_color_selector_rc = Rc::new(reticle_color_selector);
         let reticle_color_selector_for_refresh = reticle_color_selector_rc.clone();
         let config_for_reticle_refresh = config.clone();
-        let reticle_refresh: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = config_for_reticle_refresh.borrow().frame.theme.clone();
-            reticle_color_selector_for_refresh.set_theme_config(theme);
-        });
-        theme_ref_refreshers.borrow_mut().push(reticle_refresh);
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            reticle_color_selector_for_refresh.set_theme_config(config_for_reticle_refresh.borrow().frame.theme.clone());
+        }));
 
         // Store widget refs
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
@@ -504,64 +429,27 @@ impl FighterHudConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Split orientation
-        let orient_box = GtkBox::new(Orientation::Horizontal, 6);
-        orient_box.append(&Label::new(Some("Split Orientation:")));
-        let orient_list = StringList::new(&["Vertical", "Horizontal"]);
-        let split_orientation_dropdown = DropDown::new(Some(orient_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         let orient_idx = match config.borrow().frame.split_orientation {
             SplitOrientation::Vertical => 0,
             SplitOrientation::Horizontal => 1,
         };
-        split_orientation_dropdown.set_selected(orient_idx);
-        split_orientation_dropdown.set_hexpand(true);
-        orient_box.append(&split_orientation_dropdown);
+        let split_orientation_dropdown = builder.dropdown_row(
+            &page, "Split Orientation:", &["Vertical", "Horizontal"], orient_idx,
+            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        split_orientation_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.split_orientation = match selected {
-                0 => SplitOrientation::Vertical,
-                _ => SplitOrientation::Horizontal,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&orient_box);
-
-        // Content padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Content Padding:")));
-        let content_padding_spin = SpinButton::with_range(4.0, 32.0, 2.0);
-        content_padding_spin.set_value(config.borrow().frame.content_padding);
-        content_padding_spin.set_hexpand(true);
-        padding_box.append(&content_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        content_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_box);
+        let content_padding_spin = builder.spin_row(
+            &page, "Content Padding:", 4.0, 32.0, 2.0, config.borrow().frame.content_padding,
+            |cfg, v| cfg.frame.content_padding = v,
+        );
 
         // Divider section
-        let divider_label = Label::new(Some("Dividers"));
-        divider_label.set_halign(gtk4::Align::Start);
-        divider_label.add_css_class("heading");
+        let divider_label = create_section_header("Dividers");
         divider_label.set_margin_top(12);
         page.append(&divider_label);
 
-        // Divider style
-        let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_style_box.append(&Label::new(Some("Divider Style:")));
-        let div_style_list = StringList::new(&["Tick Ladder", "Arrow Line", "Tactical Dash", "Fade", "None"]);
-        let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
         let div_style_idx = match config.borrow().frame.divider_style {
             HudDividerStyle::TickLadder => 0,
             HudDividerStyle::ArrowLine => 1,
@@ -569,67 +457,29 @@ impl FighterHudConfigWidget {
             HudDividerStyle::Fade => 3,
             HudDividerStyle::None => 4,
         };
-        divider_style_dropdown.set_selected(div_style_idx);
-        divider_style_dropdown.set_hexpand(true);
-        div_style_box.append(&divider_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.divider_style = match selected {
+        let divider_style_dropdown = builder.dropdown_row(
+            &page, "Divider Style:", &["Tick Ladder", "Arrow Line", "Tactical Dash", "Fade", "None"], div_style_idx,
+            |cfg, idx| cfg.frame.divider_style = match idx {
                 0 => HudDividerStyle::TickLadder,
                 1 => HudDividerStyle::ArrowLine,
                 2 => HudDividerStyle::TacticalDash,
                 3 => HudDividerStyle::Fade,
                 _ => HudDividerStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_style_box);
+            },
+        );
 
-        // Divider padding
-        let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_padding_box.append(&Label::new(Some("Divider Padding:")));
-        let divider_padding_spin = SpinButton::with_range(2.0, 20.0, 1.0);
-        divider_padding_spin.set_value(config.borrow().frame.divider_padding);
-        divider_padding_spin.set_hexpand(true);
-        div_padding_box.append(&divider_padding_spin);
+        let divider_padding_spin = builder.spin_row(
+            &page, "Divider Padding:", 2.0, 20.0, 1.0, config.borrow().frame.divider_padding,
+            |cfg, v| cfg.frame.divider_padding = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_padding_box);
-
-        // Tick spacing
-        let tick_box = GtkBox::new(Orientation::Horizontal, 6);
-        tick_box.append(&Label::new(Some("Tick Spacing:")));
-        let tick_spacing_spin = SpinButton::with_range(4.0, 20.0, 1.0);
-        tick_spacing_spin.set_value(config.borrow().frame.tick_spacing);
-        tick_spacing_spin.set_hexpand(true);
-        tick_box.append(&tick_spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        tick_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.tick_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&tick_box);
+        let tick_spacing_spin = builder.spin_row(
+            &page, "Tick Spacing:", 4.0, 20.0, 1.0, config.borrow().frame.tick_spacing,
+            |cfg, v| cfg.frame.tick_spacing = v,
+        );
 
         // Group weights section
-        let weights_label = Label::new(Some("Group Size Weights"));
-        weights_label.set_halign(gtk4::Align::Start);
-        weights_label.add_css_class("heading");
+        let weights_label = create_section_header("Group Size Weights");
         weights_label.set_margin_top(12);
         page.append(&weights_label);
 
@@ -637,15 +487,11 @@ impl FighterHudConfigWidget {
         page.append(&group_weights_box);
 
         // Item Orientations section
-        let item_orient_label = Label::new(Some("Item Orientation per Group"));
-        item_orient_label.set_halign(gtk4::Align::Start);
-        item_orient_label.add_css_class("heading");
+        let item_orient_label = create_section_header("Item Orientation per Group");
         item_orient_label.set_margin_top(12);
         page.append(&item_orient_label);
 
-        let item_orient_info = Label::new(Some(
-            "Choose how items within each group are arranged",
-        ));
+        let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
         item_orient_info.set_halign(gtk4::Align::Start);
         item_orient_info.add_css_class("dim-label");
         page.append(&item_orient_info);

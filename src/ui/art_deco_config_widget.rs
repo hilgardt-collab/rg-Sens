@@ -717,11 +717,8 @@ impl ArtDecoConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Border style
-        let border_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        border_style_box.append(&Label::new(Some("Border Style:")));
-        let border_style_list = StringList::new(&["Sunburst", "Chevron", "Stepped", "Geometric", "Ornate"]);
-        let border_style_dropdown = DropDown::new(Some(border_style_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         let style_idx = match config.borrow().frame.border_style {
             BorderStyle::Sunburst => 0,
             BorderStyle::Chevron => 1,
@@ -729,45 +726,21 @@ impl ArtDecoConfigWidget {
             BorderStyle::Geometric => 3,
             BorderStyle::Ornate => 4,
         };
-        border_style_dropdown.set_selected(style_idx);
-        border_style_dropdown.set_hexpand(true);
-        border_style_box.append(&border_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        border_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.border_style = match selected {
+        let border_style_dropdown = builder.dropdown_row(
+            &page, "Border Style:", &["Sunburst", "Chevron", "Stepped", "Geometric", "Ornate"], style_idx,
+            |cfg, idx| cfg.frame.border_style = match idx {
                 0 => BorderStyle::Sunburst,
                 1 => BorderStyle::Chevron,
                 2 => BorderStyle::Stepped,
                 3 => BorderStyle::Geometric,
                 _ => BorderStyle::Ornate,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&border_style_box);
+            },
+        );
 
-        // Border width
-        let border_width_box = GtkBox::new(Orientation::Horizontal, 6);
-        border_width_box.append(&Label::new(Some("Border Width:")));
-        let border_width_spin = SpinButton::with_range(1.0, 10.0, 0.5);
-        border_width_spin.set_value(config.borrow().frame.border_width);
-        border_width_spin.set_hexpand(true);
-        border_width_box.append(&border_width_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        border_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.border_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&border_width_box);
+        let border_width_spin = builder.spin_row(
+            &page, "Border Width:", 1.0, 10.0, 0.5, config.borrow().frame.border_width,
+            |cfg, v| cfg.frame.border_width = v,
+        );
 
         // Border color (theme-aware)
         let border_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -792,17 +765,8 @@ impl ArtDecoConfigWidget {
         page.append(&border_color_box);
 
         // Corner style section
-        let corner_label = Label::new(Some("Corner Decorations"));
-        corner_label.set_halign(gtk4::Align::Start);
-        corner_label.add_css_class("heading");
-        corner_label.set_margin_top(12);
-        page.append(&corner_label);
+        page.append(&create_section_header("Corner Decorations"));
 
-        // Corner style
-        let corner_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        corner_style_box.append(&Label::new(Some("Style:")));
-        let corner_style_list = StringList::new(&["Fan", "Ziggurat", "Diamond", "Bracket", "None"]);
-        let corner_style_dropdown = DropDown::new(Some(corner_style_list), None::<gtk4::Expression>);
         let corner_idx = match config.borrow().frame.corner_style {
             CornerStyle::Fan => 0,
             CornerStyle::Ziggurat => 1,
@@ -810,62 +774,26 @@ impl ArtDecoConfigWidget {
             CornerStyle::Bracket => 3,
             CornerStyle::None => 4,
         };
-        corner_style_dropdown.set_selected(corner_idx);
-        corner_style_dropdown.set_hexpand(true);
-        corner_style_box.append(&corner_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.corner_style = match selected {
+        let corner_style_dropdown = builder.dropdown_row(
+            &page, "Style:", &["Fan", "Ziggurat", "Diamond", "Bracket", "None"], corner_idx,
+            |cfg, idx| cfg.frame.corner_style = match idx {
                 0 => CornerStyle::Fan,
                 1 => CornerStyle::Ziggurat,
                 2 => CornerStyle::Diamond,
                 3 => CornerStyle::Bracket,
                 _ => CornerStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&corner_style_box);
+            },
+        );
 
-        // Corner size
-        let corner_size_box = GtkBox::new(Orientation::Horizontal, 6);
-        corner_size_box.append(&Label::new(Some("Size:")));
-        let corner_size_spin = SpinButton::with_range(8.0, 64.0, 2.0);
-        corner_size_spin.set_value(config.borrow().frame.corner_size);
-        corner_size_spin.set_hexpand(true);
-        corner_size_box.append(&corner_size_spin);
+        let corner_size_spin = builder.spin_row(
+            &page, "Size:", 8.0, 64.0, 2.0, config.borrow().frame.corner_size,
+            |cfg, v| cfg.frame.corner_size = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_size_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.corner_size = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&corner_size_box);
-
-        // Accent width
-        let accent_width_box = GtkBox::new(Orientation::Horizontal, 6);
-        accent_width_box.append(&Label::new(Some("Accent Width:")));
-        let accent_width_spin = SpinButton::with_range(0.5, 5.0, 0.5);
-        accent_width_spin.set_value(config.borrow().frame.accent_width);
-        accent_width_spin.set_hexpand(true);
-        accent_width_box.append(&accent_width_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        accent_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.accent_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&accent_width_box);
+        let accent_width_spin = builder.spin_row(
+            &page, "Accent Width:", 0.5, 5.0, 0.5, config.borrow().frame.accent_width,
+            |cfg, v| cfg.frame.accent_width = v,
+        );
 
         // Accent color (theme-aware)
         let accent_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -911,7 +839,9 @@ impl ArtDecoConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Background color (theme-aware)
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
+        // Background color (theme-aware) - keep manual for ThemeColorSelector
         let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_color_box.append(&Label::new(Some("Background Color:")));
         let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.background_color.clone()));
@@ -934,17 +864,8 @@ impl ArtDecoConfigWidget {
         page.append(&bg_color_box);
 
         // Pattern section
-        let pattern_label = Label::new(Some("Background Pattern"));
-        pattern_label.set_halign(gtk4::Align::Start);
-        pattern_label.add_css_class("heading");
-        pattern_label.set_margin_top(12);
-        page.append(&pattern_label);
+        page.append(&create_section_header("Background Pattern"));
 
-        // Pattern style
-        let pattern_box = GtkBox::new(Orientation::Horizontal, 6);
-        pattern_box.append(&Label::new(Some("Pattern:")));
-        let pattern_list = StringList::new(&["Solid", "Vertical Lines", "Diamond Grid", "Sunburst", "Chevrons"]);
-        let pattern_dropdown = DropDown::new(Some(pattern_list), None::<gtk4::Expression>);
         let pattern_idx = match config.borrow().frame.background_pattern {
             BackgroundPattern::Solid => 0,
             BackgroundPattern::VerticalLines => 1,
@@ -952,62 +873,26 @@ impl ArtDecoConfigWidget {
             BackgroundPattern::Sunburst => 3,
             BackgroundPattern::Chevrons => 4,
         };
-        pattern_dropdown.set_selected(pattern_idx);
-        pattern_dropdown.set_hexpand(true);
-        pattern_box.append(&pattern_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        pattern_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.background_pattern = match selected {
+        let pattern_dropdown = builder.dropdown_row(
+            &page, "Pattern:", &["Solid", "Vertical Lines", "Diamond Grid", "Sunburst", "Chevrons"], pattern_idx,
+            |cfg, idx| cfg.frame.background_pattern = match idx {
                 0 => BackgroundPattern::Solid,
                 1 => BackgroundPattern::VerticalLines,
                 2 => BackgroundPattern::DiamondGrid,
                 3 => BackgroundPattern::Sunburst,
                 _ => BackgroundPattern::Chevrons,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&pattern_box);
+            },
+        );
 
-        // Pattern spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Pattern Spacing:")));
-        let pattern_spacing_spin = SpinButton::with_range(8.0, 64.0, 2.0);
-        pattern_spacing_spin.set_value(config.borrow().frame.pattern_spacing);
-        pattern_spacing_spin.set_hexpand(true);
-        spacing_box.append(&pattern_spacing_spin);
+        let pattern_spacing_spin = builder.spin_row(
+            &page, "Pattern Spacing:", 8.0, 64.0, 2.0, config.borrow().frame.pattern_spacing,
+            |cfg, v| cfg.frame.pattern_spacing = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        pattern_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.pattern_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&spacing_box);
-
-        // Sunburst rays (for sunburst pattern)
-        let rays_box = GtkBox::new(Orientation::Horizontal, 6);
-        rays_box.append(&Label::new(Some("Sunburst Rays:")));
-        let sunburst_rays_spin = SpinButton::with_range(6.0, 36.0, 2.0);
-        sunburst_rays_spin.set_value(config.borrow().frame.sunburst_rays as f64);
-        sunburst_rays_spin.set_hexpand(true);
-        rays_box.append(&sunburst_rays_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        sunburst_rays_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.sunburst_rays = spin.value() as usize;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&rays_box);
+        let sunburst_rays_spin = builder.spin_row(
+            &page, "Sunburst Rays:", 6.0, 36.0, 2.0, config.borrow().frame.sunburst_rays as f64,
+            |cfg, v| cfg.frame.sunburst_rays = v as usize,
+        );
 
         // Pattern color (theme-aware)
         let pattern_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1051,68 +936,33 @@ impl ArtDecoConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Show header
-        let show_header_check = CheckButton::with_label("Show Header");
-        show_header_check.set_active(config.borrow().frame.show_header);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_header_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().frame.show_header = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&show_header_check);
+        let show_header_check = builder.check_button(
+            &page, "Show Header", config.borrow().frame.show_header,
+            |cfg, v| cfg.frame.show_header = v,
+        );
 
-        // Header text
-        let text_box = GtkBox::new(Orientation::Horizontal, 6);
-        text_box.append(&Label::new(Some("Header Text:")));
-        let header_text_entry = Entry::new();
-        header_text_entry.set_text(&config.borrow().frame.header_text);
-        header_text_entry.set_hexpand(true);
-        text_box.append(&header_text_entry);
+        let header_text_entry = builder.entry_row(
+            &page, "Header Text:", &config.borrow().frame.header_text.clone(),
+            |cfg, s| cfg.frame.header_text = s,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_text_entry.connect_changed(move |entry| {
-            config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&text_box);
-
-        // Header style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Style:")));
-        let style_list = StringList::new(&["Centered", "Banner", "Stepped", "None"]);
-        let header_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
         let style_idx = match config.borrow().frame.header_style {
             HeaderStyle::Centered => 0,
             HeaderStyle::Banner => 1,
             HeaderStyle::Stepped => 2,
             HeaderStyle::None => 3,
         };
-        header_style_dropdown.set_selected(style_idx);
-        header_style_dropdown.set_hexpand(true);
-        style_box.append(&header_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        header_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.header_style = match selected {
+        let header_style_dropdown = builder.dropdown_row(
+            &page, "Style:", &["Centered", "Banner", "Stepped", "None"], style_idx,
+            |cfg, idx| cfg.frame.header_style = match idx {
                 0 => HeaderStyle::Centered,
                 1 => HeaderStyle::Banner,
                 2 => HeaderStyle::Stepped,
                 _ => HeaderStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&style_box);
+            },
+        );
 
         // Header font
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1179,64 +1029,28 @@ impl ArtDecoConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Split orientation
-        let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
-        orientation_box.append(&Label::new(Some("Group Direction:")));
-        let orientation_list = StringList::new(&["Horizontal", "Vertical"]);
-        let split_orientation_dropdown = DropDown::new(Some(orientation_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
         let orient_idx = match config.borrow().frame.split_orientation {
             SplitOrientation::Horizontal => 0,
             SplitOrientation::Vertical => 1,
         };
-        split_orientation_dropdown.set_selected(orient_idx);
-        split_orientation_dropdown.set_hexpand(true);
-        orientation_box.append(&split_orientation_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        split_orientation_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.split_orientation = match selected {
+        let split_orientation_dropdown = builder.dropdown_row(
+            &page, "Group Direction:", &["Horizontal", "Vertical"], orient_idx,
+            |cfg, idx| cfg.frame.split_orientation = match idx {
                 0 => SplitOrientation::Horizontal,
                 _ => SplitOrientation::Vertical,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&orientation_box);
+            },
+        );
 
-        // Content padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Content Padding:")));
-        let content_padding_spin = SpinButton::with_range(4.0, 48.0, 2.0);
-        content_padding_spin.set_value(config.borrow().frame.content_padding);
-        content_padding_spin.set_hexpand(true);
-        padding_box.append(&content_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        content_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_box);
+        let content_padding_spin = builder.spin_row(
+            &page, "Content Padding:", 4.0, 48.0, 2.0, config.borrow().frame.content_padding,
+            |cfg, v| cfg.frame.content_padding = v,
+        );
 
         // Divider section
-        let divider_label = Label::new(Some("Dividers"));
-        divider_label.set_halign(gtk4::Align::Start);
-        divider_label.add_css_class("heading");
-        divider_label.set_margin_top(12);
-        page.append(&divider_label);
+        page.append(&create_section_header("Dividers"));
 
-        // Divider style
-        let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_style_box.append(&Label::new(Some("Style:")));
-        let div_style_list = StringList::new(&["Chevron", "Double Line", "Line", "Stepped", "None"]);
-        let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
         let div_style_idx = match config.borrow().frame.divider_style {
             DividerStyle::Chevron => 0,
             DividerStyle::DoubleLine => 1,
@@ -1244,62 +1058,26 @@ impl ArtDecoConfigWidget {
             DividerStyle::Stepped => 3,
             DividerStyle::None => 4,
         };
-        divider_style_dropdown.set_selected(div_style_idx);
-        divider_style_dropdown.set_hexpand(true);
-        div_style_box.append(&divider_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.divider_style = match selected {
+        let divider_style_dropdown = builder.dropdown_row(
+            &page, "Style:", &["Chevron", "Double Line", "Line", "Stepped", "None"], div_style_idx,
+            |cfg, idx| cfg.frame.divider_style = match idx {
                 0 => DividerStyle::Chevron,
                 1 => DividerStyle::DoubleLine,
                 2 => DividerStyle::Line,
                 3 => DividerStyle::Stepped,
                 _ => DividerStyle::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_style_box);
+            },
+        );
 
-        // Divider width
-        let div_width_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_width_box.append(&Label::new(Some("Width:")));
-        let divider_width_spin = SpinButton::with_range(1.0, 8.0, 0.5);
-        divider_width_spin.set_value(config.borrow().frame.divider_width);
-        divider_width_spin.set_hexpand(true);
-        div_width_box.append(&divider_width_spin);
+        let divider_width_spin = builder.spin_row(
+            &page, "Width:", 1.0, 8.0, 0.5, config.borrow().frame.divider_width,
+            |cfg, v| cfg.frame.divider_width = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_width_box);
-
-        // Divider padding
-        let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_padding_box.append(&Label::new(Some("Padding:")));
-        let divider_padding_spin = SpinButton::with_range(2.0, 24.0, 2.0);
-        divider_padding_spin.set_value(config.borrow().frame.divider_padding);
-        divider_padding_spin.set_hexpand(true);
-        div_padding_box.append(&divider_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_padding_box);
+        let divider_padding_spin = builder.spin_row(
+            &page, "Padding:", 2.0, 24.0, 2.0, config.borrow().frame.divider_padding,
+            |cfg, v| cfg.frame.divider_padding = v,
+        );
 
         // Divider color (theme-aware)
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1324,11 +1102,7 @@ impl ArtDecoConfigWidget {
         page.append(&div_color_box);
 
         // Group weights section
-        let weights_label = Label::new(Some("Group Size Weights"));
-        weights_label.set_halign(gtk4::Align::Start);
-        weights_label.add_css_class("heading");
-        weights_label.set_margin_top(12);
-        page.append(&weights_label);
+        page.append(&create_section_header("Group Size Weights"));
 
         let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
         page.append(&group_weights_box.clone());
@@ -1336,11 +1110,7 @@ impl ArtDecoConfigWidget {
         Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
 
         // Item Orientations section
-        let item_orient_label = Label::new(Some("Item Orientation per Group"));
-        item_orient_label.set_halign(gtk4::Align::Start);
-        item_orient_label.add_css_class("heading");
-        item_orient_label.set_margin_top(12);
-        page.append(&item_orient_label);
+        page.append(&create_section_header("Item Orientation per Group"));
 
         let item_orient_info = Label::new(Some(
             "Choose how items within each group are arranged",
@@ -1444,35 +1214,17 @@ impl ArtDecoConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Enable animation
-        let enable_check = CheckButton::with_label("Enable Animation");
-        enable_check.set_active(config.borrow().animation_enabled);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        enable_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().animation_enabled = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&enable_check);
+        let enable_check = builder.check_button(
+            &page, "Enable Animation", config.borrow().animation_enabled,
+            |cfg, v| cfg.animation_enabled = v,
+        );
 
-        // Animation speed
-        let speed_box = GtkBox::new(Orientation::Horizontal, 6);
-        speed_box.append(&Label::new(Some("Animation Speed:")));
-        let speed_spin = SpinButton::with_range(1.0, 20.0, 0.5);
-        speed_spin.set_value(config.borrow().animation_speed);
-        speed_spin.set_hexpand(true);
-        speed_box.append(&speed_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        speed_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().animation_speed = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&speed_box);
+        let speed_spin = builder.spin_row(
+            &page, "Animation Speed:", 1.0, 20.0, 0.5, config.borrow().animation_speed,
+            |cfg, v| cfg.animation_speed = v,
+        );
 
         // Store widget refs
         *animation_widgets_out.borrow_mut() = Some(AnimationWidgets {

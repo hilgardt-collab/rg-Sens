@@ -277,7 +277,7 @@ impl LcarsConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Theme reference section for quick access to theme colors/fonts
+        // Theme reference section
         let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
             config,
             |cfg| cfg.frame.theme.clone(),
@@ -285,277 +285,120 @@ impl LcarsConfigWidget {
         theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
         page.append(&theme_ref_section);
 
-        // Sidebar width
-        let sidebar_box = GtkBox::new(Orientation::Horizontal, 6);
-        sidebar_box.append(&Label::new(Some("Sidebar Width:")));
-        let sidebar_spin = SpinButton::with_range(50.0, 300.0, 5.0);
-        sidebar_spin.set_value(config.borrow().frame.sidebar_width);
-        sidebar_spin.set_hexpand(true);
-        sidebar_box.append(&sidebar_spin);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        sidebar_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.sidebar_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&sidebar_box);
+        let sidebar_spin = builder.spin_row(
+            &page, "Sidebar Width:", 50.0, 300.0, 5.0, config.borrow().frame.sidebar_width,
+            |cfg, v| cfg.frame.sidebar_width = v,
+        );
 
-        // Sidebar position
-        let pos_box = GtkBox::new(Orientation::Horizontal, 6);
-        pos_box.append(&Label::new(Some("Sidebar Position:")));
-        let pos_list = StringList::new(&["Left", "Right"]);
-        let pos_dropdown = DropDown::new(Some(pos_list), None::<gtk4::Expression>);
         let pos_idx = match config.borrow().frame.sidebar_position {
             SidebarPosition::Left => 0,
             SidebarPosition::Right => 1,
         };
-        pos_dropdown.set_selected(pos_idx);
-        pos_dropdown.set_hexpand(true);
-        pos_box.append(&pos_dropdown);
+        let pos_dropdown = builder.dropdown_row(
+            &page, "Sidebar Position:", &["Left", "Right"], pos_idx,
+            |cfg, idx| cfg.frame.sidebar_position = if idx == 0 { SidebarPosition::Left } else { SidebarPosition::Right },
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        pos_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.sidebar_position = match dropdown.selected() {
-                0 => SidebarPosition::Left,
-                _ => SidebarPosition::Right,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&pos_box);
-
-        // Extension mode
-        let ext_box = GtkBox::new(Orientation::Horizontal, 6);
-        ext_box.append(&Label::new(Some("Extensions:")));
-        let ext_list = StringList::new(&["Top", "Bottom", "Both", "None"]);
-        let ext_dropdown = DropDown::new(Some(ext_list), None::<gtk4::Expression>);
         let ext_idx = match config.borrow().frame.extension_mode {
             ExtensionMode::Top => 0,
             ExtensionMode::Bottom => 1,
             ExtensionMode::Both => 2,
             ExtensionMode::None => 3,
         };
-        ext_dropdown.set_selected(ext_idx);
-        ext_dropdown.set_hexpand(true);
-        ext_box.append(&ext_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        ext_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.extension_mode = match dropdown.selected() {
+        let ext_dropdown = builder.dropdown_row(
+            &page, "Extensions:", &["Top", "Bottom", "Both", "None"], ext_idx,
+            |cfg, idx| cfg.frame.extension_mode = match idx {
                 0 => ExtensionMode::Top,
                 1 => ExtensionMode::Bottom,
                 2 => ExtensionMode::Both,
                 _ => ExtensionMode::None,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&ext_box);
+            },
+        );
 
-        // Top bar height
-        let top_box = GtkBox::new(Orientation::Horizontal, 6);
-        top_box.append(&Label::new(Some("Top Bar Height:")));
-        let top_spin = SpinButton::with_range(20.0, 100.0, 2.0);
-        top_spin.set_value(config.borrow().frame.top_bar_height);
-        top_spin.set_hexpand(true);
-        top_box.append(&top_spin);
+        let top_spin = builder.spin_row(
+            &page, "Top Bar Height:", 20.0, 100.0, 2.0, config.borrow().frame.top_bar_height,
+            |cfg, v| cfg.frame.top_bar_height = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        top_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.top_bar_height = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&top_box);
+        let bottom_spin = builder.spin_row(
+            &page, "Bottom Bar Height:", 20.0, 100.0, 2.0, config.borrow().frame.bottom_bar_height,
+            |cfg, v| cfg.frame.bottom_bar_height = v,
+        );
 
-        // Bottom bar height
-        let bottom_box = GtkBox::new(Orientation::Horizontal, 6);
-        bottom_box.append(&Label::new(Some("Bottom Bar Height:")));
-        let bottom_spin = SpinButton::with_range(20.0, 100.0, 2.0);
-        bottom_spin.set_value(config.borrow().frame.bottom_bar_height);
-        bottom_spin.set_hexpand(true);
-        bottom_box.append(&bottom_spin);
+        let corner_spin = builder.spin_row(
+            &page, "Corner Radius:", 0.0, 100.0, 5.0, config.borrow().frame.corner_radius,
+            |cfg, v| cfg.frame.corner_radius = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bottom_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.bottom_bar_height = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&bottom_box);
-
-        // Corner radius
-        let corner_box = GtkBox::new(Orientation::Horizontal, 6);
-        corner_box.append(&Label::new(Some("Corner Radius:")));
-        let corner_spin = SpinButton::with_range(0.0, 100.0, 5.0);
-        corner_spin.set_value(config.borrow().frame.corner_radius);
-        corner_spin.set_hexpand(true);
-        corner_box.append(&corner_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        corner_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.corner_radius = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&corner_box);
-
-        // Extension corner style
-        let ext_corner_box = GtkBox::new(Orientation::Horizontal, 6);
-        ext_corner_box.append(&Label::new(Some("Extension Corners:")));
-        let ext_corner_list = StringList::new(&["Square", "Round"]);
-        let ext_corner_dropdown = DropDown::new(Some(ext_corner_list), None::<gtk4::Expression>);
         let ext_corner_idx = match config.borrow().frame.extension_corner_style {
             CornerStyle::Square => 0,
             CornerStyle::Round => 1,
         };
-        ext_corner_dropdown.set_selected(ext_corner_idx);
-        ext_corner_dropdown.set_hexpand(true);
-        ext_corner_box.append(&ext_corner_dropdown);
+        let ext_corner_dropdown = builder.dropdown_row(
+            &page, "Extension Corners:", &["Square", "Round"], ext_corner_idx,
+            |cfg, idx| cfg.frame.extension_corner_style = if idx == 0 { CornerStyle::Square } else { CornerStyle::Round },
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        ext_corner_dropdown.connect_selected_notify(move |dropdown| {
-            config_clone.borrow_mut().frame.extension_corner_style = match dropdown.selected() {
-                0 => CornerStyle::Square,
-                _ => CornerStyle::Round,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&ext_corner_box);
-
-        // Content background color
+        // Content background color (keep manual - uses ColorButtonWidget directly)
         let content_color_box = GtkBox::new(Orientation::Horizontal, 6);
         content_color_box.append(&Label::new(Some("Content Background:")));
         let content_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.content_bg_color));
         content_color_box.append(content_color_widget.widget());
-
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         content_color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.content_bg_color = color;
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
         page.append(&content_color_box);
 
         // Content padding section
-        let padding_label = Label::new(Some("Content Padding"));
-        padding_label.set_halign(gtk4::Align::Start);
-        padding_label.add_css_class("heading");
-        page.append(&padding_label);
+        page.append(&create_section_header("Content Padding"));
 
-        // Overall padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Overall:")));
-        let padding_spin = SpinButton::with_range(0.0, 50.0, 1.0);
-        padding_spin.set_value(config.borrow().frame.content_padding);
-        padding_spin.set_hexpand(true);
-        padding_box.append(&padding_spin);
+        let padding_spin = builder.spin_row(
+            &page, "Overall:", 0.0, 50.0, 1.0, config.borrow().frame.content_padding,
+            |cfg, v| cfg.frame.content_padding = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_box);
+        let padding_top_spin = builder.spin_row(
+            &page, "Top:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_top,
+            |cfg, v| cfg.frame.content_padding_top = v,
+        );
 
-        // Top padding
-        let padding_top_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_top_box.append(&Label::new(Some("Top:")));
-        let padding_top_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
-        padding_top_spin.set_value(config.borrow().frame.content_padding_top);
-        padding_top_spin.set_hexpand(true);
-        padding_top_box.append(&padding_top_spin);
+        let padding_left_spin = builder.spin_row(
+            &page, "Left:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_left,
+            |cfg, v| cfg.frame.content_padding_left = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        padding_top_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding_top = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_top_box);
+        let padding_right_spin = builder.spin_row(
+            &page, "Right:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_right,
+            |cfg, v| cfg.frame.content_padding_right = v,
+        );
 
-        // Left padding
-        let padding_left_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_left_box.append(&Label::new(Some("Left:")));
-        let padding_left_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
-        padding_left_spin.set_value(config.borrow().frame.content_padding_left);
-        padding_left_spin.set_hexpand(true);
-        padding_left_box.append(&padding_left_spin);
+        let padding_bottom_spin = builder.spin_row(
+            &page, "Bottom:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_bottom,
+            |cfg, v| cfg.frame.content_padding_bottom = v,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        padding_left_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding_left = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_left_box);
-
-        // Right padding
-        let padding_right_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_right_box.append(&Label::new(Some("Right:")));
-        let padding_right_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
-        padding_right_spin.set_value(config.borrow().frame.content_padding_right);
-        padding_right_spin.set_hexpand(true);
-        padding_right_box.append(&padding_right_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        padding_right_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding_right = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_right_box);
-
-        // Bottom padding
-        let padding_bottom_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_bottom_box.append(&Label::new(Some("Bottom:")));
-        let padding_bottom_spin = SpinButton::with_range(-50.0, 50.0, 1.0);
-        padding_bottom_spin.set_value(config.borrow().frame.content_padding_bottom);
-        padding_bottom_spin.set_hexpand(true);
-        padding_bottom_box.append(&padding_bottom_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        padding_bottom_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding_bottom = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&padding_bottom_box);
-
-        // Store widget references for updating when config changes
+        // Store widget references
         *frame_widgets_out.borrow_mut() = Some(FrameWidgets {
-            sidebar_spin: sidebar_spin.clone(),
-            pos_dropdown: pos_dropdown.clone(),
-            ext_dropdown: ext_dropdown.clone(),
-            top_spin: top_spin.clone(),
-            bottom_spin: bottom_spin.clone(),
-            corner_spin: corner_spin.clone(),
-            ext_corner_dropdown: ext_corner_dropdown.clone(),
-            content_color_widget: content_color_widget.clone(),
-            padding_spin: padding_spin.clone(),
-            padding_top_spin: padding_top_spin.clone(),
-            padding_left_spin: padding_left_spin.clone(),
-            padding_right_spin: padding_right_spin.clone(),
-            padding_bottom_spin: padding_bottom_spin.clone(),
+            sidebar_spin,
+            pos_dropdown,
+            ext_dropdown,
+            top_spin,
+            bottom_spin,
+            corner_spin,
+            ext_corner_dropdown,
+            content_color_widget,
+            padding_spin,
+            padding_top_spin,
+            padding_left_spin,
+            padding_right_spin,
+            padding_bottom_spin,
         });
 
         page
