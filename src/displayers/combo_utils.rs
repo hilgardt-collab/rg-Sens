@@ -145,20 +145,35 @@ pub fn prefix_set(prefixes: &[String]) -> HashSet<&str> {
 
 /// Filter values to only those matching any of the given prefixes
 /// Optimized single-pass algorithm: O(n) where n = data.len()
+///
+/// DEPRECATED: Use `filter_values_by_prefixes_into` for better performance
 pub fn filter_values_by_prefixes(
     data: &HashMap<String, Value>,
     prefixes: &[String],
 ) -> HashMap<String, Value> {
+    let mut result = HashMap::with_capacity(prefixes.len() * 8);
+    filter_values_by_prefixes_into(data, prefixes, &mut result);
+    result
+}
+
+/// Filter values in-place, reusing the output HashMap to avoid allocations
+/// Clears `output` and fills it with matching values
+#[inline]
+pub fn filter_values_by_prefixes_into(
+    data: &HashMap<String, Value>,
+    prefixes: &[String],
+    output: &mut HashMap<String, Value>,
+) {
+    output.clear();
+
     // Build prefix set once for O(1) lookups
     let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
-
-    let mut result = HashMap::with_capacity(prefixes.len() * 8);
 
     // Single pass through data - O(n)
     for (k, v) in data.iter() {
         // Check if key matches any prefix exactly
         if prefix_set.contains(k.as_str()) {
-            result.insert(k.clone(), v.clone());
+            output.insert(k.clone(), v.clone());
             continue;
         }
 
@@ -168,13 +183,11 @@ pub fn filter_values_by_prefixes(
             if let Some(second_underscore) = k[underscore_pos + 1..].find('_') {
                 let potential_prefix = &k[..underscore_pos + 1 + second_underscore];
                 if prefix_set.contains(potential_prefix) {
-                    result.insert(k.clone(), v.clone());
+                    output.insert(k.clone(), v.clone());
                 }
             }
         }
     }
-
-    result
 }
 
 /// Get content item data from values with a given prefix

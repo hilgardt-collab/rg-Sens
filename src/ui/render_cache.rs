@@ -10,7 +10,7 @@ use gtk4::gdk_pixbuf::Pixbuf;
 use gtk4::prelude::GdkCairoContextExt;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::ui::background::{Color, ColorStop};
@@ -466,8 +466,8 @@ thread_local! {
 
 /// Cache for pre-computed color gradient LUTs
 struct GradientLUTCache {
-    /// Cached LUTs keyed by a hash of color stops
-    cache: HashMap<u64, ColorGradientLUT>,
+    /// Cached LUTs keyed by a hash of color stops (Arc to avoid cloning large Vec)
+    cache: HashMap<u64, Arc<ColorGradientLUT>>,
     max_entries: usize,
 }
 
@@ -479,11 +479,11 @@ impl GradientLUTCache {
         }
     }
 
-    fn get_or_create(&mut self, stops: &[ColorStop], resolution: usize) -> ColorGradientLUT {
+    fn get_or_create(&mut self, stops: &[ColorStop], resolution: usize) -> Arc<ColorGradientLUT> {
         let key = hash_color_stops(stops);
 
         if let Some(lut) = self.cache.get(&key) {
-            return lut.clone();
+            return Arc::clone(lut);  // Cheap Arc clone instead of Vec clone
         }
 
         // Evict oldest if full
@@ -493,8 +493,8 @@ impl GradientLUTCache {
             }
         }
 
-        let lut = ColorGradientLUT::from_stops(stops, resolution);
-        self.cache.insert(key, lut.clone());
+        let lut = Arc::new(ColorGradientLUT::from_stops(stops, resolution));
+        self.cache.insert(key, Arc::clone(&lut));
         lut
     }
 }
@@ -519,7 +519,8 @@ fn hash_color_stops(stops: &[ColorStop]) -> u64 {
 
 /// Get a cached color gradient LUT or create one
 /// Resolution of 256 is enough for smooth gradients while being efficient
-pub fn get_gradient_lut(stops: &[ColorStop]) -> ColorGradientLUT {
+/// Returns Arc to avoid expensive Vec cloning on every call
+fn get_gradient_lut(stops: &[ColorStop]) -> Arc<ColorGradientLUT> {
     const DEFAULT_RESOLUTION: usize = 256;
     GRADIENT_LUT_CACHE.with(|cache| cache.borrow_mut().get_or_create(stops, DEFAULT_RESOLUTION))
 }

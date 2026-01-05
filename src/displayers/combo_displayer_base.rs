@@ -282,6 +282,10 @@ pub struct ComboDisplayData {
     pub last_update: Instant,
     pub transform: PanelTransform,
     pub dirty: bool,
+    /// Cached prefixes to avoid regenerating every frame
+    pub cached_prefixes: Vec<String>,
+    /// Group item counts used to generate cached_prefixes (for invalidation)
+    pub cached_group_counts: Vec<usize>,
 }
 
 impl Default for ComboDisplayData {
@@ -295,6 +299,8 @@ impl Default for ComboDisplayData {
             last_update: Instant::now(),
             transform: PanelTransform::default(),
             dirty: true,
+            cached_prefixes: Vec::new(),
+            cached_group_counts: Vec::new(),
         }
     }
 }
@@ -505,12 +511,18 @@ pub fn handle_combo_update_data(
 ) {
     let timestamp = data.graph_start_time.elapsed().as_secs_f64();
 
-    // Generate prefixes and filter values using optimized utils
-    let prefixes = combo_utils::generate_prefixes(group_item_counts);
-    data.values = combo_utils::filter_values_by_prefixes(input, &prefixes);
+    // Only regenerate prefixes if group_item_counts changed (avoid allocation every frame)
+    if data.cached_group_counts.as_slice() != group_item_counts {
+        data.cached_prefixes = combo_utils::generate_prefixes(group_item_counts);
+        data.cached_group_counts.clear();
+        data.cached_group_counts.extend_from_slice(group_item_counts);
+    }
+
+    // Filter values using cached prefixes
+    combo_utils::filter_values_by_prefixes_into(input, &data.cached_prefixes, &mut data.values);
 
     // Update each item
-    for prefix in &prefixes {
+    for prefix in &data.cached_prefixes.clone() {
         let item_data = combo_utils::get_item_data(input, prefix);
         combo_utils::update_bar_animation(
             &mut data.bar_values,
@@ -546,9 +558,9 @@ pub fn handle_combo_update_data(
     }
 
     // Clean up stale animation entries
-    combo_utils::cleanup_bar_values(&mut data.bar_values, &prefixes);
-    combo_utils::cleanup_core_bar_values(&mut data.core_bar_values, &prefixes);
-    combo_utils::cleanup_graph_history(&mut data.graph_history, &prefixes);
+    combo_utils::cleanup_bar_values(&mut data.bar_values, &data.cached_prefixes);
+    combo_utils::cleanup_core_bar_values(&mut data.core_bar_values, &data.cached_prefixes);
+    combo_utils::cleanup_graph_history(&mut data.graph_history, &data.cached_prefixes);
 
     data.transform = PanelTransform::from_values(input);
     data.dirty = true;

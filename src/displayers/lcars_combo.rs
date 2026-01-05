@@ -617,7 +617,7 @@ impl Displayer for LcarsComboDisplayer {
 
             // Generate prefixes and filter values using optimized utils
             let prefixes = combo_utils::generate_prefixes(&group_item_counts);
-            display_data.values = combo_utils::filter_values_by_prefixes(data, &prefixes);
+            combo_utils::filter_values_by_prefixes_into(data, &prefixes, &mut display_data.values);
 
             // Cache per-group prefixes for efficient draw loop (avoids format! allocations)
             // Only rebuild if group structure changed
