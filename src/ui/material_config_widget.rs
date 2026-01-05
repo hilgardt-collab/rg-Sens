@@ -1091,155 +1091,87 @@ impl MaterialConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        // Orientation
-        let orient_box = GtkBox::new(Orientation::Horizontal, 6);
-        orient_box.append(&Label::new(Some("Split Direction:")));
-        let orient_list = StringList::new(&["Vertical", "Horizontal"]);
-        let orientation_dropdown = DropDown::new(Some(orient_list), None::<gtk4::Expression>);
+        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
+
+        // Split direction dropdown
         let orient_idx = match config.borrow().frame.split_orientation {
             SplitOrientation::Vertical => 0,
             SplitOrientation::Horizontal => 1,
         };
-        orientation_dropdown.set_selected(orient_idx);
-        orientation_dropdown.set_hexpand(true);
-        orient_box.append(&orientation_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        orientation_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.split_orientation = match selected {
-                0 => SplitOrientation::Vertical,
-                _ => SplitOrientation::Horizontal,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&orient_box);
+        let orientation_dropdown = builder.dropdown_row(
+            &page, "Split Direction:",
+            &["Vertical", "Horizontal"],
+            orient_idx,
+            |cfg, idx| {
+                cfg.frame.split_orientation = match idx {
+                    0 => SplitOrientation::Vertical,
+                    _ => SplitOrientation::Horizontal,
+                };
+            },
+        );
 
         // Content padding
-        let content_padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        content_padding_box.append(&Label::new(Some("Content Padding:")));
-        let content_padding_spin = SpinButton::with_range(8.0, 48.0, 4.0);
-        content_padding_spin.set_value(config.borrow().frame.content_padding);
-        content_padding_spin.set_hexpand(true);
-        content_padding_box.append(&content_padding_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        content_padding_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&content_padding_box);
+        let content_padding_spin = builder.spin_row(
+            &page, "Content Padding:", 8.0, 48.0, 4.0,
+            config.borrow().frame.content_padding,
+            |cfg, val| cfg.frame.content_padding = val,
+        );
 
         // Item spacing
-        let item_spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        item_spacing_box.append(&Label::new(Some("Item Spacing:")));
-        let item_spacing_spin = SpinButton::with_range(4.0, 32.0, 2.0);
-        item_spacing_spin.set_value(config.borrow().frame.item_spacing);
-        item_spacing_spin.set_hexpand(true);
-        item_spacing_box.append(&item_spacing_spin);
+        let item_spacing_spin = builder.spin_row(
+            &page, "Item Spacing:", 4.0, 32.0, 2.0,
+            config.borrow().frame.item_spacing,
+            |cfg, val| cfg.frame.item_spacing = val,
+        );
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        item_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.item_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&item_spacing_box);
-
-        // Dividers section
-        let dividers_label = Label::new(Some("Dividers"));
-        dividers_label.set_halign(gtk4::Align::Start);
-        dividers_label.add_css_class("heading");
+        // Dividers section header
+        let dividers_label = create_section_header("Dividers");
         dividers_label.set_margin_top(12);
         page.append(&dividers_label);
 
-        // Divider style
-        let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_style_box.append(&Label::new(Some("Style:")));
-        let div_style_list = StringList::new(&["Space", "Line", "Fade"]);
-        let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
+        // Divider style dropdown
         let div_style_idx = match config.borrow().frame.divider_style {
             DividerStyle::Space => 0,
             DividerStyle::Line => 1,
             DividerStyle::Fade => 2,
         };
-        divider_style_dropdown.set_selected(div_style_idx);
-        divider_style_dropdown.set_hexpand(true);
-        div_style_box.append(&divider_style_dropdown);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            config_clone.borrow_mut().frame.divider_style = match selected {
-                0 => DividerStyle::Space,
-                1 => DividerStyle::Line,
-                _ => DividerStyle::Fade,
-            };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_style_box);
+        let divider_style_dropdown = builder.dropdown_row(
+            &page, "Style:",
+            &["Space", "Line", "Fade"],
+            div_style_idx,
+            |cfg, idx| {
+                cfg.frame.divider_style = match idx {
+                    0 => DividerStyle::Space,
+                    1 => DividerStyle::Line,
+                    _ => DividerStyle::Fade,
+                };
+            },
+        );
 
         // Divider spacing
-        let div_spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_spacing_box.append(&Label::new(Some("Spacing:")));
-        let divider_spacing_spin = SpinButton::with_range(8.0, 48.0, 4.0);
-        divider_spacing_spin.set_value(config.borrow().frame.divider_spacing);
-        divider_spacing_spin.set_hexpand(true);
-        div_spacing_box.append(&divider_spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
-        page.append(&div_spacing_box);
+        let divider_spacing_spin = builder.spin_row(
+            &page, "Spacing:", 8.0, 48.0, 4.0,
+            config.borrow().frame.divider_spacing,
+            |cfg, val| cfg.frame.divider_spacing = val,
+        );
 
         // Divider color (theme-aware)
-        let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        div_color_box.append(&Label::new(Some("Color:")));
-        let divider_color_widget = Rc::new(ThemeColorSelector::new(
+        let divider_color_widget = builder.theme_color_selector_row(
+            &page, "Color:",
             config.borrow().frame.divider_color.clone(),
-        ));
-        divider_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-        div_color_box.append(divider_color_widget.widget());
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        divider_color_widget.set_on_change(move |new_source| {
-            config_clone.borrow_mut().frame.divider_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-        });
+            config.borrow().frame.theme.clone(),
+            |cfg, source| cfg.frame.divider_color = source,
+        );
 
         // Register theme refresh callback
-        let divider_color_widget_for_refresh = divider_color_widget.clone();
-        let config_for_divider_refresh = config.clone();
+        let divider_color_for_refresh = divider_color_widget.clone();
+        let config_for_refresh = config.clone();
         theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
-            let cfg = config_for_divider_refresh.borrow();
-            divider_color_widget_for_refresh.set_theme_config(cfg.frame.theme.clone());
+            divider_color_for_refresh.set_theme_config(config_for_refresh.borrow().frame.theme.clone());
         }));
 
-        page.append(&div_color_box);
-
         // Group weights section
-        let weights_label = Label::new(Some("Group Size Weights"));
-        weights_label.set_halign(gtk4::Align::Start);
-        weights_label.add_css_class("heading");
+        let weights_label = create_section_header("Group Size Weights");
         weights_label.set_margin_top(12);
         page.append(&weights_label);
 
@@ -1249,15 +1181,11 @@ impl MaterialConfigWidget {
         Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
 
         // Item Orientations section
-        let item_orient_label = Label::new(Some("Item Orientation per Group"));
-        item_orient_label.set_halign(gtk4::Align::Start);
-        item_orient_label.add_css_class("heading");
+        let item_orient_label = create_section_header("Item Orientation per Group");
         item_orient_label.set_margin_top(12);
         page.append(&item_orient_label);
 
-        let item_orient_info = Label::new(Some(
-            "Choose how items within each group are arranged",
-        ));
+        let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
         item_orient_info.set_halign(gtk4::Align::Start);
         item_orient_info.add_css_class("dim-label");
         page.append(&item_orient_info);
@@ -1265,11 +1193,9 @@ impl MaterialConfigWidget {
         let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
         item_orientations_box.set_margin_top(4);
         combo_config_base::rebuild_item_orientation_dropdowns(
-            &item_orientations_box,
-            config,
+            &item_orientations_box, config,
             |c: &mut MaterialDisplayConfig| &mut c.frame,
-            on_change,
-            preview,
+            on_change, preview,
         );
         page.append(&item_orientations_box);
 
