@@ -15,7 +15,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer};
 use crate::displayers::combo_displayer_base::{
     ComboDisplayData, ContentDrawParams, draw_content_items_generic, handle_combo_update_data,
     setup_combo_animation_timer_ext,
@@ -212,9 +212,6 @@ impl Displayer for ArtDecoDisplayer {
                 &content_items,
                 animation_enabled,
             );
-
-            display_data.combo.transform = PanelTransform::from_values(data);
-            display_data.combo.dirty = true;
         }
     }
 
