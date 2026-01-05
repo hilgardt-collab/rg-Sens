@@ -2416,7 +2416,20 @@ pub(crate) fn show_panel_properties_dialog(
     background_tab_box.set_margin_end(12);
 
     let background_widget = crate::ui::BackgroundConfigWidget::new();
-    background_widget.set_theme_config(global_theme.clone());
+    // For combo displayers, use the panel's theme instead of global theme
+    let background_theme = match panel_guard.displayer.get_typed_config() {
+        Some(crate::core::DisplayerConfig::Lcars(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::Cyberpunk(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::Material(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::Industrial(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::RetroTerminal(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::FighterHud(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::Synthwave(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::ArtDeco(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::ArtNouveau(cfg)) => cfg.frame.theme.clone(),
+        _ => global_theme.clone(),
+    };
+    background_widget.set_theme_config(background_theme);
     background_widget.set_config(panel_guard.background.clone());
     // Set source fields for indicator background configuration
     background_widget.set_source_fields((*available_fields).clone());
