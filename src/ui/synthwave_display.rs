@@ -14,7 +14,8 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
-use crate::ui::combo_config_base::LayoutFrameConfig;
+use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::ui::theme::ComboThemeConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 
 // Re-export types we use
@@ -361,6 +362,24 @@ impl LayoutFrameConfig for SynthwaveFrameConfig {
 
     fn split_orientation(&self) -> SplitOrientation {
         self.split_orientation
+    }
+}
+
+impl ThemedFrameConfig for SynthwaveFrameConfig {
+    fn theme(&self) -> &ComboThemeConfig {
+        &self.theme
+    }
+
+    fn theme_mut(&mut self) -> &mut ComboThemeConfig {
+        &mut self.theme
+    }
+
+    fn content_items(&self) -> &HashMap<String, ContentItemConfig> {
+        &self.content_items
+    }
+
+    fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig> {
+        &mut self.content_items
     }
 }
 

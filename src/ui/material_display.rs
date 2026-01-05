@@ -14,9 +14,9 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
-use crate::ui::combo_config_base::LayoutFrameConfig;
+use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
-use crate::ui::theme::{ColorSource, FontSource, deserialize_color_or_source, deserialize_font_or_source};
+use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource, deserialize_color_or_source, deserialize_font_or_source};
 
 // Re-export types we use
 pub use crate::ui::lcars_display::{ContentDisplayType as MaterialContentType, ContentItemConfig as MaterialContentItemConfig};
@@ -301,6 +301,24 @@ impl LayoutFrameConfig for MaterialFrameConfig {
 
     fn split_orientation(&self) -> SplitOrientation {
         self.split_orientation
+    }
+}
+
+impl ThemedFrameConfig for MaterialFrameConfig {
+    fn theme(&self) -> &ComboThemeConfig {
+        &self.theme
+    }
+
+    fn theme_mut(&mut self) -> &mut ComboThemeConfig {
+        &mut self.theme
+    }
+
+    fn content_items(&self) -> &HashMap<String, ContentItemConfig> {
+        &self.content_items
+    }
+
+    fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig> {
+        &mut self.content_items
     }
 }
 
