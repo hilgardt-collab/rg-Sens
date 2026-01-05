@@ -191,17 +191,6 @@ impl FighterHudConfigWidget {
         }
     }
 
-    fn set_page_margins(page: &GtkBox) {
-        combo_config_base::set_page_margins(page);
-    }
-
-    fn queue_redraw(
-        preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) {
-        combo_config_base::queue_redraw(preview, on_change);
-    }
-
     fn create_frame_page(
         config: &Rc<RefCell<FighterHudDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -210,7 +199,7 @@ impl FighterHudConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Frame style
         let style_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -243,7 +232,7 @@ impl FighterHudConfigWidget {
                 3 => HudFrameStyle::Minimal,
                 _ => HudFrameStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -260,7 +249,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         line_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.line_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&line_box);
 
@@ -277,7 +266,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         bracket_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bracket_size = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bracket_box);
 
@@ -294,7 +283,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         bracket_thickness_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bracket_thickness = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&thickness_box);
 
@@ -313,7 +302,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         show_reticle_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_center_reticle = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_reticle_check);
 
@@ -330,7 +319,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         reticle_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.reticle_size = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&reticle_size_box);
 
@@ -348,7 +337,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         reticle_color_selector.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.reticle_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for reticle color selector
@@ -382,7 +371,7 @@ impl FighterHudConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show header
         let show_header_check = CheckButton::with_label("Show Header");
@@ -393,7 +382,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -410,7 +399,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&text_box);
 
@@ -443,7 +432,7 @@ impl FighterHudConfigWidget {
                 2 => HudHeaderStyle::SystemId,
                 _ => HudHeaderStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -460,7 +449,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         header_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.header_height = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&height_box);
 
@@ -481,7 +470,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |font_source| {
             config_clone.borrow_mut().frame.header_font = font_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for header font
@@ -512,7 +501,7 @@ impl FighterHudConfigWidget {
         layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Split orientation
         let orient_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -539,7 +528,7 @@ impl FighterHudConfigWidget {
                 0 => SplitOrientation::Vertical,
                 _ => SplitOrientation::Horizontal,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orient_box);
 
@@ -556,7 +545,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         content_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_box);
 
@@ -598,7 +587,7 @@ impl FighterHudConfigWidget {
                 3 => HudDividerStyle::Fade,
                 _ => HudDividerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -615,7 +604,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         divider_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_padding_box);
 
@@ -632,7 +621,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         tick_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.tick_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&tick_box);
 
@@ -685,11 +674,6 @@ impl FighterHudConfigWidget {
         page
     }
 
-    /// Helper function to refresh all theme reference sections
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
-    }
-
     /// Create the Theme configuration page
     fn create_theme_page(
         config: &Rc<RefCell<FighterHudDisplayConfig>>,
@@ -701,7 +685,7 @@ impl FighterHudConfigWidget {
         use crate::ui::gradient_editor::GradientEditor;
 
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let scroll = ScrolledWindow::new();
         scroll.set_vexpand(true);
@@ -829,8 +813,8 @@ impl FighterHudConfigWidget {
         let refreshers_c1 = theme_ref_refreshers.clone();
         color1_widget.set_on_change(move |new_color| {
             config_c1.borrow_mut().frame.theme.color1 = new_color;
-            Self::refresh_theme_refs(&refreshers_c1);
-            Self::queue_redraw(&preview_c1, &on_change_c1);
+            combo_config_base::refresh_theme_refs(&refreshers_c1);
+            combo_config_base::queue_redraw(&preview_c1, &on_change_c1);
         });
 
         let config_c2 = config.clone();
@@ -839,8 +823,8 @@ impl FighterHudConfigWidget {
         let refreshers_c2 = theme_ref_refreshers.clone();
         color2_widget.set_on_change(move |new_color| {
             config_c2.borrow_mut().frame.theme.color2 = new_color;
-            Self::refresh_theme_refs(&refreshers_c2);
-            Self::queue_redraw(&preview_c2, &on_change_c2);
+            combo_config_base::refresh_theme_refs(&refreshers_c2);
+            combo_config_base::queue_redraw(&preview_c2, &on_change_c2);
         });
 
         let config_c3 = config.clone();
@@ -849,8 +833,8 @@ impl FighterHudConfigWidget {
         let refreshers_c3 = theme_ref_refreshers.clone();
         color3_widget.set_on_change(move |new_color| {
             config_c3.borrow_mut().frame.theme.color3 = new_color;
-            Self::refresh_theme_refs(&refreshers_c3);
-            Self::queue_redraw(&preview_c3, &on_change_c3);
+            combo_config_base::refresh_theme_refs(&refreshers_c3);
+            combo_config_base::queue_redraw(&preview_c3, &on_change_c3);
         });
 
         let config_c4 = config.clone();
@@ -859,8 +843,8 @@ impl FighterHudConfigWidget {
         let refreshers_c4 = theme_ref_refreshers.clone();
         color4_widget.set_on_change(move |new_color| {
             config_c4.borrow_mut().frame.theme.color4 = new_color;
-            Self::refresh_theme_refs(&refreshers_c4);
-            Self::queue_redraw(&preview_c4, &on_change_c4);
+            combo_config_base::refresh_theme_refs(&refreshers_c4);
+            combo_config_base::queue_redraw(&preview_c4, &on_change_c4);
         });
 
         color_widgets.push(color1_widget);
@@ -914,8 +898,8 @@ impl FighterHudConfigWidget {
                 color_widgets_for_hud[3].set_color(c4);
             }
 
-            Self::refresh_theme_refs(&refreshers_for_hud);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::refresh_theme_refs(&refreshers_for_hud);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Custom HUD color callback
@@ -943,8 +927,8 @@ impl FighterHudConfigWidget {
                 color_widgets_for_custom[3].set_color(c4);
             }
 
-            Self::refresh_theme_refs(&refreshers_for_custom);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::refresh_theme_refs(&refreshers_for_custom);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Background color callback
@@ -953,7 +937,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         background_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.background_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Glow intensity callback
@@ -962,7 +946,7 @@ impl FighterHudConfigWidget {
         let preview_clone = preview.clone();
         glow_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.glow_intensity = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Theme Gradient section
@@ -985,8 +969,8 @@ impl FighterHudConfigWidget {
         gradient_editor.set_on_change(move || {
             let gradient_config = gradient_editor_for_cb.get_gradient_source_config();
             config_clone.borrow_mut().frame.theme.gradient = gradient_config;
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::refresh_theme_refs(&refreshers_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register a theme refresh callback for the gradient editor
@@ -1040,8 +1024,8 @@ impl FighterHudConfigWidget {
                                 .unwrap_or_else(|| "monospace".to_string());
                             config_c.borrow_mut().frame.theme.font1_family = family.clone();
                             btn_c.set_label(&family);
-                            Self::refresh_theme_refs(&refreshers_c);
-                            Self::queue_redraw(&preview_c, &on_change_c);
+                            combo_config_base::refresh_theme_refs(&refreshers_c);
+                            combo_config_base::queue_redraw(&preview_c, &on_change_c);
                         }
                     },
                 );
@@ -1058,8 +1042,8 @@ impl FighterHudConfigWidget {
         let refreshers_for_font1_size = theme_ref_refreshers.clone();
         font1_size_spin.connect_value_changed(move |spin| {
             config_for_font1_size.borrow_mut().frame.theme.font1_size = spin.value();
-            Self::refresh_theme_refs(&refreshers_for_font1_size);
-            Self::queue_redraw(&preview_for_font1_size, &on_change_for_font1_size);
+            combo_config_base::refresh_theme_refs(&refreshers_for_font1_size);
+            combo_config_base::queue_redraw(&preview_for_font1_size, &on_change_for_font1_size);
         });
         font1_row.append(&font1_size_spin);
         fonts_box.append(&font1_row);
@@ -1094,8 +1078,8 @@ impl FighterHudConfigWidget {
                                 .unwrap_or_else(|| "monospace".to_string());
                             config_c.borrow_mut().frame.theme.font2_family = family.clone();
                             btn_c.set_label(&family);
-                            Self::refresh_theme_refs(&refreshers_c);
-                            Self::queue_redraw(&preview_c, &on_change_c);
+                            combo_config_base::refresh_theme_refs(&refreshers_c);
+                            combo_config_base::queue_redraw(&preview_c, &on_change_c);
                         }
                     },
                 );
@@ -1112,8 +1096,8 @@ impl FighterHudConfigWidget {
         let refreshers_for_font2_size = theme_ref_refreshers.clone();
         font2_size_spin.connect_value_changed(move |spin| {
             config_for_font2_size.borrow_mut().frame.theme.font2_size = spin.value();
-            Self::refresh_theme_refs(&refreshers_for_font2_size);
-            Self::queue_redraw(&preview_for_font2_size, &on_change_for_font2_size);
+            combo_config_base::refresh_theme_refs(&refreshers_for_font2_size);
+            combo_config_base::queue_redraw(&preview_for_font2_size, &on_change_for_font2_size);
         });
         font2_row.append(&font2_size_spin);
         fonts_box.append(&font2_row);
@@ -1179,8 +1163,8 @@ impl FighterHudConfigWidget {
             font1_size_spin_for_preset.set_value(theme.font1_size);
             font2_btn_for_preset.set_label(&theme.font2_family);
             font2_size_spin_for_preset.set_value(theme.font2_size);
-            Self::refresh_theme_refs(&refreshers_for_preset);
-            Self::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::refresh_theme_refs(&refreshers_for_preset);
+            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -1391,7 +1375,7 @@ impl FighterHudConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let info_label = Label::new(Some("Content items are configured per source slot.\nSelect a slot tab to configure its display type."));
         info_label.set_halign(gtk4::Align::Start);
@@ -1422,7 +1406,7 @@ impl FighterHudConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Animations");
@@ -1523,7 +1507,7 @@ impl FighterHudConfigWidget {
                 }
                 cfg.frame.group_size_weights[idx] = spin.value();
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             group_weights_box.append(&row);

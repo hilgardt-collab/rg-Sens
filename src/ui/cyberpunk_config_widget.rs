@@ -205,17 +205,6 @@ impl CyberpunkConfigWidget {
         }
     }
 
-    fn set_page_margins(page: &GtkBox) {
-        combo_config_base::set_page_margins(page);
-    }
-
-    fn queue_redraw(
-        preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) {
-        combo_config_base::queue_redraw(preview, on_change);
-    }
-
     fn create_frame_page(
         config: &Rc<RefCell<CyberpunkDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -224,7 +213,7 @@ impl CyberpunkConfigWidget {
         _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Border width
         let border_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -239,7 +228,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         border_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.border_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&border_box);
 
@@ -255,7 +244,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         border_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.border_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&color_box);
 
@@ -273,7 +262,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         glow_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.glow_intensity = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&glow_box);
 
@@ -304,7 +293,7 @@ impl CyberpunkConfigWidget {
                 1 => CornerStyle::Bracket,
                 _ => CornerStyle::Angular,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&corner_style_box);
 
@@ -321,7 +310,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         corner_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.corner_size = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&corner_size_box);
 
@@ -337,7 +326,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         bg_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.background_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bg_box);
 
@@ -354,7 +343,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_box);
 
@@ -391,7 +380,7 @@ impl CyberpunkConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Grid section
         let grid_label = Label::new(Some("Grid Pattern"));
@@ -408,7 +397,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         show_grid_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_grid = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_grid_check);
 
@@ -424,7 +413,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         grid_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.grid_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&grid_color_box);
 
@@ -441,7 +430,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         grid_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.grid_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&grid_spacing_box);
 
@@ -461,7 +450,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         show_scanlines_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_scanlines = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_scanlines_check);
 
@@ -479,7 +468,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         scanline_opacity_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.scanline_opacity = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&scanline_opacity_box);
 
@@ -499,7 +488,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         item_frame_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.item_frame_enabled = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&item_frame_check);
 
@@ -515,7 +504,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         item_frame_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.item_frame_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&item_frame_color_box);
 
@@ -528,7 +517,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         item_glow_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.item_glow_enabled = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&item_glow_check);
 
@@ -566,7 +555,7 @@ impl CyberpunkConfigWidget {
         _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show header
         let show_header_check = CheckButton::with_label("Show Header");
@@ -577,7 +566,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -594,7 +583,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&text_box);
 
@@ -627,7 +616,7 @@ impl CyberpunkConfigWidget {
                 2 => HeaderStyle::Box,
                 _ => HeaderStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -643,7 +632,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         header_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.header_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&color_box);
 
@@ -659,7 +648,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |font_source| {
             config_clone.borrow_mut().frame.header_font = font_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&font_box);
 
@@ -694,7 +683,7 @@ impl CyberpunkConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Layout section
         let layout_label = Label::new(Some("Layout"));
@@ -727,7 +716,7 @@ impl CyberpunkConfigWidget {
                 0 => SplitOrientation::Vertical,
                 _ => SplitOrientation::Horizontal,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orient_box);
 
@@ -784,7 +773,7 @@ impl CyberpunkConfigWidget {
                 3 => DividerStyle::Dots,
                 _ => DividerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -800,7 +789,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         divider_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.divider_color = color_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_color_box);
 
@@ -826,7 +815,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         divider_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_width_box);
 
@@ -843,7 +832,7 @@ impl CyberpunkConfigWidget {
         let preview_clone = preview.clone();
         divider_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_padding_box);
 
@@ -931,16 +920,11 @@ impl CyberpunkConfigWidget {
                     cfg.frame.group_size_weights[i] = spin.value();
                 }
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             weights_box.append(&row);
         }
-    }
-
-    /// Helper function to refresh all theme reference sections
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
     }
 
     /// Create the Theme configuration page
@@ -952,7 +936,7 @@ impl CyberpunkConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let scroll = ScrolledWindow::new();
         scroll.set_vexpand(true);
@@ -980,8 +964,8 @@ impl CyberpunkConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
-                Self::refresh_theme_refs(&refreshers_for_redraw);
+                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
 
@@ -1037,8 +1021,8 @@ impl CyberpunkConfigWidget {
             common_for_preset.font1_size_spin.set_value(theme.font1_size);
             common_for_preset.font2_btn.set_label(&theme.font2_family);
             common_for_preset.font2_size_spin.set_value(theme.font2_size);
-            Self::refresh_theme_refs(&refreshers_for_preset);
-            Self::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::refresh_theme_refs(&refreshers_for_preset);
+            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -1232,7 +1216,7 @@ impl CyberpunkConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let info_label = Label::new(Some("Configure content items for each slot.\nSlots are named: group1_1, group1_2, group2_1, etc."));
         info_label.set_halign(gtk4::Align::Start);
@@ -1429,7 +1413,7 @@ impl CyberpunkConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Animation");

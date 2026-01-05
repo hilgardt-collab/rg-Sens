@@ -201,17 +201,6 @@ impl RetroTerminalConfigWidget {
         }
     }
 
-    fn set_page_margins(page: &GtkBox) {
-        combo_config_base::set_page_margins(page);
-    }
-
-    fn queue_redraw(
-        preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) {
-        combo_config_base::queue_redraw(preview, on_change);
-    }
-
     fn create_effects_page(
         config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -219,7 +208,7 @@ impl RetroTerminalConfigWidget {
         effects_widgets_out: &Rc<RefCell<Option<EffectsWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Scanlines section
         let scanline_label = Label::new(Some("Scanlines"));
@@ -241,7 +230,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         scanline_intensity_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.scanline_intensity = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&intensity_box);
 
@@ -258,7 +247,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         scanline_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.scanline_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -283,7 +272,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         curvature_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.curvature_amount = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&curvature_box);
 
@@ -301,7 +290,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         vignette_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.vignette_intensity = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&vignette_box);
 
@@ -319,7 +308,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         glow_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.screen_glow = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&glow_box);
 
@@ -332,7 +321,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         flicker_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.flicker_enabled = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&flicker_check);
 
@@ -357,7 +346,7 @@ impl RetroTerminalConfigWidget {
         _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Bezel style
         let style_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -388,7 +377,7 @@ impl RetroTerminalConfigWidget {
                 2 => BezelStyle::Industrial,
                 _ => BezelStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -403,7 +392,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.bezel_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&color_box);
 
@@ -420,7 +409,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bezel_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&width_box);
 
@@ -440,7 +429,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         show_led_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_power_led = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_led_check);
 
@@ -455,7 +444,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         led_color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.power_led_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&led_color_box);
 
@@ -479,7 +468,7 @@ impl RetroTerminalConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show header
         let show_header_check = CheckButton::with_label("Show Header");
@@ -490,7 +479,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -507,7 +496,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&text_box);
 
@@ -540,7 +529,7 @@ impl RetroTerminalConfigWidget {
                 2 => TerminalHeaderStyle::Prompt,
                 _ => TerminalHeaderStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -557,7 +546,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         header_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.header_height = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&height_box);
 
@@ -578,7 +567,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |font_source| {
             config_clone.borrow_mut().frame.header_font = font_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for the font selector
@@ -609,7 +598,7 @@ impl RetroTerminalConfigWidget {
         layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Split orientation
         let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -636,7 +625,7 @@ impl RetroTerminalConfigWidget {
                 0 => SplitOrientation::Horizontal,
                 _ => SplitOrientation::Vertical,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orientation_box);
 
@@ -653,7 +642,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         content_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_box);
 
@@ -697,7 +686,7 @@ impl RetroTerminalConfigWidget {
                 4 => TerminalDividerStyle::Ascii,
                 _ => TerminalDividerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -714,7 +703,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         divider_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_padding_box);
 
@@ -808,16 +797,11 @@ impl RetroTerminalConfigWidget {
                     cfg.frame.group_size_weights[i] = spin.value();
                 }
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             weights_box.append(&row);
         }
-    }
-
-    /// Helper function to refresh all theme reference sections
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
     }
 
     /// Get theme colors for a given phosphor color preset
@@ -872,7 +856,7 @@ impl RetroTerminalConfigWidget {
         colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let scroll = ScrolledWindow::new();
         scroll.set_vexpand(true);
@@ -937,7 +921,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         background_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.background_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Text brightness
@@ -954,7 +938,7 @@ impl RetroTerminalConfigWidget {
         let preview_clone = preview.clone();
         brightness_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.text_brightness = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         terminal_colors_box.append(&brightness_box);
 
@@ -983,8 +967,8 @@ impl RetroTerminalConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
-                Self::refresh_theme_refs(&refreshers_for_redraw);
+                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
 
@@ -1031,9 +1015,9 @@ impl RetroTerminalConfigWidget {
             common_for_phosphor.gradient_editor.set_theme_config(config_clone.borrow().frame.theme.clone());
 
             // Refresh all theme-linked widgets
-            Self::refresh_theme_refs(&theme_ref_refreshers_clone);
+            combo_config_base::refresh_theme_refs(&theme_ref_refreshers_clone);
 
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Connect custom color widget
@@ -1066,9 +1050,9 @@ impl RetroTerminalConfigWidget {
             common_for_custom.gradient_editor.set_theme_config(config_clone.borrow().frame.theme.clone());
 
             // Refresh all theme-linked widgets
-            Self::refresh_theme_refs(&theme_ref_refreshers_clone);
+            combo_config_base::refresh_theme_refs(&theme_ref_refreshers_clone);
 
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Color Scheme presets section
@@ -1123,8 +1107,8 @@ impl RetroTerminalConfigWidget {
             common_for_preset.font1_size_spin.set_value(theme.font1_size);
             common_for_preset.font2_btn.set_label(&theme.font2_family);
             common_for_preset.font2_size_spin.set_value(theme.font2_size);
-            Self::refresh_theme_refs(&refreshers_for_preset);
-            Self::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::refresh_theme_refs(&refreshers_for_preset);
+            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -1318,7 +1302,7 @@ impl RetroTerminalConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let info_label = Label::new(Some("Configure content items for each slot."));
         info_label.set_halign(gtk4::Align::Start);
@@ -1423,7 +1407,7 @@ impl RetroTerminalConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Animation");

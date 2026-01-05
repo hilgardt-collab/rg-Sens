@@ -222,17 +222,6 @@ impl IndustrialConfigWidget {
         }
     }
 
-    fn set_page_margins(page: &GtkBox) {
-        combo_config_base::set_page_margins(page);
-    }
-
-    fn queue_redraw(
-        preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) {
-        combo_config_base::queue_redraw(preview, on_change);
-    }
-
     fn create_surface_page(
         config: &Rc<RefCell<IndustrialDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -241,7 +230,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Surface texture
         let texture_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -272,7 +261,7 @@ impl IndustrialConfigWidget {
                 2 => SurfaceTexture::DiamondPlate,
                 _ => SurfaceTexture::Solid,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&texture_box);
 
@@ -298,7 +287,7 @@ impl IndustrialConfigWidget {
         surface_color_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.surface_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = surface_color_widget.clone();
@@ -323,7 +312,7 @@ impl IndustrialConfigWidget {
         surface_dark_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.surface_color_dark = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = surface_dark_widget.clone();
@@ -348,7 +337,7 @@ impl IndustrialConfigWidget {
         highlight_color_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.highlight_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = highlight_color_widget.clone();
@@ -374,7 +363,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show border
         let show_border_check = CheckButton::with_label("Show Border");
@@ -385,7 +374,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         show_border_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_border = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_border_check);
 
@@ -402,7 +391,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         border_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.border_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&width_box);
 
@@ -421,7 +410,7 @@ impl IndustrialConfigWidget {
         border_color_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.border_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = border_color_widget.clone();
@@ -444,7 +433,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         corner_radius_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.corner_radius = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&radius_box);
 
@@ -464,7 +453,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         show_bevel_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_beveled_edge = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_bevel_check);
 
@@ -481,7 +470,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         bevel_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bevel_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bevel_width_box);
 
@@ -498,7 +487,7 @@ impl IndustrialConfigWidget {
         rivet_widgets_out: &Rc<RefCell<Option<RivetWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Rivet style
         let style_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -529,7 +518,7 @@ impl IndustrialConfigWidget {
                 2 => RivetStyle::Flat,
                 _ => RivetStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -546,7 +535,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         rivet_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.rivet_size = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&size_box);
 
@@ -561,7 +550,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         rivet_color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.rivet_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&color_box);
 
@@ -578,7 +567,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         rivet_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.rivet_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -598,7 +587,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         show_corner_rivets_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_corner_rivets = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_corner_rivets_check);
 
@@ -611,7 +600,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         show_edge_rivets_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_edge_rivets = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_edge_rivets_check);
 
@@ -636,7 +625,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Position
         let position_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -671,7 +660,7 @@ impl IndustrialConfigWidget {
                 4 => WarningStripePosition::Right,
                 _ => WarningStripePosition::All,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&position_box);
 
@@ -688,7 +677,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         stripe_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.warning_stripe_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&width_box);
 
@@ -714,7 +703,7 @@ impl IndustrialConfigWidget {
         color1_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.warning_color_1 = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = color1_widget.clone();
@@ -739,7 +728,7 @@ impl IndustrialConfigWidget {
         color2_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.warning_color_2 = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = color2_widget.clone();
@@ -762,7 +751,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         angle_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.warning_stripe_angle = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&angle_box);
 
@@ -780,7 +769,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show header
         let show_header_check = CheckButton::with_label("Show Header");
@@ -791,7 +780,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -808,7 +797,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&text_box);
 
@@ -841,7 +830,7 @@ impl IndustrialConfigWidget {
                 2 => HeaderStyle::Label,
                 _ => HeaderStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -858,7 +847,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         header_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.header_height = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&height_box);
 
@@ -886,7 +875,7 @@ impl IndustrialConfigWidget {
             let (family, size) = font_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.header_font = family;
             config_clone.borrow_mut().frame.header_font_size = size;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let selector_for_refresh = header_font_selector.clone();
@@ -910,7 +899,7 @@ impl IndustrialConfigWidget {
         header_color_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.header_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = header_color_widget.clone();
@@ -934,7 +923,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Split orientation (horizontal vs vertical group layout)
         let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -961,7 +950,7 @@ impl IndustrialConfigWidget {
                 0 => SplitOrientation::Horizontal,
                 _ => SplitOrientation::Vertical,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orientation_box);
 
@@ -978,7 +967,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         content_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&content_padding_box);
 
@@ -995,7 +984,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         item_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.item_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&item_spacing_box);
 
@@ -1035,7 +1024,7 @@ impl IndustrialConfigWidget {
                 2 => DividerStyle::Warning,
                 _ => DividerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -1052,7 +1041,7 @@ impl IndustrialConfigWidget {
         let preview_clone = preview.clone();
         divider_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_width_box);
 
@@ -1071,7 +1060,7 @@ impl IndustrialConfigWidget {
         divider_color_widget.set_on_change(move |new_source| {
             let color = new_source.resolve(&config_clone.borrow().frame.theme);
             config_clone.borrow_mut().frame.divider_color = color;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = divider_color_widget.clone();
@@ -1173,15 +1162,11 @@ impl IndustrialConfigWidget {
                     cfg.frame.group_size_weights[i] = spin.value();
                 }
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             weights_box.append(&row);
         }
-    }
-
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
     }
 
     /// Create the Theme configuration page
@@ -1193,7 +1178,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let scroll = ScrolledWindow::new();
         scroll.set_vexpand(true);
@@ -1221,8 +1206,8 @@ impl IndustrialConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
-                Self::refresh_theme_refs(&refreshers_for_redraw);
+                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
 
@@ -1278,8 +1263,8 @@ impl IndustrialConfigWidget {
             common_for_preset.font1_size_spin.set_value(theme.font1_size);
             common_for_preset.font2_btn.set_label(&theme.font2_family);
             common_for_preset.font2_size_spin.set_value(theme.font2_size);
-            Self::refresh_theme_refs(&refreshers_for_preset);
-            Self::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::refresh_theme_refs(&refreshers_for_preset);
+            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -1473,7 +1458,7 @@ impl IndustrialConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let info_label = Label::new(Some("Configure content items for each slot."));
         info_label.set_halign(gtk4::Align::Start);
@@ -1580,7 +1565,7 @@ impl IndustrialConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Animation");

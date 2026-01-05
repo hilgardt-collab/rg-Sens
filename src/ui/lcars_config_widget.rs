@@ -232,22 +232,6 @@ impl LcarsConfigWidget {
         }
     }
 
-    fn set_page_margins(page: &GtkBox) {
-        combo_config_base::set_page_margins(page);
-    }
-
-    fn queue_redraw(
-        preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) {
-        combo_config_base::queue_redraw(preview, on_change);
-    }
-
-    /// Refresh all theme reference sections
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
-    }
-
     fn create_theme_page(
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -256,7 +240,7 @@ impl LcarsConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Create common theme widgets using the shared helper
         let config_for_change = config.clone();
@@ -271,8 +255,8 @@ impl LcarsConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
-                Self::refresh_theme_refs(&refreshers_for_redraw);
+                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
 
@@ -290,7 +274,7 @@ impl LcarsConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Theme reference section for quick access to theme colors/fonts
         let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
@@ -313,7 +297,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         sidebar_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.sidebar_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&sidebar_box);
 
@@ -338,7 +322,7 @@ impl LcarsConfigWidget {
                 0 => SidebarPosition::Left,
                 _ => SidebarPosition::Right,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&pos_box);
 
@@ -367,7 +351,7 @@ impl LcarsConfigWidget {
                 2 => ExtensionMode::Both,
                 _ => ExtensionMode::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&ext_box);
 
@@ -384,7 +368,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         top_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.top_bar_height = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_box);
 
@@ -401,7 +385,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         bottom_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bottom_bar_height = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_box);
 
@@ -418,7 +402,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         corner_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.corner_radius = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&corner_box);
 
@@ -443,7 +427,7 @@ impl LcarsConfigWidget {
                 0 => CornerStyle::Square,
                 _ => CornerStyle::Round,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&ext_corner_box);
 
@@ -484,7 +468,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_box);
 
@@ -501,7 +485,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         padding_top_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding_top = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_top_box);
 
@@ -518,7 +502,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         padding_left_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding_left = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_left_box);
 
@@ -535,7 +519,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         padding_right_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding_right = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_right_box);
 
@@ -552,7 +536,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         padding_bottom_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding_bottom = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_bottom_box);
 
@@ -584,7 +568,7 @@ impl LcarsConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Theme reference section for quick access to theme colors/fonts
         let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
@@ -613,7 +597,7 @@ impl LcarsConfigWidget {
             } else {
                 HeaderPosition::None
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_show_check);
 
@@ -636,7 +620,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         top_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.top_header.text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Copy text handler
@@ -680,7 +664,7 @@ impl LcarsConfigWidget {
                 0 => HeaderShape::Pill,
                 _ => HeaderShape::Square,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_shape_box);
 
@@ -697,7 +681,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         top_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.top_header.height_percent = spin.value() / 100.0;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         top_size_box.append(&Label::new(Some("Width %:")));
@@ -711,7 +695,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         top_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.top_header.width_percent = spin.value() / 100.0;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_size_box);
 
@@ -768,7 +752,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         top_bold_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.top_header.font_bold = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Copy/Paste font buttons
@@ -796,7 +780,7 @@ impl LcarsConfigWidget {
                 if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
                     config_clone.borrow_mut().frame.top_header.font = source.clone();
                     top_font_selector_clone.set_source(source);
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
                 }
             }
         });
@@ -807,7 +791,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         top_font_selector.set_on_change(move |source| {
             config_clone.borrow_mut().frame.top_header.font = source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_font_box);
 
@@ -834,7 +818,7 @@ impl LcarsConfigWidget {
                 1 => HeaderAlign::Center,
                 _ => HeaderAlign::Right,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&top_align_box);
 
@@ -860,7 +844,7 @@ impl LcarsConfigWidget {
             } else {
                 HeaderPosition::None
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_show_check);
 
@@ -883,7 +867,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         bottom_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.bottom_header.text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Copy text handler
@@ -927,7 +911,7 @@ impl LcarsConfigWidget {
                 0 => HeaderShape::Pill,
                 _ => HeaderShape::Square,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_shape_box);
 
@@ -944,7 +928,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         bottom_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bottom_header.height_percent = spin.value() / 100.0;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         bottom_size_box.append(&Label::new(Some("Width %:")));
@@ -958,7 +942,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         bottom_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bottom_header.width_percent = spin.value() / 100.0;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_size_box);
 
@@ -1015,7 +999,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         bottom_bold_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.bottom_header.font_bold = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Copy/Paste font buttons
@@ -1043,7 +1027,7 @@ impl LcarsConfigWidget {
                 if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
                     config_clone.borrow_mut().frame.bottom_header.font = source.clone();
                     bottom_font_selector_clone.set_source(source);
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
                 }
             }
         });
@@ -1054,7 +1038,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         bottom_font_selector.set_on_change(move |source| {
             config_clone.borrow_mut().frame.bottom_header.font = source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_font_box);
 
@@ -1081,7 +1065,7 @@ impl LcarsConfigWidget {
                 1 => HeaderAlign::Center,
                 _ => HeaderAlign::Right,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&bottom_align_box);
 
@@ -1117,7 +1101,7 @@ impl LcarsConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Theme reference section for quick access to theme colors/fonts
         let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
@@ -1184,7 +1168,7 @@ impl LcarsConfigWidget {
                     }
                     cfg.frame.segments[seg_idx].label = entry.text().to_string();
                     drop(cfg);
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
                 });
                 seg_box.append(&label_box);
 
@@ -1261,7 +1245,7 @@ impl LcarsConfigWidget {
                     }
                     cfg.frame.segments[seg_idx].height_weight = spin.value();
                     drop(cfg);
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
                 });
                 seg_box.append(&weight_box);
 
@@ -1315,7 +1299,7 @@ impl LcarsConfigWidget {
                                 cfg.frame.segments[seg_idx].font = source.clone();
                             }
                             font_selector_clone.set_source(source);
-                            Self::queue_redraw(&preview_clone, &on_change_clone);
+                            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
                         }
                     }
                 });
@@ -1332,7 +1316,7 @@ impl LcarsConfigWidget {
                         }
                         cfg.frame.segments[seg_idx].font = source;
                     }
-                    Self::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
                 });
                 seg_box.append(&font_box);
 
@@ -1376,7 +1360,7 @@ impl LcarsConfigWidget {
             }
 
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
 
             // Update sync checkbox sensitivity
             if let Some(ref widgets) = *split_widgets_clone.borrow() {
@@ -1408,7 +1392,7 @@ impl LcarsConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Item spacing
         let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1423,7 +1407,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.item_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -1661,7 +1645,7 @@ impl LcarsConfigWidget {
         split_widgets_out: &Rc<RefCell<Option<SplitWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Info label
         let info_label = Label::new(Some("Configure how groups are arranged and the dividers between them."));
@@ -1695,7 +1679,7 @@ impl LcarsConfigWidget {
             if let Some(ref widgets) = *split_widgets_clone.borrow() {
                 Self::update_sync_checkbox_sensitivity(&widgets.sync_segments_check, &config_clone);
             }
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orient_box);
 
@@ -1719,7 +1703,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         divider_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_config.width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&divider_box);
 
@@ -1763,7 +1747,7 @@ impl LcarsConfigWidget {
                 0 => DividerCapStyle::Square,
                 _ => DividerCapStyle::Round,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&start_cap_box);
 
@@ -1787,7 +1771,7 @@ impl LcarsConfigWidget {
                 0 => DividerCapStyle::Square,
                 _ => DividerCapStyle::Round,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&end_cap_box);
 
@@ -1804,7 +1788,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         spacing_before_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_config.spacing_before = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         spacing_box.append(&Label::new(Some("After:")));
@@ -1818,7 +1802,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         spacing_after_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_config.spacing_after = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -1846,7 +1830,7 @@ impl LcarsConfigWidget {
         let preview_clone = preview.clone();
         sync_segments_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.sync_segments_to_groups = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&sync_segments_check);
 
@@ -1974,7 +1958,7 @@ impl LcarsConfigWidget {
                 }
                 cfg.frame.group_size_weights[group_idx] = spin.value();
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             container.append(&row);
@@ -1987,7 +1971,7 @@ impl LcarsConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Bar Animation");

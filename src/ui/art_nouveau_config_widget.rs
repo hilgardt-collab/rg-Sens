@@ -20,7 +20,7 @@ use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::{GradientEditor, ThemeFontSelector};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
+use crate::ui::widget_builder::create_page_container;
 use crate::ui::background::Color;
 use crate::ui::theme::{ComboThemeConfig, LinearGradientSourceConfig, ColorStopSource};
 use crate::displayers::ArtNouveauDisplayConfig;
@@ -366,26 +366,8 @@ impl ArtNouveauConfigWidget {
 
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
         self.config.borrow_mut().frame.theme = theme;
-        Self::refresh_theme_refs(&self.theme_ref_refreshers);
+        combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
         self.preview.queue_draw();
-    }
-
-    fn set_page_margins(page: &GtkBox) {
-        page.set_margin_start(DEFAULT_MARGIN);
-        page.set_margin_end(DEFAULT_MARGIN);
-        page.set_margin_top(DEFAULT_MARGIN);
-        page.set_margin_bottom(DEFAULT_MARGIN);
-    }
-
-    fn queue_redraw(preview: &DrawingArea, on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>) {
-        preview.queue_draw();
-        if let Some(cb) = on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
     }
 
     fn create_theme_page(
@@ -398,7 +380,7 @@ impl ArtNouveauConfigWidget {
         use crate::ui::gradient_editor::GradientEditor;
 
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         let scroll = ScrolledWindow::new();
         scroll.set_vexpand(true);
@@ -479,8 +461,8 @@ impl ArtNouveauConfigWidget {
         theme_color1_widget.set_on_change(move |color| {
             config_c1.borrow_mut().frame.theme.color1 = color;
             preset_dropdown_c1.set_selected(ART_NOUVEAU_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_c1);
-            Self::queue_redraw(&preview_c1, &on_change_c1);
+            combo_config_base::refresh_theme_refs(&refreshers_c1);
+            combo_config_base::queue_redraw(&preview_c1, &on_change_c1);
         });
 
         let config_c2 = config.clone();
@@ -491,8 +473,8 @@ impl ArtNouveauConfigWidget {
         theme_color2_widget.set_on_change(move |color| {
             config_c2.borrow_mut().frame.theme.color2 = color;
             preset_dropdown_c2.set_selected(ART_NOUVEAU_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_c2);
-            Self::queue_redraw(&preview_c2, &on_change_c2);
+            combo_config_base::refresh_theme_refs(&refreshers_c2);
+            combo_config_base::queue_redraw(&preview_c2, &on_change_c2);
         });
 
         let config_c3 = config.clone();
@@ -503,8 +485,8 @@ impl ArtNouveauConfigWidget {
         theme_color3_widget.set_on_change(move |color| {
             config_c3.borrow_mut().frame.theme.color3 = color;
             preset_dropdown_c3.set_selected(ART_NOUVEAU_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_c3);
-            Self::queue_redraw(&preview_c3, &on_change_c3);
+            combo_config_base::refresh_theme_refs(&refreshers_c3);
+            combo_config_base::queue_redraw(&preview_c3, &on_change_c3);
         });
 
         let config_c4 = config.clone();
@@ -515,8 +497,8 @@ impl ArtNouveauConfigWidget {
         theme_color4_widget.set_on_change(move |color| {
             config_c4.borrow_mut().frame.theme.color4 = color;
             preset_dropdown_c4.set_selected(ART_NOUVEAU_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_c4);
-            Self::queue_redraw(&preview_c4, &on_change_c4);
+            combo_config_base::refresh_theme_refs(&refreshers_c4);
+            combo_config_base::queue_redraw(&preview_c4, &on_change_c4);
         });
 
         // Preset dropdown change handler - updates all colors
@@ -552,8 +534,8 @@ impl ArtNouveauConfigWidget {
                     editor.set_gradient_source_config(&preset_theme.gradient);
                     editor.set_theme_config(preset_theme.clone());
                 }
-                Self::refresh_theme_refs(&refreshers_clone);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::refresh_theme_refs(&refreshers_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             }
         });
 
@@ -582,8 +564,8 @@ impl ArtNouveauConfigWidget {
             config_clone.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient_source_config();
             // Switch to Custom when manually changing gradient
             preset_dropdown_clone.set_selected(ART_NOUVEAU_PRESETS.len() as u32 - 1);
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::refresh_theme_refs(&refreshers_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Theme fonts section
@@ -632,8 +614,8 @@ impl ArtNouveauConfigWidget {
                             .unwrap_or_else(|| "sans-serif".to_string());
                         config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
                         font_btn_for_cb.set_label(&family);
-                        Self::refresh_theme_refs(&refreshers_for_cb);
-                        Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                        combo_config_base::refresh_theme_refs(&refreshers_for_cb);
+                        combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
                     }
                 },
             );
@@ -645,8 +627,8 @@ impl ArtNouveauConfigWidget {
         let refreshers_clone = theme_ref_refreshers.clone();
         font1_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.theme.font1_size = spin.value();
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::refresh_theme_refs(&refreshers_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Font 2
@@ -688,8 +670,8 @@ impl ArtNouveauConfigWidget {
                             .unwrap_or_else(|| "sans-serif".to_string());
                         config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
                         font_btn_for_cb.set_label(&family);
-                        Self::refresh_theme_refs(&refreshers_for_cb);
-                        Self::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                        combo_config_base::refresh_theme_refs(&refreshers_for_cb);
+                        combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
                     }
                 },
             );
@@ -701,8 +683,8 @@ impl ArtNouveauConfigWidget {
         let refreshers_clone = theme_ref_refreshers.clone();
         font2_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.theme.font2_size = spin.value();
-            Self::refresh_theme_refs(&refreshers_clone);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::refresh_theme_refs(&refreshers_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         scroll.set_child(Some(&inner_box));
@@ -733,7 +715,7 @@ impl ArtNouveauConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Border style
         let border_style_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -766,7 +748,7 @@ impl ArtNouveauConfigWidget {
                 3 => BorderStyle::Organic,
                 _ => BorderStyle::Peacock,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&border_style_box);
 
@@ -783,7 +765,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         border_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.border_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&border_width_box);
 
@@ -799,7 +781,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         border_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.border_color = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = border_color_widget.clone();
@@ -847,7 +829,7 @@ impl ArtNouveauConfigWidget {
                 3 => CornerStyle::Bracket,
                 _ => CornerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&corner_style_box);
 
@@ -864,7 +846,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         corner_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.corner_size = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&corner_size_box);
 
@@ -881,7 +863,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         accent_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.accent_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&accent_width_box);
 
@@ -897,7 +879,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         accent_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.accent_color = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = accent_color_widget.clone();
@@ -927,7 +909,7 @@ impl ArtNouveauConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Background color (theme-aware)
         let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -941,7 +923,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         bg_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.background_color = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = bg_color_widget.clone();
@@ -989,7 +971,7 @@ impl ArtNouveauConfigWidget {
                 3 => BackgroundPattern::Waves,
                 _ => BackgroundPattern::Peacock,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&pattern_box);
 
@@ -1006,7 +988,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         pattern_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.pattern_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -1023,7 +1005,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         wave_frequency_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.wave_frequency = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&freq_box);
 
@@ -1039,7 +1021,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         pattern_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.pattern_color = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = pattern_color_widget.clone();
@@ -1067,7 +1049,7 @@ impl ArtNouveauConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show header
         let show_header_check = CheckButton::with_label("Show Header");
@@ -1078,7 +1060,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -1095,7 +1077,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&text_box);
 
@@ -1128,7 +1110,7 @@ impl ArtNouveauConfigWidget {
                 2 => HeaderStyle::Flourish,
                 _ => HeaderStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -1144,7 +1126,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.header_font = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = header_font_selector.clone();
@@ -1166,7 +1148,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         header_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.header_color = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = header_color_widget.clone();
@@ -1195,7 +1177,7 @@ impl ArtNouveauConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Split orientation
         let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -1222,7 +1204,7 @@ impl ArtNouveauConfigWidget {
                 0 => SplitOrientation::Horizontal,
                 _ => SplitOrientation::Vertical,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orientation_box);
 
@@ -1239,7 +1221,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         content_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_box);
 
@@ -1281,7 +1263,7 @@ impl ArtNouveauConfigWidget {
                 3 => DividerStyle::Line,
                 _ => DividerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -1298,7 +1280,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         divider_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_width_box);
 
@@ -1315,7 +1297,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         divider_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_padding_box);
 
@@ -1331,7 +1313,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         divider_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.divider_color = new_source;
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         let widget_for_refresh = divider_color_widget.clone();
@@ -1432,7 +1414,7 @@ impl ArtNouveauConfigWidget {
                     cfg.frame.group_size_weights[i] = spin.value();
                 }
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             weights_box.append(&row);
@@ -1460,7 +1442,7 @@ impl ArtNouveauConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Animation");
@@ -1471,7 +1453,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         enable_check.connect_toggled(move |check| {
             config_clone.borrow_mut().animation_enabled = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&enable_check);
 
@@ -1488,7 +1470,7 @@ impl ArtNouveauConfigWidget {
         let preview_clone = preview.clone();
         speed_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().animation_speed = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&speed_box);
 

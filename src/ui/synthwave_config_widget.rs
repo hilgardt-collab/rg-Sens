@@ -206,22 +206,6 @@ impl SynthwaveConfigWidget {
         }
     }
 
-    fn set_page_margins(page: &GtkBox) {
-        combo_config_base::set_page_margins(page);
-    }
-
-    fn queue_redraw(
-        preview: &DrawingArea,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) {
-        combo_config_base::queue_redraw(preview, on_change);
-    }
-
-    /// Refresh all theme reference sections
-    fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
-        combo_config_base::refresh_theme_refs(refreshers);
-    }
-
     fn create_theme_page(
         config: &Rc<RefCell<SynthwaveDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -230,7 +214,7 @@ impl SynthwaveConfigWidget {
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Color Scheme Preset dropdown
         let scheme_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -267,8 +251,8 @@ impl SynthwaveConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                Self::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
-                Self::refresh_theme_refs(&refreshers_for_redraw);
+                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
 
@@ -302,8 +286,8 @@ impl SynthwaveConfigWidget {
                         secondary,
                         accent,
                     };
-                    Self::queue_redraw(&preview_scheme, &on_change_scheme);
-                    Self::refresh_theme_refs(&refreshers_scheme);
+                    combo_config_base::queue_redraw(&preview_scheme, &on_change_scheme);
+                    combo_config_base::refresh_theme_refs(&refreshers_scheme);
                     return;
                 }
             };
@@ -330,8 +314,8 @@ impl SynthwaveConfigWidget {
             common_for_scheme.color3_widget.set_color(accent);
             common_for_scheme.color4_widget.set_color(bg_top);
 
-            Self::queue_redraw(&preview_scheme, &on_change_scheme);
-            Self::refresh_theme_refs(&refreshers_scheme);
+            combo_config_base::queue_redraw(&preview_scheme, &on_change_scheme);
+            combo_config_base::refresh_theme_refs(&refreshers_scheme);
         });
 
         // Effects section (Neon glow - Synthwave-specific)
@@ -354,7 +338,7 @@ impl SynthwaveConfigWidget {
         let preview_glow = preview.clone();
         glow_scale.connect_value_changed(move |scale| {
             config_glow.borrow_mut().frame.neon_glow_intensity = scale.value();
-            Self::queue_redraw(&preview_glow, &on_change_glow);
+            combo_config_base::queue_redraw(&preview_glow, &on_change_glow);
         });
         page.append(&glow_box);
 
@@ -375,7 +359,7 @@ impl SynthwaveConfigWidget {
         frame_widgets_out: &Rc<RefCell<Option<FrameWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Frame style
         let style_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -408,7 +392,7 @@ impl SynthwaveConfigWidget {
                 3 => SynthwaveFrameStyle::RetroDouble,
                 _ => SynthwaveFrameStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -425,7 +409,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         frame_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.frame_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&width_box);
 
@@ -442,7 +426,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         corner_radius_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.corner_radius = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&radius_box);
 
@@ -463,7 +447,7 @@ impl SynthwaveConfigWidget {
         grid_widgets_out: &Rc<RefCell<Option<GridWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show grid
         let show_grid_check = CheckButton::with_label("Show Grid");
@@ -474,7 +458,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         show_grid_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_grid = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_grid_check);
 
@@ -509,7 +493,7 @@ impl SynthwaveConfigWidget {
                 3 => GridStyle::Scanlines,
                 _ => GridStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -526,7 +510,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         grid_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.grid_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -543,7 +527,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         grid_line_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.grid_line_width = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&line_box);
 
@@ -561,7 +545,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         horizon_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.grid_horizon = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&horizon_box);
 
@@ -579,7 +563,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         perspective_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.grid_perspective = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&perspective_box);
 
@@ -598,7 +582,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         show_sun_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_sun = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_sun_check);
 
@@ -616,7 +600,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         sun_position_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.sun_position = scale.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&sun_pos_box);
 
@@ -642,7 +626,7 @@ impl SynthwaveConfigWidget {
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Show header
         let show_header_check = CheckButton::with_label("Show Header");
@@ -653,7 +637,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -670,7 +654,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&text_box);
 
@@ -705,7 +689,7 @@ impl SynthwaveConfigWidget {
                 3 => SynthwaveHeaderStyle::Simple,
                 _ => SynthwaveHeaderStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&style_box);
 
@@ -722,7 +706,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         header_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.header_height = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&height_box);
 
@@ -765,7 +749,7 @@ impl SynthwaveConfigWidget {
                 cfg.frame.header_font = family;
                 cfg.frame.header_font_size = size;
             }
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Store widget refs
@@ -787,7 +771,7 @@ impl SynthwaveConfigWidget {
         layout_widgets_out: &Rc<RefCell<Option<LayoutWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Split orientation
         let orient_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -814,7 +798,7 @@ impl SynthwaveConfigWidget {
                 0 => SplitOrientation::Vertical,
                 _ => SplitOrientation::Horizontal,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&orient_box);
 
@@ -831,7 +815,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         content_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&padding_box);
 
@@ -848,7 +832,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         item_spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.item_spacing = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -890,7 +874,7 @@ impl SynthwaveConfigWidget {
                 3 => SynthwaveDividerStyle::Line,
                 _ => SynthwaveDividerStyle::None,
             };
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -907,7 +891,7 @@ impl SynthwaveConfigWidget {
         let preview_clone = preview.clone();
         divider_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_padding = spin.value();
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
         page.append(&div_padding_box);
 
@@ -966,7 +950,7 @@ impl SynthwaveConfigWidget {
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
-        Self::set_page_margins(&page);
+        combo_config_base::set_page_margins(&page);
 
         // Enable animation
         let enable_check = CheckButton::with_label("Enable Animations");
@@ -1067,7 +1051,7 @@ impl SynthwaveConfigWidget {
                 }
                 cfg.frame.group_size_weights[idx] = spin.value();
                 drop(cfg);
-                Self::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             });
 
             group_weights_box.append(&row);
@@ -1398,7 +1382,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.auto_height = is_auto;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Connect height spinner
@@ -1413,7 +1397,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.item_height = spin.value();
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Get available fields for this slot
@@ -1471,7 +1455,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.bar_config = bar_config;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for bar widget
@@ -1516,7 +1500,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.graph_config = graph_config;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for graph widget
@@ -1565,7 +1549,7 @@ impl SynthwaveConfigWidget {
                 item.bar_config.text_overlay = text_widget_for_callback.get_config();
             }
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for text widget
@@ -1610,7 +1594,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.core_bars_config = core_bars_config;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for core bars widget
@@ -1655,7 +1639,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.static_config.background = bg_config;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for static background widget
@@ -1700,7 +1684,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.arc_config = arc_config;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         // Register theme refresh callback for arc widget
@@ -1745,7 +1729,7 @@ impl SynthwaveConfigWidget {
                 .or_default();
             item.speedometer_config = speedometer_config;
             drop(cfg);
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         }));
 
         // Register theme refresh callback for speedometer widget
@@ -1821,7 +1805,7 @@ impl SynthwaveConfigWidget {
             arc_config_frame_clone.set_visible(display_type == ContentDisplayType::Arc);
             speedometer_config_frame_clone.set_visible(display_type == ContentDisplayType::Speedometer);
 
-            Self::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
         tab
