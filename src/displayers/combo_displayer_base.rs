@@ -378,6 +378,122 @@ pub fn setup_combo_animation_timer<F, G>(
     });
 }
 
+/// Extended animation timer that works with wrapper types containing ComboDisplayData.
+///
+/// This version allows displayers to wrap ComboDisplayData in their own DisplayData struct
+/// while still using the shared animation logic. It also supports custom per-frame animation
+/// via an optional callback.
+///
+/// # Type Parameters
+/// * `D` - The wrapper data type (e.g., `DisplayData` containing config + combo)
+/// * `AE` - Closure to check if animation is enabled
+/// * `AS` - Closure to get animation speed
+/// * `GC` - Closure to get mutable reference to ComboDisplayData from wrapper
+/// * `CA` - Optional closure for custom animation logic (scanlines, cursor blink, etc.)
+///
+/// # Arguments
+/// * `drawing_area` - The GTK DrawingArea to redraw
+/// * `data` - Arc<Mutex<D>> containing the displayer's data
+/// * `animation_enabled` - Returns true if bar animations should run
+/// * `animation_speed` - Returns the animation speed multiplier
+/// * `get_combo` - Returns mutable reference to the ComboDisplayData within D
+/// * `custom_animation` - Optional callback for style-specific animations. Called with
+///   (data: &mut D, elapsed: f64) and returns true if redraw is needed.
+pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
+    drawing_area: &DrawingArea,
+    data: Arc<Mutex<D>>,
+    animation_enabled: AE,
+    animation_speed: AS,
+    get_combo: GC,
+    custom_animation: Option<CA>,
+) where
+    D: 'static,
+    AE: Fn(&D) -> bool + 'static,
+    AS: Fn(&D) -> f64 + 'static,
+    GC: Fn(&mut D) -> &mut ComboDisplayData + 'static,
+    CA: Fn(&mut D, f64) -> bool + 'static,
+{
+    glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
+        let drawing_area_weak = drawing_area.downgrade();
+        move || {
+            let Some(drawing_area) = drawing_area_weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+
+            if !drawing_area.is_mapped() {
+                return glib::ControlFlow::Continue;
+            }
+
+            let needs_redraw = if let Ok(mut data) = data.try_lock() {
+                let combo = get_combo(&mut data);
+                let mut redraw = combo.dirty;
+                if combo.dirty {
+                    combo.dirty = false;
+                }
+
+                // Calculate elapsed time
+                let now = Instant::now();
+                let elapsed = now.duration_since(combo.last_update).as_secs_f64();
+                combo.last_update = now;
+
+                // Run custom animation if provided (always runs, even if bar animation disabled)
+                if let Some(ref custom_anim) = custom_animation {
+                    if custom_anim(&mut data, elapsed) {
+                        redraw = true;
+                    }
+                }
+
+                // Run bar/core bar animations if enabled
+                if animation_enabled(&data) {
+                    let speed = animation_speed(&data);
+                    let combo = get_combo(&mut data);
+
+                    // Animate bar values
+                    for anim in combo.bar_values.values_mut() {
+                        if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                            let delta = (anim.target - anim.current) * speed * elapsed;
+                            anim.current += delta;
+
+                            if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                anim.current = anim.target;
+                            }
+                            redraw = true;
+                        }
+                    }
+
+                    // Animate core bar values
+                    for core_anims in combo.core_bar_values.values_mut() {
+                        for anim in core_anims.iter_mut() {
+                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                let delta = (anim.target - anim.current) * speed * elapsed;
+                                anim.current += delta;
+
+                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    anim.current = anim.target;
+                                }
+                                redraw = true;
+                            }
+                        }
+                    }
+                }
+
+                redraw
+            } else {
+                false
+            };
+
+            if needs_redraw {
+                drawing_area.queue_draw();
+            }
+
+            glib::ControlFlow::Continue
+        }
+    });
+}
+
+/// Convenience type alias for displayers without custom animation
+pub type NoCustomAnimation = fn(&mut (), f64) -> bool;
+
 /// Handle update_data for a combo displayer.
 /// This updates values, animations, and graph history.
 pub fn handle_combo_update_data(

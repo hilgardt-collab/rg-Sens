@@ -15,7 +15,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
-use crate::displayers::combo_displayer_base::{ComboDisplayData, ContentDrawParams, draw_content_items_generic, handle_combo_update_data};
+use crate::displayers::combo_displayer_base::{
+    ComboDisplayData, ContentDrawParams, draw_content_items_generic, handle_combo_update_data,
+    setup_combo_animation_timer_ext,
+};
 use crate::ui::retro_terminal_display::{
     render_retro_terminal_frame, calculate_group_layouts, draw_group_dividers,
     RetroTerminalFrameConfig,
@@ -189,89 +192,35 @@ impl Displayer for RetroTerminalDisplayer {
             }
         });
 
-        // Set up animation timer (with CRT-specific effects)
-        gtk4::glib::timeout_add_local(crate::core::ANIMATION_FRAME_INTERVAL, {
-            let data_clone = self.data.clone();
-            let drawing_area_weak = drawing_area.downgrade();
-            move || {
-                let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                    return gtk4::glib::ControlFlow::Break;
-                };
+        // Set up animation timer with CRT-specific effects (cursor blink, flicker)
+        setup_combo_animation_timer_ext(
+            &drawing_area,
+            self.data.clone(),
+            |d| d.config.animation_enabled,
+            |d| d.config.animation_speed,
+            |d| &mut d.combo,
+            Some(|d: &mut DisplayData, elapsed: f64| -> bool {
+                let mut redraw = false;
 
-                if !drawing_area.is_mapped() {
-                    return gtk4::glib::ControlFlow::Continue;
-                }
-
-                let needs_redraw = if let Ok(mut data) = data_clone.try_lock() {
-                    let mut redraw = data.combo.dirty;
-                    if data.combo.dirty {
-                        data.combo.dirty = false;
-                    }
-
-                    let now = std::time::Instant::now();
-                    let elapsed = now.duration_since(data.combo.last_update).as_secs_f64();
-                    data.combo.last_update = now;
-
-                    // Update cursor blink state (CRT-specific)
-                    if data.config.frame.cursor_blink {
-                        data.cursor_blink_time += elapsed;
-                        if data.cursor_blink_time >= 0.5 {
-                            data.cursor_blink_time = 0.0;
-                            data.cursor_visible = !data.cursor_visible;
-                            redraw = true;
-                        }
-                    }
-
-                    // Update flicker effect (CRT-specific)
-                    if data.config.frame.flicker_enabled {
-                        data.flicker_offset = (rand::random::<f64>() - 0.5) * 2.0;
+                // Update cursor blink state (CRT-specific)
+                if d.config.frame.cursor_blink {
+                    d.cursor_blink_time += elapsed;
+                    if d.cursor_blink_time >= 0.5 {
+                        d.cursor_blink_time = 0.0;
+                        d.cursor_visible = !d.cursor_visible;
                         redraw = true;
                     }
-
-                    if data.config.animation_enabled {
-                        let speed = data.config.animation_speed;
-
-                        // Animate bar values
-                        for anim in data.combo.bar_values.values_mut() {
-                            if (anim.current - anim.target).abs() > crate::core::ANIMATION_SNAP_THRESHOLD {
-                                let delta = (anim.target - anim.current) * speed * elapsed;
-                                anim.current += delta;
-
-                                if (anim.current - anim.target).abs() < crate::core::ANIMATION_SNAP_THRESHOLD {
-                                    anim.current = anim.target;
-                                }
-                                redraw = true;
-                            }
-                        }
-
-                        // Animate core bar values
-                        for core_anims in data.combo.core_bar_values.values_mut() {
-                            for anim in core_anims.iter_mut() {
-                                if (anim.current - anim.target).abs() > crate::core::ANIMATION_SNAP_THRESHOLD {
-                                    let delta = (anim.target - anim.current) * speed * elapsed;
-                                    anim.current += delta;
-
-                                    if (anim.current - anim.target).abs() < crate::core::ANIMATION_SNAP_THRESHOLD {
-                                        anim.current = anim.target;
-                                    }
-                                    redraw = true;
-                                }
-                            }
-                        }
-                    }
-
-                    redraw
-                } else {
-                    false
-                };
-
-                if needs_redraw {
-                    drawing_area.queue_draw();
                 }
 
-                gtk4::glib::ControlFlow::Continue
-            }
-        });
+                // Update flicker effect (CRT-specific)
+                if d.config.frame.flicker_enabled {
+                    d.flicker_offset = (rand::random::<f64>() - 0.5) * 2.0;
+                    redraw = true;
+                }
+
+                redraw
+            }),
+        );
 
         drawing_area.upcast()
     }
