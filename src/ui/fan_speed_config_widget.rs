@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::sources::{FanSpeedConfig, FanSpeedSource, FanCategory};
+use crate::ui::widget_builder::create_page_container;
 
 /// Widget for configuring Fan Speed source
 pub struct FanSpeedConfigWidget {
@@ -24,11 +25,7 @@ pub struct FanSpeedConfigWidget {
 
 impl FanSpeedConfigWidget {
     pub fn new() -> Self {
-        let widget = GtkBox::new(Orientation::Vertical, 12);
-        widget.set_margin_start(12);
-        widget.set_margin_end(12);
-        widget.set_margin_top(12);
-        widget.set_margin_bottom(12);
+        let widget = create_page_container();
 
         let config = Rc::new(RefCell::new(FanSpeedConfig::default()));
 

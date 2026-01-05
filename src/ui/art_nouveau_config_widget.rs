@@ -20,6 +20,7 @@ use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::{GradientEditor, ThemeFontSelector};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::combo_config_base;
+use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
 use crate::ui::background::Color;
 use crate::ui::theme::{ComboThemeConfig, LinearGradientSourceConfig, ColorStopSource};
 use crate::displayers::ArtNouveauDisplayConfig;
@@ -370,10 +371,10 @@ impl ArtNouveauConfigWidget {
     }
 
     fn set_page_margins(page: &GtkBox) {
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        page.set_margin_start(DEFAULT_MARGIN);
+        page.set_margin_end(DEFAULT_MARGIN);
+        page.set_margin_top(DEFAULT_MARGIN);
+        page.set_margin_bottom(DEFAULT_MARGIN);
     }
 
     fn queue_redraw(preview: &DrawingArea, on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>) {
@@ -1439,11 +1440,7 @@ impl ArtNouveauConfigWidget {
     }
 
     fn create_content_page(content_notebook: &Rc<RefCell<Notebook>>) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         let info_label = Label::new(Some("Content configuration will appear here based on the connected data source."));
         info_label.set_halign(gtk4::Align::Start);

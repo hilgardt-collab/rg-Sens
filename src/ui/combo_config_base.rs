@@ -17,6 +17,7 @@ use crate::core::{FieldMetadata, FieldPurpose, FieldType};
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{ComboThemeConfig, FontSource};
+use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
 use crate::ui::{
     ArcConfigWidget, CoreBarsConfigWidget, GradientEditor, LazyBarConfigWidget,
     LazyGraphConfigWidget, LazyTextOverlayConfigWidget, SpeedometerConfigWidget, StaticConfigWidget,
@@ -104,10 +105,10 @@ pub struct CommonAnimationWidgets {
 
 /// Set standard margins on a page box
 pub fn set_page_margins(page: &GtkBox) {
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
+    page.set_margin_start(DEFAULT_MARGIN);
+    page.set_margin_end(DEFAULT_MARGIN);
+    page.set_margin_top(DEFAULT_MARGIN);
+    page.set_margin_bottom(DEFAULT_MARGIN);
 }
 
 /// Queue preview redraw and invoke change callback
@@ -884,11 +885,7 @@ where
 {
     // Need a way to get mutable access to content_items
     // For now we'll use a trait object approach
-    let tab = GtkBox::new(Orientation::Vertical, 8);
-    tab.set_margin_start(12);
-    tab.set_margin_end(12);
-    tab.set_margin_top(12);
-    tab.set_margin_bottom(12);
+    let tab = create_page_container();
 
     let scroll = ScrolledWindow::new();
     scroll.set_vexpand(true);

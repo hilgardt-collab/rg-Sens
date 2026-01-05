@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::ui::widget_builder::create_page_container;
+
 /// GPU source field types
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum GpuField {
@@ -109,9 +111,7 @@ pub struct GpuSourceConfigWidget {
 
 impl GpuSourceConfigWidget {
     pub fn new() -> Self {
-        let widget = GtkBox::new(Orientation::Vertical, 12);
-        widget.set_margin_start(12);
-        widget.set_margin_end(12);
+        let widget = create_page_container();
 
         let config = Rc::new(RefCell::new(GpuSourceConfig::default()));
 

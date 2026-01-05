@@ -18,6 +18,7 @@ use crate::ui::GradientEditor;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
 use crate::core::FieldMetadata;
 
 /// Bar configuration widget
@@ -82,11 +83,7 @@ pub struct BarConfigWidget {
 
 impl BarConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        let container = GtkBox::new(Orientation::Vertical, 12);
-        container.set_margin_start(12);
-        container.set_margin_end(12);
-        container.set_margin_top(12);
-        container.set_margin_bottom(12);
+        let container = create_page_container();
 
         let config = Rc::new(RefCell::new(BarDisplayConfig::default()));
         let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
@@ -97,11 +94,7 @@ impl BarConfigWidget {
         notebook.set_vexpand(true);
 
         // === Tab 1: Bar Style ===
-        let style_page = GtkBox::new(Orientation::Vertical, 12);
-        style_page.set_margin_start(12);
-        style_page.set_margin_end(12);
-        style_page.set_margin_top(12);
-        style_page.set_margin_bottom(12);
+        let style_page = create_page_container();
 
         // Style selector
         let style_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -158,11 +151,7 @@ impl BarConfigWidget {
         notebook.append_page(&style_page, Some(&Label::new(Some("Bar Style"))));
 
         // === Tab 2: Foreground ===
-        let fg_page = GtkBox::new(Orientation::Vertical, 12);
-        fg_page.set_margin_start(12);
-        fg_page.set_margin_end(12);
-        fg_page.set_margin_top(12);
-        fg_page.set_margin_bottom(12);
+        let fg_page = create_page_container();
 
         let fg_type_box = GtkBox::new(Orientation::Horizontal, 12);
         let fg_solid_radio = CheckButton::with_label("Solid Color");
@@ -205,11 +194,7 @@ impl BarConfigWidget {
         notebook.append_page(&fg_page, Some(&Label::new(Some("Foreground"))));
 
         // === Tab 3: Background ===
-        let bg_page = GtkBox::new(Orientation::Vertical, 12);
-        bg_page.set_margin_start(12);
-        bg_page.set_margin_end(12);
-        bg_page.set_margin_top(12);
-        bg_page.set_margin_bottom(12);
+        let bg_page = create_page_container();
 
         let bg_type_box = GtkBox::new(Orientation::Horizontal, 12);
         let bg_solid_radio = CheckButton::with_label("Solid Color");
@@ -256,11 +241,7 @@ impl BarConfigWidget {
         notebook.append_page(&bg_page, Some(&Label::new(Some("Background"))));
 
         // === Tab 4: Style Options ===
-        let options_page = GtkBox::new(Orientation::Vertical, 12);
-        options_page.set_margin_start(12);
-        options_page.set_margin_end(12);
-        options_page.set_margin_top(12);
-        options_page.set_margin_bottom(12);
+        let options_page = create_page_container();
 
         // Taper style selector
         let taper_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -388,11 +369,7 @@ impl BarConfigWidget {
         notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text Overlay"))));
 
         // === Tab 6: Border ===
-        let border_page = GtkBox::new(Orientation::Vertical, 12);
-        border_page.set_margin_start(12);
-        border_page.set_margin_end(12);
-        border_page.set_margin_top(12);
-        border_page.set_margin_bottom(12);
+        let border_page = create_page_container();
 
         let border_check = CheckButton::with_label("Show Border");
         border_page.append(&border_check);
@@ -416,11 +393,7 @@ impl BarConfigWidget {
         notebook.append_page(&border_page, Some(&Label::new(Some("Border"))));
 
         // === Tab 7: Animation ===
-        let animation_page = GtkBox::new(Orientation::Vertical, 12);
-        animation_page.set_margin_start(12);
-        animation_page.set_margin_end(12);
-        animation_page.set_margin_top(12);
-        animation_page.set_margin_bottom(12);
+        let animation_page = create_page_container();
 
         let animate_check = CheckButton::with_label("Enable smooth animation");
         animate_check.set_active(config.borrow().smooth_animation);
@@ -1541,10 +1514,10 @@ impl LazyBarConfigWidget {
 
         // Create placeholder with loading indicator
         let placeholder = GtkBox::new(Orientation::Vertical, 8);
-        placeholder.set_margin_top(12);
-        placeholder.set_margin_bottom(12);
-        placeholder.set_margin_start(12);
-        placeholder.set_margin_end(12);
+        placeholder.set_margin_top(DEFAULT_MARGIN);
+        placeholder.set_margin_bottom(DEFAULT_MARGIN);
+        placeholder.set_margin_start(DEFAULT_MARGIN);
+        placeholder.set_margin_end(DEFAULT_MARGIN);
 
         let info_label = Label::new(Some("Loading bar configuration..."));
         info_label.add_css_class("dim-label");

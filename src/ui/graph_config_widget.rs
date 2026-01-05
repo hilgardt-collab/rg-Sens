@@ -13,6 +13,7 @@ use super::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 use super::text_overlay_config_widget::TextOverlayConfigWidget;
 use super::theme::ComboThemeConfig;
 use super::theme_color_selector::ThemeColorSelector;
+use super::widget_builder::{create_page_container, DEFAULT_MARGIN};
 
 pub struct GraphConfigWidget {
     widget: GtkBox,
@@ -580,11 +581,7 @@ struct LayoutPageWidgets {
 }
 
 fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChangeCallback) -> StylePageWidgets {
-    let page = GtkBox::new(Orientation::Vertical, 12);
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
+    let page = create_page_container();
 
     // Graph type
     let type_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -786,11 +783,7 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
 }
 
 fn create_data_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChangeCallback) -> DataPageWidgets {
-    let page = GtkBox::new(Orientation::Vertical, 12);
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
+    let page = create_page_container();
 
     // Max data points
     let points_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -928,11 +921,7 @@ fn create_data_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChange
 }
 
 fn create_axes_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChangeCallback) -> AxesPageWidgets {
-    let page = GtkBox::new(Orientation::Vertical, 12);
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
+    let page = create_page_container();
 
     // Y-Axis section
     page.append(&Label::new(Some("Y-Axis (Vertical)")));
@@ -1400,11 +1389,7 @@ fn create_axes_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChange
 }
 
 fn create_layout_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChangeCallback) -> LayoutPageWidgets {
-    let page = GtkBox::new(Orientation::Vertical, 12);
-    page.set_margin_start(12);
-    page.set_margin_end(12);
-    page.set_margin_top(12);
-    page.set_margin_bottom(12);
+    let page = create_page_container();
 
     // Margins
     page.append(&Label::new(Some("Margins:")));
@@ -1545,10 +1530,10 @@ impl LazyGraphConfigWidget {
 
         // Create placeholder with loading indicator
         let placeholder = GtkBox::new(Orientation::Vertical, 8);
-        placeholder.set_margin_top(12);
-        placeholder.set_margin_bottom(12);
-        placeholder.set_margin_start(12);
-        placeholder.set_margin_end(12);
+        placeholder.set_margin_top(DEFAULT_MARGIN);
+        placeholder.set_margin_bottom(DEFAULT_MARGIN);
+        placeholder.set_margin_start(DEFAULT_MARGIN);
+        placeholder.set_margin_end(DEFAULT_MARGIN);
 
         let info_label = Label::new(Some("Loading graph configuration..."));
         info_label.add_css_class("dim-label");

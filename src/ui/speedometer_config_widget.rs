@@ -18,6 +18,7 @@ use crate::displayers::FieldMetadata;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::widget_builder::create_page_container;
 
 /// Speedometer gauge configuration widget
 #[allow(dead_code)]
@@ -425,11 +426,7 @@ impl SpeedometerConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, SpinButton, SpinButton, Scale, Scale) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Start angle
         let start_angle_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -514,11 +511,7 @@ impl SpeedometerConfigWidget {
         preview: &DrawingArea,
         theme: &Rc<RefCell<ComboThemeConfig>>,
     ) -> (GtkBox, CheckButton, Rc<ThemeColorSelector>, Rc<GradientEditor>) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Show track checkbox
         let show_track_check = CheckButton::with_label("Show Track");
@@ -648,11 +641,7 @@ impl SpeedometerConfigWidget {
         CheckButton,
         CheckButton,
     ) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // === Major Ticks Section ===
         let major_label = Label::new(Some("Major Ticks"));
@@ -1105,11 +1094,7 @@ impl SpeedometerConfigWidget {
         Rc<ThemeColorSelector>,
         CheckButton,
     ) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Show needle
         let show_needle_check = CheckButton::with_label("Show Needle");
@@ -1268,11 +1253,7 @@ impl SpeedometerConfigWidget {
         Rc<ThemeColorSelector>,
         Rc<crate::ui::BackgroundConfigWidget>,
     ) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // === Center Hub Section ===
         let hub_label = Label::new(Some("Center Hub"));
@@ -1420,11 +1401,7 @@ impl SpeedometerConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, CheckButton, SpinButton, CheckButton) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Animate checkbox
         let animate_check = CheckButton::with_label("Enable Animation");

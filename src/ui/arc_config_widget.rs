@@ -18,6 +18,7 @@ use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::background::ColorStop;
 use crate::ui::GradientEditor;
+use crate::ui::widget_builder::{create_page_container, create_labeled_row};
 use crate::displayers::FieldMetadata;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 
@@ -288,19 +289,12 @@ impl ArcConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, SpinButton, SpinButton, Scale, Scale, CheckButton, SpinButton, SpinButton) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Start angle
-        let start_box = GtkBox::new(Orientation::Horizontal, 6);
-        start_box.append(&Label::new(Some("Start Angle:")));
         let start_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         start_spin.set_value(config.borrow().start_angle);
-        start_spin.set_hexpand(true);
-        start_box.append(&start_spin);
+        let start_row = create_labeled_row("Start Angle:", &start_spin);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -313,15 +307,12 @@ impl ArcConfigWidget {
             }
         });
 
-        page.append(&start_box);
+        page.append(&start_row);
 
         // End angle
-        let end_box = GtkBox::new(Orientation::Horizontal, 6);
-        end_box.append(&Label::new(Some("End Angle:")));
         let end_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
         end_spin.set_value(config.borrow().end_angle);
-        end_spin.set_hexpand(true);
-        end_box.append(&end_spin);
+        let end_row = create_labeled_row("End Angle:", &end_spin);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -334,7 +325,7 @@ impl ArcConfigWidget {
             }
         });
 
-        page.append(&end_box);
+        page.append(&end_row);
 
         // Arc width
         let width_box = GtkBox::new(Orientation::Vertical, 6);
@@ -445,11 +436,7 @@ impl ArcConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, Rc<ThemeColorSelector>, CheckButton, SpinButton) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Cap style
         let cap_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -654,11 +641,7 @@ impl ArcConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, DropDown, DropDown, Rc<GradientEditor>) {
-        let page = GtkBox::new(Orientation::Vertical, 12);
-        page.set_margin_start(12);
-        page.set_margin_end(12);
-        page.set_margin_top(12);
-        page.set_margin_bottom(12);
+        let page = create_page_container();
 
         // Color transition style
         let transition_box = GtkBox::new(Orientation::Horizontal, 6);

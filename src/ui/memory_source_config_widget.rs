@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::MemoryUnit;
+use crate::ui::widget_builder::create_page_container;
 
 /// Memory field selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,11 +103,7 @@ impl MemorySourceConfigWidget {
     pub fn new() -> Self {
         let config = Rc::new(RefCell::new(MemorySourceConfig::default()));
 
-        let widget = GtkBox::new(Orientation::Vertical, 12);
-        widget.set_margin_start(12);
-        widget.set_margin_end(12);
-        widget.set_margin_top(12);
-        widget.set_margin_bottom(12);
+        let widget = create_page_container();
 
         // Caption
         let caption_label = Label::new(Some("Custom Caption (optional):"));
