@@ -17,9 +17,13 @@ echo "Installing rg-sens desktop integration..."
 # Create directories if needed
 mkdir -p "$ICON_DIR" "$DESKTOP_DIR"
 
-# Copy icon theme index (required for icon cache)
-cp "$PROJECT_DIR/data/icons/hicolor/index.theme" "$ICON_BASE_DIR/"
-echo "  Installed icon theme index"
+# Ensure index.theme exists (copy from system if missing, never overwrite)
+if [ ! -f "$ICON_BASE_DIR/index.theme" ]; then
+    if [ -f /usr/share/icons/hicolor/index.theme ]; then
+        cp /usr/share/icons/hicolor/index.theme "$ICON_BASE_DIR/"
+        echo "  Copied system index.theme (was missing)"
+    fi
+fi
 
 # Copy icon
 cp "$PROJECT_DIR/data/icons/hicolor/256x256/apps/rg-sens.png" "$ICON_DIR/"
