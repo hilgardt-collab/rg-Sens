@@ -2044,6 +2044,7 @@ impl LcarsConfigWidget {
             widgets.common.color2_widget.set_color(new_config.frame.theme.color2);
             widgets.common.color3_widget.set_color(new_config.frame.theme.color3);
             widgets.common.color4_widget.set_color(new_config.frame.theme.color4);
+            widgets.common.gradient_editor.set_theme_config(new_config.frame.theme.clone());
             widgets.common.gradient_editor.set_gradient_source_config(&new_config.frame.theme.gradient);
             widgets.common.font1_btn.set_label(&new_config.frame.theme.font1_family);
             widgets.common.font1_size_spin.set_value(new_config.frame.theme.font1_size);
@@ -2055,6 +2056,9 @@ impl LcarsConfigWidget {
 
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
+
+        // Update Theme Reference section with new theme colors
+        combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
 
         self.preview.queue_draw();
     }

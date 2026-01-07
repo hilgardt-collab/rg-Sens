@@ -1177,8 +1177,8 @@ impl IndustrialConfigWidget {
             common_for_preset.color2_widget.set_color(theme.color2);
             common_for_preset.color3_widget.set_color(theme.color3);
             common_for_preset.color4_widget.set_color(theme.color4);
-            common_for_preset.gradient_editor.set_gradient_source_config(&theme.gradient);
             common_for_preset.gradient_editor.set_theme_config(theme.clone());
+            common_for_preset.gradient_editor.set_gradient_source_config(&theme.gradient);
             common_for_preset.font1_btn.set_label(&theme.font1_family);
             common_for_preset.font1_size_spin.set_value(theme.font1_size);
             common_for_preset.font2_btn.set_label(&theme.font2_family);
@@ -1701,6 +1701,9 @@ impl IndustrialConfigWidget {
 
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
+
+        // Update Theme Reference section with new theme colors
+        combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
 
         self.preview.queue_draw();
     }

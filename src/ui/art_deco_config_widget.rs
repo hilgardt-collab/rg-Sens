@@ -1246,6 +1246,7 @@ impl ArtDecoConfigWidget {
             widgets.theme_color2_widget.set_color(config.frame.theme.color2);
             widgets.theme_color3_widget.set_color(config.frame.theme.color3);
             widgets.theme_color4_widget.set_color(config.frame.theme.color4);
+            widgets.theme_gradient_editor.set_theme_config(config.frame.theme.clone());
             widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
             widgets.font1_btn.set_label(&config.frame.theme.font1_family);
             widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
@@ -1347,6 +1348,9 @@ impl ArtDecoConfigWidget {
             &self.available_fields,
             &self.theme_ref_refreshers,
         );
+
+        // Update Theme Reference section with new theme colors
+        combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
 
         self.preview.queue_draw();
     }

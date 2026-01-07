@@ -1005,6 +1005,7 @@ impl FighterHudConfigWidget {
                 color_widgets_clone[2].set_color(theme.color3);
                 color_widgets_clone[3].set_color(theme.color4);
             }
+            gradient_editor_for_preset.set_theme_config(theme.clone());
             gradient_editor_for_preset.set_gradient_source_config(&theme.gradient);
             font1_btn_for_preset.set_label(&theme.font1_family);
             font1_size_spin_for_preset.set_value(theme.font1_size);
@@ -1483,6 +1484,7 @@ impl FighterHudConfigWidget {
             widgets.theme_color2_widget.set_color(theme.color2);
             widgets.theme_color3_widget.set_color(theme.color3);
             widgets.theme_color4_widget.set_color(theme.color4);
+            widgets.theme_gradient_editor.set_theme_config(theme.clone());
             widgets.theme_gradient_editor.set_gradient_source_config(&theme.gradient);
             widgets.font1_btn.set_label(&theme.font1_family);
             widgets.font1_size_spin.set_value(theme.font1_size);
@@ -1529,6 +1531,7 @@ impl FighterHudConfigWidget {
             widgets.theme_color2_widget.set_color(cfg.frame.theme.color2);
             widgets.theme_color3_widget.set_color(cfg.frame.theme.color3);
             widgets.theme_color4_widget.set_color(cfg.frame.theme.color4);
+            widgets.theme_gradient_editor.set_theme_config(cfg.frame.theme.clone());
             widgets.theme_gradient_editor.set_gradient_source_config(&cfg.frame.theme.gradient);
             widgets.font1_btn.set_label(&cfg.frame.theme.font1_family);
             widgets.font1_size_spin.set_value(cfg.frame.theme.font1_size);
@@ -1549,6 +1552,9 @@ impl FighterHudConfigWidget {
 
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
+
+        // Update Theme Reference section with new theme colors
+        combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
 
         self.preview.queue_draw();
     }

@@ -548,6 +548,7 @@ impl MaterialConfigWidget {
                 color_widgets_clone[2].set_color(theme.color3);
                 color_widgets_clone[3].set_color(theme.color4);
             }
+            gradient_editor_for_preset.set_theme_config(theme.clone());
             gradient_editor_for_preset.set_gradient_source_config(&theme.gradient);
             font1_btn_for_preset.set_label(&theme.font1_family);
             font1_size_spin_for_preset.set_value(theme.font1_size);
@@ -676,8 +677,8 @@ impl MaterialConfigWidget {
                 color_widgets_for_variant[2].set_color(theme.color3);
                 color_widgets_for_variant[3].set_color(theme.color4);
             }
-            gradient_editor_for_variant.set_gradient_source_config(&theme.gradient);
             gradient_editor_for_variant.set_theme_config(theme.clone());
+            gradient_editor_for_variant.set_gradient_source_config(&theme.gradient);
             font1_btn_for_variant.set_label(&theme.font1_family);
             font1_size_spin_for_variant.set_value(theme.font1_size);
             font2_btn_for_variant.set_label(&theme.font2_family);
@@ -1470,8 +1471,8 @@ impl MaterialConfigWidget {
             widgets.theme_color2_widget.set_color(config.frame.theme.color2);
             widgets.theme_color3_widget.set_color(config.frame.theme.color3);
             widgets.theme_color4_widget.set_color(config.frame.theme.color4);
-            widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
             widgets.theme_gradient_editor.set_theme_config(config.frame.theme.clone());
+            widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
             widgets.font1_btn.set_label(&config.frame.theme.font1_family);
             widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
             widgets.font2_btn.set_label(&config.frame.theme.font2_family);
@@ -1568,6 +1569,9 @@ impl MaterialConfigWidget {
 
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
+
+        // Update Theme Reference section with new theme colors
+        combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
 
         self.preview.queue_draw();
     }

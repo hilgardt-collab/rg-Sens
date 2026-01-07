@@ -1641,6 +1641,19 @@ impl SynthwaveConfigWidget {
             widgets.common.color2_widget.set_color(theme_color2);
             widgets.common.color3_widget.set_color(theme_color3);
             widgets.common.color4_widget.set_color(theme_color4);
+            // Update gradient editor with theme colors AND gradient config
+            let full_theme = crate::ui::theme::ComboThemeConfig {
+                color1: theme_color1,
+                color2: theme_color2,
+                color3: theme_color3,
+                color4: theme_color4,
+                gradient: theme_gradient.clone(),
+                font1_family: theme_font1_family.clone(),
+                font1_size: theme_font1_size,
+                font2_family: theme_font2_family.clone(),
+                font2_size: theme_font2_size,
+            };
+            widgets.common.gradient_editor.set_theme_config(full_theme);
             widgets.common.gradient_editor.set_gradient_source_config(&theme_gradient);
             widgets.common.font1_btn.set_label(&theme_font1_family);
             widgets.common.font1_size_spin.set_value(theme_font1_size);
