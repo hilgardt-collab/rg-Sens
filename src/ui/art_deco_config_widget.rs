@@ -568,6 +568,14 @@ impl ArtDecoConfigWidget {
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
+        // Register theme refresh callback for gradient editor
+        let gradient_editor_for_refresh = theme_gradient_editor.clone();
+        let config_for_gradient_refresh = config.clone();
+        theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
+            let cfg = config_for_gradient_refresh.borrow();
+            gradient_editor_for_refresh.set_theme_config(cfg.frame.theme.clone());
+        }));
+
         // Theme fonts section
         let fonts_label = Label::new(Some("Theme Fonts"));
         fonts_label.set_halign(gtk4::Align::Start);

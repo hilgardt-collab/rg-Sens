@@ -2052,13 +2052,28 @@ where
 
     page.append(&colors_grid);
 
-    // Connect color widget callbacks
+    // Theme Gradient section (create early so color callbacks can update it)
+    let gradient_label = Label::new(Some("Theme Gradient"));
+    gradient_label.set_halign(gtk4::Align::Start);
+    gradient_label.add_css_class("heading");
+    gradient_label.set_margin_top(12);
+    page.append(&gradient_label);
+
+    let theme_gradient_editor = Rc::new(GradientEditor::new());
+    theme_gradient_editor.set_theme_config(theme.clone());
+    theme_gradient_editor.set_gradient_source_config(&theme.gradient);
+    page.append(theme_gradient_editor.widget());
+
+    // Connect color widget callbacks (with gradient editor updates)
     let config_c1 = config.clone();
     let on_change_c1 = on_change.clone();
     let preview_c1 = preview.clone();
     let refreshers_c1 = theme_ref_refreshers.clone();
+    let get_theme_c1 = get_theme.clone();
+    let gradient_editor_c1 = theme_gradient_editor.clone();
     theme_color1_widget.set_on_change(move |color| {
         set_color1(&mut config_c1.borrow_mut(), color);
+        gradient_editor_c1.set_theme_config(get_theme_c1(&config_c1.borrow()));
         queue_redraw(&preview_c1, &on_change_c1);
         refresh_theme_refs(&refreshers_c1);
     });
@@ -2067,8 +2082,11 @@ where
     let on_change_c2 = on_change.clone();
     let preview_c2 = preview.clone();
     let refreshers_c2 = theme_ref_refreshers.clone();
+    let get_theme_c2 = get_theme.clone();
+    let gradient_editor_c2 = theme_gradient_editor.clone();
     theme_color2_widget.set_on_change(move |color| {
         set_color2(&mut config_c2.borrow_mut(), color);
+        gradient_editor_c2.set_theme_config(get_theme_c2(&config_c2.borrow()));
         queue_redraw(&preview_c2, &on_change_c2);
         refresh_theme_refs(&refreshers_c2);
     });
@@ -2077,8 +2095,11 @@ where
     let on_change_c3 = on_change.clone();
     let preview_c3 = preview.clone();
     let refreshers_c3 = theme_ref_refreshers.clone();
+    let get_theme_c3 = get_theme.clone();
+    let gradient_editor_c3 = theme_gradient_editor.clone();
     theme_color3_widget.set_on_change(move |color| {
         set_color3(&mut config_c3.borrow_mut(), color);
+        gradient_editor_c3.set_theme_config(get_theme_c3(&config_c3.borrow()));
         queue_redraw(&preview_c3, &on_change_c3);
         refresh_theme_refs(&refreshers_c3);
     });
@@ -2087,22 +2108,14 @@ where
     let on_change_c4 = on_change.clone();
     let preview_c4 = preview.clone();
     let refreshers_c4 = theme_ref_refreshers.clone();
+    let get_theme_c4 = get_theme.clone();
+    let gradient_editor_c4 = theme_gradient_editor.clone();
     theme_color4_widget.set_on_change(move |color| {
         set_color4(&mut config_c4.borrow_mut(), color);
+        gradient_editor_c4.set_theme_config(get_theme_c4(&config_c4.borrow()));
         queue_redraw(&preview_c4, &on_change_c4);
         refresh_theme_refs(&refreshers_c4);
     });
-
-    // Theme Gradient section
-    let gradient_label = Label::new(Some("Theme Gradient"));
-    gradient_label.set_halign(gtk4::Align::Start);
-    gradient_label.add_css_class("heading");
-    gradient_label.set_margin_top(12);
-    page.append(&gradient_label);
-
-    let theme_gradient_editor = Rc::new(GradientEditor::new());
-    theme_gradient_editor.set_gradient_source_config(&theme.gradient);
-    page.append(theme_gradient_editor.widget());
 
     let config_grad = config.clone();
     let on_change_grad = on_change.clone();
