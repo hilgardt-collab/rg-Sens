@@ -44,6 +44,8 @@ struct DisplayData {
     cached_html: Option<String>,
     /// Currently detected placeholders
     detected_placeholders: Vec<u32>,
+    /// Flag to signal that config changed and WebView needs reload
+    config_changed: bool,
 }
 
 impl Default for DisplayData {
@@ -55,6 +57,7 @@ impl Default for DisplayData {
             dirty: true,
             cached_html: None,
             detected_placeholders: Vec::new(),
+            config_changed: false,
         }
     }
 }
@@ -266,13 +269,25 @@ impl Displayer for CssTemplateDisplayer {
                     return glib::ControlFlow::Continue;
                 }
 
-                // Check for hot-reload
-                if reload_flag_reader.swap(false, Ordering::SeqCst) {
+                // Check for config change (new template selected)
+                let config_changed = data_clone.lock().ok().map(|d| d.config_changed).unwrap_or(false);
+
+                // Check for hot-reload or config change
+                if reload_flag_reader.swap(false, Ordering::SeqCst) || config_changed {
                     // Reload template
                     let html_content = {
-                        let config = data_clone.lock().ok().map(|d| d.config.clone());
+                        let mut should_reload = config_changed;
+                        let config = data_clone.lock().ok().map(|mut d| {
+                            if d.config_changed {
+                                d.config_changed = false;
+                                should_reload = true;
+                            }
+                            d.config.clone()
+                        });
+
                         if let Some(config) = config {
-                            if config.hot_reload {
+                            // Reload if config changed OR hot_reload is enabled and file changed
+                            if should_reload || config.hot_reload {
                                 // Manual load
                                 let html = if !config.html_path.as_os_str().is_empty()
                                     && config.html_path.exists()
@@ -438,8 +453,9 @@ impl Displayer for CssTemplateDisplayer {
             {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = css_config;
-                    // Invalidate cached HTML
+                    // Invalidate cached HTML and signal reload needed
                     display_data.cached_html = None;
+                    display_data.config_changed = true;
 
                     // Detect placeholders in the template
                     let html_content = if !display_data.config.html_path.as_os_str().is_empty()
@@ -463,11 +479,13 @@ impl Displayer for CssTemplateDisplayer {
             if let Some(path) = config.get("html_path").and_then(|v| v.as_str()) {
                 display_data.config.html_path = PathBuf::from(path);
                 display_data.cached_html = None;
+                display_data.config_changed = true;
             }
 
             if let Some(path) = config.get("css_path").and_then(|v| v.as_str()) {
                 display_data.config.css_path = Some(PathBuf::from(path));
                 display_data.cached_html = None;
+                display_data.config_changed = true;
             }
 
             if let Some(hot_reload) = config.get("hot_reload").and_then(|v| v.as_bool()) {

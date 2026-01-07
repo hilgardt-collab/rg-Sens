@@ -152,11 +152,17 @@ pub fn transform_template(html: &str) -> String {
 ///
 /// This creates a `window.updateValues(values)` function that
 /// efficiently updates DOM elements with data-placeholder attributes.
+/// If the template already defines `updateValues`, it wraps it to also
+/// update data-placeholder elements.
 pub fn generate_update_script() -> &'static str {
     r#"
 (function() {
+    // Save any existing updateValues function from the template
+    var templateUpdateValues = window.updateValues;
+
     // Value update function - called from Rust via evaluate_javascript
     window.updateValues = function(values) {
+        // First, update all data-placeholder elements (fallback/default behavior)
         for (const [idx, value] of Object.entries(values)) {
             const elements = document.querySelectorAll(`[data-placeholder="${idx}"]`);
             elements.forEach(el => {
@@ -165,6 +171,12 @@ pub fn generate_update_script() -> &'static str {
                     el.textContent = value;
                 }
             });
+        }
+
+        // Then call the template's custom updateValues if it exists
+        // This allows templates to have their own animation/update logic
+        if (typeof templateUpdateValues === 'function') {
+            templateUpdateValues(values);
         }
     };
 
