@@ -1,7 +1,7 @@
 //! Configuration for text displayer
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
+use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig, FontSource};
 use serde::{Deserialize, Serialize};
 
 /// Vertical position of text
@@ -199,7 +199,7 @@ pub enum TextBackgroundType {
     Solid { color: ColorSource },
     #[serde(rename = "linear_gradient")]
     LinearGradient {
-        stops: Vec<ColorStop>,
+        stops: Vec<ColorStopSource>,
         angle: f64,
     },
 }
@@ -228,7 +228,7 @@ impl TextBackgroundType {
                 })
             }
             TextBackgroundType::LinearGradient { stops, .. } => {
-                stops.first().map(|s| s.color)
+                stops.first().map(|s| s.color.resolve(theme.unwrap_or(&ComboThemeConfig::default())))
             }
         }
     }
@@ -236,6 +236,22 @@ impl TextBackgroundType {
     /// Check if this background type is None
     pub fn is_none(&self) -> bool {
         matches!(self, TextBackgroundType::None)
+    }
+
+    /// Resolve the gradient to concrete colors using theme
+    pub fn resolve_gradient(&self, theme: Option<&ComboThemeConfig>) -> Option<(Vec<ColorStop>, f64)> {
+        match self {
+            TextBackgroundType::LinearGradient { stops, angle } => {
+                let default_theme = ComboThemeConfig::default();
+                let theme_ref = theme.unwrap_or(&default_theme);
+                let resolved_stops: Vec<ColorStop> = stops
+                    .iter()
+                    .map(|s| s.resolve(theme_ref))
+                    .collect();
+                Some((resolved_stops, *angle))
+            }
+            _ => None,
+        }
     }
 }
 

@@ -396,8 +396,12 @@ fn render_text_background(
             let dy = angle_rad.sin() * length;
 
             let gradient = cairo::LinearGradient::new(cx - dx, cy - dy, cx + dx, cy + dy);
+            // Resolve theme-aware color stops
+            let default_theme = ComboThemeConfig::default();
+            let theme_ref = theme.unwrap_or(&default_theme);
             for stop in stops {
-                gradient.add_color_stop_rgba(stop.position, stop.color.r, stop.color.g, stop.color.b, stop.color.a);
+                let resolved = stop.resolve(theme_ref);
+                gradient.add_color_stop_rgba(resolved.position, resolved.color.r, resolved.color.g, resolved.color.b, resolved.color.a);
             }
 
             draw_rounded_rect(cr, bg_x, bg_y, bg_w, bg_h, radius);

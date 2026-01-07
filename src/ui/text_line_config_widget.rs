@@ -8,7 +8,7 @@ use crate::displayers::{
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::gradient_editor::GradientEditor;
 use crate::ui::position_grid_widget::PositionGridWidget;
-use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
+use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig, FontSource};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
 use gtk4::prelude::*;
@@ -812,19 +812,15 @@ impl TextLineConfigWidget {
         fill_gradient_editors.borrow_mut().push(bg_gradient_editor.clone());
         match &line_config.text_background.background {
             TextBackgroundType::LinearGradient { stops, angle } => {
-                bg_gradient_editor.set_gradient(&LinearGradientConfig {
-                    stops: stops.clone(),
-                    angle: *angle,
-                });
+                // Use set_gradient_source to preserve theme color references
+                bg_gradient_editor.set_gradient_source(*angle, stops.clone());
             }
             _ => {
-                bg_gradient_editor.set_gradient(&LinearGradientConfig {
-                    stops: vec![
-                        ColorStop::new(0.0, Color::new(0.0, 0.0, 0.0, 0.7)),
-                        ColorStop::new(1.0, Color::new(0.2, 0.2, 0.2, 0.7)),
-                    ],
-                    angle: 0.0,
-                });
+                // Default gradient with custom colors
+                bg_gradient_editor.set_stops_source(vec![
+                    ColorStopSource::custom(0.0, Color::new(0.0, 0.0, 0.0, 0.7)),
+                    ColorStopSource::custom(1.0, Color::new(0.2, 0.2, 0.2, 0.7)),
+                ]);
             }
         }
         bg_gradient_box.append(bg_gradient_editor.widget());
@@ -859,7 +855,8 @@ impl TextLineConfigWidget {
                             color: bg_color_widget_clone.source(),
                         },
                         2 => {
-                            let grad = bg_gradient_editor_clone.get_gradient();
+                            // Use get_gradient_source_config to preserve theme color references
+                            let grad = bg_gradient_editor_clone.get_gradient_source_config();
                             TextBackgroundType::LinearGradient {
                                 stops: grad.stops,
                                 angle: grad.angle,
@@ -910,7 +907,8 @@ impl TextLineConfigWidget {
             let bg_radius_spin_clone = bg_radius_spin.clone();
             let on_change_bg_grad = on_change.clone();
             bg_gradient_editor.set_on_change(move || {
-                let grad = bg_gradient_editor_clone.get_gradient();
+                // Use get_gradient_source_config to preserve theme color references
+                let grad = bg_gradient_editor_clone.get_gradient_source_config();
                 let mut lines_ref = lines_clone.borrow_mut();
                 if let Some(line) = lines_ref.get_mut(list_index) {
                     line.text_background = TextBackgroundConfig {
