@@ -86,7 +86,6 @@ mod fighter_hud;
 mod synthwave;
 mod art_deco;
 mod art_nouveau;
-#[cfg(feature = "css_template")]
 mod css_template;
 pub mod combo_utils;
 pub mod combo_displayer_base;
@@ -115,7 +114,6 @@ pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
 pub use synthwave::{SynthwaveDisplayer, SynthwaveDisplayConfig};
 pub use art_deco::{ArtDecoDisplayer, ArtDecoDisplayConfig};
 pub use art_nouveau::{ArtNouveauDisplayer, ArtNouveauDisplayConfig};
-#[cfg(feature = "css_template")]
 pub use css_template::CssTemplateDisplayer;
 
 // Re-export FieldMetadata from core for convenience
@@ -252,8 +250,7 @@ pub fn register_all() {
         || Box::new(ArtNouveauDisplayer::new()),
     );
 
-    // Register CSS Template displayer (requires css_template feature)
-    #[cfg(feature = "css_template")]
+    // Register CSS Template displayer
     global_registry().register_displayer_with_info(
         "css_template",
         "CSS Template",

@@ -1414,31 +1414,17 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&art_nouveau_config_label);
     displayer_tab_box.append(&art_nouveau_placeholder);
 
-    // CSS Template configuration (feature-gated)
-    #[cfg(feature = "css_template")]
+    // CSS Template configuration
     let css_template_config_label = Label::new(Some("CSS Template Configuration:"));
-    #[cfg(feature = "css_template")]
-    {
-        css_template_config_label.set_halign(gtk4::Align::Start);
-        css_template_config_label.add_css_class("heading");
-        css_template_config_label.set_visible(old_displayer_id == "css_template");
-    }
-    #[cfg(not(feature = "css_template"))]
-    let css_template_config_label = Label::new(None::<&str>);
+    css_template_config_label.set_halign(gtk4::Align::Start);
+    css_template_config_label.add_css_class("heading");
+    css_template_config_label.set_visible(old_displayer_id == "css_template");
 
-    #[cfg(feature = "css_template")]
     let css_template_placeholder = GtkBox::new(Orientation::Vertical, 0);
-    #[cfg(feature = "css_template")]
     css_template_placeholder.set_visible(old_displayer_id == "css_template");
-    #[cfg(not(feature = "css_template"))]
-    let css_template_placeholder = GtkBox::new(Orientation::Vertical, 0);
 
-    #[cfg(feature = "css_template")]
     let css_template_config_widget: Rc<RefCell<Option<crate::ui::CssTemplateConfigWidget>>> = Rc::new(RefCell::new(None));
-    #[cfg(not(feature = "css_template"))]
-    let _css_template_config_widget: Rc<RefCell<Option<()>>> = Rc::new(RefCell::new(None));
 
-    #[cfg(feature = "css_template")]
     if old_displayer_id == "css_template" {
         log::info!("=== Creating CssTemplateConfigWidget (lazy init) ===");
         let widget = crate::ui::CssTemplateConfigWidget::new();
@@ -1503,7 +1489,6 @@ pub(crate) fn show_panel_properties_dialog(
                 let synthwave_w = synthwave_widget_clone.clone();
                 let art_deco_w = art_deco_widget_clone.clone();
                 let art_nouveau_w = art_nouveau_widget_clone.clone();
-                #[cfg(feature = "css_template")]
                 let css_template_w = css_template_config_widget.clone();
 
                 widget.set_on_fields_updated(move |fields| {
@@ -1581,7 +1566,6 @@ pub(crate) fn show_panel_properties_dialog(
                                 widget.set_source_summaries(summaries);
                             }
                         }
-                        #[cfg(feature = "css_template")]
                         "css_template" => {
                             if let Some(ref widget) = *css_template_w.borrow() {
                                 widget.set_source_summaries(summaries);
@@ -2412,7 +2396,6 @@ pub(crate) fn show_panel_properties_dialog(
     }
 
     // Lazily create and update CSS Template widget when displayer changes to "css_template" and source is "combination"
-    #[cfg(feature = "css_template")]
     {
         let css_template_widget_clone = css_template_config_widget.clone();
         let css_template_placeholder_clone = css_template_placeholder.clone();
@@ -2743,7 +2726,6 @@ pub(crate) fn show_panel_properties_dialog(
     let synthwave_config_widget_clone = synthwave_config_widget.clone();
     let art_deco_config_widget_clone = art_deco_config_widget.clone();
     let art_nouveau_config_widget_clone = art_nouveau_config_widget.clone();
-    #[cfg(feature = "css_template")]
     let css_template_config_widget_clone = css_template_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
@@ -3702,7 +3684,6 @@ pub(crate) fn show_panel_properties_dialog(
             }
 
             // Apply CSS Template displayer configuration if CSS Template displayer is active
-            #[cfg(feature = "css_template")]
             if new_displayer_id == "css_template" {
                 if let Some(ref widget) = *css_template_config_widget_clone.borrow() {
                     let css_template_config = widget.get_config();

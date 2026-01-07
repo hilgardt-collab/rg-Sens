@@ -5,10 +5,8 @@
 //! - Template transformation for JavaScript injection
 //! - JavaScript bridge generation for value updates
 
-#[cfg(feature = "css_template")]
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "css_template")]
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -105,7 +103,6 @@ impl Default for CssTemplateDisplayConfig {
 ///
 /// Scans the HTML for `{{0}}`, `{{1}}`, etc. patterns and returns
 /// a sorted list of unique indices found.
-#[cfg(feature = "css_template")]
 pub fn detect_placeholders(html: &str) -> Vec<u32> {
     let re = Regex::new(r"\{\{(\d+)\}\}").expect("Invalid regex");
     let mut indices: HashSet<u32> = HashSet::new();
@@ -123,12 +120,6 @@ pub fn detect_placeholders(html: &str) -> Vec<u32> {
     result
 }
 
-/// Stub for when css_template feature is disabled
-#[cfg(not(feature = "css_template"))]
-pub fn detect_placeholders(_html: &str) -> Vec<u32> {
-    Vec::new()
-}
-
 /// Extract placeholder hints from an HTML template
 ///
 /// Looks for a JSON block in the format:
@@ -143,7 +134,6 @@ pub fn detect_placeholders(_html: &str) -> Vec<u32> {
 /// ```
 ///
 /// Returns a HashMap of placeholder index to hint string.
-#[cfg(feature = "css_template")]
 pub fn extract_placeholder_hints(html: &str) -> std::collections::HashMap<u32, String> {
     use std::collections::HashMap;
 
@@ -175,29 +165,16 @@ pub fn extract_placeholder_hints(html: &str) -> std::collections::HashMap<u32, S
     hints
 }
 
-/// Stub for when css_template feature is disabled
-#[cfg(not(feature = "css_template"))]
-pub fn extract_placeholder_hints(_html: &str) -> std::collections::HashMap<u32, String> {
-    std::collections::HashMap::new()
-}
-
 /// Transform placeholders in HTML for JavaScript injection
 ///
 /// Converts `{{0}}` to `<span data-placeholder="0" class="rg-placeholder">--</span>`
 /// so that values can be updated via JavaScript without re-rendering HTML.
-#[cfg(feature = "css_template")]
 pub fn transform_template(html: &str) -> String {
     let re = Regex::new(r"\{\{(\d+)\}\}").expect("Invalid regex");
     re.replace_all(html, |caps: &regex::Captures| {
         let idx = &caps[1];
         format!(r#"<span data-placeholder="{}" class="rg-placeholder">--</span>"#, idx)
     }).to_string()
-}
-
-/// Stub for when css_template feature is disabled
-#[cfg(not(feature = "css_template"))]
-pub fn transform_template(html: &str) -> String {
-    html.to_string()
 }
 
 /// Generate the JavaScript bridge code for value updates
@@ -414,7 +391,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[cfg(feature = "css_template")]
     fn test_detect_placeholders() {
         let html = r#"<div>{{0}} and {{1}} and {{0}} and {{5}}</div>"#;
         let indices = detect_placeholders(html);
@@ -422,7 +398,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "css_template")]
     fn test_transform_template() {
         let html = r#"<span>{{0}}</span>"#;
         let transformed = transform_template(html);

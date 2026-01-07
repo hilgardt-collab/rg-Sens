@@ -42,7 +42,6 @@ pub use crate::displayers::FighterHudDisplayConfig;
 pub use crate::displayers::SynthwaveDisplayConfig;
 pub use crate::displayers::ArtDecoDisplayConfig;
 pub use crate::displayers::ArtNouveauDisplayConfig;
-#[cfg(feature = "css_template")]
 pub use crate::ui::css_template_display::CssTemplateDisplayConfig;
 
 /// Type-safe enum for all source configurations.
@@ -301,7 +300,6 @@ pub enum DisplayerConfig {
     #[serde(rename = "art_nouveau")]
     ArtNouveau(ArtNouveauDisplayConfig),
 
-    #[cfg(feature = "css_template")]
     #[serde(rename = "css_template")]
     CssTemplate(CssTemplateDisplayConfig),
 }
@@ -328,7 +326,6 @@ impl DisplayerConfig {
             DisplayerConfig::Synthwave(_) => "synthwave",
             DisplayerConfig::ArtDeco(_) => "art_deco",
             DisplayerConfig::ArtNouveau(_) => "art_nouveau",
-            #[cfg(feature = "css_template")]
             DisplayerConfig::CssTemplate(_) => "css_template",
         }
     }
@@ -427,7 +424,6 @@ impl DisplayerConfig {
                     map.insert("art_nouveau_config".to_string(), val);
                 }
             }
-            #[cfg(feature = "css_template")]
             DisplayerConfig::CssTemplate(cfg) => {
                 if let Ok(val) = serde_json::to_value(cfg) {
                     map.insert("css_template_config".to_string(), val);
@@ -458,7 +454,6 @@ impl DisplayerConfig {
             "synthwave" => Some(DisplayerConfig::Synthwave(SynthwaveDisplayConfig::default())),
             "art_deco" => Some(DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::default())),
             "art_nouveau" => Some(DisplayerConfig::ArtNouveau(ArtNouveauDisplayConfig::default())),
-            #[cfg(feature = "css_template")]
             "css_template" => Some(DisplayerConfig::CssTemplate(CssTemplateDisplayConfig::default())),
             _ => None,
         }
@@ -493,7 +488,6 @@ impl DisplayerConfig {
             "synthwave" => serde_json::from_value(value).ok().map(DisplayerConfig::Synthwave),
             "art_deco" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtDeco),
             "art_nouveau" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtNouveau),
-            #[cfg(feature = "css_template")]
             "css_template" => serde_json::from_value(value).ok().map(DisplayerConfig::CssTemplate),
             _ => None,
         }
@@ -521,7 +515,6 @@ impl DisplayerConfig {
             DisplayerConfig::Synthwave(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::ArtDeco(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::ArtNouveau(c) => serde_json::to_value(c).ok(),
-            #[cfg(feature = "css_template")]
             DisplayerConfig::CssTemplate(c) => serde_json::to_value(c).ok(),
         }
     }

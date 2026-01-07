@@ -70,7 +70,6 @@ mod art_nouveau_config_widget;
 pub mod combo_config_base;
 pub mod theme;
 pub mod css_template_display;
-#[cfg(feature = "css_template")]
 mod css_template_config_widget;
 mod theme_color_selector;
 mod theme_font_selector;
@@ -182,7 +181,6 @@ pub use art_nouveau_config_widget::ArtNouveauConfigWidget;
 pub use theme_color_selector::ThemeColorSelector;
 pub use theme_font_selector::ThemeFontSelector;
 pub use css_template_display::{CssTemplateDisplayConfig, PlaceholderMapping};
-#[cfg(feature = "css_template")]
 pub use css_template_config_widget::CssTemplateConfigWidget;
 
 // Dialog close functions
