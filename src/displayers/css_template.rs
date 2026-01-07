@@ -182,6 +182,13 @@ impl Displayer for CssTemplateDisplayer {
         // Set transparent background
         webview.set_background_color(&gdk4::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
+        // Disable WebView's own context menu (let parent handle right-click)
+        webview.connect_context_menu(|_, _, _| true);
+
+        // Make WebView not be a target for pointer events - this allows
+        // the parent frame's gestures (drag, right-click) to work properly
+        webview.set_can_target(false);
+
         // Load initial template
         let html = self.load_template();
         if let Some(html_content) = html {
