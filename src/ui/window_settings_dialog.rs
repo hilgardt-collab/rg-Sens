@@ -561,6 +561,8 @@ pub fn show_window_settings_dialog<F>(
 
     let copy_window_btn = Button::with_label("Copy from Window");
     let copy_monitor_btn = Button::with_label("Copy from Monitor");
+    let apply_to_window_btn = Button::with_label("Apply to Window");
+    apply_to_window_btn.set_tooltip_text(Some("Resize main window to viewport dimensions"));
 
     // Monitor dropdown for copy
     let monitor_list = StringList::new(&[]);
@@ -582,6 +584,7 @@ pub fn show_window_settings_dialog<F>(
     copy_buttons_box.append(&copy_window_btn);
     copy_buttons_box.append(&copy_monitor_btn);
     copy_buttons_box.append(&vp_monitor_dropdown);
+    copy_buttons_box.append(&apply_to_window_btn);
     window_mode_tab_box.append(&copy_buttons_box);
 
     // Connect copy from window button
@@ -610,6 +613,22 @@ pub fn show_window_settings_dialog<F>(
                         vp_height.set_value(geom.height() as f64);
                     }
                 }
+            }
+        });
+    }
+
+    // Connect apply to window button - resize main window to viewport dimensions
+    {
+        let parent_clone = parent_window.clone();
+        let vp_width = viewport_width_spin.clone();
+        let vp_height = viewport_height_spin.clone();
+        apply_to_window_btn.connect_clicked(move |_| {
+            let width = vp_width.value() as i32;
+            let height = vp_height.value() as i32;
+            if width > 0 && height > 0 {
+                parent_clone.set_default_size(width, height);
+                // Queue a resize - this helps ensure the window updates
+                parent_clone.queue_resize();
             }
         });
     }
