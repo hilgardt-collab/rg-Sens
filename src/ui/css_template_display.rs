@@ -129,6 +129,58 @@ pub fn detect_placeholders(_html: &str) -> Vec<u32> {
     Vec::new()
 }
 
+/// Extract placeholder hints from an HTML template
+///
+/// Looks for a JSON block in the format:
+/// ```html
+/// <script type="application/json" id="rg-placeholder-hints">
+/// {
+///   "0": "CPU Usage - Caption",
+///   "1": "CPU Usage - Value",
+///   "2": "CPU Usage - Unit"
+/// }
+/// </script>
+/// ```
+///
+/// Returns a HashMap of placeholder index to hint string.
+#[cfg(feature = "css_template")]
+pub fn extract_placeholder_hints(html: &str) -> std::collections::HashMap<u32, String> {
+    use std::collections::HashMap;
+
+    let mut hints: HashMap<u32, String> = HashMap::new();
+
+    // Look for the JSON hints block
+    let re = Regex::new(
+        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-hints["']\s*>([\s\S]*?)</script>"#
+    ).expect("Invalid regex");
+
+    if let Some(caps) = re.captures(html) {
+        if let Some(json_match) = caps.get(1) {
+            let json_str = json_match.as_str().trim();
+            // Parse the JSON
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+                if let Some(obj) = parsed.as_object() {
+                    for (key, value) in obj {
+                        if let Ok(idx) = key.parse::<u32>() {
+                            if let Some(hint) = value.as_str() {
+                                hints.insert(idx, hint.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    hints
+}
+
+/// Stub for when css_template feature is disabled
+#[cfg(not(feature = "css_template"))]
+pub fn extract_placeholder_hints(_html: &str) -> std::collections::HashMap<u32, String> {
+    std::collections::HashMap::new()
+}
+
 /// Transform placeholders in HTML for JavaScript injection
 ///
 /// Converts `{{0}}` to `<span data-placeholder="0" class="rg-placeholder">--</span>`

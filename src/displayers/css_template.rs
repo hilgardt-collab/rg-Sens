@@ -26,8 +26,8 @@ use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::displayers::combo_utils;
 use crate::ui::css_template_display::{
-    detect_placeholders, format_value, prepare_html_document, transform_template,
-    CssTemplateDisplayConfig, PlaceholderMapping,
+    detect_placeholders, extract_placeholder_hints, format_value, prepare_html_document,
+    transform_template, CssTemplateDisplayConfig, PlaceholderMapping,
 };
 
 use webkit6::prelude::WebViewExt;
@@ -44,6 +44,8 @@ struct DisplayData {
     cached_html: Option<String>,
     /// Currently detected placeholders
     detected_placeholders: Vec<u32>,
+    /// Placeholder hints extracted from template (index -> description)
+    placeholder_hints: HashMap<u32, String>,
     /// Flag to signal that config changed and WebView needs reload
     config_changed: bool,
 }
@@ -57,6 +59,7 @@ impl Default for DisplayData {
             dirty: true,
             cached_html: None,
             detected_placeholders: Vec::new(),
+            placeholder_hints: HashMap::new(),
             config_changed: false,
         }
     }
@@ -151,6 +154,15 @@ impl CssTemplateDisplayer {
             css_content.as_deref(),
             config.embedded_css.as_deref(),
         ))
+    }
+
+    /// Get placeholder hints extracted from the current template
+    pub fn get_placeholder_hints(&self) -> HashMap<u32, String> {
+        if let Ok(data) = self.data.lock() {
+            data.placeholder_hints.clone()
+        } else {
+            HashMap::new()
+        }
     }
 }
 
@@ -457,7 +469,7 @@ impl Displayer for CssTemplateDisplayer {
                     display_data.cached_html = None;
                     display_data.config_changed = true;
 
-                    // Detect placeholders in the template
+                    // Detect placeholders and extract hints from the template
                     let html_content = if !display_data.config.html_path.as_os_str().is_empty()
                         && display_data.config.html_path.exists()
                     {
@@ -466,8 +478,9 @@ impl Displayer for CssTemplateDisplayer {
                         display_data.config.embedded_html.clone()
                     };
 
-                    if let Some(html) = html_content {
-                        display_data.detected_placeholders = detect_placeholders(&html);
+                    if let Some(ref html) = html_content {
+                        display_data.detected_placeholders = detect_placeholders(html);
+                        display_data.placeholder_hints = extract_placeholder_hints(html);
                     }
                 }
                 return Ok(());

@@ -3,17 +3,19 @@
 //! Provides an interface for configuring CSS Template combo panels,
 //! including template file selection and placeholder mappings.
 
+use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, FileDialog, Label,
     Notebook, Orientation, ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
-use crate::ui::css_template_display::{CssTemplateDisplayConfig, PlaceholderMapping};
+use crate::ui::css_template_display::{extract_placeholder_hints, CssTemplateDisplayConfig, PlaceholderMapping};
 use crate::ui::widget_builder::{create_page_container, create_section_header};
 
 /// CSS Template configuration widget
@@ -22,6 +24,7 @@ pub struct CssTemplateConfigWidget {
     config: Rc<RefCell<CssTemplateDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+    placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
     // Template widgets
     html_path_entry: Entry,
     css_path_entry: Entry,
@@ -45,6 +48,8 @@ impl CssTemplateConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
             Rc::new(RefCell::new(Vec::new()));
+        let placeholder_hints: Rc<RefCell<HashMap<u32, String>>> =
+            Rc::new(RefCell::new(HashMap::new()));
 
         // Create notebook for tabs
         let notebook = Notebook::new();
@@ -57,7 +62,7 @@ impl CssTemplateConfigWidget {
 
         // Mappings Tab
         let (mappings_page, mappings_container) =
-            Self::create_mappings_tab(config.clone(), on_change.clone(), source_summaries.clone());
+            Self::create_mappings_tab(config.clone(), on_change.clone(), source_summaries.clone(), placeholder_hints.clone());
         notebook.append_page(&mappings_page, Some(&Label::new(Some("Mappings"))));
 
         // Display Tab
@@ -72,6 +77,7 @@ impl CssTemplateConfigWidget {
             config,
             on_change,
             source_summaries,
+            placeholder_hints,
             html_path_entry,
             css_path_entry,
             hot_reload_check,
@@ -283,6 +289,7 @@ impl CssTemplateConfigWidget {
         config: Rc<RefCell<CssTemplateDisplayConfig>>,
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
         source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
     ) -> (GtkBox, GtkBox) {
         let page = create_page_container();
 
@@ -291,7 +298,8 @@ impl CssTemplateConfigWidget {
         page.append(&header);
 
         let help = Label::new(Some(
-            "Map each placeholder ({{0}}, {{1}}, etc.) to a data source.",
+            "Map each placeholder ({{0}}, {{1}}, etc.) to a data source.\n\
+             Hints from the template are shown in italics.",
         ));
         help.set_xalign(0.0);
         help.add_css_class("dim-label");
@@ -317,6 +325,7 @@ impl CssTemplateConfigWidget {
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let source_summaries_clone = source_summaries.clone();
+        let placeholder_hints_clone = placeholder_hints.clone();
         add_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
             let next_idx = cfg.mappings.len() as u32;
@@ -338,6 +347,7 @@ impl CssTemplateConfigWidget {
                 config_clone.clone(),
                 on_change_clone.clone(),
                 source_summaries_clone.clone(),
+                placeholder_hints_clone.clone(),
             );
 
             if let Some(ref cb) = *on_change_clone.borrow() {
@@ -356,14 +366,32 @@ impl CssTemplateConfigWidget {
         config: Rc<RefCell<CssTemplateDisplayConfig>>,
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
         source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
     ) {
+        // Create outer vertical box to hold the main row and hint
+        let outer_box = GtkBox::new(Orientation::Vertical, 2);
+        outer_box.set_margin_bottom(6);
+
         let row = GtkBox::new(Orientation::Horizontal, 6);
-        row.set_margin_bottom(6);
 
         // Index label
         let idx_label = Label::new(Some(&format!("{{{{{}}}}}", mapping.index)));
         idx_label.set_width_chars(6);
         row.append(&idx_label);
+
+        // Add hint label if available
+        let hints = placeholder_hints.borrow();
+        if let Some(hint) = hints.get(&mapping.index) {
+            let hint_label = Label::new(Some(hint));
+            hint_label.set_xalign(0.0);
+            hint_label.add_css_class("dim-label");
+            hint_label.set_markup(&format!("<i>{}</i>", glib::markup_escape_text(hint)));
+            hint_label.set_hexpand(true);
+            hint_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+            hint_label.set_tooltip_text(Some(hint));
+            outer_box.append(&hint_label);
+        }
+        drop(hints);
 
         // Source dropdown
         let summaries = source_summaries.borrow();
@@ -488,11 +516,11 @@ impl CssTemplateConfigWidget {
         // Remove button
         let remove_btn = Button::with_label("X");
         let container_for_remove = container.clone();
-        let row_for_remove = row.clone();
+        let outer_box_for_remove = outer_box.clone();
         let config_for_remove = config.clone();
         let on_change_for_remove = on_change.clone();
         remove_btn.connect_clicked(move |_| {
-            container_for_remove.remove(&row_for_remove);
+            container_for_remove.remove(&outer_box_for_remove);
             let mut cfg = config_for_remove.borrow_mut();
             if row_idx < cfg.mappings.len() {
                 cfg.mappings.remove(row_idx);
@@ -510,7 +538,9 @@ impl CssTemplateConfigWidget {
 
         row.append(&remove_btn);
 
-        container.append(&row);
+        // Add row to outer box and outer box to container
+        outer_box.append(&row);
+        container.append(&outer_box);
     }
 
     fn create_display_tab(
@@ -591,8 +621,22 @@ impl CssTemplateConfigWidget {
         self.animation_check.set_active(config.animation_enabled);
         self.animation_speed_spin.set_value(config.animation_speed);
 
-        // Rebuild mappings
+        // Rebuild mappings (also updates hints from HTML)
         self.rebuild_mappings();
+    }
+
+    /// Update placeholder hints from HTML file
+    fn update_hints_from_html(&self, html_path: &std::path::Path) {
+        let hints = if !html_path.as_os_str().is_empty() && html_path.exists() {
+            if let Ok(html) = std::fs::read_to_string(html_path) {
+                extract_placeholder_hints(&html)
+            } else {
+                HashMap::new()
+            }
+        } else {
+            HashMap::new()
+        };
+        *self.placeholder_hints.borrow_mut() = hints;
     }
 
     /// Set available sources
@@ -620,8 +664,21 @@ impl CssTemplateConfigWidget {
         self.rebuild_mappings();
     }
 
+    /// Set placeholder hints from template
+    pub fn set_placeholder_hints(&self, hints: HashMap<u32, String>) {
+        *self.placeholder_hints.borrow_mut() = hints;
+        // Rebuild mappings UI to show hints
+        self.rebuild_mappings();
+    }
+
     /// Rebuild the mappings UI
     fn rebuild_mappings(&self) {
+        // Update hints from the current HTML path
+        {
+            let config = self.config.borrow();
+            self.update_hints_from_html(&config.html_path);
+        }
+
         // Clear existing rows
         while let Some(child) = self.mappings_container.first_child() {
             self.mappings_container.remove(&child);
@@ -637,6 +694,7 @@ impl CssTemplateConfigWidget {
                 self.config.clone(),
                 self.on_change.clone(),
                 self.source_summaries.clone(),
+                self.placeholder_hints.clone(),
             );
         }
     }

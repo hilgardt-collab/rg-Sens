@@ -4,6 +4,12 @@
  * This CSS file can be used with css_template_example.html
  * for users who prefer to customize styles separately.
  *
+ * NOTE: Placeholder hints are defined in the HTML file using a JSON block:
+ *   <script type="application/json" id="rg-placeholder-hints">
+ *     { "0": "Description for {{0}}", "1": "Description for {{1}}", ... }
+ *   </script>
+ * These hints appear in the config panel to help map placeholders to sources.
+ *
  * Placeholder mapping (4 per widget: caption, value, unit, max):
  *
  *   Widget 1 (Text):
