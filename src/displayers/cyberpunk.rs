@@ -110,6 +110,12 @@ impl Displayer for CyberpunkDisplayer {
             if let Ok(data) = data_clone.lock() {
                 let w = width as f64;
                 let h = height as f64;
+
+                // Clear to transparent so panel background shows through
+                cr.set_operator(cairo::Operator::Clear);
+                cr.paint().ok();
+                cr.set_operator(cairo::Operator::Over);
+
                 data.combo.transform.apply(cr, w, h);
 
                 // Draw the Cyberpunk frame and get content bounds
