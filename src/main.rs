@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::Application;
@@ -14,6 +14,30 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 const APP_ID: &str = "com.github.hilgardt_collab.rg_sens";
+
+/// Graphics renderer to use
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum Renderer {
+    /// OpenGL renderer (recommended for stability)
+    Gl,
+    /// New OpenGL renderer (GTK 4.14+)
+    Ngl,
+    /// Vulkan renderer (may have issues with some drivers)
+    Vulkan,
+    /// Cairo software renderer (slowest but most compatible)
+    Cairo,
+}
+
+impl std::fmt::Display for Renderer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Renderer::Gl => write!(f, "gl"),
+            Renderer::Ngl => write!(f, "ngl"),
+            Renderer::Vulkan => write!(f, "vulkan"),
+            Renderer::Cairo => write!(f, "cairo"),
+        }
+    }
+}
 
 /// rg-Sens - A fast, customizable system monitoring dashboard for Linux
 #[derive(Parser, Debug, Clone)]
@@ -43,6 +67,10 @@ struct Cli {
     /// Debug verbosity level (0=quiet, 1=info, 2=debug, 3=trace)
     #[arg(short = 'd', long = "debug", value_name = "LEVEL", default_value = "0")]
     debug: u8,
+
+    /// Graphics renderer (gl, ngl, vulkan, cairo). Use 'gl' if you experience crashes in fullscreen.
+    #[arg(short = 'r', long = "renderer", value_name = "RENDERER")]
+    renderer: Option<Renderer>,
 
     /// Layout file to load at startup
     #[arg(value_name = "LAYOUT_FILE")]
@@ -117,6 +145,19 @@ fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
     warn!("Starting rg-Sens v{}", env!("CARGO_PKG_VERSION"));
+
+    // Set graphics renderer before GTK initialization
+    // GSK_RENDERER must be set before any GTK calls
+    if let Some(renderer) = &cli.renderer {
+        let renderer_str = renderer.to_string();
+        std::env::set_var("GSK_RENDERER", &renderer_str);
+        warn!("Using {} renderer (set via --renderer)", renderer_str);
+    } else if std::env::var("GSK_RENDERER").is_err() {
+        // Log the default renderer being used
+        info!("Using default GTK renderer (use --renderer to change)");
+    } else {
+        info!("Using GSK_RENDERER={} from environment", std::env::var("GSK_RENDERER").unwrap());
+    }
 
     // Handle --list option (list monitors and exit)
     if cli.list_monitors {
@@ -201,6 +242,7 @@ fn build_ui(app: &Application) {
         at: None,
         list_monitors: false,
         debug: 0,
+        renderer: None,
         layout_file: None,
     });
 
