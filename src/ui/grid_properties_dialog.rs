@@ -1443,6 +1443,13 @@ pub(crate) fn show_panel_properties_dialog(
         log::info!("=== Creating CssTemplateConfigWidget (lazy init) ===");
         let widget = crate::ui::CssTemplateConfigWidget::new();
 
+        // Set source summaries from combo widget if available
+        if let Some(ref combo_widget) = *combo_config_widget.borrow() {
+            let summaries = combo_widget.get_source_summaries();
+            log::info!("=== Setting {} source summaries for CssTemplateConfigWidget ===", summaries.len());
+            widget.set_source_summaries(summaries);
+        }
+
         // Load existing CSS Template config
         if let Some(crate::core::DisplayerConfig::CssTemplate(css_config)) = panel_guard.displayer.get_typed_config() {
             log::info!("=== Loading CSS Template config from displayer.get_typed_config() ===");
@@ -1496,6 +1503,8 @@ pub(crate) fn show_panel_properties_dialog(
                 let synthwave_w = synthwave_widget_clone.clone();
                 let art_deco_w = art_deco_widget_clone.clone();
                 let art_nouveau_w = art_nouveau_widget_clone.clone();
+                #[cfg(feature = "css_template")]
+                let css_template_w = css_template_config_widget.clone();
 
                 widget.set_on_fields_updated(move |fields| {
                     // Get summaries from combo widget (now that fields are ready)
@@ -1569,6 +1578,12 @@ pub(crate) fn show_panel_properties_dialog(
                         "art_nouveau" => {
                             if let Some(ref widget) = *art_nouveau_w.borrow() {
                                 widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        #[cfg(feature = "css_template")]
+                        "css_template" => {
+                            if let Some(ref widget) = *css_template_w.borrow() {
                                 widget.set_source_summaries(summaries);
                             }
                         }
@@ -2427,14 +2442,7 @@ pub(crate) fn show_panel_properties_dialog(
 
                                 if let Some(ref widget) = *widget_ref {
                                     log::info!("=== Displayer changed to 'css_template': updating with {} source summaries ===", summaries.len());
-                                    // Convert summaries to sources format for CssTemplateConfigWidget
-                                    let sources: Vec<(String, String, Vec<crate::core::FieldMetadata>)> = summaries
-                                        .iter()
-                                        .map(|(prefix, label, _, _)| {
-                                            (prefix.clone(), label.clone(), Vec::new())
-                                        })
-                                        .collect();
-                                    widget.set_available_sources(sources);
+                                    widget.set_source_summaries(summaries);
                                 }
                             }
                         }

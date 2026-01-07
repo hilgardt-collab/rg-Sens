@@ -595,7 +595,8 @@ impl CssTemplateConfigWidget {
         self.rebuild_mappings();
     }
 
-    /// Set available sources
+    /// Set available sources from raw source list
+    #[allow(dead_code)]
     pub fn set_available_sources(&self, sources: Vec<(String, String, Vec<FieldMetadata>)>) {
         // Convert to summaries format: (prefix, label, slot_index, group_index)
         let mut summaries = Vec::new();
@@ -610,6 +611,13 @@ impl CssTemplateConfigWidget {
         *self.source_summaries.borrow_mut() = summaries;
 
         // Rebuild mappings UI
+        self.rebuild_mappings();
+    }
+
+    /// Set source summaries directly (from combo widget)
+    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
+        *self.source_summaries.borrow_mut() = summaries;
+        // Rebuild mappings UI to update dropdowns
         self.rebuild_mappings();
     }
 
