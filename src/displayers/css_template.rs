@@ -10,6 +10,8 @@
 //! - JavaScript bridge for smooth value updates without re-rendering
 //! - Theme color integration via CSS custom properties
 
+#![cfg(feature = "css_template")]
+
 use anyhow::Result;
 use cairo::Context;
 use gtk4::{gio, glib, prelude::*, Widget};
@@ -275,8 +277,10 @@ impl Displayer for CssTemplateDisplayer {
                                     && config.html_path.exists()
                                 {
                                     fs::read_to_string(&config.html_path).ok()
+                                } else if let Some(ref embedded) = config.embedded_html {
+                                    Some(embedded.clone())
                                 } else {
-                                    config.embedded_html.clone()
+                                    None
                                 };
 
                                 let css = config.css_path.as_ref().and_then(|p| {
@@ -429,8 +433,10 @@ impl Displayer for CssTemplateDisplayer {
                         && display_data.config.html_path.exists()
                     {
                         fs::read_to_string(&display_data.config.html_path).ok()
+                    } else if let Some(ref embedded) = display_data.config.embedded_html {
+                        Some(embedded.clone())
                     } else {
-                        display_data.config.embedded_html.clone()
+                        None
                     };
 
                     if let Some(html) = html_content {
