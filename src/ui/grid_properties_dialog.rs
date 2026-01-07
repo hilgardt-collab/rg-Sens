@@ -2884,6 +2884,7 @@ pub(crate) fn show_panel_properties_dialog(
         // Update panel geometry, source, displayer, and background - single lock acquisition
         // IMPORTANT: All panel updates must be done in one lock to avoid deadlock with draw callbacks
         // Use blocking_write to ensure we get the lock (updates are fast so wait is minimal)
+        let corner_radius_changed;
         {
             let mut panel_guard = panel_clone.blocking_write();
             // Update size if changed
@@ -2904,6 +2905,7 @@ pub(crate) fn show_panel_properties_dialog(
 
             // Update corner radius and border (always apply)
             let new_corner_radius = corner_radius_spin_clone.value();
+            corner_radius_changed = (panel_guard.corner_radius - new_corner_radius).abs() > 0.01;
             panel_guard.corner_radius = new_corner_radius;
             panel_guard.border.enabled = border_enabled_check_clone.is_active();
             panel_guard.border.width = border_width_spin_clone.value();
@@ -3990,6 +3992,32 @@ pub(crate) fn show_panel_properties_dialog(
         // Queue redraws AFTER releasing the panel write lock to avoid deadlock with draw callbacks
         background_area.queue_draw();
         widget.queue_draw();
+
+        // Update CSS corner radius if changed
+        if corner_radius_changed {
+            let new_corner_radius = corner_radius_spin_clone.value();
+            let css_class = format!("panel-radius-{}", panel_id_for_apply.replace('-', "_"));
+
+            // Remove old CSS class if it exists
+            frame.remove_css_class(&css_class);
+
+            if new_corner_radius > 0.0 {
+                // Add CSS class back and update the style
+                frame.add_css_class(&css_class);
+
+                let css_provider = gtk4::CssProvider::new();
+                let css = format!(
+                    ".{} {{ border-radius: {}px; overflow: hidden; }}",
+                    css_class, new_corner_radius
+                );
+                css_provider.load_from_data(&css);
+                gtk4::style_context_add_provider_for_display(
+                    &frame.display(),
+                    &css_provider,
+                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+            }
+        }
 
         // Update widget and frame sizes if size changed (and displayer wasn't replaced)
         if size_changed && !displayer_changed {
