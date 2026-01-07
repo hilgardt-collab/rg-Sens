@@ -86,6 +86,8 @@ mod fighter_hud;
 mod synthwave;
 mod art_deco;
 mod art_nouveau;
+#[cfg(feature = "css_template")]
+mod css_template;
 pub mod combo_utils;
 pub mod combo_displayer_base;
 // mod level_bar;
@@ -113,6 +115,8 @@ pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
 pub use synthwave::{SynthwaveDisplayer, SynthwaveDisplayConfig};
 pub use art_deco::{ArtDecoDisplayer, ArtDecoDisplayConfig};
 pub use art_nouveau::{ArtNouveauDisplayer, ArtNouveauDisplayConfig};
+#[cfg(feature = "css_template")]
+pub use css_template::CssTemplateDisplayer;
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -246,6 +250,14 @@ pub fn register_all() {
         "art_nouveau",
         "Art Nouveau",
         || Box::new(ArtNouveauDisplayer::new()),
+    );
+
+    // Register CSS Template displayer (requires css_template feature)
+    #[cfg(feature = "css_template")]
+    global_registry().register_displayer_with_info(
+        "css_template",
+        "CSS Template",
+        || Box::new(CssTemplateDisplayer::new()),
     );
 
     // TODO: Register more displayers

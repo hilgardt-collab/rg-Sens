@@ -1414,6 +1414,54 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&art_nouveau_config_label);
     displayer_tab_box.append(&art_nouveau_placeholder);
 
+    // CSS Template configuration (feature-gated)
+    #[cfg(feature = "css_template")]
+    let css_template_config_label = Label::new(Some("CSS Template Configuration:"));
+    #[cfg(feature = "css_template")]
+    {
+        css_template_config_label.set_halign(gtk4::Align::Start);
+        css_template_config_label.add_css_class("heading");
+        css_template_config_label.set_visible(old_displayer_id == "css_template");
+    }
+    #[cfg(not(feature = "css_template"))]
+    let css_template_config_label = Label::new(None::<&str>);
+
+    #[cfg(feature = "css_template")]
+    let css_template_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    #[cfg(feature = "css_template")]
+    css_template_placeholder.set_visible(old_displayer_id == "css_template");
+    #[cfg(not(feature = "css_template"))]
+    let css_template_placeholder = GtkBox::new(Orientation::Vertical, 0);
+
+    #[cfg(feature = "css_template")]
+    let css_template_config_widget: Rc<RefCell<Option<crate::ui::CssTemplateConfigWidget>>> = Rc::new(RefCell::new(None));
+    #[cfg(not(feature = "css_template"))]
+    let _css_template_config_widget: Rc<RefCell<Option<()>>> = Rc::new(RefCell::new(None));
+
+    #[cfg(feature = "css_template")]
+    if old_displayer_id == "css_template" {
+        log::info!("=== Creating CssTemplateConfigWidget (lazy init) ===");
+        let widget = crate::ui::CssTemplateConfigWidget::new();
+
+        // Load existing CSS Template config
+        if let Some(crate::core::DisplayerConfig::CssTemplate(css_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading CSS Template config from displayer.get_typed_config() ===");
+            widget.set_config(&css_config);
+        } else if let Some(config_value) = panel_guard.config.get("css_template_config") {
+            if let Ok(config) = serde_json::from_value::<crate::ui::CssTemplateDisplayConfig>(config_value.clone()) {
+                log::info!("=== Loading CSS Template config from panel config hashmap ===");
+                widget.set_config(&config);
+            }
+        }
+
+        widget.set_on_change(|| {});
+        css_template_placeholder.append(widget.widget());
+        *css_template_config_widget.borrow_mut() = Some(widget);
+    }
+
+    displayer_tab_box.append(&css_template_config_label);
+    displayer_tab_box.append(&css_template_placeholder);
+
     // Connect combo_config_widget to update ONLY the active displayer's config widget when sources change
     // Other widgets are updated lazily when the user switches to them (see displayer_combo handlers below)
     {
@@ -1693,6 +1741,8 @@ pub(crate) fn show_panel_properties_dialog(
         let art_deco_label_clone = art_deco_config_label.clone();
         let art_nouveau_placeholder_clone = art_nouveau_placeholder.clone();
         let art_nouveau_label_clone = art_nouveau_config_label.clone();
+        let css_template_placeholder_clone = css_template_placeholder.clone();
+        let css_template_label_clone = css_template_config_label.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
@@ -1715,6 +1765,7 @@ pub(crate) fn show_panel_properties_dialog(
                 let is_synthwave = displayer_id == "synthwave";
                 let is_art_deco = displayer_id == "art_deco";
                 let is_art_nouveau = displayer_id == "art_nouveau";
+                let is_css_template = displayer_id == "css_template";
                 text_placeholder_clone.set_visible(is_text);
                 text_label_clone.set_visible(is_text);
                 bar_placeholder_clone.set_visible(is_bar);
@@ -1751,6 +1802,8 @@ pub(crate) fn show_panel_properties_dialog(
                 art_deco_label_clone.set_visible(is_art_deco);
                 art_nouveau_placeholder_clone.set_visible(is_art_nouveau);
                 art_nouveau_label_clone.set_visible(is_art_nouveau);
+                css_template_placeholder_clone.set_visible(is_css_template);
+                css_template_label_clone.set_visible(is_css_template);
             }
         });
     }
@@ -2343,6 +2396,54 @@ pub(crate) fn show_panel_properties_dialog(
         });
     }
 
+    // Lazily create and update CSS Template widget when displayer changes to "css_template" and source is "combination"
+    #[cfg(feature = "css_template")]
+    {
+        let css_template_widget_clone = css_template_config_widget.clone();
+        let css_template_placeholder_clone = css_template_placeholder.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
+                if displayer_id == "css_template" {
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            if let Some(ref combo_widget) = *combo_widget_clone.borrow() {
+                                let summaries = combo_widget.get_source_summaries();
+
+                                // Lazily create widget if it doesn't exist
+                                let mut widget_ref = css_template_widget_clone.borrow_mut();
+                                if widget_ref.is_none() {
+                                    log::info!("=== Lazy-creating CssTemplateConfigWidget on displayer switch ===");
+                                    let widget = crate::ui::CssTemplateConfigWidget::new();
+                                    widget.set_on_change(|| {});
+                                    css_template_placeholder_clone.append(widget.widget());
+                                    *widget_ref = Some(widget);
+                                }
+
+                                if let Some(ref widget) = *widget_ref {
+                                    log::info!("=== Displayer changed to 'css_template': updating with {} source summaries ===", summaries.len());
+                                    // Convert summaries to sources format for CssTemplateConfigWidget
+                                    let sources: Vec<(String, String, Vec<crate::core::FieldMetadata>)> = summaries
+                                        .iter()
+                                        .map(|(prefix, label, _, _)| {
+                                            (prefix.clone(), label.clone(), Vec::new())
+                                        })
+                                        .collect();
+                                    widget.set_available_sources(sources);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Update text config fields when data source changes
     {
         let _text_widget_clone = text_config_widget.clone();
@@ -2634,6 +2735,8 @@ pub(crate) fn show_panel_properties_dialog(
     let synthwave_config_widget_clone = synthwave_config_widget.clone();
     let art_deco_config_widget_clone = art_deco_config_widget.clone();
     let art_nouveau_config_widget_clone = art_nouveau_config_widget.clone();
+    #[cfg(feature = "css_template")]
+    let css_template_config_widget_clone = css_template_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
@@ -3583,6 +3686,25 @@ pub(crate) fn show_panel_properties_dialog(
                         // Apply the configuration to the displayer
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply Art Nouveau config: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Apply CSS Template displayer configuration if CSS Template displayer is active
+            #[cfg(feature = "css_template")]
+            if new_displayer_id == "css_template" {
+                if let Some(ref widget) = *css_template_config_widget_clone.borrow() {
+                    let css_template_config = widget.get_config();
+                    if let Ok(css_template_config_json) = serde_json::to_value(&css_template_config) {
+                        panel_guard.config.insert("css_template_config".to_string(), css_template_config_json);
+
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply CSS Template config: {}", e);
                         }
                     }
                 }
