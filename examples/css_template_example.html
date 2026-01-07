@@ -2,6 +2,15 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <!--
+        CSS Template Example - 4 Widgets with 16 Placeholders
+
+        Placeholder mapping (4 per widget: caption, value, unit, max):
+          Widget 1 (Text):        {{0}}  caption, {{1}}  value, {{2}}  unit, {{3}}  max
+          Widget 2 (Bar):         {{4}}  caption, {{5}}  value, {{6}}  unit, {{7}}  max
+          Widget 3 (Arc):         {{8}}  caption, {{9}}  value, {{10}} unit, {{11}} max
+          Widget 4 (Speedometer): {{12}} caption, {{13}} value, {{14}} unit, {{15}} max
+    -->
     <style>
         * {
             margin: 0;
@@ -47,6 +56,11 @@
             justify-content: center;
         }
 
+        /* Hidden max value elements - used by JavaScript */
+        .max-value {
+            display: none;
+        }
+
         /* Text Widget */
         .text-widget .value-display {
             text-align: center;
@@ -63,6 +77,12 @@
             font-size: 18px;
             color: rgba(150, 180, 255, 0.7);
             margin-left: 4px;
+        }
+
+        .text-widget .max-display {
+            font-size: 12px;
+            color: rgba(150, 180, 255, 0.5);
+            margin-top: 4px;
         }
 
         /* Bar Widget */
@@ -101,6 +121,13 @@
             border-radius: 12px;
             transition: width 0.3s ease;
             box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+
+        .bar-widget .bar-max {
+            font-size: 11px;
+            color: rgba(150, 180, 255, 0.5);
+            text-align: right;
+            margin-top: 4px;
         }
 
         /* Arc Widget */
@@ -239,36 +266,38 @@
         </defs>
     </svg>
 
-    <!-- Text Widget -->
+    <!-- Text Widget: placeholders 0-3 -->
     <div class="widget text-widget">
         <div class="widget-header">{{0}}</div>
         <div class="widget-content">
             <div class="value-display">
                 <span class="value">{{1}}</span>
                 <span class="unit">{{2}}</span>
+                <div class="max-display">max: <span class="max-val">{{3}}</span></div>
             </div>
         </div>
     </div>
 
-    <!-- Bar Widget -->
+    <!-- Bar Widget: placeholders 4-7 -->
     <div class="widget bar-widget">
-        <div class="widget-header">{{3}}</div>
+        <div class="widget-header">{{4}}</div>
         <div class="widget-content">
             <div class="bar-container">
                 <div class="bar-label">
-                    <span class="value">{{4}}</span>
-                    <span class="unit">{{5}}</span>
+                    <span class="value" id="barValue">{{5}}</span>
+                    <span class="unit">{{6}}</span>
                 </div>
                 <div class="bar-track">
                     <div class="bar-fill" id="barFill"></div>
                 </div>
+                <div class="bar-max">/ <span class="max-value" id="barMax">{{7}}</span></div>
             </div>
         </div>
     </div>
 
-    <!-- Arc Widget -->
+    <!-- Arc Widget: placeholders 8-11 -->
     <div class="widget arc-widget">
-        <div class="widget-header">{{6}}</div>
+        <div class="widget-header">{{8}}</div>
         <div class="widget-content">
             <div class="arc-container">
                 <svg viewBox="0 0 140 80">
@@ -276,16 +305,17 @@
                     <path class="arc-fill" id="arcFill" d="M 15 70 A 55 55 0 0 1 125 70"/>
                 </svg>
                 <div class="arc-value">
-                    <span class="value">{{7}}</span>
-                    <span class="unit">{{8}}</span>
+                    <span class="value" id="arcValue">{{9}}</span>
+                    <span class="unit">{{10}}</span>
                 </div>
+                <span class="max-value" id="arcMax">{{11}}</span>
             </div>
         </div>
     </div>
 
-    <!-- Speedometer Widget -->
+    <!-- Speedometer Widget: placeholders 12-15 -->
     <div class="widget speedometer-widget">
-        <div class="widget-header">{{9}}</div>
+        <div class="widget-header">{{12}}</div>
         <div class="widget-content">
             <div class="speedo-container">
                 <svg viewBox="0 0 140 140">
@@ -312,9 +342,10 @@
                     <circle class="speedo-center" cx="70" cy="70" r="8"/>
                 </svg>
                 <div class="speedo-value">
-                    <span class="value">{{10}}</span>
-                    <span class="unit">{{11}}</span>
+                    <span class="value" id="speedoValue">{{13}}</span>
+                    <span class="unit">{{14}}</span>
                 </div>
+                <span class="max-value" id="speedoMax">{{15}}</span>
             </div>
         </div>
     </div>
@@ -330,18 +361,29 @@
                 }
             });
 
-            // Animate bar widget (placeholder 4 is the value)
-            if (values['4'] !== undefined) {
-                const percent = parseFloat(values['4']) || 0;
+            // Helper to calculate percentage
+            function calcPercent(value, max) {
+                const v = parseFloat(value) || 0;
+                const m = parseFloat(max) || 100;
+                return m > 0 ? (v / m) * 100 : 0;
+            }
+
+            // Animate bar widget (value=5, max=7)
+            if (values['5'] !== undefined || values['7'] !== undefined) {
+                const value = values['5'] !== undefined ? values['5'] : (document.getElementById('barValue')?.textContent || '0');
+                const max = values['7'] !== undefined ? values['7'] : (document.getElementById('barMax')?.textContent || '100');
+                const percent = calcPercent(value, max);
                 const barFill = document.getElementById('barFill');
                 if (barFill) {
                     barFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
                 }
             }
 
-            // Animate arc widget (placeholder 7 is the value)
-            if (values['7'] !== undefined) {
-                const percent = parseFloat(values['7']) || 0;
+            // Animate arc widget (value=9, max=11)
+            if (values['9'] !== undefined || values['11'] !== undefined) {
+                const value = values['9'] !== undefined ? values['9'] : (document.getElementById('arcValue')?.textContent || '0');
+                const max = values['11'] !== undefined ? values['11'] : (document.getElementById('arcMax')?.textContent || '100');
+                const percent = calcPercent(value, max);
                 const arcFill = document.getElementById('arcFill');
                 if (arcFill) {
                     // Arc path length is approximately 173 (half circle with radius 55)
@@ -352,9 +394,11 @@
                 }
             }
 
-            // Animate speedometer widget (placeholder 10 is the value)
-            if (values['10'] !== undefined) {
-                const percent = parseFloat(values['10']) || 0;
+            // Animate speedometer widget (value=13, max=15)
+            if (values['13'] !== undefined || values['15'] !== undefined) {
+                const value = values['13'] !== undefined ? values['13'] : (document.getElementById('speedoValue')?.textContent || '0');
+                const max = values['15'] !== undefined ? values['15'] : (document.getElementById('speedoMax')?.textContent || '100');
+                const percent = calcPercent(value, max);
                 const needle = document.getElementById('speedoNeedle');
                 const speedoFill = document.getElementById('speedoFill');
                 if (needle) {
