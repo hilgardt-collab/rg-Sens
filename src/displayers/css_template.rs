@@ -12,7 +12,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{gio, glib, prelude::*, Widget};
+use gtk4::{gio, glib, prelude::*, DrawingArea, Overlay, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
@@ -184,10 +184,6 @@ impl Displayer for CssTemplateDisplayer {
 
         // Disable WebView's own context menu (let parent handle right-click)
         webview.connect_context_menu(|_, _, _| true);
-
-        // Make WebView not be a target for pointer events - this allows
-        // the parent frame's gestures (drag, right-click) to work properly
-        webview.set_can_target(false);
 
         // Load initial template
         let html = self.load_template();
@@ -362,7 +358,21 @@ impl Displayer for CssTemplateDisplayer {
             }
         });
 
-        webview.upcast()
+        // Wrap WebView in an Overlay with a transparent event-catching layer on top.
+        // This allows drag and right-click events to propagate to the parent Frame
+        // while still displaying the WebView content underneath.
+        let overlay = Overlay::new();
+        overlay.set_child(Some(&webview));
+
+        // Create transparent event layer that sits on top of WebView
+        let event_layer = DrawingArea::new();
+        event_layer.set_hexpand(true);
+        event_layer.set_vexpand(true);
+        // Make it transparent (don't draw anything)
+        event_layer.set_draw_func(|_, _, _, _| {});
+        overlay.add_overlay(&event_layer);
+
+        overlay.upcast()
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
