@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: transparent;
+            color: #fff;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 16px;
+            padding: 16px;
+        }
+
+        .widget {
+            background: linear-gradient(135deg, rgba(30, 30, 50, 0.9), rgba(20, 20, 35, 0.95));
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .widget-header {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(150, 180, 255, 0.8);
+            margin-bottom: 8px;
+        }
+
+        .widget-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Text Widget */
+        .text-widget .value-display {
+            text-align: center;
+        }
+
+        .text-widget .value {
+            font-size: 48px;
+            font-weight: 300;
+            color: #00ff88;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+
+        .text-widget .unit {
+            font-size: 18px;
+            color: rgba(150, 180, 255, 0.7);
+            margin-left: 4px;
+        }
+
+        /* Bar Widget */
+        .bar-widget .bar-container {
+            width: 100%;
+        }
+
+        .bar-widget .bar-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .bar-widget .value {
+            font-size: 24px;
+            font-weight: 500;
+            color: #00d4ff;
+        }
+
+        .bar-widget .unit {
+            font-size: 14px;
+            color: rgba(150, 180, 255, 0.7);
+        }
+
+        .bar-widget .bar-track {
+            height: 24px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-widget .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+
+        /* Arc Widget */
+        .arc-widget .arc-container {
+            position: relative;
+            width: 140px;
+            height: 80px;
+        }
+
+        .arc-widget svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .arc-widget .arc-track {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 12;
+            stroke-linecap: round;
+        }
+
+        .arc-widget .arc-fill {
+            fill: none;
+            stroke: url(#arcGradient);
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+
+        .arc-widget .arc-value {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
+        .arc-widget .value {
+            font-size: 28px;
+            font-weight: 500;
+            color: #ff6b9d;
+        }
+
+        .arc-widget .unit {
+            font-size: 12px;
+            color: rgba(150, 180, 255, 0.7);
+            display: block;
+        }
+
+        /* Speedometer Widget */
+        .speedometer-widget .speedo-container {
+            position: relative;
+            width: 140px;
+            height: 140px;
+        }
+
+        .speedometer-widget svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .speedometer-widget .speedo-track {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 8;
+        }
+
+        .speedometer-widget .speedo-fill {
+            fill: none;
+            stroke: url(#speedoGradient);
+            stroke-width: 8;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+
+        .speedometer-widget .speedo-needle {
+            fill: #ff4444;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+            transform-origin: 70px 70px;
+            transition: transform 0.3s ease;
+        }
+
+        .speedometer-widget .speedo-center {
+            fill: #333;
+            stroke: #666;
+            stroke-width: 2;
+        }
+
+        .speedometer-widget .speedo-value {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
+        .speedometer-widget .value {
+            font-size: 24px;
+            font-weight: 500;
+            color: #ffaa00;
+        }
+
+        .speedometer-widget .unit {
+            font-size: 11px;
+            color: rgba(150, 180, 255, 0.7);
+            display: block;
+        }
+
+        /* Tick marks for speedometer */
+        .speedometer-widget .tick {
+            stroke: rgba(255, 255, 255, 0.3);
+            stroke-width: 2;
+        }
+
+        .speedometer-widget .tick-major {
+            stroke: rgba(255, 255, 255, 0.6);
+            stroke-width: 3;
+        }
+    </style>
+</head>
+<body>
+    <!-- SVG Gradients -->
+    <svg style="position: absolute; width: 0; height: 0;">
+        <defs>
+            <linearGradient id="arcGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#ff6b9d"/>
+                <stop offset="100%" style="stop-color:#c44dff"/>
+            </linearGradient>
+            <linearGradient id="speedoGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#00ff88"/>
+                <stop offset="50%" style="stop-color:#ffaa00"/>
+                <stop offset="100%" style="stop-color:#ff4444"/>
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <!-- Text Widget -->
+    <div class="widget text-widget">
+        <div class="widget-header">{{0}}</div>
+        <div class="widget-content">
+            <div class="value-display">
+                <span class="value">{{1}}</span>
+                <span class="unit">{{2}}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bar Widget -->
+    <div class="widget bar-widget">
+        <div class="widget-header">{{3}}</div>
+        <div class="widget-content">
+            <div class="bar-container">
+                <div class="bar-label">
+                    <span class="value">{{4}}</span>
+                    <span class="unit">{{5}}</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill" id="barFill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Arc Widget -->
+    <div class="widget arc-widget">
+        <div class="widget-header">{{6}}</div>
+        <div class="widget-content">
+            <div class="arc-container">
+                <svg viewBox="0 0 140 80">
+                    <path class="arc-track" d="M 15 70 A 55 55 0 0 1 125 70"/>
+                    <path class="arc-fill" id="arcFill" d="M 15 70 A 55 55 0 0 1 125 70"/>
+                </svg>
+                <div class="arc-value">
+                    <span class="value">{{7}}</span>
+                    <span class="unit">{{8}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Speedometer Widget -->
+    <div class="widget speedometer-widget">
+        <div class="widget-header">{{9}}</div>
+        <div class="widget-content">
+            <div class="speedo-container">
+                <svg viewBox="0 0 140 140">
+                    <!-- Tick marks -->
+                    <g transform="translate(70, 70)">
+                        <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(-135)"/>
+                        <line class="tick" x1="0" y1="-52" x2="0" y2="-48" transform="rotate(-108)"/>
+                        <line class="tick" x1="0" y1="-52" x2="0" y2="-48" transform="rotate(-81)"/>
+                        <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(-54)"/>
+                        <line class="tick" x1="0" y1="-52" x2="0" y2="-48" transform="rotate(-27)"/>
+                        <line class="tick" x1="0" y1="-52" x2="0" y2="-48" transform="rotate(0)"/>
+                        <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(27)"/>
+                        <line class="tick" x1="0" y1="-52" x2="0" y2="-48" transform="rotate(54)"/>
+                        <line class="tick" x1="0" y1="-52" x2="0" y2="-48" transform="rotate(81)"/>
+                        <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(108)"/>
+                        <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(135)"/>
+                    </g>
+                    <!-- Track -->
+                    <path class="speedo-track" d="M 20 100 A 50 50 0 1 1 120 100"/>
+                    <path class="speedo-fill" id="speedoFill" d="M 20 100 A 50 50 0 1 1 120 100"/>
+                    <!-- Needle -->
+                    <polygon class="speedo-needle" id="speedoNeedle" points="70,25 67,70 70,75 73,70"/>
+                    <!-- Center cap -->
+                    <circle class="speedo-center" cx="70" cy="70" r="8"/>
+                </svg>
+                <div class="speedo-value">
+                    <span class="value">{{10}}</span>
+                    <span class="unit">{{11}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript bridge for updating values from rg-sens
+        window.updateValues = function(values) {
+            // Update all placeholders
+            document.querySelectorAll('[data-placeholder]').forEach(el => {
+                const idx = el.dataset.placeholder;
+                if (values[idx] !== undefined) {
+                    el.textContent = values[idx];
+                }
+            });
+
+            // Animate bar widget (placeholder 4 is the value)
+            if (values['4'] !== undefined) {
+                const percent = parseFloat(values['4']) || 0;
+                const barFill = document.getElementById('barFill');
+                if (barFill) {
+                    barFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
+                }
+            }
+
+            // Animate arc widget (placeholder 7 is the value)
+            if (values['7'] !== undefined) {
+                const percent = parseFloat(values['7']) || 0;
+                const arcFill = document.getElementById('arcFill');
+                if (arcFill) {
+                    // Arc path length is approximately 173 (half circle with radius 55)
+                    const pathLength = 173;
+                    const dashOffset = pathLength * (1 - Math.min(100, Math.max(0, percent)) / 100);
+                    arcFill.style.strokeDasharray = pathLength;
+                    arcFill.style.strokeDashoffset = dashOffset;
+                }
+            }
+
+            // Animate speedometer widget (placeholder 10 is the value)
+            if (values['10'] !== undefined) {
+                const percent = parseFloat(values['10']) || 0;
+                const needle = document.getElementById('speedoNeedle');
+                const speedoFill = document.getElementById('speedoFill');
+                if (needle) {
+                    // Rotate from -135deg (0%) to +135deg (100%)
+                    const angle = -135 + (Math.min(100, Math.max(0, percent)) / 100) * 270;
+                    needle.style.transform = `rotate(${angle}deg)`;
+                }
+                if (speedoFill) {
+                    // Arc path length is approximately 236 (270 degree arc with radius 50)
+                    const pathLength = 236;
+                    const dashOffset = pathLength * (1 - Math.min(100, Math.max(0, percent)) / 100);
+                    speedoFill.style.strokeDasharray = pathLength;
+                    speedoFill.style.strokeDashoffset = dashOffset;
+                }
+            }
+        };
+
+        // Initialize animations
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set initial dash arrays
+            const arcFill = document.getElementById('arcFill');
+            if (arcFill) {
+                arcFill.style.strokeDasharray = '173';
+                arcFill.style.strokeDashoffset = '173';
+            }
+
+            const speedoFill = document.getElementById('speedoFill');
+            if (speedoFill) {
+                speedoFill.style.strokeDasharray = '236';
+                speedoFill.style.strokeDashoffset = '236';
+            }
+
+            const needle = document.getElementById('speedoNeedle');
+            if (needle) {
+                needle.style.transform = 'rotate(-135deg)';
+            }
+        });
+    </script>
+</body>
+</html>
