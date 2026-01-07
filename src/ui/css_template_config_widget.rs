@@ -613,6 +613,13 @@ impl CssTemplateConfigWidget {
         self.rebuild_mappings();
     }
 
+    /// Set source summaries directly (from combo widget)
+    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
+        *self.source_summaries.borrow_mut() = summaries;
+        // Rebuild mappings UI to update dropdowns
+        self.rebuild_mappings();
+    }
+
     /// Rebuild the mappings UI
     fn rebuild_mappings(&self) {
         // Clear existing rows
