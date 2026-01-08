@@ -29,8 +29,9 @@ rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), pro
 - **GPU**: NVIDIA (via NVML) and AMD (via sysfs) support
 - **System Temperature**: All system temperature sensors
 - **Fan Speed**: System fan RPM monitoring
-- **Clock**: Current time with timezone support
-- **Timer**: Countdown timer with alarm
+- **Disk**: Disk usage and capacity monitoring
+- **Clock**: Current time with timezone support, alarms and timers
+- **Static Text**: Display custom static text
 - **Combo**: Combine multiple sources into one panel
 
 ### Displayers
@@ -40,7 +41,25 @@ rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), pro
 - **Graph**: Line graphs with history
 - **Speedometer**: Analog speedometer-style gauge
 - **Clock**: Digital and analog clock displays
+- **CPU Cores**: Per-core usage visualization
+- **Indicator**: Simple status indicator
+
+### Themed Combo Displayers
+Multi-slot panels with unique visual styles:
 - **LCARS**: Star Trek LCARS-themed displays
+- **Cyberpunk**: Neon cyberpunk aesthetic
+- **Material**: Google Material Design style
+- **Industrial**: Industrial/mechanical theme
+- **Fighter HUD**: Aircraft heads-up display style
+- **Retro Terminal**: Classic terminal/CRT look
+- **Synthwave**: 80s synthwave aesthetic
+- **Art Deco**: 1920s Art Deco style
+- **Art Nouveau**: Organic Art Nouveau curves
+
+### CSS Template
+- **Custom HTML/CSS**: Create fully custom visualizations using HTML, CSS, and JavaScript
+- **Hot Reload**: Automatic reload when template files change
+- **Theme Integration**: Access theme colors via CSS custom properties
 
 ### Customization
 - Panel backgrounds (solid, gradient, image, polygon)
@@ -63,9 +82,13 @@ rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), pro
 
 ### Keyboard Shortcuts
 - **Ctrl+,** - Open settings dialog
+- **Ctrl+C** - Copy selected panels
+- **Ctrl+V** - Paste panels
+- **Ctrl+A** - Select all panels
 - **Space** (hold) - Show grid overlay
 - **Delete** - Delete selected panels
 - **Double-click** - Toggle fullscreen
+- **Right-click** - Context menu
 
 ## Installation
 
@@ -73,20 +96,21 @@ rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), pro
 
 - Rust 1.70+ (install via [rustup](https://rustup.rs/))
 - GTK4 development libraries
+- WebKitGTK 6.0 (for CSS Template displayer)
 
 **Debian/Ubuntu:**
 ```bash
-sudo apt install libgtk-4-dev libcairo2-dev libpango1.0-dev
+sudo apt install libgtk-4-dev libcairo2-dev libpango1.0-dev libwebkitgtk-6.0-dev
 ```
 
 **Fedora:**
 ```bash
-sudo dnf install gtk4-devel cairo-devel pango-devel
+sudo dnf install gtk4-devel cairo-devel pango-devel webkitgtk6.0-devel
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -S gtk4 cairo pango
+sudo pacman -S gtk4 cairo pango webkitgtk-6.0
 ```
 
 ### Build and Run
