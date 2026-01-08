@@ -32,6 +32,11 @@ pub struct GraphConfigWidget {
     fill_gradient_start_widget: Rc<ThemeColorSelector>,
     fill_gradient_end_widget: Rc<ThemeColorSelector>,
     fill_opacity_spin: SpinButton,
+    // Fill control containers for dynamic visibility
+    fill_color_box: GtkBox,
+    fill_opacity_box: GtkBox,
+    gradient_start_box: GtkBox,
+    gradient_end_box: GtkBox,
 
     // Data points
     max_points_spin: SpinButton,
@@ -332,6 +337,10 @@ impl GraphConfigWidget {
             fill_gradient_start_widget: style_page.fill_gradient_start_widget,
             fill_gradient_end_widget: style_page.fill_gradient_end_widget,
             fill_opacity_spin: style_page.fill_opacity_spin,
+            fill_color_box: style_page.fill_color_box,
+            fill_opacity_box: style_page.fill_opacity_box,
+            gradient_start_box: style_page.gradient_start_box,
+            gradient_end_box: style_page.gradient_end_box,
             max_points_spin: data_page.max_points_spin,
             show_points_check: data_page.show_points_check,
             point_radius_spin: data_page.point_radius_spin,
@@ -401,6 +410,30 @@ impl GraphConfigWidget {
         notify_change_static(&self.on_change);
     }
 
+    /// Update the visibility of fill-related controls based on fill mode
+    fn update_fill_visibility(&self, fill_mode: FillMode) {
+        match fill_mode {
+            FillMode::None => {
+                self.fill_color_box.set_visible(false);
+                self.fill_opacity_box.set_visible(false);
+                self.gradient_start_box.set_visible(false);
+                self.gradient_end_box.set_visible(false);
+            }
+            FillMode::Solid => {
+                self.fill_color_box.set_visible(true);
+                self.fill_opacity_box.set_visible(true);
+                self.gradient_start_box.set_visible(false);
+                self.gradient_end_box.set_visible(false);
+            }
+            FillMode::Gradient => {
+                self.fill_color_box.set_visible(false);
+                self.fill_opacity_box.set_visible(true); // Opacity applies to gradient too
+                self.gradient_start_box.set_visible(true);
+                self.gradient_end_box.set_visible(true);
+            }
+        }
+    }
+
     pub fn set_config(&self, config: GraphDisplayConfig) {
         // Update UI from config
         self.graph_type_combo.set_selected(match config.graph_type {
@@ -429,6 +462,9 @@ impl GraphConfigWidget {
         self.fill_gradient_start_widget.set_source(config.fill_gradient_start.clone());
         self.fill_gradient_end_widget.set_source(config.fill_gradient_end.clone());
         self.fill_opacity_spin.set_value(config.fill_opacity);
+
+        // Update fill control visibility based on fill mode
+        self.update_fill_visibility(config.fill_mode);
 
         self.max_points_spin.set_value(config.max_data_points as f64);
         self.show_points_check.set_active(config.show_points);
@@ -533,6 +569,11 @@ struct StylePageWidgets {
     fill_opacity_spin: SpinButton,
     smooth_lines_check: CheckButton,
     animate_new_points_check: CheckButton,
+    // Container boxes for dynamic visibility
+    fill_color_box: GtkBox,
+    fill_opacity_box: GtkBox,
+    gradient_start_box: GtkBox,
+    gradient_end_box: GtkBox,
 }
 
 struct DataPageWidgets {
@@ -671,20 +712,7 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     fill_mode_box.append(&fill_mode_combo);
     page.append(&fill_mode_box);
 
-    let config_clone = config.clone();
-    let on_change_clone = on_change.clone();
-    fill_mode_combo.connect_selected_notify(move |combo| {
-        let fill_mode = match combo.selected() {
-            0 => FillMode::None,
-            1 => FillMode::Solid,
-            2 => FillMode::Gradient,
-            _ => FillMode::None,
-        };
-        config_clone.borrow_mut().fill_mode = fill_mode;
-        notify_change_static(&on_change_clone);
-    });
-
-    // Fill color - using ThemeColorSelector
+    // Fill color - using ThemeColorSelector (visible for Solid mode)
     let fill_color_box = GtkBox::new(Orientation::Horizontal, 6);
     fill_color_box.append(&Label::new(Some("Fill Color:")));
     let fill_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_color.clone()));
@@ -698,7 +726,23 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
         notify_change_static(&on_change_clone);
     });
 
-    // Gradient start color - using ThemeColorSelector
+    // Fill opacity (visible for Solid mode)
+    let fill_opacity_box = GtkBox::new(Orientation::Horizontal, 6);
+    fill_opacity_box.append(&Label::new(Some("Fill Opacity:")));
+    let fill_opacity_spin = SpinButton::with_range(0.0, 1.0, 0.05);
+    fill_opacity_spin.set_value(0.3);
+    fill_opacity_spin.set_hexpand(true);
+    fill_opacity_box.append(&fill_opacity_spin);
+    page.append(&fill_opacity_box);
+
+    let config_clone = config.clone();
+    let on_change_clone = on_change.clone();
+    fill_opacity_spin.connect_value_changed(move |spin| {
+        config_clone.borrow_mut().fill_opacity = spin.value();
+        notify_change_static(&on_change_clone);
+    });
+
+    // Gradient start color - using ThemeColorSelector (visible for Gradient mode)
     let gradient_start_box = GtkBox::new(Orientation::Horizontal, 6);
     gradient_start_box.append(&Label::new(Some("Gradient Start:")));
     let fill_gradient_start_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_gradient_start.clone()));
@@ -712,7 +756,7 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
         notify_change_static(&on_change_clone);
     });
 
-    // Gradient end color - using ThemeColorSelector
+    // Gradient end color - using ThemeColorSelector (visible for Gradient mode)
     let gradient_end_box = GtkBox::new(Orientation::Horizontal, 6);
     gradient_end_box.append(&Label::new(Some("Gradient End:")));
     let fill_gradient_end_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_gradient_end.clone()));
@@ -726,19 +770,51 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
         notify_change_static(&on_change_clone);
     });
 
-    // Fill opacity
-    let opacity_box = GtkBox::new(Orientation::Horizontal, 6);
-    opacity_box.append(&Label::new(Some("Fill Opacity:")));
-    let fill_opacity_spin = SpinButton::with_range(0.0, 1.0, 0.05);
-    fill_opacity_spin.set_value(0.3);
-    fill_opacity_spin.set_hexpand(true);
-    opacity_box.append(&fill_opacity_spin);
-    page.append(&opacity_box);
+    // Helper to update fill controls visibility based on fill mode
+    let update_fill_visibility = {
+        let fill_color_box = fill_color_box.clone();
+        let fill_opacity_box = fill_opacity_box.clone();
+        let gradient_start_box = gradient_start_box.clone();
+        let gradient_end_box = gradient_end_box.clone();
+        move |fill_mode: FillMode| {
+            match fill_mode {
+                FillMode::None => {
+                    fill_color_box.set_visible(false);
+                    fill_opacity_box.set_visible(false);
+                    gradient_start_box.set_visible(false);
+                    gradient_end_box.set_visible(false);
+                }
+                FillMode::Solid => {
+                    fill_color_box.set_visible(true);
+                    fill_opacity_box.set_visible(true);
+                    gradient_start_box.set_visible(false);
+                    gradient_end_box.set_visible(false);
+                }
+                FillMode::Gradient => {
+                    fill_color_box.set_visible(false);
+                    fill_opacity_box.set_visible(true); // Opacity applies to gradient too
+                    gradient_start_box.set_visible(true);
+                    gradient_end_box.set_visible(true);
+                }
+            }
+        }
+    };
 
+    // Set initial visibility based on current fill mode
+    update_fill_visibility(config.borrow().fill_mode);
+
+    // Connect fill mode combo to update visibility
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
-    fill_opacity_spin.connect_value_changed(move |spin| {
-        config_clone.borrow_mut().fill_opacity = spin.value();
+    fill_mode_combo.connect_selected_notify(move |combo| {
+        let fill_mode = match combo.selected() {
+            0 => FillMode::None,
+            1 => FillMode::Solid,
+            2 => FillMode::Gradient,
+            _ => FillMode::None,
+        };
+        config_clone.borrow_mut().fill_mode = fill_mode;
+        update_fill_visibility(fill_mode);
         notify_change_static(&on_change_clone);
     });
 
@@ -779,6 +855,10 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
         fill_opacity_spin,
         smooth_lines_check,
         animate_new_points_check,
+        fill_color_box,
+        fill_opacity_box,
+        gradient_start_box,
+        gradient_end_box,
     }
 }
 
