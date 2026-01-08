@@ -2996,8 +2996,15 @@ pub(crate) fn show_panel_properties_dialog(
                             + (panel_guard.geometry.height as i32 - 1) * config.spacing;
                         new_widget.set_size_request(pixel_width, pixel_height);
 
-                        // Replace widget in frame
-                        frame.set_child(Some(&new_widget));
+                        // Recreate overlay structure with background_area and new widget
+                        // This is necessary because frame.set_child(new_widget) would lose the overlay
+                        let overlay = gtk4::Overlay::new();
+                        overlay.set_child(Some(&background_area));
+                        new_widget.add_css_class("transparent-background");
+                        overlay.add_overlay(&new_widget);
+
+                        // Replace frame's child with the new overlay structure
+                        frame.set_child(Some(&overlay));
 
                         // Update panel displayer
                         panel_guard.displayer = new_displayer;
