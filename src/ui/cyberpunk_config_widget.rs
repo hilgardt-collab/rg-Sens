@@ -61,8 +61,7 @@ struct LayoutWidgets {
     divider_color_widget: Rc<ThemeColorSelector>,
     divider_width_spin: SpinButton,
     divider_padding_spin: SpinButton,
-    group_weights_box: GtkBox,
-    item_orientations_box: GtkBox,
+    group_settings_box: GtkBox,
 }
 
 /// Holds references to Animation tab widgets
@@ -516,18 +515,6 @@ impl CyberpunkConfigWidget {
             |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
         );
 
-        // Group weights section
-        let weights_header = create_section_header("Group Size Weights");
-        weights_header.set_margin_top(12);
-        page.append(&weights_header);
-        let weights_info = Label::new(Some("Groups are configured in the Data Sources tab."));
-        weights_info.set_halign(gtk4::Align::Start);
-        weights_info.add_css_class("dim-label");
-        page.append(&weights_info);
-
-        let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
-        page.append(&group_weights_box);
-
         // Dividers section
         let dividers_header = create_section_header("Dividers");
         dividers_header.set_margin_top(12);
@@ -573,28 +560,15 @@ impl CyberpunkConfigWidget {
             |cfg, v| cfg.frame.divider_padding = v,
         );
 
-        // Initial build of group weight spinners
-        Self::rebuild_group_spinners(config, on_change, preview, &group_weights_box);
-
-        // Item Orientations section
-        let item_header = create_section_header("Item Orientation per Group");
-        item_header.set_margin_top(12);
-        page.append(&item_header);
-        let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
-        item_orient_info.set_halign(gtk4::Align::Start);
-        item_orient_info.add_css_class("dim-label");
-        page.append(&item_orient_info);
-
-        let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
-        item_orientations_box.set_margin_top(4);
-        combo_config_base::rebuild_item_orientation_dropdowns(
-            &item_orientations_box,
+        // Combined group settings section (weight + orientation per group)
+        let group_settings_box = combo_config_base::create_combined_group_settings_section(&page);
+        combo_config_base::rebuild_combined_group_settings(
+            &group_settings_box,
             config,
             |c: &mut CyberpunkDisplayConfig| &mut c.frame,
             on_change,
             preview,
         );
-        page.append(&item_orientations_box);
 
         // Store widget refs
         *layout_widgets_out.borrow_mut() = Some(LayoutWidgets {
@@ -603,60 +577,10 @@ impl CyberpunkConfigWidget {
             divider_color_widget,
             divider_width_spin,
             divider_padding_spin,
-            group_weights_box,
-            item_orientations_box,
+            group_settings_box,
         });
 
         page
-    }
-
-    fn rebuild_group_spinners(
-        config: &Rc<RefCell<CyberpunkDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        weights_box: &GtkBox,
-    ) {
-        // Clear existing spinners
-        while let Some(child) = weights_box.first_child() {
-            weights_box.remove(&child);
-        }
-
-        let cfg = config.borrow();
-        let count = cfg.frame.group_count;
-
-        if count == 0 {
-            let placeholder = Label::new(Some("No groups configured.\nAdd sources in the Data Sources tab."));
-            placeholder.set_halign(gtk4::Align::Start);
-            placeholder.add_css_class("dim-label");
-            weights_box.append(&placeholder);
-            return;
-        }
-
-        // Build weight spinners
-        for i in 0..count {
-            let row = GtkBox::new(Orientation::Horizontal, 6);
-            row.append(&Label::new(Some(&format!("Group {}:", i + 1))));
-
-            let weight_spin = SpinButton::with_range(0.1, 10.0, 0.1);
-            weight_spin.set_digits(1);
-            weight_spin.set_value(cfg.frame.group_size_weights.get(i).copied().unwrap_or(1.0));
-            weight_spin.set_hexpand(true);
-            row.append(&weight_spin);
-
-            let config_clone = config.clone();
-            let on_change_clone = on_change.clone();
-            let preview_clone = preview.clone();
-            weight_spin.connect_value_changed(move |spin| {
-                let mut cfg = config_clone.borrow_mut();
-                if i < cfg.frame.group_size_weights.len() {
-                    cfg.frame.group_size_weights[i] = spin.value();
-                }
-                drop(cfg);
-                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-            });
-
-            weights_box.append(&row);
-        }
     }
 
     /// Create the Theme configuration page
@@ -1301,15 +1225,9 @@ impl CyberpunkConfigWidget {
             widgets.divider_width_spin.set_value(config.frame.divider_width);
             widgets.divider_padding_spin.set_value(config.frame.divider_padding);
 
-            // Rebuild group weight spinners and item orientation dropdowns
-            Self::rebuild_group_spinners(
-                &self.config,
-                &self.on_change,
-                &self.preview,
-                &widgets.group_weights_box,
-            );
-            combo_config_base::rebuild_item_orientation_dropdowns(
-                &widgets.item_orientations_box,
+            // Rebuild combined group settings
+            combo_config_base::rebuild_combined_group_settings(
+                &widgets.group_settings_box,
                 &self.config,
                 |c: &mut CyberpunkDisplayConfig| &mut c.frame,
                 &self.on_change,
@@ -1398,16 +1316,10 @@ impl CyberpunkConfigWidget {
 
         *self.source_summaries.borrow_mut() = summaries;
 
-        // Rebuild group weight spinners and item orientation dropdowns in Layout tab
+        // Rebuild combined group settings in Layout tab
         if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            Self::rebuild_group_spinners(
-                &self.config,
-                &self.on_change,
-                &self.preview,
-                &widgets.group_weights_box,
-            );
-            combo_config_base::rebuild_item_orientation_dropdowns(
-                &widgets.item_orientations_box,
+            combo_config_base::rebuild_combined_group_settings(
+                &widgets.group_settings_box,
                 &self.config,
                 |c: &mut CyberpunkDisplayConfig| &mut c.frame,
                 &self.on_change,

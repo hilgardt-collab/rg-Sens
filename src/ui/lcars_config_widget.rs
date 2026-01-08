@@ -1759,23 +1759,15 @@ impl LcarsConfigWidget {
         });
         page.append(&sync_segments_check);
 
-        // Group Settings section header (combined weight + orientation per group)
-        let group_settings_header = Label::new(Some("Group Settings"));
-        group_settings_header.set_halign(gtk4::Align::Start);
-        group_settings_header.add_css_class("heading");
-        group_settings_header.set_margin_top(12);
-        page.append(&group_settings_header);
-
-        let group_settings_info = Label::new(Some("Set weight (relative size) and item orientation for each group."));
-        group_settings_info.set_halign(gtk4::Align::Start);
-        group_settings_info.add_css_class("dim-label");
-        page.append(&group_settings_info);
-
-        // Container for combined group settings (rebuilt dynamically)
-        let group_settings_box = GtkBox::new(Orientation::Vertical, 4);
-        group_settings_box.set_margin_top(4);
-        Self::rebuild_group_settings_rows(&group_settings_box, config, on_change, preview);
-        page.append(&group_settings_box);
+        // Combined group settings section (weight + orientation per group)
+        let group_settings_box = combo_config_base::create_combined_group_settings_section(&page);
+        combo_config_base::rebuild_combined_group_settings(
+            &group_settings_box,
+            config,
+            |c: &mut LcarsDisplayConfig| &mut c.frame,
+            on_change,
+            preview,
+        );
 
         // Store widget references for updating when config changes
         *split_widgets_out.borrow_mut() = Some(SplitWidgets {
@@ -1805,113 +1797,6 @@ impl LcarsConfigWidget {
             check.set_tooltip_text(Some("Requires: Layout = Horizontal (stacked) and Segment count = Group count"));
         } else {
             check.set_tooltip_text(None);
-        }
-    }
-
-    /// Rebuild combined group settings rows (weight + orientation per group)
-    fn rebuild_group_settings_rows(
-        container: &GtkBox,
-        config: &Rc<RefCell<LcarsDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-    ) {
-        // Clear existing children
-        while let Some(child) = container.first_child() {
-            container.remove(&child);
-        }
-
-        let cfg = config.borrow();
-        let group_count = cfg.frame.group_count as usize;
-        let default_orientation = cfg.frame.layout_orientation;
-
-        if group_count == 0 {
-            let placeholder = Label::new(Some("No groups configured. Add sources in the Data Source tab."));
-            placeholder.set_halign(gtk4::Align::Start);
-            placeholder.add_css_class("dim-label");
-            container.append(&placeholder);
-            return;
-        }
-
-        // Create a combined row for each group: "Group N | Weight: [spin] | Horizontal [switch] Vertical"
-        for group_idx in 0..group_count {
-            let group_num = group_idx + 1;
-            let row = GtkBox::new(Orientation::Horizontal, 8);
-
-            // Group label
-            let group_label = Label::new(Some(&format!("Group {}", group_num)));
-            group_label.set_width_chars(8);
-            row.append(&group_label);
-
-            // Weight spinner
-            row.append(&Label::new(Some("Weight:")));
-            let weight_spin = SpinButton::with_range(0.1, 10.0, 0.1);
-            let current_weight = cfg.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
-            weight_spin.set_value(current_weight);
-            weight_spin.set_digits(1);
-            weight_spin.set_width_chars(5);
-            row.append(&weight_spin);
-
-            let config_clone = config.clone();
-            let on_change_clone = on_change.clone();
-            let preview_clone = preview.clone();
-            weight_spin.connect_value_changed(move |spin| {
-                let mut cfg = config_clone.borrow_mut();
-                while cfg.frame.group_size_weights.len() <= group_idx {
-                    cfg.frame.group_size_weights.push(1.0);
-                }
-                cfg.frame.group_size_weights[group_idx] = spin.value();
-                drop(cfg);
-                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-            });
-
-            // Separator
-            let sep = gtk4::Separator::new(Orientation::Vertical);
-            sep.set_margin_start(8);
-            sep.set_margin_end(8);
-            row.append(&sep);
-
-            // Orientation: "Horizontal [switch] Vertical"
-            // Switch OFF = Horizontal, ON = Vertical
-            let horiz_label = Label::new(Some("Horizontal"));
-            row.append(&horiz_label);
-
-            let orient_switch = gtk4::Switch::new();
-            // Determine current orientation for this group
-            let current_orient = cfg.frame.group_item_orientations.get(group_idx).copied();
-            let is_vertical = match current_orient {
-                Some(SplitOrientation::Vertical) => true,
-                Some(SplitOrientation::Horizontal) => false,
-                None => default_orientation == SplitOrientation::Vertical,
-            };
-            orient_switch.set_active(is_vertical);
-            orient_switch.set_valign(gtk4::Align::Center);
-            row.append(&orient_switch);
-
-            let vert_label = Label::new(Some("Vertical"));
-            row.append(&vert_label);
-
-            let config_clone = config.clone();
-            let on_change_clone = on_change.clone();
-            let preview_clone = preview.clone();
-            orient_switch.connect_state_set(move |_, active| {
-                let mut cfg = config_clone.borrow_mut();
-                let orientation = if active {
-                    SplitOrientation::Vertical
-                } else {
-                    SplitOrientation::Horizontal
-                };
-                // Ensure the orientations vector is long enough
-                let layout_orientation = cfg.frame.layout_orientation;
-                while cfg.frame.group_item_orientations.len() <= group_idx {
-                    cfg.frame.group_item_orientations.push(layout_orientation);
-                }
-                cfg.frame.group_item_orientations[group_idx] = orientation;
-                drop(cfg);
-                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-                gtk4::glib::Propagation::Proceed
-            });
-
-            container.append(&row);
         }
     }
 
@@ -2271,9 +2156,10 @@ impl LcarsConfigWidget {
 
         // Rebuild combined group settings and update sync checkbox in Layout tab if available
         if let Some(ref widgets) = *self.split_widgets.borrow() {
-            Self::rebuild_group_settings_rows(
+            combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,
                 &self.config,
+                |c: &mut LcarsDisplayConfig| &mut c.frame,
                 &self.on_change,
                 &self.preview,
             );

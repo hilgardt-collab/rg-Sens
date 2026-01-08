@@ -7,7 +7,7 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
-    ScrolledWindow, SpinButton, StringList,
+    ScrolledWindow, Separator, SpinButton, StringList, Switch,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -636,6 +636,156 @@ pub fn create_item_orientation_section(page: &GtkBox) -> GtkBox {
     page.append(&item_orientations_box);
 
     item_orientations_box
+}
+
+/// Create the combined group settings section UI with header and container box.
+/// Returns the container box that should be passed to rebuild_combined_group_settings.
+pub fn create_combined_group_settings_section(page: &GtkBox) -> GtkBox {
+    let settings_label = Label::new(Some("Group Settings"));
+    settings_label.set_halign(gtk4::Align::Start);
+    settings_label.add_css_class("heading");
+    settings_label.set_margin_top(12);
+    page.append(&settings_label);
+
+    let info_label = Label::new(Some("Configure weight and item arrangement for each group"));
+    info_label.set_halign(gtk4::Align::Start);
+    info_label.add_css_class("dim-label");
+    page.append(&info_label);
+
+    let group_settings_box = GtkBox::new(Orientation::Vertical, 4);
+    group_settings_box.set_margin_top(4);
+    page.append(&group_settings_box);
+
+    group_settings_box
+}
+
+/// Rebuild combined group settings rows (weight + orientation per group) using a switch widget.
+///
+/// Each row displays: "Group N | Weight: [spin] | Horizontal [switch] Vertical"
+/// This is a generic function that can be used by all themed config widgets.
+pub fn rebuild_combined_group_settings<C, L, F>(
+    container: &GtkBox,
+    config: &Rc<RefCell<C>>,
+    get_frame: F,
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    preview: &DrawingArea,
+) where
+    C: 'static,
+    L: LayoutFrameConfig + ?Sized,
+    for<'a> F: Fn(&'a mut C) -> &'a mut L,
+    F: Clone + 'static,
+{
+    // Clear existing children
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+
+    let (group_count, weights, orientations, default_orientation) = {
+        let mut cfg = config.borrow_mut();
+        let frame = get_frame(&mut cfg);
+        let count = frame.group_count();
+        let w: Vec<f64> = (0..count)
+            .map(|i| frame.group_size_weights().get(i).copied().unwrap_or(1.0))
+            .collect();
+        let o: Vec<Option<SplitOrientation>> = (0..count)
+            .map(|i| frame.group_item_orientations().get(i).copied())
+            .collect();
+        let default = frame.split_orientation();
+        (count, w, o, default)
+    };
+
+    if group_count == 0 {
+        let placeholder = Label::new(Some("No groups configured. Add sources in the Data Source tab."));
+        placeholder.set_halign(gtk4::Align::Start);
+        placeholder.add_css_class("dim-label");
+        container.append(&placeholder);
+        return;
+    }
+
+    // Create a combined row for each group: "Group N | Weight: [spin] | Horizontal [switch] Vertical"
+    for group_idx in 0..group_count {
+        let row = GtkBox::new(Orientation::Horizontal, 8);
+
+        // Group label
+        let group_label = Label::new(Some(&format!("Group {}", group_idx + 1)));
+        group_label.set_width_chars(8);
+        row.append(&group_label);
+
+        // Weight spinner
+        row.append(&Label::new(Some("Weight:")));
+        let weight_spin = SpinButton::with_range(0.1, 10.0, 0.1);
+        weight_spin.set_value(weights[group_idx]);
+        weight_spin.set_digits(1);
+        weight_spin.set_width_chars(5);
+        row.append(&weight_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let get_frame_clone = get_frame.clone();
+        weight_spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            let frame = get_frame_clone(&mut cfg);
+            let weights = frame.group_size_weights_mut();
+            while weights.len() <= group_idx {
+                weights.push(1.0);
+            }
+            weights[group_idx] = spin.value();
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+        });
+
+        // Separator
+        let sep = Separator::new(Orientation::Vertical);
+        sep.set_margin_start(8);
+        sep.set_margin_end(8);
+        row.append(&sep);
+
+        // Orientation: "Horizontal [switch] Vertical"
+        // Switch OFF = Horizontal, ON = Vertical
+        let horiz_label = Label::new(Some("Horizontal"));
+        row.append(&horiz_label);
+
+        let orient_switch = Switch::new();
+        // Determine current orientation for this group
+        let is_vertical = match orientations[group_idx] {
+            Some(SplitOrientation::Vertical) => true,
+            Some(SplitOrientation::Horizontal) => false,
+            None => default_orientation == SplitOrientation::Vertical,
+        };
+        orient_switch.set_active(is_vertical);
+        orient_switch.set_valign(gtk4::Align::Center);
+        row.append(&orient_switch);
+
+        let vert_label = Label::new(Some("Vertical"));
+        row.append(&vert_label);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let get_frame_clone = get_frame.clone();
+        orient_switch.connect_state_set(move |_, active| {
+            let mut cfg = config_clone.borrow_mut();
+            let frame = get_frame_clone(&mut cfg);
+            let orientation = if active {
+                SplitOrientation::Vertical
+            } else {
+                SplitOrientation::Horizontal
+            };
+            // Ensure the orientations vector is long enough
+            let layout_orientation = frame.split_orientation();
+            let orientations = frame.group_item_orientations_mut();
+            while orientations.len() <= group_idx {
+                orientations.push(layout_orientation);
+            }
+            orientations[group_idx] = orientation;
+            drop(cfg);
+            queue_redraw(&preview_clone, &on_change_clone);
+            glib::Propagation::Proceed
+        });
+
+        container.append(&row);
+    }
 }
 
 /// Create a theme reference section showing current theme colors, gradient, and fonts

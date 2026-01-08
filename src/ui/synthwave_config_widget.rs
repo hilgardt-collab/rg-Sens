@@ -70,8 +70,7 @@ struct LayoutWidgets {
     item_spacing_spin: SpinButton,
     divider_style_dropdown: DropDown,
     divider_padding_spin: SpinButton,
-    group_weights_box: GtkBox,
-    item_orientations_box: GtkBox,
+    group_settings_box: GtkBox,
 }
 
 /// Holds references to Animation tab widgets
@@ -636,34 +635,15 @@ impl SynthwaveConfigWidget {
             |cfg, v| cfg.frame.divider_padding = v,
         );
 
-        // Group weights section
-        let weights_label = create_section_header("Group Size Weights");
-        weights_label.set_margin_top(12);
-        page.append(&weights_label);
-
-        let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
-        page.append(&group_weights_box);
-
-        // Item Orientations section
-        let item_orient_label = create_section_header("Item Orientation per Group");
-        item_orient_label.set_margin_top(12);
-        page.append(&item_orient_label);
-
-        let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
-        item_orient_info.set_halign(gtk4::Align::Start);
-        item_orient_info.add_css_class("dim-label");
-        page.append(&item_orient_info);
-
-        let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
-        item_orientations_box.set_margin_top(4);
-        combo_config_base::rebuild_item_orientation_dropdowns(
-            &item_orientations_box,
+        // Combined group settings section (weight + orientation per group)
+        let group_settings_box = combo_config_base::create_combined_group_settings_section(&page);
+        combo_config_base::rebuild_combined_group_settings(
+            &group_settings_box,
             config,
             |c: &mut SynthwaveDisplayConfig| &mut c.frame,
             on_change,
             preview,
         );
-        page.append(&item_orientations_box);
 
         // Store widget refs
         *layout_widgets_out.borrow_mut() = Some(LayoutWidgets {
@@ -672,8 +652,7 @@ impl SynthwaveConfigWidget {
             item_spacing_spin,
             divider_style_dropdown,
             divider_padding_spin,
-            group_weights_box,
-            item_orientations_box,
+            group_settings_box,
         });
 
         page
@@ -730,56 +709,6 @@ impl SynthwaveConfigWidget {
         });
 
         page
-    }
-
-    fn rebuild_group_spinners(
-        config: &Rc<RefCell<SynthwaveDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        group_weights_box: &GtkBox,
-    ) {
-        // Clear existing spinners
-        while let Some(child) = group_weights_box.first_child() {
-            group_weights_box.remove(&child);
-        }
-
-        let cfg = config.borrow();
-        let group_count = cfg.frame.group_count;
-
-        if group_count <= 1 {
-            let label = Label::new(Some("Group weights not applicable for single group."));
-            label.add_css_class("dim-label");
-            group_weights_box.append(&label);
-            return;
-        }
-
-        // Create spinners for each group
-        for i in 0..group_count {
-            let row = GtkBox::new(Orientation::Horizontal, 6);
-            row.append(&Label::new(Some(&format!("Group {} Weight:", i + 1))));
-
-            let weight = cfg.frame.group_size_weights.get(i).copied().unwrap_or(1.0);
-            let spin = SpinButton::with_range(0.1, 10.0, 0.1);
-            spin.set_value(weight);
-            spin.set_hexpand(true);
-            row.append(&spin);
-
-            let config_clone = config.clone();
-            let on_change_clone = on_change.clone();
-            let preview_clone = preview.clone();
-            let idx = i;
-            spin.connect_value_changed(move |spin| {
-                let mut cfg = config_clone.borrow_mut();
-                while cfg.frame.group_size_weights.len() <= idx {
-                    cfg.frame.group_size_weights.push(1.0);
-                }
-                cfg.frame.group_size_weights[idx] = spin.value();
-                drop(cfg);
-                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-            });
-
-            group_weights_box.append(&row);
-        }
     }
 
     /// Create a theme reference section showing current theme colors and fonts with copy buttons
@@ -1768,16 +1697,10 @@ impl SynthwaveConfigWidget {
 
         *self.source_summaries.borrow_mut() = summaries;
 
-        // Rebuild group spinners and item orientation dropdowns in Layout tab
+        // Rebuild combined group settings in Layout tab
         if let Some(ref widgets) = *self.layout_widgets.borrow() {
-            Self::rebuild_group_spinners(
-                &self.config,
-                &self.on_change,
-                &self.preview,
-                &widgets.group_weights_box,
-            );
-            combo_config_base::rebuild_item_orientation_dropdowns(
-                &widgets.item_orientations_box,
+            combo_config_base::rebuild_combined_group_settings(
+                &widgets.group_settings_box,
                 &self.config,
                 |c: &mut SynthwaveDisplayConfig| &mut c.frame,
                 &self.on_change,
