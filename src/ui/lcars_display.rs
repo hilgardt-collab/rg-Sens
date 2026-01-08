@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::f64::consts::PI;
 
+use std::cell::RefCell;
+
 use crate::ui::background::{BackgroundConfig, Color, render_background_with_theme};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
 use crate::ui::combo_config_base::LayoutFrameConfig;
@@ -18,6 +20,52 @@ use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
 use crate::ui::arc_display::ArcDisplayConfig;
 use crate::ui::speedometer_display::SpeedometerConfig;
+
+// Thread-local buffer for render values HashMap to avoid per-frame allocations.
+// The HashMap is reused across calls, only clearing and repopulating values.
+thread_local! {
+    static RENDER_VALUES_BUFFER: RefCell<HashMap<String, serde_json::Value>> = RefCell::new(HashMap::with_capacity(16));
+}
+
+/// Populate the thread-local render values buffer from ContentItemData.
+/// Returns a reference to the populated HashMap via the callback.
+/// This avoids allocating a new HashMap on every frame.
+#[inline]
+fn with_render_values<F, R>(
+    data: &ContentItemData,
+    slot_values: Option<&HashMap<String, serde_json::Value>>,
+    f: F,
+) -> R
+where
+    F: FnOnce(&HashMap<String, serde_json::Value>) -> R,
+{
+    RENDER_VALUES_BUFFER.with(|buffer| {
+        let mut values = buffer.borrow_mut();
+        values.clear();
+
+        // Add basic ContentItemData fields
+        // Using static key strings where possible to avoid allocation
+        values.insert("caption".to_string(), serde_json::Value::String(data.caption.clone()));
+        values.insert("value".to_string(), serde_json::Value::String(data.value.clone()));
+        values.insert("unit".to_string(), serde_json::Value::String(data.unit.clone()));
+        values.insert("numerical_value".to_string(), serde_json::Value::from(data.numerical_value));
+        values.insert("min_value".to_string(), serde_json::Value::from(data.min_value));
+        values.insert("max_value".to_string(), serde_json::Value::from(data.max_value));
+
+        // Add any additional slot values (like hour, minute, second for clock source)
+        if let Some(sv) = slot_values {
+            for (k, v) in sv {
+                // Don't override the basic fields we already set
+                if !values.contains_key(k) {
+                    values.insert(k.clone(), v.clone());
+                }
+            }
+        }
+
+        // Call the closure with the populated buffer
+        f(&values)
+    })
+}
 
 /// Sidebar position (left or right)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -1587,32 +1635,13 @@ pub fn render_content_bar(
     cr.save()?;
     cr.translate(x, y);
 
-    // Build values HashMap for render_bar's text overlay
-    let mut values = HashMap::new();
-
-    // Add basic ContentItemData fields
-    values.insert("caption".to_string(), serde_json::json!(data.caption));
-    values.insert("value".to_string(), serde_json::json!(data.value));
-    values.insert("unit".to_string(), serde_json::json!(data.unit));
-    values.insert("numerical_value".to_string(), serde_json::json!(data.numerical_value));
-    values.insert("min_value".to_string(), serde_json::json!(data.min_value));
-    values.insert("max_value".to_string(), serde_json::json!(data.max_value));
-
-    // Add any additional slot values (like hour, minute, second for clock source)
-    if let Some(sv) = slot_values {
-        for (k, v) in sv {
-            // Don't override the basic fields we already set
-            if !values.contains_key(k) {
-                values.insert(k.clone(), v.clone());
-            }
-        }
-    }
-
-    // Call the reusable render_bar function
-    render_bar(cr, bar_config, theme, animated_percent, &values, w, h)?;
+    // Use thread-local buffer to avoid per-frame HashMap allocations
+    let result = with_render_values(data, slot_values, |values| {
+        render_bar(cr, bar_config, theme, animated_percent, values, w, h)
+    });
 
     cr.restore()?;
-    Ok(())
+    result
 }
 
 /// Render text-only content (no bar) - uses bar renderer with transparent background
@@ -1630,32 +1659,14 @@ pub fn render_content_text(
     cr.save()?;
     cr.translate(x, y);
 
-    // Build values HashMap for text rendering
-    let mut values = HashMap::new();
-
-    // Add basic ContentItemData fields
-    values.insert("caption".to_string(), serde_json::json!(data.caption));
-    values.insert("value".to_string(), serde_json::json!(data.value));
-    values.insert("unit".to_string(), serde_json::json!(data.unit));
-    values.insert("numerical_value".to_string(), serde_json::json!(data.numerical_value));
-    values.insert("min_value".to_string(), serde_json::json!(data.min_value));
-    values.insert("max_value".to_string(), serde_json::json!(data.max_value));
-
-    // Add any additional slot values (like hour, minute, second for clock source)
-    if let Some(sv) = slot_values {
-        for (k, v) in sv {
-            // Don't override the basic fields we already set
-            if !values.contains_key(k) {
-                values.insert(k.clone(), v.clone());
-            }
-        }
-    }
-
+    // Use thread-local buffer to avoid per-frame HashMap allocations
     // Render with 0 value to show text only (bar won't be visible)
-    render_bar(cr, bar_config, theme, 0.0, &values, w, h)?;
+    let result = with_render_values(data, slot_values, |values| {
+        render_bar(cr, bar_config, theme, 0.0, values, w, h)
+    });
 
     cr.restore()?;
-    Ok(())
+    result
 }
 
 /// Calculate layout positions for content items
