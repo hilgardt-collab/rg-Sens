@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 
 /// Analog clock displayer
@@ -156,7 +157,6 @@ impl Displayer for ClockAnalogDisplayer {
                 // Draw indicator
                 if data.config.show_icon {
                     let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
-                    crate::ui::render_cache::apply_cached_font(cr, icon_font, cairo::FontSlant::Normal, font_weight, font_size);
 
                     // Build display text based on state
                     let display_text = if timer_active && !data.timer_display.is_empty() {
@@ -171,11 +171,8 @@ impl Displayer for ClockAnalogDisplayer {
                         icon_text.clone()
                     };
 
-                    let (text_w, text_h) = if let Ok(te) = cr.text_extents(&display_text) {
-                        (te.width(), te.height())
-                    } else {
-                        (font_size * 3.0, font_size)
-                    };
+                    let te = pango_text_extents(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, font_size);
+                    let (text_w, text_h) = (te.width().max(font_size * 3.0), te.height().max(font_size));
 
                     // Position based on center_indicator setting
                     let (text_x, text_y) = if data.config.center_indicator {
@@ -233,7 +230,7 @@ impl Displayer for ClockAnalogDisplayer {
                     }
 
                     cr.move_to(text_x, text_y);
-                    cr.show_text(&display_text).ok();
+                    pango_show_text(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, font_size);
                     cr.restore().ok();
                 }
                 data.transform.restore(cr);

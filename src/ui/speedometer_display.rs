@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{deserialize_color_or_source, ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 
@@ -755,15 +756,14 @@ fn draw_tick_label(
         cairo::FontWeight::Normal
     };
 
-    crate::ui::render_cache::apply_cached_font(cr, &label_config.font_family, font_slant, font_weight, label_config.font_size);
     cr.set_source_rgba(resolved_color.r, resolved_color.g, resolved_color.b, resolved_color.a);
 
-    let extents = cr.text_extents(text)?;
+    let extents = pango_text_extents(cr, text, &label_config.font_family, font_slant, font_weight, label_config.font_size);
     let x = center_x + label_radius * angle.cos() - extents.width() / 2.0;
     let y = center_y + label_radius * angle.sin() + extents.height() / 2.0;
 
     cr.move_to(x, y);
-    cr.show_text(text)?;
+    pango_show_text(cr, text, &label_config.font_family, font_slant, font_weight, label_config.font_size);
 
     cr.restore()?;
     Ok(())

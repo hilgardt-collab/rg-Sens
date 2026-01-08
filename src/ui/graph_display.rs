@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use super::background::Color;
+use super::pango_text::{pango_show_text, pango_text_extents};
 use super::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
 use crate::displayers::TextLineConfig;
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
@@ -692,7 +693,6 @@ pub fn render_graph_with_theme(
             } else {
                 cairo::FontWeight::Normal
             };
-            crate::ui::render_cache::apply_cached_font(cr, &config.y_axis.label_font_family, font_slant, font_weight, config.y_axis.label_font_size);
 
             let num_labels = 5;
             for i in 0..=num_labels {
@@ -709,11 +709,11 @@ pub fn render_graph_with_theme(
                 };
                 let y = plot_y + (i as f64 / num_labels as f64) * plot_height;
 
-                let extents = cr.text_extents(&label)?;
+                let extents = pango_text_extents(cr, &label, &config.y_axis.label_font_family, font_slant, font_weight, config.y_axis.label_font_size);
                 // Ensure label stays within panel bounds
                 let label_x = (plot_x - extents.width() - 5.0).max(2.0);
                 cr.move_to(label_x, y + extents.height() / 2.0);
-                cr.show_text(&label)?;
+                pango_show_text(cr, &label, &config.y_axis.label_font_family, font_slant, font_weight, config.y_axis.label_font_size);
             }
             cr.restore()?;
         }

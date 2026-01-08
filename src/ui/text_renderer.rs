@@ -8,7 +8,7 @@ use crate::displayers::{
     CombineDirection, HorizontalPosition, TextBackgroundConfig, TextBackgroundType,
     TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition, VerticalPosition,
 };
-use crate::ui::render_cache::TEXT_EXTENTS_CACHE;
+use crate::ui::pango_text::{pango_show_text, pango_text_extents, get_font_description};
 use crate::ui::theme::ComboThemeConfig;
 
 /// Render text lines using a TextDisplayerConfig
@@ -133,30 +133,19 @@ fn render_combined_parts(
 
     const SPACING: f64 = 5.0;
 
-    // Calculate dimensions for each part
-    let mut part_extents: Vec<cairo::TextExtents> = Vec::new();
+    // Calculate dimensions for each part using Pango
+    let mut part_extents: Vec<crate::ui::pango_text::TextExtents> = Vec::new();
     for (config, text) in parts {
         // Resolve font using theme if available
         let (font_family, font_size) = config.resolved_font(theme);
-        let extents = TEXT_EXTENTS_CACHE
-            .lock()
-            .ok()
-            .and_then(|mut cache| {
-                cache.get_or_compute(
-                    cr,
-                    &font_family,
-                    font_size,
-                    config.bold,
-                    config.italic,
-                    text,
-                )
-            })
-            .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+        let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
+        let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+        let extents = pango_text_extents(cr, text, &font_family, font_slant, font_weight, font_size);
         part_extents.push(extents);
     }
 
     // Calculate combined dimensions based on direction
-    let (combined_width, combined_height, _min_y_bearing) = match direction {
+    let (combined_width, combined_height, min_y_bearing) = match direction {
         CombineDirection::Horizontal => {
             let mut total_width = 0.0;
             let mut min_y_bearing: f64 = 0.0;
@@ -236,7 +225,7 @@ fn render_combined_parts(
     }
 
     // Extract alignment components from TextPosition
-    let (align_v, align_h) = alignment.to_positions();
+    let (_align_v, align_h) = alignment.to_positions();
 
     // Render each part based on direction and alignment
     // Note: y_offset is calculated as position of text TOP, but render_text_part
@@ -246,21 +235,21 @@ fn render_combined_parts(
 
     match direction {
         CombineDirection::Horizontal => {
+            // For horizontal text, align baselines (not ink rectangles) for proper typography
+            // All texts share the same baseline position
+            //
+            // combined_height = max_descent - min_y_bearing (total ink span)
+            // For ink to fit in bounding box [0, combined_height]:
+            //   - ink_top = baseline + min_y_bearing = 0  =>  baseline = -min_y_bearing
+            //   - ink_bottom = baseline + max_descent = combined_height (automatically satisfied)
+            //
+            // This baseline position works for all alignments since baselines must be aligned
+            let common_baseline = -min_y_bearing;
+
             let mut current_x = 0.0;
             for (i, ((config, text), ext)) in parts.iter().zip(&part_extents).enumerate() {
-                // Calculate y offset for top of text based on vertical alignment
-                let part_height = ext.height();
-                let top_offset = match align_v {
-                    VerticalPosition::Top => 0.0,
-                    VerticalPosition::Center => (combined_height - part_height) / 2.0,
-                    VerticalPosition::Bottom => combined_height - part_height,
-                };
-
-                // Convert top offset to baseline position: baseline = top - y_bearing
-                // (y_bearing is negative, so we subtract it to go down to baseline)
-                let baseline_y = top_offset - ext.y_bearing();
-
-                render_text_part(cr, config, text, current_x, baseline_y, ext, theme, skip_individual_bg);
+                // All texts share the same baseline for proper horizontal alignment
+                render_text_part(cr, config, text, current_x, common_baseline, ext, theme, skip_individual_bg);
 
                 current_x += ext.width();
                 if i < parts.len() - 1 {
@@ -304,7 +293,7 @@ fn render_text_part(
     text: &str,
     x: f64,
     y: f64,
-    extents: &cairo::TextExtents,
+    extents: &crate::ui::pango_text::TextExtents,
     theme: Option<&ComboThemeConfig>,
     skip_background: bool,
 ) {
@@ -323,10 +312,8 @@ fn render_text_part(
         }
     }
 
-    // Set font using cached ScaledFont to prevent memory leaks
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, font_slant, font_weight, font_size);
 
     // Render background if configured (skip when rendering grouped text - group renders its own background)
     if !skip_background {
@@ -337,7 +324,7 @@ fn render_text_part(
     cr.move_to(x, y);
 
     // Render text with fill
-    render_text_fill(cr, config, text, x, y, extents, theme);
+    render_text_fill(cr, config, text, x, y, extents, &font_family, font_slant, font_weight, font_size, theme);
 
     cr.restore().ok();
 }
@@ -419,7 +406,11 @@ fn render_text_fill(
     text: &str,
     x: f64,
     y: f64,
-    extents: &cairo::TextExtents,
+    extents: &crate::ui::pango_text::TextExtents,
+    font_family: &str,
+    font_slant: cairo::FontSlant,
+    font_weight: cairo::FontWeight,
+    font_size: f64,
     theme: Option<&ComboThemeConfig>,
 ) {
     // Resolve the primary color using theme if available
@@ -429,12 +420,21 @@ fn render_text_fill(
         TextFillType::Solid { .. } => {
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(x, y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, font_family, font_slant, font_weight, font_size);
         }
         TextFillType::LinearGradient { stops, angle } => {
-            // Create text path
-            cr.move_to(x, y);
-            cr.text_path(text);
+            // Create text path using Pango layout
+            let font_desc = get_font_description(font_family, font_slant, font_weight, font_size);
+            let layout = pangocairo::functions::create_layout(cr);
+            layout.set_font_description(Some(&font_desc));
+            layout.set_text(text);
+
+            // Get baseline offset for proper positioning
+            let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+
+            cr.save().ok();
+            cr.move_to(x, y - baseline);
+            pangocairo::functions::layout_path(cr, &layout);
 
             // Create gradient covering the text bounds
             let angle_rad = angle.to_radians();
@@ -451,6 +451,7 @@ fn render_text_fill(
 
             cr.set_source(&gradient).ok();
             cr.fill().ok();
+            cr.restore().ok();
         }
     }
 }
@@ -504,32 +505,24 @@ fn render_text_with_config(
     // Resolve font using theme if available
     let (font_family, font_size) = config.resolved_font(theme);
 
-    // Set font using cached ScaledFont to prevent memory leaks
     let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
     let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, font_slant, font_weight, font_size);
 
-    // Get text dimensions
-    let extents = TEXT_EXTENTS_CACHE
-        .lock()
-        .ok()
-        .and_then(|mut cache| {
-            cache.get_or_compute(cr, &font_family, font_size, config.bold, config.italic, text)
-        })
-        .unwrap_or_else(|| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    // Get text dimensions using Pango
+    let extents = pango_text_extents(cr, text, &font_family, font_slant, font_weight, font_size);
 
     let text_w = extents.width();
     let text_h = extents.height();
 
-    // Get font metrics for consistent vertical positioning
-    // Using font ascent ensures all text at same font size aligns consistently,
-    // regardless of whether specific characters have descenders
-    let (font_height, font_ascent) = if let Ok(font_extents) = cr.font_extents() {
-        (font_extents.ascent() + font_extents.descent(), font_extents.ascent())
-    } else {
-        // Fallback to text extents if font_extents fails
-        (text_h, -extents.y_bearing())
-    };
+    // Get font metrics for consistent vertical positioning using Pango
+    let font_desc = get_font_description(&font_family, font_slant, font_weight, font_size);
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.set_font_description(Some(&font_desc));
+    layout.set_text("Xg"); // Use chars with ascender and descender for metrics
+    let (_, logical_rect) = layout.pixel_extents();
+    let font_height = logical_rect.height() as f64;
+    // For ascent, use baseline position
+    let font_ascent = layout.baseline() as f64 / pango::SCALE as f64;
 
     // Calculate rotated bounding box dimensions
     let angle_rad = rotation_angle.to_radians();
@@ -570,7 +563,7 @@ fn render_text_with_config(
         render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h, theme);
 
         // Render text with fill
-        render_text_fill(cr, config, text, draw_x, draw_y, &extents, theme);
+        render_text_fill(cr, config, text, draw_x, draw_y, &extents, &font_family, font_slant, font_weight, font_size, theme);
     } else {
         // Position baseline: text_y is top of font box, add ascent to get baseline
         let baseline_y = text_y + font_ascent;
@@ -581,7 +574,7 @@ fn render_text_with_config(
         render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h, theme);
 
         // Render text with fill
-        render_text_fill(cr, config, text, draw_x, draw_y, &extents, theme);
+        render_text_fill(cr, config, text, draw_x, draw_y, &extents, &font_family, font_slant, font_weight, font_size, theme);
     }
 
     cr.restore().ok();

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource, deserialize_color_or_source, deserialize_font_or_source};
 
 // Re-export types we use
@@ -384,22 +385,24 @@ fn calculate_aligned_text_x(
     area_w: f64,
     padding: f64,
     alignment: HeaderAlignment,
+    font_family: &str,
+    font_size: f64,
 ) -> f64 {
     match alignment {
         HeaderAlignment::Left => area_x + padding,
         HeaderAlignment::Center => {
-            if let Ok(extents) = cr.text_extents(text) {
-                area_x + (area_w - extents.width()) / 2.0
-            } else {
-                area_x + padding // fallback to left
-            }
+            let extents = pango_text_extents(
+                cr, text, font_family,
+                cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size
+            );
+            area_x + (area_w - extents.width()) / 2.0
         }
         HeaderAlignment::Right => {
-            if let Ok(extents) = cr.text_extents(text) {
-                area_x + area_w - padding - extents.width()
-            } else {
-                area_x + padding // fallback to left
-            }
+            let extents = pango_text_extents(
+                cr, text, font_family,
+                cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size
+            );
+            area_x + area_w - padding - extents.width()
         }
     }
 }
@@ -507,11 +510,10 @@ fn draw_group_header(
                 let text_color = config.text_color();
                 cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
                 let (font_family, font_size) = config.header_font.resolve(&config.theme);
-                crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
                 let text_y = y + bar_h + 8.0 + font_size;
                 cr.move_to(x + config.card_padding, text_y);
-                cr.show_text(header_text).ok();
+                pango_show_text(cr, header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
                 cr.restore().ok();
 
                 return bar_h + font_size + 16.0;
@@ -527,11 +529,10 @@ fn draw_group_header(
             // Draw text in white
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
             cr.move_to(x + config.card_padding, text_y);
-            cr.show_text(header_text).ok();
+            pango_show_text(cr, header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             cr.restore().ok();
             header_h
@@ -545,11 +546,10 @@ fn draw_group_header(
             // Draw colored text
             cr.set_source_rgba(accent.r, accent.g, accent.b, accent.a);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             let text_y = y + config.card_padding + font_size;
             cr.move_to(x + config.card_padding, text_y);
-            cr.show_text(header_text).ok();
+            pango_show_text(cr, header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             cr.restore().ok();
             font_size + config.card_padding * 2.0
@@ -708,12 +708,12 @@ fn draw_main_header(
             let text_color = config.text_color();
             cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size + 2.0);
+            let actual_font_size = font_size + 2.0;
 
             let text_y = y + bar_h + 12.0 + font_size;
-            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
+            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment, &font_family, actual_font_size);
             cr.move_to(text_x, text_y);
-            cr.show_text(&config.header_text).ok();
+            pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, actual_font_size);
             cr.restore().ok();
 
             bar_h + font_size + 24.0
@@ -726,12 +726,12 @@ fn draw_main_header(
             // White text
             cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size + 2.0);
+            let actual_font_size = font_size + 2.0;
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
-            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
+            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment, &font_family, actual_font_size);
             cr.move_to(text_x, text_y);
-            cr.show_text(&config.header_text).ok();
+            pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, actual_font_size);
 
             cr.restore().ok();
             header_h
@@ -740,12 +740,12 @@ fn draw_main_header(
             let text_color = config.text_color();
             cr.set_source_rgba(text_color.r, text_color.g, text_color.b, 0.87);
             let (font_family, font_size) = config.header_font.resolve(&config.theme);
-            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size + 2.0);
+            let actual_font_size = font_size + 2.0;
 
             let text_y = y + config.card_padding + font_size;
-            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment);
+            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment, &font_family, actual_font_size);
             cr.move_to(text_x, text_y);
-            cr.show_text(&config.header_text).ok();
+            pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, actual_font_size);
 
             cr.restore().ok();
             font_size + config.card_padding * 2.0

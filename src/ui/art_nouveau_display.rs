@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
 
 // Re-export types we use
@@ -768,14 +769,10 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
     cr.save().ok();
 
     // Measure text
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
     let header_height = font_size + 20.0;
 
-    let (text_width, text_height) = if let Ok(extents) = cr.text_extents(&config.header_text) {
-        (extents.width(), extents.height())
-    } else {
-        (0.0, font_size)
-    };
+    let text_extents = pango_text_extents(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
+    let (text_width, text_height) = (text_extents.width(), text_extents.height().max(font_size));
 
     let text_x = x + (w - text_width) / 2.0;
     let text_y = y + header_height / 2.0 + text_height / 2.0;
@@ -845,7 +842,7 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
     // Draw header text
     cr.set_source_rgba(header_color.r, header_color.g, header_color.b, header_color.a);
     cr.move_to(text_x, text_y);
-    cr.show_text(&config.header_text).ok();
+    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
 
     cr.restore().ok();
 

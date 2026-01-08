@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
 
 // Re-export types we use
@@ -493,10 +494,9 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
 
     cr.save().ok();
 
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
-
-    let text_extents = cr.text_extents(&config.header_text).ok();
-    let (text_width, text_height) = text_extents.map(|e| (e.width(), e.height())).unwrap_or((0.0, 0.0));
+    let text_extents = pango_text_extents(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    let text_width = text_extents.width();
+    let text_height = text_extents.height();
     let text_x = x + (w - text_width) / 2.0;
     let text_y = y + header_height / 2.0 + text_height / 2.0;
 
@@ -579,7 +579,7 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
         header_color.a,
     );
     cr.move_to(text_x, text_y);
-    cr.show_text(&config.header_text).ok();
+    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
     cr.restore().ok();
 

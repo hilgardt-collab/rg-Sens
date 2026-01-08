@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{ColorSource, FontSource, deserialize_font_or_source};
@@ -610,7 +611,6 @@ fn draw_header(
 
     // Resolve header font from FontSource using theme
     let (header_font_family, header_font_size) = config.header_font.resolve(&config.theme);
-    crate::ui::render_cache::apply_cached_font(cr, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
 
     let text = if config.header_text.is_empty() {
         "HUD"
@@ -618,8 +618,8 @@ fn draw_header(
         &config.header_text
     };
 
-    let text_extents = cr.text_extents(text).ok();
-    let (_text_width, text_height) = text_extents.map(|e| (e.width(), e.height())).unwrap_or((0.0, 0.0));
+    let text_extents = pango_text_extents(cr, text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+    let (_text_width, text_height) = (text_extents.width(), text_extents.height());
 
     match config.header_style {
         HudHeaderStyle::StatusBar => {
@@ -639,27 +639,27 @@ fn draw_header(
             if config.glow_intensity > 0.0 {
                 cr.set_source_rgba(color.r, color.g, color.b, config.glow_intensity * 0.4);
                 cr.move_to(text_x, text_y);
-                cr.show_text(&status_text).ok();
+                pango_show_text(cr, &status_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
             }
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(text_x, text_y);
-            cr.show_text(&status_text).ok();
+            pango_show_text(cr, &status_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
 
             // Right side status indicators
             let status_right = "ONLINE";
-            let right_extents = cr.text_extents(status_right).ok();
-            let right_width = right_extents.map(|e| e.width()).unwrap_or(0.0);
+            let right_extents = pango_text_extents(cr, status_right, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            let right_width = right_extents.width();
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.7);
             cr.move_to(x + w - right_width - 4.0, text_y);
-            cr.show_text(status_right).ok();
+            pango_show_text(cr, status_right, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
         }
         HudHeaderStyle::MissionCallout => {
             // Centered mission-style callout
             let callout_text = format!("<<< {} >>>", text.to_uppercase());
-            let callout_extents = cr.text_extents(&callout_text).ok();
-            let callout_width = callout_extents.map(|e| e.width()).unwrap_or(0.0);
+            let callout_extents = pango_text_extents(cr, &callout_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            let callout_width = callout_extents.width();
 
             let text_x = x + (w - callout_width) / 2.0;
             let text_y = y + header_h / 2.0 + text_height / 3.0;
@@ -668,12 +668,12 @@ fn draw_header(
             if config.glow_intensity > 0.0 {
                 cr.set_source_rgba(color.r, color.g, color.b, config.glow_intensity * 0.4);
                 cr.move_to(text_x, text_y);
-                cr.show_text(&callout_text).ok();
+                pango_show_text(cr, &callout_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
             }
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(text_x, text_y);
-            cr.show_text(&callout_text).ok();
+            pango_show_text(cr, &callout_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
 
             // Decorative lines on sides
             cr.set_line_width(1.0);
@@ -698,7 +698,7 @@ fn draw_header(
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(text_x, text_y);
-            cr.show_text(&id_text).ok();
+            pango_show_text(cr, &id_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
         }
         HudHeaderStyle::None => {}
     }

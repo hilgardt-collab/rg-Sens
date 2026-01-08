@@ -14,6 +14,7 @@ use std::f64::consts::PI;
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::ui::lcars_display::ContentItemConfig;
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 use std::collections::HashMap;
 use crate::ui::lcars_display::SplitOrientation;
@@ -840,34 +841,31 @@ fn draw_header(
             // Text
             let c = &config.header_color;
             cr.set_source_rgba(c.r, c.g, c.b, c.a);
-            crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
-            let extents = cr.text_extents(&config.header_text)?;
+            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
             let text_x = plate_x + (plate_w - extents.width()) / 2.0;
             let text_y = y + (h + extents.height()) / 2.0;
 
             // Shadow
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
             cr.move_to(text_x + 1.0, text_y + 1.0);
-            cr.show_text(&config.header_text)?;
+            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             // Main text
             cr.set_source_rgba(c.r, c.g, c.b, c.a);
             cr.move_to(text_x, text_y);
-            cr.show_text(&config.header_text)?;
+            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
         }
         HeaderStyle::Stencil => {
             // Stenciled text look
-            crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
-
-            let extents = cr.text_extents(&config.header_text)?;
+            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
             let text_x = x + (w - extents.width()) / 2.0;
             let text_y = y + (h + extents.height()) / 2.0;
 
             // Spray paint effect
             cr.set_source_rgba(0.1, 0.1, 0.1, 0.9);
             cr.move_to(text_x, text_y);
-            cr.show_text(&config.header_text)?;
+            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
         }
         HeaderStyle::Label => {
             // Equipment label style
@@ -889,13 +887,12 @@ fn draw_header(
 
             // Text
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
-            crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
-            let extents = cr.text_extents(&config.header_text)?;
+            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
             let text_x = label_x + (label_w - extents.width()) / 2.0;
             let text_y = label_y + (label_h + extents.height()) / 2.0;
             cr.move_to(text_x, text_y);
-            cr.show_text(&config.header_text)?;
+            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
         }
         HeaderStyle::None => {
             cr.restore()?;

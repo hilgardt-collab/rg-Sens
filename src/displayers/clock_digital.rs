@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::background::Color;
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 
 /// Digital clock display style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -274,13 +275,9 @@ impl Displayer for ClockDigitalDisplayer {
                         cr.save().ok();
 
                         let font_size = icon_size_px.min(height as f64 * 0.2);
-                        crate::ui::render_cache::apply_cached_font(cr, icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
-                        let (text_w, text_h) = if let Ok(te) = cr.text_extents(&data.timer_display) {
-                            (te.width(), te.height())
-                        } else {
-                            (50.0, 12.0) // Fallback dimensions
-                        };
+                        let te = pango_text_extents(cr, &data.timer_display, icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+                        let (text_w, text_h) = (te.width().max(50.0), te.height().max(12.0));
                         let text_x = width as f64 - text_w - 6.0;
                         let text_y = height as f64 - 6.0;
 
@@ -308,14 +305,13 @@ impl Displayer for ClockDigitalDisplayer {
                         }
 
                         cr.move_to(text_x, text_y);
-                        cr.show_text(&data.timer_display).ok();
+                        pango_show_text(cr, &data.timer_display, icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
                         cr.restore().ok();
                     } else {
                         // Show icon with optional next alarm time
                         cr.save().ok();
 
                         let icon_size = icon_size_px.min(height as f64 * 0.25);
-                        crate::ui::render_cache::apply_cached_font(cr, icon_font, cairo::FontSlant::Normal, font_weight, icon_size);
 
                         // Build display text: icon + optional next alarm time
                         let display_text = if let Some(ref next_time) = data.next_alarm_time {
@@ -328,11 +324,8 @@ impl Displayer for ClockDigitalDisplayer {
                             icon_text.clone()
                         };
 
-                        let (text_w, text_h) = if let Ok(te) = cr.text_extents(&display_text) {
-                            (te.width(), te.height())
-                        } else {
-                            (icon_size * 0.8, icon_size * 0.8) // Fallback dimensions
-                        };
+                        let te = pango_text_extents(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, icon_size);
+                        let (text_w, text_h) = (te.width().max(icon_size * 0.8), te.height().max(icon_size * 0.8));
                         let text_x = width as f64 - text_w - 6.0;
                         let text_y = height as f64 - 6.0;
 
@@ -362,7 +355,7 @@ impl Displayer for ClockDigitalDisplayer {
                         }
 
                         cr.move_to(text_x, text_y);
-                        cr.show_text(&display_text).ok();
+                        pango_show_text(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, icon_size);
                         cr.restore().ok();
                     }
                 }
@@ -606,7 +599,6 @@ fn render_digital_clock(
 
     match config.style {
         DigitalStyle::Simple => {
-            crate::ui::render_cache::apply_cached_font(cr, &config.time_font, time_slant, font_weight, config.time_size);
             cr.set_source_rgba(
                 config.time_color.r,
                 config.time_color.g,
@@ -614,11 +606,11 @@ fn render_digital_clock(
                 config.time_color.a,
             );
 
-            let extents = cr.text_extents(&time_str)?;
+            let extents = pango_text_extents(cr, &time_str, &config.time_font, time_slant, font_weight, config.time_size);
             let x = (width - extents.width()) / 2.0;
             y_offset += config.time_size;
             cr.move_to(x, y_offset);
-            cr.show_text(&time_str)?;
+            pango_show_text(cr, &time_str, &config.time_font, time_slant, font_weight, config.time_size);
         }
         DigitalStyle::Segment | DigitalStyle::LCD => {
             // Draw 7-segment style
@@ -641,7 +633,6 @@ fn render_digital_clock(
         } else {
             cairo::FontWeight::Normal
         };
-        crate::ui::render_cache::apply_cached_font(cr, &config.date_font, date_slant, date_weight, config.date_size);
         cr.set_source_rgba(
             config.date_color.r,
             config.date_color.g,
@@ -655,11 +646,11 @@ fn render_digital_clock(
             data.date_string.clone()
         };
 
-        let extents = cr.text_extents(&date_text)?;
+        let extents = pango_text_extents(cr, &date_text, &config.date_font, date_slant, date_weight, config.date_size);
         let x = (width - extents.width()) / 2.0;
         y_offset += config.date_size;
         cr.move_to(x, y_offset);
-        cr.show_text(&date_text)?;
+        pango_show_text(cr, &date_text, &config.date_font, date_slant, date_weight, config.date_size);
         y_offset += 5.0;
     }
 
@@ -676,15 +667,15 @@ fn render_digital_clock(
             config.timer_color
         };
 
-        crate::ui::render_cache::apply_cached_font(cr, &config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.date_size * 1.2);
         cr.set_source_rgba(timer_color.r, timer_color.g, timer_color.b, timer_color.a);
 
-        let timer_text = format!("⏱ {}", data.timer_display);
-        let extents = cr.text_extents(&timer_text)?;
+        let timer_text = format!("\u{23f1} {}", data.timer_display);
+        let timer_font_size = config.date_size * 1.2;
+        let extents = pango_text_extents(cr, &timer_text, &config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, timer_font_size);
         let x = (width - extents.width()) / 2.0;
-        y_offset += config.date_size * 1.2;
+        y_offset += timer_font_size;
         cr.move_to(x, y_offset);
-        cr.show_text(&timer_text)?;
+        pango_show_text(cr, &timer_text, &config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, timer_font_size);
     }
 
     // Draw alarm indicator
@@ -698,9 +689,8 @@ fn render_digital_clock(
         };
 
         cr.set_source_rgba(alarm_color.r, alarm_color.g, alarm_color.b, alarm_color.a);
-        crate::ui::render_cache::apply_cached_font(cr, "Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal, 14.0);
         cr.move_to(width - 25.0, 20.0);
-        cr.show_text("🔔")?;
+        pango_show_text(cr, "\u{1f514}", "Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal, 14.0);
     }
 
     cr.restore()?;
@@ -725,9 +715,8 @@ fn draw_segment_text(
     } else {
         cairo::FontWeight::Normal
     };
-    crate::ui::render_cache::apply_cached_font(cr, &config.time_font, time_slant, time_weight, config.time_size);
 
-    let extents = cr.text_extents(text)?;
+    let extents = pango_text_extents(cr, text, &config.time_font, time_slant, time_weight, config.time_size);
     let x = (width - extents.width()) / 2.0;
     let y = y_offset + config.time_size;
 
@@ -740,7 +729,7 @@ fn draw_segment_text(
             0.3,
         );
         cr.move_to(x, y);
-        cr.show_text("88:88:88")?; // Show all segments dimly
+        pango_show_text(cr, "88:88:88", &config.time_font, time_slant, time_weight, config.time_size); // Show all segments dimly
     }
 
     // Draw glow using cardinal directions only (4 draws instead of 8)
@@ -753,7 +742,7 @@ fn draw_segment_text(
     );
     for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
         cr.move_to(x + dx, y + dy);
-        cr.show_text(text)?;
+        pango_show_text(cr, text, &config.time_font, time_slant, time_weight, config.time_size);
     }
 
     // Draw main text
@@ -764,7 +753,7 @@ fn draw_segment_text(
         config.time_color.a,
     );
     cr.move_to(x, y);
-    cr.show_text(text)?;
+    pango_show_text(cr, text, &config.time_font, time_slant, time_weight, config.time_size);
 
     Ok(())
 }

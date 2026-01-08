@@ -40,6 +40,7 @@ pub mod text_renderer;
 mod shared_font_dialog;
 pub use shared_font_dialog::{init_shared_font_dialog, warm_font_cache};
 pub mod render_cache;
+pub mod pango_text;
 pub mod clock_display;
 pub mod lcars_display;
 mod lcars_config_widget;

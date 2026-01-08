@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
 use crate::ui::background::Color;
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 
 /// Clock hand style
@@ -611,7 +612,6 @@ fn draw_numbers(
     } else {
         cairo::FontWeight::Normal
     };
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, slant, weight, font_size);
 
     let number_radius = radius * 0.75;
 
@@ -630,9 +630,9 @@ fn draw_numbers(
         let x = cx + number_radius * angle.cos();
         let y = cy + number_radius * angle.sin();
 
-        let extents = cr.text_extents(num)?;
+        let extents = pango_text_extents(cr, num, &font_family, slant, weight, font_size);
         cr.move_to(x - extents.width() / 2.0, y + extents.height() / 2.0);
-        cr.show_text(num)?;
+        pango_show_text(cr, num, &font_family, slant, weight, font_size);
     }
 
     cr.restore()?;

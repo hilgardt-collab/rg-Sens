@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 
@@ -754,16 +755,15 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
 
     cr.save().ok();
 
-    crate::ui::render_cache::apply_cached_font(cr, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
-
     let text = if config.header_text.is_empty() {
         "SYNTHWAVE"
     } else {
         &config.header_text
     };
 
-    let text_extents = cr.text_extents(text).ok();
-    let (text_width, text_height) = text_extents.map(|e| (e.width(), e.height())).unwrap_or((0.0, 0.0));
+    let text_extents = pango_text_extents(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+    let text_width = text_extents.width();
+    let text_height = text_extents.height();
 
     let text_x = x + (w - text_width) / 2.0;
     let text_y = y + header_h / 2.0 + text_height / 3.0;
@@ -781,12 +781,12 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
             // Shadow
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
             cr.move_to(text_x + 2.0, text_y + 2.0);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             // Chrome gradient text
             cr.set_source(&gradient).ok();
             cr.move_to(text_x, text_y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             // Underline with neon glow
             if config.neon_glow_intensity > 0.0 {
@@ -810,25 +810,30 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
                     let alpha = config.neon_glow_intensity * 0.3 * (4.0 - i as f64) / 3.0;
                     cr.set_source_rgba(neon.r, neon.g, neon.b, alpha);
                     cr.move_to(text_x, text_y);
-                    cr.show_text(text).ok();
+                    pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
                 }
             }
 
             // Main text
             cr.set_source_rgba(accent.r, accent.g, accent.b, 1.0);
             cr.move_to(text_x, text_y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
 
             // Bright center
             cr.set_source_rgba(1.0, 1.0, 1.0, 0.6);
             cr.move_to(text_x, text_y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
         }
         SynthwaveHeaderStyle::Outline => {
-            // Outlined text
+            // Outlined text using Pango layout path
             cr.set_source_rgba(accent.r, accent.g, accent.b, 1.0);
-            cr.move_to(text_x, text_y);
-            cr.text_path(text);
+            let font_desc = crate::ui::pango_text::get_font_description(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let layout = pangocairo::functions::create_layout(cr);
+            layout.set_font_description(Some(&font_desc));
+            layout.set_text(text);
+            let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+            cr.move_to(text_x, text_y - baseline);
+            pangocairo::functions::layout_path(cr, &layout);
             cr.set_line_width(2.0);
             cr.stroke_preserve().ok();
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.8);
@@ -837,7 +842,7 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
         SynthwaveHeaderStyle::Simple => {
             cr.set_source_rgba(secondary.r, secondary.g, secondary.b, 1.0);
             cr.move_to(text_x, text_y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
         }
         SynthwaveHeaderStyle::None => {}
     }

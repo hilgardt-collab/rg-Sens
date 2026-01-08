@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{FontSource, deserialize_font_or_source};
@@ -631,7 +632,6 @@ fn draw_header(
 
     // Resolve the theme-aware font
     let (font_family, font_size) = config.header_font.resolve(&config.theme);
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
     let text = if config.header_text.is_empty() {
         "TERMINAL"
@@ -639,8 +639,8 @@ fn draw_header(
         &config.header_text
     };
 
-    let text_extents = cr.text_extents(text).ok();
-    let (text_width, text_height) = text_extents.map(|e| (e.width(), e.height())).unwrap_or((0.0, 0.0));
+    let text_extents = pango_text_extents(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    let (text_width, text_height) = (text_extents.width(), text_extents.height());
 
     match config.header_style {
         TerminalHeaderStyle::TitleBar => {
@@ -664,7 +664,7 @@ fn draw_header(
             if config.screen_glow > 0.0 {
                 cr.set_source_rgba(phosphor.r, phosphor.g, phosphor.b, config.screen_glow * 0.3);
                 cr.move_to(text_x, text_y);
-                cr.show_text(text).ok();
+                pango_show_text(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
             }
 
             // Main text
@@ -675,7 +675,7 @@ fn draw_header(
                 1.0,
             );
             cr.move_to(text_x, text_y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
         }
         TerminalHeaderStyle::StatusLine => {
             // VT100-style reverse video status line
@@ -689,14 +689,14 @@ fn draw_header(
 
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
             cr.move_to(text_x, text_y);
-            cr.show_text(text).ok();
+            pango_show_text(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
 
             // Right-aligned info
             let info = "STATUS: OK";
-            let info_extents = cr.text_extents(info).ok();
-            let info_width = info_extents.map(|e| e.width()).unwrap_or(0.0);
+            let info_extents = pango_text_extents(cr, info, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            let info_width = info_extents.width();
             cr.move_to(x + w - info_width - 8.0, text_y);
-            cr.show_text(info).ok();
+            pango_show_text(cr, info, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
         }
         TerminalHeaderStyle::Prompt => {
             // Shell prompt style: $ SYSTEM MONITOR _
@@ -709,7 +709,7 @@ fn draw_header(
             if config.screen_glow > 0.0 {
                 cr.set_source_rgba(phosphor.r, phosphor.g, phosphor.b, config.screen_glow * 0.3);
                 cr.move_to(text_x, text_y);
-                cr.show_text(&prompt).ok();
+                pango_show_text(cr, &prompt, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
             }
 
             cr.set_source_rgba(
@@ -719,7 +719,7 @@ fn draw_header(
                 1.0,
             );
             cr.move_to(text_x, text_y);
-            cr.show_text(&prompt).ok();
+            pango_show_text(cr, &prompt, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
         }
         TerminalHeaderStyle::None => {}
     }

@@ -2,6 +2,7 @@
 
 use crate::config::AppConfig;
 use crate::core::Panel;
+use crate::ui::pango_text::pango_show_text;
 use gtk4::gdk::ModifierType;
 use gtk4::{prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
 use log::info;
@@ -398,7 +399,7 @@ impl GridLayout {
                         if rect_x < width as f64 && rect_y < height as f64 {
                             let label = format!("Page {}", vp_row * vp_cols + vp_col + 1);
                             cr.move_to(rect_x, rect_y);
-                            cr.show_text(&label).ok();
+                            pango_show_text(cr, &label, "Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal, 12.0);
                         }
                     }
                 }

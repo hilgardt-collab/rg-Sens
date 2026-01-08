@@ -15,6 +15,7 @@ use std::cell::RefCell;
 use crate::ui::background::{BackgroundConfig, Color, render_background_with_theme};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
 use crate::ui::combo_config_base::LayoutFrameConfig;
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
 use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
@@ -1082,30 +1083,31 @@ pub fn render_lcars_frame(
 
     // Draw segment labels without transform (so text isn't mirrored)
     for label_info in &labels {
-        crate::ui::render_cache::apply_cached_font(cr, &label_info.font, cairo::FontSlant::Normal, cairo::FontWeight::Normal, label_info.font_size);
+        let text_extents = pango_text_extents(
+            cr, &label_info.text, &label_info.font,
+            cairo::FontSlant::Normal, cairo::FontWeight::Normal, label_info.font_size
+        );
 
-        if let Ok(text_extents) = cr.text_extents(&label_info.text) {
-            label_info.color.apply_to_cairo(cr);
+        label_info.color.apply_to_cairo(cr);
 
-            // Calculate x position based on sidebar position
-            let label_x = if is_right {
-                // Sidebar on right: text aligned to left of sidebar
-                width - sidebar_w + 5.0
-            } else {
-                // Sidebar on left: text aligned to right of sidebar
-                sidebar_w - text_extents.width() - 5.0
-            };
+        // Calculate x position based on sidebar position
+        let label_x = if is_right {
+            // Sidebar on right: text aligned to left of sidebar
+            width - sidebar_w + 5.0
+        } else {
+            // Sidebar on left: text aligned to right of sidebar
+            sidebar_w - text_extents.width() - 5.0
+        };
 
-            // Last segment: label at top; others: label at bottom
-            let label_y = if label_info.is_last {
-                label_info.y + label_info.font_size + 5.0
-            } else {
-                label_info.y + label_info.seg_h - 5.0
-            };
+        // Last segment: label at top; others: label at bottom
+        let label_y = if label_info.is_last {
+            label_info.y + label_info.font_size + 5.0
+        } else {
+            label_info.y + label_info.seg_h - 5.0
+        };
 
-            cr.move_to(label_x, label_y);
-            let _ = cr.show_text(&label_info.text);
-        }
+        cr.move_to(label_x, label_y);
+        pango_show_text(cr, &label_info.text, &label_info.font, cairo::FontSlant::Normal, cairo::FontWeight::Normal, label_info.font_size);
     }
 
     // Draw headers (need to handle mirroring separately for text)
@@ -1250,8 +1252,7 @@ fn render_header_bar(
     } else {
         cairo::FontWeight::Normal
     };
-    crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, font_weight, font_size);
-    let text_extents = cr.text_extents(&text)?;
+    let text_extents = pango_text_extents(cr, &text, &font_family, cairo::FontSlant::Normal, font_weight, font_size);
 
     // Calculate available space for width calculations
     let max_available_space = match frame_config.sidebar_position {
@@ -1331,7 +1332,7 @@ fn render_header_bar(
     let text_x = bar_x + (bar_w - text_extents.width()) / 2.0;
     let text_y = bar_y + (bar_content_h + font_size * 0.7) / 2.0;
     cr.move_to(text_x, text_y);
-    cr.show_text(&text)?;
+    pango_show_text(cr, &text, &font_family, cairo::FontSlant::Normal, font_weight, font_size);
 
     cr.restore()?;
     Ok(())
@@ -1417,16 +1418,15 @@ fn render_sidebar_segments(
         if !segment.label.is_empty() {
             let label_text = segment.label.to_uppercase();
             let (font_family, font_size) = segment.font.resolve(&config.theme);
-            crate::ui::render_cache::apply_cached_font(cr, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
 
-            let text_extents = cr.text_extents(&label_text)?;
+            let text_extents = pango_text_extents(cr, &label_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
             segment.label_color.resolve(&config.theme).apply_to_cairo(cr);
 
             // Position label at bottom-right of segment
             let label_x = sidebar_x + sidebar_w - text_extents.width() - 5.0;
             let label_y = current_y + seg_h - 5.0;
             cr.move_to(label_x, label_y);
-            cr.show_text(&label_text)?;
+            pango_show_text(cr, &label_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
         }
 
         cr.restore()?;

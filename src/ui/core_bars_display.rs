@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 use crate::ui::text_renderer::render_text_lines_with_theme;
 use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
@@ -290,19 +291,14 @@ fn calculate_label_space(cr: &cairo::Context, config: &CoreBarsConfig, num_bars:
         cairo::FontWeight::Normal
     };
 
-    crate::ui::render_cache::apply_cached_font(cr, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
-
     // Calculate max label width/height
     let max_index = config.start_core + num_bars - 1;
     let test_label = format!("{}{}", config.label_prefix, max_index);
 
-    if let Ok(extents) = cr.text_extents(&test_label) {
-        match config.orientation {
-            BarOrientation::Horizontal => extents.width() + 8.0,
-            BarOrientation::Vertical => extents.height() + 8.0,
-        }
-    } else {
-        config.label_size + 8.0
+    let extents = pango_text_extents(cr, &test_label, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
+    match config.orientation {
+        BarOrientation::Horizontal => extents.width() + 8.0,
+        BarOrientation::Vertical => extents.height() + 8.0,
     }
 }
 
@@ -695,15 +691,12 @@ fn render_label(
         cairo::FontWeight::Normal
     };
 
-    crate::ui::render_cache::apply_cached_font(cr, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
     let label_color = config.label_color.resolve(theme);
     label_color.apply_to_cairo(cr);
 
-    let (text_width, text_height) = if let Ok(extents) = cr.text_extents(&label) {
-        (extents.width(), extents.height())
-    } else {
-        (config.label_size, config.label_size)
-    };
+    let extents = pango_text_extents(cr, &label, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
+    let text_width = extents.width();
+    let text_height = extents.height();
 
     if horizontal {
         // Label for horizontal bar (on left or right)
@@ -725,7 +718,7 @@ fn render_label(
         cr.move_to(text_x, text_y);
     }
 
-    cr.show_text(&label)?;
+    pango_show_text(cr, &label, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
 
     Ok(())
 }

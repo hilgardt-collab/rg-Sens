@@ -44,6 +44,7 @@ struct FrameWidgets {
 }
 
 /// Holds references to Headers tab widgets for updating when config changes
+#[allow(dead_code)] // Widgets stored for potential future set_config() updates
 struct HeadersWidgets {
     // Notebook for Top/Bottom tabs
     headers_notebook: Notebook,

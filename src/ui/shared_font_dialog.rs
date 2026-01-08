@@ -1,18 +1,10 @@
-//! Shared font dialog with pre-warmed font cache
+//! Shared font dialog using modern GTK4 FontDialog API
 //!
-//! Uses a singleton FontChooserDialog that's created once and hidden/shown
-//! rather than destroyed, avoiding the font enumeration on each open.
+//! Uses the non-deprecated FontDialog which handles font selection asynchronously.
 
 use gtk4::prelude::*;
-use gtk4::{FontChooserDialog, ResponseType, Window};
-use std::cell::RefCell;
-use std::rc::Rc;
+use gtk4::{FontDialog, Window};
 use std::sync::atomic::{AtomicBool, Ordering};
-
-thread_local! {
-    /// Global FontChooserDialog instance - created once, hidden/shown for reuse
-    static FONT_DIALOG: RefCell<Option<FontChooserDialog>> = const { RefCell::new(None) };
-}
 
 /// Flag to track if font cache has been warmed (can be set from any thread)
 static FONT_CACHE_WARMED: AtomicBool = AtomicBool::new(false);
@@ -36,32 +28,14 @@ pub fn warm_font_cache() {
 }
 
 /// Initialize the shared font dialog on the main thread.
-/// Call this after warm_font_cache() has completed.
-/// MUST be called from the main GTK thread.
+/// With the modern FontDialog API, this is a no-op since FontDialog
+/// doesn't need pre-initialization.
 pub fn init_shared_font_dialog() {
-    FONT_DIALOG.with(|cell| {
-        let mut dialog = cell.borrow_mut();
-        if dialog.is_none() {
-            log::debug!("Creating shared FontChooserDialog...");
-
-            let font_dialog = FontChooserDialog::new(Some("Select Font"), None::<&Window>);
-
-            // Hide instead of destroy on close - this is the key optimization
-            font_dialog.connect_close_request(|d| {
-                d.set_visible(false);
-                gtk4::glib::Propagation::Stop
-            });
-
-            *dialog = Some(font_dialog);
-            log::debug!("Shared FontChooserDialog created");
-        }
-    });
+    // Modern FontDialog doesn't need pre-initialization
+    // The font cache warming is the main optimization
 }
 
-/// Callback type for font selection
-pub type FontSelectedCallback = Box<dyn FnOnce(pango::FontDescription) + 'static>;
-
-/// Show the shared font dialog and call the callback when a font is selected.
+/// Show the font dialog and call the callback when a font is selected.
 ///
 /// # Arguments
 /// * `parent` - The parent window for the dialog
@@ -74,79 +48,26 @@ pub fn show_font_dialog<F>(
 ) where
     F: FnOnce(pango::FontDescription) + 'static,
 {
-    FONT_DIALOG.with(|cell| {
-        let mut dialog_opt = cell.borrow_mut();
+    let dialog = FontDialog::new();
 
-        // Create dialog if it doesn't exist yet
-        if dialog_opt.is_none() {
-            log::debug!("Creating FontChooserDialog on demand");
-            let font_dialog = FontChooserDialog::new(Some("Select Font"), None::<&Window>);
-            font_dialog.connect_close_request(|d| {
-                d.set_visible(false);
-                gtk4::glib::Propagation::Stop
-            });
-            *dialog_opt = Some(font_dialog);
+    // Set title
+    dialog.set_title("Select Font");
+
+    // Clone initial font for the async block
+    let initial = initial_font.cloned();
+
+    // Clone parent window reference for async block
+    let parent_window = parent.cloned();
+
+    // Spawn async font selection
+    gtk4::glib::MainContext::default().spawn_local(async move {
+        let result = dialog.choose_font_future(
+            parent_window.as_ref(),
+            initial.as_ref(),
+        ).await;
+
+        if let Ok(font_desc) = result {
+            on_selected(font_desc);
         }
-
-        let dialog = dialog_opt.as_ref().unwrap();
-
-        // Set parent window
-        if let Some(parent) = parent {
-            dialog.set_transient_for(Some(parent));
-            dialog.set_modal(true);
-        }
-
-        // Set initial font
-        if let Some(font_desc) = initial_font {
-            dialog.set_font_desc(font_desc);
-        }
-
-        // Store callback in Rc for the response handler
-        let callback = Rc::new(RefCell::new(Some(on_selected)));
-        let callback_clone = callback.clone();
-
-        // Store handler_id so we can disconnect it after use
-        let handler_id_cell: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> = Rc::new(RefCell::new(None));
-        let handler_id_for_response = handler_id_cell.clone();
-        let handler_id_for_hide = handler_id_cell.clone();
-
-        // Connect response handler (disconnect after use)
-        let dialog_weak_for_response = dialog.downgrade();
-        let handler_id = dialog.connect_response(move |dlg, response| {
-            if response == ResponseType::Ok {
-                if let Some(font_desc) = dlg.font_desc() {
-                    if let Some(cb) = callback_clone.borrow_mut().take() {
-                        cb(font_desc);
-                    }
-                }
-            }
-            dlg.set_visible(false);
-            // Disconnect ourselves after handling
-            if let Some(id) = handler_id_for_response.borrow_mut().take() {
-                if let Some(d) = dialog_weak_for_response.upgrade() {
-                    d.disconnect(id);
-                }
-            }
-        });
-
-        // Store the handler_id so it can be disconnected
-        *handler_id_cell.borrow_mut() = Some(handler_id);
-
-        // Also disconnect on hide (in case dialog is closed without response)
-        let dialog_weak = dialog.downgrade();
-        dialog.connect_hide(move |_| {
-            if let Some(id) = handler_id_for_hide.borrow_mut().take() {
-                if let Some(dlg) = dialog_weak.upgrade() {
-                    dlg.disconnect(id);
-                }
-            }
-        });
-
-        dialog.present();
     });
-}
-
-/// Check if the font cache has been warmed
-pub fn is_font_cache_warmed() -> bool {
-    FONT_CACHE_WARMED.load(Ordering::SeqCst)
 }
