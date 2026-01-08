@@ -3,7 +3,7 @@
 //! Provides a row of theme font toggle buttons (T1-T2) plus a custom font picker.
 //! T1/T2 controls font family from theme, size is always independent.
 
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::{ComboThemeConfig, FontSource};
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Button, Orientation, SpinButton, ToggleButton};
@@ -165,35 +165,28 @@ impl ThemeFontSelector {
                 let font_button_clone2 = font_button_for_click.clone();
                 let size_spin_clone2 = size_spin_for_click.clone();
 
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(new_font_desc) = result {
-                            let family = new_font_desc
-                                .family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
+                show_font_dialog(Some(&window), Some(&font_desc), move |new_font_desc| {
+                    let family = new_font_desc
+                        .family()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "sans-serif".to_string());
 
-                            *custom_family_clone2.borrow_mut() = family.clone();
-                            *theme_index_clone2.borrow_mut() = None;
+                    *custom_family_clone2.borrow_mut() = family.clone();
+                    *theme_index_clone2.borrow_mut() = None;
 
-                            // Deselect theme buttons
-                            for btn in &theme_buttons_clone2 {
-                                btn.set_active(false);
-                            }
-                            font_button_clone2.set_label(&family);
+                    // Deselect theme buttons
+                    for btn in &theme_buttons_clone2 {
+                        btn.set_active(false);
+                    }
+                    font_button_clone2.set_label(&family);
 
-                            if let Some(ref callback) = *on_change_clone2.borrow() {
-                                callback(FontSource::Custom {
-                                    family,
-                                    size: size_spin_clone2.value(),
-                                });
-                            }
-                        }
-                    },
-                );
+                    if let Some(ref callback) = *on_change_clone2.borrow() {
+                        callback(FontSource::Custom {
+                            family,
+                            size: size_spin_clone2.value(),
+                        });
+                    }
+                });
             }
         });
 

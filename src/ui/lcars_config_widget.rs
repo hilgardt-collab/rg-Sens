@@ -5,7 +5,7 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList, ScrolledWindow,
+    Scale, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -45,6 +45,10 @@ struct FrameWidgets {
 
 /// Holds references to Headers tab widgets for updating when config changes
 struct HeadersWidgets {
+    // Notebook for Top/Bottom tabs
+    headers_notebook: Notebook,
+    top_tab_label: Label,
+    bottom_tab_label: Label,
     // Top header
     top_show_check: CheckButton,
     top_text_entry: Entry,
@@ -54,6 +58,8 @@ struct HeadersWidgets {
     top_font_selector: Rc<ThemeFontSelector>,
     top_bold_check: CheckButton,
     top_align_dropdown: DropDown,
+    top_height_spin: SpinButton,
+    top_width_spin: SpinButton,
     // Bottom header
     bottom_show_check: CheckButton,
     bottom_text_entry: Entry,
@@ -63,13 +69,16 @@ struct HeadersWidgets {
     bottom_font_selector: Rc<ThemeFontSelector>,
     bottom_bold_check: CheckButton,
     bottom_align_dropdown: DropDown,
+    bottom_height_spin: SpinButton,
+    bottom_width_spin: SpinButton,
 }
 
 /// Holds references to Segments tab widgets for updating when config changes
 struct SegmentsWidgets {
     count_spin: SpinButton,
-    segment_frames: Rc<RefCell<Vec<gtk4::Frame>>>,
-    // Store segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
+    /// Notebook containing per-segment tabs
+    segments_notebook: Notebook,
+    /// Store segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
     segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>>,
 }
 
@@ -85,10 +94,8 @@ struct SplitWidgets {
     div_color_widget: Rc<ThemeColorSelector>,
     start_cap_dropdown: DropDown,
     end_cap_dropdown: DropDown,
-    /// Container for group size weight spinners (rebuilt when groups change)
-    group_weights_box: GtkBox,
-    /// Container for per-group item orientation dropdowns (rebuilt when groups change)
-    item_orientations_box: GtkBox,
+    /// Container for combined group settings (weight + orientation per group)
+    group_settings_box: GtkBox,
     /// Checkbox for syncing segments with groups
     sync_segments_check: CheckButton,
 }
@@ -213,6 +220,28 @@ impl LcarsConfigWidget {
         container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
+
+        // Connect extension dropdown to update headers tab visibility
+        {
+            let headers_widgets_clone = headers_widgets.clone();
+            if let Some(ref frame_w) = *frame_widgets.borrow() {
+                frame_w.ext_dropdown.connect_selected_notify(move |dropdown| {
+                    let ext_mode = match dropdown.selected() {
+                        0 => ExtensionMode::Top,
+                        1 => ExtensionMode::Bottom,
+                        2 => ExtensionMode::Both,
+                        _ => ExtensionMode::None,
+                    };
+                    if let Some(ref hw) = *headers_widgets_clone.borrow() {
+                        Self::update_headers_tab_visibility(
+                            &hw.top_tab_label,
+                            &hw.bottom_tab_label,
+                            ext_mode,
+                        );
+                    }
+                });
+            }
+        }
 
         Self {
             container,
@@ -422,13 +451,18 @@ impl LcarsConfigWidget {
         theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
         page.append(&theme_ref_section);
 
-        // Top Header section
-        let top_label = Label::new(Some("Top Header"));
-        top_label.set_halign(gtk4::Align::Start);
-        top_label.add_css_class("heading");
-        page.append(&top_label);
+        // Create notebook for Top/Bottom header tabs
+        let headers_notebook = Notebook::new();
+        headers_notebook.set_vexpand(true);
 
-        // Top header show toggle (replaces position dropdown)
+        // ===== TOP HEADER TAB =====
+        let top_page = GtkBox::new(Orientation::Vertical, 8);
+        top_page.set_margin_top(8);
+        top_page.set_margin_bottom(8);
+        top_page.set_margin_start(8);
+        top_page.set_margin_end(8);
+
+        // Top header show toggle
         let top_show_check = CheckButton::with_label("Show Top Header");
         top_show_check.set_active(config.borrow().frame.top_header.position == HeaderPosition::Top);
 
@@ -443,7 +477,7 @@ impl LcarsConfigWidget {
             };
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&top_show_check);
+        top_page.append(&top_show_check);
 
         // Top header text
         let top_text_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -453,7 +487,6 @@ impl LcarsConfigWidget {
         top_text_entry.set_hexpand(true);
         top_text_box.append(&top_text_entry);
 
-        // Copy/Paste text buttons
         let top_copy_text_btn = Button::with_label("Copy");
         let top_paste_text_btn = Button::with_label("Paste");
         top_text_box.append(&top_copy_text_btn);
@@ -467,7 +500,6 @@ impl LcarsConfigWidget {
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Copy text handler
         let top_text_entry_clone = top_text_entry.clone();
         top_copy_text_btn.connect_clicked(move |_| {
             let text = top_text_entry_clone.text().to_string();
@@ -476,7 +508,6 @@ impl LcarsConfigWidget {
             }
         });
 
-        // Paste text handler
         let top_text_entry_clone = top_text_entry.clone();
         top_paste_text_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -485,7 +516,7 @@ impl LcarsConfigWidget {
                 }
             }
         });
-        page.append(&top_text_box);
+        top_page.append(&top_text_box);
 
         // Top header shape
         let top_shape_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -510,7 +541,7 @@ impl LcarsConfigWidget {
             };
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&top_shape_box);
+        top_page.append(&top_shape_box);
 
         // Top header size percentages
         let top_size_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -541,7 +572,7 @@ impl LcarsConfigWidget {
             config_clone.borrow_mut().frame.top_header.width_percent = spin.value() / 100.0;
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&top_size_box);
+        top_page.append(&top_size_box);
 
         // Top header colors row
         let top_colors_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -576,9 +607,9 @@ impl LcarsConfigWidget {
                 cb();
             }
         });
-        page.append(&top_colors_box);
+        top_page.append(&top_colors_box);
 
-        // Top header font settings (with theme font selector)
+        // Top header font settings
         let top_font_box = GtkBox::new(Orientation::Horizontal, 6);
         top_font_box.append(&Label::new(Some("Font:")));
 
@@ -586,7 +617,6 @@ impl LcarsConfigWidget {
         top_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         top_font_box.append(top_font_selector.widget());
 
-        // Bold checkbox
         let top_bold_check = CheckButton::with_label("Bold");
         top_bold_check.set_active(config.borrow().frame.top_header.font_bold);
         top_font_box.append(&top_bold_check);
@@ -599,13 +629,11 @@ impl LcarsConfigWidget {
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Copy/Paste font buttons
         let top_copy_font_btn = Button::with_label("Copy");
         let top_paste_font_btn = Button::with_label("Paste");
         top_font_box.append(&top_copy_font_btn);
         top_font_box.append(&top_paste_font_btn);
 
-        // Copy font handler
         let config_clone = config.clone();
         top_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
@@ -614,7 +642,6 @@ impl LcarsConfigWidget {
             }
         });
 
-        // Paste font handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
@@ -629,7 +656,6 @@ impl LcarsConfigWidget {
             }
         });
 
-        // Font selector change handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
@@ -637,9 +663,9 @@ impl LcarsConfigWidget {
             config_clone.borrow_mut().frame.top_header.font = source;
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&top_font_box);
+        top_page.append(&top_font_box);
 
-        // Top header alignment (relative to side extension)
+        // Top header alignment
         let top_align_box = GtkBox::new(Orientation::Horizontal, 6);
         top_align_box.append(&Label::new(Some("Align (from sidebar):")));
         let top_align_list = StringList::new(&["Near", "Center", "Far"]);
@@ -664,18 +690,20 @@ impl LcarsConfigWidget {
             };
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&top_align_box);
+        top_page.append(&top_align_box);
 
-        // Separator
-        page.append(&gtk4::Separator::new(Orientation::Horizontal));
+        // Add top page to notebook
+        let top_tab_label = Label::new(Some("Top"));
+        let _top_page_num = headers_notebook.append_page(&top_page, Some(&top_tab_label));
 
-        // Bottom Header section
-        let bottom_label = Label::new(Some("Bottom Header"));
-        bottom_label.set_halign(gtk4::Align::Start);
-        bottom_label.add_css_class("heading");
-        page.append(&bottom_label);
+        // ===== BOTTOM HEADER TAB =====
+        let bottom_page = GtkBox::new(Orientation::Vertical, 8);
+        bottom_page.set_margin_top(8);
+        bottom_page.set_margin_bottom(8);
+        bottom_page.set_margin_start(8);
+        bottom_page.set_margin_end(8);
 
-        // Bottom header show toggle (replaces position dropdown)
+        // Bottom header show toggle
         let bottom_show_check = CheckButton::with_label("Show Bottom Header");
         bottom_show_check.set_active(config.borrow().frame.bottom_header.position == HeaderPosition::Bottom);
 
@@ -690,7 +718,7 @@ impl LcarsConfigWidget {
             };
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&bottom_show_check);
+        bottom_page.append(&bottom_show_check);
 
         // Bottom header text
         let bottom_text_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -700,7 +728,6 @@ impl LcarsConfigWidget {
         bottom_text_entry.set_hexpand(true);
         bottom_text_box.append(&bottom_text_entry);
 
-        // Copy/Paste text buttons
         let bottom_copy_text_btn = Button::with_label("Copy");
         let bottom_paste_text_btn = Button::with_label("Paste");
         bottom_text_box.append(&bottom_copy_text_btn);
@@ -714,7 +741,6 @@ impl LcarsConfigWidget {
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Copy text handler
         let bottom_text_entry_clone = bottom_text_entry.clone();
         bottom_copy_text_btn.connect_clicked(move |_| {
             let text = bottom_text_entry_clone.text().to_string();
@@ -723,7 +749,6 @@ impl LcarsConfigWidget {
             }
         });
 
-        // Paste text handler
         let bottom_text_entry_clone = bottom_text_entry.clone();
         bottom_paste_text_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -732,7 +757,7 @@ impl LcarsConfigWidget {
                 }
             }
         });
-        page.append(&bottom_text_box);
+        bottom_page.append(&bottom_text_box);
 
         // Bottom header shape
         let bottom_shape_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -757,7 +782,7 @@ impl LcarsConfigWidget {
             };
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&bottom_shape_box);
+        bottom_page.append(&bottom_shape_box);
 
         // Bottom header size percentages
         let bottom_size_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -788,7 +813,7 @@ impl LcarsConfigWidget {
             config_clone.borrow_mut().frame.bottom_header.width_percent = spin.value() / 100.0;
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&bottom_size_box);
+        bottom_page.append(&bottom_size_box);
 
         // Bottom header colors row
         let bottom_colors_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -823,9 +848,9 @@ impl LcarsConfigWidget {
                 cb();
             }
         });
-        page.append(&bottom_colors_box);
+        bottom_page.append(&bottom_colors_box);
 
-        // Bottom header font settings (with theme font selector)
+        // Bottom header font settings
         let bottom_font_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_font_box.append(&Label::new(Some("Font:")));
 
@@ -833,7 +858,6 @@ impl LcarsConfigWidget {
         bottom_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         bottom_font_box.append(bottom_font_selector.widget());
 
-        // Bold checkbox
         let bottom_bold_check = CheckButton::with_label("Bold");
         bottom_bold_check.set_active(config.borrow().frame.bottom_header.font_bold);
         bottom_font_box.append(&bottom_bold_check);
@@ -846,13 +870,11 @@ impl LcarsConfigWidget {
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
-        // Copy/Paste font buttons
         let bottom_copy_font_btn = Button::with_label("Copy");
         let bottom_paste_font_btn = Button::with_label("Paste");
         bottom_font_box.append(&bottom_copy_font_btn);
         bottom_font_box.append(&bottom_paste_font_btn);
 
-        // Copy font handler
         let config_clone = config.clone();
         bottom_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
@@ -861,7 +883,6 @@ impl LcarsConfigWidget {
             }
         });
 
-        // Paste font handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
@@ -876,7 +897,6 @@ impl LcarsConfigWidget {
             }
         });
 
-        // Font selector change handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
@@ -884,9 +904,9 @@ impl LcarsConfigWidget {
             config_clone.borrow_mut().frame.bottom_header.font = source;
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&bottom_font_box);
+        bottom_page.append(&bottom_font_box);
 
-        // Bottom header alignment (relative to side extension)
+        // Bottom header alignment
         let bottom_align_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_align_box.append(&Label::new(Some("Align (from sidebar):")));
         let bottom_align_list = StringList::new(&["Near", "Center", "Far"]);
@@ -911,10 +931,22 @@ impl LcarsConfigWidget {
             };
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
-        page.append(&bottom_align_box);
+        bottom_page.append(&bottom_align_box);
+
+        // Add bottom page to notebook
+        let bottom_tab_label = Label::new(Some("Bottom"));
+        let _bottom_page_num = headers_notebook.append_page(&bottom_page, Some(&bottom_tab_label));
+
+        // Set initial tab visibility based on extension mode
+        Self::update_headers_tab_visibility(&top_tab_label, &bottom_tab_label, config.borrow().frame.extension_mode);
+
+        page.append(&headers_notebook);
 
         // Store widget references for updating when config changes
         *headers_widgets_out.borrow_mut() = Some(HeadersWidgets {
+            headers_notebook: headers_notebook.clone(),
+            top_tab_label: top_tab_label.clone(),
+            bottom_tab_label: bottom_tab_label.clone(),
             top_show_check: top_show_check.clone(),
             top_text_entry: top_text_entry.clone(),
             top_shape_dropdown: top_shape_dropdown.clone(),
@@ -923,6 +955,8 @@ impl LcarsConfigWidget {
             top_font_selector: top_font_selector.clone(),
             top_bold_check: top_bold_check.clone(),
             top_align_dropdown: top_align_dropdown.clone(),
+            top_height_spin: top_height_spin.clone(),
+            top_width_spin: top_width_spin.clone(),
             bottom_show_check: bottom_show_check.clone(),
             bottom_text_entry: bottom_text_entry.clone(),
             bottom_shape_dropdown: bottom_shape_dropdown.clone(),
@@ -931,9 +965,24 @@ impl LcarsConfigWidget {
             bottom_font_selector: bottom_font_selector.clone(),
             bottom_bold_check: bottom_bold_check.clone(),
             bottom_align_dropdown: bottom_align_dropdown.clone(),
+            bottom_height_spin: bottom_height_spin.clone(),
+            bottom_width_spin: bottom_width_spin.clone(),
         });
 
         page
+    }
+
+    /// Update the visibility of header tabs based on extension mode.
+    /// - Top only: show only Top tab
+    /// - Bottom only: show only Bottom tab
+    /// - Both or None: show both tabs
+    fn update_headers_tab_visibility(top_tab_label: &Label, bottom_tab_label: &Label, extension_mode: ExtensionMode) {
+        let show_top = matches!(extension_mode, ExtensionMode::Top | ExtensionMode::Both | ExtensionMode::None);
+        let show_bottom = matches!(extension_mode, ExtensionMode::Bottom | ExtensionMode::Both | ExtensionMode::None);
+
+        // Set visibility on the tab labels themselves
+        top_tab_label.set_visible(show_top);
+        bottom_tab_label.set_visible(show_bottom);
     }
 
     fn create_segments_page(
@@ -964,246 +1013,56 @@ impl LcarsConfigWidget {
         count_box.append(&count_spin);
         page.append(&count_box);
 
-        // Scrolled area for segment configs
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_vexpand(true);
-        scrolled.set_min_content_height(200);
-
-        let segments_box = GtkBox::new(Orientation::Vertical, 8);
-        let segments_box_rc = Rc::new(segments_box);
-
-        // Create wrapper container to hold segment frames
-        let segment_frames: Rc<RefCell<Vec<gtk4::Frame>>> = Rc::new(RefCell::new(Vec::new()));
+        // Create notebook for per-segment tabs
+        let segments_notebook = Notebook::new();
+        segments_notebook.set_vexpand(true);
+        segments_notebook.set_scrollable(true);
 
         // Store per-segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
         let segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>> = Rc::new(RefCell::new(Vec::new()));
 
-        // Helper function to create a segment config widget
-        // Returns (frame, (label_entry, color_widget, label_color_widget, weight_spin, font_selector))
-        let create_segment_widget = {
-            let config = config.clone();
-            let on_change = on_change.clone();
-            let preview = preview.clone();
-            move |seg_idx: usize| -> (gtk4::Frame, (Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)) {
-                let seg_frame = gtk4::Frame::new(Some(&format!("Segment {}", seg_idx + 1)));
-                let seg_box = GtkBox::new(Orientation::Vertical, 4);
-                seg_box.set_margin_start(8);
-                seg_box.set_margin_end(8);
-                seg_box.set_margin_top(8);
-                seg_box.set_margin_bottom(8);
-
-                // Label
-                let label_box = GtkBox::new(Orientation::Horizontal, 6);
-                label_box.append(&Label::new(Some("Label:")));
-                let label_entry = Entry::new();
-                if let Some(seg) = config.borrow().frame.segments.get(seg_idx) {
-                    label_entry.set_text(&seg.label);
-                }
-                label_entry.set_hexpand(true);
-                label_box.append(&label_entry);
-
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                label_entry.connect_changed(move |entry| {
-                    let mut cfg = config_clone.borrow_mut();
-                    while cfg.frame.segments.len() <= seg_idx {
-                        cfg.frame.segments.push(SegmentConfig::default());
-                    }
-                    cfg.frame.segments[seg_idx].label = entry.text().to_string();
-                    drop(cfg);
-                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-                });
-                seg_box.append(&label_box);
-
-                // Colors row (segment color + label color)
-                let colors_box = GtkBox::new(Orientation::Horizontal, 12);
-                colors_box.append(&Label::new(Some("Segment:")));
-                let seg_color = config.borrow().frame.segments.get(seg_idx)
-                    .map(|s| s.color.clone())
-                    .unwrap_or_else(|| ColorSource::custom(Color::new(0.8, 0.4, 0.4, 1.0)));
-                let color_widget = Rc::new(ThemeColorSelector::new(seg_color));
-                color_widget.set_theme_config(config.borrow().frame.theme.clone());
-                colors_box.append(color_widget.widget());
-
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                color_widget.set_on_change(move |color_source| {
-                    let mut cfg = config_clone.borrow_mut();
-                    while cfg.frame.segments.len() <= seg_idx {
-                        cfg.frame.segments.push(SegmentConfig::default());
-                    }
-                    cfg.frame.segments[seg_idx].color = color_source;
-                    drop(cfg);
-                    preview_clone.queue_draw();
-                    if let Some(cb) = on_change_clone.borrow().as_ref() {
-                        cb();
-                    }
-                });
-
-                colors_box.append(&Label::new(Some("Label:")));
-                let label_color = config.borrow().frame.segments.get(seg_idx)
-                    .map(|s| s.label_color.clone())
-                    .unwrap_or_else(|| ColorSource::custom(Color::new(0.0, 0.0, 0.0, 1.0)));
-                let label_color_widget = Rc::new(ThemeColorSelector::new(label_color));
-                label_color_widget.set_theme_config(config.borrow().frame.theme.clone());
-                colors_box.append(label_color_widget.widget());
-
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                label_color_widget.set_on_change(move |color_source| {
-                    let mut cfg = config_clone.borrow_mut();
-                    while cfg.frame.segments.len() <= seg_idx {
-                        cfg.frame.segments.push(SegmentConfig::default());
-                    }
-                    cfg.frame.segments[seg_idx].label_color = color_source;
-                    drop(cfg);
-                    preview_clone.queue_draw();
-                    if let Some(cb) = on_change_clone.borrow().as_ref() {
-                        cb();
-                    }
-                });
-                seg_box.append(&colors_box);
-
-                // Weight
-                let weight_box = GtkBox::new(Orientation::Horizontal, 6);
-                weight_box.append(&Label::new(Some("Height Weight:")));
-                let weight_spin = SpinButton::with_range(0.1, 5.0, 0.1);
-                if let Some(seg) = config.borrow().frame.segments.get(seg_idx) {
-                    weight_spin.set_value(seg.height_weight);
-                } else {
-                    weight_spin.set_value(1.0);
-                }
-                weight_spin.set_hexpand(true);
-                weight_box.append(&weight_spin);
-
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                weight_spin.connect_value_changed(move |spin| {
-                    let mut cfg = config_clone.borrow_mut();
-                    while cfg.frame.segments.len() <= seg_idx {
-                        cfg.frame.segments.push(SegmentConfig::default());
-                    }
-                    cfg.frame.segments[seg_idx].height_weight = spin.value();
-                    drop(cfg);
-                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-                });
-                seg_box.append(&weight_box);
-
-                // Font settings (with theme font selector)
-                let font_box = GtkBox::new(Orientation::Horizontal, 6);
-                font_box.append(&Label::new(Some("Font:")));
-
-                let font_source = {
-                    let cfg = config.borrow();
-                    if let Some(seg) = cfg.frame.segments.get(seg_idx) {
-                        seg.font.clone()
-                    } else {
-                        FontSource::default()
-                    }
-                };
-
-                let font_selector = Rc::new(ThemeFontSelector::new(font_source));
-                font_selector.set_theme_config(config.borrow().frame.theme.clone());
-                font_box.append(font_selector.widget());
-
-                // Copy/Paste font buttons
-                let copy_font_btn = Button::with_label("Copy");
-                let paste_font_btn = Button::with_label("Paste");
-                font_box.append(&copy_font_btn);
-                font_box.append(&paste_font_btn);
-
-                // Copy font handler
-                let config_clone = config.clone();
-                copy_font_btn.connect_clicked(move |_| {
-                    let cfg = config_clone.borrow();
-                    if let Some(seg) = cfg.frame.segments.get(seg_idx) {
-                        if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                            clipboard.copy_font_source(seg.font.clone(), false, false);
-                        }
-                    }
-                });
-
-                // Paste font handler
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                let font_selector_clone = font_selector.clone();
-                paste_font_btn.connect_clicked(move |_| {
-                    if let Ok(clipboard) = CLIPBOARD.lock() {
-                        if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
-                            {
-                                let mut cfg = config_clone.borrow_mut();
-                                while cfg.frame.segments.len() <= seg_idx {
-                                    cfg.frame.segments.push(SegmentConfig::default());
-                                }
-                                cfg.frame.segments[seg_idx].font = source.clone();
-                            }
-                            font_selector_clone.set_source(source);
-                            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-                        }
-                    }
-                });
-
-                // Font selector change handler
-                let config_clone = config.clone();
-                let on_change_clone = on_change.clone();
-                let preview_clone = preview.clone();
-                font_selector.set_on_change(move |source| {
-                    {
-                        let mut cfg = config_clone.borrow_mut();
-                        while cfg.frame.segments.len() <= seg_idx {
-                            cfg.frame.segments.push(SegmentConfig::default());
-                        }
-                        cfg.frame.segments[seg_idx].font = source;
-                    }
-                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
-                });
-                seg_box.append(&font_box);
-
-                seg_frame.set_child(Some(&seg_box));
-                (seg_frame, (label_entry, color_widget.clone(), label_color_widget.clone(), weight_spin.clone(), font_selector.clone()))
-            }
-        };
-
-        // Create initial segment widgets based on current count
+        // Build initial segment tabs
         let initial_count = config.borrow().frame.segment_count as usize;
-        for i in 0..10 {
-            let (frame, widgets) = create_segment_widget(i);
-            frame.set_visible(i < initial_count);
-            segments_box_rc.append(&frame);
-            segment_frames.borrow_mut().push(frame);
-            segment_widgets.borrow_mut().push(widgets);
-        }
+        Self::rebuild_segment_tabs(
+            &segments_notebook,
+            initial_count,
+            config,
+            on_change,
+            preview,
+            &segment_widgets,
+        );
 
-        // Connect count spin to show/hide segment frames
-        let segment_frames_clone = segment_frames.clone();
+        // Connect count spin to rebuild segment tabs
+        let segments_notebook_clone = segments_notebook.clone();
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         let split_widgets_clone = split_widgets.clone();
+        let segment_widgets_clone = segment_widgets.clone();
         count_spin.connect_value_changed(move |spin| {
             let count = spin.value() as usize;
 
-            // Show/hide frames based on count
-            let frames = segment_frames_clone.borrow();
-            for (i, frame) in frames.iter().enumerate() {
-                frame.set_visible(i < count);
-            }
-
             // Update config
-            let mut cfg = config_clone.borrow_mut();
-            cfg.frame.segment_count = count as u32;
+            {
+                let mut cfg = config_clone.borrow_mut();
+                cfg.frame.segment_count = count as u32;
 
-            // Ensure we have enough segments in config
-            while cfg.frame.segments.len() < count {
-                cfg.frame.segments.push(SegmentConfig::default());
+                // Ensure we have enough segments in config
+                while cfg.frame.segments.len() < count {
+                    cfg.frame.segments.push(SegmentConfig::default());
+                }
             }
 
-            drop(cfg);
+            // Rebuild the segment tabs
+            Self::rebuild_segment_tabs(
+                &segments_notebook_clone,
+                count,
+                &config_clone,
+                &on_change_clone,
+                &preview_clone,
+                &segment_widgets_clone,
+            );
+
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
 
             // Update sync checkbox sensitivity
@@ -1212,17 +1071,239 @@ impl LcarsConfigWidget {
             }
         });
 
-        scrolled.set_child(Some(&*segments_box_rc));
-        page.append(&scrolled);
+        page.append(&segments_notebook);
 
         // Store widget references for updating when config changes
         *segments_widgets_out.borrow_mut() = Some(SegmentsWidgets {
             count_spin: count_spin.clone(),
-            segment_frames: segment_frames.clone(),
+            segments_notebook: segments_notebook.clone(),
             segment_widgets: segment_widgets.clone(),
         });
 
         page
+    }
+
+    /// Rebuild segment tabs in the notebook based on segment count
+    fn rebuild_segment_tabs(
+        notebook: &Notebook,
+        count: usize,
+        config: &Rc<RefCell<LcarsDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        segment_widgets: &Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>>,
+    ) {
+        // Clear existing tabs
+        while notebook.n_pages() > 0 {
+            notebook.remove_page(Some(0));
+        }
+        segment_widgets.borrow_mut().clear();
+
+        // Create tabs for each segment
+        for seg_idx in 0..count {
+            let (tab_content, widgets) = Self::create_segment_tab_content(seg_idx, config, on_change, preview);
+            let tab_label = Label::new(Some(&format!("Seg {}", seg_idx + 1)));
+            notebook.append_page(&tab_content, Some(&tab_label));
+            segment_widgets.borrow_mut().push(widgets);
+        }
+
+        // Show placeholder if no segments
+        if count == 0 {
+            let placeholder = GtkBox::new(Orientation::Vertical, 8);
+            placeholder.set_valign(gtk4::Align::Center);
+            placeholder.set_halign(gtk4::Align::Center);
+            let label = Label::new(Some("No segments configured.\nIncrease the segment count above to add segments."));
+            label.add_css_class("dim-label");
+            placeholder.append(&label);
+            notebook.append_page(&placeholder, Some(&Label::new(Some("Info"))));
+        }
+    }
+
+    /// Create content for a single segment tab
+    fn create_segment_tab_content(
+        seg_idx: usize,
+        config: &Rc<RefCell<LcarsDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+    ) -> (GtkBox, (Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)) {
+        let seg_box = GtkBox::new(Orientation::Vertical, 8);
+        seg_box.set_margin_start(12);
+        seg_box.set_margin_end(12);
+        seg_box.set_margin_top(12);
+        seg_box.set_margin_bottom(12);
+
+        // Label
+        let label_box = GtkBox::new(Orientation::Horizontal, 6);
+        label_box.append(&Label::new(Some("Label:")));
+        let label_entry = Entry::new();
+        if let Some(seg) = config.borrow().frame.segments.get(seg_idx) {
+            label_entry.set_text(&seg.label);
+        }
+        label_entry.set_hexpand(true);
+        label_box.append(&label_entry);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        label_entry.connect_changed(move |entry| {
+            let mut cfg = config_clone.borrow_mut();
+            while cfg.frame.segments.len() <= seg_idx {
+                cfg.frame.segments.push(SegmentConfig::default());
+            }
+            cfg.frame.segments[seg_idx].label = entry.text().to_string();
+            drop(cfg);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        seg_box.append(&label_box);
+
+        // Colors row (segment color + label color)
+        let colors_box = GtkBox::new(Orientation::Horizontal, 12);
+        colors_box.append(&Label::new(Some("Segment Color:")));
+        let seg_color = config.borrow().frame.segments.get(seg_idx)
+            .map(|s| s.color.clone())
+            .unwrap_or_else(|| ColorSource::custom(Color::new(0.8, 0.4, 0.4, 1.0)));
+        let color_widget = Rc::new(ThemeColorSelector::new(seg_color));
+        color_widget.set_theme_config(config.borrow().frame.theme.clone());
+        colors_box.append(color_widget.widget());
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        color_widget.set_on_change(move |color_source| {
+            let mut cfg = config_clone.borrow_mut();
+            while cfg.frame.segments.len() <= seg_idx {
+                cfg.frame.segments.push(SegmentConfig::default());
+            }
+            cfg.frame.segments[seg_idx].color = color_source;
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
+        });
+
+        colors_box.append(&Label::new(Some("Label Color:")));
+        let label_color = config.borrow().frame.segments.get(seg_idx)
+            .map(|s| s.label_color.clone())
+            .unwrap_or_else(|| ColorSource::custom(Color::new(0.0, 0.0, 0.0, 1.0)));
+        let label_color_widget = Rc::new(ThemeColorSelector::new(label_color));
+        label_color_widget.set_theme_config(config.borrow().frame.theme.clone());
+        colors_box.append(label_color_widget.widget());
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        label_color_widget.set_on_change(move |color_source| {
+            let mut cfg = config_clone.borrow_mut();
+            while cfg.frame.segments.len() <= seg_idx {
+                cfg.frame.segments.push(SegmentConfig::default());
+            }
+            cfg.frame.segments[seg_idx].label_color = color_source;
+            drop(cfg);
+            preview_clone.queue_draw();
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
+        });
+        seg_box.append(&colors_box);
+
+        // Weight
+        let weight_box = GtkBox::new(Orientation::Horizontal, 6);
+        weight_box.append(&Label::new(Some("Height Weight:")));
+        let weight_spin = SpinButton::with_range(0.1, 5.0, 0.1);
+        if let Some(seg) = config.borrow().frame.segments.get(seg_idx) {
+            weight_spin.set_value(seg.height_weight);
+        } else {
+            weight_spin.set_value(1.0);
+        }
+        weight_spin.set_hexpand(true);
+        weight_box.append(&weight_spin);
+
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        weight_spin.connect_value_changed(move |spin| {
+            let mut cfg = config_clone.borrow_mut();
+            while cfg.frame.segments.len() <= seg_idx {
+                cfg.frame.segments.push(SegmentConfig::default());
+            }
+            cfg.frame.segments[seg_idx].height_weight = spin.value();
+            drop(cfg);
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        seg_box.append(&weight_box);
+
+        // Font settings (with theme font selector)
+        let font_box = GtkBox::new(Orientation::Horizontal, 6);
+        font_box.append(&Label::new(Some("Font:")));
+
+        let font_source = {
+            let cfg = config.borrow();
+            if let Some(seg) = cfg.frame.segments.get(seg_idx) {
+                seg.font.clone()
+            } else {
+                FontSource::default()
+            }
+        };
+
+        let font_selector = Rc::new(ThemeFontSelector::new(font_source));
+        font_selector.set_theme_config(config.borrow().frame.theme.clone());
+        font_box.append(font_selector.widget());
+
+        // Copy/Paste font buttons
+        let copy_font_btn = Button::with_label("Copy");
+        let paste_font_btn = Button::with_label("Paste");
+        font_box.append(&copy_font_btn);
+        font_box.append(&paste_font_btn);
+
+        // Copy font handler
+        let config_clone = config.clone();
+        copy_font_btn.connect_clicked(move |_| {
+            let cfg = config_clone.borrow();
+            if let Some(seg) = cfg.frame.segments.get(seg_idx) {
+                if let Ok(mut clipboard) = CLIPBOARD.lock() {
+                    clipboard.copy_font_source(seg.font.clone(), false, false);
+                }
+            }
+        });
+
+        // Paste font handler
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        let font_selector_clone = font_selector.clone();
+        paste_font_btn.connect_clicked(move |_| {
+            if let Ok(clipboard) = CLIPBOARD.lock() {
+                if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
+                    {
+                        let mut cfg = config_clone.borrow_mut();
+                        while cfg.frame.segments.len() <= seg_idx {
+                            cfg.frame.segments.push(SegmentConfig::default());
+                        }
+                        cfg.frame.segments[seg_idx].font = source.clone();
+                    }
+                    font_selector_clone.set_source(source);
+                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+                }
+            }
+        });
+
+        // Font selector change handler
+        let config_clone = config.clone();
+        let on_change_clone = on_change.clone();
+        let preview_clone = preview.clone();
+        font_selector.set_on_change(move |source| {
+            {
+                let mut cfg = config_clone.borrow_mut();
+                while cfg.frame.segments.len() <= seg_idx {
+                    cfg.frame.segments.push(SegmentConfig::default());
+                }
+                cfg.frame.segments[seg_idx].font = source;
+            }
+            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+        });
+        seg_box.append(&font_box);
+
+        (seg_box, (label_entry, color_widget.clone(), label_color_widget.clone(), weight_spin.clone(), font_selector.clone()))
     }
 
     fn create_content_page(
@@ -1678,47 +1759,23 @@ impl LcarsConfigWidget {
         });
         page.append(&sync_segments_check);
 
-        // Group Sizes section header
-        let group_sizes_header = Label::new(Some("Group Sizes (relative weight)"));
-        group_sizes_header.set_halign(gtk4::Align::Start);
-        group_sizes_header.add_css_class("heading");
-        group_sizes_header.set_margin_top(12);
-        page.append(&group_sizes_header);
+        // Group Settings section header (combined weight + orientation per group)
+        let group_settings_header = Label::new(Some("Group Settings"));
+        group_settings_header.set_halign(gtk4::Align::Start);
+        group_settings_header.add_css_class("heading");
+        group_settings_header.set_margin_top(12);
+        page.append(&group_settings_header);
 
-        let group_sizes_info = Label::new(Some("Set relative size weight for each group. Higher weight = larger size."));
-        group_sizes_info.set_halign(gtk4::Align::Start);
-        group_sizes_info.add_css_class("dim-label");
-        page.append(&group_sizes_info);
+        let group_settings_info = Label::new(Some("Set weight (relative size) and item orientation for each group."));
+        group_settings_info.set_halign(gtk4::Align::Start);
+        group_settings_info.add_css_class("dim-label");
+        page.append(&group_settings_info);
 
-        // Container for group size weight spinners (rebuilt dynamically)
-        let group_weights_box = GtkBox::new(Orientation::Vertical, 4);
-        group_weights_box.set_margin_top(4);
-        Self::rebuild_group_weight_spinners(&group_weights_box, config, on_change, preview);
-        page.append(&group_weights_box);
-
-        // Item Orientations section header
-        let item_orient_header = Label::new(Some("Item Orientations"));
-        item_orient_header.set_halign(gtk4::Align::Start);
-        item_orient_header.add_css_class("heading");
-        item_orient_header.set_margin_top(12);
-        page.append(&item_orient_header);
-
-        let item_orient_info = Label::new(Some("Set item arrangement for each group. Default matches group layout."));
-        item_orient_info.set_halign(gtk4::Align::Start);
-        item_orient_info.add_css_class("dim-label");
-        page.append(&item_orient_info);
-
-        // Container for per-group item orientation dropdowns (rebuilt dynamically)
-        let item_orientations_box = GtkBox::new(Orientation::Vertical, 4);
-        item_orientations_box.set_margin_top(4);
-        combo_config_base::rebuild_item_orientation_dropdowns(
-            &item_orientations_box,
-            config,
-            |c: &mut LcarsDisplayConfig| &mut c.frame,
-            on_change,
-            preview,
-        );
-        page.append(&item_orientations_box);
+        // Container for combined group settings (rebuilt dynamically)
+        let group_settings_box = GtkBox::new(Orientation::Vertical, 4);
+        group_settings_box.set_margin_top(4);
+        Self::rebuild_group_settings_rows(&group_settings_box, config, on_change, preview);
+        page.append(&group_settings_box);
 
         // Store widget references for updating when config changes
         *split_widgets_out.borrow_mut() = Some(SplitWidgets {
@@ -1727,8 +1784,7 @@ impl LcarsConfigWidget {
             div_color_widget: div_color_widget.clone(),
             start_cap_dropdown: start_cap_dropdown.clone(),
             end_cap_dropdown: end_cap_dropdown.clone(),
-            group_weights_box: group_weights_box.clone(),
-            item_orientations_box: item_orientations_box.clone(),
+            group_settings_box: group_settings_box.clone(),
             sync_segments_check: sync_segments_check.clone(),
         });
 
@@ -1752,8 +1808,8 @@ impl LcarsConfigWidget {
         }
     }
 
-    /// Rebuild the group weight spinners based on current group count
-    fn rebuild_group_weight_spinners(
+    /// Rebuild combined group settings rows (weight + orientation per group)
+    fn rebuild_group_settings_rows(
         container: &GtkBox,
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -1766,6 +1822,7 @@ impl LcarsConfigWidget {
 
         let cfg = config.borrow();
         let group_count = cfg.frame.group_count as usize;
+        let default_orientation = cfg.frame.layout_orientation;
 
         if group_count == 0 {
             let placeholder = Label::new(Some("No groups configured. Add sources in the Data Source tab."));
@@ -1775,20 +1832,23 @@ impl LcarsConfigWidget {
             return;
         }
 
-        // Create a spinner for each group
+        // Create a combined row for each group: "Group N | Weight: [spin] | Horizontal [switch] Vertical"
         for group_idx in 0..group_count {
             let group_num = group_idx + 1;
-            let row = GtkBox::new(Orientation::Horizontal, 6);
+            let row = GtkBox::new(Orientation::Horizontal, 8);
 
-            let label = Label::new(Some(&format!("Group {} Weight:", group_num)));
-            label.set_width_chars(15);
-            row.append(&label);
+            // Group label
+            let group_label = Label::new(Some(&format!("Group {}", group_num)));
+            group_label.set_width_chars(8);
+            row.append(&group_label);
 
+            // Weight spinner
+            row.append(&Label::new(Some("Weight:")));
             let weight_spin = SpinButton::with_range(0.1, 10.0, 0.1);
             let current_weight = cfg.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
             weight_spin.set_value(current_weight);
             weight_spin.set_digits(1);
-            weight_spin.set_hexpand(true);
+            weight_spin.set_width_chars(5);
             row.append(&weight_spin);
 
             let config_clone = config.clone();
@@ -1796,13 +1856,59 @@ impl LcarsConfigWidget {
             let preview_clone = preview.clone();
             weight_spin.connect_value_changed(move |spin| {
                 let mut cfg = config_clone.borrow_mut();
-                // Ensure the weights vector is long enough
                 while cfg.frame.group_size_weights.len() <= group_idx {
                     cfg.frame.group_size_weights.push(1.0);
                 }
                 cfg.frame.group_size_weights[group_idx] = spin.value();
                 drop(cfg);
                 combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            });
+
+            // Separator
+            let sep = gtk4::Separator::new(Orientation::Vertical);
+            sep.set_margin_start(8);
+            sep.set_margin_end(8);
+            row.append(&sep);
+
+            // Orientation: "Horizontal [switch] Vertical"
+            // Switch OFF = Horizontal, ON = Vertical
+            let horiz_label = Label::new(Some("Horizontal"));
+            row.append(&horiz_label);
+
+            let orient_switch = gtk4::Switch::new();
+            // Determine current orientation for this group
+            let current_orient = cfg.frame.group_item_orientations.get(group_idx).copied();
+            let is_vertical = match current_orient {
+                Some(SplitOrientation::Vertical) => true,
+                Some(SplitOrientation::Horizontal) => false,
+                None => default_orientation == SplitOrientation::Vertical,
+            };
+            orient_switch.set_active(is_vertical);
+            orient_switch.set_valign(gtk4::Align::Center);
+            row.append(&orient_switch);
+
+            let vert_label = Label::new(Some("Vertical"));
+            row.append(&vert_label);
+
+            let config_clone = config.clone();
+            let on_change_clone = on_change.clone();
+            let preview_clone = preview.clone();
+            orient_switch.connect_state_set(move |_, active| {
+                let mut cfg = config_clone.borrow_mut();
+                let orientation = if active {
+                    SplitOrientation::Vertical
+                } else {
+                    SplitOrientation::Horizontal
+                };
+                // Ensure the orientations vector is long enough
+                let layout_orientation = cfg.frame.layout_orientation;
+                while cfg.frame.group_item_orientations.len() <= group_idx {
+                    cfg.frame.group_item_orientations.push(layout_orientation);
+                }
+                cfg.frame.group_item_orientations[group_idx] = orientation;
+                drop(cfg);
+                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+                gtk4::glib::Propagation::Proceed
             });
 
             container.append(&row);
@@ -1987,23 +2093,16 @@ impl LcarsConfigWidget {
         if let Some(ref widgets) = *self.segments_widgets.borrow() {
             widgets.count_spin.set_value(new_config.frame.segment_count as f64);
 
-            // Show/hide segment frames
-            let frames = widgets.segment_frames.borrow();
-            for (i, frame) in frames.iter().enumerate() {
-                frame.set_visible(i < new_config.frame.segment_count as usize);
-            }
-
-            // Update individual segment widgets
-            let segment_widgets = widgets.segment_widgets.borrow();
-            for (i, (label_entry, color_widget, label_color_widget, weight_spin, font_selector)) in segment_widgets.iter().enumerate() {
-                if let Some(seg) = new_config.frame.segments.get(i) {
-                    label_entry.set_text(&seg.label);
-                    color_widget.set_source(seg.color.clone());
-                    label_color_widget.set_source(seg.label_color.clone());
-                    weight_spin.set_value(seg.height_weight);
-                    font_selector.set_source(seg.font.clone());
-                }
-            }
+            // Rebuild segment tabs with new config
+            let count = new_config.frame.segment_count as usize;
+            Self::rebuild_segment_tabs(
+                &widgets.segments_notebook,
+                count,
+                &self.config,
+                &self.on_change,
+                &self.preview,
+                &widgets.segment_widgets,
+            );
         }
 
         // Update content widgets
@@ -2170,18 +2269,11 @@ impl LcarsConfigWidget {
             &self.theme_ref_refreshers,
         );
 
-        // Rebuild group weight spinners and update sync checkbox in Layout tab if available
+        // Rebuild combined group settings and update sync checkbox in Layout tab if available
         if let Some(ref widgets) = *self.split_widgets.borrow() {
-            Self::rebuild_group_weight_spinners(
-                &widgets.group_weights_box,
+            Self::rebuild_group_settings_rows(
+                &widgets.group_settings_box,
                 &self.config,
-                &self.on_change,
-                &self.preview,
-            );
-            combo_config_base::rebuild_item_orientation_dropdowns(
-                &widgets.item_orientations_box,
-                &self.config,
-                |c: &mut LcarsDisplayConfig| &mut c.frame,
                 &self.on_change,
                 &self.preview,
             );

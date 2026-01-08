@@ -14,7 +14,7 @@ use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, B
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::GradientEditor;
@@ -1082,19 +1082,13 @@ impl CoreBarsConfigWidget {
             let on_change_clone2 = on_change_clone.clone();
 
             if let Some(win) = window {
-                let font_dialog = shared_font_dialog();
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
-                        Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                            config_clone2.borrow_mut().label_font = family.clone();
-                            let size = size_spin.value();
-                            font_btn.set_label(&format!("{} {:.0}", family, size));
-                            if let Some(ref cb) = *on_change_clone2.borrow() {
-                                cb();
-                            }
-                        }
-                        Err(_) => {}
+                show_font_dialog(Some(&win), None, move |font_desc| {
+                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                    config_clone2.borrow_mut().label_font = family.clone();
+                    let size = size_spin.value();
+                    font_btn.set_label(&format!("{} {:.0}", family, size));
+                    if let Some(ref cb) = *on_change_clone2.borrow() {
+                        cb();
                     }
                 });
             }

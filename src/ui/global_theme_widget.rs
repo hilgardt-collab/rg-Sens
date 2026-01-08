@@ -1,7 +1,7 @@
 //! Widget for configuring the global theme (for non-combo panels)
 
 use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::GradientEditor;
 use gtk4::prelude::*;
@@ -198,23 +198,16 @@ impl GlobalThemeWidget {
                 if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
                     let current_font = config_for_cb.borrow().font1_family.clone();
                     let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                    shared_font_dialog().choose_font(
-                        Some(&window),
-                        Some(&font_desc),
-                        gtk4::gio::Cancellable::NONE,
-                        move |result| {
-                            if let Ok(font_desc) = result {
-                                let family = font_desc.family()
-                                    .map(|s| s.to_string())
-                                    .unwrap_or_else(|| "sans-serif".to_string());
-                                config_for_cb.borrow_mut().font1_family = family.clone();
-                                font_btn_for_cb.set_label(&family);
-                                if let Some(cb) = on_change_for_cb.borrow().as_ref() {
-                                    cb();
-                                }
-                            }
-                        },
-                    );
+                    show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
+                        let family = font_desc.family()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "sans-serif".to_string());
+                        config_for_cb.borrow_mut().font1_family = family.clone();
+                        font_btn_for_cb.set_label(&family);
+                        if let Some(cb) = on_change_for_cb.borrow().as_ref() {
+                            cb();
+                        }
+                    });
                 }
             });
         }
@@ -255,23 +248,16 @@ impl GlobalThemeWidget {
                 if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
                     let current_font = config_for_cb.borrow().font2_family.clone();
                     let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                    shared_font_dialog().choose_font(
-                        Some(&window),
-                        Some(&font_desc),
-                        gtk4::gio::Cancellable::NONE,
-                        move |result| {
-                            if let Ok(font_desc) = result {
-                                let family = font_desc.family()
-                                    .map(|s| s.to_string())
-                                    .unwrap_or_else(|| "sans-serif".to_string());
-                                config_for_cb.borrow_mut().font2_family = family.clone();
-                                font_btn_for_cb.set_label(&family);
-                                if let Some(cb) = on_change_for_cb.borrow().as_ref() {
-                                    cb();
-                                }
-                            }
-                        },
-                    );
+                    show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
+                        let family = font_desc.family()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "sans-serif".to_string());
+                        config_for_cb.borrow_mut().font2_family = family.clone();
+                        font_btn_for_cb.set_label(&family);
+                        if let Some(cb) = on_change_for_cb.borrow().as_ref() {
+                            cb();
+                        }
+                    });
                 }
             });
         }

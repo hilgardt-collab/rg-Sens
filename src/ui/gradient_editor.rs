@@ -716,6 +716,51 @@ impl GradientEditor {
     pub fn update_preview(&self) {
         self.preview.queue_draw();
     }
+
+    /// Update only the theme colors without replacing the entire theme config.
+    /// This preserves the gradient and font settings while updating C1-C4.
+    pub fn update_theme_colors(
+        &self,
+        color1: crate::ui::Color,
+        color2: crate::ui::Color,
+        color3: crate::ui::Color,
+        color4: crate::ui::Color,
+    ) {
+        // Get current theme or create default
+        let mut theme = self.theme_config.borrow().clone().unwrap_or_default();
+
+        // Check if colors actually changed
+        let colors_changed = theme.color1 != color1
+            || theme.color2 != color2
+            || theme.color3 != color3
+            || theme.color4 != color4;
+
+        if !colors_changed {
+            return;
+        }
+
+        // Update only the colors
+        theme.color1 = color1;
+        theme.color2 = color2;
+        theme.color3 = color3;
+        theme.color4 = color4;
+
+        // Store updated theme
+        *self.theme_config.borrow_mut() = Some(theme);
+        self.preview.queue_draw();
+
+        // Rebuild stops list to update ThemeColorSelectors with new theme
+        *self.is_updating.borrow_mut() = true;
+        Self::rebuild_stops_list(
+            &self.stops_listbox,
+            &self.stops,
+            &self.preview,
+            &self.on_change,
+            &self.theme_config,
+            &self.is_updating,
+        );
+        *self.is_updating.borrow_mut() = false;
+    }
 }
 
 impl Default for GradientEditor {

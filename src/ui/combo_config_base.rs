@@ -25,7 +25,7 @@ use crate::ui::{
     ArcConfigWidget, ColorButtonWidget, CoreBarsConfigWidget, GradientEditor, LazyBarConfigWidget,
     LazyGraphConfigWidget, LazyTextOverlayConfigWidget, SpeedometerConfigWidget, StaticConfigWidget,
 };
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 
 /// Trait for combo panel frame configurations that support theming
 pub trait ThemedFrameConfig {
@@ -231,19 +231,13 @@ where
     page.append(gradient_editor.widget());
 
     // Helper to sync gradient editor's theme colors
+    // Uses update_theme_colors to preserve gradient/font settings while updating C1-C4
     fn sync_gradient_theme(
         gradient_editor: &GradientEditor,
         colors: &Rc<RefCell<(crate::ui::Color, crate::ui::Color, crate::ui::Color, crate::ui::Color)>>,
     ) {
         let (c1, c2, c3, c4) = *colors.borrow();
-        let theme = ComboThemeConfig {
-            color1: c1,
-            color2: c2,
-            color3: c3,
-            color4: c4,
-            ..Default::default()
-        };
-        gradient_editor.set_theme_config(theme);
+        gradient_editor.update_theme_colors(c1, c2, c3, c4);
     }
 
     // Connect color widget callbacks
@@ -338,22 +332,15 @@ where
             if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
                 let current_font = font_btn.label().map(|s| s.to_string()).unwrap_or_default();
                 let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            let family = font_desc.family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
-                            font_btn.set_label(&family);
-                            let family_clone = family.clone();
-                            on_theme_change(Box::new(move |t| t.font1_family = family_clone));
-                            on_redraw();
-                        }
-                    },
-                );
+                show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
+                    let family = font_desc.family()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "sans-serif".to_string());
+                    font_btn.set_label(&family);
+                    let family_clone = family.clone();
+                    on_theme_change(Box::new(move |t| t.font1_family = family_clone));
+                    on_redraw();
+                });
             }
         });
     }
@@ -393,22 +380,15 @@ where
             if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
                 let current_font = font_btn.label().map(|s| s.to_string()).unwrap_or_default();
                 let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-                shared_font_dialog().choose_font(
-                    Some(&window),
-                    Some(&font_desc),
-                    gtk4::gio::Cancellable::NONE,
-                    move |result| {
-                        if let Ok(font_desc) = result {
-                            let family = font_desc.family()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "sans-serif".to_string());
-                            font_btn.set_label(&family);
-                            let family_clone = family.clone();
-                            on_theme_change(Box::new(move |t| t.font2_family = family_clone));
-                            on_redraw();
-                        }
-                    },
-                );
+                show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
+                    let family = font_desc.family()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "sans-serif".to_string());
+                    font_btn.set_label(&family);
+                    let family_clone = family.clone();
+                    on_theme_change(Box::new(move |t| t.font2_family = family_clone));
+                    on_redraw();
+                });
             }
         });
     }

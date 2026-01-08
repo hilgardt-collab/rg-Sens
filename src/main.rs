@@ -252,7 +252,8 @@ fn build_ui(app: &Application) {
     // Apply system color scheme (dark/light mode)
     theme::apply_system_color_scheme();
 
-    // Pre-warm font dialog cache (loads system fonts once at startup)
+    // Pre-warm font cache and dialog (loads system fonts once at startup)
+    rg_sens::ui::warm_font_cache();
     rg_sens::ui::init_shared_font_dialog();
 
     // Load user colors for color picker

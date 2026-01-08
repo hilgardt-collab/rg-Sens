@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyle};
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::BackgroundConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::theme_color_selector::ThemeColorSelector;
@@ -667,17 +667,11 @@ impl ClockAnalogConfigWidget {
             let size_spin = icon_size_spin_clone.clone();
 
             if let Some(win) = window {
-                let font_dialog = shared_font_dialog();
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
-                        Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Noto Color Emoji".to_string());
-                            config_clone.borrow_mut().icon_font = family.clone();
-                            let size_pct = size_spin.value();
-                            font_btn.set_label(&format!("{} {:.0}%", family, size_pct));
-                        }
-                        Err(_) => {} // User cancelled
-                    }
+                show_font_dialog(Some(&win), None, move |font_desc| {
+                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Noto Color Emoji".to_string());
+                    config_clone.borrow_mut().icon_font = family.clone();
+                    let size_pct = size_spin.value();
+                    font_btn.set_label(&format!("{} {:.0}%", family, size_pct));
                 });
             }
         });

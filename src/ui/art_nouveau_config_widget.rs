@@ -10,7 +10,7 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::art_nouveau_display::{
     render_art_nouveau_frame, BorderStyle, CornerStyle, BackgroundPattern,
@@ -611,22 +611,15 @@ impl ArtNouveauConfigWidget {
             let font_btn_for_cb = font1_btn_clone.clone();
             let current_font = config_clone.borrow().frame.theme.font1_family.clone();
             let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-            shared_font_dialog().choose_font(
-                Some(&window),
-                Some(&font_desc),
-                gtk4::gio::Cancellable::NONE,
-                move |result| {
-                    if let Ok(font_desc) = result {
-                        let family = font_desc.family()
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| "sans-serif".to_string());
-                        config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
-                        font_btn_for_cb.set_label(&family);
-                        combo_config_base::refresh_theme_refs(&refreshers_for_cb);
-                        combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                    }
-                },
-            );
+            show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
+                let family = font_desc.family()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "sans-serif".to_string());
+                config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
+                font_btn_for_cb.set_label(&family);
+                combo_config_base::refresh_theme_refs(&refreshers_for_cb);
+                combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
+            });
         });
 
         let config_clone = config.clone();
@@ -667,22 +660,15 @@ impl ArtNouveauConfigWidget {
             let font_btn_for_cb = font2_btn_clone.clone();
             let current_font = config_clone.borrow().frame.theme.font2_family.clone();
             let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
-            shared_font_dialog().choose_font(
-                Some(&window),
-                Some(&font_desc),
-                gtk4::gio::Cancellable::NONE,
-                move |result| {
-                    if let Ok(font_desc) = result {
-                        let family = font_desc.family()
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| "sans-serif".to_string());
-                        config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
-                        font_btn_for_cb.set_label(&family);
-                        combo_config_base::refresh_theme_refs(&refreshers_for_cb);
-                        combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
-                    }
-                },
-            );
+            show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
+                let family = font_desc.family()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "sans-serif".to_string());
+                config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
+                font_btn_for_cb.set_label(&family);
+                combo_config_base::refresh_theme_refs(&refreshers_for_cb);
+                combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
+            });
         });
 
         let config_clone = config.clone();

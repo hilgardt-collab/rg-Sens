@@ -980,26 +980,19 @@ impl SpeedometerConfigWidget {
             let size_spin_clone2 = size_spin_clone_font.clone();
 
             // Use callback-based API for font selection with shared dialog
-            crate::ui::shared_font_dialog::shared_font_dialog().choose_font(
-                window.as_ref(),
-                Some(&current_font),
-                gtk4::gio::Cancellable::NONE,
-                move |result| {
-                    if let Ok(font_desc) = result {
-                        // Extract family and size from font description
-                        let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
-                        let size = font_desc.size() as f64 / gtk4::pango::SCALE as f64;
+            crate::ui::shared_font_dialog::show_font_dialog(window.as_ref(), Some(&current_font), move |font_desc| {
+                // Extract family and size from font description
+                let family = font_desc.family().map(|s| s.to_string()).unwrap_or_else(|| "Sans".to_string());
+                let size = font_desc.size() as f64 / gtk4::pango::SCALE as f64;
 
-                        config_clone2.borrow_mut().tick_label_config.font_family = family.clone();
-                        config_clone2.borrow_mut().tick_label_config.font_size = size;
+                config_clone2.borrow_mut().tick_label_config.font_family = family.clone();
+                config_clone2.borrow_mut().tick_label_config.font_size = size;
 
-                        // Update button label and size spinner
-                        font_button_clone2.set_label(&format!("{} {:.0}", family, size));
-                        size_spin_clone2.set_value(size);
-                        Self::queue_preview_redraw(&preview_clone2, &on_change_clone2);
-                    }
-                },
-            );
+                // Update button label and size spinner
+                font_button_clone2.set_label(&format!("{} {:.0}", family, size));
+                size_spin_clone2.set_value(size);
+                Self::queue_preview_redraw(&preview_clone2, &on_change_clone2);
+            });
         });
 
         // Label color - using ThemeColorSelector

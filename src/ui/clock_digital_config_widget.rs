@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use crate::displayers::{DigitalClockConfig, DigitalStyle};
 use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::shared_font_dialog::shared_font_dialog;
+use crate::ui::shared_font_dialog::show_font_dialog;
 
 /// Widget for configuring Digital Clock displayer
 pub struct ClockDigitalConfigWidget {
@@ -328,17 +328,11 @@ impl ClockDigitalConfigWidget {
             let size_spin = time_size_spin_clone.clone();
 
             if let Some(win) = window {
-                let font_dialog = shared_font_dialog();
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
-                        Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Monospace".to_string());
-                            config_clone.borrow_mut().time_font = family.clone();
-                            let size = size_spin.value();
-                            font_btn.set_label(&format!("{} {:.0}", family, size));
-                        }
-                        Err(_) => {} // User cancelled
-                    }
+                show_font_dialog(Some(&win), None, move |font_desc| {
+                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Monospace".to_string());
+                    config_clone.borrow_mut().time_font = family.clone();
+                    let size = size_spin.value();
+                    font_btn.set_label(&format!("{} {:.0}", family, size));
                 });
             }
         });
@@ -422,17 +416,11 @@ impl ClockDigitalConfigWidget {
             let size_spin = date_size_spin_clone.clone();
 
             if let Some(win) = window {
-                let font_dialog = shared_font_dialog();
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
-                        Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                            config_clone.borrow_mut().date_font = family.clone();
-                            let size = size_spin.value();
-                            font_btn.set_label(&format!("{} {:.0}", family, size));
-                        }
-                        Err(_) => {} // User cancelled
-                    }
+                show_font_dialog(Some(&win), None, move |font_desc| {
+                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                    config_clone.borrow_mut().date_font = family.clone();
+                    let size = size_spin.value();
+                    font_btn.set_label(&format!("{} {:.0}", family, size));
                 });
             }
         });
@@ -540,17 +528,11 @@ impl ClockDigitalConfigWidget {
             let size_spin = icon_size_spin_clone.clone();
 
             if let Some(win) = window {
-                let font_dialog = shared_font_dialog();
-                gtk4::glib::MainContext::default().spawn_local(async move {
-                    match font_dialog.choose_font_future(Some(&win), None::<&gtk4::pango::FontDescription>).await {
-                        Ok(font_desc) => {
-                            let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
-                            config_clone.borrow_mut().icon_font = family.clone();
-                            let size_px = size_spin.value();
-                            font_btn.set_label(&format!("{} {:.0}px", family, size_px));
-                        }
-                        Err(_) => {} // User cancelled
-                    }
+                show_font_dialog(Some(&win), None, move |font_desc| {
+                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                    config_clone.borrow_mut().icon_font = family.clone();
+                    let size_px = size_spin.value();
+                    font_btn.set_label(&format!("{} {:.0}px", family, size_px));
                 });
             }
         });
