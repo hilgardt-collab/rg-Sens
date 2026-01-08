@@ -71,8 +71,9 @@ pub mod art_nouveau_display;
 mod art_nouveau_config_widget;
 pub mod combo_config_base;
 pub mod theme;
-pub mod css_template_display;
-mod css_template_config_widget;
+pub mod css_template_display;  // Config types always available for serialization
+#[cfg(feature = "webkit")]
+mod css_template_config_widget;  // Config widget only when webkit is available
 mod theme_color_selector;
 mod theme_font_selector;
 pub mod window_settings_dialog;
@@ -183,7 +184,30 @@ pub use art_nouveau_config_widget::ArtNouveauConfigWidget;
 pub use theme_color_selector::ThemeColorSelector;
 pub use theme_font_selector::ThemeFontSelector;
 pub use css_template_display::{CssTemplateDisplayConfig, PlaceholderMapping};
+#[cfg(feature = "webkit")]
 pub use css_template_config_widget::CssTemplateConfigWidget;
+
+// Stub type when webkit is disabled - provides same interface but no functionality
+#[cfg(not(feature = "webkit"))]
+pub struct CssTemplateConfigWidget {
+    widget: gtk4::Box,
+}
+
+#[cfg(not(feature = "webkit"))]
+impl CssTemplateConfigWidget {
+    pub fn new() -> Self {
+        use gtk4::prelude::*;
+        let widget = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        let label = gtk4::Label::new(Some("CSS Template requires webkit feature"));
+        widget.append(&label);
+        Self { widget }
+    }
+    pub fn widget(&self) -> &gtk4::Box { &self.widget }
+    pub fn set_config(&self, _config: &CssTemplateDisplayConfig) {}
+    pub fn get_config(&self) -> CssTemplateDisplayConfig { CssTemplateDisplayConfig::default() }
+    pub fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
+    pub fn set_on_change<F: Fn() + 'static>(&self, _f: F) {}
+}
 
 // Dialog close functions
 pub use grid_properties_dialog::close_panel_properties_dialog;
