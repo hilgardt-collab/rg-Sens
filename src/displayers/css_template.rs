@@ -210,9 +210,12 @@ impl Displayer for CssTemplateDisplayer {
             }
         }
 
-        // Set up file watcher for hot-reload using atomic flag
+        // Set up file watcher for hot-reload using atomic flags
         let reload_flag = Arc::new(AtomicBool::new(false));
         let reload_flag_writer = reload_flag.clone();
+        // Stop flag to terminate the watcher thread when widget is destroyed
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        let stop_flag_writer = stop_flag.clone();
         let watcher_data = self.data.clone();
 
         // Spawn file watcher in a separate thread
@@ -260,10 +263,13 @@ impl Displayer for CssTemplateDisplayer {
                 }
             }
 
-            // Keep the watcher alive
-            loop {
-                std::thread::sleep(Duration::from_secs(60));
+            // Keep the watcher alive until stop flag is set
+            // Check every second instead of every 60 seconds for faster cleanup
+            while !stop_flag_writer.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_secs(1));
             }
+            log::debug!("CSS template file watcher thread stopped");
+            // Watcher is dropped here, releasing file handles
         });
 
         // Set up periodic check for reload and value updates
@@ -271,8 +277,11 @@ impl Displayer for CssTemplateDisplayer {
             let data_clone = self.data.clone();
             let webview_weak = webview.downgrade();
             let reload_flag_reader = reload_flag;
+            let stop_flag_setter = stop_flag;
             move || {
                 let Some(webview) = webview_weak.upgrade() else {
+                    // Widget is destroyed - signal the file watcher thread to stop
+                    stop_flag_setter.store(true, Ordering::SeqCst);
                     return glib::ControlFlow::Break;
                 };
 
