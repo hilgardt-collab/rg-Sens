@@ -252,6 +252,9 @@ fn build_ui(app: &Application) {
     // Apply system color scheme (dark/light mode)
     theme::apply_system_color_scheme();
 
+    // Pre-warm font dialog cache (loads system fonts once at startup)
+    rg_sens::ui::init_shared_font_dialog();
+
     // Load user colors for color picker
     if let Err(e) = rg_sens::ui::custom_color_picker::CustomColorPicker::load_colors() {
         warn!("Failed to load user colors: {}", e);

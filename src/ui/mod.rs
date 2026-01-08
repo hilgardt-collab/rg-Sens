@@ -38,6 +38,7 @@ pub mod graph_display;
 mod graph_config_widget;
 pub mod text_renderer;
 mod shared_font_dialog;
+pub use shared_font_dialog::init_shared_font_dialog;
 pub mod render_cache;
 pub mod clock_display;
 pub mod lcars_display;
