@@ -532,7 +532,15 @@ impl ArtNouveauConfigWidget {
                 if let Some(ref editor) = *gradient_editor_for_preset_clone.borrow() {
                     editor.set_gradient_source_config(&preset_theme.gradient);
                     editor.set_theme_config(preset_theme.clone());
+                    // Also explicitly update the gradient editor's internal theme colors
+                    editor.update_theme_colors(
+                        preset_theme.color1,
+                        preset_theme.color2,
+                        preset_theme.color3,
+                        preset_theme.color4,
+                    );
                 }
+                // Refresh all theme-linked widgets (theme reference section, etc.)
                 combo_config_base::refresh_theme_refs(&refreshers_clone);
                 combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
             }

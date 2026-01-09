@@ -308,14 +308,12 @@ impl SynthwaveConfigWidget {
                 cfg.frame.theme.color4 = bg_top; // Use background top color as highlight
             }
 
-            // Update color widget displays
-            common_for_scheme.color1_widget.set_color(primary);
-            common_for_scheme.color2_widget.set_color(secondary);
-            common_for_scheme.color3_widget.set_color(accent);
-            common_for_scheme.color4_widget.set_color(bg_top);
+            // Update all theme color widgets and internal state using the common helper
+            common_for_scheme.apply_theme_colors(primary, secondary, accent, bg_top);
 
-            combo_config_base::queue_redraw(&preview_scheme, &on_change_scheme);
+            // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_scheme);
+            combo_config_base::queue_redraw(&preview_scheme, &on_change_scheme);
         });
 
         // Effects section (Neon glow - Synthwave-specific)
@@ -1566,11 +1564,7 @@ impl SynthwaveConfigWidget {
         // Update UI widgets
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
             widgets.color_scheme_dropdown.set_selected(color_scheme_idx);
-            widgets.common.color1_widget.set_color(theme_color1);
-            widgets.common.color2_widget.set_color(theme_color2);
-            widgets.common.color3_widget.set_color(theme_color3);
-            widgets.common.color4_widget.set_color(theme_color4);
-            // Update gradient editor with theme colors AND gradient config
+            // Apply the complete theme using the common helper
             let full_theme = crate::ui::theme::ComboThemeConfig {
                 color1: theme_color1,
                 color2: theme_color2,
@@ -1582,12 +1576,7 @@ impl SynthwaveConfigWidget {
                 font2_family: theme_font2_family.clone(),
                 font2_size: theme_font2_size,
             };
-            widgets.common.gradient_editor.set_theme_config(full_theme);
-            widgets.common.gradient_editor.set_gradient_source_config(&theme_gradient);
-            widgets.common.font1_btn.set_label(&theme_font1_family);
-            widgets.common.font1_size_spin.set_value(theme_font1_size);
-            widgets.common.font2_btn.set_label(&theme_font2_family);
-            widgets.common.font2_size_spin.set_value(theme_font2_size);
+            widgets.common.apply_theme_preset(&full_theme);
             widgets.glow_scale.set_value(neon_glow);
         }
 

@@ -18,7 +18,7 @@ use crate::ui::combo_config_base::LayoutFrameConfig;
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
-use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph};
+use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph_with_theme};
 use crate::ui::arc_display::ArcDisplayConfig;
 use crate::ui::speedometer_display::SpeedometerConfig;
 
@@ -1773,6 +1773,9 @@ pub fn calculate_item_layouts_with_orientation(
 }
 
 /// Render a graph content item using the graph_display module
+///
+/// The `theme` parameter allows passing the panel's current theme for color resolution,
+/// ensuring graph colors update when panel theme colors change.
 pub fn render_content_graph(
     cr: &cairo::Context,
     x: f64,
@@ -1780,6 +1783,7 @@ pub fn render_content_graph(
     w: f64,
     h: f64,
     config: &GraphDisplayConfig,
+    theme: &ComboThemeConfig,
     data: &VecDeque<DataPoint>,
     source_values: &HashMap<String, serde_json::Value>,
 ) -> anyhow::Result<()> {
@@ -1800,8 +1804,8 @@ pub fn render_content_graph(
     cr.save()?;
     cr.translate(x, y);
 
-    // Call the graph_display render function (no scroll animation in LCARS mode)
-    render_graph(cr, config, data, source_values, w, h, 0.0)?;
+    // Call the graph_display render function with the panel's theme for color resolution
+    render_graph_with_theme(cr, config, data, source_values, w, h, 0.0, Some(theme))?;
 
     cr.restore()?;
     Ok(())

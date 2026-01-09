@@ -685,6 +685,48 @@ impl ComboThemeConfig {
         }
     }
 
+    /// Default theme for Material Design panels (Teal variant)
+    pub fn default_for_material_teal() -> Self {
+        Self {
+            color1: Color::new(0.0, 0.588, 0.533, 1.0),   // Teal 500 #009688 - Primary
+            color2: Color::new(0.0, 0.447, 0.420, 1.0),   // Teal 700 #00796b - Secondary
+            color3: Color::new(1.0, 0.341, 0.133, 1.0),   // Deep Orange #ff5722 - Accent
+            color4: Color::new(0.459, 0.459, 0.459, 1.0), // Gray #757575 - Highlight
+            gradient: LinearGradientSourceConfig {
+                angle: 180.0,
+                stops: vec![
+                    ColorStopSource::custom(0.0, Color::new(0.878, 0.949, 0.945, 1.0)), // Teal 50 #e0f2f1
+                    ColorStopSource::custom(1.0, Color::new(0.757, 0.890, 0.882, 1.0)), // Teal 100 #b2dfdb
+                ],
+            },
+            font1_family: "Roboto".to_string(),
+            font1_size: 14.0,
+            font2_family: "Roboto".to_string(),
+            font2_size: 12.0,
+        }
+    }
+
+    /// Default theme for Material Design panels (Purple variant)
+    pub fn default_for_material_purple() -> Self {
+        Self {
+            color1: Color::new(0.404, 0.227, 0.718, 1.0), // Deep Purple 500 #673ab7 - Primary
+            color2: Color::new(0.482, 0.416, 0.882, 1.0), // Deep Purple 300 #7b6ae1 - Secondary
+            color3: Color::new(0.0, 0.898, 0.694, 1.0),   // Teal A400 #00e5b1 - Accent
+            color4: Color::new(0.620, 0.620, 0.620, 1.0), // Gray 500 #9e9e9e - Highlight
+            gradient: LinearGradientSourceConfig {
+                angle: 180.0,
+                stops: vec![
+                    ColorStopSource::custom(0.0, Color::new(0.188, 0.141, 0.251, 1.0)), // Deep Purple 900 #311b40
+                    ColorStopSource::custom(1.0, Color::new(0.122, 0.098, 0.176, 1.0)), // Darker purple #1f192d
+                ],
+            },
+            font1_family: "Roboto".to_string(),
+            font1_size: 14.0,
+            font2_family: "Roboto".to_string(),
+            font2_size: 12.0,
+        }
+    }
+
     /// Default theme for Industrial panels
     pub fn default_for_industrial() -> Self {
         Self {

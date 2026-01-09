@@ -61,6 +61,10 @@ pub enum ThemeVariant {
     Light,
     /// Dark theme (dark gray cards on darker background)
     Dark,
+    /// Teal theme (teal accent on light background)
+    Teal,
+    /// Purple theme (deep purple accent on dark background)
+    Purple,
 }
 
 /// Divider style between groups
@@ -327,24 +331,24 @@ impl MaterialFrameConfig {
     /// Get the surface color based on current theme variant
     pub fn surface_color(&self) -> Color {
         match self.theme_variant {
-            ThemeVariant::Light => self.surface_color_light,
-            ThemeVariant::Dark => self.surface_color_dark,
+            ThemeVariant::Light | ThemeVariant::Teal => self.surface_color_light,
+            ThemeVariant::Dark | ThemeVariant::Purple => self.surface_color_dark,
         }
     }
 
     /// Get the background color based on current theme variant
     pub fn background_color(&self) -> Color {
         match self.theme_variant {
-            ThemeVariant::Light => self.background_color_light,
-            ThemeVariant::Dark => self.background_color_dark,
+            ThemeVariant::Light | ThemeVariant::Teal => self.background_color_light,
+            ThemeVariant::Dark | ThemeVariant::Purple => self.background_color_dark,
         }
     }
 
     /// Get the text color based on current theme variant
     pub fn text_color(&self) -> Color {
         match self.theme_variant {
-            ThemeVariant::Light => self.text_color_light,
-            ThemeVariant::Dark => self.text_color_dark,
+            ThemeVariant::Light | ThemeVariant::Teal => self.text_color_light,
+            ThemeVariant::Dark | ThemeVariant::Purple => self.text_color_dark,
         }
     }
 

@@ -153,6 +153,7 @@ where
                     item_w,
                     item_h,
                     &item_config.graph_config,
+                    params.theme,
                     history,
                     &slot_values,
                 ) {

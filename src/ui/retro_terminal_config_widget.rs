@@ -857,14 +857,15 @@ impl RetroTerminalConfigWidget {
                 cfg.frame.theme.color4 = theme_colors[3];
             }
 
-            // Update the theme color widgets
-            common_for_phosphor.color1_widget.set_color(theme_colors[0]);
-            common_for_phosphor.color2_widget.set_color(theme_colors[1]);
-            common_for_phosphor.color3_widget.set_color(theme_colors[2]);
-            common_for_phosphor.color4_widget.set_color(theme_colors[3]);
-            common_for_phosphor.gradient_editor.set_theme_config(config_clone.borrow().frame.theme.clone());
+            // Update all theme color widgets and internal state using the common helper
+            common_for_phosphor.apply_theme_colors(
+                theme_colors[0],
+                theme_colors[1],
+                theme_colors[2],
+                theme_colors[3],
+            );
 
-            // Refresh all theme-linked widgets
+            // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&theme_ref_refreshers_clone);
 
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
@@ -892,14 +893,15 @@ impl RetroTerminalConfigWidget {
                 cfg.frame.theme.color4 = theme_colors[3];
             }
 
-            // Update the theme color widgets
-            common_for_custom.color1_widget.set_color(theme_colors[0]);
-            common_for_custom.color2_widget.set_color(theme_colors[1]);
-            common_for_custom.color3_widget.set_color(theme_colors[2]);
-            common_for_custom.color4_widget.set_color(theme_colors[3]);
-            common_for_custom.gradient_editor.set_theme_config(config_clone.borrow().frame.theme.clone());
+            // Update all theme color widgets and internal state using the common helper
+            common_for_custom.apply_theme_colors(
+                theme_colors[0],
+                theme_colors[1],
+                theme_colors[2],
+                theme_colors[3],
+            );
 
-            // Refresh all theme-linked widgets
+            // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&theme_ref_refreshers_clone);
 
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
@@ -946,17 +948,9 @@ impl RetroTerminalConfigWidget {
                 _ => return,
             };
             config_for_preset.borrow_mut().frame.theme = theme.clone();
-            // Update UI widgets
-            common_for_preset.color1_widget.set_color(theme.color1);
-            common_for_preset.color2_widget.set_color(theme.color2);
-            common_for_preset.color3_widget.set_color(theme.color3);
-            common_for_preset.color4_widget.set_color(theme.color4);
-            common_for_preset.gradient_editor.set_theme_config(theme.clone());
-            common_for_preset.gradient_editor.set_gradient_source_config(&theme.gradient);
-            common_for_preset.font1_btn.set_label(&theme.font1_family);
-            common_for_preset.font1_size_spin.set_value(theme.font1_size);
-            common_for_preset.font2_btn.set_label(&theme.font2_family);
-            common_for_preset.font2_size_spin.set_value(theme.font2_size);
+            // Apply the complete theme preset using the common helper
+            common_for_preset.apply_theme_preset(&theme);
+            // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_for_preset);
             combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
         });

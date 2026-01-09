@@ -1102,17 +1102,9 @@ impl IndustrialConfigWidget {
                 _ => return,
             };
             config_for_preset.borrow_mut().frame.theme = theme.clone();
-            // Update UI widgets
-            common_for_preset.color1_widget.set_color(theme.color1);
-            common_for_preset.color2_widget.set_color(theme.color2);
-            common_for_preset.color3_widget.set_color(theme.color3);
-            common_for_preset.color4_widget.set_color(theme.color4);
-            common_for_preset.gradient_editor.set_theme_config(theme.clone());
-            common_for_preset.gradient_editor.set_gradient_source_config(&theme.gradient);
-            common_for_preset.font1_btn.set_label(&theme.font1_family);
-            common_for_preset.font1_size_spin.set_value(theme.font1_size);
-            common_for_preset.font2_btn.set_label(&theme.font2_family);
-            common_for_preset.font2_size_spin.set_value(theme.font2_size);
+            // Apply the complete theme preset using the common helper
+            common_for_preset.apply_theme_preset(&theme);
+            // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_for_preset);
             combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
         });

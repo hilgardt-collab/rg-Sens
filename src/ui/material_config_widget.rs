@@ -224,11 +224,13 @@ impl MaterialConfigWidget {
 
         let variant_row = GtkBox::new(Orientation::Horizontal, 8);
         variant_row.append(&Label::new(Some("Variant:")));
-        let variant_list = StringList::new(&["Light", "Dark"]);
+        let variant_list = StringList::new(&["Light", "Dark", "Teal", "Purple"]);
         let theme_variant_dropdown = DropDown::new(Some(variant_list), None::<gtk4::Expression>);
         let variant_idx = match config.borrow().frame.theme_variant {
             ThemeVariant::Light => 0,
             ThemeVariant::Dark => 1,
+            ThemeVariant::Teal => 2,
+            ThemeVariant::Purple => 3,
         };
         theme_variant_dropdown.set_selected(variant_idx);
         theme_variant_dropdown.set_hexpand(true);
@@ -648,7 +650,9 @@ impl MaterialConfigWidget {
             // Set theme variant and default colors
             let (variant, theme) = match selected {
                 0 => (ThemeVariant::Light, ComboThemeConfig::default_for_material_light()),
-                _ => (ThemeVariant::Dark, ComboThemeConfig::default_for_material_dark()),
+                1 => (ThemeVariant::Dark, ComboThemeConfig::default_for_material_dark()),
+                2 => (ThemeVariant::Teal, ComboThemeConfig::default_for_material_teal()),
+                _ => (ThemeVariant::Purple, ComboThemeConfig::default_for_material_purple()),
             };
             {
                 let mut cfg = config_for_variant.borrow_mut();
@@ -664,10 +668,18 @@ impl MaterialConfigWidget {
             }
             gradient_editor_for_variant.set_theme_config(theme.clone());
             gradient_editor_for_variant.set_gradient_source_config(&theme.gradient);
+            // Also explicitly update the gradient editor's internal theme colors
+            gradient_editor_for_variant.update_theme_colors(
+                theme.color1,
+                theme.color2,
+                theme.color3,
+                theme.color4,
+            );
             font1_btn_for_variant.set_label(&theme.font1_family);
             font1_size_spin_for_variant.set_value(theme.font1_size);
             font2_btn_for_variant.set_label(&theme.font2_family);
             font2_size_spin_for_variant.set_value(theme.font2_size);
+            // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_for_variant);
             combo_config_base::queue_redraw(&preview_for_variant, &on_change_for_variant);
         });
@@ -1383,6 +1395,8 @@ impl MaterialConfigWidget {
             widgets.theme_variant_dropdown.set_selected(match config.frame.theme_variant {
                 ThemeVariant::Light => 0,
                 ThemeVariant::Dark => 1,
+                ThemeVariant::Teal => 2,
+                ThemeVariant::Purple => 3,
             });
             // Theme colors
             widgets.theme_color1_widget.set_color(config.frame.theme.color1);

@@ -804,7 +804,14 @@ impl FighterHudConfigWidget {
         let config_for_gradient_refresh = config.clone();
         let gradient_refresh: Rc<dyn Fn()> = Rc::new(move || {
             let theme = config_for_gradient_refresh.borrow().frame.theme.clone();
-            gradient_editor_for_refresh.set_theme_config(theme);
+            gradient_editor_for_refresh.set_theme_config(theme.clone());
+            // Also explicitly update the gradient editor's internal theme colors
+            gradient_editor_for_refresh.update_theme_colors(
+                theme.color1,
+                theme.color2,
+                theme.color3,
+                theme.color4,
+            );
         });
         theme_ref_refreshers.borrow_mut().push(gradient_refresh);
 

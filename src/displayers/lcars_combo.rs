@@ -221,6 +221,7 @@ impl LcarsComboDisplayer {
                         item_w,
                         item_h,
                         &item_config.graph_config,
+                        &config.frame.theme,
                         history,
                         &slot_values,
                     ) {

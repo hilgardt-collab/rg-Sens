@@ -124,6 +124,45 @@ pub struct CommonThemeWidgets {
     pub font1_size_spin: SpinButton,
     pub font2_btn: Button,
     pub font2_size_spin: SpinButton,
+    /// Internal color state used for gradient editor synchronization.
+    /// This must be updated when colors are changed programmatically (e.g., from presets).
+    current_colors: Rc<RefCell<(crate::ui::Color, crate::ui::Color, crate::ui::Color, crate::ui::Color)>>,
+}
+
+impl CommonThemeWidgets {
+    /// Apply theme colors from a preset or external source.
+    /// This updates all color widgets, the internal color state, and the gradient editor.
+    /// Call this when changing colors programmatically (e.g., from color scheme presets).
+    pub fn apply_theme_colors(&self, color1: crate::ui::Color, color2: crate::ui::Color, color3: crate::ui::Color, color4: crate::ui::Color) {
+        // Update color widgets
+        self.color1_widget.set_color(color1);
+        self.color2_widget.set_color(color2);
+        self.color3_widget.set_color(color3);
+        self.color4_widget.set_color(color4);
+
+        // Update internal color state (critical for gradient editor sync)
+        *self.current_colors.borrow_mut() = (color1, color2, color3, color4);
+
+        // Update gradient editor with new theme colors
+        self.gradient_editor.update_theme_colors(color1, color2, color3, color4);
+    }
+
+    /// Apply a complete theme preset including colors, gradient, and fonts.
+    /// This is the recommended way to apply theme presets from dropdowns.
+    pub fn apply_theme_preset(&self, theme: &ComboThemeConfig) {
+        // Apply colors
+        self.apply_theme_colors(theme.color1, theme.color2, theme.color3, theme.color4);
+
+        // Apply gradient
+        self.gradient_editor.set_theme_config(theme.clone());
+        self.gradient_editor.set_gradient_source_config(&theme.gradient);
+
+        // Apply fonts
+        self.font1_btn.set_label(&theme.font1_family);
+        self.font1_size_spin.set_value(theme.font1_size);
+        self.font2_btn.set_label(&theme.font2_family);
+        self.font2_size_spin.set_value(theme.font2_size);
+    }
 }
 
 /// Set standard margins on a page box
@@ -414,6 +453,7 @@ where
         font1_size_spin,
         font2_btn,
         font2_size_spin,
+        current_colors,
     }
 }
 
