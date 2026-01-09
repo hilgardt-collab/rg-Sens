@@ -811,7 +811,9 @@ fn draw_header(
     match config.header_style {
         HeaderStyle::Plate => {
             // Metal plate with embossed look
-            let plate_w = w.min(config.header_text.len() as f64 * config.header_font_size * 0.6 + 40.0);
+            // Use actual text extents for accurate plate width
+            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let plate_w = w.min(extents.width() + 40.0);
             let plate_x = x + (w - plate_w) / 2.0;
 
             // Plate background
@@ -842,7 +844,6 @@ fn draw_header(
             let c = &config.header_color;
             cr.set_source_rgba(c.r, c.g, c.b, c.a);
 
-            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
             let text_x = plate_x + (plate_w - extents.width()) / 2.0;
             let text_y = y + (h + extents.height()) / 2.0;
 
@@ -869,7 +870,9 @@ fn draw_header(
         }
         HeaderStyle::Label => {
             // Equipment label style
-            let label_w = config.header_text.len() as f64 * config.header_font_size * 0.6 + 20.0;
+            // Use actual text extents for accurate label width
+            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let label_w = extents.width() + 20.0;
             let label_x = x + (w - label_w) / 2.0;
             let label_h = h - 8.0;
             let label_y = y + 4.0;
@@ -888,7 +891,6 @@ fn draw_header(
             // Text
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
 
-            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
             let text_x = label_x + (label_w - extents.width()) / 2.0;
             let text_y = label_y + (label_h + extents.height()) / 2.0;
             cr.move_to(text_x, text_y);
