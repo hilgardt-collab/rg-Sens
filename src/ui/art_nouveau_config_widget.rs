@@ -244,6 +244,9 @@ impl ArtNouveauConfigWidget {
             |cfg| cfg.frame.theme.clone(),
         );
 
+        // Push main theme callback FIRST so it's preserved when rebuild_content_tabs clears
+        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+
         // Main tabbed notebook
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
@@ -314,9 +317,6 @@ impl ArtNouveauConfigWidget {
         container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
-
-        // Store refresh callback
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
 
         Self {
             container,

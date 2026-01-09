@@ -1191,10 +1191,18 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     // Increment generation to cancel any pending incremental builds
     let generation = CONTENT_REBUILD_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
 
-    // CRITICAL: Clear stale theme refresh callbacks before rebuilding tabs.
-    // Each content item adds multiple callbacks, and without clearing,
-    // these accumulate on every rebuild causing memory leaks and CPU explosion.
+    // CRITICAL: Preserve the first callback (main theme reference) before clearing.
+    // Content items add multiple callbacks that accumulate on every rebuild.
+    // We need to clear those but preserve the main theme reference callback.
+    let preserved_callback = {
+        let refreshers = theme_ref_refreshers.borrow();
+        refreshers.first().cloned()
+    };
     theme_ref_refreshers.borrow_mut().clear();
+    // Re-add the preserved main callback
+    if let Some(cb) = preserved_callback {
+        theme_ref_refreshers.borrow_mut().push(cb);
+    }
 
     let notebook = content_notebook.borrow();
 
