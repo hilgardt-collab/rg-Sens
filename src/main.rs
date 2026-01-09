@@ -962,6 +962,7 @@ fn build_ui(app: &Application) {
     let grid_layout_for_key = grid_layout_for_settings.clone();
     let grid_layout_for_space = grid_layout_for_settings.clone();
     let grid_layout_for_space_release = grid_layout_for_settings.clone();
+    let scrolled_window_for_keys = scrolled_window.clone();
 
     key_controller.connect_key_pressed(move |_, key, _code, modifiers| {
         // Ctrl+Comma opens settings
@@ -976,6 +977,46 @@ fn build_ui(app: &Application) {
                 &start_auto_scroll_for_settings,
             );
             return glib::Propagation::Stop;
+        }
+
+        // Arrow keys scroll the window
+        // Shift+Arrow scrolls by window width/height, plain arrow scrolls a small amount
+        let is_shift = modifiers.contains(gtk4::gdk::ModifierType::SHIFT_MASK);
+        let h_adj = scrolled_window_for_keys.hadjustment();
+        let v_adj = scrolled_window_for_keys.vadjustment();
+
+        // Use window dimensions for page scroll
+        let page_width = window_clone_for_settings.width() as f64;
+        let page_height = window_clone_for_settings.height() as f64;
+
+        match key {
+            gtk4::gdk::Key::Up => {
+                let step = if is_shift { page_height } else { 50.0 };
+                let new_val = (v_adj.value() - step).max(0.0);
+                v_adj.set_value(new_val);
+                return glib::Propagation::Stop;
+            }
+            gtk4::gdk::Key::Down => {
+                let step = if is_shift { page_height } else { 50.0 };
+                let max_val = v_adj.upper() - v_adj.page_size();
+                let new_val = (v_adj.value() + step).min(max_val);
+                v_adj.set_value(new_val);
+                return glib::Propagation::Stop;
+            }
+            gtk4::gdk::Key::Left => {
+                let step = if is_shift { page_width } else { 50.0 };
+                let new_val = (h_adj.value() - step).max(0.0);
+                h_adj.set_value(new_val);
+                return glib::Propagation::Stop;
+            }
+            gtk4::gdk::Key::Right => {
+                let step = if is_shift { page_width } else { 50.0 };
+                let max_val = h_adj.upper() - h_adj.page_size();
+                let new_val = (h_adj.value() + step).min(max_val);
+                h_adj.set_value(new_val);
+                return glib::Propagation::Stop;
+            }
+            _ => {}
         }
 
         // Space bar shows grid overlay
