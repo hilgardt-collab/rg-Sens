@@ -63,6 +63,7 @@ pub(crate) fn show_panel_properties_dialog(
     let old_geometry = Rc::new(RefCell::new(panel_guard.geometry));
     let old_source_id = panel_guard.source.metadata().id.clone();
     let old_displayer_id = panel_guard.displayer.id().to_string();
+    let displayer_name = panel_guard.displayer.name().to_string();
 
     // Get parent window for transient_for
     let parent_window = _container.root().and_then(|r| r.downcast::<Window>().ok());
@@ -80,7 +81,7 @@ pub(crate) fn show_panel_properties_dialog(
 
     // Create dialog window
     let dialog = Window::builder()
-        .title(format!("Panel Properties - {}", panel_id))
+        .title(format!("Panel Properties - {}", displayer_name))
         .modal(false)
         .default_width(550)
         .default_height(650)
@@ -1743,9 +1744,15 @@ pub(crate) fn show_panel_properties_dialog(
         let css_template_placeholder_clone = css_template_placeholder.clone();
         let css_template_label_clone = css_template_config_label.clone();
         let displayers_clone = displayers.clone();
+        let displayer_names_clone = displayer_display_names.clone();
+        let dialog_clone = dialog.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
+                // Update dialog title to show selected displayer name
+                if let Some(display_name) = displayer_names_clone.borrow().get(selected_idx) {
+                    dialog_clone.set_title(Some(&format!("Panel Properties - {}", display_name)));
+                }
                 let is_text = displayer_id == "text";
                 let is_bar = displayer_id == "bar";
                 let is_arc = displayer_id == "arc";
