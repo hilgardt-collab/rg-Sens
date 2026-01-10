@@ -19,6 +19,7 @@ static TIMER_MANAGER: Lazy<Arc<RwLock<TimerAlarmManager>>> = Lazy::new(|| {
 });
 
 /// Audio commands for the audio thread
+#[allow(dead_code)]
 enum AudioCommand {
     Play(AlarmSoundConfig),
     Stop,
@@ -26,6 +27,7 @@ enum AudioCommand {
 }
 
 /// Audio thread state including sender and thread handle for cleanup
+#[allow(dead_code)]
 struct AudioThreadState {
     sender: Option<Sender<AudioCommand>>,
     handle: Option<std::thread::JoinHandle<()>>,
@@ -108,6 +110,7 @@ pub fn play_preview_sound(sound_config: &AlarmSoundConfig) {
 
 /// Shutdown the audio thread gracefully
 /// Call this during application exit for clean shutdown
+#[allow(dead_code)]
 pub fn shutdown_audio_thread() {
     if let Ok(mut guard) = AUDIO_THREAD.lock() {
         // Send shutdown command
