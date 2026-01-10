@@ -116,25 +116,28 @@ impl GpuSource {
 
     /// Set configuration
     pub fn set_config(&mut self, config: GpuSourceConfig) {
+        let mut config = config;
+        let gpu_count = GPU_MANAGER.backends.len();
+
+        // Clamp gpu_index to valid range to ensure config and backend stay in sync
+        if gpu_count > 0 && (config.gpu_index as usize) >= gpu_count {
+            log::warn!(
+                "GPU index {} out of bounds (only {} GPUs available), clamping to {}",
+                config.gpu_index,
+                gpu_count,
+                gpu_count - 1
+            );
+            config.gpu_index = (gpu_count - 1) as u32;
+        }
+
         // Update backend and cached vendor if GPU index changed
         if config.gpu_index != self.config.gpu_index {
-            // Validate gpu_index is within bounds before accessing
-            let gpu_count = GPU_MANAGER.backends.len();
-            if (config.gpu_index as usize) < gpu_count {
-                self.backend = GPU_MANAGER.backends.get(config.gpu_index as usize).cloned();
-                // Update cached vendor for the new GPU
-                self.cached_vendor = GPU_MANAGER.gpu_info
-                    .get(config.gpu_index as usize)
-                    .map(|info| info.vendor.as_str().to_string())
-                    .unwrap_or_else(|| "GPU".to_string());
-            } else {
-                log::warn!(
-                    "GPU index {} out of bounds (only {} GPUs available), keeping current backend",
-                    config.gpu_index,
-                    gpu_count
-                );
-                // Don't update backend - keep the existing one or None
-            }
+            self.backend = GPU_MANAGER.backends.get(config.gpu_index as usize).cloned();
+            // Update cached vendor for the new GPU
+            self.cached_vendor = GPU_MANAGER.gpu_info
+                .get(config.gpu_index as usize)
+                .map(|info| info.vendor.as_str().to_string())
+                .unwrap_or_else(|| "GPU".to_string());
         }
         self.config = config;
     }

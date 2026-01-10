@@ -145,23 +145,27 @@ impl SharedSourceManager {
         let interval = Duration::from_millis(source_config.update_interval_ms());
 
         // Phase 1: Check if source exists (quick read lock)
-        {
+        // Clone the Arc handle while holding the lock, then release lock before acquiring Mutex
+        // This avoids potential deadlock from nested RwLock -> Mutex acquisition
+        let existing_handle = {
             let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-            if let Some(handle) = sources.get(&key) {
-                // Source already exists, increment ref count and track panel interval
-                if let Ok(mut shared) = handle.lock() {
-                    shared.ref_count += 1;
-                    shared.panel_intervals.insert(panel_id.to_string(), interval);
-                    shared.recalculate_min_interval();
-                    debug!(
-                        "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
-                        key, panel_id, shared.ref_count, shared.min_interval
-                    );
-                }
-                return Ok(key);
+            sources.get(&key).cloned()
+        };
+        // Read lock released here - now safe to acquire Mutex
+
+        if let Some(handle) = existing_handle {
+            // Source already exists, increment ref count and track panel interval
+            if let Ok(mut shared) = handle.lock() {
+                shared.ref_count += 1;
+                shared.panel_intervals.insert(panel_id.to_string(), interval);
+                shared.recalculate_min_interval();
+                debug!(
+                    "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                    key, panel_id, shared.ref_count, shared.min_interval
+                );
             }
+            return Ok(key);
         }
-        // Read lock released here
 
         // Phase 2: Create new source OUTSIDE the lock (slow I/O)
         let mut source = registry.create_source(source_config.source_type())?;
@@ -180,8 +184,13 @@ impl SharedSourceManager {
 
         // Phase 3: Insert into map (quick write lock)
         // Re-check in case another thread created it while we were doing I/O
-        let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-        if let Some(handle) = sources.get(&key) {
+        // Clone handle while holding lock to avoid nested RwLock -> Mutex deadlock
+        let existing_handle = {
+            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            sources.get(&key).cloned()
+        };
+
+        if let Some(handle) = existing_handle {
             // Another thread created it - just increment ref count and discard ours
             if let Ok(mut existing) = handle.lock() {
                 existing.ref_count += 1;
@@ -193,7 +202,10 @@ impl SharedSourceManager {
                 );
             }
         } else {
-            sources.insert(key.clone(), Arc::new(Mutex::new(shared)));
+            // No existing source, insert new one
+            let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            // Double-check after acquiring write lock (another thread may have inserted)
+            sources.entry(key.clone()).or_insert_with(|| Arc::new(Mutex::new(shared)));
         }
 
         Ok(key)
@@ -208,46 +220,70 @@ impl SharedSourceManager {
     /// Uses read lock for the common case (decrementing ref count) and only
     /// acquires write lock when the source needs to be removed.
     pub fn release_source(&self, key: &str, panel_id: &str) {
-        // Phase 1: Update ref count with read lock
-        let should_remove = {
+        // Phase 1: Clone handle while holding read lock to avoid nested RwLock -> Mutex deadlock
+        let handle = {
             let sources = match self.sources.read() {
                 Ok(s) => s,
                 Err(_) => return,
             };
+            sources.get(key).cloned()
+        };
+        // Read lock released here - now safe to acquire Mutex
 
-            if let Some(handle) = sources.get(key) {
-                if let Ok(mut shared) = handle.lock() {
-                    shared.ref_count = shared.ref_count.saturating_sub(1);
-                    shared.panel_intervals.remove(panel_id);
-                    shared.recalculate_min_interval();
+        let should_remove = if let Some(handle) = handle {
+            if let Ok(mut shared) = handle.lock() {
+                shared.ref_count = shared.ref_count.saturating_sub(1);
+                shared.panel_intervals.remove(panel_id);
+                shared.recalculate_min_interval();
 
-                    debug!(
-                        "Released source {} for panel {} (ref_count: {}, min_interval: {:?})",
-                        key, panel_id, shared.ref_count, shared.min_interval
-                    );
+                debug!(
+                    "Released source {} for panel {} (ref_count: {}, min_interval: {:?})",
+                    key, panel_id, shared.ref_count, shared.min_interval
+                );
 
-                    shared.ref_count == 0
-                } else {
-                    false
-                }
+                shared.ref_count == 0
             } else {
                 false
             }
+        } else {
+            false
         };
-        // Read lock released here
 
         // Phase 2: Remove with write lock only if needed
         if should_remove {
-            if let Ok(mut sources) = self.sources.write() {
-                // Re-check ref_count in case another thread incremented it
-                let still_empty = sources.get(key)
-                    .and_then(|h| h.lock().ok())
-                    .map(|s| s.ref_count == 0)
-                    .unwrap_or(false);
+            // Clone handle to re-check ref_count without holding RwLock
+            let handle_for_recheck = {
+                let sources = match self.sources.read() {
+                    Ok(s) => s,
+                    Err(_) => return,
+                };
+                sources.get(key).cloned()
+            };
 
-                if still_empty {
-                    info!("Removing unused shared source {}", key);
-                    sources.remove(key);
+            // Check ref_count without holding any RwLock (avoids deadlock)
+            let still_empty = if let Some(ref h) = handle_for_recheck {
+                h.lock().ok().map(|s| s.ref_count == 0).unwrap_or(false)
+            } else {
+                false
+            };
+
+            if still_empty {
+                // Safe to acquire write lock now - no mutex held
+                if let Ok(mut sources) = self.sources.write() {
+                    // Use remove_entry pattern to avoid nested lock during final check
+                    // If ref_count was incremented by another thread, they have their own Arc
+                    if let Some((_, handle)) = sources.remove_entry(key) {
+                        // Final check after removal - if ref_count > 0, put it back
+                        if let Ok(shared) = handle.lock() {
+                            if shared.ref_count > 0 {
+                                // Another thread added a reference, put it back
+                                sources.insert(key.to_string(), handle.clone());
+                                debug!("Source {} was re-referenced, keeping", key);
+                            } else {
+                                info!("Removed unused shared source {}", key);
+                            }
+                        }
+                    }
                 }
             }
         }

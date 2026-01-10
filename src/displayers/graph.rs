@@ -245,16 +245,16 @@ impl Displayer for GraphDisplayer {
                         .as_secs_f64();
                     let relative_time = current_time - data.start_time;
 
+                    // Remove old data points first to maintain strict bounds
+                    while data.data_points.len() >= data.config.max_data_points {
+                        data.data_points.pop_front();
+                    }
+
                     // Add new data point
                     data.data_points.push_back(DataPoint {
                         value,
                         timestamp: relative_time,
                     });
-
-                    // Remove old data points
-                    while data.data_points.len() > data.config.max_data_points {
-                        data.data_points.pop_front();
-                    }
 
                     // Reset scroll offset when new data arrives for smooth continuous scrolling
                     // The graph has now "scrolled" one position, so we start fresh

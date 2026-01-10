@@ -14,6 +14,23 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+/// RAII guard for Cairo state that ensures restore() is called even on panic
+struct CairoGuard<'a>(&'a Context);
+
+impl<'a> CairoGuard<'a> {
+    fn new(cr: &'a Context) -> std::result::Result<Self, cairo::Error> {
+        cr.save()?;
+        Ok(Self(cr))
+    }
+}
+
+impl Drop for CairoGuard<'_> {
+    fn drop(&mut self) {
+        // Ignore errors during restore in drop to avoid panic during unwinding
+        let _ = self.0.restore();
+    }
+}
+
 use crate::core::{PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::arc_display::render_arc;
@@ -236,7 +253,8 @@ where
                 )?;
             }
             ContentDisplayType::Arc => {
-                cr.save()?;
+                // Use CairoGuard to ensure restore() even if render_arc panics
+                let _guard = CairoGuard::new(cr)?;
                 cr.translate(item_x, item_y);
                 render_arc(
                     cr,
@@ -247,10 +265,11 @@ where
                     item_w,
                     item_h,
                 )?;
-                cr.restore()?;
+                // _guard drops here, calling restore()
             }
             ContentDisplayType::Speedometer => {
-                cr.save()?;
+                // Use CairoGuard to ensure restore() even if render panics
+                let _guard = CairoGuard::new(cr)?;
                 cr.translate(item_x, item_y);
                 if let Err(e) = render_speedometer_with_theme(
                     cr,
@@ -263,7 +282,7 @@ where
                 ) {
                     log::warn!("Failed to render speedometer for {}: {}", prefix, e);
                 }
-                cr.restore()?;
+                // _guard drops here, calling restore()
             }
         }
     }

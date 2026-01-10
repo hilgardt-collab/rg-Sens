@@ -307,7 +307,8 @@ pub fn update_bar_animation(
         KEY_BUFFER.with(|buf| {
             let mut key_buf = buf.borrow_mut();
             let key = key_buf.build_bar_key(prefix);
-            bar_values.get_mut(key).unwrap()
+            // Use expect with context - this should never fail since we just checked contains_key
+            bar_values.get_mut(key).expect("bar key disappeared between contains_key check and get_mut")
         })
     };
 
@@ -343,7 +344,8 @@ pub fn update_graph_history(
         KEY_BUFFER.with(|buf| {
             let mut key_buf = buf.borrow_mut();
             let key = key_buf.build_graph_key(prefix);
-            graph_history.get_mut(key).unwrap()
+            // Use expect with context - this should never fail since we just checked contains_key
+            graph_history.get_mut(key).expect("graph key disappeared between contains_key check and get_mut")
         })
     };
 

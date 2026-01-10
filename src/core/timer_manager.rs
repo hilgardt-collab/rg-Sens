@@ -22,14 +22,21 @@ static TIMER_MANAGER: Lazy<Arc<RwLock<TimerAlarmManager>>> = Lazy::new(|| {
 enum AudioCommand {
     Play(AlarmSoundConfig),
     Stop,
+    Shutdown,
 }
 
-/// Global audio command sender
-static AUDIO_SENDER: Lazy<Mutex<Option<Sender<AudioCommand>>>> = Lazy::new(|| {
+/// Audio thread state including sender and thread handle for cleanup
+struct AudioThreadState {
+    sender: Option<Sender<AudioCommand>>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Global audio thread state
+static AUDIO_THREAD: Lazy<Mutex<AudioThreadState>> = Lazy::new(|| {
     // Spawn audio thread
     let (tx, rx) = channel::<AudioCommand>();
 
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         // Create AudioPlayer in this thread (it's not Send)
         let player = match AudioPlayer::new() {
             Ok(p) => p,
@@ -57,15 +64,23 @@ static AUDIO_SENDER: Lazy<Mutex<Option<Sender<AudioCommand>>>> = Lazy::new(|| {
                 Ok(AudioCommand::Stop) => {
                     player.stop();
                 }
+                Ok(AudioCommand::Shutdown) => {
+                    log::debug!("Audio thread received shutdown signal");
+                    break;
+                }
                 Err(_) => {
                     // Channel closed, exit thread
                     break;
                 }
             }
         }
+        log::debug!("Audio thread exiting");
     });
 
-    Mutex::new(Some(tx))
+    Mutex::new(AudioThreadState {
+        sender: Some(tx),
+        handle: Some(handle),
+    })
 });
 
 /// Get the global timer manager
@@ -75,8 +90,8 @@ pub fn global_timer_manager() -> Arc<RwLock<TimerAlarmManager>> {
 
 /// Stop all currently playing alarm/timer sounds
 pub fn stop_all_sounds() {
-    if let Ok(guard) = AUDIO_SENDER.lock() {
-        if let Some(ref sender) = *guard {
+    if let Ok(guard) = AUDIO_THREAD.lock() {
+        if let Some(ref sender) = guard.sender {
             let _ = sender.send(AudioCommand::Stop);
         }
     }
@@ -84,9 +99,28 @@ pub fn stop_all_sounds() {
 
 /// Play a preview sound using the given sound config
 pub fn play_preview_sound(sound_config: &AlarmSoundConfig) {
-    if let Ok(guard) = AUDIO_SENDER.lock() {
-        if let Some(ref sender) = *guard {
+    if let Ok(guard) = AUDIO_THREAD.lock() {
+        if let Some(ref sender) = guard.sender {
             let _ = sender.send(AudioCommand::Play(sound_config.clone()));
+        }
+    }
+}
+
+/// Shutdown the audio thread gracefully
+/// Call this during application exit for clean shutdown
+pub fn shutdown_audio_thread() {
+    if let Ok(mut guard) = AUDIO_THREAD.lock() {
+        // Send shutdown command
+        if let Some(ref sender) = guard.sender {
+            let _ = sender.send(AudioCommand::Shutdown);
+        }
+        // Drop sender to close channel
+        guard.sender = None;
+        // Wait for thread to finish
+        if let Some(handle) = guard.handle.take() {
+            if let Err(e) = handle.join() {
+                log::warn!("Audio thread panicked: {:?}", e);
+            }
         }
     }
 }
@@ -350,6 +384,10 @@ impl TimerAlarmManager {
 
     /// Register a callback for state changes
     /// Returns a callback ID that can be used to remove the callback later
+    ///
+    /// # Important
+    /// Callers MUST call `remove_callback` when the callback is no longer needed
+    /// (e.g., when a displayer is destroyed) to prevent memory leaks.
     pub fn on_change<F>(&mut self, callback: F) -> String
     where
         F: Fn() + Send + Sync + 'static,
@@ -363,6 +401,17 @@ impl TimerAlarmManager {
     /// Returns true if a callback was removed, false if the ID was not found
     pub fn remove_callback(&mut self, callback_id: &str) -> bool {
         self.change_callbacks.remove(callback_id).is_some()
+    }
+
+    /// Clear all registered callbacks
+    /// Use this during application shutdown to ensure cleanup
+    pub fn clear_all_callbacks(&mut self) {
+        self.change_callbacks.clear();
+    }
+
+    /// Get the number of registered callbacks (for debugging memory leaks)
+    pub fn callback_count(&self) -> usize {
+        self.change_callbacks.len()
     }
 
     /// Notify all callbacks of a change
