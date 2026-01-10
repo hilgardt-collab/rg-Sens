@@ -23,6 +23,9 @@ pub struct MemorySource {
     available_memory: u64,
     total_swap: u64,
     used_swap: u64,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl MemorySource {
@@ -61,6 +64,7 @@ impl MemorySource {
             available_memory: 0,
             total_swap: 0,
             used_swap: 0,
+            values: HashMap::with_capacity(16),
         }
     }
 
@@ -153,11 +157,8 @@ impl DataSource for MemorySource {
         self.total_swap = self.system.total_swap();
         self.used_swap = self.system.used_swap();
 
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         let caption = self.config.custom_caption
             .as_ref()
@@ -183,56 +184,56 @@ impl DataSource for MemorySource {
         match self.config.field {
             MemoryField::Used => {
                 let converted = self.convert_memory(self.used_memory);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(converted));
-                values.insert("used".to_string(), Value::from(converted));
-                values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(converted));
+                self.values.insert("used".to_string(), Value::from(converted));
+                self.values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
             }
             MemoryField::Free => {
                 let converted = self.convert_memory(free_memory);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(converted));
-                values.insert("free".to_string(), Value::from(converted));
-                values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(converted));
+                self.values.insert("free".to_string(), Value::from(converted));
+                self.values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
             }
             MemoryField::Available => {
                 let converted = self.convert_memory(self.available_memory);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(converted));
-                values.insert("available".to_string(), Value::from(converted));
-                values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(converted));
+                self.values.insert("available".to_string(), Value::from(converted));
+                self.values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
             }
             MemoryField::Percent => {
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(memory_percent));
-                values.insert("percent".to_string(), Value::from(memory_percent));
-                values.insert("unit".to_string(), Value::from("%"));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(memory_percent));
+                self.values.insert("percent".to_string(), Value::from(memory_percent));
+                self.values.insert("unit".to_string(), Value::from("%"));
             }
             MemoryField::SwapUsed => {
                 let converted = self.convert_memory(self.used_swap);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(converted));
-                values.insert("swap_used".to_string(), Value::from(converted));
-                values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(converted));
+                self.values.insert("swap_used".to_string(), Value::from(converted));
+                self.values.insert("unit".to_string(), Value::from(self.get_memory_unit_string()));
             }
             MemoryField::SwapPercent => {
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(swap_percent));
-                values.insert("swap_percent".to_string(), Value::from(swap_percent));
-                values.insert("unit".to_string(), Value::from("%"));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(swap_percent));
+                self.values.insert("swap_percent".to_string(), Value::from(swap_percent));
+                self.values.insert("unit".to_string(), Value::from("%"));
             }
         }
 
         // Also provide all raw data (in configured units)
-        values.insert("raw_total".to_string(), Value::from(self.convert_memory(self.total_memory)));
-        values.insert("raw_used".to_string(), Value::from(self.convert_memory(self.used_memory)));
-        values.insert("raw_free".to_string(), Value::from(self.convert_memory(free_memory)));
-        values.insert("raw_available".to_string(), Value::from(self.convert_memory(self.available_memory)));
-        values.insert("raw_percent".to_string(), Value::from(memory_percent));
-        values.insert("raw_swap_total".to_string(), Value::from(self.convert_memory(self.total_swap)));
-        values.insert("raw_swap_used".to_string(), Value::from(self.convert_memory(self.used_swap)));
-        values.insert("raw_swap_free".to_string(), Value::from(self.convert_memory(free_swap)));
-        values.insert("raw_swap_percent".to_string(), Value::from(swap_percent));
+        self.values.insert("raw_total".to_string(), Value::from(self.convert_memory(self.total_memory)));
+        self.values.insert("raw_used".to_string(), Value::from(self.convert_memory(self.used_memory)));
+        self.values.insert("raw_free".to_string(), Value::from(self.convert_memory(free_memory)));
+        self.values.insert("raw_available".to_string(), Value::from(self.convert_memory(self.available_memory)));
+        self.values.insert("raw_percent".to_string(), Value::from(memory_percent));
+        self.values.insert("raw_swap_total".to_string(), Value::from(self.convert_memory(self.total_swap)));
+        self.values.insert("raw_swap_used".to_string(), Value::from(self.convert_memory(self.used_swap)));
+        self.values.insert("raw_swap_free".to_string(), Value::from(self.convert_memory(free_swap)));
+        self.values.insert("raw_swap_percent".to_string(), Value::from(swap_percent));
 
         // Add limits based on field type
         let (min_limit, max_limit) = match self.config.field {
@@ -248,10 +249,18 @@ impl DataSource for MemorySource {
             }
         };
 
-        values.insert("min_limit".to_string(), Value::from(min_limit));
-        values.insert("max_limit".to_string(), Value::from(max_limit));
+        self.values.insert("min_limit".to_string(), Value::from(min_limit));
+        self.values.insert("max_limit".to_string(), Value::from(max_limit));
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {

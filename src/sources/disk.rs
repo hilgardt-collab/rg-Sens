@@ -26,6 +26,9 @@ pub struct DiskSource {
     available_space: u64,
     // Cached file system type (avoids double lookup in get_values)
     file_system: String,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl DiskSource {
@@ -58,6 +61,7 @@ impl DiskSource {
             total_space: 0,
             available_space: 0,
             file_system: String::new(),
+            values: HashMap::with_capacity(16),
         }
     }
 
@@ -235,28 +239,25 @@ impl DataSource for DiskSource {
             self.file_system.clear();
         }
 
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         let caption = self.config.custom_caption.clone()
             .unwrap_or_else(|| self.generate_auto_caption());
 
-        values.insert("mount_point".to_string(), Value::from(self.config.disk_path.as_str()));
+        self.values.insert("mount_point".to_string(), Value::from(self.config.disk_path.as_str()));
 
         // Use cached file system type (cached during update() to avoid double lookup)
         if !self.file_system.is_empty() {
-            values.insert("file_system".to_string(), Value::from(self.file_system.as_str()));
+            self.values.insert("file_system".to_string(), Value::from(self.file_system.as_str()));
         }
 
         if self.total_space == 0 {
             // Disk not found or has no space
-            values.insert("caption".to_string(), Value::from(caption));
-            values.insert("value".to_string(), Value::from("N/A"));
-            values.insert("unit".to_string(), Value::from(""));
-            return values;
+            self.values.insert("caption".to_string(), Value::from(caption));
+            self.values.insert("value".to_string(), Value::from("N/A"));
+            self.values.insert("unit".to_string(), Value::from(""));
+            return Ok(());
         }
 
         let used_space = self.total_space.saturating_sub(self.available_space);
@@ -267,10 +268,10 @@ impl DataSource for DiskSource {
         };
 
         // Provide all raw data
-        values.insert("raw_used_bytes".to_string(), Value::from(used_space));
-        values.insert("raw_free_bytes".to_string(), Value::from(self.available_space));
-        values.insert("raw_total_bytes".to_string(), Value::from(self.total_space));
-        values.insert("percent".to_string(), Value::from(percent));
+        self.values.insert("raw_used_bytes".to_string(), Value::from(used_space));
+        self.values.insert("raw_free_bytes".to_string(), Value::from(self.available_space));
+        self.values.insert("raw_total_bytes".to_string(), Value::from(self.total_space));
+        self.values.insert("percent".to_string(), Value::from(percent));
 
         // Calculate limits based on field
         let (min_limit, max_limit) = match self.config.field {
@@ -309,46 +310,54 @@ impl DataSource for DiskSource {
             }
         };
 
-        values.insert("min_limit".to_string(), Value::from(min_limit));
-        values.insert("max_limit".to_string(), Value::from(max_limit));
+        self.values.insert("min_limit".to_string(), Value::from(min_limit));
+        self.values.insert("max_limit".to_string(), Value::from(max_limit));
 
         // Set field-specific values
         match self.config.field {
             DiskField::Used => {
                 let used = self.convert_space(used_space);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(used));
-                values.insert("used".to_string(), Value::from(used));
-                values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(used));
+                self.values.insert("used".to_string(), Value::from(used));
+                self.values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
             }
             DiskField::Free => {
                 let free = self.convert_space(self.available_space);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(free));
-                values.insert("free".to_string(), Value::from(free));
-                values.insert("available".to_string(), Value::from(free));
-                values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(free));
+                self.values.insert("free".to_string(), Value::from(free));
+                self.values.insert("available".to_string(), Value::from(free));
+                self.values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
             }
             DiskField::Total => {
                 let total = self.convert_space(self.total_space);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(total));
-                values.insert("total".to_string(), Value::from(total));
-                values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(total));
+                self.values.insert("total".to_string(), Value::from(total));
+                self.values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
             }
             DiskField::Percent => {
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(percent));
-                values.insert("unit".to_string(), Value::from("%"));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(percent));
+                self.values.insert("unit".to_string(), Value::from("%"));
             }
         }
 
         // Also provide converted space values for all fields
-        values.insert("used_converted".to_string(), Value::from(self.convert_space(used_space)));
-        values.insert("free_converted".to_string(), Value::from(self.convert_space(self.available_space)));
-        values.insert("total_converted".to_string(), Value::from(self.convert_space(self.total_space)));
+        self.values.insert("used_converted".to_string(), Value::from(self.convert_space(used_space)));
+        self.values.insert("free_converted".to_string(), Value::from(self.convert_space(self.available_space)));
+        self.values.insert("total_converted".to_string(), Value::from(self.convert_space(self.total_space)));
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {

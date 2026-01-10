@@ -223,6 +223,9 @@ pub struct FanSpeedSource {
     current_rpm: f64,
     detected_min: Option<f64>,
     detected_max: Option<f64>,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl FanSpeedSource {
@@ -249,6 +252,7 @@ impl FanSpeedSource {
             current_rpm: 0.0,
             detected_min: None,
             detected_max: None,
+            values: HashMap::with_capacity(8),
         }
     }
 
@@ -353,31 +357,28 @@ impl DataSource for FanSpeedSource {
             self.current_rpm = 0.0;
         }
 
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         // Fan speed value - MUST provide "value" key for displayers
-        values.insert("value".to_string(), Value::from(self.current_rpm));
-        values.insert("rpm".to_string(), Value::from(self.current_rpm)); // Keep for compatibility
+        self.values.insert("value".to_string(), Value::from(self.current_rpm));
+        self.values.insert("rpm".to_string(), Value::from(self.current_rpm)); // Keep for compatibility
 
         // Sensor label
         let sensor_label = FAN_SENSORS
             .get(self.config.sensor_index)
             .map(|s| s.label.as_str())
             .unwrap_or("Unknown");
-        values.insert("sensor_label".to_string(), Value::from(sensor_label));
+        self.values.insert("sensor_label".to_string(), Value::from(sensor_label));
 
         // Unit
-        values.insert("unit".to_string(), Value::from("RPM"));
+        self.values.insert("unit".to_string(), Value::from("RPM"));
 
         // Caption (custom or auto-generated)
         let caption = self.config.custom_caption.clone().unwrap_or_else(|| {
             sensor_label.to_string()
         });
-        values.insert("caption".to_string(), Value::from(caption));
+        self.values.insert("caption".to_string(), Value::from(caption));
 
         // Limits
         let min_limit = if self.config.auto_detect_limits {
@@ -396,27 +397,35 @@ impl DataSource for FanSpeedSource {
         // This prevents the arc displayer from showing 0 when min == max
         if let (Some(min), Some(max)) = (min_limit, max_limit) {
             if max > min {
-                values.insert("min_limit".to_string(), Value::from(min));
-                values.insert("max_limit".to_string(), Value::from(max));
+                self.values.insert("min_limit".to_string(), Value::from(min));
+                self.values.insert("max_limit".to_string(), Value::from(max));
             } else if !self.config.auto_detect_limits {
                 // For manual limits, always provide them even if equal
                 // (user explicitly set them, might be intentional)
-                values.insert("min_limit".to_string(), Value::from(min));
-                values.insert("max_limit".to_string(), Value::from(max));
+                self.values.insert("min_limit".to_string(), Value::from(min));
+                self.values.insert("max_limit".to_string(), Value::from(max));
             }
             // For auto-detect with min == max, don't provide limits yet
             // Let the displayer use fallback logic (percentage mode)
         } else if min_limit.is_some() || max_limit.is_some() {
             // Provide partial limits if available (one but not both)
             if let Some(min) = min_limit {
-                values.insert("min_limit".to_string(), Value::from(min));
+                self.values.insert("min_limit".to_string(), Value::from(min));
             }
             if let Some(max) = max_limit {
-                values.insert("max_limit".to_string(), Value::from(max));
+                self.values.insert("max_limit".to_string(), Value::from(max));
             }
         }
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {

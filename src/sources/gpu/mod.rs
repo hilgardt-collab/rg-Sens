@@ -58,6 +58,9 @@ pub struct GpuSource {
     fan_speed: Option<u32>,
     clock_core: Option<u32>,
     clock_memory: Option<u32>,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl GpuSource {
@@ -101,6 +104,7 @@ impl GpuSource {
             fan_speed: None,
             clock_core: None,
             clock_memory: None,
+            values: HashMap::with_capacity(24),
         }
     }
 
@@ -272,12 +276,8 @@ impl DataSource for GpuSource {
         self.clock_core = metrics.clock_core;
         self.clock_memory = metrics.clock_memory;
 
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        // Pre-allocate with expected capacity to avoid reallocations
-        let mut values = HashMap::with_capacity(16);
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         let caption = self.config.custom_caption
             .as_ref()
@@ -293,79 +293,79 @@ impl DataSource for GpuSource {
             GpuField::Temperature => {
                 if let Some(temp) = self.temperature {
                     let converted = self.convert_temperature(temp);
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(converted));
-                    values.insert("temperature".into(), Value::from(converted));
-                    values.insert(KEY_UNIT.into(), Value::from(self.get_temperature_unit_string()));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(converted));
+                    self.values.insert("temperature".into(), Value::from(converted));
+                    self.values.insert(KEY_UNIT.into(), Value::from(self.get_temperature_unit_string()));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::Utilization => {
                 if let Some(util) = self.utilization {
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(util));
-                    values.insert("utilization".into(), Value::from(util));
-                    values.insert(KEY_UNIT.into(), Value::from("%"));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(util));
+                    self.values.insert("utilization".into(), Value::from(util));
+                    self.values.insert(KEY_UNIT.into(), Value::from("%"));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::MemoryUsed => {
                 if let Some(mem) = self.memory_used {
                     let converted = self.convert_memory(mem);
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(converted));
-                    values.insert("memory_used".into(), Value::from(converted));
-                    values.insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(converted));
+                    self.values.insert("memory_used".into(), Value::from(converted));
+                    self.values.insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::MemoryPercent => {
                 if let (Some(used), Some(total)) = (self.memory_used, self.memory_total) {
                     if total > 0 {
                         let percent = (used as f64 / total as f64 * 100.0) as u32;
-                        values.insert(KEY_CAPTION.into(), Value::from(caption));
-                        values.insert(KEY_VALUE.into(), Value::from(percent));
-                        values.insert("memory_percent".into(), Value::from(percent));
-                        values.insert(KEY_UNIT.into(), Value::from("%"));
+                        self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                        self.values.insert(KEY_VALUE.into(), Value::from(percent));
+                        self.values.insert("memory_percent".into(), Value::from(percent));
+                        self.values.insert(KEY_UNIT.into(), Value::from("%"));
                     } else {
-                        Self::insert_na_values(&mut values, caption);
+                        Self::insert_na_values(&mut self.values, caption);
                     }
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::PowerUsage => {
                 if let Some(power) = self.power_usage {
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(power));
-                    values.insert("power".into(), Value::from(power));
-                    values.insert(KEY_UNIT.into(), Value::from("W"));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(power));
+                    self.values.insert("power".into(), Value::from(power));
+                    self.values.insert(KEY_UNIT.into(), Value::from("W"));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::FanSpeed => {
                 if let Some(fan) = self.fan_speed {
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(fan));
-                    values.insert("fan_speed".into(), Value::from(fan));
-                    values.insert(KEY_UNIT.into(), Value::from("%"));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(fan));
+                    self.values.insert("fan_speed".into(), Value::from(fan));
+                    self.values.insert(KEY_UNIT.into(), Value::from("%"));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::MemoryTotal => {
                 if let Some(mem) = self.memory_total {
                     let converted = self.convert_memory(mem);
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(converted));
-                    values.insert("memory_total".into(), Value::from(converted));
-                    values.insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(converted));
+                    self.values.insert("memory_total".into(), Value::from(converted));
+                    self.values.insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::ClockCore => {
@@ -375,12 +375,12 @@ impl DataSource for GpuSource {
                         GpuFrequencyUnit::MHz => (clock as f64, "MHz"),
                         GpuFrequencyUnit::GHz => (clock as f64 / 1000.0, "GHz"),
                     };
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(value));
-                    values.insert("clock_core".into(), Value::from(value));
-                    values.insert(KEY_UNIT.into(), Value::from(unit));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(value));
+                    self.values.insert("clock_core".into(), Value::from(value));
+                    self.values.insert(KEY_UNIT.into(), Value::from(unit));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
             GpuField::ClockMemory => {
@@ -390,34 +390,34 @@ impl DataSource for GpuSource {
                         GpuFrequencyUnit::MHz => (clock as f64, "MHz"),
                         GpuFrequencyUnit::GHz => (clock as f64 / 1000.0, "GHz"),
                     };
-                    values.insert(KEY_CAPTION.into(), Value::from(caption));
-                    values.insert(KEY_VALUE.into(), Value::from(value));
-                    values.insert("clock_memory".into(), Value::from(value));
-                    values.insert(KEY_UNIT.into(), Value::from(unit));
+                    self.values.insert(KEY_CAPTION.into(), Value::from(caption));
+                    self.values.insert(KEY_VALUE.into(), Value::from(value));
+                    self.values.insert("clock_memory".into(), Value::from(value));
+                    self.values.insert(KEY_UNIT.into(), Value::from(unit));
                 } else {
-                    Self::insert_na_values(&mut values, caption);
+                    Self::insert_na_values(&mut self.values, caption);
                 }
             }
         }
 
         // Also provide all raw data
         if let Some(temp) = self.temperature {
-            values.insert("raw_temperature_celsius".into(), Value::from(temp));
+            self.values.insert("raw_temperature_celsius".into(), Value::from(temp));
         }
         if let Some(util) = self.utilization {
-            values.insert("raw_utilization".into(), Value::from(util));
+            self.values.insert("raw_utilization".into(), Value::from(util));
         }
         if let Some(mem_used) = self.memory_used {
-            values.insert("raw_memory_used_bytes".into(), Value::from(mem_used));
+            self.values.insert("raw_memory_used_bytes".into(), Value::from(mem_used));
         }
         if let Some(mem_total) = self.memory_total {
-            values.insert("raw_memory_total_bytes".into(), Value::from(mem_total));
+            self.values.insert("raw_memory_total_bytes".into(), Value::from(mem_total));
         }
         if let Some(power) = self.power_usage {
-            values.insert("raw_power_watts".into(), Value::from(power));
+            self.values.insert("raw_power_watts".into(), Value::from(power));
         }
         if let Some(fan) = self.fan_speed {
-            values.insert("raw_fan_speed".into(), Value::from(fan));
+            self.values.insert("raw_fan_speed".into(), Value::from(fan));
         }
 
         // Add limits
@@ -496,10 +496,18 @@ impl DataSource for GpuSource {
             }
         };
 
-        values.insert("min_limit".into(), Value::from(min_limit));
-        values.insert("max_limit".into(), Value::from(max_limit));
+        self.values.insert("min_limit".into(), Value::from(min_limit));
+        self.values.insert("max_limit".into(), Value::from(max_limit));
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {

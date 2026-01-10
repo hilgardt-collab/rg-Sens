@@ -125,6 +125,9 @@ pub struct CpuSource {
     detected_min: Option<f64>,
     detected_max: Option<f64>,
     update_count: usize,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl CpuSource {
@@ -166,6 +169,7 @@ impl CpuSource {
             detected_min: None,
             detected_max: None,
             update_count: 0,
+            values: HashMap::with_capacity(48), // More capacity for per-core fields
         }
     }
 
@@ -424,11 +428,8 @@ impl DataSource for CpuSource {
             }
         }
 
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         // Determine which data to use based on core selection
         let usage_value = match &self.config.core_selection {
@@ -454,45 +455,45 @@ impl DataSource for CpuSource {
         // Use consistent field names ("caption", "value", "unit") for easier text displayer config
         match self.config.field {
             CpuField::Usage => {
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(usage_value));
-                values.insert("usage".to_string(), Value::from(usage_value)); // Keep for compatibility
-                values.insert("unit".to_string(), Value::from("%"));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(usage_value));
+                self.values.insert("usage".to_string(), Value::from(usage_value)); // Keep for compatibility
+                self.values.insert("unit".to_string(), Value::from("%"));
             }
             CpuField::Temperature => {
-                values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("caption".to_string(), Value::from(caption));
                 if let Some(temp) = temperature_value {
-                    values.insert("value".to_string(), Value::from(temp));
-                    values.insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
-                    values.insert("unit".to_string(), Value::from(self.get_temperature_unit_string()));
+                    self.values.insert("value".to_string(), Value::from(temp));
+                    self.values.insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
+                    self.values.insert("unit".to_string(), Value::from(self.get_temperature_unit_string()));
                 } else {
-                    values.insert("value".to_string(), Value::from("N/A"));
-                    values.insert("temperature".to_string(), Value::from("N/A")); // Keep for compatibility
-                    values.insert("unit".to_string(), Value::from(""));
+                    self.values.insert("value".to_string(), Value::from("N/A"));
+                    self.values.insert("temperature".to_string(), Value::from("N/A")); // Keep for compatibility
+                    self.values.insert("unit".to_string(), Value::from(""));
                 }
             }
             CpuField::Frequency => {
                 let converted_freq = self.convert_frequency(frequency_value);
-                values.insert("caption".to_string(), Value::from(caption));
-                values.insert("value".to_string(), Value::from(converted_freq));
-                values.insert("frequency".to_string(), Value::from(converted_freq)); // Keep for compatibility
-                values.insert("unit".to_string(), Value::from(self.get_frequency_unit_string()));
+                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values.insert("value".to_string(), Value::from(converted_freq));
+                self.values.insert("frequency".to_string(), Value::from(converted_freq)); // Keep for compatibility
+                self.values.insert("unit".to_string(), Value::from(self.get_frequency_unit_string()));
             }
         }
 
         // Also provide all raw data for advanced use cases
-        values.insert("raw_usage".to_string(), Value::from(self.global_usage));
+        self.values.insert("raw_usage".to_string(), Value::from(self.global_usage));
 
         if let Some(temp) = self.cpu_temperature {
-            values.insert("raw_temperature_celsius".to_string(), Value::from(temp));
+            self.values.insert("raw_temperature_celsius".to_string(), Value::from(temp));
         }
 
-        values.insert("raw_frequency".to_string(), Value::from(self.cpu_frequency));
+        self.values.insert("raw_frequency".to_string(), Value::from(self.cpu_frequency));
 
         // Per-core data (always available) - use cached key names to avoid allocation
         for (i, usage) in self.per_core_usage.iter().enumerate() {
             if let Some(key) = CPU_HARDWARE_INFO.core_usage_keys.get(i) {
-                values.insert(key.clone(), Value::from(*usage));
+                self.values.insert(key.clone(), Value::from(*usage));
             }
         }
 
@@ -518,14 +519,22 @@ impl DataSource for CpuSource {
         };
 
         if let Some(min) = min_limit {
-            values.insert("min_limit".to_string(), Value::from(min));
+            self.values.insert("min_limit".to_string(), Value::from(min));
         }
 
         if let Some(max) = max_limit {
-            values.insert("max_limit".to_string(), Value::from(max));
+            self.values.insert("max_limit".to_string(), Value::from(max));
         }
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn is_available(&self) -> bool {

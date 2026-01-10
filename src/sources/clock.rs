@@ -105,6 +105,9 @@ pub struct ClockSource {
     date_string: String,
     day_name: String,
     month_name: String,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl ClockSource {
@@ -151,6 +154,7 @@ impl ClockSource {
             date_string: String::new(),
             day_name: String::new(),
             month_name: String::new(),
+            values: HashMap::with_capacity(32),
         }
     }
 
@@ -480,47 +484,44 @@ impl DataSource for ClockSource {
             manager.update(self.hour, self.minute, self.second, self.day_of_week);
         }
 
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         // Time components
-        values.insert("hour".to_string(), Value::from(self.hour));
-        values.insert("minute".to_string(), Value::from(self.minute));
-        values.insert("second".to_string(), Value::from(self.second));
-        values.insert("millisecond".to_string(), Value::from(self.millisecond));
+        self.values.insert("hour".to_string(), Value::from(self.hour));
+        self.values.insert("minute".to_string(), Value::from(self.minute));
+        self.values.insert("second".to_string(), Value::from(self.second));
+        self.values.insert("millisecond".to_string(), Value::from(self.millisecond));
 
         // Formatted strings
-        values.insert("time".to_string(), Value::from(self.time_string.clone()));
-        values.insert("date".to_string(), Value::from(self.date_string.clone()));
-        values.insert(
+        self.values.insert("time".to_string(), Value::from(self.time_string.clone()));
+        self.values.insert("date".to_string(), Value::from(self.date_string.clone()));
+        self.values.insert(
             "day_name".to_string(),
             Value::from(self.day_name.clone()),
         );
-        values.insert(
+        self.values.insert(
             "month_name".to_string(),
             Value::from(self.month_name.clone()),
         );
 
         // Date components
-        values.insert("day".to_string(), Value::from(self.day));
-        values.insert("month".to_string(), Value::from(self.month));
-        values.insert("year".to_string(), Value::from(self.year));
-        values.insert("day_of_week".to_string(), Value::from(self.day_of_week));
+        self.values.insert("day".to_string(), Value::from(self.day));
+        self.values.insert("month".to_string(), Value::from(self.month));
+        self.values.insert("year".to_string(), Value::from(self.year));
+        self.values.insert("day_of_week".to_string(), Value::from(self.day_of_week));
 
         // Get alarm/timer info from global manager
         if let Ok(manager) = global_timer_manager().read() {
             // Alarm state
             let any_triggered = manager.any_alarm_triggered();
-            values.insert("alarm_triggered".to_string(), Value::from(any_triggered));
+            self.values.insert("alarm_triggered".to_string(), Value::from(any_triggered));
             let any_alarm_enabled = manager.alarms.iter().any(|a| a.enabled);
-            values.insert("alarm_enabled".to_string(), Value::from(any_alarm_enabled));
+            self.values.insert("alarm_enabled".to_string(), Value::from(any_alarm_enabled));
 
             // Next alarm info
             if let Some(ref next_time) = manager.next_alarm_time {
-                values.insert(
+                self.values.insert(
                     "next_alarm_time".to_string(),
                     Value::from(next_time.clone()),
                 );
@@ -528,18 +529,18 @@ impl DataSource for ClockSource {
 
             // Triggered alarm IDs
             let triggered_ids: Vec<_> = manager.triggered_alarms.iter().cloned().collect();
-            values.insert(
+            self.values.insert(
                 "triggered_alarm_ids".to_string(),
                 serde_json::to_value(&triggered_ids).unwrap_or(Value::Array(vec![])),
             );
 
             // Timer info
             if let Some(timer) = manager.get_display_timer() {
-                values.insert(
+                self.values.insert(
                     "timer_display".to_string(),
                     Value::from(timer.display_string()),
                 );
-                values.insert("timer_progress".to_string(), Value::from(timer.progress()));
+                self.values.insert("timer_progress".to_string(), Value::from(timer.progress()));
 
                 let timer_state = match timer.state {
                     TimerState::Stopped => "stopped",
@@ -547,36 +548,36 @@ impl DataSource for ClockSource {
                     TimerState::Paused => "paused",
                     TimerState::Finished => "finished",
                 };
-                values.insert("timer_state".to_string(), Value::from(timer_state));
+                self.values.insert("timer_state".to_string(), Value::from(timer_state));
             } else {
-                values.insert("timer_display".to_string(), Value::from(""));
-                values.insert("timer_progress".to_string(), Value::from(0.0));
-                values.insert("timer_state".to_string(), Value::from("stopped"));
+                self.values.insert("timer_display".to_string(), Value::from(""));
+                self.values.insert("timer_progress".to_string(), Value::from(0.0));
+                self.values.insert("timer_state".to_string(), Value::from("stopped"));
             }
 
             // Expose all alarms and timers for UI
-            values.insert(
+            self.values.insert(
                 "alarms".to_string(),
                 serde_json::to_value(&manager.alarms).unwrap_or(Value::Array(vec![])),
             );
-            values.insert(
+            self.values.insert(
                 "timers".to_string(),
                 serde_json::to_value(&manager.timers).unwrap_or(Value::Array(vec![])),
             );
 
             // Check if needs attention (for visual cue)
-            values.insert(
+            self.values.insert(
                 "needs_attention".to_string(),
                 Value::from(manager.needs_attention()),
             );
         } else {
             // Fallback values if manager lock fails
-            values.insert("alarm_triggered".to_string(), Value::from(false));
-            values.insert("alarm_enabled".to_string(), Value::from(false));
-            values.insert("timer_display".to_string(), Value::from(""));
-            values.insert("timer_progress".to_string(), Value::from(0.0));
-            values.insert("timer_state".to_string(), Value::from("stopped"));
-            values.insert("needs_attention".to_string(), Value::from(false));
+            self.values.insert("alarm_triggered".to_string(), Value::from(false));
+            self.values.insert("alarm_enabled".to_string(), Value::from(false));
+            self.values.insert("timer_display".to_string(), Value::from(""));
+            self.values.insert("timer_progress".to_string(), Value::from(0.0));
+            self.values.insert("timer_state".to_string(), Value::from("stopped"));
+            self.values.insert("needs_attention".to_string(), Value::from(false));
         }
 
         // Normalized value for analog displays (based on 12-hour clock)
@@ -587,15 +588,15 @@ impl DataSource for ClockSource {
 
         // Hour hand position (0-1 for full rotation)
         let hour_value = (hour_12 + minute_frac) / 12.0;
-        values.insert("hour_value".to_string(), Value::from(hour_value));
+        self.values.insert("hour_value".to_string(), Value::from(hour_value));
 
         // Minute hand position (0-1 for full rotation)
         let minute_value = (self.minute as f64 + second_frac) / 60.0;
-        values.insert("minute_value".to_string(), Value::from(minute_value));
+        self.values.insert("minute_value".to_string(), Value::from(minute_value));
 
         // Second hand position (0-1 for full rotation, with millisecond smoothing)
         let second_value = (self.second as f64 + ms_frac) / 60.0;
-        values.insert("second_value".to_string(), Value::from(second_value));
+        self.values.insert("second_value".to_string(), Value::from(second_value));
 
         // Day progress value (0-1 representing percentage of 24-hour period elapsed)
         // 24 hours = 86400 seconds
@@ -604,22 +605,30 @@ impl DataSource for ClockSource {
             + self.second as f64
             + ms_frac;
         let day_progress = total_seconds / 86400.0;
-        values.insert("value".to_string(), Value::from(day_progress));
+        self.values.insert("value".to_string(), Value::from(day_progress));
 
         // Caption for text displays
-        values.insert(
+        self.values.insert(
             "caption".to_string(),
             Value::from(self.time_string.clone()),
         );
-        values.insert("unit".to_string(), Value::from(""));
+        self.values.insert("unit".to_string(), Value::from(""));
 
         // Timezone
-        values.insert(
+        self.values.insert(
             "timezone".to_string(),
             Value::from(self.config.timezone.clone()),
         );
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {

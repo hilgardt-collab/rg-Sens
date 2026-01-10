@@ -87,6 +87,8 @@ pub static TEST_SOURCE_STATE: once_cell::sync::Lazy<Arc<Mutex<TestSourceState>>>
 /// Test data source
 pub struct TestSource {
     metadata: SourceMetadata,
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl TestSource {
@@ -109,6 +111,7 @@ impl TestSource {
                 ],
                 default_interval: Duration::from_millis(100),
             },
+            values: HashMap::with_capacity(12),
         }
     }
 
@@ -208,27 +211,23 @@ impl DataSource for TestSource {
     }
 
     fn update(&mut self) -> anyhow::Result<()> {
-        // Values are computed dynamically in get_values()
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         // Use blocking lock - handlers only hold the lock briefly so this is safe
         // try_lock was causing values to reset to defaults during any lock contention
         let Ok(state) = TEST_SOURCE_STATE.lock() else {
             // Return default values only if lock is poisoned (thread panic)
-            values.insert("caption".to_string(), Value::from("Test"));
-            values.insert("value".to_string(), Value::from(50.0));
-            values.insert("unit".to_string(), Value::from(""));
-            values.insert("normalized".to_string(), Value::from(50.0));
-            values.insert("numerical_value".to_string(), Value::from(50.0));
-            values.insert("min".to_string(), Value::from(0.0));
-            values.insert("max".to_string(), Value::from(100.0));
-            values.insert("min_limit".to_string(), Value::from(0.0));
-            values.insert("max_limit".to_string(), Value::from(100.0));
-            return values;
+            self.values.insert("caption".to_string(), Value::from("Test"));
+            self.values.insert("value".to_string(), Value::from(50.0));
+            self.values.insert("unit".to_string(), Value::from(""));
+            self.values.insert("normalized".to_string(), Value::from(50.0));
+            self.values.insert("numerical_value".to_string(), Value::from(50.0));
+            self.values.insert("min".to_string(), Value::from(0.0));
+            self.values.insert("max".to_string(), Value::from(100.0));
+            self.values.insert("min_limit".to_string(), Value::from(0.0));
+            self.values.insert("max_limit".to_string(), Value::from(100.0));
+            return Ok(());
         };
         let value = Self::calculate_value(&state);
         let config = &state.config;
@@ -249,19 +248,27 @@ impl DataSource for TestSource {
             TestMode::Triangle => "Tri",
             TestMode::Square => "Sqr",
         };
-        values.insert("caption".to_string(), Value::from(caption));
-        values.insert("value".to_string(), Value::from(value));
-        values.insert("unit".to_string(), Value::from(""));
-        values.insert("normalized".to_string(), Value::from(normalized));
-        values.insert("min".to_string(), Value::from(config.min_value));
-        values.insert("max".to_string(), Value::from(config.max_value));
+        self.values.insert("caption".to_string(), Value::from(caption));
+        self.values.insert("value".to_string(), Value::from(value));
+        self.values.insert("unit".to_string(), Value::from(""));
+        self.values.insert("normalized".to_string(), Value::from(normalized));
+        self.values.insert("min".to_string(), Value::from(config.min_value));
+        self.values.insert("max".to_string(), Value::from(config.max_value));
         // Also provide min_limit/max_limit for displayers that expect these names
-        values.insert("min_limit".to_string(), Value::from(config.min_value));
-        values.insert("max_limit".to_string(), Value::from(config.max_value));
+        self.values.insert("min_limit".to_string(), Value::from(config.min_value));
+        self.values.insert("max_limit".to_string(), Value::from(config.max_value));
         // Provide numerical_value for LCARS compatibility
-        values.insert("numerical_value".to_string(), Value::from(value));
+        self.values.insert("numerical_value".to_string(), Value::from(value));
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {

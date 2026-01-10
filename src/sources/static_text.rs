@@ -64,6 +64,9 @@ impl Default for StaticTextSourceConfig {
 pub struct StaticTextSource {
     metadata: SourceMetadata,
     config: StaticTextSourceConfig,
+
+    /// Cached output values - updated in update(), returned by reference in values_ref()
+    values: HashMap<String, Value>,
 }
 
 impl StaticTextSource {
@@ -83,6 +86,7 @@ impl StaticTextSource {
         Self {
             metadata,
             config: StaticTextSourceConfig::default(),
+            values: HashMap::with_capacity(8),
         }
     }
 
@@ -170,12 +174,8 @@ impl DataSource for StaticTextSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        // Static text doesn't need to update from external sources
-        Ok(())
-    }
-
-    fn get_values(&self) -> HashMap<String, Value> {
-        let mut values = HashMap::new();
+        // Build values HashMap (reuse allocation, just clear and refill)
+        self.values.clear();
 
         // Ensure we have valid config - use default if lines is empty
         let lines = if self.config.lines.is_empty() {
@@ -192,27 +192,35 @@ impl DataSource for StaticTextSource {
                     .map(|l| l.label.clone())
                     .unwrap_or_else(|| "Static Text".to_string())
             });
-        values.insert("caption".to_string(), Value::from(caption.clone()));
+        self.values.insert("caption".to_string(), Value::from(caption.clone()));
 
         // Set primary value to first line's text
         let value_text = lines.first()
             .map(|l| l.text.clone())
             .unwrap_or_else(|| "Static Text".to_string());
-        values.insert("value".to_string(), Value::from(value_text.clone()));
+        self.values.insert("value".to_string(), Value::from(value_text.clone()));
 
         // Unit is empty for static text
-        values.insert("unit".to_string(), Value::from(""));
+        self.values.insert("unit".to_string(), Value::from(""));
 
         // Add all configured lines as their field_id
         for line in &lines {
-            values.insert(line.field_id.clone(), Value::from(line.text.clone()));
+            self.values.insert(line.field_id.clone(), Value::from(line.text.clone()));
         }
 
         // Set min/max limits for compatibility with displayers that expect them
-        values.insert("min_limit".to_string(), Value::from(0.0));
-        values.insert("max_limit".to_string(), Value::from(100.0));
+        self.values.insert("min_limit".to_string(), Value::from(0.0));
+        self.values.insert("max_limit".to_string(), Value::from(100.0));
 
-        values
+        Ok(())
+    }
+
+    fn get_values(&self) -> HashMap<String, Value> {
+        self.values.clone()
+    }
+
+    fn values_ref(&self) -> Option<&HashMap<String, Value>> {
+        Some(&self.values)
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {

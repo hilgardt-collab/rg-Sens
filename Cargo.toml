@@ -71,6 +71,11 @@ lto = true
 codegen-units = 1
 strip = true
 
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false
+
 [profile.dev]
 opt-level = 1  # Slightly optimized debug builds for better performance during development
 
