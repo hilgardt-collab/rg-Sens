@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>rg-sens</id>
+
+  <name>rg-Sens</name>
+  <summary>A fast, customizable system monitoring dashboard</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+
+  <description>
+    <p>
+      rg-Sens is a highly customizable system monitoring dashboard for Linux.
+      It provides a grid-based interface for visualizing system metrics including
+      CPU usage, GPU statistics, memory, temperatures, and more.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Customizable grid layout with drag-and-drop panel arrangement</li>
+      <li>Multiple visualization styles: text, bars, arcs, and gauges</li>
+      <li>Support for CPU, memory, GPU (AMD/NVIDIA), and temperature monitoring</li>
+      <li>Configurable backgrounds with gradients, images, and polygons</li>
+      <li>Low resource usage with target of less than 5% CPU idle</li>
+      <li>Theme support with customizable colors</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">rg-sens.desktop</launchable>
+
+  <url type="homepage">https://github.com/hilgardt-collab/rg-Sens</url>
+  <url type="bugtracker">https://github.com/hilgardt-collab/rg-Sens/issues</url>
+  <url type="vcs-browser">https://github.com/hilgardt-collab/rg-Sens</url>
+
+  <developer>
+    <name>rg-Sens Contributors</name>
+  </developer>
+
+  <provides>
+    <binary>rg-sens</binary>
+  </provides>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+
+  <categories>
+    <category>System</category>
+    <category>Monitor</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>system</keyword>
+    <keyword>monitor</keyword>
+    <keyword>cpu</keyword>
+    <keyword>gpu</keyword>
+    <keyword>memory</keyword>
+    <keyword>temperature</keyword>
+    <keyword>dashboard</keyword>
+  </keywords>
+
+  <screenshots>
+    <!-- Add screenshots when available -->
+    <!--
+    <screenshot type="default">
+      <caption>Main dashboard view</caption>
+      <image>https://raw.githubusercontent.com/hilgardt-collab/rg-Sens/main/screenshots/main.png</image>
+    </screenshot>
+    -->
+  </screenshots>
+
+  <releases>
+    <release version="0.5.0" date="2024-01-01">
+      <description>
+        <p>Initial Flatpak release</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1" />
+</component>

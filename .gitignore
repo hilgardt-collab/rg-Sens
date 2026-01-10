@@ -28,3 +28,9 @@ coverage/
 
 # Generated files
 /doc
+
+# AUR packaging
+/aur/src/
+/aur/pkg/
+/aur/*.pkg.tar.*
+/aur/PKGBUILD-local

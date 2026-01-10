@@ -8,4 +8,4 @@ Type=Application
 Categories=System;Monitor;Utility;
 Keywords=system;monitor;cpu;gpu;memory;temperature;
 StartupNotify=true
-StartupWMClass=com.github.hilgardt_collab.rg_sens
+StartupWMClass=rg-sens

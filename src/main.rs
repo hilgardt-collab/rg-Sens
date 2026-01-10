@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-const APP_ID: &str = "com.github.hilgardt_collab.rg_sens";
+const APP_ID: &str = "rg-sens";
 
 /// Graphics renderer to use
 #[derive(Debug, Clone, Copy, ValueEnum)]

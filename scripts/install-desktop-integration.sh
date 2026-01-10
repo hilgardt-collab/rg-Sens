@@ -30,7 +30,7 @@ cp "$PROJECT_DIR/data/icons/hicolor/256x256/apps/rg-sens.png" "$ICON_DIR/"
 echo "  Installed icon to $ICON_DIR/rg-sens.png"
 
 # Copy desktop file
-cp "$PROJECT_DIR/data/com.github.hilgardt_collab.rg_sens.desktop" "$DESKTOP_DIR/"
+cp "$PROJECT_DIR/data/rg-sens.desktop" "$DESKTOP_DIR/"
 echo "  Installed desktop file to $DESKTOP_DIR/"
 
 # Update icon cache (required for Wayland)
