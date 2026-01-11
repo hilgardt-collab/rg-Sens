@@ -122,13 +122,12 @@ where
         // Draw item frame using the provided closure
         draw_item_frame(cr, item_x, item_y, item_w, item_h);
 
-        // Get animated percent
-        let bar_key = format!("{}_bar", prefix);
-        let animated_percent = params
-            .bar_values
-            .get(&bar_key)
-            .map(|av| av.current)
-            .unwrap_or_else(|| item_data.percent());
+        // Get animated percent (use KeyBuffer to avoid allocation)
+        let animated_percent = combo_utils::with_key_buffer(|buf| {
+            let bar_key = buf.build_bar_key(&prefix);
+            params.bar_values.get(bar_key).map(|av| av.current)
+        })
+        .unwrap_or_else(|| item_data.percent());
 
         match item_config.display_as {
             ContentDisplayType::Bar => {
@@ -159,9 +158,13 @@ where
                 )?;
             }
             ContentDisplayType::Graph => {
-                let graph_key = format!("{}_graph", prefix);
+                // Use KeyBuffer to avoid allocation for graph_key lookup
                 let empty_history = VecDeque::new();
-                let history = params.graph_history.get(&graph_key).unwrap_or(&empty_history);
+                let history = combo_utils::with_key_buffer(|buf| {
+                    let graph_key = buf.build_graph_key(&prefix);
+                    params.graph_history.get(graph_key)
+                })
+                .unwrap_or(&empty_history);
 
                 if let Err(e) = render_content_graph(
                     cr,
@@ -209,16 +212,23 @@ where
                     let capacity =
                         core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
                     let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
+                    // Use KeyBuffer to avoid allocation for core_key lookups
                     for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                        let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                        let value = params.values.get(&core_key).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let value = combo_utils::with_key_buffer(|buf| {
+                            let core_key = buf.build_core_key(&prefix, core_idx);
+                            params.values.get(core_key).and_then(|v| v.as_f64())
+                        })
+                        .unwrap_or(0.0);
                         raw_values.push(value / 100.0);
                     }
 
                     if raw_values.is_empty() {
                         for core_idx in 0..128 {
-                            let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            if let Some(v) = params.values.get(&core_key).and_then(|v| v.as_f64()) {
+                            let value = combo_utils::with_key_buffer(|buf| {
+                                let core_key = buf.build_core_key(&prefix, core_idx);
+                                params.values.get(core_key).and_then(|v| v.as_f64())
+                            });
+                            if let Some(v) = value {
                                 raw_values.push(v / 100.0);
                             } else {
                                 break;
@@ -304,6 +314,8 @@ pub struct ComboDisplayData {
     pub dirty: bool,
     /// Cached prefixes to avoid regenerating every frame
     pub cached_prefixes: Vec<String>,
+    /// Cached prefix set for O(1) lookups (regenerated when prefixes change)
+    pub cached_prefix_set: std::collections::HashSet<String>,
     /// Group item counts used to generate cached_prefixes (for invalidation)
     pub cached_group_counts: Vec<usize>,
 }
@@ -320,6 +332,7 @@ impl Default for ComboDisplayData {
             transform: PanelTransform::default(),
             dirty: true,
             cached_prefixes: Vec::new(),
+            cached_prefix_set: std::collections::HashSet::new(),
             cached_group_counts: Vec::new(),
         }
     }
@@ -500,12 +513,14 @@ pub fn handle_combo_update_data(
     // Only regenerate prefixes if group_item_counts changed (avoid allocation every frame)
     if data.cached_group_counts.as_slice() != group_item_counts {
         data.cached_prefixes = combo_utils::generate_prefixes(group_item_counts);
+        // Also regenerate the prefix set for O(1) lookups
+        data.cached_prefix_set = data.cached_prefixes.iter().cloned().collect();
         data.cached_group_counts.clear();
         data.cached_group_counts.extend_from_slice(group_item_counts);
     }
 
-    // Filter values using cached prefixes
-    combo_utils::filter_values_by_prefixes_into(input, &data.cached_prefixes, &mut data.values);
+    // Filter values using cached prefix set (avoids HashSet creation on every call)
+    combo_utils::filter_values_with_owned_prefix_set(input, &data.cached_prefix_set, &mut data.values);
 
     // Update each item
     for prefix in &data.cached_prefixes.clone() {

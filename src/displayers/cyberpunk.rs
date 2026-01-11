@@ -203,10 +203,11 @@ impl Displayer for CyberpunkDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
-            // Clone config data to avoid borrow conflicts
+            // Clone config values to satisfy borrow checker (MutexGuard doesn't support split borrowing)
+            // group_item_counts is small (1-4 elements), content_items is needed for the duration
+            let animation_enabled = display_data.config.animation_enabled;
             let group_item_counts = display_data.config.frame.group_item_counts.clone();
             let content_items = display_data.config.frame.content_items.clone();
-            let animation_enabled = display_data.config.animation_enabled;
 
             // Use shared update logic
             handle_combo_update_data(

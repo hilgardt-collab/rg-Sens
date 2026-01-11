@@ -228,13 +228,14 @@ impl Displayer for CpuCoresDisplayer {
             let start = display_data.config.start_core.min(max_core);
             let end = display_data.config.end_core.min(max_core);
 
-            // Get values for selected range
+            // Get values for selected range using binary search (O(log n) per lookup)
+            // all_cores is sorted by index, so binary search is efficient
             let selected_cores: Vec<f64> = (start..=end)
                 .map(|idx| {
                     all_cores
-                        .iter()
-                        .find(|(i, _)| *i == idx)
-                        .map(|(_, v)| *v)
+                        .binary_search_by_key(&idx, |(i, _)| *i)
+                        .ok()
+                        .map(|pos| all_cores[pos].1)
                         .unwrap_or(0.0)
                 })
                 .collect();

@@ -164,15 +164,55 @@ pub fn filter_values_by_prefixes_into(
     prefixes: &[String],
     output: &mut HashMap<String, Value>,
 ) {
-    output.clear();
+    let prefix_set = prefix_set(prefixes);
+    filter_values_with_prefix_set(data, &prefix_set, output);
+}
 
-    // Build prefix set once for O(1) lookups
-    let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
+/// Filter values in-place using a pre-built prefix HashSet (borrowed &str version)
+/// Use this variant when calling repeatedly with the same prefixes to avoid HashSet allocation
+#[inline]
+pub fn filter_values_with_prefix_set(
+    data: &HashMap<String, Value>,
+    prefix_set: &HashSet<&str>,
+    output: &mut HashMap<String, Value>,
+) {
+    output.clear();
 
     // Single pass through data - O(n)
     for (k, v) in data.iter() {
         // Check if key matches any prefix exactly
         if prefix_set.contains(k.as_str()) {
+            output.insert(k.clone(), v.clone());
+            continue;
+        }
+
+        // Check if key starts with any prefix followed by underscore
+        // Extract potential prefix from key (everything before first underscore after "group")
+        if let Some(underscore_pos) = k.find('_') {
+            if let Some(second_underscore) = k[underscore_pos + 1..].find('_') {
+                let potential_prefix = &k[..underscore_pos + 1 + second_underscore];
+                if prefix_set.contains(potential_prefix) {
+                    output.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
+}
+
+/// Filter values in-place using a pre-built prefix HashSet (owned String version)
+/// Use this variant when you have a cached HashSet<String> to avoid repeated HashSet creation
+#[inline]
+pub fn filter_values_with_owned_prefix_set(
+    data: &HashMap<String, Value>,
+    prefix_set: &HashSet<String>,
+    output: &mut HashMap<String, Value>,
+) {
+    output.clear();
+
+    // Single pass through data - O(n)
+    for (k, v) in data.iter() {
+        // Check if key matches any prefix exactly
+        if prefix_set.contains(k) {
             output.insert(k.clone(), v.clone());
             continue;
         }
