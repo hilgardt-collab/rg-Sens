@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Widget};
@@ -154,14 +154,15 @@ impl Displayer for GraphDisplayer {
                             // Update scroll offset for smooth horizontal scrolling
                             // scroll_offset advances at rate of 1.0 per update_interval seconds
                             let update_interval = data_guard.config.update_interval.max(0.1);
+                            let prev_scroll = data_guard.scroll_offset;
                             data_guard.scroll_offset += elapsed / update_interval;
 
                             // Clamp scroll_offset - it will be reset when new data arrives
                             // Allow it to go slightly beyond 1.0 to handle timing variations
                             data_guard.scroll_offset = data_guard.scroll_offset.min(1.5);
 
-                            // Always redraw when animating for smooth scrolling
-                            redraw = true;
+                            // Track if scroll is actively animating (not yet clamped at max)
+                            let scroll_animating = prev_scroll < 1.0 && data_guard.scroll_offset < 1.5;
 
                             // Smooth interpolation factor for Y-value animation
                             let lerp_factor = 0.15;
@@ -169,6 +170,9 @@ impl Displayer for GraphDisplayer {
                             // Ensure animated_points has the same length as data_points
                             let target_len = data_guard.data_points.len();
                             let animated_len = data_guard.animated_points.len();
+
+                            // Track if any points are still animating
+                            let mut points_animating = false;
 
                             // Add new points if needed (copy values to avoid borrow conflicts)
                             // If adding multiple points at once (e.g., animation just enabled),
@@ -180,6 +184,7 @@ impl Displayer for GraphDisplayer {
                                     let initial_value = if initialize_to_actual {
                                         p.value // Use actual value for bulk initialization
                                     } else {
+                                        points_animating = true; // New point will animate
                                         0.0 // Single new point animates from baseline
                                     };
                                     data_guard.animated_points.push_back(DataPoint {
@@ -194,8 +199,8 @@ impl Displayer for GraphDisplayer {
                                 data_guard.animated_points.pop_front();
                             }
 
-                            // Interpolate all points toward their target values
-                            // Access by index to avoid intermediate Vec allocation
+                            // Interpolate points toward their target values
+                            // OPTIMIZATION: Only interpolate points that haven't converged yet
                             let len = data_guard.animated_points.len();
                             for i in 0..len {
                                 // Get target values first (immutable borrow)
@@ -206,12 +211,27 @@ impl Displayer for GraphDisplayer {
                                 };
                                 // Then update animated point (mutable borrow)
                                 if let Some(animated) = data_guard.animated_points.get_mut(i) {
-                                    animated.value += (target_value - animated.value) * lerp_factor;
+                                    // Always update timestamp
                                     animated.timestamp = target_timestamp;
+
+                                    // Skip interpolation if already converged (within snap threshold)
+                                    let diff = (target_value - animated.value).abs();
+                                    if diff > ANIMATION_SNAP_THRESHOLD {
+                                        animated.value += (target_value - animated.value) * lerp_factor;
+                                        points_animating = true;
+                                    } else if diff > 0.0 {
+                                        // Snap to target when very close
+                                        animated.value = target_value;
+                                    }
                                 }
                             }
 
                             data_guard.last_update_time = current_time;
+
+                            // Only redraw if scroll is animating OR points are still interpolating
+                            if scroll_animating || points_animating {
+                                redraw = true;
+                            }
                             redraw
                         } else {
                             // Animation disabled - render uses data_points directly,
@@ -263,8 +283,17 @@ impl Displayer for GraphDisplayer {
             }
 
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
+            // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
             if data.config.text_overlay.enabled && !data.config.text_overlay.text_config.lines.is_empty() {
-                data.source_values = super::extract_text_values(values, &data.config.text_overlay.text_config);
+                // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
+                let field_ids: Vec<_> = data.config.text_overlay.text_config.lines.iter()
+                    .map(|l| l.field_id.clone()).collect();
+                data.source_values.clear();
+                for field_id in field_ids {
+                    if let Some(value) = values.get(&field_id) {
+                        data.source_values.insert(field_id, value.clone());
+                    }
+                }
             } else {
                 data.source_values.clear();
             }

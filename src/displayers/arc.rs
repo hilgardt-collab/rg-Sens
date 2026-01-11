@@ -167,10 +167,16 @@ impl Displayer for ArcDisplayer {
             }
 
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            display_data.values = super::extract_text_values(
-                data,
-                &display_data.config.text_overlay.text_config,
-            );
+            // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
+            // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
+            let field_ids: Vec<_> = display_data.config.text_overlay.text_config.lines.iter()
+                .map(|l| l.field_id.clone()).collect();
+            display_data.values.clear();
+            for field_id in field_ids {
+                if let Some(value) = data.get(&field_id) {
+                    display_data.values.insert(field_id, value.clone());
+                }
+            }
             // Extract transform
             display_data.transform = PanelTransform::from_values(data);
 
