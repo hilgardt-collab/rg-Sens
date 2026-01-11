@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::bar_display::{render_bar, BarDisplayConfig};
 
 /// Bar displayer
@@ -87,57 +87,40 @@ impl Displayer for BarDisplayer {
             }
         });
 
-        // Set up periodic redraw for animation (~60fps)
-        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
-            let drawing_area_weak = drawing_area.downgrade();
-            let data_for_timer = self.data.clone();
-            move || {
-                let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                    return glib::ControlFlow::Break;
-                };
+        // Register with global animation manager for centralized animation timing
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
+            // Use try_lock to avoid blocking UI thread if lock is held
+            if let Ok(mut data) = data_for_animation.try_lock() {
+                // Check if animation is in progress
+                if data.config.smooth_animation && (data.animated_value - data.value).abs() > ANIMATION_SNAP_THRESHOLD {
+                    // Calculate elapsed time for smooth animation
+                    let now = std::time::Instant::now();
+                    let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
+                    data.last_frame_time = now;
 
-                // Skip animation updates when widget is not visible (saves CPU)
-                if !drawing_area.is_mapped() {
-                    return glib::ControlFlow::Continue;
+                    // Animation speed: higher value = faster animation
+                    // animation_speed of 1.0 means very fast, 0.1 means slow
+                    let animation_speed = data.config.animation_speed.clamp(0.01, 1.0) * 10.0;
+                    let delta = (data.value - data.animated_value) * animation_speed * elapsed;
+
+                    // Apply delta with smoothing
+                    data.animated_value += delta;
+
+                    // Snap to target if close enough
+                    if (data.animated_value - data.value).abs() < ANIMATION_SNAP_THRESHOLD {
+                        data.animated_value = data.value;
+                    }
+
+                    true
+                } else if data.dirty {
+                    data.dirty = false;
+                    true
+                } else {
+                    false
                 }
-
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                        // Check if animation is in progress
-                        if data.config.smooth_animation && (data.animated_value - data.value).abs() > ANIMATION_SNAP_THRESHOLD {
-                            // Calculate elapsed time for smooth animation
-                            let now = std::time::Instant::now();
-                            let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
-                            data.last_frame_time = now;
-
-                            // Animation speed: higher value = faster animation
-                            // animation_speed of 1.0 means very fast, 0.1 means slow
-                            let animation_speed = data.config.animation_speed.clamp(0.01, 1.0) * 10.0;
-                            let delta = (data.value - data.animated_value) * animation_speed * elapsed;
-
-                            // Apply delta with smoothing
-                            data.animated_value += delta;
-
-                            // Snap to target if close enough
-                            if (data.animated_value - data.value).abs() < ANIMATION_SNAP_THRESHOLD {
-                                data.animated_value = data.value;
-                            }
-
-                            true
-                        } else if data.dirty {
-                            data.dirty = false;
-                            true
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    };
-
-                if needs_redraw {
-                    drawing_area.queue_draw();
-                }
-                glib::ControlFlow::Continue
+            } else {
+                false
             }
         });
 

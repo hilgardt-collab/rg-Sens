@@ -357,6 +357,9 @@ fn build_ui(app: &Application) {
     // Initialize global update manager so new panels can register themselves
     rg_sens::core::init_global_update_manager(update_manager.clone());
 
+    // Initialize global animation manager for centralized animation timing
+    rg_sens::core::init_global_animation_manager();
+
     let mut panels = Vec::new();
 
     // Create panels from configuration (uses new PanelData format with auto-migration)

@@ -7,6 +7,7 @@ mod field_metadata;
 mod panel;
 mod panel_data;
 mod registry;
+mod animation_manager;
 mod shared_source_manager;
 mod timer_manager;
 mod update_manager;
@@ -25,4 +26,5 @@ pub use timer_manager::{
     TimerConfig, TimerDisplayConfig, TimerMode, TimerState,
 };
 pub use update_manager::{UpdateManager, init_global_update_manager, global_update_manager};
+pub use animation_manager::{init_global_animation_manager, register_animation};
 pub use constants::{ANIMATION_FRAME_INTERVAL, ANIMATION_FRAME_MS, ANIMATION_SNAP_THRESHOLD, STATIC_POLL_INTERVAL};

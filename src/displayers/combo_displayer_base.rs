@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea};
+use gtk4::{prelude::*, DrawingArea};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -31,7 +31,7 @@ impl Drop for CairoGuard<'_> {
     }
 }
 
-use crate::core::{PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::arc_display::render_arc;
 use crate::ui::graph_display::DataPoint;
@@ -326,7 +326,7 @@ impl Default for ComboDisplayData {
 }
 
 /// Set up the animation timer for a combo displayer.
-/// Returns a function that performs the animation tick.
+/// Registers the animation callback with the global AnimationManager.
 /// Call this after creating the drawing area.
 pub fn setup_combo_animation_timer<F, G>(
     drawing_area: &DrawingArea,
@@ -337,32 +337,36 @@ pub fn setup_combo_animation_timer<F, G>(
     F: Fn(&ComboDisplayData) -> bool + 'static,
     G: Fn(&ComboDisplayData) -> f64 + 'static,
 {
-    glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
-        let drawing_area_weak = drawing_area.downgrade();
-        move || {
-            let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            if !drawing_area.is_mapped() {
-                return glib::ControlFlow::Continue;
+    register_animation(drawing_area.downgrade(), move || {
+        if let Ok(mut data) = data.try_lock() {
+            let mut redraw = data.dirty;
+            if data.dirty {
+                data.dirty = false;
             }
 
-            let needs_redraw = if let Ok(mut data) = data.try_lock() {
-                let mut redraw = data.dirty;
-                if data.dirty {
-                    data.dirty = false;
+            if animation_enabled(&data) {
+                let now = Instant::now();
+                let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                data.last_update = now;
+
+                let speed = animation_speed(&data);
+
+                // Animate bar values
+                for anim in data.bar_values.values_mut() {
+                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                        let delta = (anim.target - anim.current) * speed * elapsed;
+                        anim.current += delta;
+
+                        if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                            anim.current = anim.target;
+                        }
+                        redraw = true;
+                    }
                 }
 
-                if animation_enabled(&data) {
-                    let now = Instant::now();
-                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                    data.last_update = now;
-
-                    let speed = animation_speed(&data);
-
-                    // Animate bar values
-                    for anim in data.bar_values.values_mut() {
+                // Animate core bar values
+                for core_anims in data.core_bar_values.values_mut() {
+                    for anim in core_anims.iter_mut() {
                         if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
                             let delta = (anim.target - anim.current) * speed * elapsed;
                             anim.current += delta;
@@ -373,33 +377,12 @@ pub fn setup_combo_animation_timer<F, G>(
                             redraw = true;
                         }
                     }
-
-                    // Animate core bar values
-                    for core_anims in data.core_bar_values.values_mut() {
-                        for anim in core_anims.iter_mut() {
-                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                let delta = (anim.target - anim.current) * speed * elapsed;
-                                anim.current += delta;
-
-                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                    anim.current = anim.target;
-                                }
-                                redraw = true;
-                            }
-                        }
-                    }
                 }
-
-                redraw
-            } else {
-                false
-            };
-
-            if needs_redraw {
-                drawing_area.queue_draw();
             }
 
-            glib::ControlFlow::Continue
+            redraw
+        } else {
+            false
         }
     });
 }
@@ -439,43 +422,47 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
     GC: Fn(&mut D) -> &mut ComboDisplayData + 'static,
     CA: Fn(&mut D, f64) -> bool + 'static,
 {
-    glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
-        let drawing_area_weak = drawing_area.downgrade();
-        move || {
-            let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            if !drawing_area.is_mapped() {
-                return glib::ControlFlow::Continue;
+    register_animation(drawing_area.downgrade(), move || {
+        if let Ok(mut data) = data.try_lock() {
+            let combo = get_combo(&mut data);
+            let mut redraw = combo.dirty;
+            if combo.dirty {
+                combo.dirty = false;
             }
 
-            let needs_redraw = if let Ok(mut data) = data.try_lock() {
-                let combo = get_combo(&mut data);
-                let mut redraw = combo.dirty;
-                if combo.dirty {
-                    combo.dirty = false;
+            // Calculate elapsed time
+            let now = Instant::now();
+            let elapsed = now.duration_since(combo.last_update).as_secs_f64();
+            combo.last_update = now;
+
+            // Run custom animation if provided (always runs, even if bar animation disabled)
+            if let Some(ref custom_anim) = custom_animation {
+                if custom_anim(&mut data, elapsed) {
+                    redraw = true;
                 }
+            }
 
-                // Calculate elapsed time
-                let now = Instant::now();
-                let elapsed = now.duration_since(combo.last_update).as_secs_f64();
-                combo.last_update = now;
+            // Run bar/core bar animations if enabled
+            if animation_enabled(&data) {
+                let speed = animation_speed(&data);
+                let combo = get_combo(&mut data);
 
-                // Run custom animation if provided (always runs, even if bar animation disabled)
-                if let Some(ref custom_anim) = custom_animation {
-                    if custom_anim(&mut data, elapsed) {
+                // Animate bar values
+                for anim in combo.bar_values.values_mut() {
+                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                        let delta = (anim.target - anim.current) * speed * elapsed;
+                        anim.current += delta;
+
+                        if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                            anim.current = anim.target;
+                        }
                         redraw = true;
                     }
                 }
 
-                // Run bar/core bar animations if enabled
-                if animation_enabled(&data) {
-                    let speed = animation_speed(&data);
-                    let combo = get_combo(&mut data);
-
-                    // Animate bar values
-                    for anim in combo.bar_values.values_mut() {
+                // Animate core bar values
+                for core_anims in combo.core_bar_values.values_mut() {
+                    for anim in core_anims.iter_mut() {
                         if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
                             let delta = (anim.target - anim.current) * speed * elapsed;
                             anim.current += delta;
@@ -486,33 +473,12 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
                             redraw = true;
                         }
                     }
-
-                    // Animate core bar values
-                    for core_anims in combo.core_bar_values.values_mut() {
-                        for anim in core_anims.iter_mut() {
-                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                let delta = (anim.target - anim.current) * speed * elapsed;
-                                anim.current += delta;
-
-                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                    anim.current = anim.target;
-                                }
-                                redraw = true;
-                            }
-                        }
-                    }
                 }
-
-                redraw
-            } else {
-                false
-            };
-
-            if needs_redraw {
-                drawing_area.queue_draw();
             }
 
-            glib::ControlFlow::Continue
+            redraw
+        } else {
+            false
         }
     });
 }

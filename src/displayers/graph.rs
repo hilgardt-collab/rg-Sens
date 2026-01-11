@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Widget};
@@ -113,141 +113,121 @@ impl Displayer for GraphDisplayer {
             }
         });
 
-        // Set up periodic redraw and animation updates
-        // The timeout automatically stops when the widget is destroyed (weak reference breaks)
+        // Register with global animation manager for centralized animation timing
         let data_for_animation = self.data.clone();
-        gtk4::glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
-            let drawing_area_weak = drawing_area.downgrade();
-            move || {
-                // Check if widget still exists - this automatically stops the timeout
-                let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                    return gtk4::glib::ControlFlow::Break;
-                };
+        register_animation(drawing_area.downgrade(), move || {
+            // Update animation if enabled - check dirty flag and animation state
+            // Use try_lock to avoid blocking UI thread if lock is held
+            if let Ok(mut data_guard) = data_for_animation.try_lock() {
+                let mut redraw = false;
 
-                // Skip animation updates when widget is not visible (saves CPU)
-                if !drawing_area.is_mapped() {
-                    return gtk4::glib::ControlFlow::Continue;
+                // Always calculate elapsed time since last frame to ensure smooth animation
+                let now = std::time::Instant::now();
+                let elapsed = now.duration_since(data_guard.last_frame_time).as_secs_f64();
+                data_guard.last_frame_time = now;
+
+                // Check if data changed (dirty flag)
+                if data_guard.dirty {
+                    data_guard.dirty = false;
+                    redraw = true;
                 }
 
-                // Update animation if enabled - check dirty flag and animation state
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data_guard) = data_for_animation.try_lock() {
-                        let mut redraw = false;
+                if data_guard.config.animate_new_points {
+                    let current_time = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs_f64();
 
-                        // Always calculate elapsed time since last frame to ensure smooth animation
-                        let now = std::time::Instant::now();
-                        let elapsed = now.duration_since(data_guard.last_frame_time).as_secs_f64();
-                        data_guard.last_frame_time = now;
+                    // Update scroll offset for smooth horizontal scrolling
+                    // scroll_offset advances at rate of 1.0 per update_interval seconds
+                    let update_interval = data_guard.config.update_interval.max(0.1);
+                    let prev_scroll = data_guard.scroll_offset;
+                    data_guard.scroll_offset += elapsed / update_interval;
 
-                        // Check if data changed (dirty flag)
-                        if data_guard.dirty {
-                            data_guard.dirty = false;
-                            redraw = true;
+                    // Clamp scroll_offset - it will be reset when new data arrives
+                    // Allow it to go slightly beyond 1.0 to handle timing variations
+                    data_guard.scroll_offset = data_guard.scroll_offset.min(1.5);
+
+                    // Track if scroll is actively animating (not yet clamped at max)
+                    let scroll_animating = prev_scroll < 1.0 && data_guard.scroll_offset < 1.5;
+
+                    // Smooth interpolation factor for Y-value animation
+                    let lerp_factor = 0.15;
+
+                    // Ensure animated_points has the same length as data_points
+                    let target_len = data_guard.data_points.len();
+                    let animated_len = data_guard.animated_points.len();
+
+                    // Track if any points are still animating
+                    let mut points_animating = false;
+
+                    // Add new points if needed (copy values to avoid borrow conflicts)
+                    // If adding multiple points at once (e.g., animation just enabled),
+                    // initialize to actual values to avoid jarring "grow from zero" effect
+                    let initialize_to_actual = (target_len - animated_len) > 1;
+                    for i in animated_len..target_len {
+                        if let Some(p) = data_guard.data_points.get(i) {
+                            let timestamp = p.timestamp;
+                            let initial_value = if initialize_to_actual {
+                                p.value // Use actual value for bulk initialization
+                            } else {
+                                points_animating = true; // New point will animate
+                                0.0 // Single new point animates from baseline
+                            };
+                            data_guard.animated_points.push_back(DataPoint {
+                                value: initial_value,
+                                timestamp,
+                            });
                         }
+                    }
 
-                        if data_guard.config.animate_new_points {
-                            let current_time = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs_f64();
+                    // Remove excess points if needed
+                    while data_guard.animated_points.len() > target_len {
+                        data_guard.animated_points.pop_front();
+                    }
 
-                            // Update scroll offset for smooth horizontal scrolling
-                            // scroll_offset advances at rate of 1.0 per update_interval seconds
-                            let update_interval = data_guard.config.update_interval.max(0.1);
-                            let prev_scroll = data_guard.scroll_offset;
-                            data_guard.scroll_offset += elapsed / update_interval;
-
-                            // Clamp scroll_offset - it will be reset when new data arrives
-                            // Allow it to go slightly beyond 1.0 to handle timing variations
-                            data_guard.scroll_offset = data_guard.scroll_offset.min(1.5);
-
-                            // Track if scroll is actively animating (not yet clamped at max)
-                            let scroll_animating = prev_scroll < 1.0 && data_guard.scroll_offset < 1.5;
-
-                            // Smooth interpolation factor for Y-value animation
-                            let lerp_factor = 0.15;
-
-                            // Ensure animated_points has the same length as data_points
-                            let target_len = data_guard.data_points.len();
-                            let animated_len = data_guard.animated_points.len();
-
-                            // Track if any points are still animating
-                            let mut points_animating = false;
-
-                            // Add new points if needed (copy values to avoid borrow conflicts)
-                            // If adding multiple points at once (e.g., animation just enabled),
-                            // initialize to actual values to avoid jarring "grow from zero" effect
-                            let initialize_to_actual = (target_len - animated_len) > 1;
-                            for i in animated_len..target_len {
-                                if let Some(p) = data_guard.data_points.get(i) {
-                                    let timestamp = p.timestamp;
-                                    let initial_value = if initialize_to_actual {
-                                        p.value // Use actual value for bulk initialization
-                                    } else {
-                                        points_animating = true; // New point will animate
-                                        0.0 // Single new point animates from baseline
-                                    };
-                                    data_guard.animated_points.push_back(DataPoint {
-                                        value: initial_value,
-                                        timestamp,
-                                    });
-                                }
-                            }
-
-                            // Remove excess points if needed
-                            while data_guard.animated_points.len() > target_len {
-                                data_guard.animated_points.pop_front();
-                            }
-
-                            // Interpolate points toward their target values
-                            // OPTIMIZATION: Only interpolate points that haven't converged yet
-                            let len = data_guard.animated_points.len();
-                            for i in 0..len {
-                                // Get target values first (immutable borrow)
-                                let (target_value, target_timestamp) = if let Some(target) = data_guard.data_points.get(i) {
-                                    (target.value, target.timestamp)
-                                } else {
-                                    continue;
-                                };
-                                // Then update animated point (mutable borrow)
-                                if let Some(animated) = data_guard.animated_points.get_mut(i) {
-                                    // Always update timestamp
-                                    animated.timestamp = target_timestamp;
-
-                                    // Skip interpolation if already converged (within snap threshold)
-                                    let diff = (target_value - animated.value).abs();
-                                    if diff > ANIMATION_SNAP_THRESHOLD {
-                                        animated.value += (target_value - animated.value) * lerp_factor;
-                                        points_animating = true;
-                                    } else if diff > 0.0 {
-                                        // Snap to target when very close
-                                        animated.value = target_value;
-                                    }
-                                }
-                            }
-
-                            data_guard.last_update_time = current_time;
-
-                            // Only redraw if scroll is animating OR points are still interpolating
-                            if scroll_animating || points_animating {
-                                redraw = true;
-                            }
-                            redraw
+                    // Interpolate points toward their target values
+                    // OPTIMIZATION: Only interpolate points that haven't converged yet
+                    let len = data_guard.animated_points.len();
+                    for i in 0..len {
+                        // Get target values first (immutable borrow)
+                        let (target_value, target_timestamp) = if let Some(target) = data_guard.data_points.get(i) {
+                            (target.value, target.timestamp)
                         } else {
-                            // Animation disabled - render uses data_points directly,
-                            // no need to copy to animated_points
-                            data_guard.scroll_offset = 0.0;
-                            redraw // Still redraw if dirty flag was set
-                        }
-                    } else {
-                        false
-                    };
+                            continue;
+                        };
+                        // Then update animated point (mutable borrow)
+                        if let Some(animated) = data_guard.animated_points.get_mut(i) {
+                            // Always update timestamp
+                            animated.timestamp = target_timestamp;
 
-                // Only queue draw if animation actually updated
-                if needs_redraw {
-                    drawing_area.queue_draw();
+                            // Skip interpolation if already converged (within snap threshold)
+                            let diff = (target_value - animated.value).abs();
+                            if diff > ANIMATION_SNAP_THRESHOLD {
+                                animated.value += (target_value - animated.value) * lerp_factor;
+                                points_animating = true;
+                            } else if diff > 0.0 {
+                                // Snap to target when very close
+                                animated.value = target_value;
+                            }
+                        }
+                    }
+
+                    data_guard.last_update_time = current_time;
+
+                    // Only redraw if scroll is animating OR points are still interpolating
+                    if scroll_animating || points_animating {
+                        redraw = true;
+                    }
+                    redraw
+                } else {
+                    // Animation disabled - render uses data_points directly,
+                    // no need to copy to animated_points
+                    data_guard.scroll_offset = 0.0;
+                    redraw // Still redraw if dirty flag was set
                 }
-                gtk4::glib::ControlFlow::Continue
+            } else {
+                false
             }
         });
 

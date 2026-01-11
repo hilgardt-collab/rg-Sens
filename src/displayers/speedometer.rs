@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::speedometer_display::{render_speedometer, SpeedometerConfig};
 
 /// Speedometer gauge displayer
@@ -88,81 +88,61 @@ impl Displayer for SpeedometerDisplayer {
             }
         });
 
-        // Set up periodic animation/redraw at 60fps
-        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
-            let data_clone = self.data.clone();
-            let drawing_area_weak = drawing_area.downgrade();
-            move || {
-                // Check if widget still exists - this automatically stops the timeout
-                let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                    return glib::ControlFlow::Break;
-                };
+        // Register with global animation manager for centralized animation timing
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
+            // Update animation state and check if redraw needed
+            // Use try_lock to avoid blocking UI thread if lock is held
+            if let Ok(mut data) = data_for_animation.try_lock() {
+                let mut redraw = false;
 
-                // Skip animation updates when widget is not visible (saves CPU)
-                if !drawing_area.is_mapped() {
-                    return glib::ControlFlow::Continue;
+                // Always calculate elapsed time since last frame to ensure smooth animation
+                let now = std::time::Instant::now();
+                let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                data.last_update = now;
+
+                // Check if data changed (dirty flag)
+                if data.dirty {
+                    data.dirty = false;
+                    redraw = true;
                 }
 
-                // Update animation state and check if redraw needed
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data) = data_clone.try_lock() {
-                    let mut redraw = false;
+                // Check if animation is active
+                if data.config.animate && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD {
+                    // Use exponential decay formula for smooth animation
+                    // This ensures the needle reaches ~95% of target in animation_duration seconds
+                    let duration = data.config.animation_duration.max(0.05);
+                    // decay_rate of ~3/duration gives 95% completion in duration seconds
+                    let decay_rate = 3.0 / duration;
+                    let lerp_factor = 1.0 - (-decay_rate * elapsed).exp();
 
-                    // Always calculate elapsed time since last frame to ensure smooth animation
-                    let now = std::time::Instant::now();
-                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                    data.last_update = now;
+                    if data.config.bounce_animation {
+                        // Bounce animation: overshoot then settle
+                        let diff = data.target_value - data.animated_value;
+                        // Use faster lerp for bounce, with slight overshoot
+                        let fast_lerp = 1.0 - (-decay_rate * 2.0 * elapsed).exp();
+                        data.animated_value += diff * fast_lerp;
 
-                    // Check if data changed (dirty flag)
-                    if data.dirty {
-                        data.dirty = false;
-                        redraw = true;
+                        // Check if we've overshot and add bounce back
+                        if diff.abs() < 0.05 {
+                            data.animated_value += (data.target_value - data.animated_value) * 0.15;
+                        }
+                    } else {
+                        // Smooth ease-out animation using exponential interpolation
+                        let diff = data.target_value - data.animated_value;
+                        data.animated_value += diff * lerp_factor;
                     }
 
-                    // Check if animation is active
-                    if data.config.animate && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD {
-
-                        // Use exponential decay formula for smooth animation
-                        // This ensures the needle reaches ~95% of target in animation_duration seconds
-                        let duration = data.config.animation_duration.max(0.05);
-                        // decay_rate of ~3/duration gives 95% completion in duration seconds
-                        let decay_rate = 3.0 / duration;
-                        let lerp_factor = 1.0 - (-decay_rate * elapsed).exp();
-
-                        if data.config.bounce_animation {
-                            // Bounce animation: overshoot then settle
-                            let diff = data.target_value - data.animated_value;
-                            // Use faster lerp for bounce, with slight overshoot
-                            let fast_lerp = 1.0 - (-decay_rate * 2.0 * elapsed).exp();
-                            data.animated_value += diff * fast_lerp;
-
-                            // Check if we've overshot and add bounce back
-                            if diff.abs() < 0.05 {
-                                data.animated_value += (data.target_value - data.animated_value) * 0.15;
-                            }
-                        } else {
-                            // Smooth ease-out animation using exponential interpolation
-                            let diff = data.target_value - data.animated_value;
-                            data.animated_value += diff * lerp_factor;
-                        }
-
-                        // Snap to target if very close
-                        if (data.animated_value - data.target_value).abs() < ANIMATION_SNAP_THRESHOLD {
-                            data.animated_value = data.target_value;
-                        }
-                        redraw = true;
+                    // Snap to target if very close
+                    if (data.animated_value - data.target_value).abs() < ANIMATION_SNAP_THRESHOLD {
+                        data.animated_value = data.target_value;
                     }
-
-                    redraw
-                } else {
-                    false
-                };
-
-                // Only queue draw if needed
-                if needs_redraw {
-                    drawing_area.queue_draw();
+                    redraw = true;
                 }
-                glib::ControlFlow::Continue
+
+                redraw
+            } else {
+                false
             }
         });
 

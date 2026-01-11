@@ -5,13 +5,13 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
 use crate::ui::core_bars_display::{render_core_bars_with_values, CoreBarsConfig};
 use crate::ui::theme::ComboThemeConfig;
 
@@ -156,73 +156,56 @@ impl Displayer for CpuCoresDisplayer {
             }
         });
 
-        // Animation timer (60fps)
-        let data_for_timer = self.data.clone();
-        let drawing_area_weak = drawing_area.downgrade();
-
-        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, move || {
-            let Some(da) = drawing_area_weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            // Skip animation updates when widget is not visible (saves CPU)
-            if !da.is_mapped() {
-                return glib::ControlFlow::Continue;
-            }
-
+        // Register with global animation manager for centralized animation timing
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
-            let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                    let now = Instant::now();
-                    let delta = now.duration_since(data.last_update).as_secs_f64();
-                    data.last_update = now;
+            if let Ok(mut data) = data_for_animation.try_lock() {
+                let now = Instant::now();
+                let delta = now.duration_since(data.last_update).as_secs_f64();
+                data.last_update = now;
 
-                    let mut any_animating = false;
+                let mut any_animating = false;
 
-                    if data.config.animate {
-                        let speed = data.config.animation_speed;
+                if data.config.animate {
+                    let speed = data.config.animation_speed;
 
-                        for val in &mut data.core_values {
-                            if val.first_update {
-                                val.current = val.target;
-                                val.first_update = false;
+                    for val in &mut data.core_values {
+                        if val.first_update {
+                            val.current = val.target;
+                            val.first_update = false;
+                        } else {
+                            let diff = (val.target - val.current).abs();
+                            if diff > ANIMATION_SNAP_THRESHOLD {
+                                val.current += (val.target - val.current) * (speed * delta).min(1.0);
+                                any_animating = true;
                             } else {
-                                let diff = (val.target - val.current).abs();
-                                if diff > ANIMATION_SNAP_THRESHOLD {
-                                    val.current += (val.target - val.current) * (speed * delta).min(1.0);
-                                    any_animating = true;
-                                } else {
-                                    val.current = val.target;
-                                }
+                                val.current = val.target;
                             }
                         }
-                    } else {
-                        // No animation - snap to target
-                        for val in &mut data.core_values {
-                            val.current = val.target;
-                        }
                     }
-
-                    // Update render cache (reuse allocation, only reallocate if size changes)
-                    let core_count = data.core_values.len();
-                    if data.render_cache.len() != core_count {
-                        data.render_cache.resize(core_count, 0.0);
-                    }
-                    for i in 0..core_count {
-                        data.render_cache[i] = data.core_values[i].current;
-                    }
-
-                    let should_redraw = data.dirty || any_animating;
-                    data.dirty = false;
-                    should_redraw
                 } else {
-                    false
-                };
+                    // No animation - snap to target
+                    for val in &mut data.core_values {
+                        val.current = val.target;
+                    }
+                }
 
-            if needs_redraw {
-                da.queue_draw();
+                // Update render cache (reuse allocation, only reallocate if size changes)
+                let core_count = data.core_values.len();
+                if data.render_cache.len() != core_count {
+                    data.render_cache.resize(core_count, 0.0);
+                }
+                for i in 0..core_count {
+                    data.render_cache[i] = data.core_values[i].current;
+                }
+
+                let should_redraw = data.dirty || any_animating;
+                data.dirty = false;
+                should_redraw
+            } else {
+                false
             }
-
-            glib::ControlFlow::Continue
         });
 
         drawing_area.upcast()
