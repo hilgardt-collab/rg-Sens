@@ -533,3 +533,354 @@ pub fn show_context_menu<F>(
 
     popover.popup();
 }
+
+/// Create the application menu popover for the header bar menu button.
+///
+/// This provides a subset of the context menu options suitable for the title bar:
+/// - New Panel
+/// - Save/Load Layout to/from File
+/// - Toggle Fullscreen/Borderless
+/// - Options
+/// - Quit
+#[allow(clippy::too_many_arguments)]
+pub fn create_app_menu_popover<F>(
+    window: &ApplicationWindow,
+    app_config: &Rc<RefCell<AppConfig>>,
+    window_background: &DrawingArea,
+    grid_layout: &Rc<RefCell<GridLayout>>,
+    config_dirty: &Arc<AtomicBool>,
+    start_auto_scroll: &Rc<F>,
+) -> Popover
+where
+    F: Fn() + 'static,
+{
+    use gtk4::{Box as GtkBox, Button, Separator, Orientation};
+
+    // Create the popover
+    let popover = Popover::new();
+    popover.set_has_arrow(false);
+    popover.set_autohide(true);
+
+    // Create menu content box
+    let menu_box = GtkBox::new(Orientation::Vertical, 0);
+    menu_box.set_margin_top(6);
+    menu_box.set_margin_bottom(6);
+    menu_box.set_margin_start(6);
+    menu_box.set_margin_end(6);
+
+    // Helper to create menu buttons with consistent styling
+    let create_menu_button = |label: &str| -> Button {
+        let btn = Button::with_label(label);
+        btn.add_css_class("flat");
+        btn.set_halign(gtk4::Align::Fill);
+        btn
+    };
+
+    // New Panel button
+    let new_panel_btn = create_menu_button("New Panel");
+    menu_box.append(&new_panel_btn);
+
+    menu_box.append(&Separator::new(Orientation::Horizontal));
+
+    // Save to File button
+    let save_file_btn = create_menu_button("Save Layout to File...");
+    menu_box.append(&save_file_btn);
+
+    // Load from File button
+    let load_file_btn = create_menu_button("Load Layout from File...");
+    menu_box.append(&load_file_btn);
+
+    menu_box.append(&Separator::new(Orientation::Horizontal));
+
+    // Toggle Fullscreen button
+    let toggle_fullscreen_btn = create_menu_button("Toggle Fullscreen");
+    menu_box.append(&toggle_fullscreen_btn);
+
+    // Toggle Borderless button
+    let toggle_borderless_btn = create_menu_button("Toggle Borderless");
+    menu_box.append(&toggle_borderless_btn);
+
+    menu_box.append(&Separator::new(Orientation::Horizontal));
+
+    // Options button
+    let options_btn = create_menu_button("Options");
+    menu_box.append(&options_btn);
+
+    // Quit button
+    let quit_btn = create_menu_button("Quit");
+    menu_box.append(&quit_btn);
+
+    popover.set_child(Some(&menu_box));
+
+    // Store references for button handlers
+    let popover_ref = popover.clone();
+
+    // New Panel button handler - uses (0, 0) as position since we don't have mouse coordinates
+    let window_for_new = window.clone();
+    let grid_layout_for_new = grid_layout.clone();
+    let config_dirty_for_new = config_dirty.clone();
+    let app_config_for_new = app_config.clone();
+    let popover_for_new = popover_ref.clone();
+    new_panel_btn.connect_clicked(move |_| {
+        popover_for_new.popdown();
+        info!("New panel requested from app menu (position 0, 0)");
+        new_panel_dialog::show_new_panel_dialog(
+            &window_for_new,
+            &grid_layout_for_new,
+            &config_dirty_for_new,
+            &app_config_for_new,
+            Some((0.0, 0.0)),
+        );
+    });
+
+    // Save to File button handler
+    let window_for_save_file = window.clone();
+    let grid_layout_for_save_file = grid_layout.clone();
+    let app_config_for_save_file = app_config.clone();
+    let config_dirty_for_save_file = config_dirty.clone();
+    let popover_for_save_file = popover_ref.clone();
+    save_file_btn.connect_clicked(move |_| {
+        popover_for_save_file.popdown();
+        info!("Save to file requested");
+        let window = window_for_save_file.clone();
+        let grid_layout = grid_layout_for_save_file.clone();
+        let app_config = app_config_for_save_file.clone();
+        let config_dirty = config_dirty_for_save_file.clone();
+
+        gtk4::glib::MainContext::default().spawn_local(async move {
+            use gtk4::FileDialog;
+            use gtk4::gio;
+
+            // Get initial directory (config dir)
+            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                .map(|d| d.config_dir().to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+            // Create file filter for JSON files
+            let json_filter = gtk4::FileFilter::new();
+            json_filter.set_name(Some("JSON files"));
+            json_filter.add_pattern("*.json");
+
+            let all_filter = gtk4::FileFilter::new();
+            all_filter.set_name(Some("All files"));
+            all_filter.add_pattern("*");
+
+            let filters = gio::ListStore::new::<gtk4::FileFilter>();
+            filters.append(&json_filter);
+            filters.append(&all_filter);
+
+            let file_dialog = FileDialog::builder()
+                .title("Save Layout to File")
+                .modal(true)
+                .initial_folder(&gio::File::for_path(&initial_dir))
+                .initial_name("layout.json")
+                .filters(&filters)
+                .default_filter(&json_filter)
+                .build();
+
+            match file_dialog.save_future(Some(&window)).await {
+                Ok(file) => {
+                    if let Some(path) = file.path() {
+                        info!("Saving layout to {:?}", path);
+
+                        let (width, height) = (window.default_width(), window.default_height());
+                        let panel_data_list: Vec<PanelData> = grid_layout.borrow().with_panels(|panels| {
+                            panels
+                                .iter()
+                                .map(|panel| {
+                                    let panel_guard = panel.blocking_read();
+                                    panel_guard.to_data()
+                                })
+                                .collect()
+                        });
+
+                        {
+                            let mut config = app_config.borrow_mut();
+                            config.window.width = width;
+                            config.window.height = height;
+                            config.set_panels(panel_data_list);
+                        }
+
+                        match app_config.borrow().save_to_path(&path) {
+                            Ok(()) => {
+                                info!("Layout saved successfully to {:?}", path);
+                                config_dirty.store(false, Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                warn!("Failed to save layout: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    info!("Save file dialog cancelled or failed: {}", e);
+                }
+            }
+        });
+    });
+
+    // Load from File button handler
+    let window_for_load_file = window.clone();
+    let grid_layout_for_load_file = grid_layout.clone();
+    let app_config_for_load_file = app_config.clone();
+    let config_dirty_for_load_file = config_dirty.clone();
+    let popover_for_load_file = popover_ref.clone();
+    load_file_btn.connect_clicked(move |_| {
+        popover_for_load_file.popdown();
+        info!("Load from file requested");
+        let window = window_for_load_file.clone();
+        let grid_layout = grid_layout_for_load_file.clone();
+        let app_config = app_config_for_load_file.clone();
+        let config_dirty = config_dirty_for_load_file.clone();
+
+        gtk4::glib::MainContext::default().spawn_local(async move {
+            use gtk4::FileDialog;
+            use gtk4::gio;
+
+            // Get initial directory (config dir)
+            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                .map(|d| d.config_dir().to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+
+            // Create file filter for JSON files
+            let json_filter = gtk4::FileFilter::new();
+            json_filter.set_name(Some("JSON files"));
+            json_filter.add_pattern("*.json");
+
+            let all_filter = gtk4::FileFilter::new();
+            all_filter.set_name(Some("All files"));
+            all_filter.add_pattern("*");
+
+            let filters = gio::ListStore::new::<gtk4::FileFilter>();
+            filters.append(&json_filter);
+            filters.append(&all_filter);
+
+            let file_dialog = FileDialog::builder()
+                .title("Load Layout from File")
+                .modal(true)
+                .initial_folder(&gio::File::for_path(&initial_dir))
+                .filters(&filters)
+                .default_filter(&json_filter)
+                .build();
+
+            match file_dialog.open_future(Some(&window)).await {
+                Ok(file) => {
+                    if let Some(path) = file.path() {
+                        info!("Loading layout from {:?}", path);
+
+                        match AppConfig::load_from_path(&path) {
+                            Ok(loaded_config) => {
+                                info!("Layout loaded successfully from {:?}", path);
+                                *app_config.borrow_mut() = loaded_config.clone();
+                                grid_layout.borrow_mut().clear_all_panels();
+
+                                let registry = crate::core::global_registry();
+                                for panel_data in loaded_config.get_panels() {
+                                    let panel_id = panel_data.id.clone();
+                                    match new_panel_dialog::create_panel_from_data(panel_data, registry) {
+                                        Ok(panel) => {
+                                            grid_layout.borrow_mut().add_panel(panel.clone());
+
+                                            if let Some(update_manager) = crate::core::global_update_manager() {
+                                                update_manager.queue_add_panel(panel.clone());
+                                            }
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to create panel {}: {}", panel_id, e);
+                                        }
+                                    }
+                                }
+
+                                grid_layout.borrow_mut().update_grid_size(
+                                    loaded_config.grid.cell_width,
+                                    loaded_config.grid.cell_height,
+                                    loaded_config.grid.spacing,
+                                );
+                                config_dirty.store(false, Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                warn!("Failed to load layout: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    info!("Load file dialog cancelled or failed: {}", e);
+                }
+            }
+        });
+    });
+
+    // Toggle Fullscreen button handler
+    let window_for_fullscreen = window.clone();
+    let app_config_for_fullscreen = app_config.clone();
+    let config_dirty_for_fullscreen = config_dirty.clone();
+    let popover_for_fullscreen = popover_ref.clone();
+    toggle_fullscreen_btn.connect_clicked(move |_| {
+        popover_for_fullscreen.popdown();
+        let is_fullscreen = window_for_fullscreen.is_fullscreen();
+        if is_fullscreen {
+            window_for_fullscreen.unfullscreen();
+            app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = false;
+        } else {
+            window_for_fullscreen.fullscreen();
+            app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
+        }
+        config_dirty_for_fullscreen.store(true, Ordering::Relaxed);
+        info!("Toggled fullscreen: {}", !is_fullscreen);
+    });
+
+    // Toggle Borderless button handler
+    let window_for_borderless = window.clone();
+    let app_config_for_borderless = app_config.clone();
+    let config_dirty_for_borderless = config_dirty.clone();
+    let popover_for_borderless = popover_ref.clone();
+    toggle_borderless_btn.connect_clicked(move |_| {
+        popover_for_borderless.popdown();
+        let current_decorated = window_for_borderless.is_decorated();
+        let new_borderless = current_decorated; // If decorated, we want borderless (not decorated)
+
+        // Update config
+        app_config_for_borderless.borrow_mut().window.borderless = new_borderless;
+
+        // Toggle decoration
+        window_for_borderless.set_decorated(!new_borderless);
+
+        // On Wayland/some compositors, we need to hide/show for decoration change to apply
+        window_for_borderless.set_visible(false);
+        window_for_borderless.set_visible(true);
+
+        config_dirty_for_borderless.store(true, Ordering::Relaxed);
+        info!("Toggled borderless: {}", new_borderless);
+    });
+
+    // Options button handler
+    let window_for_options = window.clone();
+    let app_config_for_options = app_config.clone();
+    let window_bg_for_options = window_background.clone();
+    let grid_layout_for_options = grid_layout.clone();
+    let config_dirty_for_options = config_dirty.clone();
+    let start_auto_scroll_for_options = start_auto_scroll.clone();
+    let popover_for_options = popover_ref.clone();
+    options_btn.connect_clicked(move |_| {
+        popover_for_options.popdown();
+        window_settings_dialog::show_window_settings_dialog(
+            &window_for_options,
+            &app_config_for_options,
+            &window_bg_for_options,
+            &grid_layout_for_options,
+            &config_dirty_for_options,
+            &start_auto_scroll_for_options,
+        );
+    });
+
+    // Quit button handler
+    let window_for_quit = window.clone();
+    let popover_for_quit = popover_ref.clone();
+    quit_btn.connect_clicked(move |_| {
+        popover_for_quit.popdown();
+        window_for_quit.close();
+    });
+
+    popover
+}

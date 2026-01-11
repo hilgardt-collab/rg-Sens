@@ -871,6 +871,25 @@ fn build_ui(app: &Application) {
     // Store the start function for use in settings dialog
     let start_auto_scroll = Rc::new(start_auto_scroll);
 
+    // Create header bar with menu button
+    let header_bar = gtk4::HeaderBar::new();
+    let menu_button = gtk4::MenuButton::new();
+    menu_button.set_icon_name("open-menu-symbolic");
+    menu_button.set_tooltip_text(Some("Application menu"));
+
+    // Create the app menu popover
+    let app_menu_popover = context_menu::create_app_menu_popover(
+        &window,
+        &app_config,
+        &window_background,
+        &grid_layout,
+        &config_dirty,
+        &start_auto_scroll,
+    );
+    menu_button.set_popover(Some(&app_menu_popover));
+    header_bar.pack_start(&menu_button);
+    window.set_titlebar(Some(&header_bar));
+
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
     let config_dirty_clone4 = config_dirty.clone();
