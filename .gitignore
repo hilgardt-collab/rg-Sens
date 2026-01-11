@@ -34,3 +34,4 @@ coverage/
 /aur/pkg/
 /aur/*.pkg.tar.*
 /aur/PKGBUILD-local
+/aur-repo-git
