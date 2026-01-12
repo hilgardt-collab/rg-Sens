@@ -362,11 +362,62 @@ pub fn update_bar_animation(
         })
     };
 
-    anim.target = target_percent;
+    // Only update target if the change is visually significant (> 0.5%)
+    // This prevents constant 60fps animation from tiny sensor fluctuations
+    const TARGET_CHANGE_THRESHOLD: f64 = 0.005;
+    let target_changed = (anim.target - target_percent).abs() > TARGET_CHANGE_THRESHOLD;
+
+    if target_changed {
+        anim.target = target_percent;
+    }
+
     if anim.first_update || !animation_enabled {
         anim.current = target_percent;
         anim.first_update = false;
     }
+}
+
+/// Update bar animation target, returning true if the value changed meaningfully
+pub fn update_bar_animation_with_change_detection(
+    bar_values: &mut HashMap<String, AnimatedValue>,
+    prefix: &str,
+    target_percent: f64,
+    animation_enabled: bool,
+) -> bool {
+    let bar_key = KEY_BUFFER.with(|buf| {
+        let mut key_buf = buf.borrow_mut();
+        let key = key_buf.build_bar_key(prefix);
+        if bar_values.contains_key(key) {
+            None
+        } else {
+            Some(key.to_string())
+        }
+    });
+
+    let anim = if let Some(new_key) = bar_key {
+        bar_values.entry(new_key).or_default()
+    } else {
+        KEY_BUFFER.with(|buf| {
+            let mut key_buf = buf.borrow_mut();
+            let key = key_buf.build_bar_key(prefix);
+            bar_values.get_mut(key).expect("bar key disappeared")
+        })
+    };
+
+    const TARGET_CHANGE_THRESHOLD: f64 = 0.005;
+    let target_changed = (anim.target - target_percent).abs() > TARGET_CHANGE_THRESHOLD;
+
+    if target_changed {
+        anim.target = target_percent;
+    }
+
+    if anim.first_update || !animation_enabled {
+        anim.current = target_percent;
+        anim.first_update = false;
+        return true; // First update always counts as a change
+    }
+
+    target_changed
 }
 
 /// Update graph history - optimized version using thread-local KeyBuffer
@@ -456,10 +507,15 @@ pub fn update_core_bars(
     }
     anims.truncate(core_targets.len());
 
-    // Update animation targets
+    // Update animation targets (only if change is visually significant)
+    const TARGET_CHANGE_THRESHOLD: f64 = 0.005;
     for (i, &target) in core_targets.iter().enumerate() {
         if let Some(anim) = anims.get_mut(i) {
-            anim.target = target;
+            // Only update target if the change is significant (> 0.5%)
+            let target_changed = (anim.target - target).abs() > TARGET_CHANGE_THRESHOLD;
+            if target_changed {
+                anim.target = target;
+            }
             if anim.first_update || !animation_enabled {
                 anim.current = target;
                 anim.first_update = false;
