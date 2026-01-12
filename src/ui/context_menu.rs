@@ -606,6 +606,12 @@ where
     let options_btn = create_menu_button("Options");
     menu_box.append(&options_btn);
 
+    menu_box.append(&Separator::new(Orientation::Horizontal));
+
+    // About button
+    let about_btn = create_menu_button("About");
+    menu_box.append(&about_btn);
+
     // Quit button
     let quit_btn = create_menu_button("Quit");
     menu_box.append(&quit_btn);
@@ -874,6 +880,14 @@ where
         );
     });
 
+    // About button handler
+    let window_for_about = window.clone();
+    let popover_for_about = popover_ref.clone();
+    about_btn.connect_clicked(move |_| {
+        popover_for_about.popdown();
+        show_about_dialog(&window_for_about);
+    });
+
     // Quit button handler
     let window_for_quit = window.clone();
     let popover_for_quit = popover_ref.clone();
@@ -883,4 +897,34 @@ where
     });
 
     popover
+}
+
+/// Show the About dialog
+fn show_about_dialog(window: &ApplicationWindow) {
+    use gtk4::AboutDialog;
+    use gtk4::License;
+
+    let about = AboutDialog::builder()
+        .transient_for(window)
+        .modal(true)
+        .program_name("rg-Sens")
+        .version(env!("CARGO_PKG_VERSION"))
+        .comments("A fast, customizable system monitoring dashboard for Linux")
+        .website("https://github.com/hilgardt-collab/rg-Sens")
+        .website_label("GitHub Repository")
+        .authors(vec!["rg-Sens Contributors"])
+        .license_type(License::MitX11)
+        .logo_icon_name("rg-sens")
+        .build();
+
+    // Try to load the application icon
+    if let Ok(pixbuf) = gtk4::gdk_pixbuf::Pixbuf::from_file("/usr/share/icons/hicolor/256x256/apps/rg-sens.png")
+        .or_else(|_| gtk4::gdk_pixbuf::Pixbuf::from_file("rg-sens.png"))
+        .or_else(|_| gtk4::gdk_pixbuf::Pixbuf::from_file("data/icons/hicolor/256x256/apps/rg-sens.png"))
+    {
+        let texture = gtk4::gdk::Texture::for_pixbuf(&pixbuf);
+        about.set_logo(Some(&texture));
+    }
+
+    about.present();
 }
