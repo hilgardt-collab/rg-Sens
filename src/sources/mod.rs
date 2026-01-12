@@ -42,11 +42,11 @@ pub fn register_all() {
     // General metric displayers available to most sources
     let general_displayers = &["text", "bar", "arc", "speedometer", "graph", "indicator"];
 
-    // Register CPU source
+    // Register CPU source - includes cpu_cores for per-core visualization
     global_registry().register_source_with_info(
         "cpu",
         "Cpu",
-        general_displayers,
+        &["text", "bar", "arc", "speedometer", "graph", "indicator", "cpu_cores"],
         || Box::new(CpuSource::new()),
     );
 
