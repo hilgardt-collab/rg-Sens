@@ -273,7 +273,8 @@ impl Displayer for CssTemplateDisplayer {
         });
 
         // Set up periodic check for reload and value updates
-        glib::timeout_add_local(Duration::from_millis(100), {
+        // 250ms is sufficient for hot-reload detection while reducing CPU overhead
+        glib::timeout_add_local(Duration::from_millis(250), {
             let data_clone = self.data.clone();
             let webview_weak = webview.downgrade();
             let reload_flag_reader = reload_flag;

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
 use crate::ui::background::Color;
@@ -193,7 +194,7 @@ struct DisplayData {
     next_alarm_label: Option<String>, // Optional label for next alarm
     second: u32,
     blink_state: bool,
-    blink_elapsed: f64, // Track elapsed time for blink toggle (every 0.5s)
+    last_blink_time: Instant, // Track actual time for blink toggle (every 0.5s)
     dirty: bool, // Flag to indicate data has changed and needs redraw
     transform: PanelTransform,
 }
@@ -213,7 +214,7 @@ impl ClockDigitalDisplayer {
             next_alarm_label: None,
             second: 0,
             blink_state: true,
-            blink_elapsed: 0.0,
+            last_blink_time: Instant::now(),
             dirty: true,
             transform: PanelTransform::default(),
         }));
@@ -372,12 +373,13 @@ impl Displayer for ClockDigitalDisplayer {
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
-                // Toggle blink state every ~500ms (using elapsed time at 60fps)
-                data.blink_elapsed += 1.0 / 60.0; // ~16ms per frame
+                let now = Instant::now();
                 let mut redraw = false;
 
-                if data.blink_elapsed >= 0.5 {
-                    data.blink_elapsed = 0.0;
+                // Toggle blink state every 500ms using actual time tracking
+                // This works correctly regardless of frame rate (60fps or idle mode 4fps)
+                if now.duration_since(data.last_blink_time).as_millis() >= 500 {
+                    data.last_blink_time = now;
                     data.blink_state = !data.blink_state;
 
                     // Redraw if blink effect is visible (alarm/timer active or blinking colon)

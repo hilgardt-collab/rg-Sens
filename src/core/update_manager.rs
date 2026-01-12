@@ -17,10 +17,10 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
-/// Minimum interval between config hash checks (500ms)
+/// Minimum interval between config hash checks (1 second)
 /// Config changes are rare (user must open dialog, change settings, click save)
-/// so checking every tick is wasteful
-const CONFIG_CHECK_INTERVAL: Duration = Duration::from_millis(500);
+/// so checking frequently is wasteful
+const CONFIG_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Maximum number of concurrent panel update tasks
 /// This prevents spawning too many tasks at once if many panels are due

@@ -866,10 +866,11 @@ impl GridLayout {
         // Set up periodic redraw for indicator backgrounds
         // This ensures the background color updates when source values change
         // Only redraws when the indicator value actually changes to avoid wasting CPU
+        // 500ms interval is sufficient since panel update cycle also triggers redraws
         let panel_for_bg_timer = panel.clone();
         let background_area_weak_timer = background_area.downgrade();
         let last_indicator_value: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
-        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             // Stop if background area is gone (panel deleted)
             let Some(bg_area) = background_area_weak_timer.upgrade() else {
                 return gtk4::glib::ControlFlow::Break;

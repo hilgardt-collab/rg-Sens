@@ -3,13 +3,25 @@
 //! Instead of each animated displayer creating its own `glib::timeout_add_local()` timer,
 //! this module provides a single global timer that processes all registered animation callbacks.
 //! This reduces overhead from N timers to 1 timer, where N is the number of animated panels.
+//!
+//! The manager uses adaptive frame rate: 60fps when animations are active, ~10fps when idle.
+//! This dramatically reduces CPU usage when nothing is animating.
 
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::DrawingArea;
 use std::cell::{Cell, RefCell};
+use std::time::{Duration, Instant};
 
 use crate::core::ANIMATION_FRAME_INTERVAL;
+
+/// Idle polling interval when no animations are active (250ms = ~4fps)
+/// This should be >= update_manager interval to avoid constant polling
+const IDLE_FRAME_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Time without active animations before switching to idle mode (1 second)
+/// This is time-based rather than frame-based to work correctly at any frame rate
+const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(1000);
 
 thread_local! {
     /// Thread-local animation manager. Since GTK operations must happen on the main thread,
@@ -88,11 +100,19 @@ struct AnimationEntry {
 /// Manages a single global animation timer that processes all registered animation callbacks.
 ///
 /// This is stored in thread-local storage since GTK operations must happen on the main thread.
+/// Uses adaptive frame rate: fast (60fps) when animating, slow (~4fps) when idle.
 struct AnimationManager {
     /// Registered animation entries.
     entries: RefCell<Vec<AnimationEntry>>,
     /// Whether the global timer is currently active.
     timer_active: Cell<bool>,
+    /// Timestamp of the last active redraw (for time-based idle detection).
+    last_active_time: Cell<Option<Instant>>,
+    /// Whether we're currently in idle mode (slow polling).
+    in_idle_mode: Cell<bool>,
+    /// Count of consecutive frames with active redraws.
+    /// Only sustained activity (2+ frames) keeps us out of idle mode.
+    consecutive_active_frames: Cell<u32>,
 }
 
 impl AnimationManager {
@@ -101,6 +121,9 @@ impl AnimationManager {
         Self {
             entries: RefCell::new(Vec::new()),
             timer_active: Cell::new(false),
+            last_active_time: Cell::new(None),
+            in_idle_mode: Cell::new(false),
+            consecutive_active_frames: Cell::new(0),
         }
     }
 
@@ -114,6 +137,10 @@ impl AnimationManager {
             tick_fn: Box::new(tick_fn),
         });
 
+        // Reset idle state when new animation is registered
+        self.last_active_time.set(Some(Instant::now()));
+        self.in_idle_mode.set(false);
+
         // Start the timer if not already running
         self.ensure_timer_running();
     }
@@ -125,27 +152,71 @@ impl AnimationManager {
         }
 
         self.timer_active.set(true);
+        self.schedule_next_tick();
+    }
 
-        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, move || {
-            let should_continue = with_animation_manager(|manager| {
-                manager.tick();
-                !manager.entries.borrow().is_empty()
-            });
+    /// Schedule the next tick with appropriate interval based on idle state.
+    fn schedule_next_tick(&self) {
+        let interval = if self.in_idle_mode.get() {
+            IDLE_FRAME_INTERVAL
+        } else {
+            ANIMATION_FRAME_INTERVAL
+        };
 
-            if should_continue {
-                glib::ControlFlow::Continue
-            } else {
-                with_animation_manager(|manager| {
+        glib::timeout_add_local_once(interval, move || {
+            with_animation_manager(|manager| {
+                let any_active = manager.tick();
+                let now = Instant::now();
+
+                // Track consecutive active frames to distinguish sustained animation
+                // from single-frame dirty redraws
+                if any_active {
+                    let consecutive = manager.consecutive_active_frames.get() + 1;
+                    manager.consecutive_active_frames.set(consecutive);
+
+                    // Only treat as "real" animation if we have 2+ consecutive active frames
+                    // Single-frame activity is likely just a dirty redraw from data update
+                    if consecutive >= 2 {
+                        manager.last_active_time.set(Some(now));
+                        if manager.in_idle_mode.get() {
+                            manager.in_idle_mode.set(false);
+                            log::debug!("Animation manager exiting idle mode (sustained animation detected)");
+                        }
+                    }
+                } else {
+                    manager.consecutive_active_frames.set(0);
+
+                    // Switch to idle mode if no sustained activity for IDLE_TIME_THRESHOLD
+                    if let Some(last_active) = manager.last_active_time.get() {
+                        if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD && !manager.in_idle_mode.get() {
+                            manager.in_idle_mode.set(true);
+                            log::debug!("Animation manager entering idle mode (no activity for {:?})", IDLE_TIME_THRESHOLD);
+                        }
+                    } else {
+                        // No activity ever recorded, enter idle mode immediately
+                        if !manager.in_idle_mode.get() {
+                            manager.in_idle_mode.set(true);
+                        }
+                    }
+                }
+
+                // Continue if we have entries
+                if !manager.entries.borrow().is_empty() {
+                    manager.schedule_next_tick();
+                } else {
                     manager.timer_active.set(false);
-                });
-                glib::ControlFlow::Break
-            }
+                }
+            });
         });
     }
 
     /// Process one animation frame for all registered widgets.
-    fn tick(&self) {
+    /// Returns true if any animation needed a redraw.
+    fn tick(&self) -> bool {
         let mut entries = self.entries.borrow_mut();
+        let mut any_active = false;
+        let mut active_count = 0;
+        let mut mapped_count = 0;
 
         // Use retain to process entries and remove dead ones in a single pass
         entries.retain(|entry| {
@@ -159,6 +230,7 @@ impl AnimationManager {
             if !widget.is_mapped() {
                 return true; // Keep entry, just skip this frame
             }
+            mapped_count += 1;
 
             // Call the tick function
             let needs_redraw = (entry.tick_fn)();
@@ -166,10 +238,22 @@ impl AnimationManager {
             // Queue redraw if needed
             if needs_redraw {
                 widget.queue_draw();
+                any_active = true;
+                active_count += 1;
             }
 
             true // Keep entry
         });
+
+        // Log periodically to debug high CPU
+        static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let count = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count % 60 == 0 {
+            log::debug!("Animation tick #{}: {} entries, {} mapped, {} active, idle_mode={}",
+                count, entries.len(), mapped_count, active_count, self.in_idle_mode.get());
+        }
+
+        any_active
     }
 
     /// Get the number of currently registered animations.
