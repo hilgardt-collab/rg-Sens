@@ -3518,6 +3518,10 @@ pub(crate) fn show_panel_properties_dialog(
                     let text_config = widget.get_config();
                     if let Ok(text_config_json) = serde_json::to_value(&text_config) {
                         panel_guard.config.insert("text_config".to_string(), text_config_json);
+                        // Add global theme for theme-aware colors
+                        if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
+                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                        }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply text config: {}", e);
@@ -3532,6 +3536,10 @@ pub(crate) fn show_panel_properties_dialog(
                     let bar_config = widget.get_config();
                     if let Ok(bar_config_json) = serde_json::to_value(&bar_config) {
                         panel_guard.config.insert("bar_config".to_string(), bar_config_json);
+                        // Add global theme for theme-aware colors
+                        if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
+                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                        }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply bar config: {}", e);
@@ -3546,6 +3554,10 @@ pub(crate) fn show_panel_properties_dialog(
                     let arc_config = widget.get_config();
                     if let Ok(arc_config_json) = serde_json::to_value(&arc_config) {
                         panel_guard.config.insert("arc_config".to_string(), arc_config_json);
+                        // Add global theme for theme-aware colors
+                        if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
+                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                        }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply arc config: {}", e);
@@ -3560,6 +3572,10 @@ pub(crate) fn show_panel_properties_dialog(
                     let speedometer_config = widget.get_config();
                     if let Ok(speedometer_config_json) = serde_json::to_value(&speedometer_config) {
                         panel_guard.config.insert("speedometer_config".to_string(), speedometer_config_json);
+                        // Add global theme for theme-aware tick/label colors
+                        if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
+                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                        }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply speedometer config: {}", e);
@@ -3638,6 +3654,10 @@ pub(crate) fn show_panel_properties_dialog(
                     let core_bars_config = widget.get_config();
                     if let Ok(core_bars_config_json) = serde_json::to_value(&core_bars_config) {
                         panel_guard.config.insert("core_bars_config".to_string(), core_bars_config_json);
+                        // Add global theme for theme-aware colors
+                        if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
+                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                        }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply CPU Cores config: {}", e);
