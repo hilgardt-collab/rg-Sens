@@ -12,7 +12,9 @@ use cairo::Context;
 use gtk4::{prelude::*, DrawingArea, Widget};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -60,8 +62,22 @@ impl Default for LcarsDisplayConfig {
     }
 }
 
+/// Cached frame rendering for LCARS (stored in draw closure, not Send/Sync)
+struct LcarsFrameCache {
+    /// Cached frame surface (LCARS sidebar, content background, dividers)
+    surface: cairo::ImageSurface,
+    /// Size cache was rendered at
+    width: i32,
+    height: i32,
+    /// Config version when cache was created
+    config_version: u64,
+    /// Content bounds from frame render
+    content_bounds: (f64, f64, f64, f64),
+    /// Pre-calculated group layouts: Vec of (x, y, w, h) for each group
+    group_layouts: Vec<(f64, f64, f64, f64)>,
+}
+
 /// Internal display data
-#[derive(Clone)]
 struct DisplayData {
     config: LcarsDisplayConfig,
     values: HashMap<String, Value>,
@@ -76,6 +92,8 @@ struct DisplayData {
     /// Cached prefixes per group to avoid format! allocations in draw loop
     /// group_prefixes[0] = ["group1_1", "group1_2", ...], etc.
     group_prefixes: Vec<Vec<String>>,
+    /// Config version counter for cache invalidation
+    config_version: u64,
 }
 
 impl Default for DisplayData {
@@ -91,6 +109,7 @@ impl Default for DisplayData {
             transform: PanelTransform::default(),
             dirty: true,
             group_prefixes: Vec::new(),
+            config_version: 0,
         }
     }
 }
@@ -368,6 +387,10 @@ impl Displayer for LcarsComboDisplayer {
         let drawing_area = DrawingArea::new();
         drawing_area.set_size_request(400, 300);
 
+        // Frame cache lives in the draw closure (not Send/Sync required)
+        let frame_cache: Rc<RefCell<Option<LcarsFrameCache>>> = Rc::new(RefCell::new(None));
+        let frame_cache_clone = frame_cache.clone();
+
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
@@ -382,153 +405,263 @@ impl Displayer for LcarsComboDisplayer {
 
                 data.transform.apply(cr, w, h);
 
-                // Draw the LCARS frame
-                if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
-                    log::warn!("LCARS frame render error: {}", e);
-                }
+                // Check if frame cache is valid
+                let cache_valid = frame_cache_clone
+                    .borrow()
+                    .as_ref()
+                    .map_or(false, |cache| {
+                        cache.width == width
+                            && cache.height == height
+                            && cache.config_version == data.config_version
+                    });
 
-                // Draw content background
-                if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
-                    log::warn!("LCARS content background render error: {}", e);
-                }
+                // Either use cached frame or render fresh
+                let (content_bounds, group_layouts) = if cache_valid {
+                    // Use cached frame
+                    let cache_ref = frame_cache_clone.borrow();
+                    let cache = cache_ref.as_ref().unwrap();
+                    if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
+                        log::debug!("Failed to set cached surface: {:?}", e);
+                    }
+                    cr.paint().ok();
+                    (cache.content_bounds, cache.group_layouts.clone())
+                } else {
+                    // Try to create cache surface
+                    let cache_result = cairo::ImageSurface::create(
+                        cairo::Format::ARgb32,
+                        width,
+                        height,
+                    )
+                    .ok()
+                    .and_then(|surface| {
+                        cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
+                    });
 
-                // Get content bounds
-                let (content_x, content_y, content_w, content_h) =
-                    get_content_bounds(&data.config.frame, w, h);
+                    if let Some((surface, cache_cr)) = cache_result {
+                        // Render frame to cache
+                        if let Err(e) = render_lcars_frame(&cache_cr, &data.config.frame, w, h) {
+                            log::debug!("LCARS frame render error: {}", e);
+                        }
 
-                // Clip to content area
+                        // Render content background to cache
+                        if let Err(e) = render_content_background(&cache_cr, &data.config.frame, w, h) {
+                            log::debug!("LCARS content background render error: {}", e);
+                        }
+
+                        // Get content bounds
+                        let content_bounds = get_content_bounds(&data.config.frame, w, h);
+                        let (content_x, content_y, content_w, content_h) = content_bounds;
+
+                        // Calculate group layouts and render dividers to cache
+                        let group_count = data.config.frame.group_item_counts.len();
+                        let divider_config = &data.config.frame.divider_config;
+                        let mut group_layouts = Vec::with_capacity(group_count);
+
+                        if group_count == 0 {
+                            // No groups
+                        } else if group_count == 1 {
+                            group_layouts.push((content_x, content_y, content_w, content_h));
+                        } else {
+                            let total_divider_space = divider_config.width
+                                + divider_config.spacing_before
+                                + divider_config.spacing_after;
+                            let num_dividers = (group_count - 1) as f64;
+
+                            let total_weight: f64 = (0..group_count)
+                                .map(|i| data.config.frame.group_size_weights.get(i).copied().unwrap_or(1.0))
+                                .sum();
+                            let total_weight = if total_weight <= 0.0 { 1.0 } else { total_weight };
+
+                            match data.config.frame.layout_orientation {
+                                SplitOrientation::Vertical => {
+                                    let available_w = content_w - num_dividers * total_divider_space;
+                                    let mut current_x = content_x;
+
+                                    for group_idx in 0..group_count {
+                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let group_w = (weight / total_weight) * available_w;
+
+                                        group_layouts.push((current_x, content_y, group_w, content_h));
+
+                                        if group_idx < group_count - 1 {
+                                            let divider_x = current_x + group_w + divider_config.spacing_before;
+                                            let _ = render_divider(
+                                                &cache_cr,
+                                                divider_x,
+                                                content_y,
+                                                divider_config.width,
+                                                content_h,
+                                                divider_config,
+                                                SplitOrientation::Vertical,
+                                                &data.config.frame.theme,
+                                            );
+                                            current_x = divider_x + divider_config.width + divider_config.spacing_after;
+                                        }
+                                    }
+                                }
+                                SplitOrientation::Horizontal => {
+                                    let available_h = content_h - num_dividers * total_divider_space;
+                                    let mut current_y = content_y;
+
+                                    for group_idx in 0..group_count {
+                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let group_h = (weight / total_weight) * available_h;
+
+                                        group_layouts.push((content_x, current_y, content_w, group_h));
+
+                                        if group_idx < group_count - 1 {
+                                            let divider_y = current_y + group_h + divider_config.spacing_before;
+                                            let _ = render_divider(
+                                                &cache_cr,
+                                                content_x,
+                                                divider_y,
+                                                content_w,
+                                                divider_config.width,
+                                                divider_config,
+                                                SplitOrientation::Horizontal,
+                                                &data.config.frame.theme,
+                                            );
+                                            current_y = divider_y + divider_config.width + divider_config.spacing_after;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Flush and store cache
+                        drop(cache_cr);
+                        surface.flush();
+
+                        *frame_cache_clone.borrow_mut() = Some(LcarsFrameCache {
+                            surface,
+                            width,
+                            height,
+                            config_version: data.config_version,
+                            content_bounds,
+                            group_layouts: group_layouts.clone(),
+                        });
+
+                        // Paint cached surface
+                        let cache_ref = frame_cache_clone.borrow();
+                        let cache = cache_ref.as_ref().unwrap();
+                        if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
+                            log::debug!("Failed to set cached surface: {:?}", e);
+                        }
+                        cr.paint().ok();
+
+                        (content_bounds, group_layouts)
+                    } else {
+                        // Cache creation failed - render directly (fallback)
+                        if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
+                            log::warn!("LCARS frame render error: {}", e);
+                        }
+                        if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
+                            log::warn!("LCARS content background render error: {}", e);
+                        }
+
+                        let content_bounds = get_content_bounds(&data.config.frame, w, h);
+                        let (content_x, content_y, content_w, content_h) = content_bounds;
+
+                        // Calculate group layouts (without caching)
+                        let group_count = data.config.frame.group_item_counts.len();
+                        let divider_config = &data.config.frame.divider_config;
+                        let mut group_layouts = Vec::with_capacity(group_count);
+
+                        if group_count == 1 {
+                            group_layouts.push((content_x, content_y, content_w, content_h));
+                        } else if group_count > 1 {
+                            let total_divider_space = divider_config.width
+                                + divider_config.spacing_before
+                                + divider_config.spacing_after;
+                            let num_dividers = (group_count - 1) as f64;
+
+                            let total_weight: f64 = (0..group_count)
+                                .map(|i| data.config.frame.group_size_weights.get(i).copied().unwrap_or(1.0))
+                                .sum();
+                            let total_weight = if total_weight <= 0.0 { 1.0 } else { total_weight };
+
+                            match data.config.frame.layout_orientation {
+                                SplitOrientation::Vertical => {
+                                    let available_w = content_w - num_dividers * total_divider_space;
+                                    let mut current_x = content_x;
+
+                                    for group_idx in 0..group_count {
+                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let group_w = (weight / total_weight) * available_w;
+                                        group_layouts.push((current_x, content_y, group_w, content_h));
+
+                                        if group_idx < group_count - 1 {
+                                            let divider_x = current_x + group_w + divider_config.spacing_before;
+                                            let _ = render_divider(
+                                                cr,
+                                                divider_x,
+                                                content_y,
+                                                divider_config.width,
+                                                content_h,
+                                                divider_config,
+                                                SplitOrientation::Vertical,
+                                                &data.config.frame.theme,
+                                            );
+                                            current_x = divider_x + divider_config.width + divider_config.spacing_after;
+                                        }
+                                    }
+                                }
+                                SplitOrientation::Horizontal => {
+                                    let available_h = content_h - num_dividers * total_divider_space;
+                                    let mut current_y = content_y;
+
+                                    for group_idx in 0..group_count {
+                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let group_h = (weight / total_weight) * available_h;
+                                        group_layouts.push((content_x, current_y, content_w, group_h));
+
+                                        if group_idx < group_count - 1 {
+                                            let divider_y = current_y + group_h + divider_config.spacing_before;
+                                            let _ = render_divider(
+                                                cr,
+                                                content_x,
+                                                divider_y,
+                                                content_w,
+                                                divider_config.width,
+                                                divider_config,
+                                                SplitOrientation::Horizontal,
+                                                &data.config.frame.theme,
+                                            );
+                                            current_y = divider_y + divider_config.width + divider_config.spacing_after;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        (content_bounds, group_layouts)
+                    }
+                };
+
+                let (content_x, content_y, content_w, content_h) = content_bounds;
+
+                // Clip to content area for dynamic content
                 cr.save().ok();
                 cr.rectangle(content_x, content_y, content_w, content_h);
                 cr.clip();
 
-                // Draw content based on groups with dividers between them
-                let group_count = data.config.frame.group_item_counts.len();
-                let divider_config = &data.config.frame.divider_config;
-
-                if group_count == 0 {
-                    // No groups configured
-                } else if group_count == 1 {
-                    // Single group - no dividers needed
-                    let prefixes = data.group_prefixes.first().map(|v| v.as_slice()).unwrap_or(&[]);
+                // Draw dynamic content items for each group
+                for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
+                    let prefixes = data.group_prefixes.get(group_idx).map(|v| v.as_slice()).unwrap_or(&[]);
                     let _ = Self::draw_content_items(
                         cr,
-                        content_x,
-                        content_y,
-                        content_w,
-                        content_h,
+                        gx,
+                        gy,
+                        gw,
+                        gh,
                         prefixes,
-                        0, // group_idx
+                        group_idx,
                         &data.config,
                         &data.values,
                         &data.bar_values,
                         &data.core_bar_values,
                         &data.graph_history,
                     );
-                } else {
-                    // Multiple groups - calculate space with dividers between each
-                    let total_divider_space = divider_config.width
-                        + divider_config.spacing_before
-                        + divider_config.spacing_after;
-                    let num_dividers = (group_count - 1) as f64;
-
-                    // Calculate total weight for group sizing
-                    let total_weight: f64 = (0..group_count)
-                        .map(|i| data.config.frame.group_size_weights.get(i).copied().unwrap_or(1.0))
-                        .sum();
-                    let total_weight = if total_weight <= 0.0 { 1.0 } else { total_weight };
-
-                    match data.config.frame.layout_orientation {
-                        SplitOrientation::Vertical => {
-                            // Groups arranged side by side (left to right)
-                            let available_w = content_w - num_dividers * total_divider_space;
-
-                            let mut current_x = content_x;
-                            for (group_idx, _) in data.config.frame.group_item_counts.iter().enumerate() {
-                                let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
-                                let group_w = (weight / total_weight) * available_w;
-
-                                // Draw group content using cached prefixes
-                                let prefixes = data.group_prefixes.get(group_idx).map(|v| v.as_slice()).unwrap_or(&[]);
-                                let _ = Self::draw_content_items(
-                                    cr,
-                                    current_x,
-                                    content_y,
-                                    group_w,
-                                    content_h,
-                                    prefixes,
-                                    group_idx,
-                                    &data.config,
-                                    &data.values,
-                                    &data.bar_values,
-                                    &data.core_bar_values,
-                                    &data.graph_history,
-                                );
-
-                                // Draw divider after this group (except for the last group)
-                                if group_idx < group_count - 1 {
-                                    let divider_x = current_x + group_w + divider_config.spacing_before;
-                                    let _ = render_divider(
-                                        cr,
-                                        divider_x,
-                                        content_y,
-                                        divider_config.width,
-                                        content_h,
-                                        divider_config,
-                                        SplitOrientation::Vertical,
-                                        &data.config.frame.theme,
-                                    );
-                                    current_x = divider_x + divider_config.width + divider_config.spacing_after;
-                                } else {
-                                    current_x += group_w;
-                                }
-                            }
-                        }
-                        SplitOrientation::Horizontal => {
-                            // Groups stacked vertically (top to bottom)
-                            let available_h = content_h - num_dividers * total_divider_space;
-
-                            let mut current_y = content_y;
-                            for (group_idx, _) in data.config.frame.group_item_counts.iter().enumerate() {
-                                let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
-                                let group_h = (weight / total_weight) * available_h;
-
-                                // Draw group content using cached prefixes
-                                let prefixes = data.group_prefixes.get(group_idx).map(|v| v.as_slice()).unwrap_or(&[]);
-                                let _ = Self::draw_content_items(
-                                    cr,
-                                    content_x,
-                                    current_y,
-                                    content_w,
-                                    group_h,
-                                    prefixes,
-                                    group_idx,
-                                    &data.config,
-                                    &data.values,
-                                    &data.bar_values,
-                                    &data.core_bar_values,
-                                    &data.graph_history,
-                                );
-
-                                // Draw divider after this group (except for the last group)
-                                if group_idx < group_count - 1 {
-                                    let divider_y = current_y + group_h + divider_config.spacing_before;
-                                    let _ = render_divider(
-                                        cr,
-                                        content_x,
-                                        divider_y,
-                                        content_w,
-                                        divider_config.width,
-                                        divider_config,
-                                        SplitOrientation::Horizontal,
-                                        &data.config.frame.theme,
-                                    );
-                                    current_y = divider_y + divider_config.width + divider_config.spacing_after;
-                                } else {
-                                    current_y += group_h;
-                                }
-                            }
-                        }
-                    }
                 }
 
                 cr.restore().ok();
@@ -546,38 +679,51 @@ impl Displayer for LcarsComboDisplayer {
                     data.dirty = false;
                 }
 
-                // Update animation state
+                // Update animation state - with early exit optimization
                 if data.config.animation_enabled {
-                    let now = Instant::now();
-                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                    data.last_update = now;
+                    // Quick check: any animations in progress?
+                    // This avoids Instant::now() and iteration when nothing is animating
+                    let has_bar_animations = data.bar_values.values()
+                        .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
+                    let has_core_animations = data.core_bar_values.values()
+                        .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD));
 
-                    let speed = data.config.animation_speed;
+                    if has_bar_animations || has_core_animations {
+                        let now = Instant::now();
+                        let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                        data.last_update = now;
 
-                    // Animate bar values
-                    for (_key, anim) in data.bar_values.iter_mut() {
-                        if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                            let delta = (anim.target - anim.current) * speed * elapsed;
-                            anim.current += delta;
+                        let speed = data.config.animation_speed;
 
-                            if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                anim.current = anim.target;
-                            }
-                            redraw = true;
-                        }
-                    }
+                        // Animate bar values
+                        if has_bar_animations {
+                            for (_key, anim) in data.bar_values.iter_mut() {
+                                if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                    let delta = (anim.target - anim.current) * speed * elapsed;
+                                    anim.current += delta;
 
-                    // Animate core bar values
-                    for (_key, core_anims) in data.core_bar_values.iter_mut() {
-                        for anim in core_anims.iter_mut() {
-                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                let delta = (anim.target - anim.current) * speed * elapsed;
-                                anim.current += delta;
-
-                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                    anim.current = anim.target;
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                        anim.current = anim.target;
+                                    }
+                                    redraw = true;
                                 }
-                                redraw = true;
+                            }
+                        }
+
+                        // Animate core bar values
+                        if has_core_animations {
+                            for (_key, core_anims) in data.core_bar_values.iter_mut() {
+                                for anim in core_anims.iter_mut() {
+                                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                        let delta = (anim.target - anim.current) * speed * elapsed;
+                                        anim.current += delta;
+
+                                        if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                            anim.current = anim.target;
+                                        }
+                                        redraw = true;
+                                    }
+                                }
                             }
                         }
                     }
@@ -719,6 +865,7 @@ impl Displayer for LcarsComboDisplayer {
                 lcars_config.frame.migrate_legacy();
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = lcars_config;
+                    display_data.config_version = display_data.config_version.wrapping_add(1);
                 }
                 return Ok(());
             }
@@ -737,6 +884,8 @@ impl Displayer for LcarsComboDisplayer {
             if let Some(segment_count) = config.get("segment_count").and_then(|v| v.as_u64()) {
                 display_data.config.frame.segment_count = segment_count as u32;
             }
+
+            display_data.config_version = display_data.config_version.wrapping_add(1);
         }
 
         Ok(())

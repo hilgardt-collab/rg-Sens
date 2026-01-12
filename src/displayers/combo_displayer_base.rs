@@ -466,28 +466,36 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
                 combo.dirty = false;
             }
 
-            // Calculate elapsed time
-            let now = Instant::now();
-            let elapsed = now.duration_since(combo.last_update).as_secs_f64();
-            combo.last_update = now;
+            // Check if we have custom animation that needs elapsed time
+            let has_custom_anim = custom_animation.is_some();
 
-            // Run custom animation if provided (always runs, even if bar animation disabled)
-            if let Some(ref custom_anim) = custom_animation {
-                if custom_anim(&mut data, elapsed) {
-                    redraw = true;
-                }
-            }
-
-            // Run bar/core bar animations if enabled
-            if animation_enabled(&data) {
+            // Quick check: any bar animations in progress?
+            let has_bar_animations = animation_enabled(&data) && {
                 let combo = get_combo(&mut data);
+                combo.bar_values.values()
+                    .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
+            };
+            let has_core_animations = animation_enabled(&data) && {
+                let combo = get_combo(&mut data);
+                combo.core_bar_values.values()
+                    .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD))
+            };
 
-                // Quick check: any animations in progress?
-                let has_bar_animations = combo.bar_values.values()
-                    .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
-                let has_core_animations = combo.core_bar_values.values()
-                    .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD));
+            // Only calculate elapsed time if something actually needs it
+            if has_custom_anim || has_bar_animations || has_core_animations {
+                let combo = get_combo(&mut data);
+                let now = Instant::now();
+                let elapsed = now.duration_since(combo.last_update).as_secs_f64();
+                combo.last_update = now;
 
+                // Run custom animation if provided
+                if let Some(ref custom_anim) = custom_animation {
+                    if custom_anim(&mut data, elapsed) {
+                        redraw = true;
+                    }
+                }
+
+                // Run bar/core bar animations if enabled
                 if has_bar_animations || has_core_animations {
                     let speed = animation_speed(&data);
                     let combo = get_combo(&mut data);

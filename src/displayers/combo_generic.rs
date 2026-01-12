@@ -7,8 +7,10 @@ use anyhow::Result;
 use cairo::Context;
 use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
@@ -18,11 +20,28 @@ use crate::displayers::combo_displayer_base::{
     draw_content_items_generic, handle_combo_update_data, setup_combo_animation_timer_ext,
 };
 
-/// Internal display data for the generic displayer
-#[derive(Clone)]
+/// Cached frame rendering data to avoid re-rendering static elements
+/// This is stored in RefCell within the draw closure (not Send/Sync)
+struct FrameCache {
+    /// Cached frame surface (borders, decorations, background)
+    surface: cairo::ImageSurface,
+    /// Size the cache was rendered at
+    width: i32,
+    height: i32,
+    /// Config version when cache was created
+    config_version: u64,
+    /// Content bounds from frame render (x, y, width, height)
+    content_bounds: (f64, f64, f64, f64),
+    /// Group layouts from frame render
+    group_layouts: Vec<(f64, f64, f64, f64)>,
+}
+
+/// Internal display data for the generic displayer (Send + Sync)
 struct DisplayData<C: ComboFrameConfig> {
     config: C,
     combo: ComboDisplayData,
+    /// Monotonically increasing counter to detect config changes
+    config_version: u64,
 }
 
 impl<C: ComboFrameConfig> Default for DisplayData<C> {
@@ -30,6 +49,7 @@ impl<C: ComboFrameConfig> Default for DisplayData<C> {
         Self {
             config: C::default(),
             combo: ComboDisplayData::default(),
+            config_version: 0,
         }
     }
 }
@@ -73,6 +93,7 @@ impl<R: FrameRenderer> GenericComboDisplayer<R> {
             data: Arc::new(Mutex::new(DisplayData {
                 config: default_config,
                 combo: ComboDisplayData::default(),
+                config_version: 0,
             })),
             _phantom: PhantomData,
         }
@@ -88,6 +109,7 @@ impl<R: FrameRenderer> GenericComboDisplayer<R> {
         if let Ok(mut data) = self.data.lock() {
             data.config = config;
             data.combo.dirty = true;
+            data.config_version = data.config_version.wrapping_add(1); // Invalidate frame cache
         }
     }
 }
@@ -239,6 +261,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = new_config;
                     display_data.combo.dirty = true;
+                    display_data.config_version = display_data.config_version.wrapping_add(1);
                 }
                 return Ok(());
             }
@@ -253,6 +276,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
                 display_data.config.set_animation_speed(speed);
             }
             display_data.combo.dirty = true;
+            display_data.config_version = display_data.config_version.wrapping_add(1);
         }
 
         Ok(())
@@ -290,6 +314,7 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
             data: Arc::new(Mutex::new(DisplayData {
                 config: default_config,
                 combo: ComboDisplayData::default(),
+                config_version: 0,
             })),
         }
     }
@@ -304,6 +329,7 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         if let Ok(mut data) = self.data.lock() {
             data.config = config;
             data.combo.dirty = true;
+            data.config_version = data.config_version.wrapping_add(1); // Invalidate frame cache
         }
     }
 }
@@ -324,6 +350,10 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
         let data_clone = self.data.clone();
         let renderer_clone = self.renderer.clone();
 
+        // Frame cache lives in the draw closure (not Send/Sync required)
+        let frame_cache: Rc<RefCell<Option<FrameCache>>> = Rc::new(RefCell::new(None));
+        let frame_cache_clone = frame_cache.clone();
+
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if width < 10 || height < 10 {
                 return;
@@ -340,36 +370,116 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
                 data.combo.transform.apply(cr, w, h);
 
-                // Render the frame
-                let content_bounds = match renderer_clone.render_frame(cr, &data.config, w, h) {
-                    Ok(bounds) => bounds,
-                    Err(e) => {
-                        log::debug!("{} frame render error: {}", renderer_clone.theme_name(), e);
-                        data.combo.transform.restore(cr);
-                        return;
+                // Check if frame cache is valid (same size and config version)
+                let cache_valid = frame_cache_clone
+                    .borrow()
+                    .as_ref()
+                    .map_or(false, |cache| {
+                        cache.width == width
+                            && cache.height == height
+                            && cache.config_version == data.config_version
+                    });
+
+                // Either use cached frame or render fresh and cache
+                let (content_bounds, group_layouts) = if cache_valid {
+                    // Use cached frame - just paint the surface
+                    let cache_ref = frame_cache_clone.borrow();
+                    let cache = cache_ref.as_ref().unwrap();
+                    if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
+                        log::debug!("Failed to set cached surface: {:?}", e);
+                    }
+                    cr.paint().ok();
+                    (cache.content_bounds, cache.group_layouts.clone())
+                } else {
+                    // Try to create cache surface
+                    let cache_result = cairo::ImageSurface::create(
+                        cairo::Format::ARgb32,
+                        width,
+                        height,
+                    )
+                    .ok()
+                    .and_then(|surface| {
+                        cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
+                    });
+
+                    if let Some((surface, cache_cr)) = cache_result {
+                        // Render frame to cache surface
+                        let content_bounds =
+                            match renderer_clone.render_frame(&cache_cr, &data.config, w, h) {
+                                Ok(bounds) => bounds,
+                                Err(e) => {
+                                    log::debug!(
+                                        "{} frame render error: {}",
+                                        renderer_clone.theme_name(),
+                                        e
+                                    );
+                                    data.combo.transform.restore(cr);
+                                    return;
+                                }
+                            };
+
+                        let (cx, cy, cw, ch) = content_bounds;
+
+                        // Calculate and render group dividers to cache
+                        let group_layouts =
+                            renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
+                        renderer_clone.draw_group_dividers(&cache_cr, &data.config, &group_layouts);
+
+                        // Flush and store cache
+                        drop(cache_cr);
+                        surface.flush();
+
+                        *frame_cache_clone.borrow_mut() = Some(FrameCache {
+                            surface,
+                            width,
+                            height,
+                            config_version: data.config_version,
+                            content_bounds,
+                            group_layouts: group_layouts.clone(),
+                        });
+
+                        // Paint cached surface
+                        let cache_ref = frame_cache_clone.borrow();
+                        let cache = cache_ref.as_ref().unwrap();
+                        if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
+                            log::debug!("Failed to set cached surface: {:?}", e);
+                        }
+                        cr.paint().ok();
+
+                        (content_bounds, group_layouts)
+                    } else {
+                        // Cache creation failed - render directly (fallback)
+                        let content_bounds =
+                            match renderer_clone.render_frame(cr, &data.config, w, h) {
+                                Ok(bounds) => bounds,
+                                Err(e) => {
+                                    log::debug!(
+                                        "{} frame render error: {}",
+                                        renderer_clone.theme_name(),
+                                        e
+                                    );
+                                    data.combo.transform.restore(cr);
+                                    return;
+                                }
+                            };
+
+                        let (cx, cy, cw, ch) = content_bounds;
+                        let group_layouts =
+                            renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
+                        renderer_clone.draw_group_dividers(cr, &data.config, &group_layouts);
+
+                        (content_bounds, group_layouts)
                     }
                 };
 
                 let (content_x, content_y, content_w, content_h) = content_bounds;
 
-                // Calculate group layouts
-                let group_layouts = renderer_clone.calculate_group_layouts(
-                    &data.config,
-                    content_x,
-                    content_y,
-                    content_w,
-                    content_h,
-                );
-
-                // Draw group dividers
-                renderer_clone.draw_group_dividers(cr, &data.config, &group_layouts);
-
-                // Clip to content area
+                // Clip to content area for dynamic content
                 cr.save().ok();
                 cr.rectangle(content_x, content_y, content_w, content_h);
                 cr.clip();
 
-                // Build draw params
+                // Build draw params for dynamic content
                 let draw_params = ContentDrawParams {
                     values: &data.combo.values,
                     bar_values: &data.combo.bar_values,
@@ -381,7 +491,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                     theme: data.config.theme(),
                 };
 
-                // Draw content items for each group
+                // Draw dynamic content items for each group
                 let group_item_counts = data.config.group_item_counts();
                 for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
                     let item_count = group_item_counts.get(group_idx).copied().unwrap_or(1);
@@ -481,6 +591,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = new_config;
                     display_data.combo.dirty = true;
+                    display_data.config_version = display_data.config_version.wrapping_add(1);
                 }
                 return Ok(());
             }
@@ -494,6 +605,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 display_data.config.set_animation_speed(speed);
             }
             display_data.combo.dirty = true;
+            display_data.config_version = display_data.config_version.wrapping_add(1);
         }
 
         Ok(())
