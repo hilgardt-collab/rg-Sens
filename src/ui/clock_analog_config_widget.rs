@@ -8,7 +8,8 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, IconPosition, TickStyle};
+use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyle};
+use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::BackgroundConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
@@ -61,7 +62,7 @@ pub struct ClockAnalogConfigWidget {
     icon_bold_check: CheckButton,
     center_indicator_check: CheckButton,
     shrink_for_indicator_check: CheckButton,
-    icon_position_dropdown: DropDown,
+    icon_position_grid: PositionGridWidget,
     icon_offset_x_spin: SpinButton,
     icon_offset_y_spin: SpinButton,
 }
@@ -543,30 +544,11 @@ impl ClockAnalogConfigWidget {
         layout_label.set_margin_top(8);
         icon_box.append(&layout_label);
 
-        // Icon position dropdown (3x3 grid)
+        // Icon position (3x3 grid widget)
         let position_row = GtkBox::new(Orientation::Horizontal, 6);
         position_row.append(&Label::new(Some("Position:")));
-        let position_items = StringList::new(&[
-            "Top Left", "Top Center", "Top Right",
-            "Middle Left", "Center", "Middle Right",
-            "Bottom Left", "Bottom Center", "Bottom Right",
-        ]);
-        let icon_position_dropdown = DropDown::new(Some(position_items), gtk4::Expression::NONE);
-        // Set initial position from config
-        let initial_pos = match config.borrow().icon_position {
-            IconPosition::TopLeft => 0,
-            IconPosition::TopCenter => 1,
-            IconPosition::TopRight => 2,
-            IconPosition::MiddleLeft => 3,
-            IconPosition::Center => 4,
-            IconPosition::MiddleRight => 5,
-            IconPosition::BottomLeft => 6,
-            IconPosition::BottomCenter => 7,
-            IconPosition::BottomRight => 8,
-        };
-        icon_position_dropdown.set_selected(initial_pos);
-        icon_position_dropdown.set_hexpand(true);
-        position_row.append(&icon_position_dropdown);
+        let icon_position_grid = PositionGridWidget::new(config.borrow().icon_position);
+        position_row.append(icon_position_grid.widget());
         icon_box.append(&position_row);
 
         // X offset
@@ -754,21 +736,9 @@ impl ClockAnalogConfigWidget {
             config_for_shrink.borrow_mut().shrink_for_indicator = check.is_active();
         });
 
-        // Icon position dropdown
+        // Icon position grid
         let config_for_position = config.clone();
-        icon_position_dropdown.connect_selected_notify(move |dropdown| {
-            let pos = match dropdown.selected() {
-                0 => IconPosition::TopLeft,
-                1 => IconPosition::TopCenter,
-                2 => IconPosition::TopRight,
-                3 => IconPosition::MiddleLeft,
-                4 => IconPosition::Center,
-                5 => IconPosition::MiddleRight,
-                6 => IconPosition::BottomLeft,
-                7 => IconPosition::BottomCenter,
-                8 => IconPosition::BottomRight,
-                _ => IconPosition::BottomCenter,
-            };
+        icon_position_grid.set_on_change(move |pos| {
             config_for_position.borrow_mut().icon_position = pos;
         });
 
@@ -824,7 +794,7 @@ impl ClockAnalogConfigWidget {
             icon_bold_check,
             center_indicator_check,
             shrink_for_indicator_check,
-            icon_position_dropdown,
+            icon_position_grid,
             icon_offset_x_spin,
             icon_offset_y_spin,
         }
@@ -913,18 +883,7 @@ impl ClockAnalogConfigWidget {
         self.shrink_for_indicator_check.set_active(config.shrink_for_indicator);
 
         // Icon position
-        let pos_index = match config.icon_position {
-            IconPosition::TopLeft => 0,
-            IconPosition::TopCenter => 1,
-            IconPosition::TopRight => 2,
-            IconPosition::MiddleLeft => 3,
-            IconPosition::Center => 4,
-            IconPosition::MiddleRight => 5,
-            IconPosition::BottomLeft => 6,
-            IconPosition::BottomCenter => 7,
-            IconPosition::BottomRight => 8,
-        };
-        self.icon_position_dropdown.set_selected(pos_index);
+        self.icon_position_grid.set_position(config.icon_position);
         self.icon_offset_x_spin.set_value(config.icon_offset_x);
         self.icon_offset_y_spin.set_value(config.icon_offset_y);
 

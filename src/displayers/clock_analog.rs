@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
-use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig, IconPosition};
+use crate::displayers::TextPosition;
+use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 
@@ -176,7 +177,10 @@ impl Displayer for ClockAnalogDisplayer {
 
                 cr.restore().ok();
 
-                // Draw indicator using 3x3 grid positioning
+                // Restore transform BEFORE drawing icon so icon is in screen coordinates
+                data.transform.restore(cr);
+
+                // Draw indicator using 3x3 grid positioning (in screen coordinates)
                 if data.config.show_icon {
                     let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
 
@@ -197,17 +201,21 @@ impl Displayer for ClockAnalogDisplayer {
                     let (text_w, text_h) = (te.width().max(font_size * 3.0), te.height().max(font_size));
 
                     // Calculate base position from 3x3 grid
+                    // For baseline-positioned text: y is the baseline, text draws ABOVE that
                     let padding = 6.0;
                     let (base_x, base_y) = match data.config.icon_position {
-                        IconPosition::TopLeft => (padding, text_h + padding),
-                        IconPosition::TopCenter => ((width - text_w) / 2.0, text_h + padding),
-                        IconPosition::TopRight => (width - text_w - padding, text_h + padding),
-                        IconPosition::MiddleLeft => (padding, (height + text_h) / 2.0),
-                        IconPosition::Center => ((width - text_w) / 2.0, (height + text_h) / 2.0),
-                        IconPosition::MiddleRight => (width - text_w - padding, (height + text_h) / 2.0),
-                        IconPosition::BottomLeft => (padding, height - padding),
-                        IconPosition::BottomCenter => ((width - text_w) / 2.0, height - padding),
-                        IconPosition::BottomRight => (width - text_w - padding, height - padding),
+                        // Top row: baseline at padding + text_h so text top is at padding
+                        TextPosition::TopLeft => (padding, padding + text_h),
+                        TextPosition::TopCenter => ((width - text_w) / 2.0, padding + text_h),
+                        TextPosition::TopRight => (width - text_w - padding, padding + text_h),
+                        // Middle row: baseline at center + text_h/2 so text is vertically centered
+                        TextPosition::CenterLeft => (padding, (height + text_h) / 2.0),
+                        TextPosition::Center => ((width - text_w) / 2.0, (height + text_h) / 2.0),
+                        TextPosition::CenterRight => (width - text_w - padding, (height + text_h) / 2.0),
+                        // Bottom row: baseline at height - padding so text bottom is at height - padding
+                        TextPosition::BottomLeft => (padding, height - padding),
+                        TextPosition::BottomCenter => ((width - text_w) / 2.0, height - padding),
+                        TextPosition::BottomRight => (width - text_w - padding, height - padding),
                     };
 
                     // Apply user offset
@@ -270,7 +278,6 @@ impl Displayer for ClockAnalogDisplayer {
                     // No icon shown, clear bounds
                     data.icon_bounds = None;
                 }
-                data.transform.restore(cr);
             }
         });
 

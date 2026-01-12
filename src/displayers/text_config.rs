@@ -25,15 +25,24 @@ pub enum HorizontalPosition {
 /// Combined position for 3x3 grid selection
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum TextPosition {
+    #[serde(alias = "top_left")]
     TopLeft,
+    #[serde(alias = "top_center")]
     TopCenter,
+    #[serde(alias = "top_right")]
     TopRight,
+    #[serde(alias = "middle_left", alias = "center_left")]
     CenterLeft,
+    #[serde(alias = "center")]
     #[default]
     Center,
+    #[serde(alias = "middle_right", alias = "center_right")]
     CenterRight,
+    #[serde(alias = "bottom_left")]
     BottomLeft,
+    #[serde(alias = "bottom_center")]
     BottomCenter,
+    #[serde(alias = "bottom_right")]
     BottomRight,
 }
 

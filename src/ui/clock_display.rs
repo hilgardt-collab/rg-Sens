@@ -6,6 +6,7 @@ use gtk4::cairo;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
+use crate::displayers::TextPosition;
 use crate::ui::background::Color;
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
@@ -61,29 +62,6 @@ pub enum TickStyle {
     Triangles,
 }
 
-/// Icon position on a 3x3 grid
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
-pub enum IconPosition {
-    #[serde(rename = "top_left")]
-    TopLeft,
-    #[serde(rename = "top_center")]
-    TopCenter,
-    #[serde(rename = "top_right")]
-    TopRight,
-    #[serde(rename = "middle_left")]
-    MiddleLeft,
-    #[serde(rename = "center")]
-    Center,
-    #[serde(rename = "middle_right")]
-    MiddleRight,
-    #[serde(rename = "bottom_left")]
-    BottomLeft,
-    #[serde(rename = "bottom_center")]
-    #[default]
-    BottomCenter,
-    #[serde(rename = "bottom_right")]
-    BottomRight,
-}
 
 
 /// Analog clock display configuration
@@ -194,8 +172,8 @@ pub struct AnalogClockConfig {
     pub shrink_for_indicator: bool, // Shrink clock face when indicator is visible
 
     // New icon positioning (3x3 grid with offset)
-    #[serde(default)]
-    pub icon_position: IconPosition,
+    #[serde(default = "default_icon_position")]
+    pub icon_position: TextPosition,
     #[serde(default)]
     pub icon_offset_x: f64, // Pixels offset from calculated position
     #[serde(default)]
@@ -302,6 +280,10 @@ fn default_icon_size() -> f64 {
     12.0 // As percentage of panel size
 }
 
+fn default_icon_position() -> TextPosition {
+    TextPosition::BottomCenter
+}
+
 impl Default for AnalogClockConfig {
     fn default() -> Self {
         // Create a default circular background with dark color
@@ -353,7 +335,7 @@ impl Default for AnalogClockConfig {
             icon_bold: false,
             center_indicator: true,
             shrink_for_indicator: true,
-            icon_position: IconPosition::default(),
+            icon_position: default_icon_position(),
             icon_offset_x: 0.0,
             icon_offset_y: 0.0,
         }
