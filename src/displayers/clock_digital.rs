@@ -2,13 +2,13 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{cairo, glib, prelude::*, DrawingArea, Widget};
+use gtk4::{cairo, prelude::*, DrawingArea, Widget};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
 use crate::ui::background::Color;
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 
@@ -193,6 +193,7 @@ struct DisplayData {
     next_alarm_label: Option<String>, // Optional label for next alarm
     second: u32,
     blink_state: bool,
+    blink_elapsed: f64, // Track elapsed time for blink toggle (every 0.5s)
     dirty: bool, // Flag to indicate data has changed and needs redraw
     transform: PanelTransform,
 }
@@ -212,6 +213,7 @@ impl ClockDigitalDisplayer {
             next_alarm_label: None,
             second: 0,
             blink_state: true,
+            blink_elapsed: 0.0,
             dirty: true,
             transform: PanelTransform::default(),
         }));
@@ -365,40 +367,36 @@ impl Displayer for ClockDigitalDisplayer {
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs
 
-        // Blink timer - also handles dirty flag for data updates
-        let data_for_timer = self.data.clone();
-        let drawing_area_weak = drawing_area.downgrade();
-        glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-            let Some(da) = drawing_area_weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            // Skip updates when widget is not visible (saves CPU)
-            if !da.is_mapped() {
-                return glib::ControlFlow::Continue;
-            }
-
+        // Register with global animation manager for blink effect
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
-            let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                data.blink_state = !data.blink_state;
+            if let Ok(mut data) = data_for_animation.try_lock() {
+                // Toggle blink state every ~500ms (using elapsed time at 60fps)
+                data.blink_elapsed += 1.0 / 60.0; // ~16ms per frame
+                let mut redraw = false;
 
-                // Check if data was updated (dirty flag)
-                let was_dirty = data.dirty;
-                if was_dirty {
-                    data.dirty = false;
+                if data.blink_elapsed >= 0.5 {
+                    data.blink_elapsed = 0.0;
+                    data.blink_state = !data.blink_state;
+
+                    // Redraw if blink effect is visible (alarm/timer active or blinking colon)
+                    if data.alarm_triggered || data.timer_state == "finished" ||
+                       data.timer_state == "paused" || data.config.blink_colon {
+                        redraw = true;
+                    }
                 }
 
-                // Redraw if: data changed OR blink effect is visible (alarm/timer active or blinking colon)
-                was_dirty || data.alarm_triggered || data.timer_state == "finished" ||
-                data.timer_state == "paused" || data.config.blink_colon
+                // Check if data was updated (dirty flag)
+                if data.dirty {
+                    data.dirty = false;
+                    redraw = true;
+                }
+
+                redraw
             } else {
                 false
-            };
-
-            if needs_redraw {
-                da.queue_draw();
             }
-            glib::ControlFlow::Continue
         });
 
         drawing_area.upcast()

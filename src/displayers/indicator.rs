@@ -3,13 +3,13 @@
 //! Displays a color based on a value mapped to a gradient (0% -> 100%).
 //! Can show full panel fill, circles, squares, or polygons.
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, STATIC_POLL_INTERVAL};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, register_animation};
 use crate::displayers::TextDisplayerConfig;
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::render_cache::get_cached_color_at;
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -369,36 +369,19 @@ impl Displayer for IndicatorDisplayer {
             }
         });
 
-        // Periodic redraw when dirty (uses longer interval since indicator doesn't animate)
-        glib::timeout_add_local(STATIC_POLL_INTERVAL, {
-            let drawing_area_weak = drawing_area.downgrade();
-            let data_for_timer = self.data.clone();
-            move || {
-                let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                    return glib::ControlFlow::Break;
-                };
-
-                // Skip updates when widget is not visible (saves CPU)
-                if !drawing_area.is_mapped() {
-                    return glib::ControlFlow::Continue;
-                }
-
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                    if data.dirty {
-                        data.dirty = false;
-                        true
-                    } else {
-                        false
-                    }
+        // Register with global animation manager - only redraws when dirty flag is set
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
+            // Use try_lock to avoid blocking UI thread if lock is held
+            if let Ok(mut data) = data_for_animation.try_lock() {
+                if data.dirty {
+                    data.dirty = false;
+                    true
                 } else {
                     false
-                };
-
-                if needs_redraw {
-                    drawing_area.queue_draw();
                 }
-                glib::ControlFlow::Continue
+            } else {
+                false
             }
         });
 

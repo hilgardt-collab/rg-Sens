@@ -9,14 +9,14 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, ANIMATION_FRAME_INTERVAL, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
@@ -536,78 +536,56 @@ impl Displayer for LcarsComboDisplayer {
             }
         });
 
-        // Set up animation timer (60fps)
-        glib::timeout_add_local(ANIMATION_FRAME_INTERVAL, {
-            let data_clone = self.data.clone();
-            let drawing_area_weak = drawing_area.downgrade();
-            move || {
-                let Some(drawing_area) = drawing_area_weak.upgrade() else {
-                    return glib::ControlFlow::Break;
-                };
-
-                // Skip animation updates when widget is not visible (saves CPU)
-                if !drawing_area.is_mapped() {
-                    return glib::ControlFlow::Continue;
+        // Register with global animation manager for smooth animations
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
+            // Use try_lock to avoid blocking UI thread if lock is held
+            if let Ok(mut data) = data_for_animation.try_lock() {
+                let mut redraw = data.dirty;
+                if data.dirty {
+                    data.dirty = false;
                 }
 
-                // Use try_lock to avoid blocking UI thread if lock is held
-                let needs_redraw = if let Ok(mut data) = data_clone.try_lock() {
-                    let mut redraw = data.dirty;
-                    if data.dirty {
-                        data.dirty = false;
+                // Update animation state
+                if data.config.animation_enabled {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                    data.last_update = now;
+
+                    let speed = data.config.animation_speed;
+
+                    // Animate bar values
+                    for (_key, anim) in data.bar_values.iter_mut() {
+                        if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                            let delta = (anim.target - anim.current) * speed * elapsed;
+                            anim.current += delta;
+
+                            if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                anim.current = anim.target;
+                            }
+                            redraw = true;
+                        }
                     }
 
-                    // Update animation state
-                    if data.config.animation_enabled {
-                        let now = Instant::now();
-                        let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                        data.last_update = now;
-
-                        let speed = data.config.animation_speed;
-
-                        // Animate bar values
-                        for (_key, anim) in data.bar_values.iter_mut() {
+                    // Animate core bar values
+                    for (_key, core_anims) in data.core_bar_values.iter_mut() {
+                        for anim in core_anims.iter_mut() {
                             if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                // Lerp toward target
                                 let delta = (anim.target - anim.current) * speed * elapsed;
                                 anim.current += delta;
 
-                                // Snap if very close
                                 if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
                                     anim.current = anim.target;
                                 }
                                 redraw = true;
                             }
                         }
-
-                        // Animate core bar values
-                        for (_key, core_anims) in data.core_bar_values.iter_mut() {
-                            for anim in core_anims.iter_mut() {
-                                if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                    // Lerp toward target
-                                    let delta = (anim.target - anim.current) * speed * elapsed;
-                                    anim.current += delta;
-
-                                    // Snap if very close
-                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                        anim.current = anim.target;
-                                    }
-                                    redraw = true;
-                                }
-                            }
-                        }
                     }
-
-                    redraw
-                } else {
-                    false
-                };
-
-                if needs_redraw {
-                    drawing_area.queue_draw();
                 }
 
-                glib::ControlFlow::Continue
+                redraw
+            } else {
+                false
             }
         });
 

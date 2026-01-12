@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
 use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
@@ -33,6 +33,7 @@ struct DisplayData {
     timer_state: String,
     timer_display: String,
     flash_state: bool,
+    flash_elapsed: f64, // Track elapsed time for flash toggle (every 0.5s)
     transform: PanelTransform,
 }
 
@@ -51,6 +52,7 @@ impl ClockAnalogDisplayer {
             timer_state: "stopped".to_string(),
             timer_display: String::new(),
             flash_state: false,
+            flash_elapsed: 0.0,
             transform: PanelTransform::default(),
         }));
 
@@ -239,30 +241,19 @@ impl Displayer for ClockAnalogDisplayer {
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs
 
-        // Animation timer for smooth second hand and flash effect
-        let data_for_timer = self.data.clone();
-        let drawing_area_weak = drawing_area.downgrade();
-        let mut flash_counter = 0u32;
-        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-            let Some(da) = drawing_area_weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            // Skip updates when widget is not visible (saves CPU)
-            if !da.is_mapped() {
-                return glib::ControlFlow::Continue;
-            }
-
+        // Register with global animation manager for smooth second hand and flash effect
+        let data_for_animation = self.data.clone();
+        register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
-            let needs_redraw = if let Ok(mut data) = data_for_timer.try_lock() {
-                // Toggle flash state every 500ms (10 * 50ms)
-                flash_counter += 1;
+            if let Ok(mut data) = data_for_animation.try_lock() {
                 let mut redraw = false;
 
-                if flash_counter >= 10 {
-                    flash_counter = 0;
-                    // Only toggle flash if alarm or timer is active
-                    if data.alarm_triggered || data.timer_state == "finished" {
+                // Toggle flash state every ~500ms (using elapsed time at 60fps = ~30 frames)
+                // Only track flash if alarm or timer is active
+                if data.alarm_triggered || data.timer_state == "finished" {
+                    data.flash_elapsed += 1.0 / 60.0; // ~16ms per frame
+                    if data.flash_elapsed >= 0.5 {
+                        data.flash_elapsed = 0.0;
                         data.flash_state = !data.flash_state;
                         redraw = true;
                     }
@@ -276,12 +267,7 @@ impl Displayer for ClockAnalogDisplayer {
                 redraw
             } else {
                 false
-            };
-
-            if needs_redraw {
-                da.queue_draw();
             }
-            glib::ControlFlow::Continue
         });
 
         drawing_area.upcast()
