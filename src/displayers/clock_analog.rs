@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use gtk4::{prelude::*, DrawingArea, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -285,8 +285,10 @@ impl Displayer for ClockAnalogDisplayer {
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs
 
-        // Register with global animation manager for flash effect only (not smooth seconds)
-        // This allows the animation manager to enter idle mode when no flash is active
+        // Register with global animation manager for flash effect AND smooth seconds
+        // The animation manager uses adaptive frame rate:
+        // - 60fps when animations are active (smooth_seconds or flash)
+        // - ~4fps when idle (no animation needed)
         let data_for_animation = self.data.clone();
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
@@ -304,35 +306,16 @@ impl Displayer for ClockAnalogDisplayer {
                     }
                 }
 
-                // Note: smooth_seconds uses its own dedicated timer below
-                // This keeps the global animation manager from running at 60fps constantly
+                // Smooth seconds - request redraw every frame to animate second hand smoothly
+                // This keeps animation manager in "active" mode at 60fps when enabled
+                if data.config.smooth_seconds && data.config.show_second_hand {
+                    redraw = true;
+                }
 
                 redraw
             } else {
                 false
             }
-        });
-
-        // Dedicated timer for smooth seconds - only affects this widget
-        // This runs independently of the global animation manager
-        let data_for_smooth = self.data.clone();
-        let drawing_area_weak = drawing_area.downgrade();
-        glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
-            let Some(widget) = drawing_area_weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            // Only redraw if smooth_seconds is enabled and widget is visible
-            if widget.is_mapped() {
-                if let Ok(data) = data_for_smooth.try_lock() {
-                    if data.config.smooth_seconds && data.config.show_second_hand {
-                        drop(data); // Release lock before queue_draw
-                        widget.queue_draw();
-                    }
-                }
-            }
-
-            glib::ControlFlow::Continue
         });
 
         drawing_area.upcast()
