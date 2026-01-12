@@ -1415,6 +1415,54 @@ pub(crate) fn show_panel_properties_dialog(
     displayer_tab_box.append(&art_nouveau_config_label);
     displayer_tab_box.append(&art_nouveau_placeholder);
 
+    // === Steampunk Configuration (Lazy Initialization) ===
+    let steampunk_config_label = Label::new(Some("Steampunk Configuration:"));
+    steampunk_config_label.set_halign(gtk4::Align::Start);
+    steampunk_config_label.add_css_class("heading");
+    steampunk_config_label.set_visible(old_displayer_id == "steampunk");
+
+    // Create placeholder box for lazy widget creation
+    let steampunk_placeholder = GtkBox::new(Orientation::Vertical, 0);
+    steampunk_placeholder.set_visible(old_displayer_id == "steampunk");
+
+    // Use Option for lazy initialization - only create widget when needed
+    let steampunk_config_widget: Rc<RefCell<Option<crate::ui::SteampunkConfigWidget>>> = Rc::new(RefCell::new(None));
+
+    // Only create Steampunk widget if this is the active displayer (lazy init)
+    if old_displayer_id == "steampunk" {
+        log::info!("=== Creating SteampunkConfigWidget (lazy init) ===");
+        let widget = crate::ui::SteampunkConfigWidget::new((*available_fields).clone());
+
+        // Load existing Steampunk config
+        // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Steampunk(sp_config)) = panel_guard.displayer.get_typed_config() {
+            log::info!("=== Loading Steampunk config from displayer.get_typed_config() ===");
+            widget.set_theme(sp_config.frame.theme.clone());
+            widget.set_config(&sp_config);
+            true
+        } else {
+            false
+        };
+
+        if !config_loaded {
+            if let Some(config_value) = panel_guard.config.get("steampunk_config") {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::SteampunkDisplayConfig>(config_value.clone()) {
+                    log::info!("=== Loading Steampunk config from panel config hashmap ===");
+                    widget.set_theme(config.frame.theme.clone());
+                    widget.set_config(&config);
+                }
+            }
+        }
+
+        // NOTE: Config is only applied on Apply/Accept button click, not on every change
+        widget.set_on_change(|| {});
+        steampunk_placeholder.append(widget.widget());
+        *steampunk_config_widget.borrow_mut() = Some(widget);
+    }
+
+    displayer_tab_box.append(&steampunk_config_label);
+    displayer_tab_box.append(&steampunk_placeholder);
+
     // CSS Template configuration
     let css_template_config_label = Label::new(Some("CSS Template Configuration:"));
     css_template_config_label.set_halign(gtk4::Align::Start);
@@ -1626,7 +1674,7 @@ pub(crate) fn show_panel_properties_dialog(
     }
 
     // Shared storage for transferring config between combo panel types
-    let combo_panel_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau"];
+    let combo_panel_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau", "steampunk"];
     let is_combo_panel = |id: &str| combo_panel_ids.contains(&id);
     let previous_combo_displayer: Rc<RefCell<String>> = Rc::new(RefCell::new(
         if is_combo_panel(&old_displayer_id) { old_displayer_id.clone() } else { String::new() }
@@ -1645,6 +1693,7 @@ pub(crate) fn show_panel_properties_dialog(
         synthwave: &Rc<RefCell<Option<crate::ui::SynthwaveConfigWidget>>>,
         art_deco: &Rc<RefCell<Option<crate::ui::ArtDecoConfigWidget>>>,
         art_nouveau: &Rc<RefCell<Option<crate::ui::ArtNouveauConfigWidget>>>,
+        steampunk: &Rc<RefCell<Option<crate::ui::SteampunkConfigWidget>>>,
     ) -> Option<crate::ui::combo_config_base::TransferableComboConfig> {
         match displayer_id {
             "lcars" => lcars.borrow().as_ref().map(|w| w.get_transferable_config()),
@@ -1656,6 +1705,7 @@ pub(crate) fn show_panel_properties_dialog(
             "synthwave" => synthwave.borrow().as_ref().map(|w| w.get_transferable_config()),
             "art_deco" => art_deco.borrow().as_ref().map(|w| w.get_transferable_config()),
             "art_nouveau" => art_nouveau.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "steampunk" => steampunk.borrow().as_ref().map(|w| w.get_transferable_config()),
             _ => None,
         }
     }
@@ -1673,12 +1723,13 @@ pub(crate) fn show_panel_properties_dialog(
         let synthwave_clone = synthwave_config_widget.clone();
         let art_deco_clone = art_deco_config_widget.clone();
         let art_nouveau_clone = art_nouveau_config_widget.clone();
+        let steampunk_clone = steampunk_config_widget.clone();
         let displayers_clone = displayers.clone();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(new_displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 let prev_id = previous_combo_clone.borrow().clone();
-                let combo_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau"];
+                let combo_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau", "steampunk"];
                 let new_is_combo = combo_ids.contains(&new_displayer_id.as_str());
                 let prev_is_combo = !prev_id.is_empty() && combo_ids.contains(&prev_id.as_str());
 
@@ -1688,7 +1739,7 @@ pub(crate) fn show_panel_properties_dialog(
                         &prev_id,
                         &lcars_clone, &cyberpunk_clone, &material_clone, &industrial_clone,
                         &retro_terminal_clone, &fighter_hud_clone, &synthwave_clone,
-                        &art_deco_clone, &art_nouveau_clone,
+                        &art_deco_clone, &art_nouveau_clone, &steampunk_clone,
                     );
                     if let Some(cfg) = config {
                         log::info!("=== Extracted transferable config from '{}' for transfer to '{}' ===", prev_id, new_displayer_id);
@@ -1741,6 +1792,8 @@ pub(crate) fn show_panel_properties_dialog(
         let art_deco_label_clone = art_deco_config_label.clone();
         let art_nouveau_placeholder_clone = art_nouveau_placeholder.clone();
         let art_nouveau_label_clone = art_nouveau_config_label.clone();
+        let steampunk_placeholder_clone = steampunk_placeholder.clone();
+        let steampunk_label_clone = steampunk_config_label.clone();
         let css_template_placeholder_clone = css_template_placeholder.clone();
         let css_template_label_clone = css_template_config_label.clone();
         let displayers_clone = displayers.clone();
@@ -1771,6 +1824,7 @@ pub(crate) fn show_panel_properties_dialog(
                 let is_synthwave = displayer_id == "synthwave";
                 let is_art_deco = displayer_id == "art_deco";
                 let is_art_nouveau = displayer_id == "art_nouveau";
+                let is_steampunk = displayer_id == "steampunk";
                 let is_css_template = displayer_id == "css_template";
                 text_placeholder_clone.set_visible(is_text);
                 text_label_clone.set_visible(is_text);
@@ -1808,6 +1862,8 @@ pub(crate) fn show_panel_properties_dialog(
                 art_deco_label_clone.set_visible(is_art_deco);
                 art_nouveau_placeholder_clone.set_visible(is_art_nouveau);
                 art_nouveau_label_clone.set_visible(is_art_nouveau);
+                steampunk_placeholder_clone.set_visible(is_steampunk);
+                steampunk_label_clone.set_visible(is_steampunk);
                 css_template_placeholder_clone.set_visible(is_css_template);
                 css_template_label_clone.set_visible(is_css_template);
             }
@@ -2402,6 +2458,56 @@ pub(crate) fn show_panel_properties_dialog(
         });
     }
 
+    // Lazily create and update Steampunk widget when displayer changes to "steampunk" and source is "combination"
+    {
+        let steampunk_widget_clone = steampunk_config_widget.clone();
+        let steampunk_placeholder_clone = steampunk_placeholder.clone();
+        let combo_widget_clone = combo_config_widget.clone();
+        let displayers_clone = displayers.clone();
+        let sources_clone = sources.clone();
+        let source_combo_clone = source_combo.clone();
+        let pending_config_clone = pending_transfer_config.clone();
+        displayer_combo.connect_selected_notify(move |combo| {
+            let selected_idx = combo.selected() as usize;
+            if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
+                if displayer_id == "steampunk" {
+                    let source_idx = source_combo_clone.selected() as usize;
+                    if let Some(source_id) = sources_clone.get(source_idx) {
+                        if source_id == "combination" {
+                            if let Some(ref combo_widget) = *combo_widget_clone.borrow() {
+                                let summaries = combo_widget.get_source_summaries();
+                                let fields = combo_widget.get_available_fields();
+
+                                // Lazily create widget if it doesn't exist
+                                let mut widget_ref = steampunk_widget_clone.borrow_mut();
+                                if widget_ref.is_none() {
+                                    log::info!("=== Lazy-creating SteampunkConfigWidget on displayer switch ===");
+                                    let widget = crate::ui::SteampunkConfigWidget::new(fields.clone());
+                                    // NOTE: Config is only applied on Apply/Accept button click
+                                    widget.set_on_change(|| {});
+                                    steampunk_placeholder_clone.append(widget.widget());
+                                    *widget_ref = Some(widget);
+                                }
+
+                                if let Some(ref widget) = *widget_ref {
+                                    log::info!("=== Displayer changed to 'steampunk': updating with {} source summaries ===", summaries.len());
+                                    widget.set_available_fields(fields);
+                                    widget.set_source_summaries(summaries);
+
+                                    // Apply any pending transfer config from a previous combo panel
+                                    if let Some(transfer_config) = pending_config_clone.borrow_mut().take() {
+                                        log::info!("=== Applying transferred config to 'steampunk' ===");
+                                        widget.apply_transferable_config(&transfer_config);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Lazily create and update CSS Template widget when displayer changes to "css_template" and source is "combination"
     {
         let css_template_widget_clone = css_template_config_widget.clone();
@@ -2733,6 +2839,7 @@ pub(crate) fn show_panel_properties_dialog(
     let synthwave_config_widget_clone = synthwave_config_widget.clone();
     let art_deco_config_widget_clone = art_deco_config_widget.clone();
     let art_nouveau_config_widget_clone = art_nouveau_config_widget.clone();
+    let steampunk_config_widget_clone = steampunk_config_widget.clone();
     let css_template_config_widget_clone = css_template_config_widget.clone();
     let dialog_for_apply = dialog.clone();
     let width_spin_for_collision = width_spin.clone();
@@ -3692,6 +3799,24 @@ pub(crate) fn show_panel_properties_dialog(
                         // Apply the configuration to the displayer
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply Art Nouveau config: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Apply Steampunk displayer configuration if Steampunk displayer is active
+            if new_displayer_id == "steampunk" {
+                if let Some(ref widget) = *steampunk_config_widget_clone.borrow() {
+                    let steampunk_config = widget.get_config();
+                    if let Ok(steampunk_config_json) = serde_json::to_value(&steampunk_config) {
+                        panel_guard.config.insert("steampunk_config".to_string(), steampunk_config_json);
+
+                        // Clone config before applying
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the displayer
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply Steampunk config: {}", e);
                         }
                     }
                 }

@@ -2315,3 +2315,74 @@ where
         theme_gradient_editor,
     )
 }
+
+// ============================================================================
+// Generic Combo Config Widget Framework
+// ============================================================================
+//
+// The following traits enable a data-driven approach to combo config widgets
+// where theme-specific tabs are encapsulated in a ThemeConfigTabs trait,
+// allowing common tabs (Theme, Layout, Content, Animation) to be shared.
+
+/// Trait for providing theme-specific configuration tabs.
+///
+/// Implement this trait to add theme-specific configuration options (Frame, Effects, etc.)
+/// to a generic combo config widget. Common tabs (Theme, Layout, Content, Animation)
+/// are provided automatically.
+pub trait ThemeConfigTabs<C>: 'static {
+    /// Create theme-specific configuration tabs.
+    ///
+    /// Returns a vector of (tab_name, tab_widget, optional_update_fn) tuples.
+    /// The update_fn is called when set_config is invoked to update widget values.
+    fn create_theme_tabs(
+        config: &Rc<RefCell<C>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        preview: &DrawingArea,
+        theme_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    ) -> Vec<ThemeTab>;
+
+    /// Update theme-specific widgets when config changes.
+    ///
+    /// Called when set_config is invoked to synchronize widgets with new config values.
+    fn update_theme_widgets(&self, config: &C);
+
+    /// Get the transferable config from the current configuration.
+    ///
+    /// This extracts layout/content settings that can be preserved when switching themes.
+    fn get_transferable_config(config: &C) -> TransferableComboConfig;
+
+    /// Apply transferable config to the current configuration.
+    ///
+    /// This applies layout/content settings from another theme.
+    fn apply_transferable_config(config: &mut C, transferable: &TransferableComboConfig);
+}
+
+/// A theme-specific configuration tab.
+pub struct ThemeTab {
+    /// Tab name shown in the notebook
+    pub name: String,
+    /// Tab widget content
+    pub widget: GtkBox,
+    /// Optional callback to update widgets when config changes
+    pub update_fn: Option<Box<dyn Fn()>>,
+}
+
+impl ThemeTab {
+    /// Create a new theme tab
+    pub fn new(name: impl Into<String>, widget: GtkBox) -> Self {
+        Self {
+            name: name.into(),
+            widget,
+            update_fn: None,
+        }
+    }
+
+    /// Create a new theme tab with an update function
+    pub fn with_update<F: Fn() + 'static>(name: impl Into<String>, widget: GtkBox, update_fn: F) -> Self {
+        Self {
+            name: name.into(),
+            widget,
+            update_fn: Some(Box::new(update_fn)),
+        }
+    }
+}

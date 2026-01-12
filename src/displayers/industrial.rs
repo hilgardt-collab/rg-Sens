@@ -8,28 +8,34 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{prelude::*, DrawingArea, Widget};
+use gtk4::Widget;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer};
-use crate::displayers::combo_displayer_base::{
-    ComboDisplayData, ContentDrawParams, draw_content_items_generic, handle_combo_update_data,
-    setup_combo_animation_timer_ext,
-};
-use crate::ui::industrial_display::{
-    render_industrial_frame, calculate_group_layouts, draw_group_dividers, draw_group_panel,
-    IndustrialFrameConfig,
-};
+use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
+use crate::displayers::combo_generic::GenericComboDisplayerShared;
+use crate::ui::industrial_display::{IndustrialFrameConfig, IndustrialRenderer};
 
-/// Industrial display configuration
+/// Industrial display configuration (wrapper for backward compatibility)
+///
+/// This struct maintains backward compatibility with saved configs that have
+/// the animation fields at the top level alongside a `frame` field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndustrialDisplayConfig {
     pub frame: IndustrialFrameConfig,
+    #[serde(default = "default_animation_enabled")]
     pub animation_enabled: bool,
+    #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
+}
+
+fn default_animation_enabled() -> bool {
+    true
+}
+
+fn default_animation_speed() -> f64 {
+    8.0
 }
 
 impl Default for IndustrialDisplayConfig {
@@ -42,28 +48,34 @@ impl Default for IndustrialDisplayConfig {
     }
 }
 
-/// Display data for rendering
-#[derive(Clone)]
-#[derive(Default)]
-struct DisplayData {
-    config: IndustrialDisplayConfig,
-    combo: ComboDisplayData,
-}
+impl IndustrialDisplayConfig {
+    /// Create config from frame config, syncing animation fields
+    pub fn from_frame(frame: IndustrialFrameConfig) -> Self {
+        Self {
+            animation_enabled: frame.animation_enabled,
+            animation_speed: frame.animation_speed,
+            frame,
+        }
+    }
 
+    /// Convert to frame config, syncing animation fields from wrapper
+    pub fn to_frame(&self) -> IndustrialFrameConfig {
+        let mut frame = self.frame.clone();
+        frame.animation_enabled = self.animation_enabled;
+        frame.animation_speed = self.animation_speed;
+        frame
+    }
+}
 
 /// Industrial/Gauge Panel displayer
 pub struct IndustrialDisplayer {
-    id: String,
-    name: String,
-    data: Arc<Mutex<DisplayData>>,
+    inner: GenericComboDisplayerShared<IndustrialRenderer>,
 }
 
 impl IndustrialDisplayer {
     pub fn new() -> Self {
         Self {
-            id: "industrial".to_string(),
-            name: "Industrial".to_string(),
-            data: Arc::new(Mutex::new(DisplayData::default())),
+            inner: GenericComboDisplayerShared::new(IndustrialRenderer),
         }
     }
 }
@@ -76,138 +88,23 @@ impl Default for IndustrialDisplayer {
 
 impl Displayer for IndustrialDisplayer {
     fn id(&self) -> &str {
-        &self.id
+        self.inner.id()
     }
 
     fn name(&self) -> &str {
-        &self.name
+        self.inner.name()
     }
 
     fn create_widget(&self) -> Widget {
-        let drawing_area = DrawingArea::new();
-        drawing_area.set_size_request(400, 300);
-
-        // Set up draw function
-        let data_clone = self.data.clone();
-        drawing_area.set_draw_func(move |_, cr, width, height| {
-            if width < 10 || height < 10 {
-                return;
-            }
-            if let Ok(data) = data_clone.lock() {
-                let w = width as f64;
-                let h = height as f64;
-
-                // Clear to transparent so panel background shows through
-                cr.set_operator(cairo::Operator::Clear);
-                cr.paint().ok();
-                cr.set_operator(cairo::Operator::Over);
-
-                data.combo.transform.apply(cr, w, h);
-
-                // Draw the Industrial frame and get content bounds
-                let content_bounds = match render_industrial_frame(cr, &data.config.frame, w, h) {
-                    Ok(bounds) => bounds,
-                    Err(e) => {
-                        log::debug!("Industrial frame render error: {}", e);
-                        return;
-                    }
-                };
-
-                let (content_x, content_y, content_w, content_h) = content_bounds;
-
-                // Calculate group layouts
-                let group_layouts = calculate_group_layouts(
-                    content_x, content_y, content_w, content_h,
-                    &data.config.frame,
-                );
-
-                // Draw group dividers
-                if let Err(e) = draw_group_dividers(cr, &group_layouts, &data.config.frame) {
-                    log::debug!("Failed to draw industrial dividers: {}", e);
-                }
-
-                // Build draw params
-                let draw_params = ContentDrawParams {
-                    values: &data.combo.values,
-                    bar_values: &data.combo.bar_values,
-                    core_bar_values: &data.combo.core_bar_values,
-                    graph_history: &data.combo.graph_history,
-                    content_items: &data.config.frame.content_items,
-                    group_item_orientations: &data.config.frame.group_item_orientations,
-                    split_orientation: data.config.frame.split_orientation,
-                    theme: &data.config.frame.theme,
-                };
-
-                // Draw content items for each group
-                for (group_idx, (group_x, group_y, group_w, group_h, item_count)) in group_layouts.iter().enumerate() {
-                    // Draw subtle group panel
-                    if let Err(e) = draw_group_panel(cr, *group_x, *group_y, *group_w, *group_h, &data.config.frame) {
-                        log::debug!("Failed to draw group panel: {}", e);
-                    }
-
-                    let base_prefix = format!("group{}_", group_idx + 1);
-
-                    // Use shared drawing function with no custom frame drawing
-                    let _ = draw_content_items_generic(
-                        cr,
-                        *group_x,
-                        *group_y,
-                        *group_w,
-                        *group_h,
-                        &base_prefix,
-                        *item_count as u32,
-                        group_idx,
-                        &draw_params,
-                        |_, _, _, _, _| {},
-                    );
-                }
-
-                data.combo.transform.restore(cr);
-            }
-        });
-
-        // Set up animation timer using shared helper
-        setup_combo_animation_timer_ext(
-            &drawing_area,
-            self.data.clone(),
-            |d| d.config.animation_enabled,
-            |d| d.config.animation_speed,
-            |d| &mut d.combo,
-            None::<fn(&mut DisplayData, f64) -> bool>,
-        );
-
-        drawing_area.upcast()
+        self.inner.create_widget()
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        if let Ok(mut display_data) = self.data.lock() {
-            // Clone config values to satisfy borrow checker (MutexGuard doesn't support split borrowing)
-            // group_item_counts is small (1-4 elements), content_items is needed for the duration
-            let animation_enabled = display_data.config.animation_enabled;
-            let group_item_counts = display_data.config.frame.group_item_counts.clone();
-            let content_items = display_data.config.frame.content_items.clone();
-
-            handle_combo_update_data(
-                &mut display_data.combo,
-                data,
-                &group_item_counts,
-                &content_items,
-                animation_enabled,
-            );
-        }
+        self.inner.update_data(data)
     }
 
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
-        if width < 10.0 || height < 10.0 {
-            return Ok(());
-        }
-        // Use try_lock to avoid blocking the GTK main thread
-        if let Ok(data) = self.data.try_lock() {
-            data.combo.transform.apply(cr, width, height);
-            render_industrial_frame(cr, &data.config.frame, width, height)?;
-            data.combo.transform.restore(cr);
-        }
-        Ok(())
+        self.inner.draw(cr, width, height)
     }
 
     fn config_schema(&self) -> ConfigSchema {
@@ -239,39 +136,31 @@ impl Displayer for IndustrialDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        // Check for full industrial_config first
-        if let Some(industrial_config_value) = config.get("industrial_config") {
-            if let Ok(industrial_config) = serde_json::from_value::<IndustrialDisplayConfig>(industrial_config_value.clone()) {
-                if let Ok(mut display_data) = self.data.lock() {
-                    display_data.config = industrial_config;
-                    display_data.combo.dirty = true;
-                }
+        // Check for full industrial_config first (wrapper format)
+        if let Some(config_value) = config.get("industrial_config") {
+            if let Ok(display_config) = serde_json::from_value::<IndustrialDisplayConfig>(config_value.clone()) {
+                // Convert wrapper to frame config and apply
+                self.inner.set_config(display_config.to_frame());
+                return Ok(());
+            }
+            // Try direct IndustrialFrameConfig (new format)
+            if let Ok(frame_config) = serde_json::from_value::<IndustrialFrameConfig>(config_value.clone()) {
+                self.inner.set_config(frame_config);
                 return Ok(());
             }
         }
 
-        // Apply individual settings for backward compatibility
-        if let Ok(mut display_data) = self.data.lock() {
-            if let Some(animation) = config.get("animation_enabled").and_then(|v| v.as_bool()) {
-                display_data.config.animation_enabled = animation;
-            }
-            display_data.combo.dirty = true;
-        }
-
-        Ok(())
+        // Delegate to inner for individual field updates
+        self.inner.apply_config(config)
     }
 
     fn needs_redraw(&self) -> bool {
-        // Use try_lock to avoid blocking the GTK main thread
-        self.data.try_lock().map(|data| data.combo.dirty).unwrap_or(true)
+        self.inner.needs_redraw()
     }
 
-    fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
-        // Use try_lock to avoid blocking the GTK main thread
-        if let Ok(display_data) = self.data.try_lock() {
-            Some(crate::core::DisplayerConfig::Industrial(display_data.config.clone()))
-        } else {
-            None
-        }
+    fn get_typed_config(&self) -> Option<DisplayerConfig> {
+        self.inner.get_config().map(|frame| {
+            DisplayerConfig::Industrial(IndustrialDisplayConfig::from_frame(frame))
+        })
     }
 }

@@ -13,6 +13,7 @@ use std::f64::consts::PI;
 
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::ContentItemConfig;
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
@@ -155,6 +156,22 @@ pub struct IndustrialFrameConfig {
 
     /// Theme configuration
     pub theme: crate::ui::theme::ComboThemeConfig,
+
+    /// Animation enabled (for ComboFrameConfig trait)
+    #[serde(default = "default_animation_enabled")]
+    pub animation_enabled: bool,
+
+    /// Animation speed multiplier (for ComboFrameConfig trait)
+    #[serde(default = "default_animation_speed")]
+    pub animation_speed: f64,
+}
+
+fn default_animation_enabled() -> bool {
+    true
+}
+
+fn default_animation_speed() -> f64 {
+    8.0
 }
 
 fn default_industrial_theme() -> crate::ui::theme::ComboThemeConfig {
@@ -218,6 +235,8 @@ impl Default for IndustrialFrameConfig {
 
             content_items: std::collections::HashMap::new(),
             theme: default_industrial_theme(),
+            animation_enabled: default_animation_enabled(),
+            animation_speed: default_animation_speed(),
         }
     }
 }
@@ -263,6 +282,32 @@ impl ThemedFrameConfig for IndustrialFrameConfig {
 
     fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig> {
         &mut self.content_items
+    }
+}
+
+impl ComboFrameConfig for IndustrialFrameConfig {
+    fn animation_enabled(&self) -> bool {
+        self.animation_enabled
+    }
+
+    fn set_animation_enabled(&mut self, enabled: bool) {
+        self.animation_enabled = enabled;
+    }
+
+    fn animation_speed(&self) -> f64 {
+        self.animation_speed
+    }
+
+    fn set_animation_speed(&mut self, speed: f64) {
+        self.animation_speed = speed;
+    }
+
+    fn group_item_counts(&self) -> &[usize] {
+        &self.group_item_counts
+    }
+
+    fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
+        &mut self.group_item_counts
     }
 }
 
@@ -1151,4 +1196,85 @@ fn draw_rounded_rect(cr: &Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     cr.arc(x + r, y + h - r, r, PI / 2.0, PI);
     cr.arc(x + r, y + r, r, PI, 3.0 * PI / 2.0);
     cr.close_path();
+}
+
+// ============================================================================
+// FrameRenderer implementation for generic combo displayer
+// ============================================================================
+
+/// Industrial frame renderer for use with GenericComboDisplayer
+pub struct IndustrialRenderer;
+
+impl FrameRenderer for IndustrialRenderer {
+    type Config = IndustrialFrameConfig;
+
+    fn theme_id(&self) -> &'static str {
+        "industrial"
+    }
+
+    fn theme_name(&self) -> &'static str {
+        "Industrial Gauge"
+    }
+
+    fn default_config(&self) -> Self::Config {
+        IndustrialFrameConfig::default()
+    }
+
+    fn render_frame(
+        &self,
+        cr: &Context,
+        config: &Self::Config,
+        width: f64,
+        height: f64,
+    ) -> anyhow::Result<(f64, f64, f64, f64)> {
+        render_industrial_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
+    }
+
+    fn calculate_group_layouts(
+        &self,
+        config: &Self::Config,
+        content_x: f64,
+        content_y: f64,
+        content_w: f64,
+        content_h: f64,
+    ) -> Vec<(f64, f64, f64, f64)> {
+        // Call the existing function and convert 5-tuple to 4-tuple
+        calculate_group_layouts(content_x, content_y, content_w, content_h, config)
+            .into_iter()
+            .map(|(x, y, w, h, _item_count)| (x, y, w, h))
+            .collect()
+    }
+
+    fn draw_group_dividers(
+        &self,
+        cr: &Context,
+        config: &Self::Config,
+        group_layouts: &[(f64, f64, f64, f64)],
+    ) {
+        // Convert 4-tuple layouts to 5-tuple for the existing function
+        let layouts_with_counts: Vec<_> = group_layouts
+            .iter()
+            .enumerate()
+            .map(|(i, &(x, y, w, h))| {
+                let item_count = config.group_item_counts.get(i).copied().unwrap_or(1);
+                (x, y, w, h, item_count)
+            })
+            .collect();
+
+        if let Err(e) = draw_group_dividers(cr, &layouts_with_counts, config) {
+            log::debug!("Failed to draw industrial dividers: {}", e);
+        }
+    }
+
+    fn draw_item_frame(
+        &self,
+        _cr: &Context,
+        _config: &Self::Config,
+        _x: f64,
+        _y: f64,
+        _w: f64,
+        _h: f64,
+    ) {
+        // Industrial style doesn't draw item frames
+    }
 }

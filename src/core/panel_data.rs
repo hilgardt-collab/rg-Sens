@@ -42,6 +42,7 @@ pub use crate::displayers::FighterHudDisplayConfig;
 pub use crate::displayers::SynthwaveDisplayConfig;
 pub use crate::displayers::ArtDecoDisplayConfig;
 pub use crate::displayers::ArtNouveauDisplayConfig;
+pub use crate::displayers::SteampunkDisplayConfig;
 pub use crate::ui::css_template_display::CssTemplateDisplayConfig;
 
 /// Type-safe enum for all source configurations.
@@ -300,6 +301,9 @@ pub enum DisplayerConfig {
     #[serde(rename = "art_nouveau")]
     ArtNouveau(ArtNouveauDisplayConfig),
 
+    #[serde(rename = "steampunk")]
+    Steampunk(SteampunkDisplayConfig),
+
     #[serde(rename = "css_template")]
     CssTemplate(CssTemplateDisplayConfig),
 }
@@ -326,6 +330,7 @@ impl DisplayerConfig {
             DisplayerConfig::Synthwave(_) => "synthwave",
             DisplayerConfig::ArtDeco(_) => "art_deco",
             DisplayerConfig::ArtNouveau(_) => "art_nouveau",
+            DisplayerConfig::Steampunk(_) => "steampunk",
             DisplayerConfig::CssTemplate(_) => "css_template",
         }
     }
@@ -424,6 +429,11 @@ impl DisplayerConfig {
                     map.insert("art_nouveau_config".to_string(), val);
                 }
             }
+            DisplayerConfig::Steampunk(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("steampunk_config".to_string(), val);
+                }
+            }
             DisplayerConfig::CssTemplate(cfg) => {
                 if let Ok(val) = serde_json::to_value(cfg) {
                     map.insert("css_template_config".to_string(), val);
@@ -454,6 +464,7 @@ impl DisplayerConfig {
             "synthwave" => Some(DisplayerConfig::Synthwave(SynthwaveDisplayConfig::default())),
             "art_deco" => Some(DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::default())),
             "art_nouveau" => Some(DisplayerConfig::ArtNouveau(ArtNouveauDisplayConfig::default())),
+            "steampunk" => Some(DisplayerConfig::Steampunk(SteampunkDisplayConfig::default())),
             "css_template" => Some(DisplayerConfig::CssTemplate(CssTemplateDisplayConfig::default())),
             _ => None,
         }
@@ -488,6 +499,7 @@ impl DisplayerConfig {
             "synthwave" => serde_json::from_value(value).ok().map(DisplayerConfig::Synthwave),
             "art_deco" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtDeco),
             "art_nouveau" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtNouveau),
+            "steampunk" => serde_json::from_value(value).ok().map(DisplayerConfig::Steampunk),
             "css_template" => serde_json::from_value(value).ok().map(DisplayerConfig::CssTemplate),
             _ => None,
         }
@@ -515,6 +527,7 @@ impl DisplayerConfig {
             DisplayerConfig::Synthwave(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::ArtDeco(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::ArtNouveau(c) => serde_json::to_value(c).ok(),
+            DisplayerConfig::Steampunk(c) => serde_json::to_value(c).ok(),
             DisplayerConfig::CssTemplate(c) => serde_json::to_value(c).ok(),
         }
     }

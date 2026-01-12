@@ -831,6 +831,27 @@ impl ComboThemeConfig {
             font2_size: 11.0,
         }
     }
+
+    /// Default theme for Steampunk panels - Victorian industrial brass/copper
+    pub fn default_for_steampunk() -> Self {
+        Self {
+            color1: Color::new(0.804, 0.608, 0.114, 1.0), // Brass #CD9B1D
+            color2: Color::new(0.722, 0.451, 0.200, 1.0), // Copper #B87333
+            color3: Color::new(0.545, 0.412, 0.078, 1.0), // Bronze #8B6914
+            color4: Color::new(0.180, 0.137, 0.098, 1.0), // Dark brown #2E2319
+            gradient: LinearGradientSourceConfig {
+                angle: 180.0,
+                stops: vec![
+                    ColorStopSource::custom(0.0, Color::new(0.25, 0.20, 0.15, 1.0)), // Dark sepia top
+                    ColorStopSource::custom(1.0, Color::new(0.15, 0.12, 0.08, 1.0)), // Darker brown bottom
+                ],
+            },
+            font1_family: "Serif".to_string(),
+            font1_size: 15.0,
+            font2_family: "Sans".to_string(),
+            font2_size: 11.0,
+        }
+    }
 }
 
 #[cfg(test)]

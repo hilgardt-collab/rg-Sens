@@ -69,6 +69,8 @@ pub mod art_deco_display;
 mod art_deco_config_widget;
 pub mod art_nouveau_display;
 mod art_nouveau_config_widget;
+pub mod steampunk_display;
+mod steampunk_config_widget;
 pub mod combo_config_base;
 pub mod theme;
 pub mod css_template_display;  // Config types always available for serialization
@@ -122,7 +124,7 @@ pub use lcars_display::{
     SegmentConfig, HeaderConfig, DividerConfig, ContentItemConfig,
     ContentItemData, render_lcars_frame, render_content_background, render_divider,
     render_content_bar, render_content_text, render_content_core_bars, get_content_bounds,
-    calculate_item_layouts, calculate_item_layouts_with_orientation,
+    calculate_item_layouts, calculate_item_layouts_with_orientation, LcarsRenderer,
 };
 pub use lcars_config_widget::LcarsConfigWidget;
 pub use core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
@@ -135,12 +137,14 @@ pub use global_theme_widget::GlobalThemeWidget;
 pub use cyberpunk_display::{
     CyberpunkFrameConfig, CornerStyle as CyberpunkCornerStyle, HeaderStyle as CyberpunkHeaderStyle,
     DividerStyle as CyberpunkDividerStyle, render_cyberpunk_frame, calculate_group_layouts, draw_group_dividers,
+    CyberpunkRenderer,
 };
 pub use cyberpunk_config_widget::CyberpunkConfigWidget;
 pub use material_display::{
     MaterialFrameConfig, CardElevation, HeaderStyle as MaterialHeaderStyle,
     DividerStyle as MaterialDividerStyle, ThemeVariant, render_material_frame,
     calculate_group_layouts as material_calculate_group_layouts, draw_group_dividers as material_draw_group_dividers,
+    MaterialRenderer,
 };
 pub use material_config_widget::MaterialConfigWidget;
 pub use industrial_display::{
@@ -148,20 +152,21 @@ pub use industrial_display::{
     HeaderStyle as IndustrialHeaderStyle, DividerStyle as IndustrialDividerStyle,
     render_industrial_frame, calculate_group_layouts as industrial_calculate_group_layouts,
     draw_group_dividers as industrial_draw_group_dividers, draw_group_panel as industrial_draw_group_panel,
+    IndustrialRenderer,
 };
 pub use industrial_config_widget::IndustrialConfigWidget;
 pub use retro_terminal_display::{
     RetroTerminalFrameConfig, PhosphorColor, BezelStyle as RetroBezelStyle,
     TerminalHeaderStyle, TerminalDividerStyle, render_retro_terminal_frame,
     calculate_group_layouts as retro_calculate_group_layouts,
-    draw_group_dividers as retro_draw_group_dividers,
+    draw_group_dividers as retro_draw_group_dividers, RetroTerminalRenderer,
 };
 pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
 pub use fighter_hud_display::{
     FighterHudFrameConfig, HudColorPreset, HudFrameStyle,
     HudHeaderStyle, HudDividerStyle, render_fighter_hud_frame,
     calculate_group_layouts as fighter_hud_calculate_group_layouts,
-    draw_group_dividers as fighter_hud_draw_group_dividers,
+    draw_group_dividers as fighter_hud_draw_group_dividers, FighterHudRenderer,
 };
 pub use fighter_hud_config_widget::FighterHudConfigWidget;
 pub use synthwave_display::{
@@ -169,18 +174,33 @@ pub use synthwave_display::{
     GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle, render_synthwave_frame,
     render_scanline_overlay,
     calculate_group_layouts as synthwave_calculate_group_layouts,
-    draw_group_dividers as synthwave_draw_group_dividers,
+    draw_group_dividers as synthwave_draw_group_dividers, SynthwaveRenderer,
 };
 pub use synthwave_config_widget::SynthwaveConfigWidget;
+pub use art_deco_display::{
+    ArtDecoFrameConfig, BorderStyle as ArtDecoBorderStyle,
+    CornerStyle as ArtDecoCornerStyle, BackgroundPattern as ArtDecoBackgroundPattern,
+    HeaderStyle as ArtDecoHeaderStyle, DividerStyle as ArtDecoDividerStyle,
+    render_art_deco_frame, calculate_group_layouts as art_deco_calculate_group_layouts,
+    draw_group_dividers as art_deco_draw_group_dividers, ArtDecoRenderer,
+};
 pub use art_deco_config_widget::ArtDecoConfigWidget;
 pub use art_nouveau_display::{
     ArtNouveauFrameConfig, BorderStyle as ArtNouveauBorderStyle,
     CornerStyle as ArtNouveauCornerStyle, BackgroundPattern as ArtNouveauBackgroundPattern,
     HeaderStyle as ArtNouveauHeaderStyle, DividerStyle as ArtNouveauDividerStyle,
     render_art_nouveau_frame, calculate_group_layouts as art_nouveau_calculate_group_layouts,
-    draw_group_dividers as art_nouveau_draw_group_dividers,
+    draw_group_dividers as art_nouveau_draw_group_dividers, ArtNouveauRenderer,
 };
 pub use art_nouveau_config_widget::ArtNouveauConfigWidget;
+pub use steampunk_config_widget::SteampunkConfigWidget;
+pub use steampunk_display::{
+    SteampunkFrameConfig, BorderStyle as SteampunkBorderStyle,
+    CornerStyle as SteampunkCornerStyle, BackgroundTexture, HeaderStyle as SteampunkHeaderStyle,
+    DividerStyle as SteampunkDividerStyle, render_steampunk_frame,
+    calculate_group_layouts as steampunk_calculate_group_layouts,
+    draw_group_dividers as steampunk_draw_group_dividers, SteampunkRenderer,
+};
 pub use theme_color_selector::ThemeColorSelector;
 pub use theme_font_selector::ThemeFontSelector;
 pub use css_template_display::{CssTemplateDisplayConfig, PlaceholderMapping};

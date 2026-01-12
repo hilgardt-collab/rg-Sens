@@ -14,7 +14,8 @@ use std::cell::RefCell;
 
 use crate::ui::background::{BackgroundConfig, Color, render_background_with_theme};
 use crate::ui::bar_display::{BarDisplayConfig, render_bar};
-use crate::ui::combo_config_base::LayoutFrameConfig;
+use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
 use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
@@ -656,10 +657,25 @@ pub struct LcarsFrameConfig {
     #[serde(default)]
     pub sync_segments_to_groups: bool,
 
+    /// Animation enabled
+    #[serde(default = "default_animation_enabled")]
+    pub animation_enabled: bool,
+
+    /// Animation speed
+    #[serde(default = "default_animation_speed")]
+    pub animation_speed: f64,
+
     /// Theme configuration
     #[serde(default = "default_lcars_theme")]
     pub theme: crate::ui::theme::ComboThemeConfig,
+
+    /// Shadow field for group_item_counts as usize (for ComboFrameConfig trait)
+    #[serde(skip)]
+    group_item_counts_usize: Vec<usize>,
 }
+
+fn default_animation_enabled() -> bool { true }
+fn default_animation_speed() -> f64 { 8.0 }
 
 fn default_lcars_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_lcars()
@@ -767,7 +783,10 @@ impl Default for LcarsFrameConfig {
             divider_config: DividerConfig::default(),
             item_spacing: default_item_spacing(),
             sync_segments_to_groups: false,
+            animation_enabled: default_animation_enabled(),
+            animation_speed: default_animation_speed(),
             theme: default_lcars_theme(),
+            group_item_counts_usize: vec![2],
         }
     }
 }
@@ -795,6 +814,151 @@ impl LayoutFrameConfig for LcarsFrameConfig {
 
     fn split_orientation(&self) -> SplitOrientation {
         self.layout_orientation
+    }
+}
+
+impl ThemedFrameConfig for LcarsFrameConfig {
+    fn theme(&self) -> &ComboThemeConfig {
+        &self.theme
+    }
+
+    fn theme_mut(&mut self) -> &mut ComboThemeConfig {
+        &mut self.theme
+    }
+
+    fn content_items(&self) -> &HashMap<String, ContentItemConfig> {
+        &self.content_items
+    }
+
+    fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig> {
+        &mut self.content_items
+    }
+}
+
+impl ComboFrameConfig for LcarsFrameConfig {
+    fn animation_enabled(&self) -> bool {
+        self.animation_enabled
+    }
+
+    fn set_animation_enabled(&mut self, enabled: bool) {
+        self.animation_enabled = enabled;
+    }
+
+    fn animation_speed(&self) -> f64 {
+        self.animation_speed
+    }
+
+    fn set_animation_speed(&mut self, speed: f64) {
+        self.animation_speed = speed;
+    }
+
+    fn group_item_counts(&self) -> &[usize] {
+        &self.group_item_counts_usize
+    }
+
+    fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
+        // Sync from u32 to usize before returning
+        self.group_item_counts_usize = self.group_item_counts.iter().map(|&c| c as usize).collect();
+        &mut self.group_item_counts_usize
+    }
+}
+
+impl LcarsFrameConfig {
+    /// Sync the usize shadow field from the u32 field
+    pub fn sync_group_item_counts(&mut self) {
+        self.group_item_counts_usize = self.group_item_counts.iter().map(|&c| c as usize).collect();
+    }
+}
+
+/// Frame renderer for LCARS theme
+pub struct LcarsRenderer;
+
+impl FrameRenderer for LcarsRenderer {
+    type Config = LcarsFrameConfig;
+
+    fn theme_id(&self) -> &'static str {
+        "lcars"
+    }
+
+    fn theme_name(&self) -> &'static str {
+        "LCARS"
+    }
+
+    fn default_config(&self) -> Self::Config {
+        LcarsFrameConfig::default()
+    }
+
+    fn render_frame(
+        &self,
+        cr: &cairo::Context,
+        config: &Self::Config,
+        width: f64,
+        height: f64,
+    ) -> anyhow::Result<(f64, f64, f64, f64)> {
+        render_lcars_frame(cr, config, width, height)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        Ok(get_content_bounds(config, width, height))
+    }
+
+    fn calculate_group_layouts(
+        &self,
+        config: &Self::Config,
+        content_x: f64,
+        content_y: f64,
+        content_w: f64,
+        content_h: f64,
+    ) -> Vec<(f64, f64, f64, f64)> {
+        // LCARS uses group_count and group_item_counts differently
+        // Calculate group layouts based on the group count
+        let group_count = config.group_count;
+        if group_count == 0 {
+            return Vec::new();
+        }
+
+        let empty_fixed_sizes: HashMap<usize, f64> = HashMap::new();
+        calculate_item_layouts_with_orientation(
+            content_x,
+            content_y,
+            content_w,
+            content_h,
+            group_count,
+            config.item_spacing,
+            &empty_fixed_sizes,
+            config.layout_orientation,
+        )
+    }
+
+    fn draw_group_dividers(
+        &self,
+        cr: &cairo::Context,
+        config: &Self::Config,
+        group_layouts: &[(f64, f64, f64, f64)],
+    ) {
+        // LCARS renders dividers as part of the frame rendering
+        // but we can still draw them here for consistency
+        if group_layouts.len() < 2 {
+            return;
+        }
+
+        let divider_w = config.divider_config.width;
+
+        for window in group_layouts.windows(2) {
+            let (x1, y1, w1, h1) = window[0];
+            let (x2, y2, _, _) = window[1];
+
+            match config.layout_orientation {
+                SplitOrientation::Vertical => {
+                    // Vertical layout - groups side by side, dividers are vertical
+                    let divider_x = x2 - divider_w / 2.0 - config.item_spacing / 2.0;
+                    let _ = render_divider(cr, divider_x, y1, divider_w, h1, &config.divider_config, SplitOrientation::Vertical, &config.theme);
+                }
+                SplitOrientation::Horizontal => {
+                    // Horizontal layout - groups stacked, dividers are horizontal
+                    let divider_y = y2 - divider_w / 2.0 - config.item_spacing / 2.0;
+                    let _ = render_divider(cr, x1, divider_y, w1, divider_w, &config.divider_config, SplitOrientation::Horizontal, &config.theme);
+                }
+            }
+        }
     }
 }
 

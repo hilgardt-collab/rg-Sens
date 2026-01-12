@@ -1,10 +1,11 @@
-//! Art Deco Displayer
+//! Steampunk Displayer
 //!
-//! A 1920s-inspired Art Deco display with:
-//! - Sunburst and fan corner decorations
-//! - Stepped/ziggurat border patterns
-//! - Chevron dividers and accents
-//! - Gold, copper, brass metallic color schemes
+//! A Victorian-era steampunk display with:
+//! - Brass, copper, and bronze metallic colors
+//! - Decorative gears and cogs
+//! - Ornate rivets and Victorian flourishes
+//! - Steam pipe and gauge aesthetics
+//! - Weathered patina textures
 //! - Support for multiple data source groups
 
 use anyhow::Result;
@@ -16,13 +17,13 @@ use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::displayers::combo_generic::GenericComboDisplayerShared;
-use crate::ui::art_deco_display::{ArtDecoFrameConfig, ArtDecoRenderer};
+use crate::ui::steampunk_display::{SteampunkFrameConfig, SteampunkRenderer};
 
-/// Full Art Deco display configuration (wrapper for backward compatibility)
+/// Full Steampunk display configuration (wrapper for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArtDecoDisplayConfig {
+pub struct SteampunkDisplayConfig {
     #[serde(default)]
-    pub frame: ArtDecoFrameConfig,
+    pub frame: SteampunkFrameConfig,
     #[serde(default = "default_animation_enabled")]
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
@@ -37,19 +38,18 @@ fn default_animation_speed() -> f64 {
     8.0
 }
 
-impl Default for ArtDecoDisplayConfig {
+impl Default for SteampunkDisplayConfig {
     fn default() -> Self {
         Self {
-            frame: ArtDecoFrameConfig::default(),
+            frame: SteampunkFrameConfig::default(),
             animation_enabled: default_animation_enabled(),
             animation_speed: default_animation_speed(),
         }
     }
 }
 
-impl ArtDecoDisplayConfig {
-    /// Create config from frame config, syncing animation fields
-    pub fn from_frame(frame: ArtDecoFrameConfig) -> Self {
+impl SteampunkDisplayConfig {
+    pub fn from_frame(frame: SteampunkFrameConfig) -> Self {
         Self {
             animation_enabled: frame.animation_enabled,
             animation_speed: frame.animation_speed,
@@ -57,8 +57,7 @@ impl ArtDecoDisplayConfig {
         }
     }
 
-    /// Convert to frame config, syncing animation fields from wrapper
-    pub fn to_frame(&self) -> ArtDecoFrameConfig {
+    pub fn to_frame(&self) -> SteampunkFrameConfig {
         let mut frame = self.frame.clone();
         frame.animation_enabled = self.animation_enabled;
         frame.animation_speed = self.animation_speed;
@@ -66,26 +65,26 @@ impl ArtDecoDisplayConfig {
     }
 }
 
-/// Art Deco Displayer
-pub struct ArtDecoDisplayer {
-    inner: GenericComboDisplayerShared<ArtDecoRenderer>,
+/// Steampunk Displayer
+pub struct SteampunkDisplayer {
+    inner: GenericComboDisplayerShared<SteampunkRenderer>,
 }
 
-impl ArtDecoDisplayer {
+impl SteampunkDisplayer {
     pub fn new() -> Self {
         Self {
-            inner: GenericComboDisplayerShared::new(ArtDecoRenderer),
+            inner: GenericComboDisplayerShared::new(SteampunkRenderer),
         }
     }
 }
 
-impl Default for ArtDecoDisplayer {
+impl Default for SteampunkDisplayer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Displayer for ArtDecoDisplayer {
+impl Displayer for SteampunkDisplayer {
     fn id(&self) -> &str {
         self.inner.id()
     }
@@ -110,18 +109,25 @@ impl Displayer for ArtDecoDisplayer {
         ConfigSchema {
             options: vec![
                 ConfigOption {
-                    key: "color_scheme".to_string(),
-                    name: "Color Scheme".to_string(),
-                    description: "Art Deco metallic color palette".to_string(),
+                    key: "border_style".to_string(),
+                    name: "Border Style".to_string(),
+                    description: "Style of frame border".to_string(),
                     value_type: "string".to_string(),
-                    default: serde_json::json!("gold"),
+                    default: serde_json::json!("victorian"),
                 },
                 ConfigOption {
                     key: "corner_style".to_string(),
                     name: "Corner Style".to_string(),
                     description: "Style of corner decorations".to_string(),
                     value_type: "string".to_string(),
-                    default: serde_json::json!("sunburst"),
+                    default: serde_json::json!("gear"),
+                },
+                ConfigOption {
+                    key: "background_texture".to_string(),
+                    name: "Background Texture".to_string(),
+                    description: "Background texture style".to_string(),
+                    value_type: "string".to_string(),
+                    default: serde_json::json!("brushed_brass"),
                 },
                 ConfigOption {
                     key: "animation_enabled".to_string(),
@@ -135,20 +141,16 @@ impl Displayer for ArtDecoDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        // Check for full art_deco_config first (wrapper format)
-        if let Some(config_value) = config.get("art_deco_config") {
-            if let Ok(display_config) = serde_json::from_value::<ArtDecoDisplayConfig>(config_value.clone()) {
+        if let Some(config_value) = config.get("steampunk_config") {
+            if let Ok(display_config) = serde_json::from_value::<SteampunkDisplayConfig>(config_value.clone()) {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
-            // Try direct ArtDecoFrameConfig (new format)
-            if let Ok(frame_config) = serde_json::from_value::<ArtDecoFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) = serde_json::from_value::<SteampunkFrameConfig>(config_value.clone()) {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }
         }
-
-        // Delegate to inner for individual field updates
         self.inner.apply_config(config)
     }
 
@@ -158,7 +160,7 @@ impl Displayer for ArtDecoDisplayer {
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
         self.inner.get_config().map(|frame| {
-            DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::from_frame(frame))
+            DisplayerConfig::Steampunk(SteampunkDisplayConfig::from_frame(frame))
         })
     }
 }

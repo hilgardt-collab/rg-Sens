@@ -86,10 +86,12 @@ mod fighter_hud;
 mod synthwave;
 mod art_deco;
 mod art_nouveau;
+mod steampunk;
 #[cfg(feature = "webkit")]
 mod css_template;
 pub mod combo_utils;
 pub mod combo_displayer_base;
+pub mod combo_generic;
 // mod level_bar;
 
 pub use text::TextDisplayer;
@@ -115,11 +117,16 @@ pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
 pub use synthwave::{SynthwaveDisplayer, SynthwaveDisplayConfig};
 pub use art_deco::{ArtDecoDisplayer, ArtDecoDisplayConfig};
 pub use art_nouveau::{ArtNouveauDisplayer, ArtNouveauDisplayConfig};
+pub use steampunk::{SteampunkDisplayer, SteampunkDisplayConfig};
 #[cfg(feature = "webkit")]
 pub use css_template::CssTemplateDisplayer;
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
+
+// Re-export generic combo framework types
+pub use combo_displayer_base::{ComboFrameConfig, FrameRenderer};
+pub use combo_generic::{GenericComboDisplayer, GenericComboDisplayerShared};
 // pub use level_bar::LevelBarDisplayer;
 
 /// Register all built-in displayers with the global registry
@@ -250,6 +257,13 @@ pub fn register_all() {
         "art_nouveau",
         "Art Nouveau",
         || Box::new(ArtNouveauDisplayer::new()),
+    );
+
+    // Register Steampunk displayer
+    global_registry().register_displayer_with_info(
+        "steampunk",
+        "Steampunk",
+        || Box::new(SteampunkDisplayer::new()),
     );
 
     // Register CSS Template displayer (only when webkit feature is enabled)

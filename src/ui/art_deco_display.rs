@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
@@ -225,6 +226,22 @@ pub struct ArtDecoFrameConfig {
     /// Theme configuration
     #[serde(default = "default_art_deco_theme")]
     pub theme: ComboThemeConfig,
+
+    /// Animation enabled
+    #[serde(default = "default_animation_enabled")]
+    pub animation_enabled: bool,
+
+    /// Animation speed
+    #[serde(default = "default_animation_speed")]
+    pub animation_speed: f64,
+}
+
+fn default_animation_enabled() -> bool {
+    true
+}
+
+fn default_animation_speed() -> f64 {
+    8.0
 }
 
 impl Default for ArtDecoFrameConfig {
@@ -259,6 +276,8 @@ impl Default for ArtDecoFrameConfig {
             divider_padding: default_divider_padding(),
             content_items: HashMap::new(),
             theme: default_art_deco_theme(),
+            animation_enabled: default_animation_enabled(),
+            animation_speed: default_animation_speed(),
         }
     }
 }
@@ -304,6 +323,82 @@ impl ThemedFrameConfig for ArtDecoFrameConfig {
 
     fn content_items_mut(&mut self) -> &mut HashMap<String, ContentItemConfig> {
         &mut self.content_items
+    }
+}
+
+impl ComboFrameConfig for ArtDecoFrameConfig {
+    fn animation_enabled(&self) -> bool {
+        self.animation_enabled
+    }
+
+    fn set_animation_enabled(&mut self, enabled: bool) {
+        self.animation_enabled = enabled;
+    }
+
+    fn animation_speed(&self) -> f64 {
+        self.animation_speed
+    }
+
+    fn set_animation_speed(&mut self, speed: f64) {
+        self.animation_speed = speed;
+    }
+
+    fn group_item_counts(&self) -> &[usize] {
+        &self.group_item_counts
+    }
+
+    fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
+        &mut self.group_item_counts
+    }
+}
+
+/// Frame renderer for Art Deco theme
+pub struct ArtDecoRenderer;
+
+impl FrameRenderer for ArtDecoRenderer {
+    type Config = ArtDecoFrameConfig;
+
+    fn theme_id(&self) -> &'static str {
+        "art_deco"
+    }
+
+    fn theme_name(&self) -> &'static str {
+        "Art Deco"
+    }
+
+    fn default_config(&self) -> Self::Config {
+        ArtDecoFrameConfig::default()
+    }
+
+    fn render_frame(
+        &self,
+        cr: &Context,
+        config: &Self::Config,
+        width: f64,
+        height: f64,
+    ) -> anyhow::Result<(f64, f64, f64, f64)> {
+        render_art_deco_frame(cr, config, width, height)
+            .map_err(|e| anyhow::anyhow!("{}", e))
+    }
+
+    fn calculate_group_layouts(
+        &self,
+        config: &Self::Config,
+        content_x: f64,
+        content_y: f64,
+        content_w: f64,
+        content_h: f64,
+    ) -> Vec<(f64, f64, f64, f64)> {
+        calculate_group_layouts(config, content_x, content_y, content_w, content_h)
+    }
+
+    fn draw_group_dividers(
+        &self,
+        cr: &Context,
+        config: &Self::Config,
+        group_layouts: &[(f64, f64, f64, f64)],
+    ) {
+        draw_group_dividers(cr, config, group_layouts);
     }
 }
 
