@@ -460,10 +460,11 @@ fn render_full_bar(
 }
 
 /// Calculate number of segments for tapered bars based on dimension.
-/// Scales with panel size: ~1 segment per 5 pixels, clamped to 5-50 range.
+/// Scales with panel size: ~1 segment per 8 pixels, clamped to 5-25 range.
+/// Lower max reduces CPU from Cairo save/restore overhead (was 50, now 25).
 #[inline]
 fn calculate_tapered_segments(dimension: f64) -> i32 {
-    ((dimension / 5.0).round() as i32).clamp(5, 50)
+    ((dimension / 8.0).round() as i32).clamp(5, 25)
 }
 
 /// Render tapered bar background

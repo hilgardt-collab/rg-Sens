@@ -368,36 +368,49 @@ pub fn setup_combo_animation_timer<F, G>(
             }
 
             if animation_enabled(&data) {
-                let now = Instant::now();
-                let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                data.last_update = now;
+                // Quick check: any animations in progress?
+                // This avoids Instant::now() and iteration when nothing is animating
+                let has_bar_animations = data.bar_values.values()
+                    .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
+                let has_core_animations = data.core_bar_values.values()
+                    .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD));
 
-                let speed = animation_speed(&data);
+                if has_bar_animations || has_core_animations {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                    data.last_update = now;
 
-                // Animate bar values
-                for anim in data.bar_values.values_mut() {
-                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                        let delta = (anim.target - anim.current) * speed * elapsed;
-                        anim.current += delta;
+                    let speed = animation_speed(&data);
 
-                        if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                            anim.current = anim.target;
-                        }
-                        redraw = true;
-                    }
-                }
+                    // Animate bar values
+                    if has_bar_animations {
+                        for anim in data.bar_values.values_mut() {
+                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                let delta = (anim.target - anim.current) * speed * elapsed;
+                                anim.current += delta;
 
-                // Animate core bar values
-                for core_anims in data.core_bar_values.values_mut() {
-                    for anim in core_anims.iter_mut() {
-                        if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                            let delta = (anim.target - anim.current) * speed * elapsed;
-                            anim.current += delta;
-
-                            if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                anim.current = anim.target;
+                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    anim.current = anim.target;
+                                }
+                                redraw = true;
                             }
-                            redraw = true;
+                        }
+                    }
+
+                    // Animate core bar values
+                    if has_core_animations {
+                        for core_anims in data.core_bar_values.values_mut() {
+                            for anim in core_anims.iter_mut() {
+                                if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                    let delta = (anim.target - anim.current) * speed * elapsed;
+                                    anim.current += delta;
+
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                        anim.current = anim.target;
+                                    }
+                                    redraw = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -467,33 +480,47 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
 
             // Run bar/core bar animations if enabled
             if animation_enabled(&data) {
-                let speed = animation_speed(&data);
                 let combo = get_combo(&mut data);
 
-                // Animate bar values
-                for anim in combo.bar_values.values_mut() {
-                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                        let delta = (anim.target - anim.current) * speed * elapsed;
-                        anim.current += delta;
+                // Quick check: any animations in progress?
+                let has_bar_animations = combo.bar_values.values()
+                    .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
+                let has_core_animations = combo.core_bar_values.values()
+                    .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD));
 
-                        if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                            anim.current = anim.target;
-                        }
-                        redraw = true;
-                    }
-                }
+                if has_bar_animations || has_core_animations {
+                    let speed = animation_speed(&data);
+                    let combo = get_combo(&mut data);
 
-                // Animate core bar values
-                for core_anims in combo.core_bar_values.values_mut() {
-                    for anim in core_anims.iter_mut() {
-                        if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                            let delta = (anim.target - anim.current) * speed * elapsed;
-                            anim.current += delta;
+                    // Animate bar values
+                    if has_bar_animations {
+                        for anim in combo.bar_values.values_mut() {
+                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                let delta = (anim.target - anim.current) * speed * elapsed;
+                                anim.current += delta;
 
-                            if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                anim.current = anim.target;
+                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    anim.current = anim.target;
+                                }
+                                redraw = true;
                             }
-                            redraw = true;
+                        }
+                    }
+
+                    // Animate core bar values
+                    if has_core_animations {
+                        for core_anims in combo.core_bar_values.values_mut() {
+                            for anim in core_anims.iter_mut() {
+                                if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                    let delta = (anim.target - anim.current) * speed * elapsed;
+                                    anim.current += delta;
+
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                        anim.current = anim.target;
+                                    }
+                                    redraw = true;
+                                }
+                            }
                         }
                     }
                 }

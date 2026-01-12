@@ -9,7 +9,7 @@
 //! - `pango_show_text()` replaces `cr.show_text()`
 
 use cairo::Context;
-use pango::{FontDescription, Layout, Weight as PangoWeight, Style as PangoStyle};
+use pango::{FontDescription, Weight as PangoWeight, Style as PangoStyle};
 use pangocairo::functions::{create_layout, show_layout};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -127,8 +127,6 @@ impl FontDescriptionCache {
 // Thread-local caches for Pango objects
 thread_local! {
     static FONT_DESC_CACHE: RefCell<FontDescriptionCache> = RefCell::new(FontDescriptionCache::new());
-    // Reusable layout - we create one per thread and reuse it
-    static PANGO_LAYOUT: RefCell<Option<Layout>> = const { RefCell::new(None) };
 }
 
 /// Convert Cairo font weight to Pango weight

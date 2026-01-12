@@ -1,6 +1,7 @@
 //! Shared text rendering utilities for displayers
 
 use cairo::Context;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use serde_json::Value;
 
@@ -10,6 +11,12 @@ use crate::displayers::{
 };
 use crate::ui::pango_text::{pango_show_text, pango_text_extents, get_font_description};
 use crate::ui::theme::ComboThemeConfig;
+
+// Thread-local buffers to avoid allocations in hot render paths
+thread_local! {
+    static GROUP_BUFFER: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
+    static PARTS_BUFFER: RefCell<Vec<(usize, String)>> = const { RefCell::new(Vec::new()) };
+}
 
 /// Render text lines using a TextDisplayerConfig
 pub fn render_text_lines(
@@ -31,31 +38,140 @@ pub fn render_text_lines_with_theme(
     values: &HashMap<String, Value>,
     theme: Option<&ComboThemeConfig>,
 ) {
-    // Group lines by group_id for combined rendering
-    let mut grouped_lines: HashMap<Option<String>, Vec<&TextLineConfig>> = HashMap::new();
-    let mut standalone_lines: Vec<&TextLineConfig> = Vec::new();
+    // Fast path: if no lines, nothing to do
+    if config.lines.is_empty() {
+        return;
+    }
 
-    for line in &config.lines {
+    // Fast path: if only one line, render directly without grouping
+    if config.lines.len() == 1 {
+        let line = &config.lines[0];
         if line.is_combined {
-            grouped_lines.entry(line.group_id.clone())
-                .or_default()
-                .push(line);
+            render_line_group_inline(cr, width, height, &[0], &config.lines, values, theme);
         } else {
-            standalone_lines.push(line);
+            render_single_line(cr, width, height, line, values, theme);
         }
+        return;
     }
 
-    // Render grouped lines
-    for (_, group) in grouped_lines {
-        render_line_group(cr, width, height, &group, values, theme);
-    }
+    // For multiple lines, use thread-local buffer to track groups without HashMap allocation
+    // This avoids allocating HashMap<Option<String>, Vec<&TextLineConfig>> every frame
+    GROUP_BUFFER.with(|buf| {
+        let mut group_indices = buf.borrow_mut();
+        group_indices.clear();
 
-    // Render standalone lines
-    for line in standalone_lines {
-        render_single_line(cr, width, height, line, values, theme);
-    }
+        // First pass: render standalone lines and collect combined line indices
+        for (i, line) in config.lines.iter().enumerate() {
+            if line.is_combined {
+                group_indices.push(i);
+            } else {
+                render_single_line(cr, width, height, line, values, theme);
+            }
+        }
+
+        // Render combined lines grouped by group_id
+        // Since most configs have 1-2 groups, we iterate and filter rather than building HashMap
+        if !group_indices.is_empty() {
+            // Track which indices we've processed
+            let mut processed = vec![false; group_indices.len()];
+
+            for start_idx in 0..group_indices.len() {
+                if processed[start_idx] {
+                    continue;
+                }
+
+                let line_idx = group_indices[start_idx];
+                let group_id = &config.lines[line_idx].group_id;
+
+                // Collect all indices with same group_id (reuse group_indices temporarily)
+                let mut same_group: Vec<usize> = Vec::with_capacity(4); // Most groups are small
+                same_group.push(line_idx);
+                processed[start_idx] = true;
+
+                for check_idx in (start_idx + 1)..group_indices.len() {
+                    if processed[check_idx] {
+                        continue;
+                    }
+                    let check_line_idx = group_indices[check_idx];
+                    if &config.lines[check_line_idx].group_id == group_id {
+                        same_group.push(check_line_idx);
+                        processed[check_idx] = true;
+                    }
+                }
+
+                // Render this group
+                render_line_group_inline(cr, width, height, &same_group, &config.lines, values, theme);
+            }
+        }
+    });
 }
 
+/// Render a group of lines using indices into the config.lines array
+/// This version avoids allocating Vec<&TextLineConfig> by using indices
+fn render_line_group_inline(
+    cr: &Context,
+    width: f64,
+    height: f64,
+    line_indices: &[usize],
+    all_lines: &[TextLineConfig],
+    values: &HashMap<String, Value>,
+    theme: Option<&ComboThemeConfig>,
+) {
+    if line_indices.is_empty() {
+        return;
+    }
+
+    // All lines in a group share settings from the first line
+    let first_line = &all_lines[line_indices[0]];
+    let shared_v_pos = first_line.vertical_position();
+    let shared_rotation = first_line.rotation_angle;
+    let shared_offset_x = first_line.offset_x;
+    let shared_offset_y = first_line.offset_y;
+    let shared_direction = first_line.combine_direction;
+    let shared_alignment = first_line.combine_alignment;
+
+    // Use thread-local buffer to avoid Vec allocations every frame
+    // We store (line_index, text) pairs and filter by horizontal position during render
+    PARTS_BUFFER.with(|buf| {
+        let mut parts = buf.borrow_mut();
+        parts.clear();
+
+        // Collect parts with their text values
+        for &idx in line_indices {
+            let line = &all_lines[idx];
+            if let Some(text) = get_field_value(&line.field_id, values) {
+                parts.push((idx, text));
+            }
+        }
+
+        if parts.is_empty() {
+            return;
+        }
+
+        // Render each horizontal position group
+        // We iterate 3 times to avoid allocating separate vectors for left/center/right
+        for h_pos in [HorizontalPosition::Left, HorizontalPosition::Center, HorizontalPosition::Right] {
+            // Check if any parts match this position
+            let has_parts = parts.iter().any(|(idx, _)| all_lines[*idx].horizontal_position() == h_pos);
+            if !has_parts {
+                continue;
+            }
+
+            // Collect matching parts into a temporary slice (reuse parts buffer structure)
+            let matching: Vec<(&TextLineConfig, String)> = parts.iter()
+                .filter(|(idx, _)| all_lines[*idx].horizontal_position() == h_pos)
+                .map(|(idx, text)| (&all_lines[*idx], text.clone()))
+                .collect();
+
+            render_combined_parts(
+                cr, width, height, &matching, &shared_v_pos, &h_pos,
+                shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
+            );
+        }
+    });
+}
+
+#[allow(dead_code)]
 fn render_line_group(
     cr: &Context,
     width: f64,
