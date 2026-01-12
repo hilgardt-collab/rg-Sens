@@ -96,6 +96,16 @@ impl KeyBuffer {
         self.buffer.push('_');
         &self.buffer
     }
+
+    /// Build an item prefix by appending item number to base prefix
+    /// e.g., build_item_prefix("group1_", 1) -> "group1_1"
+    #[inline]
+    pub fn build_item_prefix(&mut self, base_prefix: &str, item_num: usize) -> &str {
+        self.buffer.clear();
+        use std::fmt::Write;
+        let _ = write!(self.buffer, "{}{}", base_prefix, item_num);
+        &self.buffer
+    }
 }
 
 impl Default for KeyBuffer {

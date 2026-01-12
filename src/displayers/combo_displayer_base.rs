@@ -91,11 +91,18 @@ where
         .copied()
         .unwrap_or(params.split_orientation);
 
+    // Reusable prefix buffer to avoid format!() allocations in loops
+    // Uses write!() which is more efficient than format!() for repeated use
+    let mut prefix_buf = String::with_capacity(base_prefix.len() + 4);
+
     // Determine fixed sizes for items that need them
     let mut fixed_sizes: HashMap<usize, f64> = HashMap::new();
     for i in 0..count as usize {
-        let prefix = format!("{}{}", base_prefix, i + 1);
-        if let Some(cfg) = params.content_items.get(&prefix) {
+        // Build prefix without allocation using reusable buffer
+        prefix_buf.clear();
+        use std::fmt::Write;
+        let _ = write!(prefix_buf, "{}{}", base_prefix, i + 1);
+        if let Some(cfg) = params.content_items.get(&prefix_buf) {
             if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
                 fixed_sizes.insert(i, cfg.item_height);
             }
@@ -108,14 +115,17 @@ where
 
     // Draw each item
     for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
-        let prefix = format!("{}{}", base_prefix, i + 1);
-        let item_data = combo_utils::get_item_data(params.values, &prefix);
-        let slot_values = combo_utils::get_slot_values(params.values, &prefix);
+        // Build prefix without allocation using reusable buffer
+        prefix_buf.clear();
+        use std::fmt::Write;
+        let _ = write!(prefix_buf, "{}{}", base_prefix, i + 1);
+        let item_data = combo_utils::get_item_data(params.values, &prefix_buf);
+        let slot_values = combo_utils::get_slot_values(params.values, &prefix_buf);
 
         // Get item config (or use default)
         let item_config = params
             .content_items
-            .get(&prefix)
+            .get(&prefix_buf)
             .cloned()
             .unwrap_or_default();
 
@@ -124,7 +134,7 @@ where
 
         // Get animated percent (use KeyBuffer to avoid allocation)
         let animated_percent = combo_utils::with_key_buffer(|buf| {
-            let bar_key = buf.build_bar_key(&prefix);
+            let bar_key = buf.build_bar_key(&prefix_buf);
             params.bar_values.get(bar_key).map(|av| av.current)
         })
         .unwrap_or_else(|| item_data.percent());
@@ -161,7 +171,7 @@ where
                 // Use KeyBuffer to avoid allocation for graph_key lookup
                 let empty_history = VecDeque::new();
                 let history = combo_utils::with_key_buffer(|buf| {
-                    let graph_key = buf.build_graph_key(&prefix);
+                    let graph_key = buf.build_graph_key(&prefix_buf);
                     params.graph_history.get(graph_key)
                 })
                 .unwrap_or(&empty_history);
@@ -177,7 +187,7 @@ where
                     history,
                     &slot_values,
                 ) {
-                    log::warn!("Failed to render graph for {}: {}", prefix, e);
+                    log::warn!("Failed to render graph for {}: {}", prefix_buf, e);
                     render_content_text(
                         cr,
                         item_x,
@@ -206,7 +216,7 @@ where
             }
             ContentDisplayType::CoreBars => {
                 let core_bars_config = &item_config.core_bars_config;
-                let core_values: Vec<f64> = if let Some(animated) = params.core_bar_values.get(&prefix) {
+                let core_values: Vec<f64> = if let Some(animated) = params.core_bar_values.get(&prefix_buf) {
                     animated.iter().map(|av| av.current).collect()
                 } else {
                     let capacity =
@@ -215,7 +225,7 @@ where
                     // Use KeyBuffer to avoid allocation for core_key lookups
                     for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                         let value = combo_utils::with_key_buffer(|buf| {
-                            let core_key = buf.build_core_key(&prefix, core_idx);
+                            let core_key = buf.build_core_key(&prefix_buf, core_idx);
                             params.values.get(core_key).and_then(|v| v.as_f64())
                         })
                         .unwrap_or(0.0);
@@ -225,7 +235,7 @@ where
                     if raw_values.is_empty() {
                         for core_idx in 0..128 {
                             let value = combo_utils::with_key_buffer(|buf| {
-                                let core_key = buf.build_core_key(&prefix, core_idx);
+                                let core_key = buf.build_core_key(&prefix_buf, core_idx);
                                 params.values.get(core_key).and_then(|v| v.as_f64())
                             });
                             if let Some(v) = value {
@@ -290,7 +300,7 @@ where
                     item_h,
                     params.theme,
                 ) {
-                    log::warn!("Failed to render speedometer for {}: {}", prefix, e);
+                    log::warn!("Failed to render speedometer for {}: {}", prefix_buf, e);
                 }
                 // _guard drops here, calling restore()
             }
@@ -522,30 +532,41 @@ pub fn handle_combo_update_data(
     // Filter values using cached prefix set (avoids HashSet creation on every call)
     combo_utils::filter_values_with_owned_prefix_set(input, &data.cached_prefix_set, &mut data.values);
 
-    // Update each item
-    for prefix in &data.cached_prefixes.clone() {
+    // Update each item using index-based iteration to avoid cloning cached_prefixes
+    let prefix_count = data.cached_prefixes.len();
+    for i in 0..prefix_count {
+        // Get prefix reference - safe because prefix_count is fixed and we only mutate other fields
+        let prefix = &data.cached_prefixes[i];
         let item_data = combo_utils::get_item_data(input, prefix);
+        let target_percent = item_data.percent();
+        let numerical_value = item_data.numerical_value;
+
+        // Get item config before mutating data
+        let default_config = ContentItemConfig::default();
+        let item_config = content_items.get(prefix).cloned().unwrap_or(default_config);
+
+        // Now do the mutable operations
+        let prefix = &data.cached_prefixes[i]; // Re-borrow after item_config lookup
         combo_utils::update_bar_animation(
             &mut data.bar_values,
             prefix,
-            item_data.percent(),
+            target_percent,
             animation_enabled,
         );
 
-        let default_config = ContentItemConfig::default();
-        let item_config = content_items.get(prefix).unwrap_or(&default_config);
-
         match item_config.display_as {
             ContentDisplayType::Graph => {
+                let prefix = &data.cached_prefixes[i];
                 combo_utils::update_graph_history(
                     &mut data.graph_history,
                     prefix,
-                    item_data.numerical_value,
+                    numerical_value,
                     timestamp,
                     item_config.graph_config.max_data_points,
                 );
             }
             ContentDisplayType::CoreBars => {
+                let prefix = &data.cached_prefixes[i];
                 combo_utils::update_core_bars(
                     input,
                     &mut data.core_bar_values,
