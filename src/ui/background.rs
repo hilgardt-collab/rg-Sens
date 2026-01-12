@@ -1,5 +1,4 @@
 use gtk4::cairo;
-use gtk4::prelude::GdkCairoContextExt;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::theme::{ColorSource, ComboThemeConfig};
@@ -472,75 +471,46 @@ fn render_image_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    use crate::ui::render_cache::{get_cached_pixbuf, get_cached_tile_surface};
+    use crate::ui::render_cache::{get_cached_scaled_surface, get_cached_tile_surface};
 
-    // Use cached image loading
-    if let Some(pixbuf) = get_cached_pixbuf(path) {
-        let img_width = pixbuf.width() as f64;
-        let img_height = pixbuf.height() as f64;
+    let target_width = width as i32;
+    let target_height = height as i32;
 
-        cr.save()?;
+    // For Tile mode, use the tile surface cache
+    if matches!(display_mode, ImageDisplayMode::Tile) {
+        if let Some(surface) = get_cached_tile_surface(path) {
+            cr.save()?;
+            cr.rectangle(0.0, 0.0, width, height);
+            cr.clip();
 
-        // Clip to widget bounds to prevent image from extending outside
-        cr.rectangle(0.0, 0.0, width, height);
-        cr.clip();
+            let pattern = cairo::SurfacePattern::create(&surface);
+            pattern.set_extend(cairo::Extend::Repeat);
+            cr.set_source(&pattern)?;
+            cr.paint_with_alpha(alpha)?;
 
-        match display_mode {
-            ImageDisplayMode::Fit => {
-                // Scale to fit (maintain aspect ratio, may have empty space)
-                let scale = (width / img_width).min(height / img_height);
-                cr.scale(scale, scale);
-                cr.translate(
-                    (width / scale - img_width) / 2.0,
-                    (height / scale - img_height) / 2.0,
-                );
-                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
-                cr.paint_with_alpha(alpha)?;
-            }
-            ImageDisplayMode::Stretch => {
-                // Stretch to fill (may distort)
-                cr.scale(width / img_width, height / img_height);
-                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
-                cr.paint_with_alpha(alpha)?;
-            }
-            ImageDisplayMode::Zoom => {
-                // Scale to fill (maintain aspect ratio, may crop)
-                let scale = (width / img_width).max(height / img_height);
-                cr.scale(scale, scale);
-                cr.translate(
-                    (width / scale - img_width) / 2.0,
-                    (height / scale - img_height) / 2.0,
-                );
-                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
-                cr.paint_with_alpha(alpha)?;
-            }
-            ImageDisplayMode::Tile => {
-                // Tile the image - use cached tile surface
-                if let Some(surface) = get_cached_tile_surface(path) {
-                    let pattern = cairo::SurfacePattern::create(&surface);
-                    pattern.set_extend(cairo::Extend::Repeat);
-                    cr.set_source(&pattern)?;
-                    cr.paint_with_alpha(alpha)?;
-                } else {
-                    // Fallback: create surface on the fly
-                    let surface = cairo::ImageSurface::create(
-                        cairo::Format::ARgb32,
-                        img_width as i32,
-                        img_height as i32,
-                    )?;
-                    let tmp_cr = cairo::Context::new(&surface)?;
-                    tmp_cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
-                    tmp_cr.paint()?;
-
-                    let pattern = cairo::SurfacePattern::create(&surface);
-                    pattern.set_extend(cairo::Extend::Repeat);
-                    cr.set_source(&pattern)?;
-                    cr.paint_with_alpha(alpha)?;
-                }
-            }
+            cr.restore()?;
+        } else {
+            // Fallback to solid color if image can't be loaded
+            cr.set_source_rgb(0.2, 0.2, 0.2);
+            cr.rectangle(0.0, 0.0, width, height);
+            cr.fill()?;
         }
+        return Ok(());
+    }
 
-        cr.restore()?;
+    // For Fit/Stretch/Zoom modes, use pre-scaled surface cache
+    // This avoids expensive set_source_pixbuf + scale on every frame
+    let mode_code = match display_mode {
+        ImageDisplayMode::Fit => 0,
+        ImageDisplayMode::Stretch => 1,
+        ImageDisplayMode::Zoom => 2,
+        ImageDisplayMode::Tile => unreachable!(),
+    };
+
+    if let Some(scaled_surface) = get_cached_scaled_surface(path, target_width, target_height, mode_code, alpha) {
+        // Fast path: just paint the pre-scaled, pre-alpha'd surface
+        cr.set_source_surface(&scaled_surface, 0.0, 0.0)?;
+        cr.paint()?;
     } else {
         // Fallback to solid color if image can't be loaded
         cr.set_source_rgb(0.2, 0.2, 0.2);

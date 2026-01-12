@@ -35,6 +35,131 @@ pub fn invalidate_cached_image(path: &str) {
     IMAGE_CACHE.with(|cache| cache.borrow_mut().invalidate(path));
 }
 
+// Thread-local scaled surface cache (separate from pixbuf cache for better memory management)
+thread_local! {
+    static SCALED_SURFACE_CACHE: RefCell<ScaledSurfaceCache> = RefCell::new(ScaledSurfaceCache::new());
+}
+
+/// Get or create a pre-scaled surface for the given image at the specified dimensions and display mode
+/// This avoids expensive set_source_pixbuf + scale operations on every frame
+pub fn get_cached_scaled_surface(
+    path: &str,
+    target_width: i32,
+    target_height: i32,
+    display_mode: u8, // 0=Fit, 1=Stretch, 2=Zoom
+    alpha: f64,
+) -> Option<cairo::ImageSurface> {
+    SCALED_SURFACE_CACHE.with(|cache| {
+        cache.borrow_mut().get_or_create(path, target_width, target_height, display_mode, alpha)
+    })
+}
+
+/// Cache for pre-scaled image surfaces at specific dimensions
+struct ScaledSurfaceCache {
+    /// Cached surfaces keyed by (path, width, height, mode, alpha*100)
+    cache: HashMap<(String, i32, i32, u8, i32), ScaledSurfaceEntry>,
+    max_entries: usize,
+}
+
+struct ScaledSurfaceEntry {
+    surface: cairo::ImageSurface,
+    last_access: Instant,
+}
+
+impl ScaledSurfaceCache {
+    fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+            max_entries: 30, // Limit memory usage
+        }
+    }
+
+    fn get_or_create(
+        &mut self,
+        path: &str,
+        target_width: i32,
+        target_height: i32,
+        display_mode: u8,
+        alpha: f64,
+    ) -> Option<cairo::ImageSurface> {
+        // Key includes alpha (quantized to 1% precision to avoid cache explosion)
+        let alpha_key = (alpha * 100.0) as i32;
+        let key = (path.to_string(), target_width, target_height, display_mode, alpha_key);
+
+        // Check cache
+        if let Some(entry) = self.cache.get_mut(&key) {
+            entry.last_access = Instant::now();
+            return Some(entry.surface.clone());
+        }
+
+        // Load the source pixbuf
+        let pixbuf = get_cached_pixbuf(path)?;
+        let img_width = pixbuf.width() as f64;
+        let img_height = pixbuf.height() as f64;
+
+        // Create target surface
+        let surface = cairo::ImageSurface::create(
+            cairo::Format::ARgb32,
+            target_width,
+            target_height,
+        ).ok()?;
+
+        let cr = cairo::Context::new(&surface).ok()?;
+        let width = target_width as f64;
+        let height = target_height as f64;
+
+        // Render scaled image based on display mode
+        match display_mode {
+            0 => {
+                // Fit: Scale to fit (maintain aspect ratio, may have empty space)
+                let scale = (width / img_width).min(height / img_height);
+                cr.scale(scale, scale);
+                cr.translate(
+                    (width / scale - img_width) / 2.0,
+                    (height / scale - img_height) / 2.0,
+                );
+                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                cr.paint_with_alpha(alpha).ok()?;
+            }
+            1 => {
+                // Stretch: Stretch to fill (may distort)
+                cr.scale(width / img_width, height / img_height);
+                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                cr.paint_with_alpha(alpha).ok()?;
+            }
+            2 => {
+                // Zoom: Scale to fill (maintain aspect ratio, may crop)
+                let scale = (width / img_width).max(height / img_height);
+                cr.scale(scale, scale);
+                cr.translate(
+                    (width / scale - img_width) / 2.0,
+                    (height / scale - img_height) / 2.0,
+                );
+                cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+                cr.paint_with_alpha(alpha).ok()?;
+            }
+            _ => return None,
+        }
+
+        // Evict LRU if full
+        if self.cache.len() >= self.max_entries {
+            if let Some(oldest_key) = self.cache.iter()
+                .min_by_key(|(_, e)| e.last_access)
+                .map(|(k, _)| k.clone())
+            {
+                self.cache.remove(&oldest_key);
+            }
+        }
+
+        self.cache.insert(key, ScaledSurfaceEntry {
+            surface: surface.clone(),
+            last_access: Instant::now(),
+        });
+
+        Some(surface)
+    }
+}
+
 /// Cache for loaded images and their Cairo surfaces
 struct ImageCache {
     /// Cached pixbufs keyed by file path
