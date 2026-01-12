@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
-use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
+use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig, IconPosition};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 
@@ -35,6 +35,11 @@ struct DisplayData {
     flash_state: bool,
     flash_elapsed: f64, // Track elapsed time for flash toggle (every 0.5s)
     transform: PanelTransform,
+    // Icon bounds for click detection (x, y, width, height) - updated on each draw
+    icon_bounds: Option<(f64, f64, f64, f64)>,
+    // Last known widget dimensions for bounds calculation
+    last_width: f64,
+    last_height: f64,
 }
 
 impl ClockAnalogDisplayer {
@@ -54,12 +59,25 @@ impl ClockAnalogDisplayer {
             flash_state: false,
             flash_elapsed: 0.0,
             transform: PanelTransform::default(),
+            icon_bounds: None,
+            last_width: 0.0,
+            last_height: 0.0,
         }));
 
         Self {
             id: "clock_analog".to_string(),
             name: "Analog Clock".to_string(),
             data,
+        }
+    }
+
+    /// Get the current icon bounds for click detection
+    /// Returns (x, y, width, height) or None if icon is not shown
+    pub fn get_icon_bounds(&self) -> Option<(f64, f64, f64, f64)> {
+        if let Ok(data) = self.data.lock() {
+            data.icon_bounds
+        } else {
+            None
         }
     }
 }
@@ -85,9 +103,11 @@ impl Displayer for ClockAnalogDisplayer {
 
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
+            if let Ok(mut data) = data_clone.lock() {
                 let width = width as f64;
                 let height = height as f64;
+                data.last_width = width;
+                data.last_height = height;
                 data.transform.apply(cr, width, height);
 
                 // Calculate smooth time values
@@ -98,23 +118,23 @@ impl Displayer for ClockAnalogDisplayer {
                 // Determine if indicator should be shown (icon always shown if show_icon is true)
                 let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
 
-                // Get indicator text and calculate its size
-                let icon_font = &data.config.icon_font;
-                let icon_text = &data.config.icon_text;
+                // Get indicator text and calculate its size (clone to avoid borrow conflicts)
+                let icon_font = data.config.icon_font.clone();
+                let icon_text = data.config.icon_text.clone();
                 let icon_size_pct = data.config.icon_size;
                 let icon_bold = data.config.icon_bold;
                 let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
 
-                // Calculate indicator height for layout purposes - always reserve space if icon is shown and centered
-                let indicator_height = if data.config.show_icon && data.config.center_indicator {
+                // Calculate indicator height for layout purposes - reserve space if shrink_for_indicator is enabled
+                let indicator_height = if data.config.show_icon && data.config.shrink_for_indicator {
                     let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
                     font_size + 16.0 // Font height + padding
                 } else {
                     0.0
                 };
 
-                // Calculate clock area - shrink if icon is shown, centered, and shrink option enabled
-                let (clock_width, clock_height, clock_offset_y) = if data.config.show_icon && data.config.shrink_for_indicator && data.config.center_indicator {
+                // Calculate clock area - shrink if icon is shown and shrink option enabled
+                let (clock_width, clock_height, clock_offset_y) = if data.config.show_icon && data.config.shrink_for_indicator {
                     let available_height = height - indicator_height;
                     let clock_size = width.min(available_height);
                     (clock_size, clock_size, (available_height - clock_size) / 2.0)
@@ -156,7 +176,7 @@ impl Displayer for ClockAnalogDisplayer {
 
                 cr.restore().ok();
 
-                // Draw indicator
+                // Draw indicator using 3x3 grid positioning
                 if data.config.show_icon {
                     let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
 
@@ -173,23 +193,35 @@ impl Displayer for ClockAnalogDisplayer {
                         icon_text.clone()
                     };
 
-                    let te = pango_text_extents(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, font_size);
+                    let te = pango_text_extents(cr, &display_text, &icon_font, cairo::FontSlant::Normal, font_weight, font_size);
                     let (text_w, text_h) = (te.width().max(font_size * 3.0), te.height().max(font_size));
 
-                    // Position based on center_indicator setting
-                    let (text_x, text_y) = if data.config.center_indicator {
-                        // Center below clock
-                        let x = (width - text_w) / 2.0;
-                        let y = if data.config.shrink_for_indicator {
-                            height - 8.0
-                        } else {
-                            height - 8.0
-                        };
-                        (x, y)
-                    } else {
-                        // Bottom-right corner (original behavior)
-                        (width - text_w - 6.0, height - 6.0)
+                    // Calculate base position from 3x3 grid
+                    let padding = 6.0;
+                    let (base_x, base_y) = match data.config.icon_position {
+                        IconPosition::TopLeft => (padding, text_h + padding),
+                        IconPosition::TopCenter => ((width - text_w) / 2.0, text_h + padding),
+                        IconPosition::TopRight => (width - text_w - padding, text_h + padding),
+                        IconPosition::MiddleLeft => (padding, (height + text_h) / 2.0),
+                        IconPosition::Center => ((width - text_w) / 2.0, (height + text_h) / 2.0),
+                        IconPosition::MiddleRight => (width - text_w - padding, (height + text_h) / 2.0),
+                        IconPosition::BottomLeft => (padding, height - padding),
+                        IconPosition::BottomCenter => ((width - text_w) / 2.0, height - padding),
+                        IconPosition::BottomRight => (width - text_w - padding, height - padding),
                     };
+
+                    // Apply user offset
+                    let text_x = base_x + data.config.icon_offset_x;
+                    let text_y = base_y + data.config.icon_offset_y;
+
+                    // Store icon bounds for click detection (with padding for easier clicking)
+                    let bounds_padding = 4.0;
+                    data.icon_bounds = Some((
+                        text_x - bounds_padding,
+                        text_y - text_h - bounds_padding,
+                        text_w + bounds_padding * 2.0,
+                        text_h + bounds_padding * 2.0,
+                    ));
 
                     cr.save().ok();
 
@@ -232,8 +264,11 @@ impl Displayer for ClockAnalogDisplayer {
                     }
 
                     cr.move_to(text_x, text_y);
-                    pango_show_text(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, font_size);
+                    pango_show_text(cr, &display_text, &icon_font, cairo::FontSlant::Normal, font_weight, font_size);
                     cr.restore().ok();
+                } else {
+                    // No icon shown, clear bounds
+                    data.icon_bounds = None;
                 }
                 data.transform.restore(cr);
             }
@@ -442,6 +477,14 @@ impl Displayer for ClockAnalogDisplayer {
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         if let Ok(data) = self.data.lock() {
             Some(crate::core::DisplayerConfig::ClockAnalog(data.config.clone()))
+        } else {
+            None
+        }
+    }
+
+    fn get_icon_bounds(&self) -> Option<(f64, f64, f64, f64)> {
+        if let Ok(data) = self.data.lock() {
+            data.icon_bounds
         } else {
             None
         }

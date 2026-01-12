@@ -111,7 +111,7 @@ pub use speedometer_config_widget::SpeedometerConfigWidget;
 pub use graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode, AxisConfig, Margin, DataPoint, render_graph};
 pub use graph_config_widget::{GraphConfigWidget, LazyGraphConfigWidget};
 pub use clipboard::{PanelStyle, CLIPBOARD};
-pub use clock_display::{AnalogClockConfig, HandStyle, FaceStyle, TickStyle as ClockTickStyle, render_analog_clock};
+pub use clock_display::{AnalogClockConfig, HandStyle, FaceStyle, TickStyle as ClockTickStyle, IconPosition, render_analog_clock};
 pub use clock_source_config_widget::ClockSourceConfigWidget;
 pub use clock_analog_config_widget::ClockAnalogConfigWidget;
 pub use clock_digital_config_widget::ClockDigitalConfigWidget;

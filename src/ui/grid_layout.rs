@@ -760,7 +760,8 @@ impl GridLayout {
         // For clock displayers, add click handler for alarm/timer management
         if displayer_id == "clock_analog" || displayer_id == "clock_digital" {
             let gesture = gtk4::GestureClick::new();
-            gesture.connect_released(move |gesture, _, _x, _y| {
+            let panel_for_click = panel.clone();
+            gesture.connect_released(move |gesture, _, click_x, click_y| {
                 if let Some(widget) = gesture.widget() {
                     // First check if any alarm is triggered or timer is finished - if so, clicking anywhere dismisses it
                     // Use global timer manager for accurate state
@@ -787,11 +788,24 @@ impl GridLayout {
                         return; // Don't open dialog when dismissing
                     }
 
-                    // Click anywhere on clock opens the alarm/timer dialog
-                    let window = widget.root()
-                        .and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    // Check if click is on the icon - only open dialog if clicked on icon
+                    let on_icon = if let Ok(panel_guard) = panel_for_click.try_read() {
+                        if let Some((ix, iy, iw, ih)) = panel_guard.displayer.get_icon_bounds() {
+                            click_x >= ix && click_x <= ix + iw && click_y >= iy && click_y <= iy + ih
+                        } else {
+                            // No icon bounds means no icon shown, allow click anywhere
+                            true
+                        }
+                    } else {
+                        true // Couldn't read panel, allow click
+                    };
 
-                    crate::ui::AlarmTimerDialog::show(window.as_ref());
+                    if on_icon {
+                        let window = widget.root()
+                            .and_then(|r| r.downcast::<gtk4::Window>().ok());
+
+                        crate::ui::AlarmTimerDialog::show(window.as_ref());
+                    }
                 }
             });
             widget.add_controller(gesture);

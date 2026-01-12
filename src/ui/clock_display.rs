@@ -61,6 +61,30 @@ pub enum TickStyle {
     Triangles,
 }
 
+/// Icon position on a 3x3 grid
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum IconPosition {
+    #[serde(rename = "top_left")]
+    TopLeft,
+    #[serde(rename = "top_center")]
+    TopCenter,
+    #[serde(rename = "top_right")]
+    TopRight,
+    #[serde(rename = "middle_left")]
+    MiddleLeft,
+    #[serde(rename = "center")]
+    Center,
+    #[serde(rename = "middle_right")]
+    MiddleRight,
+    #[serde(rename = "bottom_left")]
+    BottomLeft,
+    #[serde(rename = "bottom_center")]
+    #[default]
+    BottomCenter,
+    #[serde(rename = "bottom_right")]
+    BottomRight,
+}
+
 
 /// Analog clock display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,9 +189,17 @@ pub struct AnalogClockConfig {
 
     // Indicator layout options
     #[serde(default = "default_true")]
-    pub center_indicator: bool, // Place indicator in center below clock instead of corner
+    pub center_indicator: bool, // DEPRECATED: Use icon_position instead
     #[serde(default = "default_true")]
     pub shrink_for_indicator: bool, // Shrink clock face when indicator is visible
+
+    // New icon positioning (3x3 grid with offset)
+    #[serde(default)]
+    pub icon_position: IconPosition,
+    #[serde(default)]
+    pub icon_offset_x: f64, // Pixels offset from calculated position
+    #[serde(default)]
+    pub icon_offset_y: f64, // Pixels offset from calculated position
 }
 
 fn default_face_color() -> Color {
@@ -321,6 +353,9 @@ impl Default for AnalogClockConfig {
             icon_bold: false,
             center_indicator: true,
             shrink_for_indicator: true,
+            icon_position: IconPosition::default(),
+            icon_offset_x: 0.0,
+            icon_offset_y: 0.0,
         }
     }
 }

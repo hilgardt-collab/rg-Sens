@@ -77,6 +77,11 @@ impl Displayer for SpeedometerDisplayer {
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(data) = data_clone.lock() {
+                // Ensure we start with a clean, transparent state
+                // This prevents background bleed-through issues
+                cr.save().ok();
+                cr.set_operator(cairo::Operator::Over);
+
                 data.transform.apply(cr, width as f64, height as f64);
                 let display_value = if data.config.animate {
                     data.animated_value
@@ -85,6 +90,8 @@ impl Displayer for SpeedometerDisplayer {
                 };
                 let _ = render_speedometer(cr, &data.config, display_value, &data.values, width as f64, height as f64);
                 data.transform.restore(cr);
+
+                cr.restore().ok();
             }
         });
 
@@ -219,6 +226,7 @@ impl Displayer for SpeedometerDisplayer {
             let speedometer_config: SpeedometerConfig = serde_json::from_value(config_value.clone())?;
             if let Ok(mut data) = self.data.lock() {
                 data.config = speedometer_config;
+                data.dirty = true; // Ensure redraw after config change
             }
         }
         Ok(())

@@ -94,6 +94,16 @@ pub trait Displayer: Send + Sync {
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
         None
     }
+
+    /// Get bounds of clickable icon/indicator area (if any)
+    ///
+    /// Returns (x, y, width, height) in widget coordinates.
+    /// Used for hit testing to determine if a click should trigger
+    /// icon-specific behavior (like opening alarm dialog).
+    /// Default implementation returns None (no clickable icon).
+    fn get_icon_bounds(&self) -> Option<(f64, f64, f64, f64)> {
+        None
+    }
 }
 
 /// Type-erased displayer for dynamic dispatch

@@ -8,7 +8,7 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyle};
+use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, IconPosition, TickStyle};
 use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::BackgroundConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
@@ -61,6 +61,9 @@ pub struct ClockAnalogConfigWidget {
     icon_bold_check: CheckButton,
     center_indicator_check: CheckButton,
     shrink_for_indicator_check: CheckButton,
+    icon_position_dropdown: DropDown,
+    icon_offset_x_spin: SpinButton,
+    icon_offset_y_spin: SpinButton,
 }
 
 impl ClockAnalogConfigWidget {
@@ -540,10 +543,55 @@ impl ClockAnalogConfigWidget {
         layout_label.set_margin_top(8);
         icon_box.append(&layout_label);
 
-        // Center indicator checkbox
-        let center_indicator_check = CheckButton::with_label("Center indicator below clock");
+        // Icon position dropdown (3x3 grid)
+        let position_row = GtkBox::new(Orientation::Horizontal, 6);
+        position_row.append(&Label::new(Some("Position:")));
+        let position_items = StringList::new(&[
+            "Top Left", "Top Center", "Top Right",
+            "Middle Left", "Center", "Middle Right",
+            "Bottom Left", "Bottom Center", "Bottom Right",
+        ]);
+        let icon_position_dropdown = DropDown::new(Some(position_items), gtk4::Expression::NONE);
+        // Set initial position from config
+        let initial_pos = match config.borrow().icon_position {
+            IconPosition::TopLeft => 0,
+            IconPosition::TopCenter => 1,
+            IconPosition::TopRight => 2,
+            IconPosition::MiddleLeft => 3,
+            IconPosition::Center => 4,
+            IconPosition::MiddleRight => 5,
+            IconPosition::BottomLeft => 6,
+            IconPosition::BottomCenter => 7,
+            IconPosition::BottomRight => 8,
+        };
+        icon_position_dropdown.set_selected(initial_pos);
+        icon_position_dropdown.set_hexpand(true);
+        position_row.append(&icon_position_dropdown);
+        icon_box.append(&position_row);
+
+        // X offset
+        let offset_x_row = GtkBox::new(Orientation::Horizontal, 6);
+        offset_x_row.append(&Label::new(Some("X Offset:")));
+        let offset_x_adj = Adjustment::new(config.borrow().icon_offset_x, -100.0, 100.0, 1.0, 10.0, 0.0);
+        let icon_offset_x_spin = SpinButton::new(Some(&offset_x_adj), 1.0, 0);
+        icon_offset_x_spin.set_hexpand(true);
+        offset_x_row.append(&icon_offset_x_spin);
+        icon_box.append(&offset_x_row);
+
+        // Y offset
+        let offset_y_row = GtkBox::new(Orientation::Horizontal, 6);
+        offset_y_row.append(&Label::new(Some("Y Offset:")));
+        let offset_y_adj = Adjustment::new(config.borrow().icon_offset_y, -100.0, 100.0, 1.0, 10.0, 0.0);
+        let icon_offset_y_spin = SpinButton::new(Some(&offset_y_adj), 1.0, 0);
+        icon_offset_y_spin.set_hexpand(true);
+        offset_y_row.append(&icon_offset_y_spin);
+        icon_box.append(&offset_y_row);
+
+        // Center indicator checkbox (deprecated but kept for backwards compatibility)
+        let center_indicator_check = CheckButton::with_label("Legacy: Center indicator (use Position instead)");
         center_indicator_check.set_active(config.borrow().center_indicator);
-        center_indicator_check.set_tooltip_text(Some("Place the alarm/timer indicator centered below the clock face"));
+        center_indicator_check.set_tooltip_text(Some("Deprecated: Use Position dropdown instead"));
+        center_indicator_check.set_sensitive(false); // Disable since we're using position dropdown
         icon_box.append(&center_indicator_check);
 
         // Shrink for indicator checkbox
@@ -706,6 +754,36 @@ impl ClockAnalogConfigWidget {
             config_for_shrink.borrow_mut().shrink_for_indicator = check.is_active();
         });
 
+        // Icon position dropdown
+        let config_for_position = config.clone();
+        icon_position_dropdown.connect_selected_notify(move |dropdown| {
+            let pos = match dropdown.selected() {
+                0 => IconPosition::TopLeft,
+                1 => IconPosition::TopCenter,
+                2 => IconPosition::TopRight,
+                3 => IconPosition::MiddleLeft,
+                4 => IconPosition::Center,
+                5 => IconPosition::MiddleRight,
+                6 => IconPosition::BottomLeft,
+                7 => IconPosition::BottomCenter,
+                8 => IconPosition::BottomRight,
+                _ => IconPosition::BottomCenter,
+            };
+            config_for_position.borrow_mut().icon_position = pos;
+        });
+
+        // Icon X offset
+        let config_for_offset_x = config.clone();
+        icon_offset_x_spin.connect_value_changed(move |spin| {
+            config_for_offset_x.borrow_mut().icon_offset_x = spin.value();
+        });
+
+        // Icon Y offset
+        let config_for_offset_y = config.clone();
+        icon_offset_y_spin.connect_value_changed(move |spin| {
+            config_for_offset_y.borrow_mut().icon_offset_y = spin.value();
+        });
+
         Self {
             widget: notebook,
             config,
@@ -746,6 +824,9 @@ impl ClockAnalogConfigWidget {
             icon_bold_check,
             center_indicator_check,
             shrink_for_indicator_check,
+            icon_position_dropdown,
+            icon_offset_x_spin,
+            icon_offset_y_spin,
         }
     }
 
@@ -830,6 +911,22 @@ impl ClockAnalogConfigWidget {
         self.icon_bold_check.set_active(config.icon_bold);
         self.center_indicator_check.set_active(config.center_indicator);
         self.shrink_for_indicator_check.set_active(config.shrink_for_indicator);
+
+        // Icon position
+        let pos_index = match config.icon_position {
+            IconPosition::TopLeft => 0,
+            IconPosition::TopCenter => 1,
+            IconPosition::TopRight => 2,
+            IconPosition::MiddleLeft => 3,
+            IconPosition::Center => 4,
+            IconPosition::MiddleRight => 5,
+            IconPosition::BottomLeft => 6,
+            IconPosition::BottomCenter => 7,
+            IconPosition::BottomRight => 8,
+        };
+        self.icon_position_dropdown.set_selected(pos_index);
+        self.icon_offset_x_spin.set_value(config.icon_offset_x);
+        self.icon_offset_y_spin.set_value(config.icon_offset_y);
 
         // Store config
         *self.config.borrow_mut() = config;
