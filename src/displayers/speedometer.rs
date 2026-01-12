@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
-use crate::ui::speedometer_display::{render_speedometer, SpeedometerConfig};
+use crate::ui::speedometer_display::{render_speedometer_with_theme, SpeedometerConfig};
+use crate::ui::theme::ComboThemeConfig;
 
 /// Speedometer gauge displayer
 pub struct SpeedometerDisplayer {
@@ -20,6 +21,7 @@ pub struct SpeedometerDisplayer {
 #[derive(Clone)]
 struct DisplayData {
     config: SpeedometerConfig,
+    theme: ComboThemeConfig,
     value: f64,
     target_value: f64,
     animated_value: f64,
@@ -34,6 +36,7 @@ impl SpeedometerDisplayer {
     pub fn new() -> Self {
         let data = Arc::new(Mutex::new(DisplayData {
             config: SpeedometerConfig::default(),
+            theme: ComboThemeConfig::default(),
             value: 0.0,
             target_value: 0.0,
             animated_value: 0.0,
@@ -88,7 +91,7 @@ impl Displayer for SpeedometerDisplayer {
                 } else {
                     data.value
                 };
-                let _ = render_speedometer(cr, &data.config, display_value, &data.values, width as f64, height as f64);
+                let _ = render_speedometer_with_theme(cr, &data.config, display_value, &data.values, width as f64, height as f64, &data.theme);
                 data.transform.restore(cr);
 
                 cr.restore().ok();
@@ -200,7 +203,7 @@ impl Displayer for SpeedometerDisplayer {
             } else {
                 data.value
             };
-            render_speedometer(cr, &data.config, display_value, &data.values, width, height)
+            render_speedometer_with_theme(cr, &data.config, display_value, &data.values, width, height, &data.theme)
                 .map_err(|e| anyhow::anyhow!("Failed to render speedometer: {}", e))?;
             data.transform.restore(cr);
         }
@@ -222,11 +225,21 @@ impl Displayer for SpeedometerDisplayer {
     }
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
-        if let Some(config_value) = config.get("speedometer_config") {
-            let speedometer_config: SpeedometerConfig = serde_json::from_value(config_value.clone())?;
-            if let Ok(mut data) = self.data.lock() {
-                data.config = speedometer_config;
-                data.dirty = true; // Ensure redraw after config change
+        if let Ok(mut data) = self.data.lock() {
+            // Handle global theme
+            if let Some(theme_value) = config.get("global_theme") {
+                if let Ok(theme) = serde_json::from_value(theme_value.clone()) {
+                    data.theme = theme;
+                    data.dirty = true;
+                }
+            }
+
+            // Handle speedometer-specific config
+            if let Some(config_value) = config.get("speedometer_config") {
+                if let Ok(speedometer_config) = serde_json::from_value(config_value.clone()) {
+                    data.config = speedometer_config;
+                    data.dirty = true;
+                }
             }
         }
         Ok(())
