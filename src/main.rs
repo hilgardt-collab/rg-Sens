@@ -830,31 +830,6 @@ fn build_ui(app: &Application) {
         grid_layout.borrow().set_viewport_size(vp_width, vp_height);
     }
 
-    // Add double-click gesture on overlay to toggle fullscreen
-    let double_click_gesture = gtk4::GestureClick::new();
-    double_click_gesture.set_button(gtk4::gdk::BUTTON_PRIMARY);
-
-    let window_for_fullscreen = window.clone();
-    let app_config_for_fullscreen = app_config.clone();
-    let config_dirty_for_fullscreen = config_dirty.clone();
-
-    double_click_gesture.connect_pressed(move |_gesture, n_press, _x, _y| {
-        // Only respond to double-clicks
-        if n_press == 2 {
-            let is_fullscreen = window_for_fullscreen.is_fullscreen();
-            if is_fullscreen {
-                window_for_fullscreen.unfullscreen();
-                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = false;
-            } else {
-                window_for_fullscreen.fullscreen();
-                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
-            }
-            // Mark config as dirty
-            config_dirty_for_fullscreen.store(true, Ordering::Relaxed);
-        }
-    });
-
-    scrolled_window.add_controller(double_click_gesture);
 
     // Setup auto-scroll using the auto_scroll module
     let start_auto_scroll = auto_scroll::create_auto_scroll_starter(
@@ -933,6 +908,39 @@ fn build_ui(app: &Application) {
     // Set up the window content and auto-hide behavior
     window.set_child(Some(&top_overlay));
     setup_auto_hide_header(&window, &revealer, &app_menu_popover);
+
+    // Add double-click gesture on scrolled_window to toggle fullscreen
+    let double_click_gesture = gtk4::GestureClick::new();
+    double_click_gesture.set_button(gtk4::gdk::BUTTON_PRIMARY);
+
+    let window_for_fullscreen = window.clone();
+    let app_config_for_fullscreen = app_config.clone();
+    let config_dirty_for_fullscreen = config_dirty.clone();
+    let revealer_for_fullscreen = revealer.clone();
+
+    double_click_gesture.connect_pressed(move |_gesture, n_press, _x, _y| {
+        // Only respond to double-clicks
+        if n_press == 2 {
+            let is_fullscreen = window_for_fullscreen.is_fullscreen();
+            if is_fullscreen {
+                window_for_fullscreen.unfullscreen();
+                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = false;
+            } else {
+                window_for_fullscreen.fullscreen();
+                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
+                // Briefly show the auto-hide menu to indicate fullscreen mode
+                revealer_for_fullscreen.set_reveal_child(true);
+                let revealer_hide = revealer_for_fullscreen.clone();
+                glib::timeout_add_local_once(std::time::Duration::from_millis(2000), move || {
+                    revealer_hide.set_reveal_child(false);
+                });
+            }
+            // Mark config as dirty
+            config_dirty_for_fullscreen.store(true, Ordering::Relaxed);
+        }
+    });
+
+    scrolled_window.add_controller(double_click_gesture);
 
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
