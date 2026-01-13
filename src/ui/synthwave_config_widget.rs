@@ -114,7 +114,9 @@ impl SynthwaveConfigWidget {
         // Preview at the top
         let preview = DrawingArea::new();
         preview.set_content_height(180);
+        preview.set_content_width(100);
         preview.set_hexpand(true);
+        preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
 
         let config_clone = config.clone();
