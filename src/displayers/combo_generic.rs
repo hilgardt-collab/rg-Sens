@@ -374,7 +374,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 let cache_valid = frame_cache_clone
                     .borrow()
                     .as_ref()
-                    .map_or(false, |cache| {
+                    .is_some_and(|cache| {
                         cache.width == width
                             && cache.height == height
                             && cache.config_version == data.config_version

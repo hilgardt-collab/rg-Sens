@@ -259,7 +259,7 @@ impl AnimationManager {
         // Log periodically to debug high CPU and memory issues
         static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let count = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count % 300 == 0 {
+        if count.is_multiple_of(300) {
             // Log every ~5 seconds at 60fps
             log::info!("Animation manager: {} entries, {} mapped, {} active",
                 entries.len(), mapped_count, active_count);

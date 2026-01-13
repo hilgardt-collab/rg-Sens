@@ -274,6 +274,4 @@ pub fn register_all() {
         || Box::new(CssTemplateDisplayer::new()),
     );
 
-    // TODO: Register more displayers
-    // register_displayer!("level_bar", LevelBarDisplayer);
 }

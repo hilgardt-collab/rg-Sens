@@ -122,6 +122,4 @@ pub fn register_all() {
         || Box::new(StaticTextSource::new()),
     );
 
-    // TODO: Register more sources
-    // register_source!("network", NetworkSource);
 }

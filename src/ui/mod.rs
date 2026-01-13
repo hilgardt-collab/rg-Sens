@@ -2,10 +2,8 @@
 
 mod render_utils;
 pub mod widget_builder;
-mod main_window;
 mod grid_layout;
 mod grid_properties_dialog;
-mod config_dialog;
 mod color_picker;
 pub mod custom_color_picker;
 pub mod background;
@@ -84,11 +82,9 @@ pub mod config_helpers;
 pub mod context_menu;
 pub mod auto_scroll;
 
-pub use main_window::MainWindow;
 pub use test_source_dialog::{show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback};
 pub use color_button_widget::ColorButtonWidget;
 pub use grid_layout::{GridConfig, GridLayout, BorderlessDragCallback};
-pub use config_dialog::ConfigDialog;
 pub use color_picker::ColorPickerDialog;
 pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background, render_background_with_source, render_background_with_theme, render_background_with_source_and_theme, ImageDisplayMode, IndicatorBackgroundConfig, IndicatorBackgroundShape, render_indicator_background_with_value};
 pub use gradient_editor::GradientEditor;
