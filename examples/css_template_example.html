@@ -155,8 +155,8 @@
         /* Arc Widget */
         .arc-widget .arc-container {
             position: relative;
-            width: 140px;
-            height: 90px;
+            width: 120px;
+            height: 120px;
         }
 
         .arc-widget svg {
@@ -168,34 +168,34 @@
         .arc-widget .arc-track {
             fill: none;
             stroke: rgba(255, 255, 255, 0.1);
-            stroke-width: 12;
+            stroke-width: 10;
             stroke-linecap: round;
         }
 
         .arc-widget .arc-fill {
             fill: none;
             stroke: url(#arcGradient);
-            stroke-width: 12;
+            stroke-width: 10;
             stroke-linecap: round;
             transition: stroke-dashoffset 0.3s ease;
         }
 
         .arc-widget .arc-value {
             position: absolute;
-            bottom: 0;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translate(-50%, -50%);
             text-align: center;
         }
 
         .arc-widget .value {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 500;
             color: #ff6b9d;
         }
 
         .arc-widget .unit {
-            font-size: 12px;
+            font-size: 11px;
             color: rgba(150, 180, 255, 0.7);
             display: block;
         }
@@ -211,20 +211,6 @@
             width: 100%;
             height: 100%;
             overflow: visible;
-        }
-
-        .speedometer-widget .speedo-track {
-            fill: none;
-            stroke: rgba(255, 255, 255, 0.1);
-            stroke-width: 8;
-        }
-
-        .speedometer-widget .speedo-fill {
-            fill: none;
-            stroke: url(#speedoGradient);
-            stroke-width: 8;
-            stroke-linecap: round;
-            transition: stroke-dashoffset 0.3s ease;
         }
 
         .speedometer-widget .speedo-needle {
@@ -322,9 +308,10 @@
         <div class="widget-header">{{8}}</div>
         <div class="widget-content">
             <div class="arc-container">
-                <svg viewBox="0 0 140 80">
-                    <path class="arc-track" d="M 15 70 A 55 55 0 0 0 125 70"/>
-                    <path class="arc-fill" id="arcFill" d="M 15 70 A 55 55 0 0 0 125 70"/>
+                <svg viewBox="0 0 120 120">
+                    <!-- 270° arc with gap at bottom (45° to 135°) -->
+                    <path class="arc-track" d="M 17.6 77.4 A 45 45 0 1 1 102.4 77.4"/>
+                    <path class="arc-fill" id="arcFill" d="M 17.6 77.4 A 45 45 0 1 1 102.4 77.4"/>
                 </svg>
                 <div class="arc-value">
                     <span class="value" id="arcValue">{{9}}</span>
@@ -355,9 +342,6 @@
                         <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(108)"/>
                         <line class="tick-major" x1="0" y1="-52" x2="0" y2="-45" transform="rotate(135)"/>
                     </g>
-                    <!-- Track -->
-                    <path class="speedo-track" d="M 20 70 A 50 50 0 1 1 120 70"/>
-                    <path class="speedo-fill" id="speedoFill" d="M 20 70 A 50 50 0 1 1 120 70"/>
                     <!-- Needle -->
                     <polygon class="speedo-needle" id="speedoNeedle" points="70,25 67,70 70,75 73,70"/>
                     <!-- Center cap -->
@@ -408,8 +392,8 @@
                 const percent = calcPercent(value, max);
                 const arcFill = document.getElementById('arcFill');
                 if (arcFill) {
-                    // Arc path length is approximately 173 (half circle with radius 55)
-                    const pathLength = 173;
+                    // Arc path length is approximately 212 (270° arc with radius 45)
+                    const pathLength = 212;
                     const dashOffset = pathLength * (1 - Math.min(100, Math.max(0, percent)) / 100);
                     arcFill.style.strokeDasharray = pathLength;
                     arcFill.style.strokeDashoffset = dashOffset;
@@ -422,18 +406,10 @@
                 const max = values['15'] !== undefined ? values['15'] : (document.getElementById('speedoMax')?.textContent || '100');
                 const percent = calcPercent(value, max);
                 const needle = document.getElementById('speedoNeedle');
-                const speedoFill = document.getElementById('speedoFill');
                 if (needle) {
                     // Rotate from -135deg (0%) to +135deg (100%)
                     const angle = -135 + (Math.min(100, Math.max(0, percent)) / 100) * 270;
                     needle.style.transform = `rotate(${angle}deg)`;
-                }
-                if (speedoFill) {
-                    // Arc path length is approximately 236 (270 degree arc with radius 50)
-                    const pathLength = 236;
-                    const dashOffset = pathLength * (1 - Math.min(100, Math.max(0, percent)) / 100);
-                    speedoFill.style.strokeDasharray = pathLength;
-                    speedoFill.style.strokeDashoffset = dashOffset;
                 }
             }
         };
@@ -443,14 +419,8 @@
             // Set initial dash arrays
             const arcFill = document.getElementById('arcFill');
             if (arcFill) {
-                arcFill.style.strokeDasharray = '173';
-                arcFill.style.strokeDashoffset = '173';
-            }
-
-            const speedoFill = document.getElementById('speedoFill');
-            if (speedoFill) {
-                speedoFill.style.strokeDasharray = '236';
-                speedoFill.style.strokeDashoffset = '236';
+                arcFill.style.strokeDasharray = '212';
+                arcFill.style.strokeDashoffset = '212';
             }
 
             const needle = document.getElementById('speedoNeedle');
