@@ -933,7 +933,7 @@ fn show_about_dialog(window: &ApplicationWindow) {
         .comments("A fast, customizable system monitoring dashboard for Linux")
         .website("https://github.com/hilgardt-collab/rg-Sens")
         .website_label("GitHub Repository")
-        .authors(vec!["rg-Sens Contributors"])
+        .authors(vec!["H.G. Raubenheimer", "Claude (Anthropic)"])
         .license_type(License::MitX11)
         .logo_icon_name("rg-sens")
         .build();
