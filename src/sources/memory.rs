@@ -4,17 +4,27 @@ use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMeta
 use crate::core::constants::{BYTES_PER_MB, BYTES_PER_GB};
 use crate::ui::{MemoryField, MemorySourceConfig, MemoryUnit};
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 use sysinfo::System;
+
+/// Shared sysinfo::System instance for all MemorySource instances.
+/// This reduces memory usage when multiple memory sources exist.
+static SHARED_MEMORY_SYSTEM: Lazy<Mutex<System>> = Lazy::new(|| {
+    log::info!("Creating shared Memory sysinfo::System instance");
+    Mutex::new(System::new())
+});
 
 /// Memory data source
 ///
 /// Provides comprehensive memory information including RAM and swap usage.
+/// Uses a shared sysinfo::System instance to reduce memory usage.
 pub struct MemorySource {
     metadata: SourceMetadata,
-    system: System,
+    // Note: No local System field - we use SHARED_MEMORY_SYSTEM instead
     config: MemorySourceConfig,
 
     // Cached values (in bytes)
@@ -51,13 +61,10 @@ impl MemorySource {
             default_interval: Duration::from_millis(1000),
         };
 
-        // Use empty System - we only need memory info, not CPU/disk/etc.
-        // refresh_memory() will be called in update() to populate memory data
-        let system = System::new();
+        // Note: We use SHARED_MEMORY_SYSTEM instead of a local System to save memory
 
         Self {
             metadata,
-            system,
             config: MemorySourceConfig::default(),
             total_memory: 0,
             used_memory: 0,
@@ -147,15 +154,21 @@ impl DataSource for MemorySource {
     }
 
     fn update(&mut self) -> Result<()> {
+        // Use shared System instance to reduce memory usage
+        let mut system = SHARED_MEMORY_SYSTEM.lock().unwrap();
+
         // Refresh memory information
-        self.system.refresh_memory();
+        system.refresh_memory();
 
         // Get values in bytes
-        self.total_memory = self.system.total_memory();
-        self.used_memory = self.system.used_memory();
-        self.available_memory = self.system.available_memory();
-        self.total_swap = self.system.total_swap();
-        self.used_swap = self.system.used_swap();
+        self.total_memory = system.total_memory();
+        self.used_memory = system.used_memory();
+        self.available_memory = system.available_memory();
+        self.total_swap = system.total_swap();
+        self.used_swap = system.used_swap();
+
+        // Drop the lock before doing any other processing
+        drop(system);
 
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();

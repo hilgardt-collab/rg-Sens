@@ -6,10 +6,22 @@ use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 
 use super::shared_sensors;
+
+/// Shared sysinfo::System instance for all CpuSource instances.
+/// This significantly reduces memory usage when multiple CPU sources exist
+/// (e.g., in combo panels with multiple CPU data slots).
+/// Each System instance can use 50-100MB of memory, so sharing is crucial.
+static SHARED_CPU_SYSTEM: Lazy<Mutex<System>> = Lazy::new(|| {
+    log::info!("Creating shared CPU sysinfo::System instance");
+    Mutex::new(System::new_with_specifics(
+        RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+    ))
+});
 
 /// Information about a discovered CPU temperature sensor
 #[derive(Debug, Clone)]
@@ -113,9 +125,13 @@ fn discover_cpu_sensors_from_list(temps: &[(String, f32)]) -> Vec<CpuSensor> {
 ///
 /// Provides comprehensive CPU information including usage, temperature, frequency,
 /// and per-core statistics using sysinfo crate.
+///
+/// Uses a shared sysinfo::System instance (SHARED_CPU_SYSTEM) to reduce memory usage
+/// when multiple CpuSource instances exist (e.g., in combo panels).
 pub struct CpuSource {
     metadata: SourceMetadata,
-    system: System,
+    // Note: No local System field - we use SHARED_CPU_SYSTEM instead
+    // This saves ~50-100MB per instance when multiple CPU sources exist
     global_usage: f32,
     per_core_usage: Vec<f32>,
     cpu_sensors: Vec<CpuSensor>,
@@ -148,18 +164,13 @@ impl CpuSource {
             default_interval: Duration::from_millis(1000),
         };
 
-        // Initialize system with CPU refresh configuration
-        let system = System::new_with_specifics(
-            RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
-        );
-
         // Use cached sensor list from global hardware info
         // Note: Temperature readings use shared_sensors module, not a local Components instance
+        // Note: We use SHARED_CPU_SYSTEM instead of a local System to save memory
         let cpu_sensors = CPU_HARDWARE_INFO.sensors.clone();
 
         Self {
             metadata,
-            system,
             global_usage: 0.0,
             per_core_usage: Vec::new(),
             cpu_sensors,
@@ -188,9 +199,9 @@ impl CpuSource {
         &self.cpu_sensors
     }
 
-    /// Get number of CPU cores
+    /// Get number of CPU cores (from cached hardware info)
     pub fn get_core_count(&self) -> usize {
-        self.system.cpus().len()
+        CPU_HARDWARE_INFO.core_count
     }
 
     /// Set configuration for this CPU source
@@ -371,22 +382,28 @@ impl DataSource for CpuSource {
     }
 
     fn update(&mut self) -> Result<()> {
+        // Use shared System instance to reduce memory usage
+        let mut system = SHARED_CPU_SYSTEM.lock().unwrap();
+
         // Refresh CPU information
-        self.system.refresh_cpu_all();
+        system.refresh_cpu_all();
 
         // Update global CPU usage
-        self.global_usage = self.system.global_cpu_usage();
+        self.global_usage = system.global_cpu_usage();
 
         // Update per-core usage
         self.per_core_usage.clear();
-        for cpu in self.system.cpus() {
+        for cpu in system.cpus() {
             self.per_core_usage.push(cpu.cpu_usage());
         }
 
         // Get CPU frequency (from first CPU)
-        if let Some(cpu) = self.system.cpus().first() {
+        if let Some(cpu) = system.cpus().first() {
             self.cpu_frequency = cpu.frequency() as f64;
         }
+
+        // Drop the lock before doing temperature lookup (which doesn't need System)
+        drop(system);
 
         // Get temperature from shared sensors (they handle refresh internally)
         self.cpu_temperature = self.find_cpu_temperature();
