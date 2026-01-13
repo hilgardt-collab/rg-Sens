@@ -20,7 +20,7 @@ use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::{GradientEditor, ThemeFontSelector};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_page_container, create_section_header};
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
 use crate::ui::background::Color;
 use crate::ui::theme::{ComboThemeConfig, LinearGradientSourceConfig, ColorStopSource};
 use crate::displayers::SteampunkDisplayConfig;
@@ -1164,15 +1164,22 @@ impl SteampunkConfigWidget {
     }
 
     fn create_content_page(content_notebook: &Rc<RefCell<Notebook>>) -> GtkBox {
-        let page = create_page_container();
+        let page = GtkBox::new(Orientation::Vertical, 8);
+        combo_config_base::set_page_margins(&page);
 
-        let info_label = Label::new(Some("Content configuration will appear here based on the connected data source."));
+        let info_label = Label::new(Some("Configure content items for each slot.\nSlots are named: group1_1, group1_2, group2_1, etc."));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
         page.append(&info_label);
 
+        let scrolled = ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        scrolled.set_hexpand(true);
+        scrolled.set_min_content_height(300);
+
         let notebook = content_notebook.borrow();
-        page.append(&*notebook);
+        scrolled.set_child(Some(&*notebook));
+        page.append(&scrolled);
 
         page
     }
