@@ -143,15 +143,28 @@ impl PanelTransform {
     pub fn apply(&self, cr: &Context, width: f64, height: f64) -> (f64, f64) {
         cr.save().ok();
 
+        // Validate translation values - skip if NaN or infinite
+        let translate_x = if self.translate_x.is_finite() { self.translate_x } else { 0.0 };
+        let translate_y = if self.translate_y.is_finite() { self.translate_y } else { 0.0 };
+
         // Apply translation first
-        cr.translate(self.translate_x, self.translate_y);
+        cr.translate(translate_x, translate_y);
+
+        // Validate scale - must be positive and finite, with a minimum to prevent invalid matrix
+        let scale = if self.scale.is_finite() && self.scale > TRANSFORM_THRESHOLD {
+            self.scale
+        } else if self.scale.is_finite() && self.scale > 0.0 {
+            TRANSFORM_THRESHOLD // Use minimum valid scale
+        } else {
+            1.0 // Default to no scaling for invalid values
+        };
 
         // Scale from center
-        if (self.scale - 1.0).abs() > TRANSFORM_THRESHOLD {
+        if (scale - 1.0).abs() > TRANSFORM_THRESHOLD {
             let center_x = width / 2.0;
             let center_y = height / 2.0;
             cr.translate(center_x, center_y);
-            cr.scale(self.scale, self.scale);
+            cr.scale(scale, scale);
             cr.translate(-center_x, -center_y);
         }
 

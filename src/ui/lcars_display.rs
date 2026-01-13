@@ -1796,6 +1796,11 @@ pub fn render_content_bar(
     animated_percent: f64,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
+    // Guard against invalid dimensions that would cause Cairo matrix errors
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+        return Ok(());
+    }
+
     cr.save()?;
     cr.translate(x, y);
 
@@ -1820,6 +1825,11 @@ pub fn render_content_text(
     data: &ContentItemData,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
+    // Guard against invalid dimensions that would cause Cairo matrix errors
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+        return Ok(());
+    }
+
     cr.save()?;
     cr.translate(x, y);
 
@@ -1951,6 +1961,11 @@ pub fn render_content_graph(
     data: &VecDeque<DataPoint>,
     source_values: &HashMap<String, serde_json::Value>,
 ) -> anyhow::Result<()> {
+    // Guard against invalid dimensions that would cause Cairo matrix errors
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+        return Ok(());
+    }
+
     log::debug!(
         "LCARS render_content_graph: text_overlay enabled={}, lines={}, source_values keys: {:?}",
         config.text_overlay.enabled,
@@ -1987,6 +2002,11 @@ pub fn render_content_core_bars(
     core_values: &[f64],
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
+    // Guard against invalid dimensions that would cause Cairo matrix errors
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+        return Ok(());
+    }
+
     cr.save()?;
     cr.translate(x, y);
 
@@ -2012,6 +2032,11 @@ pub fn render_content_static(
     theme: &ComboThemeConfig,
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
+    // Guard against invalid dimensions that would cause Cairo matrix errors
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+        return Ok(());
+    }
+
     cr.save()?;
     cr.translate(x, y);
 

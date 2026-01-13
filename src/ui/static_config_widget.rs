@@ -159,7 +159,8 @@ pub struct LazyStaticConfigWidget {
     deferred_config: Rc<RefCell<StaticDisplayConfig>>,
     /// Deferred theme to apply when widget is created
     deferred_theme: Rc<RefCell<ComboThemeConfig>>,
-    /// Available fields for the widget
+    /// Available fields for the widget (used in init closure)
+    #[allow(dead_code)]
     available_fields: Vec<FieldMetadata>,
     /// Callback to invoke on config changes
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
