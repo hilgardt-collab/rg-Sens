@@ -334,13 +334,16 @@ impl ComboSourceConfigWidget {
             destroyed,
         };
 
-        // Connect destroy signal to cancel async callbacks and prevent memory leaks
+        // Connect unrealize signal to cancel async callbacks and prevent memory leaks.
+        // In GTK4, connect_destroy doesn't fire reliably when a dialog is closed.
+        // connect_unrealize fires when the widget's GDK resources are released,
+        // which happens when the dialog is closed and its widget tree is torn down.
         {
             let destroyed_clone = widget.destroyed.clone();
             let rebuild_gen = widget.rebuild_generation.clone();
             let fields_gen = widget.fields_generation.clone();
-            widget.container.connect_destroy(move |_| {
-                log::debug!("ComboSourceConfigWidget destroyed - cancelling async operations");
+            widget.container.connect_unrealize(move |_| {
+                log::debug!("ComboSourceConfigWidget unrealized - cancelling async operations");
                 destroyed_clone.set(true);
                 // Increment generation counters to cancel any pending async operations
                 rebuild_gen.set(rebuild_gen.get().wrapping_add(1));
@@ -1423,6 +1426,17 @@ impl ComboSourceConfigWidget {
         } else {
             Vec::new()
         }
+    }
+
+    /// Explicitly cancel all async operations and mark this widget as destroyed.
+    /// Call this before dropping the widget to ensure async callbacks exit cleanly.
+    /// This is important for preventing memory leaks when the parent dialog closes.
+    pub fn cleanup(&self) {
+        log::debug!("ComboSourceConfigWidget::cleanup() - cancelling async operations");
+        self.destroyed.set(true);
+        // Increment generation counters to cancel any pending async operations
+        self.rebuild_generation.set(self.rebuild_generation.get().wrapping_add(1));
+        self.fields_generation.set(self.fields_generation.get().wrapping_add(1));
     }
 }
 

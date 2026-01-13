@@ -4215,11 +4215,22 @@ pub(crate) fn show_panel_properties_dialog(
 
     dialog.set_child(Some(&vbox));
 
-    // Clear singleton reference when window closes
+    // Clear singleton reference and config widgets when window closes
+    // This is critical to break reference cycles and prevent memory leaks.
+    // The combo_config_widget has async callbacks that hold Rc references,
+    // so we must explicitly clear it to allow cleanup.
+    let combo_widget_for_cleanup = combo_config_widget.clone();
     dialog.connect_close_request(move |_| {
         PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
             *dialog_ref.borrow_mut() = None;
         });
+        // Clean up and clear the combo config widget to break Rc reference cycles.
+        // Call cleanup() first to cancel async callbacks, then clear the reference.
+        if let Some(ref widget) = *combo_widget_for_cleanup.borrow() {
+            log::debug!("Cleaning up ComboSourceConfigWidget on dialog close");
+            widget.cleanup();
+        }
+        *combo_widget_for_cleanup.borrow_mut() = None;
         gtk4::glib::Propagation::Proceed
     });
 
