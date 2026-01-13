@@ -2894,7 +2894,8 @@ pub(crate) fn show_panel_properties_dialog(
         }
 
         // Get panel state and clone all widget references upfront to avoid borrow conflicts
-        let (background_area, frame, widget) = {
+        // Note: `widget` is mutable because it needs to be updated if the displayer changes
+        let (background_area, frame, mut widget) = {
             let mut states = panel_states.borrow_mut();
             let state = match states.get_mut(&panel_id) {
                 Some(s) => s,
@@ -3129,6 +3130,12 @@ pub(crate) fn show_panel_properties_dialog(
                                 state.widget = new_widget.clone();
                             }
                         }
+
+                        // CRITICAL: Update the local widget variable to the new widget
+                        // This ensures the old widget reference is dropped, allowing it to be
+                        // garbage collected. Without this, the old widget stays alive and
+                        // causes a memory leak through retained animation callbacks.
+                        widget = new_widget.clone();
 
                         // Re-attach gesture controllers to the new widget
                         // This is necessary because the old widget with its gesture controllers was replaced

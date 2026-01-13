@@ -228,10 +228,12 @@ impl AnimationManager {
 
             // Remove entry if widget has been orphaned (removed from widget tree)
             // This is critical for preventing memory leaks when displayers are changed -
-            // the old widget is removed from its parent but GTK may keep it alive briefly.
+            // the old widget may still have a parent (e.g., an overlay) but that parent
+            // is no longer attached to any window. We check for root() being None to
+            // detect widgets that are truly disconnected from the display.
             // Without this check, the tick_fn closure holds Arc references indefinitely.
-            if widget.parent().is_none() {
-                log::debug!("Removing animation entry for orphaned widget");
+            if widget.root().is_none() {
+                log::debug!("Removing animation entry for orphaned widget (no root)");
                 return false;
             }
 
@@ -254,12 +256,13 @@ impl AnimationManager {
             true // Keep entry
         });
 
-        // Log periodically to debug high CPU
+        // Log periodically to debug high CPU and memory issues
         static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let count = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count % 60 == 0 {
-            log::debug!("Animation tick #{}: {} entries, {} mapped, {} active, idle_mode={}",
-                count, entries.len(), mapped_count, active_count, self.in_idle_mode.get());
+        if count % 300 == 0 {
+            // Log every ~5 seconds at 60fps
+            log::info!("Animation manager: {} entries, {} mapped, {} active",
+                entries.len(), mapped_count, active_count);
         }
 
         any_active
