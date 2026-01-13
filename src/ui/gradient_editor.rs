@@ -57,7 +57,9 @@ impl GradientEditor {
         // Preview area (created early so angle handlers can reference it)
         let preview = DrawingArea::new();
         preview.set_content_height(100);
+        preview.set_content_width(100); // Set small natural width so it doesn't overflow
         preview.set_hexpand(true);
+        preview.set_halign(gtk4::Align::Fill); // Fill available width
         preview.set_vexpand(false);
 
         let stops_clone = stops.clone();
