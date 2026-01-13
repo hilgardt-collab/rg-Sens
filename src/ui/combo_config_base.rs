@@ -17,7 +17,9 @@ use crate::core::{FieldMetadata, FieldPurpose, FieldType};
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::lcars_display::{ContentDisplayType, ContentItemConfig, SplitOrientation};
 use crate::ui::theme::{ComboThemeConfig, FontSource};
-use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
+use crate::ui::widget_builder::{
+    create_dropdown_row, create_page_container, create_spin_row_with_value, DEFAULT_MARGIN,
+};
 
 // Re-export for convenience - combo config widgets can import from here
 pub use crate::ui::widget_builder::{queue_redraw, notify_change, OnChangeCallback};
@@ -1089,12 +1091,8 @@ where
     page.append(&enable_check);
 
     // Animation speed
-    let speed_box = GtkBox::new(Orientation::Horizontal, 6);
-    speed_box.append(&Label::new(Some("Animation Speed:")));
-    let speed_spin = SpinButton::with_range(1.0, 20.0, 1.0);
-    speed_spin.set_value(get_animation_speed(&config.borrow()));
-    speed_spin.set_hexpand(true);
-    speed_box.append(&speed_spin);
+    let (speed_box, speed_spin) =
+        create_spin_row_with_value("Animation Speed:", 1.0, 20.0, 1.0, get_animation_speed(&config.borrow()));
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -1384,20 +1382,6 @@ where
     let inner_box = GtkBox::new(Orientation::Vertical, 8);
 
     // Display type dropdown
-    let type_box = GtkBox::new(Orientation::Horizontal, 6);
-    type_box.append(&Label::new(Some("Display As:")));
-    let type_list = StringList::new(&[
-        "Bar",
-        "Text",
-        "Graph",
-        "Core Bars",
-        "Static",
-        "Arc",
-        "Speedometer",
-    ]);
-    let type_dropdown = DropDown::new(Some(type_list), None::<gtk4::Expression>);
-    type_dropdown.set_hexpand(true);
-
     let current_type = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -1414,8 +1398,11 @@ where
         ContentDisplayType::Arc => 5,
         ContentDisplayType::Speedometer => 6,
     };
+    let (type_box, type_dropdown) = create_dropdown_row(
+        "Display As:",
+        &["Bar", "Text", "Graph", "Core Bars", "Static", "Arc", "Speedometer"],
+    );
     type_dropdown.set_selected(type_idx);
-    type_box.append(&type_dropdown);
     inner_box.append(&type_box);
 
     // Auto height checkbox
@@ -1431,9 +1418,6 @@ where
     inner_box.append(&auto_height_check);
 
     // Item height
-    let height_box = GtkBox::new(Orientation::Horizontal, 6);
-    height_box.append(&Label::new(Some("Item Height:")));
-    let height_spin = SpinButton::with_range(20.0, 300.0, 5.0);
     let current_height = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -1441,10 +1425,8 @@ where
             .map(|item| item.item_height)
             .unwrap_or(60.0)
     };
-    height_spin.set_value(current_height);
-    height_spin.set_hexpand(true);
+    let (height_box, height_spin) = create_spin_row_with_value("Item Height:", 20.0, 300.0, 5.0, current_height);
     height_spin.set_sensitive(!current_auto_height);
-    height_box.append(&height_spin);
     inner_box.append(&height_box);
 
     // Connect auto-height checkbox
@@ -2062,17 +2044,13 @@ where
     set_page_margins(&page);
 
     // Split orientation
-    let orient_box = GtkBox::new(Orientation::Horizontal, 6);
-    orient_box.append(&Label::new(Some("Split Orientation:")));
-    let orient_list = StringList::new(&["Vertical", "Horizontal"]);
-    let split_orientation_dropdown = DropDown::new(Some(orient_list), None::<gtk4::Expression>);
     let orient_idx = match get_split_orientation(&config.borrow()) {
         SplitOrientation::Vertical => 0,
         SplitOrientation::Horizontal => 1,
     };
+    let (orient_box, split_orientation_dropdown) =
+        create_dropdown_row("Split Orientation:", &["Vertical", "Horizontal"]);
     split_orientation_dropdown.set_selected(orient_idx);
-    split_orientation_dropdown.set_hexpand(true);
-    orient_box.append(&split_orientation_dropdown);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -2092,12 +2070,8 @@ where
     page.append(&orient_box);
 
     // Content padding
-    let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-    padding_box.append(&Label::new(Some("Content Padding:")));
-    let content_padding_spin = SpinButton::with_range(4.0, 32.0, 2.0);
-    content_padding_spin.set_value(get_content_padding(&config.borrow()));
-    content_padding_spin.set_hexpand(true);
-    padding_box.append(&content_padding_spin);
+    let (padding_box, content_padding_spin) =
+        create_spin_row_with_value("Content Padding:", 4.0, 32.0, 2.0, get_content_padding(&config.borrow()));
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -2109,12 +2083,8 @@ where
     page.append(&padding_box);
 
     // Item spacing
-    let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-    spacing_box.append(&Label::new(Some("Item Spacing:")));
-    let item_spacing_spin = SpinButton::with_range(0.0, 20.0, 1.0);
-    item_spacing_spin.set_value(get_item_spacing(&config.borrow()));
-    item_spacing_spin.set_hexpand(true);
-    spacing_box.append(&item_spacing_spin);
+    let (spacing_box, item_spacing_spin) =
+        create_spin_row_with_value("Item Spacing:", 0.0, 20.0, 1.0, get_item_spacing(&config.borrow()));
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -2133,12 +2103,8 @@ where
     page.append(&divider_label);
 
     // Divider padding
-    let div_padding_box = GtkBox::new(Orientation::Horizontal, 6);
-    div_padding_box.append(&Label::new(Some("Divider Padding:")));
-    let divider_padding_spin = SpinButton::with_range(2.0, 20.0, 1.0);
-    divider_padding_spin.set_value(get_divider_padding(&config.borrow()));
-    divider_padding_spin.set_hexpand(true);
-    div_padding_box.append(&divider_padding_spin);
+    let (div_padding_box, divider_padding_spin) =
+        create_spin_row_with_value("Divider Padding:", 2.0, 20.0, 1.0, get_divider_padding(&config.borrow()));
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
