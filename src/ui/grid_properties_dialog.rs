@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::grid_layout::{delete_selected_panels, GridConfig, PanelState};
+use super::widget_builder::create_spin_row_with_value;
 
 thread_local! {
     /// Singleton reference to the panel properties dialog
@@ -157,15 +158,9 @@ pub(crate) fn show_panel_properties_dialog(
     panel_props_box.append(&transform_label);
 
     // Scale control
-    let scale_box = GtkBox::new(Orientation::Horizontal, 6);
-    scale_box.set_margin_start(12);
-    let scale_label = Label::new(Some("Scale:"));
-    let scale_spin = SpinButton::with_range(0.1, 5.0, 0.1);
+    let (scale_box, scale_spin) = create_spin_row_with_value("Scale:", 0.1, 5.0, 0.1, panel_guard.scale);
     scale_spin.set_digits(2);
-    scale_spin.set_value(panel_guard.scale);
-    scale_spin.set_hexpand(true);
-    scale_box.append(&scale_label);
-    scale_box.append(&scale_spin);
+    scale_box.set_margin_start(12);
     panel_props_box.append(&scale_box);
 
     // Translation controls
@@ -192,15 +187,9 @@ pub(crate) fn show_panel_properties_dialog(
     panel_props_box.append(&layering_label);
 
     // Z-Index control
-    let z_index_box = GtkBox::new(Orientation::Horizontal, 6);
-    z_index_box.set_margin_start(12);
-    let z_index_label = Label::new(Some("Z-Index:"));
-    let z_index_spin = SpinButton::with_range(-100.0, 100.0, 1.0);
-    z_index_spin.set_value(panel_guard.z_index as f64);
-    z_index_spin.set_hexpand(true);
+    let (z_index_box, z_index_spin) = create_spin_row_with_value("Z-Index:", -100.0, 100.0, 1.0, panel_guard.z_index as f64);
     z_index_spin.set_tooltip_text(Some("Higher values bring the panel in front of others"));
-    z_index_box.append(&z_index_label);
-    z_index_box.append(&z_index_spin);
+    z_index_box.set_margin_start(12);
     panel_props_box.append(&z_index_box);
 
     // Ignore Collision control
@@ -2736,13 +2725,8 @@ pub(crate) fn show_panel_properties_dialog(
     corner_radius_label.add_css_class("heading");
     appearance_tab_box.append(&corner_radius_label);
 
-    let corner_radius_box = GtkBox::new(Orientation::Horizontal, 6);
+    let (corner_radius_box, corner_radius_spin) = create_spin_row_with_value("Radius:", 0.0, 50.0, 1.0, panel_guard.corner_radius);
     corner_radius_box.set_margin_start(12);
-    corner_radius_box.append(&Label::new(Some("Radius:")));
-    let corner_radius_spin = SpinButton::with_range(0.0, 50.0, 1.0);
-    corner_radius_spin.set_value(panel_guard.corner_radius);
-    corner_radius_spin.set_hexpand(true);
-    corner_radius_box.append(&corner_radius_spin);
     appearance_tab_box.append(&corner_radius_box);
 
     // Border section
@@ -2756,13 +2740,8 @@ pub(crate) fn show_panel_properties_dialog(
     border_enabled_check.set_margin_start(12);
     appearance_tab_box.append(&border_enabled_check);
 
-    let border_width_box = GtkBox::new(Orientation::Horizontal, 6);
+    let (border_width_box, border_width_spin) = create_spin_row_with_value("Width:", 0.5, 10.0, 0.5, panel_guard.border.width);
     border_width_box.set_margin_start(12);
-    border_width_box.append(&Label::new(Some("Width:")));
-    let border_width_spin = SpinButton::with_range(0.5, 10.0, 0.5);
-    border_width_spin.set_value(panel_guard.border.width);
-    border_width_spin.set_hexpand(true);
-    border_width_box.append(&border_width_spin);
     appearance_tab_box.append(&border_width_box);
 
     let border_color_btn = Button::with_label("Border Color");
