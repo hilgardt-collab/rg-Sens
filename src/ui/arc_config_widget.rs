@@ -3,7 +3,7 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList,
+    Scale, SpinButton,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -18,7 +18,10 @@ use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::background::ColorStop;
 use crate::ui::GradientEditor;
-use crate::ui::widget_builder::{create_page_container, create_labeled_row};
+use crate::ui::widget_builder::{
+    create_page_container, create_labeled_row, create_dropdown_row, create_spin_row_with_value,
+    SpinChangeHandler,
+};
 use crate::displayers::FieldMetadata;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 
@@ -290,42 +293,17 @@ impl ArcConfigWidget {
         preview: &DrawingArea,
     ) -> (GtkBox, SpinButton, SpinButton, Scale, Scale, CheckButton, SpinButton, SpinButton) {
         let page = create_page_container();
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Start angle
-        let start_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
-        start_spin.set_value(config.borrow().start_angle);
-        let start_row = create_labeled_row("Start Angle:", &start_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        start_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().start_angle = spin.value();
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
+        let (start_row, start_spin) = create_spin_row_with_value("Start Angle:", -360.0, 360.0, 1.0, config.borrow().start_angle);
         page.append(&start_row);
+        handler.connect_spin(&start_spin, |cfg, val| cfg.start_angle = val);
 
         // End angle
-        let end_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
-        end_spin.set_value(config.borrow().end_angle);
-        let end_row = create_labeled_row("End Angle:", &end_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        end_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().end_angle = spin.value();
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
+        let (end_row, end_spin) = create_spin_row_with_value("End Angle:", -360.0, 360.0, 1.0, config.borrow().end_angle);
         page.append(&end_row);
+        handler.connect_spin(&end_spin, |cfg, val| cfg.end_angle = val);
 
         // Arc width
         let width_box = GtkBox::new(Orientation::Vertical, 6);
@@ -334,20 +312,17 @@ impl ArcConfigWidget {
         width_scale.set_value(config.borrow().arc_width);
         width_scale.set_draw_value(true);
         width_scale.set_value_pos(gtk4::PositionType::Right);
+        width_box.append(&width_scale);
+        page.append(&width_box);
 
         let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
         width_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().arc_width = scale.value();
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
-
-        width_box.append(&width_scale);
-        page.append(&width_box);
 
         // Radius
         let radius_box = GtkBox::new(Orientation::Vertical, 6);
@@ -356,75 +331,33 @@ impl ArcConfigWidget {
         radius_scale.set_value(config.borrow().radius_percent);
         radius_scale.set_draw_value(true);
         radius_scale.set_value_pos(gtk4::PositionType::Right);
+        radius_box.append(&radius_scale);
+        page.append(&radius_box);
 
         let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
         radius_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().radius_percent = scale.value();
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
-
-        radius_box.append(&radius_scale);
-        page.append(&radius_box);
 
         // Segmentation
         let seg_check = CheckButton::with_label("Segmented");
         seg_check.set_active(config.borrow().segmented);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        seg_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().segmented = check.is_active();
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
         page.append(&seg_check);
+        handler.connect_check(&seg_check, |cfg, val| cfg.segmented = val);
 
         // Segment count
-        let count_box = GtkBox::new(Orientation::Horizontal, 6);
-        count_box.append(&Label::new(Some("Segment Count:")));
-        let count_spin = SpinButton::with_range(5.0, 50.0, 1.0);
-        count_spin.set_value(config.borrow().segment_count as f64);
-        count_spin.set_hexpand(true);
-        count_box.append(&count_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        count_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().segment_count = spin.value() as u32;
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
-        page.append(&count_box);
+        let (count_row, count_spin) = create_spin_row_with_value("Segment Count:", 5.0, 50.0, 1.0, config.borrow().segment_count as f64);
+        page.append(&count_row);
+        handler.connect_spin_int(&count_spin, |cfg, val| cfg.segment_count = val as u32);
 
         // Segment spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Segment Spacing (degrees):")));
-        let spacing_spin = SpinButton::with_range(0.0, 10.0, 0.5);
-        spacing_spin.set_value(config.borrow().segment_spacing);
-        spacing_spin.set_hexpand(true);
-        spacing_box.append(&spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().segment_spacing = spin.value();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
-        page.append(&spacing_box);
+        let (spacing_row, spacing_spin) = create_spin_row_with_value("Segment Spacing (degrees):", 0.0, 10.0, 0.5, config.borrow().segment_spacing);
+        page.append(&spacing_row);
+        handler.connect_spin(&spacing_spin, |cfg, val| cfg.segment_spacing = val);
 
         (page, start_spin, end_spin, width_scale, radius_scale,
          seg_check, count_spin, spacing_spin)
@@ -437,200 +370,98 @@ impl ArcConfigWidget {
         preview: &DrawingArea,
     ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, Rc<ThemeColorSelector>, CheckButton, SpinButton) {
         let page = create_page_container();
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Cap style
-        let cap_box = GtkBox::new(Orientation::Horizontal, 6);
-        cap_box.append(&Label::new(Some("End Cap Style:")));
-        let cap_options = StringList::new(&["Butt", "Round", "Pointed"]);
-        let cap_dropdown = DropDown::new(Some(cap_options), Option::<gtk4::Expression>::None);
-
         let cap_index = match config.borrow().cap_style {
             ArcCapStyle::Butt => 0,
             ArcCapStyle::Round => 1,
             ArcCapStyle::Pointed => 2,
         };
+        let (cap_row, cap_dropdown) = create_dropdown_row("End Cap Style:", &["Butt", "Round", "Pointed"]);
         cap_dropdown.set_selected(cap_index);
-        cap_dropdown.set_hexpand(true);
-        cap_box.append(&cap_dropdown);
+        page.append(&cap_row);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        cap_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            let style = match selected {
+        handler.connect_dropdown(&cap_dropdown, |cfg, sel| {
+            cfg.cap_style = match sel {
                 0 => ArcCapStyle::Butt,
                 1 => ArcCapStyle::Round,
-                2 => ArcCapStyle::Pointed,
-                _ => ArcCapStyle::Round,
+                _ => ArcCapStyle::Pointed,
             };
-            config_clone.borrow_mut().cap_style = style;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
         });
 
-        page.append(&cap_box);
-
         // Taper style
-        let taper_box = GtkBox::new(Orientation::Horizontal, 6);
-        taper_box.append(&Label::new(Some("Taper Style:")));
-        let taper_options = StringList::new(&["None", "Start", "End", "Both"]);
-        let taper_dropdown = DropDown::new(Some(taper_options), Option::<gtk4::Expression>::None);
-
         let taper_index = match config.borrow().taper_style {
             ArcTaperStyle::None => 0,
             ArcTaperStyle::Start => 1,
             ArcTaperStyle::End => 2,
             ArcTaperStyle::Both => 3,
         };
+        let (taper_row, taper_dropdown) = create_dropdown_row("Taper Style:", &["None", "Start", "End", "Both"]);
         taper_dropdown.set_selected(taper_index);
-        taper_dropdown.set_hexpand(true);
-        taper_box.append(&taper_dropdown);
+        page.append(&taper_row);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        taper_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            let style = match selected {
+        handler.connect_dropdown(&taper_dropdown, |cfg, sel| {
+            cfg.taper_style = match sel {
                 0 => ArcTaperStyle::None,
                 1 => ArcTaperStyle::Start,
                 2 => ArcTaperStyle::End,
-                3 => ArcTaperStyle::Both,
-                _ => ArcTaperStyle::None,
+                _ => ArcTaperStyle::Both,
             };
-            config_clone.borrow_mut().taper_style = style;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
         });
-
-        page.append(&taper_box);
 
         // Taper amount
-        let amount_box = GtkBox::new(Orientation::Horizontal, 6);
-        amount_box.append(&Label::new(Some("Taper Amount:")));
-        let amount_spin = SpinButton::with_range(0.0, 100.0, 5.0);
-        amount_spin.set_value(config.borrow().taper_amount * 100.0); // Convert to percentage
+        let (amount_row, amount_spin) = create_spin_row_with_value("Taper Amount (%):", 0.0, 100.0, 5.0, config.borrow().taper_amount * 100.0);
         amount_spin.set_digits(0);
-        amount_spin.set_width_request(80);
-        let percent_label = Label::new(Some("%"));
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        amount_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().taper_amount = spin.value() / 100.0; // Convert from percentage
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
-        amount_box.append(&amount_spin);
-        amount_box.append(&percent_label);
-        page.append(&amount_box);
+        page.append(&amount_row);
+        handler.connect_spin_percent(&amount_spin, |cfg, val| cfg.taper_amount = val);
 
         // Background arc
         let bg_check = CheckButton::with_label("Show Background Arc");
         bg_check.set_active(config.borrow().show_background_arc);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        bg_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().show_background_arc = check.is_active();
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
         page.append(&bg_check);
+        handler.connect_check(&bg_check, |cfg, val| cfg.show_background_arc = val);
 
         // Overlay background checkbox
         let overlay_check = CheckButton::with_label("Overlay Background");
         overlay_check.set_active(config.borrow().overlay_background);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        overlay_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().overlay_background = check.is_active();
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
         page.append(&overlay_check);
+        handler.connect_check(&overlay_check, |cfg, val| cfg.overlay_background = val);
 
         // Background arc color - using ThemeColorSelector
-        let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        bg_color_box.append(&Label::new(Some("Background Arc Color:")));
         let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().background_color.clone()));
         bg_color_widget.set_theme_config(theme.borrow().clone());
-        bg_color_box.append(bg_color_widget.widget());
-        page.append(&bg_color_box);
+        let bg_color_row = create_labeled_row("Background Arc Color:", bg_color_widget.widget());
+        page.append(&bg_color_row);
 
         let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
         bg_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().background_color = color_source;
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
 
         // Animation
         let animate_check = CheckButton::with_label("Animate");
         animate_check.set_active(config.borrow().animate);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        animate_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().animate = check.is_active();
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-
         page.append(&animate_check);
+        handler.connect_check(&animate_check, |cfg, val| cfg.animate = val);
 
         // Animation duration
-        let duration_box = GtkBox::new(Orientation::Horizontal, 6);
-        duration_box.append(&Label::new(Some("Animation Duration (ms):")));
-        let duration_spin = SpinButton::with_range(50.0, 2000.0, 50.0);
-        duration_spin.set_value(config.borrow().animation_duration * 1000.0); // Convert to ms
+        let (duration_row, duration_spin) = create_spin_row_with_value("Animation Duration (ms):", 50.0, 2000.0, 50.0, config.borrow().animation_duration * 1000.0);
         duration_spin.set_digits(0);
-        duration_spin.set_width_request(100);
+        page.append(&duration_row);
 
         let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
         duration_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().animation_duration = spin.value() / 1000.0; // Convert from ms
+            config_clone.borrow_mut().animation_duration = spin.value() / 1000.0;
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
         });
-
-        duration_box.append(&duration_spin);
-        page.append(&duration_box);
 
         (page, cap_dropdown, taper_dropdown, amount_spin, bg_check, overlay_check, bg_color_widget,
          animate_check, duration_spin)
@@ -642,74 +473,39 @@ impl ArcConfigWidget {
         preview: &DrawingArea,
     ) -> (GtkBox, DropDown, DropDown, Rc<GradientEditor>) {
         let page = create_page_container();
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Color transition style
-        let transition_box = GtkBox::new(Orientation::Horizontal, 6);
-        transition_box.append(&Label::new(Some("Color Transition:")));
-        let transition_options = StringList::new(&["Smooth", "Abrupt"]);
-        let transition_dropdown = DropDown::new(Some(transition_options), Option::<gtk4::Expression>::None);
-
         let trans_index = match config.borrow().color_transition {
             ColorTransitionStyle::Smooth => 0,
             ColorTransitionStyle::Abrupt => 1,
         };
+        let (transition_row, transition_dropdown) = create_dropdown_row("Color Transition:", &["Smooth", "Abrupt"]);
         transition_dropdown.set_selected(trans_index);
-        transition_dropdown.set_hexpand(true);
-        transition_box.append(&transition_dropdown);
+        page.append(&transition_row);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        transition_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            let style = match selected {
+        handler.connect_dropdown(&transition_dropdown, |cfg, sel| {
+            cfg.color_transition = match sel {
                 0 => ColorTransitionStyle::Smooth,
-                1 => ColorTransitionStyle::Abrupt,
                 _ => ColorTransitionStyle::Abrupt,
             };
-            config_clone.borrow_mut().color_transition = style;
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
         });
 
-        page.append(&transition_box);
-
         // Color application mode
-        let mode_box = GtkBox::new(Orientation::Horizontal, 6);
-        mode_box.append(&Label::new(Some("Color Mode:")));
-        let mode_options = StringList::new(&["Progressive", "Segments"]);
-        let mode_dropdown = DropDown::new(Some(mode_options), Option::<gtk4::Expression>::None);
-
         let mode_index = match config.borrow().color_mode {
             ColorApplicationMode::Progressive => 0,
             ColorApplicationMode::Segments => 1,
         };
+        let (mode_row, mode_dropdown) = create_dropdown_row("Color Mode:", &["Progressive", "Segments"]);
         mode_dropdown.set_selected(mode_index);
-        mode_dropdown.set_hexpand(true);
-        mode_box.append(&mode_dropdown);
+        page.append(&mode_row);
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        mode_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            let mode = match selected {
+        handler.connect_dropdown(&mode_dropdown, |cfg, sel| {
+            cfg.color_mode = match sel {
                 0 => ColorApplicationMode::Progressive,
-                1 => ColorApplicationMode::Segments,
-                _ => ColorApplicationMode::Progressive,
+                _ => ColorApplicationMode::Segments,
             };
-            config_clone.borrow_mut().color_mode = mode;
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
         });
-
-        page.append(&mode_box);
 
         // Color stops editor using GradientEditor
         page.append(&Label::new(Some("Color Stops:")));

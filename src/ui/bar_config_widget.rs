@@ -3,7 +3,7 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label,
-    Notebook, Orientation, SpinButton, Stack, StringList,
+    Notebook, Orientation, SpinButton, Stack,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -18,7 +18,10 @@ use crate::ui::GradientEditor;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
+use crate::ui::widget_builder::{
+    create_page_container, create_dropdown_row, create_spin_row_with_value,
+    create_percent_spin_row_with_value, DEFAULT_MARGIN,
+};
 use crate::core::FieldMetadata;
 
 /// Bar configuration widget
@@ -97,34 +100,16 @@ impl BarConfigWidget {
         let style_page = create_page_container();
 
         // Style selector
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Style:")));
-        let style_options = StringList::new(&["Full Panel", "Rectangle", "Segmented"]);
-        let style_dropdown = DropDown::new(Some(style_options), Option::<gtk4::Expression>::None);
-        style_dropdown.set_selected(0);
-        style_dropdown.set_hexpand(true);
-        style_box.append(&style_dropdown);
-        style_page.append(&style_box);
+        let (style_row, style_dropdown) = create_dropdown_row("Style:", &["Full Panel", "Rectangle", "Segmented"]);
+        style_page.append(&style_row);
 
         // Orientation selector
-        let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
-        orientation_box.append(&Label::new(Some("Orientation:")));
-        let orientation_options = StringList::new(&["Horizontal", "Vertical"]);
-        let orientation_dropdown = DropDown::new(Some(orientation_options), Option::<gtk4::Expression>::None);
-        orientation_dropdown.set_selected(0);
-        orientation_dropdown.set_hexpand(true);
-        orientation_box.append(&orientation_dropdown);
-        style_page.append(&orientation_box);
+        let (orientation_row, orientation_dropdown) = create_dropdown_row("Orientation:", &["Horizontal", "Vertical"]);
+        style_page.append(&orientation_row);
 
         // Fill direction selector
-        let direction_box = GtkBox::new(Orientation::Horizontal, 6);
-        direction_box.append(&Label::new(Some("Fill Direction:")));
-        let direction_options = StringList::new(&["Left to Right", "Right to Left", "Bottom to Top", "Top to Bottom"]);
-        let direction_dropdown = DropDown::new(Some(direction_options), Option::<gtk4::Expression>::None);
-        direction_dropdown.set_selected(0);
-        direction_dropdown.set_hexpand(true);
-        direction_box.append(&direction_dropdown);
-        style_page.append(&direction_box);
+        let (direction_row, direction_dropdown) = create_dropdown_row("Fill Direction:", &["Left to Right", "Right to Left", "Bottom to Top", "Top to Bottom"]);
+        style_page.append(&direction_row);
 
         // Preview
         let preview = DrawingArea::new();
@@ -244,44 +229,29 @@ impl BarConfigWidget {
         let options_page = create_page_container();
 
         // Taper style selector
-        let taper_box = GtkBox::new(Orientation::Horizontal, 6);
-        taper_box.append(&Label::new(Some("Taper Style:")));
-        let taper_options = StringList::new(&["None", "Start", "End", "Both"]);
-        let taper_style_dropdown = DropDown::new(Some(taper_options), Option::<gtk4::Expression>::None);
         let taper_index = match config.borrow().taper_style {
             BarTaperStyle::None => 0,
             BarTaperStyle::Start => 1,
             BarTaperStyle::End => 2,
             BarTaperStyle::Both => 3,
         };
+        let (taper_row, taper_style_dropdown) = create_dropdown_row("Taper Style:", &["None", "Start", "End", "Both"]);
         taper_style_dropdown.set_selected(taper_index);
-        taper_style_dropdown.set_hexpand(true);
-        taper_box.append(&taper_style_dropdown);
-        options_page.append(&taper_box);
+        options_page.append(&taper_row);
 
         // Taper amount
-        let taper_amount_box = GtkBox::new(Orientation::Horizontal, 6);
-        taper_amount_box.append(&Label::new(Some("Taper Amount (%):")));
-        let taper_amount_spin = SpinButton::with_range(0.0, 100.0, 5.0);
-        taper_amount_spin.set_value(config.borrow().taper_amount * 100.0);
-        taper_amount_spin.set_hexpand(true);
-        taper_amount_box.append(&taper_amount_spin);
-        options_page.append(&taper_amount_box);
+        let (taper_amount_row, taper_amount_spin) = create_percent_spin_row_with_value("Taper Amount (%):", config.borrow().taper_amount * 100.0);
+        options_page.append(&taper_amount_row);
 
         // Taper alignment selector
-        let taper_align_box = GtkBox::new(Orientation::Horizontal, 6);
-        taper_align_box.append(&Label::new(Some("Taper Alignment:")));
-        let taper_align_options = StringList::new(&["Top / Left", "Center", "Bottom / Right"]);
-        let taper_alignment_dropdown = DropDown::new(Some(taper_align_options), Option::<gtk4::Expression>::None);
         let align_index = match config.borrow().taper_alignment {
             BarTaperAlignment::Start => 0,
             BarTaperAlignment::Center => 1,
             BarTaperAlignment::End => 2,
         };
+        let (taper_align_row, taper_alignment_dropdown) = create_dropdown_row("Taper Alignment:", &["Top / Left", "Center", "Bottom / Right"]);
         taper_alignment_dropdown.set_selected(align_index);
-        taper_alignment_dropdown.set_hexpand(true);
-        taper_align_box.append(&taper_alignment_dropdown);
-        options_page.append(&taper_align_box);
+        options_page.append(&taper_align_row);
 
         // Taper style change handler
         let config_clone = config.clone();
@@ -374,13 +344,8 @@ impl BarConfigWidget {
         let border_check = CheckButton::with_label("Show Border");
         border_page.append(&border_check);
 
-        let border_width_box = GtkBox::new(Orientation::Horizontal, 6);
-        border_width_box.append(&Label::new(Some("Width:")));
-        let border_width_spin = SpinButton::with_range(1.0, 10.0, 0.5);
-        border_width_spin.set_value(1.0);
-        border_width_spin.set_hexpand(true);
-        border_width_box.append(&border_width_spin);
-        border_page.append(&border_width_box);
+        let (border_width_row, border_width_spin) = create_spin_row_with_value("Width:", 1.0, 10.0, 0.5, 1.0);
+        border_page.append(&border_width_row);
 
         // Border color - using ThemeColorSelector
         let border_color_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -399,14 +364,9 @@ impl BarConfigWidget {
         animate_check.set_active(config.borrow().smooth_animation);
         animation_page.append(&animate_check);
 
-        let speed_box = GtkBox::new(Orientation::Horizontal, 6);
-        speed_box.append(&Label::new(Some("Animation Speed:")));
-        let animation_speed_spin = SpinButton::with_range(0.1, 1.0, 0.1);
-        animation_speed_spin.set_value(config.borrow().animation_speed);
+        let (speed_row, animation_speed_spin) = create_spin_row_with_value("Animation Speed:", 0.1, 1.0, 0.1, config.borrow().animation_speed);
         animation_speed_spin.set_digits(1);
-        animation_speed_spin.set_hexpand(true);
-        speed_box.append(&animation_speed_spin);
-        animation_page.append(&speed_box);
+        animation_page.append(&speed_row);
 
         // Help text
         let help_label = Label::new(Some("Animation smoothly transitions the bar value.\nHigher speed = faster transition."));
@@ -1095,96 +1055,30 @@ impl BarConfigWidget {
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) -> (GtkBox, SpinButton, SpinButton, SpinButton, SpinButton) {
+        use crate::ui::widget_builder::SpinChangeHandler;
+
         let page = GtkBox::new(Orientation::Vertical, 12);
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Width
-        let width_box = GtkBox::new(Orientation::Horizontal, 6);
-        width_box.append(&Label::new(Some("Width (%):")));
-        let width_spin = SpinButton::with_range(10.0, 100.0, 1.0);
-        width_spin.set_value(80.0);
-        width_spin.set_hexpand(true);
-        width_box.append(&width_spin);
-        page.append(&width_box);
+        let (width_row, width_spin) = create_spin_row_with_value("Width (%):", 10.0, 100.0, 1.0, 80.0);
+        page.append(&width_row);
+        handler.connect_spin_percent(&width_spin, |cfg, val| cfg.rectangle_width = val);
 
         // Height
-        let height_box = GtkBox::new(Orientation::Horizontal, 6);
-        height_box.append(&Label::new(Some("Height (%):")));
-        let height_spin = SpinButton::with_range(10.0, 100.0, 1.0);
-        height_spin.set_value(60.0);
-        height_spin.set_hexpand(true);
-        height_box.append(&height_spin);
-        page.append(&height_box);
+        let (height_row, height_spin) = create_spin_row_with_value("Height (%):", 10.0, 100.0, 1.0, 60.0);
+        page.append(&height_row);
+        handler.connect_spin_percent(&height_spin, |cfg, val| cfg.rectangle_height = val);
 
         // Corner radius
-        let radius_box = GtkBox::new(Orientation::Horizontal, 6);
-        radius_box.append(&Label::new(Some("Corner Radius:")));
-        let radius_spin = SpinButton::with_range(0.0, 50.0, 1.0);
-        radius_spin.set_value(5.0);
-        radius_spin.set_hexpand(true);
-        radius_box.append(&radius_spin);
-        page.append(&radius_box);
+        let (radius_row, radius_spin) = create_spin_row_with_value("Corner Radius:", 0.0, 50.0, 1.0, 5.0);
+        page.append(&radius_row);
+        handler.connect_spin(&radius_spin, |cfg, val| cfg.corner_radius = val);
 
         // Padding
-        let padding_box = GtkBox::new(Orientation::Horizontal, 6);
-        padding_box.append(&Label::new(Some("Padding:")));
-        let padding_spin = SpinButton::with_range(0.0, 50.0, 1.0);
-        padding_spin.set_value(4.0);
-        padding_spin.set_hexpand(true);
-        padding_box.append(&padding_spin);
-        page.append(&padding_box);
-
-        // Handlers
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        width_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.rectangle_width = spin.value() / 100.0;
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        height_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.rectangle_height = spin.value() / 100.0;
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        radius_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.corner_radius = spin.value();
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        padding_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.padding = spin.value();
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
+        let (padding_row, padding_spin) = create_spin_row_with_value("Padding:", 0.0, 50.0, 1.0, 4.0);
+        page.append(&padding_row);
+        handler.connect_spin(&padding_spin, |cfg, val| cfg.padding = val);
 
         (page, width_spin, height_spin, radius_spin, padding_spin)
     }
@@ -1194,118 +1088,35 @@ impl BarConfigWidget {
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     ) -> (GtkBox, SpinButton, SpinButton, SpinButton, SpinButton, SpinButton) {
+        use crate::ui::widget_builder::SpinChangeHandler;
+
         let page = GtkBox::new(Orientation::Vertical, 12);
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Segment count
-        let count_box = GtkBox::new(Orientation::Horizontal, 6);
-        count_box.append(&Label::new(Some("Segments:")));
-        let count_spin = SpinButton::with_range(2.0, 100.0, 1.0);
-        count_spin.set_value(10.0);
-        count_spin.set_hexpand(true);
-        count_box.append(&count_spin);
-        page.append(&count_box);
+        let (count_row, count_spin) = create_spin_row_with_value("Segments:", 2.0, 100.0, 1.0, 10.0);
+        page.append(&count_row);
+        handler.connect_spin_int(&count_spin, |cfg, val| cfg.segment_count = val as u32);
 
         // Segment spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Spacing:")));
-        let spacing_spin = SpinButton::with_range(0.0, 20.0, 0.5);
-        spacing_spin.set_value(2.0);
-        spacing_spin.set_hexpand(true);
-        spacing_box.append(&spacing_spin);
-        page.append(&spacing_box);
+        let (spacing_row, spacing_spin) = create_spin_row_with_value("Spacing:", 0.0, 20.0, 0.5, 2.0);
+        page.append(&spacing_row);
+        handler.connect_spin(&spacing_spin, |cfg, val| cfg.segment_spacing = val);
 
         // Width
-        let width_box = GtkBox::new(Orientation::Horizontal, 6);
-        width_box.append(&Label::new(Some("Width (%):")));
-        let width_spin = SpinButton::with_range(10.0, 100.0, 1.0);
-        width_spin.set_value(90.0);
-        width_spin.set_hexpand(true);
-        width_box.append(&width_spin);
-        page.append(&width_box);
+        let (width_row, width_spin) = create_spin_row_with_value("Width (%):", 10.0, 100.0, 1.0, 90.0);
+        page.append(&width_row);
+        handler.connect_spin_percent(&width_spin, |cfg, val| cfg.segment_width = val);
 
         // Height
-        let height_box = GtkBox::new(Orientation::Horizontal, 6);
-        height_box.append(&Label::new(Some("Height (%):")));
-        let height_spin = SpinButton::with_range(10.0, 100.0, 1.0);
-        height_spin.set_value(80.0);
-        height_spin.set_hexpand(true);
-        height_box.append(&height_spin);
-        page.append(&height_box);
+        let (height_row, height_spin) = create_spin_row_with_value("Height (%):", 10.0, 100.0, 1.0, 80.0);
+        page.append(&height_row);
+        handler.connect_spin_percent(&height_spin, |cfg, val| cfg.segment_height = val);
 
         // Corner radius
-        let corner_radius_box = GtkBox::new(Orientation::Horizontal, 6);
-        corner_radius_box.append(&Label::new(Some("Corner Radius:")));
-        let corner_radius_spin = SpinButton::with_range(0.0, 50.0, 1.0);
-        corner_radius_spin.set_value(5.0);
-        corner_radius_spin.set_hexpand(true);
-        corner_radius_box.append(&corner_radius_spin);
-        page.append(&corner_radius_box);
-
-        // Handlers
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        count_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.segment_count = spin.value() as u32;
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        spacing_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.segment_spacing = spin.value();
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        width_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.segment_width = spin.value() / 100.0;
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        height_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.segment_height = spin.value() / 100.0;
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
-
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
-        corner_radius_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            cfg.corner_radius = spin.value();
-            drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(callback) = on_change_clone.borrow().as_ref() {
-                callback();
-            }
-        });
+        let (radius_row, corner_radius_spin) = create_spin_row_with_value("Corner Radius:", 0.0, 50.0, 1.0, 5.0);
+        page.append(&radius_row);
+        handler.connect_spin(&corner_radius_spin, |cfg, val| cfg.corner_radius = val);
 
         (page, count_spin, spacing_spin, width_spin, height_spin, corner_radius_spin)
     }
