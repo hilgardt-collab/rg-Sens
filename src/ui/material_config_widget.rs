@@ -1279,8 +1279,10 @@ impl MaterialConfigWidget {
                 HeaderAlignment::Center => 1,
                 HeaderAlignment::Right => 2,
             });
+            widgets.header_color_selector.set_theme_config(config.frame.theme.clone());
             widgets.header_color_selector.set_source(config.frame.accent_color.clone());
             widgets.header_height_spin.set_value(config.frame.header_height);
+            widgets.header_font_selector.set_theme_config(config.frame.theme.clone());
             widgets.header_font_selector.set_source(config.frame.header_font.clone());
         }
 
@@ -1298,6 +1300,7 @@ impl MaterialConfigWidget {
                 DividerStyle::Fade => 2,
             });
             widgets.divider_spacing_spin.set_value(config.frame.divider_spacing);
+            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
             widgets.divider_color_widget.set_source(config.frame.divider_color.clone());
 
             combo_config_base::rebuild_combined_group_settings(
