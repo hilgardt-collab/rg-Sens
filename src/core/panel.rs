@@ -644,3 +644,16 @@ impl Panel {
             .unwrap_or(1000) // Default 1 second
     }
 }
+
+impl Drop for Panel {
+    fn drop(&mut self) {
+        // Release the shared source reference when the panel is dropped.
+        // This ensures the SharedSourceManager can clean up unused sources.
+        if let Some(ref source_key) = self.source_key {
+            if let Some(manager) = global_shared_source_manager() {
+                manager.release_source(source_key, &self.id);
+                log::debug!("Panel {} dropped, released shared source {}", self.id, source_key);
+            }
+        }
+    }
+}
