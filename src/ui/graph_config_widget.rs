@@ -3,7 +3,7 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, Orientation,
-    SpinButton, StringList,
+    SpinButton,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -13,7 +13,10 @@ use super::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 use super::text_overlay_config_widget::TextOverlayConfigWidget;
 use super::theme::ComboThemeConfig;
 use super::theme_color_selector::ThemeColorSelector;
-use super::widget_builder::{create_page_container, DEFAULT_MARGIN};
+use super::widget_builder::{
+    create_page_container, create_dropdown_row, create_spin_row_with_value,
+    create_labeled_row, DEFAULT_MARGIN,
+};
 
 pub struct GraphConfigWidget {
     widget: GtkBox,
@@ -619,60 +622,39 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     let page = create_page_container();
 
     // Graph type
-    let type_box = GtkBox::new(Orientation::Horizontal, 6);
-    type_box.append(&Label::new(Some("Graph Type:")));
-    let graph_type_combo = DropDown::new(
-        Some(StringList::new(&["Line", "Bar", "Area", "Stepped Line"])),
-        Option::<gtk4::Expression>::None,
-    );
-    type_box.append(&graph_type_combo);
-    page.append(&type_box);
+    let (type_row, graph_type_combo) = create_dropdown_row("Graph Type:", &["Line", "Bar", "Area", "Stepped Line"]);
+    page.append(&type_row);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
     graph_type_combo.connect_selected_notify(move |combo| {
-        let graph_type = match combo.selected() {
+        config_clone.borrow_mut().graph_type = match combo.selected() {
             0 => GraphType::Line,
             1 => GraphType::Bar,
             2 => GraphType::Area,
-            3 => GraphType::SteppedLine,
-            _ => GraphType::Line,
+            _ => GraphType::SteppedLine,
         };
-        config_clone.borrow_mut().graph_type = graph_type;
         notify_change_static(&on_change_clone);
     });
 
     // Line style
-    let line_style_box = GtkBox::new(Orientation::Horizontal, 6);
-    line_style_box.append(&Label::new(Some("Line Style:")));
-    let line_style_combo = DropDown::new(
-        Some(StringList::new(&["Solid", "Dashed", "Dotted"])),
-        Option::<gtk4::Expression>::None,
-    );
-    line_style_box.append(&line_style_combo);
-    page.append(&line_style_box);
+    let (line_style_row, line_style_combo) = create_dropdown_row("Line Style:", &["Solid", "Dashed", "Dotted"]);
+    page.append(&line_style_row);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
     line_style_combo.connect_selected_notify(move |combo| {
-        let line_style = match combo.selected() {
+        config_clone.borrow_mut().line_style = match combo.selected() {
             0 => LineStyle::Solid,
             1 => LineStyle::Dashed,
-            2 => LineStyle::Dotted,
-            _ => LineStyle::Solid,
+            _ => LineStyle::Dotted,
         };
-        config_clone.borrow_mut().line_style = line_style;
         notify_change_static(&on_change_clone);
     });
 
     // Line width
-    let width_box = GtkBox::new(Orientation::Horizontal, 6);
-    width_box.append(&Label::new(Some("Line Width:")));
-    let line_width_spin = SpinButton::with_range(0.5, 10.0, 0.5);
-    line_width_spin.set_value(2.0);
-    line_width_spin.set_hexpand(true);
-    width_box.append(&line_width_spin);
-    page.append(&width_box);
+    let (width_row, line_width_spin) = create_spin_row_with_value("Line Width:", 0.5, 10.0, 0.5, 2.0);
+    page.append(&width_row);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -682,11 +664,9 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     });
 
     // Line color - using ThemeColorSelector
-    let line_color_box = GtkBox::new(Orientation::Horizontal, 6);
-    line_color_box.append(&Label::new(Some("Line Color:")));
     let line_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().line_color.clone()));
-    line_color_box.append(line_color_widget.widget());
-    page.append(&line_color_box);
+    let line_color_row = create_labeled_row("Line Color:", line_color_widget.widget());
+    page.append(&line_color_row);
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -696,21 +676,13 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     });
 
     // Fill mode
-    let fill_mode_box = GtkBox::new(Orientation::Horizontal, 6);
-    fill_mode_box.append(&Label::new(Some("Fill Mode:")));
-    let fill_mode_combo = DropDown::new(
-        Some(StringList::new(&["None", "Solid", "Gradient"])),
-        Option::<gtk4::Expression>::None,
-    );
+    let (fill_mode_row, fill_mode_combo) = create_dropdown_row("Fill Mode:", &["None", "Solid", "Gradient"]);
     fill_mode_combo.set_selected(2);
-    fill_mode_box.append(&fill_mode_combo);
-    page.append(&fill_mode_box);
+    page.append(&fill_mode_row);
 
     // Fill color - using ThemeColorSelector (visible for Solid mode)
-    let fill_color_box = GtkBox::new(Orientation::Horizontal, 6);
-    fill_color_box.append(&Label::new(Some("Fill Color:")));
     let fill_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_color.clone()));
-    fill_color_box.append(fill_color_widget.widget());
+    let fill_color_box = create_labeled_row("Fill Color:", fill_color_widget.widget());
     page.append(&fill_color_box);
 
     let config_clone = config.clone();
@@ -721,12 +693,7 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     });
 
     // Fill opacity (visible for Solid mode)
-    let fill_opacity_box = GtkBox::new(Orientation::Horizontal, 6);
-    fill_opacity_box.append(&Label::new(Some("Fill Opacity:")));
-    let fill_opacity_spin = SpinButton::with_range(0.0, 1.0, 0.05);
-    fill_opacity_spin.set_value(0.3);
-    fill_opacity_spin.set_hexpand(true);
-    fill_opacity_box.append(&fill_opacity_spin);
+    let (fill_opacity_box, fill_opacity_spin) = create_spin_row_with_value("Fill Opacity:", 0.0, 1.0, 0.05, 0.3);
     page.append(&fill_opacity_box);
 
     let config_clone = config.clone();
@@ -737,10 +704,8 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     });
 
     // Gradient start color - using ThemeColorSelector (visible for Gradient mode)
-    let gradient_start_box = GtkBox::new(Orientation::Horizontal, 6);
-    gradient_start_box.append(&Label::new(Some("Gradient Start:")));
     let fill_gradient_start_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_gradient_start.clone()));
-    gradient_start_box.append(fill_gradient_start_widget.widget());
+    let gradient_start_box = create_labeled_row("Gradient Start:", fill_gradient_start_widget.widget());
     page.append(&gradient_start_box);
 
     let config_clone = config.clone();
@@ -751,10 +716,8 @@ fn create_style_page(config: Rc<RefCell<GraphDisplayConfig>>, on_change: OnChang
     });
 
     // Gradient end color - using ThemeColorSelector (visible for Gradient mode)
-    let gradient_end_box = GtkBox::new(Orientation::Horizontal, 6);
-    gradient_end_box.append(&Label::new(Some("Gradient End:")));
     let fill_gradient_end_widget = Rc::new(ThemeColorSelector::new(config.borrow().fill_gradient_end.clone()));
-    gradient_end_box.append(fill_gradient_end_widget.widget());
+    let gradient_end_box = create_labeled_row("Gradient End:", fill_gradient_end_widget.widget());
     page.append(&gradient_end_box);
 
     let config_clone = config.clone();

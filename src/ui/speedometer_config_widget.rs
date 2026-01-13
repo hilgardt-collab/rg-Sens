@@ -18,7 +18,9 @@ use crate::displayers::FieldMetadata;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::widget_builder::create_page_container;
+use crate::ui::widget_builder::{
+    create_page_container, create_dropdown_row, create_spin_row_with_value, SpinChangeHandler,
+};
 
 /// Speedometer gauge configuration widget
 #[allow(dead_code)]
@@ -427,40 +429,17 @@ impl SpeedometerConfigWidget {
         preview: &DrawingArea,
     ) -> (GtkBox, SpinButton, SpinButton, Scale, Scale) {
         let page = create_page_container();
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Start angle
-        let start_angle_box = GtkBox::new(Orientation::Horizontal, 6);
-        start_angle_box.append(&Label::new(Some("Start Angle (°):")));
-        let start_angle_adj = Adjustment::new(135.0, -360.0, 360.0, 1.0, 10.0, 0.0);
-        let start_angle_spin = SpinButton::new(Some(&start_angle_adj), 1.0, 1);
-        start_angle_spin.set_hexpand(true);
-        start_angle_box.append(&start_angle_spin);
-        page.append(&start_angle_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        start_angle_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().start_angle = spin.value();
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-        });
+        let (start_row, start_angle_spin) = create_spin_row_with_value("Start Angle (°):", -360.0, 360.0, 1.0, 135.0);
+        page.append(&start_row);
+        handler.connect_spin(&start_angle_spin, |cfg, val| cfg.start_angle = val);
 
         // End angle
-        let end_angle_box = GtkBox::new(Orientation::Horizontal, 6);
-        end_angle_box.append(&Label::new(Some("End Angle (°):")));
-        let end_angle_adj = Adjustment::new(45.0, -360.0, 360.0, 1.0, 10.0, 0.0);
-        let end_angle_spin = SpinButton::new(Some(&end_angle_adj), 1.0, 1);
-        end_angle_spin.set_hexpand(true);
-        end_angle_box.append(&end_angle_spin);
-        page.append(&end_angle_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        end_angle_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().end_angle = spin.value();
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-        });
+        let (end_row, end_angle_spin) = create_spin_row_with_value("End Angle (°):", -360.0, 360.0, 1.0, 45.0);
+        page.append(&end_row);
+        handler.connect_spin(&end_angle_spin, |cfg, val| cfg.end_angle = val);
 
         // Arc width
         let arc_width_box = GtkBox::new(Orientation::Vertical, 6);
@@ -472,8 +451,8 @@ impl SpeedometerConfigWidget {
         page.append(&arc_width_box);
 
         let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
         arc_width_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().arc_width = scale.value();
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
@@ -1088,73 +1067,36 @@ impl SpeedometerConfigWidget {
         CheckButton,
     ) {
         let page = create_page_container();
+        let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Show needle
         let show_needle_check = CheckButton::with_label("Show Needle");
         show_needle_check.set_active(true);
         page.append(&show_needle_check);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        show_needle_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().show_needle = check.is_active();
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-        });
+        handler.connect_check(&show_needle_check, |cfg, val| cfg.show_needle = val);
 
         // Needle style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Needle Style:")));
-        let styles = StringList::new(&["Arrow", "Line", "Tapered", "Triangle"]);
-        let needle_style_dropdown = DropDown::new(Some(styles), Option::<gtk4::Expression>::None);
-        needle_style_dropdown.set_selected(0);
-        style_box.append(&needle_style_dropdown);
-        page.append(&style_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        needle_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            let style = match selected {
+        let (style_row, needle_style_dropdown) = create_dropdown_row("Needle Style:", &["Arrow", "Line", "Tapered", "Triangle"]);
+        page.append(&style_row);
+        handler.connect_dropdown(&needle_style_dropdown, |cfg, sel| {
+            cfg.needle_style = match sel {
                 0 => NeedleStyle::Arrow,
                 1 => NeedleStyle::Line,
                 2 => NeedleStyle::Tapered,
-                3 => NeedleStyle::Triangle,
-                _ => NeedleStyle::Arrow,
+                _ => NeedleStyle::Triangle,
             };
-            config_clone.borrow_mut().needle_style = style;
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Needle tail style
-        let tail_box = GtkBox::new(Orientation::Horizontal, 6);
-        tail_box.append(&Label::new(Some("Needle Tail:")));
-        let tails = StringList::new(&["None", "Short", "Balanced"]);
-        let needle_tail_style_dropdown = DropDown::new(Some(tails), Option::<gtk4::Expression>::None);
+        let (tail_row, needle_tail_style_dropdown) = create_dropdown_row("Needle Tail:", &["None", "Short", "Balanced"]);
         needle_tail_style_dropdown.set_selected(1);
-        tail_box.append(&needle_tail_style_dropdown);
-        page.append(&tail_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        needle_tail_style_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            if selected == gtk4::INVALID_LIST_POSITION {
-                return;
-            }
-            let style = match selected {
+        page.append(&tail_row);
+        handler.connect_dropdown(&needle_tail_style_dropdown, |cfg, sel| {
+            cfg.needle_tail_style = match sel {
                 0 => NeedleTailStyle::None,
                 1 => NeedleTailStyle::Short,
-                2 => NeedleTailStyle::Balanced,
-                _ => NeedleTailStyle::Short,
+                _ => NeedleTailStyle::Balanced,
             };
-            config_clone.borrow_mut().needle_tail_style = style;
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
         });
 
         // Needle length
@@ -1175,32 +1117,19 @@ impl SpeedometerConfigWidget {
         });
 
         // Needle width
-        let width_box = GtkBox::new(Orientation::Horizontal, 6);
-        width_box.append(&Label::new(Some("Needle Width (px):")));
-        let width_adj = Adjustment::new(3.0, 1.0, 20.0, 0.5, 1.0, 0.0);
-        let needle_width_spin = SpinButton::new(Some(&width_adj), 0.5, 1);
-        needle_width_spin.set_hexpand(true);
-        width_box.append(&needle_width_spin);
-        page.append(&width_box);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        needle_width_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().needle_width = spin.value();
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-        });
+        let (width_row, needle_width_spin) = create_spin_row_with_value("Needle Width (px):", 1.0, 20.0, 0.5, 3.0);
+        needle_width_spin.set_digits(1);
+        page.append(&width_row);
+        handler.connect_spin(&needle_width_spin, |cfg, val| cfg.needle_width = val);
 
         // Needle color - using ThemeColorSelector
-        let needle_color_box = GtkBox::new(Orientation::Horizontal, 6);
-        needle_color_box.append(&Label::new(Some("Needle Color:")));
         let needle_color_button = Rc::new(ThemeColorSelector::new(config.borrow().needle_color.clone()));
-        needle_color_box.append(needle_color_button.widget());
-        page.append(&needle_color_box);
+        let needle_color_row = crate::ui::widget_builder::create_labeled_row("Needle Color:", needle_color_button.widget());
+        page.append(&needle_color_row);
 
         let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
+        let on_change_clone = on_change.clone();
         needle_color_button.set_on_change(move |source| {
             config_clone.borrow_mut().needle_color = source;
             Self::queue_preview_redraw(&preview_clone, &on_change_clone);
@@ -1210,14 +1139,7 @@ impl SpeedometerConfigWidget {
         let needle_shadow_check = CheckButton::with_label("Add Shadow");
         needle_shadow_check.set_active(false);
         page.append(&needle_shadow_check);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        needle_shadow_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().needle_shadow = check.is_active();
-            Self::queue_preview_redraw(&preview_clone, &on_change_clone);
-        });
+        handler.connect_check(&needle_shadow_check, |cfg, val| cfg.needle_shadow = val);
 
         (
             page,
