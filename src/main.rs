@@ -450,8 +450,7 @@ fn build_ui(app: &Application) {
     scrolled_window.set_hexpand(true);
     scrolled_window.set_vexpand(true);
 
-    // Set scrolled window as window content
-    window.set_child(Some(&scrolled_window));
+    // Note: window.set_child() is called later, after determining if we need auto-hide mode
 
     // Set initial fullscreen state - CLI overrides config
     // --windowed forces normal windowed mode, overriding saved fullscreen
@@ -888,7 +887,52 @@ fn build_ui(app: &Application) {
     );
     menu_button.set_popover(Some(&app_menu_popover));
     header_bar.pack_start(&menu_button);
-    window.set_titlebar(Some(&header_bar));
+
+    // Auto-hide header: appears when mouse moves to top of window
+    // Create revealer for smooth show/hide animation
+    let revealer = gtk4::Revealer::new();
+    revealer.set_transition_type(gtk4::RevealerTransitionType::SlideDown);
+    revealer.set_transition_duration(200);
+    revealer.set_reveal_child(false); // Start hidden
+    revealer.set_valign(gtk4::Align::Start); // Position at top
+    revealer.set_halign(gtk4::Align::Fill); // Span full width
+
+    // Wrap headerbar in a box with styling for visibility against content
+    let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    header_box.append(&header_bar);
+    header_box.set_hexpand(true);
+    header_box.add_css_class("auto-hide-header");
+    revealer.set_child(Some(&header_box));
+
+    // Add CSS for auto-hide header styling
+    let css_provider = gtk4::CssProvider::new();
+    css_provider.load_from_data(
+        ".auto-hide-header {
+            background-color: rgba(40, 40, 40, 0.95);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 8px;
+        }
+        .auto-hide-header headerbar {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            min-height: 0;
+        }"
+    );
+    gtk4::style_context_add_provider_for_display(
+        &gtk4::prelude::WidgetExt::display(&window),
+        &css_provider,
+        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+
+    // Create top-level overlay to hold both content and the auto-hide header
+    let top_overlay = gtk4::Overlay::new();
+    top_overlay.set_child(Some(&scrolled_window));
+    top_overlay.add_overlay(&revealer);
+
+    // Set up the window content and auto-hide behavior
+    window.set_child(Some(&top_overlay));
+    setup_auto_hide_header(&window, &revealer, &app_menu_popover);
 
     // Setup save-on-close confirmation
     let grid_layout_for_close = grid_layout.clone();
@@ -1061,5 +1105,98 @@ fn build_ui(app: &Application) {
     window.add_controller(key_controller);
 
     window.present();
+}
+
+/// Setup auto-hide behavior for the headerbar in fullscreen/borderless mode.
+/// The headerbar slides down when the mouse moves to the top of the window,
+/// and hides after a delay when the mouse moves away.
+fn setup_auto_hide_header(
+    window: &gtk4::ApplicationWindow,
+    revealer: &gtk4::Revealer,
+    popover: &gtk4::Popover,
+) {
+    let motion_controller = gtk4::EventControllerMotion::new();
+    let revealer_motion = revealer.clone();
+    let revealer_leave = revealer.clone();
+    let popover_motion = popover.clone();
+    let popover_leave = popover.clone();
+
+    // Timer for delayed hide
+    let hide_timer: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+    let hide_timer_motion = hide_timer.clone();
+    let hide_timer_leave = hide_timer.clone();
+
+    // Helper to cancel any pending hide timer
+    fn cancel_hide_timer(timer: &Rc<RefCell<Option<glib::SourceId>>>) {
+        if let Some(id) = timer.borrow_mut().take() {
+            id.remove();
+        }
+    }
+
+    // Helper to schedule hide after delay
+    fn schedule_hide(
+        timer: &Rc<RefCell<Option<glib::SourceId>>>,
+        revealer: &gtk4::Revealer,
+        delay_ms: u64,
+    ) {
+        if timer.borrow().is_some() {
+            return; // Timer already scheduled
+        }
+        let revealer_hide = revealer.clone();
+        let timer_ref = timer.clone();
+        let source_id = glib::timeout_add_local_once(
+            std::time::Duration::from_millis(delay_ms),
+            move || {
+                revealer_hide.set_reveal_child(false);
+                *timer_ref.borrow_mut() = None;
+            },
+        );
+        *timer.borrow_mut() = Some(source_id);
+    }
+
+    motion_controller.connect_motion(move |_, _x, y| {
+        let trigger_zone = 50.0; // pixels from top to trigger reveal
+
+        if y < trigger_zone {
+            // Mouse at top - show menu immediately
+            cancel_hide_timer(&hide_timer_motion);
+            revealer_motion.set_reveal_child(true);
+        } else if revealer_motion.reveals_child() && !popover_motion.is_visible() {
+            // Mouse moved away and popover is not open - schedule hide
+            schedule_hide(&hide_timer_motion, &revealer_motion, 1500);
+        }
+    });
+
+    motion_controller.connect_leave(move |_| {
+        // Mouse left window - hide menu after delay (unless popover is open)
+        if revealer_leave.reveals_child() && !popover_leave.is_visible() {
+            schedule_hide(&hide_timer_leave, &revealer_leave, 1500);
+        }
+    });
+
+    window.add_controller(motion_controller);
+
+    // Also track when the popover closes to schedule hide
+    let revealer_popover = revealer.clone();
+    let hide_timer_popover = hide_timer.clone();
+    popover.connect_closed(move |_| {
+        // When popover closes, schedule hide after delay
+        if revealer_popover.reveals_child() {
+            let revealer_hide = revealer_popover.clone();
+            let timer_ref = hide_timer_popover.clone();
+            // Cancel any existing timer first
+            if let Some(id) = timer_ref.borrow_mut().take() {
+                id.remove();
+            }
+            let source_id = glib::timeout_add_local_once(
+                std::time::Duration::from_millis(1500),
+                move || {
+                    revealer_hide.set_reveal_child(false);
+                    *timer_ref.borrow_mut() = None;
+                },
+            );
+            *hide_timer_popover.borrow_mut() = Some(source_id);
+        }
+    });
 }
 
