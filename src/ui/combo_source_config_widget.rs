@@ -213,6 +213,9 @@ pub struct ComboSourceConfigWidget {
     fields_generation: Rc<Cell<u32>>,
     /// Callback to invoke when fields are updated asynchronously
     on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>>,
+    /// Flag to indicate widget is destroyed - checked by async callbacks to abort early
+    /// This prevents memory leaks from async callbacks holding Rc references after dialog closes
+    destroyed: Rc<Cell<bool>>,
 }
 
 /// Widgets for a single slot configuration
@@ -311,6 +314,9 @@ impl ComboSourceConfigWidget {
         let on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>> =
             Rc::new(RefCell::new(None));
 
+        // Destroyed flag - set when widget is destroyed to cancel async callbacks
+        let destroyed = Rc::new(Cell::new(false));
+
         let widget = Self {
             container,
             config,
@@ -325,7 +331,22 @@ impl ComboSourceConfigWidget {
             cached_fields,
             fields_generation,
             on_fields_updated,
+            destroyed,
         };
+
+        // Connect destroy signal to cancel async callbacks and prevent memory leaks
+        {
+            let destroyed_clone = widget.destroyed.clone();
+            let rebuild_gen = widget.rebuild_generation.clone();
+            let fields_gen = widget.fields_generation.clone();
+            widget.container.connect_destroy(move |_| {
+                log::debug!("ComboSourceConfigWidget destroyed - cancelling async operations");
+                destroyed_clone.set(true);
+                // Increment generation counters to cancel any pending async operations
+                rebuild_gen.set(rebuild_gen.get().wrapping_add(1));
+                fields_gen.set(fields_gen.get().wrapping_add(1));
+            });
+        }
 
         // Build tabs once with the initial config
         widget.rebuild_tabs();
