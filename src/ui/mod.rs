@@ -9,7 +9,6 @@ pub mod custom_color_picker;
 pub mod background;
 mod gradient_editor;
 mod background_config_widget;
-mod image_picker;
 mod text_line_config_widget;
 mod text_overlay_config_widget;
 mod position_grid_widget;
@@ -89,7 +88,6 @@ pub use color_picker::ColorPickerDialog;
 pub use background::{BackgroundConfig, BackgroundType, Color, ColorStop, LinearGradientConfig, RadialGradientConfig, PolygonConfig, render_background, render_background_with_source, render_background_with_theme, render_background_with_source_and_theme, ImageDisplayMode, IndicatorBackgroundConfig, IndicatorBackgroundShape, render_indicator_background_with_value};
 pub use gradient_editor::GradientEditor;
 pub use background_config_widget::BackgroundConfigWidget;
-pub use image_picker::ImagePicker;
 pub use text_line_config_widget::{TextLineConfigWidget, LazyTextLineConfigWidget};
 pub use text_overlay_config_widget::{LazyTextOverlayConfigWidget, TextOverlayConfig, TextOverlayConfigWidget};
 pub use cpu_source_config_widget::{CpuSourceConfigWidget, CpuSourceConfig, CpuField, TemperatureUnit, FrequencyUnit, CoreSelection};
@@ -228,7 +226,6 @@ impl CssTemplateConfigWidget {
 // Dialog close functions
 pub use grid_properties_dialog::close_panel_properties_dialog;
 pub use alarm_timer_dialog::close_alarm_timer_dialog;
-pub use image_picker::close_image_picker_dialog;
 pub use timezone_dialog::close_timezone_dialog;
 
 /// Close all open singleton dialogs
@@ -236,6 +233,5 @@ pub use timezone_dialog::close_timezone_dialog;
 pub fn close_all_dialogs() {
     close_panel_properties_dialog();
     close_alarm_timer_dialog();
-    close_image_picker_dialog();
     close_timezone_dialog();
 }

@@ -554,27 +554,51 @@ impl BackgroundConfigWidget {
         let on_change_clone = on_change.clone();
 
         browse_button.connect_clicked(move |btn| {
-            let picker = crate::ui::ImagePicker::new("Select Background Image");
-
             let config_clone2 = config_clone.clone();
             let preview_clone2 = preview_clone.clone();
             let path_entry_clone2 = path_entry_clone.clone();
             let on_change_clone2 = on_change_clone.clone();
 
             let window = btn.root().and_downcast::<gtk4::Window>();
-            picker.pick(window.as_ref(), move |path| {
-                if let Some(path) = path {
-                    let path_str = path.to_string_lossy().to_string();
-                    path_entry_clone2.set_text(&path_str);
 
-                    let mut cfg = config_clone2.borrow_mut();
-                    if let BackgroundType::Image { ref mut path, .. } = cfg.background {
-                        *path = path_str;
-                        drop(cfg);
-                        preview_clone2.queue_draw();
+            // Use GTK4 FileDialog for native file selection
+            let dialog = gtk4::FileDialog::builder()
+                .title("Select Background Image")
+                .modal(true)
+                .build();
 
-                        if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                            callback();
+            // Set up image file filter
+            let filter = gtk4::FileFilter::new();
+            filter.set_name(Some("Image Files"));
+            filter.add_mime_type("image/*");
+            filter.add_suffix("png");
+            filter.add_suffix("jpg");
+            filter.add_suffix("jpeg");
+            filter.add_suffix("gif");
+            filter.add_suffix("bmp");
+            filter.add_suffix("webp");
+            filter.add_suffix("svg");
+
+            let filters = gtk4::gio::ListStore::new::<gtk4::FileFilter>();
+            filters.append(&filter);
+            dialog.set_filters(Some(&filters));
+            dialog.set_default_filter(Some(&filter));
+
+            gtk4::glib::MainContext::default().spawn_local(async move {
+                if let Ok(file) = dialog.open_future(window.as_ref()).await {
+                    if let Some(path) = file.path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        path_entry_clone2.set_text(&path_str);
+
+                        let mut cfg = config_clone2.borrow_mut();
+                        if let BackgroundType::Image { ref mut path, .. } = cfg.background {
+                            *path = path_str;
+                            drop(cfg);
+                            preview_clone2.queue_draw();
+
+                            if let Some(callback) = on_change_clone2.borrow().as_ref() {
+                                callback();
+                            }
                         }
                     }
                 }
