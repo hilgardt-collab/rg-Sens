@@ -1798,13 +1798,16 @@ pub(crate) fn show_panel_properties_dialog(
         let css_template_label_clone = css_template_config_label.clone();
         let displayers_clone = displayers.clone();
         let displayer_names_clone = displayer_display_names.clone();
-        let dialog_clone = dialog.clone();
+        // Use weak reference to avoid reference cycle (dialog owns combo, combo handler owns dialog)
+        let dialog_weak = dialog.downgrade();
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 // Update dialog title to show selected displayer name
                 if let Some(display_name) = displayer_names_clone.borrow().get(selected_idx) {
-                    dialog_clone.set_title(Some(&format!("Panel Properties - {}", display_name)));
+                    if let Some(d) = dialog_weak.upgrade() {
+                        d.set_title(Some(&format!("Panel Properties - {}", display_name)));
+                    }
                 }
                 let is_text = displayer_id == "text";
                 let is_bar = displayer_id == "bar";
@@ -2770,16 +2773,17 @@ pub(crate) fn show_panel_properties_dialog(
     let border_color = Rc::new(RefCell::new(panel_guard.border.color));
 
     // Border color button handler
+    // Use weak reference to avoid reference cycle (dialog owns button, button handler owns dialog)
     {
         let border_color_clone = border_color.clone();
-        let dialog_clone = dialog.clone();
+        let dialog_weak = dialog.downgrade();
         border_color_btn.connect_clicked(move |_| {
             let current_color = *border_color_clone.borrow();
-            let window_opt = dialog_clone.clone().upcast::<gtk4::Window>();
+            let window_opt = dialog_weak.upgrade().map(|d| d.upcast::<gtk4::Window>());
             let border_color_clone2 = border_color_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = crate::ui::ColorPickerDialog::pick_color(Some(&window_opt), current_color).await {
+                if let Some(new_color) = crate::ui::ColorPickerDialog::pick_color(window_opt.as_ref(), current_color).await {
                     *border_color_clone2.borrow_mut() = new_color;
                 }
             });
@@ -2803,9 +2807,12 @@ pub(crate) fn show_panel_properties_dialog(
     let accept_button = Button::with_label("Accept");
     accept_button.add_css_class("suggested-action");
 
-    let dialog_clone = dialog.clone();
+    // Use weak reference to avoid reference cycle (dialog owns button, button handler owns dialog)
+    let dialog_weak = dialog.downgrade();
     cancel_button.connect_clicked(move |_| {
-        dialog_clone.close();
+        if let Some(d) = dialog_weak.upgrade() {
+            d.close();
+        }
     });
 
     // Create a shared closure for applying changes
@@ -2841,7 +2848,8 @@ pub(crate) fn show_panel_properties_dialog(
     let art_nouveau_config_widget_clone = art_nouveau_config_widget.clone();
     let steampunk_config_widget_clone = steampunk_config_widget.clone();
     let css_template_config_widget_clone = css_template_config_widget.clone();
-    let dialog_for_apply = dialog.clone();
+    // Use weak reference to avoid reference cycle (apply_changes closure captured by buttons)
+    let dialog_weak_for_apply = dialog.downgrade();
     let width_spin_for_collision = width_spin.clone();
     let height_spin_for_collision = height_spin.clone();
     let scale_spin_clone = scale_spin.clone();
@@ -2964,7 +2972,9 @@ pub(crate) fn show_panel_properties_dialog(
                 width_spin_for_collision.set_value(current_geometry.width as f64);
                 height_spin_for_collision.set_value(current_geometry.height as f64);
 
-                error_dialog.show(Some(&dialog_for_apply));
+                if let Some(d) = dialog_weak_for_apply.upgrade() {
+                    error_dialog.show(Some(&d));
+                }
                 return;
             }
 
@@ -4200,11 +4210,14 @@ pub(crate) fn show_panel_properties_dialog(
     });
 
     // Accept button - applies changes and closes dialog
+    // Use weak reference to avoid reference cycle (dialog owns button, button handler owns dialog)
     let apply_changes_clone2 = apply_changes.clone();
-    let dialog_clone2 = dialog.clone();
+    let dialog_weak2 = dialog.downgrade();
     accept_button.connect_clicked(move |_| {
         apply_changes_clone2();
-        dialog_clone2.close();
+        if let Some(d) = dialog_weak2.upgrade() {
+            d.close();
+        }
     });
 
     button_box.append(&cancel_button);
