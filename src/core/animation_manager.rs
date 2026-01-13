@@ -226,6 +226,15 @@ impl AnimationManager {
                 return false;
             };
 
+            // Remove entry if widget has been orphaned (removed from widget tree)
+            // This is critical for preventing memory leaks when displayers are changed -
+            // the old widget is removed from its parent but GTK may keep it alive briefly.
+            // Without this check, the tick_fn closure holds Arc references indefinitely.
+            if widget.parent().is_none() {
+                log::debug!("Removing animation entry for orphaned widget");
+                return false;
+            }
+
             // Skip if widget is not visible (saves CPU)
             if !widget.is_mapped() {
                 return true; // Keep entry, just skip this frame
