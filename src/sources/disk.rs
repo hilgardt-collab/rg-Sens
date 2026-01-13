@@ -4,21 +4,30 @@ use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMeta
 use crate::core::constants::{BYTES_PER_MB, BYTES_PER_GB, BYTES_PER_TB};
 use crate::ui::{DiskField, DiskSourceConfig, DiskUnit};
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use sysinfo::Disks;
 
 /// Cached disk list for UI dropdowns (avoids expensive filesystem scan on each call)
 static CACHED_DISKS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
+/// Shared sysinfo::Disks instance for all DiskSource instances.
+/// This reduces memory usage when multiple disk sources exist.
+static SHARED_DISKS: Lazy<Mutex<Disks>> = Lazy::new(|| {
+    log::info!("Creating shared Disks sysinfo instance");
+    Mutex::new(Disks::new_with_refreshed_list())
+});
+
 /// Disk usage data source
 ///
 /// Provides disk usage information for mounted filesystems.
+/// Uses a shared sysinfo::Disks instance to reduce memory usage.
 pub struct DiskSource {
     metadata: SourceMetadata,
-    disks: Disks,
+    // Note: No local Disks field - we use SHARED_DISKS instead
     config: DiskSourceConfig,
 
     // Cached values (in bytes)
@@ -52,11 +61,10 @@ impl DiskSource {
             default_interval: Duration::from_millis(2000),
         };
 
-        let disks = Disks::new_with_refreshed_list();
+        // Note: We use SHARED_DISKS instead of a local Disks to save memory
 
         Self {
             metadata,
-            disks,
             config: DiskSourceConfig::default(),
             total_space: 0,
             available_space: 0,
@@ -223,10 +231,12 @@ impl DataSource for DiskSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        self.disks.refresh();
+        // Use shared Disks instance to reduce memory usage
+        let mut disks = SHARED_DISKS.lock().unwrap();
+        disks.refresh();
 
         // Find the disk matching our configured path and cache all values
-        if let Some(disk) = self.disks.iter().find(|d| {
+        if let Some(disk) = disks.iter().find(|d| {
             d.mount_point().to_string_lossy() == self.config.disk_path
         }) {
             self.total_space = disk.total_space();
@@ -238,6 +248,9 @@ impl DataSource for DiskSource {
             self.available_space = 0;
             self.file_system.clear();
         }
+
+        // Drop the lock before doing any other processing
+        drop(disks);
 
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();

@@ -211,6 +211,8 @@ pub struct ComboSourceConfigWidget {
     cached_fields: Rc<RefCell<Vec<crate::core::FieldMetadata>>>,
     /// Generation counter for field updates (to cancel stale updates)
     fields_generation: Rc<Cell<u32>>,
+    /// Debounce counter for field updates (to coalesce rapid updates)
+    fields_debounce_id: Rc<Cell<u32>>,
     /// Callback to invoke when fields are updated asynchronously
     on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>>,
     /// Flag to indicate widget is destroyed - checked by async callbacks to abort early
@@ -311,6 +313,7 @@ impl ComboSourceConfigWidget {
         // Cached fields and generation counter
         let cached_fields = Rc::new(RefCell::new(Vec::new()));
         let fields_generation = Rc::new(Cell::new(0u32));
+        let fields_debounce_id = Rc::new(Cell::new(0u32));
         let on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>> =
             Rc::new(RefCell::new(None));
 
@@ -330,6 +333,7 @@ impl ComboSourceConfigWidget {
             rebuild_generation,
             cached_fields,
             fields_generation,
+            fields_debounce_id,
             on_fields_updated,
             destroyed,
         };
@@ -342,12 +346,14 @@ impl ComboSourceConfigWidget {
             let destroyed_clone = widget.destroyed.clone();
             let rebuild_gen = widget.rebuild_generation.clone();
             let fields_gen = widget.fields_generation.clone();
+            let fields_debounce = widget.fields_debounce_id.clone();
             widget.container.connect_unrealize(move |_| {
                 log::debug!("ComboSourceConfigWidget unrealized - cancelling async operations");
                 destroyed_clone.set(true);
-                // Increment generation counters to cancel any pending async operations
+                // Increment generation and debounce counters to cancel any pending async operations
                 rebuild_gen.set(rebuild_gen.get().wrapping_add(1));
                 fields_gen.set(fields_gen.get().wrapping_add(1));
+                fields_debounce.set(fields_debounce.get().wrapping_add(1));
             });
         }
 
@@ -1331,79 +1337,107 @@ impl ComboSourceConfigWidget {
     /// Update the cached fields asynchronously (non-blocking).
     /// Creates a ComboSource in a background thread and updates the cache when done.
     /// Calls the `on_fields_updated` callback when the cache is updated.
+    ///
+    /// This method is debounced - rapid calls are coalesced into a single update.
+    /// This prevents spawning many threads when multiple dropdowns change at once
+    /// (e.g., during initialization or when pasting configurations).
     pub fn update_fields_cache_async(&self) {
-        // Increment generation to cancel any pending updates
-        let generation = self.fields_generation.get().wrapping_add(1);
-        self.fields_generation.set(generation);
+        // Debounce: increment counter and schedule delayed execution
+        // If called again before delay, the counter changes and previous call is cancelled
+        let debounce_id = self.fields_debounce_id.get().wrapping_add(1);
+        self.fields_debounce_id.set(debounce_id);
 
-        let config = self.config.borrow().clone();
-
-        // Use Arc for thread-safe references
+        let config = self.config.clone();
         let cached_fields = self.cached_fields.clone();
         let fields_generation = self.fields_generation.clone();
+        let fields_debounce_id = self.fields_debounce_id.clone();
         let on_fields_updated = self.on_fields_updated.clone();
+        let destroyed = self.destroyed.clone();
 
-        // Create a channel to send results back to main thread
-        let (tx, rx) = std::sync::mpsc::channel::<(u32, Vec<crate::core::FieldMetadata>)>();
-
-        // Spawn background thread for expensive ComboSource creation
-        std::thread::spawn(move || {
-            use crate::core::DataSource;
-            use crate::sources::ComboSource;
-            use serde_json::Value;
-
-            let start = std::time::Instant::now();
-            let mut source = ComboSource::new();
-
-            // Configure the source
-            let combo_config_value = serde_json::to_value(&config).unwrap_or(Value::Null);
-            let mut config_map: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-            config_map.insert("combo_config".to_string(), combo_config_value);
-
-            let fields = if source.configure(&config_map).is_ok() {
-                source.fields()
-            } else {
-                Vec::new()
-            };
-
-            log::debug!("Fields computed in background thread in {:?} with {} fields", start.elapsed(), fields.len());
-
-            // Send results back via channel
-            let _ = tx.send((generation, fields));
-        });
-
-        // Set up receiver on main thread to process results
-        // Use timeout_add_local instead of idle_add_local to avoid busy-polling
-        // which causes high CPU usage and UI unresponsiveness
-        glib::timeout_add_local(Duration::from_millis(50), move || {
-            match rx.try_recv() {
-                Ok((gen, fields)) => {
-                    // Check if this update is still valid (not superseded by newer request)
-                    if fields_generation.get() != gen {
-                        log::debug!("Skipping stale fields update (gen {} vs current {})", gen, fields_generation.get());
-                        return glib::ControlFlow::Break;
-                    }
-
-                    // Update the cache
-                    *cached_fields.borrow_mut() = fields.clone();
-
-                    // Notify listeners
-                    if let Some(ref callback) = *on_fields_updated.borrow() {
-                        callback(fields);
-                    }
-
-                    glib::ControlFlow::Break
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    // Results not ready yet, check again in 50ms
-                    glib::ControlFlow::Continue
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    // Channel closed (thread panicked or finished without sending)
-                    log::warn!("Fields computation thread disconnected without sending results");
-                    glib::ControlFlow::Break
-                }
+        // Wait for debounce period before spawning thread
+        // This coalesces rapid calls (e.g., setting up 20 slots) into one
+        glib::timeout_add_local_once(Duration::from_millis(100), move || {
+            // Check if this is still the latest request
+            if fields_debounce_id.get() != debounce_id {
+                log::debug!("Skipping debounced fields update (id {} vs current {})", debounce_id, fields_debounce_id.get());
+                return;
             }
+
+            // Check if widget is destroyed
+            if destroyed.get() {
+                log::debug!("Skipping fields update - widget destroyed");
+                return;
+            }
+
+            // Increment generation for this actual update
+            let generation = fields_generation.get().wrapping_add(1);
+            fields_generation.set(generation);
+
+            let config_snapshot = config.borrow().clone();
+
+            // Create a channel to send results back to main thread
+            let (tx, rx) = std::sync::mpsc::channel::<(u32, Vec<crate::core::FieldMetadata>)>();
+
+            log::debug!("Spawning fields computation thread (gen {})", generation);
+
+            // Spawn background thread for expensive ComboSource creation
+            std::thread::spawn(move || {
+                use crate::core::DataSource;
+                use crate::sources::ComboSource;
+                use serde_json::Value;
+
+                let start = std::time::Instant::now();
+                let mut source = ComboSource::new();
+
+                // Configure the source
+                let combo_config_value = serde_json::to_value(&config_snapshot).unwrap_or(Value::Null);
+                let mut config_map: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+                config_map.insert("combo_config".to_string(), combo_config_value);
+
+                let fields = if source.configure(&config_map).is_ok() {
+                    source.fields()
+                } else {
+                    Vec::new()
+                };
+
+                log::debug!("Fields computed in background thread in {:?} with {} fields", start.elapsed(), fields.len());
+
+                // Send results back via channel
+                let _ = tx.send((generation, fields));
+            });
+
+            // Set up receiver on main thread to process results
+            let fields_generation_for_recv = fields_generation.clone();
+            glib::timeout_add_local(Duration::from_millis(50), move || {
+                match rx.try_recv() {
+                    Ok((gen, fields)) => {
+                        // Check if this update is still valid (not superseded by newer request)
+                        if fields_generation_for_recv.get() != gen {
+                            log::debug!("Skipping stale fields update (gen {} vs current {})", gen, fields_generation_for_recv.get());
+                            return glib::ControlFlow::Break;
+                        }
+
+                        // Update the cache
+                        *cached_fields.borrow_mut() = fields.clone();
+
+                        // Notify listeners
+                        if let Some(ref callback) = *on_fields_updated.borrow() {
+                            callback(fields);
+                        }
+
+                        glib::ControlFlow::Break
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        // Results not ready yet, check again in 50ms
+                        glib::ControlFlow::Continue
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        // Channel closed (thread panicked or finished without sending)
+                        log::warn!("Fields computation thread disconnected without sending results");
+                        glib::ControlFlow::Break
+                    }
+                }
+            });
         });
     }
 
@@ -1434,9 +1468,10 @@ impl ComboSourceConfigWidget {
     pub fn cleanup(&self) {
         log::debug!("ComboSourceConfigWidget::cleanup() - cancelling async operations");
         self.destroyed.set(true);
-        // Increment generation counters to cancel any pending async operations
+        // Increment generation and debounce counters to cancel any pending async operations
         self.rebuild_generation.set(self.rebuild_generation.get().wrapping_add(1));
         self.fields_generation.set(self.fields_generation.get().wrapping_add(1));
+        self.fields_debounce_id.set(self.fields_debounce_id.get().wrapping_add(1));
     }
 }
 
