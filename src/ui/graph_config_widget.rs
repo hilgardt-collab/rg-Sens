@@ -404,12 +404,6 @@ impl GraphConfigWidget {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
-    /// Notify that config has changed (available for direct calls on the widget)
-    #[allow(dead_code)]
-    fn notify_change(&self) {
-        notify_change_static(&self.on_change);
-    }
-
     /// Update the visibility of fill-related controls based on fill mode
     fn update_fill_visibility(&self, fill_mode: FillMode) {
         match fill_mode {

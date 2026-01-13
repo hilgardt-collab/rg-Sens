@@ -170,65 +170,6 @@ fn render_line_group_inline(
         }
     });
 }
-
-#[allow(dead_code)]
-fn render_line_group(
-    cr: &Context,
-    width: f64,
-    height: f64,
-    lines: &[&TextLineConfig],
-    values: &HashMap<String, Value>,
-    theme: Option<&ComboThemeConfig>,
-) {
-    if lines.is_empty() {
-        return;
-    }
-
-    // All lines in a group share settings from the first line
-    let first_line = lines[0];
-    let shared_v_pos = first_line.vertical_position();
-    let shared_rotation = first_line.rotation_angle;
-    let shared_offset_x = first_line.offset_x;
-    let shared_offset_y = first_line.offset_y;
-    let shared_direction = first_line.combine_direction;
-    let shared_alignment = first_line.combine_alignment;
-
-    // Group lines by horizontal position
-    let mut left_parts: Vec<(&TextLineConfig, String)> = Vec::new();
-    let mut center_parts: Vec<(&TextLineConfig, String)> = Vec::new();
-    let mut right_parts: Vec<(&TextLineConfig, String)> = Vec::new();
-
-    for line in lines {
-        if let Some(text) = get_field_value(&line.field_id, values) {
-            match line.horizontal_position() {
-                HorizontalPosition::Left => left_parts.push((line, text)),
-                HorizontalPosition::Center => center_parts.push((line, text)),
-                HorizontalPosition::Right => right_parts.push((line, text)),
-            }
-        }
-    }
-
-    // Render each group of parts with shared settings
-    if !left_parts.is_empty() {
-        render_combined_parts(
-            cr, width, height, &left_parts, &shared_v_pos, &HorizontalPosition::Left,
-            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
-        );
-    }
-    if !center_parts.is_empty() {
-        render_combined_parts(
-            cr, width, height, &center_parts, &shared_v_pos, &HorizontalPosition::Center,
-            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
-        );
-    }
-    if !right_parts.is_empty() {
-        render_combined_parts(
-            cr, width, height, &right_parts, &shared_v_pos, &HorizontalPosition::Right,
-            shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
-        );
-    }
-}
-
 fn render_combined_parts(
     cr: &Context,
     width: f64,
