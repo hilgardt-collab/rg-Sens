@@ -136,6 +136,8 @@ struct FrameWidgets {
     corner_style_dropdown: DropDown,
     corner_size_spin: SpinButton,
     gear_teeth_spin: SpinButton,
+    border_color_widget: Rc<ThemeColorSelector>,
+    accent_color_widget: Rc<ThemeColorSelector>,
 }
 
 /// Holds references to Background tab widgets
@@ -145,6 +147,9 @@ struct BackgroundWidgets {
     rivet_size_spin: SpinButton,
     rivet_spacing_spin: SpinButton,
     patina_intensity_spin: SpinButton,
+    bg_color_widget: Rc<ThemeColorSelector>,
+    patina_color_widget: Rc<ThemeColorSelector>,
+    rivet_color_widget: Rc<ThemeColorSelector>,
 }
 
 /// Holds references to Header tab widgets
@@ -164,6 +169,7 @@ struct LayoutWidgets {
     divider_style_dropdown: DropDown,
     divider_width_spin: SpinButton,
     divider_padding_spin: SpinButton,
+    divider_color_widget: Rc<ThemeColorSelector>,
     group_settings_box: GtkBox,
 }
 
@@ -812,6 +818,8 @@ impl SteampunkConfigWidget {
             corner_style_dropdown,
             corner_size_spin,
             gear_teeth_spin,
+            border_color_widget,
+            accent_color_widget,
         });
 
         page
@@ -947,6 +955,9 @@ impl SteampunkConfigWidget {
             rivet_size_spin,
             rivet_spacing_spin,
             patina_intensity_spin,
+            bg_color_widget,
+            patina_color_widget,
+            rivet_color_widget,
         });
 
         page
@@ -1145,6 +1156,7 @@ impl SteampunkConfigWidget {
             divider_style_dropdown,
             divider_width_spin,
             divider_padding_spin,
+            divider_color_widget,
             group_settings_box,
         });
 
@@ -1233,6 +1245,11 @@ impl SteampunkConfigWidget {
             });
             widgets.corner_size_spin.set_value(config.frame.corner_size);
             widgets.gear_teeth_spin.set_value(config.frame.gear_teeth as f64);
+            // Update color selectors (theme_config BEFORE source)
+            widgets.border_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.border_color_widget.set_source(config.frame.border_color.clone());
+            widgets.accent_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.accent_color_widget.set_source(config.frame.accent_color.clone());
         }
 
         // Update Background widgets
@@ -1248,6 +1265,13 @@ impl SteampunkConfigWidget {
             widgets.rivet_size_spin.set_value(config.frame.rivet_size);
             widgets.rivet_spacing_spin.set_value(config.frame.rivet_spacing);
             widgets.patina_intensity_spin.set_value(config.frame.patina_intensity);
+            // Update color selectors (theme_config BEFORE source)
+            widgets.bg_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.bg_color_widget.set_source(config.frame.background_color.clone());
+            widgets.patina_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.patina_color_widget.set_source(config.frame.patina_color.clone());
+            widgets.rivet_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.rivet_color_widget.set_source(config.frame.rivet_color.clone());
         }
 
         // Update Header widgets
@@ -1260,10 +1284,11 @@ impl SteampunkConfigWidget {
                 HeaderStyle::Industrial => 2,
                 HeaderStyle::None => 3,
             });
-            widgets.header_font_selector.set_source(config.frame.header_font.clone());
+            // Update selectors (theme_config BEFORE source)
             widgets.header_font_selector.set_theme_config(config.frame.theme.clone());
-            widgets.header_color_selector.set_source(config.frame.header_color.clone());
+            widgets.header_font_selector.set_source(config.frame.header_font.clone());
             widgets.header_color_selector.set_theme_config(config.frame.theme.clone());
+            widgets.header_color_selector.set_source(config.frame.header_color.clone());
         }
 
         // Update Layout widgets
@@ -1282,6 +1307,9 @@ impl SteampunkConfigWidget {
             });
             widgets.divider_width_spin.set_value(config.frame.divider_width);
             widgets.divider_padding_spin.set_value(config.frame.divider_padding);
+            // Update color selector (theme_config BEFORE source)
+            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets.divider_color_widget.set_source(config.frame.divider_color.clone());
 
             combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,
