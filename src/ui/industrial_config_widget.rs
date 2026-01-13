@@ -19,7 +19,7 @@ use crate::ui::lcars_display::SplitOrientation;
 use crate::displayers::IndustrialDisplayConfig;
 use crate::core::FieldMetadata;
 use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
+use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header, create_dropdown_row};
 use crate::ui::theme::{ColorSource, FontSource};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
@@ -233,19 +233,14 @@ impl IndustrialConfigWidget {
         combo_config_base::set_page_margins(&page);
 
         // Surface texture
-        let texture_box = GtkBox::new(Orientation::Horizontal, 6);
-        texture_box.append(&Label::new(Some("Texture:")));
-        let texture_list = StringList::new(&["Brushed Metal", "Carbon Fiber", "Diamond Plate", "Solid"]);
-        let texture_dropdown = DropDown::new(Some(texture_list), None::<gtk4::Expression>);
         let texture_idx = match config.borrow().frame.surface_texture {
             SurfaceTexture::BrushedMetal => 0,
             SurfaceTexture::CarbonFiber => 1,
             SurfaceTexture::DiamondPlate => 2,
             SurfaceTexture::Solid => 3,
         };
+        let (texture_box, texture_dropdown) = create_dropdown_row("Texture:", &["Brushed Metal", "Carbon Fiber", "Diamond Plate", "Solid"]);
         texture_dropdown.set_selected(texture_idx);
-        texture_dropdown.set_hexpand(true);
-        texture_box.append(&texture_dropdown);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -490,19 +485,14 @@ impl IndustrialConfigWidget {
         combo_config_base::set_page_margins(&page);
 
         // Rivet style
-        let style_box = GtkBox::new(Orientation::Horizontal, 6);
-        style_box.append(&Label::new(Some("Rivet Style:")));
-        let style_list = StringList::new(&["Hex Bolt", "Phillips Screw", "Flat Rivet", "None"]);
-        let rivet_style_dropdown = DropDown::new(Some(style_list), None::<gtk4::Expression>);
         let style_idx = match config.borrow().frame.rivet_style {
             RivetStyle::Hex => 0,
             RivetStyle::Phillips => 1,
             RivetStyle::Flat => 2,
             RivetStyle::None => 3,
         };
+        let (style_box, rivet_style_dropdown) = create_dropdown_row("Rivet Style:", &["Hex Bolt", "Phillips Screw", "Flat Rivet", "None"]);
         rivet_style_dropdown.set_selected(style_idx);
-        rivet_style_dropdown.set_hexpand(true);
-        style_box.append(&rivet_style_dropdown);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();

@@ -19,6 +19,7 @@ use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::GradientEditor;
 use crate::ui::TextOverlayConfigWidget;
+use crate::ui::widget_builder::{create_dropdown_row, create_spin_row_with_value};
 
 /// Core bars configuration widget
 pub struct CoreBarsConfigWidget {
@@ -376,51 +377,23 @@ impl CoreBarsConfigWidget {
         page.set_margin_bottom(8);
 
         // Style dropdown
-        let style_row = GtkBox::new(Orientation::Horizontal, 8);
-        style_row.append(&Label::new(Some("Style:")));
-        let style_options = StringList::new(&["Full", "Rectangle", "Segmented"]);
-        let style_dropdown = DropDown::new(Some(style_options), Option::<gtk4::Expression>::None);
-        style_dropdown.set_selected(0);
-        style_dropdown.set_hexpand(true);
-        style_row.append(&style_dropdown);
+        let (style_row, style_dropdown) = create_dropdown_row("Style:", &["Full", "Rectangle", "Segmented"]);
         page.append(&style_row);
 
         // Orientation dropdown
-        let orient_row = GtkBox::new(Orientation::Horizontal, 8);
-        orient_row.append(&Label::new(Some("Orientation:")));
-        let orient_options = StringList::new(&["Horizontal", "Vertical"]);
-        let orientation_dropdown = DropDown::new(Some(orient_options), Option::<gtk4::Expression>::None);
-        orientation_dropdown.set_selected(0);
-        orientation_dropdown.set_hexpand(true);
-        orient_row.append(&orientation_dropdown);
+        let (orient_row, orientation_dropdown) = create_dropdown_row("Orientation:", &["Horizontal", "Vertical"]);
         page.append(&orient_row);
 
         // Fill direction dropdown (will be populated based on orientation)
-        let direction_row = GtkBox::new(Orientation::Horizontal, 8);
-        direction_row.append(&Label::new(Some("Fill Direction:")));
-        let direction_options = StringList::new(&["Left to Right", "Right to Left"]); // Initial horizontal options
-        let fill_direction_dropdown = DropDown::new(Some(direction_options), Option::<gtk4::Expression>::None);
-        fill_direction_dropdown.set_selected(0);
-        fill_direction_dropdown.set_hexpand(true);
-        direction_row.append(&fill_direction_dropdown);
+        let (direction_row, fill_direction_dropdown) = create_dropdown_row("Fill Direction:", &["Left to Right", "Right to Left"]);
         page.append(&direction_row);
 
         // Corner radius
-        let radius_row = GtkBox::new(Orientation::Horizontal, 8);
-        radius_row.append(&Label::new(Some("Corner Radius:")));
-        let radius_adj = Adjustment::new(3.0, 0.0, 20.0, 1.0, 2.0, 0.0);
-        let corner_radius_spin = SpinButton::new(Some(&radius_adj), 1.0, 0);
-        corner_radius_spin.set_hexpand(true);
-        radius_row.append(&corner_radius_spin);
+        let (radius_row, corner_radius_spin) = create_spin_row_with_value("Corner Radius:", 0.0, 20.0, 1.0, 3.0);
         page.append(&radius_row);
 
         // Bar spacing
-        let spacing_row = GtkBox::new(Orientation::Horizontal, 8);
-        spacing_row.append(&Label::new(Some("Bar Spacing:")));
-        let spacing_adj = Adjustment::new(4.0, 0.0, 20.0, 1.0, 2.0, 0.0);
-        let bar_spacing_spin = SpinButton::new(Some(&spacing_adj), 1.0, 0);
-        bar_spacing_spin.set_hexpand(true);
-        spacing_row.append(&bar_spacing_spin);
+        let (spacing_row, bar_spacing_spin) = create_spin_row_with_value("Bar Spacing:", 0.0, 20.0, 1.0, 4.0);
         page.append(&spacing_row);
 
         // Segmented options
@@ -428,20 +401,11 @@ impl CoreBarsConfigWidget {
         seg_label.set_xalign(0.0);
         page.append(&seg_label);
 
-        let seg_count_row = GtkBox::new(Orientation::Horizontal, 8);
-        seg_count_row.append(&Label::new(Some("Segment Count:")));
-        let seg_count_adj = Adjustment::new(10.0, 2.0, 50.0, 1.0, 5.0, 0.0);
-        let segment_count_spin = SpinButton::new(Some(&seg_count_adj), 1.0, 0);
-        segment_count_spin.set_hexpand(true);
-        seg_count_row.append(&segment_count_spin);
+        let (seg_count_row, segment_count_spin) = create_spin_row_with_value("Segment Count:", 2.0, 50.0, 1.0, 10.0);
         page.append(&seg_count_row);
 
-        let seg_spacing_row = GtkBox::new(Orientation::Horizontal, 8);
-        seg_spacing_row.append(&Label::new(Some("Segment Spacing:")));
-        let seg_spacing_adj = Adjustment::new(1.0, 0.0, 10.0, 0.5, 1.0, 0.0);
-        let segment_spacing_spin = SpinButton::new(Some(&seg_spacing_adj), 0.5, 1);
-        segment_spacing_spin.set_hexpand(true);
-        seg_spacing_row.append(&segment_spacing_spin);
+        let (seg_spacing_row, segment_spacing_spin) = create_spin_row_with_value("Segment Spacing:", 0.0, 10.0, 0.5, 1.0);
+        segment_spacing_spin.set_digits(1);
         page.append(&seg_spacing_row);
 
         // Connect signals
@@ -980,13 +944,7 @@ impl CoreBarsConfigWidget {
         page.append(&prefix_row);
 
         // Label position
-        let pos_row = GtkBox::new(Orientation::Horizontal, 8);
-        pos_row.append(&Label::new(Some("Position:")));
-        let pos_options = StringList::new(&["Start", "End", "Inside"]);
-        let label_position_dropdown = DropDown::new(Some(pos_options), Option::<gtk4::Expression>::None);
-        label_position_dropdown.set_selected(0);
-        label_position_dropdown.set_hexpand(true);
-        pos_row.append(&label_position_dropdown);
+        let (pos_row, label_position_dropdown) = create_dropdown_row("Position:", &["Start", "End", "Inside"]);
         page.append(&pos_row);
 
         // Font button with copy/paste
@@ -1011,13 +969,7 @@ impl CoreBarsConfigWidget {
         page.append(&font_row);
 
         // Font size
-        let size_row = GtkBox::new(Orientation::Horizontal, 8);
-        size_row.append(&Label::new(Some("Size:")));
-        let size_adj = Adjustment::new(10.0, 6.0, 32.0, 1.0, 2.0, 0.0);
-        let label_size_spin = SpinButton::new(Some(&size_adj), 1.0, 0);
-        label_size_spin.set_value(config.borrow().label_size);
-        label_size_spin.set_hexpand(true);
-        size_row.append(&label_size_spin);
+        let (size_row, label_size_spin) = create_spin_row_with_value("Size:", 6.0, 32.0, 1.0, config.borrow().label_size);
         page.append(&size_row);
 
         // Font color
