@@ -170,7 +170,7 @@ impl CoreBarsConfigWidget {
 
         // Preview configuration
         preview.set_content_height(150);
-        preview.set_content_width(100);
+        preview.set_content_width(200); // Min width 200px
         preview.set_hexpand(true);
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);

@@ -136,8 +136,8 @@ impl IndustrialConfigWidget {
 
         // Preview at the top
         let preview = DrawingArea::new();
-        preview.set_content_height(200);
-        preview.set_content_width(100);
+        preview.set_content_height(200); // Max height 200px
+        preview.set_content_width(200); // Min width 200px
         preview.set_hexpand(true);
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
