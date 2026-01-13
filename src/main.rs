@@ -1129,6 +1129,11 @@ fn setup_auto_hide_header(
     let popover_motion = popover.clone();
     let popover_leave = popover.clone();
 
+    // Track if mouse is over the header area
+    let mouse_over_header: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
+    let mouse_over_header_motion = mouse_over_header.clone();
+    let mouse_over_header_leave = mouse_over_header.clone();
+
     // Timer for delayed hide
     let hide_timer: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
     let hide_timer_motion = hide_timer.clone();
@@ -1141,26 +1146,57 @@ fn setup_auto_hide_header(
         }
     }
 
-    // Helper to schedule hide after delay
+    // Helper to schedule hide after delay (only if not over header and popover not visible)
     fn schedule_hide(
         timer: &Rc<RefCell<Option<glib::SourceId>>>,
         revealer: &gtk4::Revealer,
+        popover: &gtk4::Popover,
+        mouse_over_header: &Rc<RefCell<bool>>,
         delay_ms: u64,
     ) {
         if timer.borrow().is_some() {
             return; // Timer already scheduled
         }
         let revealer_hide = revealer.clone();
+        let popover_check = popover.clone();
+        let mouse_over_check = mouse_over_header.clone();
         let timer_ref = timer.clone();
         let source_id = glib::timeout_add_local_once(
             std::time::Duration::from_millis(delay_ms),
             move || {
-                revealer_hide.set_reveal_child(false);
+                // Only hide if popover is not visible and mouse is not over header
+                if !popover_check.is_visible() && !*mouse_over_check.borrow() {
+                    revealer_hide.set_reveal_child(false);
+                }
                 *timer_ref.borrow_mut() = None;
             },
         );
         *timer.borrow_mut() = Some(source_id);
     }
+
+    // Add motion controller to the revealer to track when mouse is over header
+    let header_motion_controller = gtk4::EventControllerMotion::new();
+    let mouse_over_header_enter = mouse_over_header.clone();
+    let mouse_over_header_exit = mouse_over_header.clone();
+    let hide_timer_header = hide_timer.clone();
+
+    header_motion_controller.connect_enter(move |_, _x, _y| {
+        *mouse_over_header_enter.borrow_mut() = true;
+        cancel_hide_timer(&hide_timer_header);
+    });
+
+    let hide_timer_header_leave = hide_timer.clone();
+    let revealer_header_leave = revealer.clone();
+    let popover_header_leave = popover.clone();
+    header_motion_controller.connect_leave(move |_| {
+        *mouse_over_header_exit.borrow_mut() = false;
+        // Schedule hide when leaving header area (unless popover is open)
+        if revealer_header_leave.reveals_child() && !popover_header_leave.is_visible() {
+            schedule_hide(&hide_timer_header_leave, &revealer_header_leave, &popover_header_leave, &mouse_over_header_exit, 2000);
+        }
+    });
+
+    revealer.add_controller(header_motion_controller);
 
     motion_controller.connect_motion(move |_, _x, y| {
         let trigger_zone = 50.0; // pixels from top to trigger reveal
@@ -1169,16 +1205,16 @@ fn setup_auto_hide_header(
             // Mouse at top - show menu immediately
             cancel_hide_timer(&hide_timer_motion);
             revealer_motion.set_reveal_child(true);
-        } else if revealer_motion.reveals_child() && !popover_motion.is_visible() {
-            // Mouse moved away and popover is not open - schedule hide
-            schedule_hide(&hide_timer_motion, &revealer_motion, 1500);
+        } else if revealer_motion.reveals_child() && !popover_motion.is_visible() && !*mouse_over_header_motion.borrow() {
+            // Mouse moved away, popover is not open, and not over header - schedule hide
+            schedule_hide(&hide_timer_motion, &revealer_motion, &popover_motion, &mouse_over_header_motion, 2000);
         }
     });
 
     motion_controller.connect_leave(move |_| {
-        // Mouse left window - hide menu after delay (unless popover is open)
-        if revealer_leave.reveals_child() && !popover_leave.is_visible() {
-            schedule_hide(&hide_timer_leave, &revealer_leave, 1500);
+        // Mouse left window - hide menu after delay (unless popover is open or over header)
+        if revealer_leave.reveals_child() && !popover_leave.is_visible() && !*mouse_over_header_leave.borrow() {
+            schedule_hide(&hide_timer_leave, &revealer_leave, &popover_leave, &mouse_over_header_leave, 2000);
         }
     });
 
@@ -1186,24 +1222,13 @@ fn setup_auto_hide_header(
 
     // Also track when the popover closes to schedule hide
     let revealer_popover = revealer.clone();
+    let popover_for_close = popover.clone();
     let hide_timer_popover = hide_timer.clone();
+    let mouse_over_header_popover = mouse_over_header.clone();
     popover.connect_closed(move |_| {
         // When popover closes, schedule hide after delay
         if revealer_popover.reveals_child() {
-            let revealer_hide = revealer_popover.clone();
-            let timer_ref = hide_timer_popover.clone();
-            // Cancel any existing timer first
-            if let Some(id) = timer_ref.borrow_mut().take() {
-                id.remove();
-            }
-            let source_id = glib::timeout_add_local_once(
-                std::time::Duration::from_millis(1500),
-                move || {
-                    revealer_hide.set_reveal_child(false);
-                    *timer_ref.borrow_mut() = None;
-                },
-            );
-            *hide_timer_popover.borrow_mut() = Some(source_id);
+            schedule_hide(&hide_timer_popover, &revealer_popover, &popover_for_close, &mouse_over_header_popover, 2000);
         }
     });
 }

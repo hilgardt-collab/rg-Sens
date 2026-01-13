@@ -582,6 +582,12 @@ where
 
     menu_box.append(&Separator::new(Orientation::Horizontal));
 
+    // Save Layout button (saves to default config location)
+    let save_layout_btn = create_menu_button("Save Layout");
+    menu_box.append(&save_layout_btn);
+
+    menu_box.append(&Separator::new(Orientation::Horizontal));
+
     // Save to File button
     let save_file_btn = create_menu_button("Save Layout to File...");
     menu_box.append(&save_file_btn);
@@ -637,6 +643,21 @@ where
             &app_config_for_new,
             Some((0.0, 0.0)),
         );
+    });
+
+    // Save Layout button handler (saves to default config location)
+    let grid_layout_for_save = grid_layout.clone();
+    let app_config_for_save = app_config.clone();
+    let window_for_save = window.clone();
+    let config_dirty_for_save = config_dirty.clone();
+    let popover_for_save = popover_ref.clone();
+    save_layout_btn.connect_clicked(move |_| {
+        popover_for_save.popdown();
+        info!("Save layout requested");
+        grid_layout_for_save.borrow().with_panels(|panels| {
+            config_helpers::save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, panels);
+        });
+        config_dirty_for_save.store(false, Ordering::Relaxed);
     });
 
     // Save to File button handler
