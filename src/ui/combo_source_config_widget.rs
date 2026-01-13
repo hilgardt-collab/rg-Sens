@@ -1342,6 +1342,7 @@ impl ComboSourceConfigWidget {
     /// This prevents spawning many threads when multiple dropdowns change at once
     /// (e.g., during initialization or when pasting configurations).
     pub fn update_fields_cache_async(&self) {
+        log::info!("=== update_fields_cache_async CALLED ===");
         // Debounce: increment counter and schedule delayed execution
         // If called again before delay, the counter changes and previous call is cancelled
         let debounce_id = self.fields_debounce_id.get().wrapping_add(1);
@@ -1378,7 +1379,7 @@ impl ComboSourceConfigWidget {
             // Create a channel to send results back to main thread
             let (tx, rx) = std::sync::mpsc::channel::<(u32, Vec<crate::core::FieldMetadata>)>();
 
-            log::debug!("Spawning fields computation thread (gen {})", generation);
+            log::info!("=== DEBOUNCE FIRED: Spawning fields computation thread (gen {}) ===", generation);
 
             // Spawn background thread for expensive ComboSource creation
             std::thread::spawn(move || {
@@ -1400,7 +1401,7 @@ impl ComboSourceConfigWidget {
                     Vec::new()
                 };
 
-                log::debug!("Fields computed in background thread in {:?} with {} fields", start.elapsed(), fields.len());
+                log::info!("=== BACKGROUND THREAD DONE: Fields computed in {:?} with {} fields ===", start.elapsed(), fields.len());
 
                 // Send results back via channel
                 let _ = tx.send((generation, fields));
@@ -1472,6 +1473,12 @@ impl ComboSourceConfigWidget {
         self.rebuild_generation.set(self.rebuild_generation.get().wrapping_add(1));
         self.fields_generation.set(self.fields_generation.get().wrapping_add(1));
         self.fields_debounce_id.set(self.fields_debounce_id.get().wrapping_add(1));
+    }
+}
+
+impl Drop for ComboSourceConfigWidget {
+    fn drop(&mut self) {
+        log::info!("=== ComboSourceConfigWidget DROPPED ===");
     }
 }
 

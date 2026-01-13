@@ -1558,3 +1558,153 @@ impl SpeedometerConfigWidget {
         }
     }
 }
+
+/// Lazy wrapper for SpeedometerConfigWidget to defer expensive widget creation
+///
+/// The actual SpeedometerConfigWidget (with preview, notebook pages, etc.) is only created
+/// when the widget becomes visible (mapped), saving significant memory when many
+/// content items are created but only one display type is active.
+pub struct LazySpeedometerConfigWidget {
+    /// Container that holds either the placeholder or the actual widget
+    container: GtkBox,
+    /// The actual widget, created lazily on first map
+    inner_widget: Rc<RefCell<Option<SpeedometerConfigWidget>>>,
+    /// Deferred config to apply when widget is created
+    deferred_config: Rc<RefCell<SpeedometerConfig>>,
+    /// Deferred theme to apply when widget is created
+    deferred_theme: Rc<RefCell<ComboThemeConfig>>,
+    /// Available fields for the widget
+    available_fields: Vec<FieldMetadata>,
+    /// Callback to invoke on config changes
+    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+}
+
+impl LazySpeedometerConfigWidget {
+    /// Create a new lazy speedometer config widget
+    ///
+    /// The actual SpeedometerConfigWidget is NOT created here - it's created automatically
+    /// when the widget becomes visible (mapped).
+    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        let container = GtkBox::new(Orientation::Vertical, 0);
+        let inner_widget: Rc<RefCell<Option<SpeedometerConfigWidget>>> = Rc::new(RefCell::new(None));
+        let deferred_config = Rc::new(RefCell::new(SpeedometerConfig::default()));
+        let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
+        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+
+        // Create placeholder with loading indicator
+        let placeholder = GtkBox::new(Orientation::Vertical, 8);
+        placeholder.set_margin_top(12);
+        placeholder.set_margin_bottom(12);
+        placeholder.set_margin_start(12);
+        placeholder.set_margin_end(12);
+
+        let info_label = Label::new(Some("Loading speedometer configuration..."));
+        info_label.add_css_class("dim-label");
+        placeholder.append(&info_label);
+        container.append(&placeholder);
+
+        // Create a shared initialization closure
+        let init_widget = {
+            let container_clone = container.clone();
+            let inner_widget_clone = inner_widget.clone();
+            let deferred_config_clone = deferred_config.clone();
+            let deferred_theme_clone = deferred_theme.clone();
+            let available_fields_clone = available_fields.clone();
+            let on_change_clone = on_change.clone();
+
+            Rc::new(move || {
+                // Only create if not already created
+                if inner_widget_clone.borrow().is_none() {
+                    log::info!("LazySpeedometerConfigWidget: Creating actual SpeedometerConfigWidget on map");
+
+                    // Create the actual widget
+                    let widget = SpeedometerConfigWidget::new(available_fields_clone.clone());
+
+                    // Apply deferred theme first (before config, as config may trigger UI updates)
+                    widget.set_theme(deferred_theme_clone.borrow().clone());
+
+                    // Apply deferred config
+                    widget.set_config(&deferred_config_clone.borrow());
+
+                    // Connect on_change callback
+                    let on_change_inner = on_change_clone.clone();
+                    widget.set_on_change(Box::new(move || {
+                        if let Some(ref callback) = *on_change_inner.borrow() {
+                            callback();
+                        }
+                    }));
+
+                    // Remove placeholder and add actual widget
+                    while let Some(child) = container_clone.first_child() {
+                        container_clone.remove(&child);
+                    }
+                    container_clone.append(widget.widget());
+
+                    // Store the widget
+                    *inner_widget_clone.borrow_mut() = Some(widget);
+                }
+            })
+        };
+
+        // Auto-initialize when the widget becomes visible (mapped)
+        {
+            let init_widget_clone = init_widget.clone();
+            container.connect_map(move |_| {
+                init_widget_clone();
+            });
+        }
+
+        Self {
+            container,
+            inner_widget,
+            deferred_config,
+            deferred_theme,
+            available_fields,
+            on_change,
+        }
+    }
+
+    /// Get the widget container
+    pub fn widget(&self) -> &GtkBox {
+        &self.container
+    }
+
+    /// Set the speedometer configuration
+    pub fn set_config(&self, config: &SpeedometerConfig) {
+        *self.deferred_config.borrow_mut() = config.clone();
+        if let Some(ref widget) = *self.inner_widget.borrow() {
+            widget.set_config(config);
+        }
+    }
+
+    /// Get the current speedometer configuration
+    pub fn get_config(&self) -> SpeedometerConfig {
+        if let Some(ref widget) = *self.inner_widget.borrow() {
+            widget.get_config()
+        } else {
+            self.deferred_config.borrow().clone()
+        }
+    }
+
+    /// Set the theme for the speedometer widget
+    pub fn set_theme(&self, theme: ComboThemeConfig) {
+        *self.deferred_theme.borrow_mut() = theme.clone();
+        if let Some(ref widget) = *self.inner_widget.borrow() {
+            widget.set_theme(theme);
+        }
+    }
+
+    /// Set the on_change callback
+    pub fn set_on_change(&self, callback: Box<dyn Fn()>) {
+        *self.on_change.borrow_mut() = Some(callback);
+        // If widget already exists, connect it
+        if let Some(ref widget) = *self.inner_widget.borrow() {
+            let on_change_inner = self.on_change.clone();
+            widget.set_on_change(Box::new(move || {
+                if let Some(ref cb) = *on_change_inner.borrow() {
+                    cb();
+                }
+            }));
+        }
+    }
+}

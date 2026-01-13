@@ -22,8 +22,9 @@ use crate::ui::widget_builder::{create_page_container, DEFAULT_MARGIN};
 // Re-export for convenience - combo config widgets can import from here
 pub use crate::ui::widget_builder::{queue_redraw, notify_change, OnChangeCallback};
 use crate::ui::{
-    ArcConfigWidget, ColorButtonWidget, CoreBarsConfigWidget, GradientEditor, LazyBarConfigWidget,
-    LazyGraphConfigWidget, LazyTextOverlayConfigWidget, SpeedometerConfigWidget, StaticConfigWidget,
+    ColorButtonWidget, GradientEditor, LazyArcConfigWidget, LazyBarConfigWidget,
+    LazyCoreBarsConfigWidget, LazyGraphConfigWidget, LazySpeedometerConfigWidget,
+    LazyStaticConfigWidget, LazyTextOverlayConfigWidget,
 };
 use crate::ui::shared_font_dialog::show_font_dialog;
 
@@ -1726,7 +1727,7 @@ where
     let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
     core_bars_config_frame.set_margin_top(12);
 
-    let core_bars_widget = CoreBarsConfigWidget::new();
+    let core_bars_widget = LazyCoreBarsConfigWidget::new();
     let current_core_bars_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -1784,7 +1785,7 @@ where
     let arc_config_frame = gtk4::Frame::new(Some("Arc Configuration"));
     arc_config_frame.set_margin_top(12);
 
-    let arc_widget = ArcConfigWidget::new(slot_fields.clone());
+    let arc_widget = LazyArcConfigWidget::new(slot_fields.clone());
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -1842,7 +1843,7 @@ where
     let speedometer_config_frame = gtk4::Frame::new(Some("Speedometer Configuration"));
     speedometer_config_frame.set_margin_top(12);
 
-    let speedometer_widget = SpeedometerConfigWidget::new(slot_fields.clone());
+    let speedometer_widget = LazySpeedometerConfigWidget::new(slot_fields.clone());
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -1900,7 +1901,7 @@ where
     let static_config_frame = gtk4::Frame::new(Some("Static Display Configuration"));
     static_config_frame.set_margin_top(12);
 
-    let static_widget = StaticConfigWidget::new(slot_fields.clone());
+    let static_widget = LazyStaticConfigWidget::new(slot_fields.clone());
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();

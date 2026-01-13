@@ -685,7 +685,10 @@ pub(crate) fn show_panel_properties_dialog(
     text_config_label.set_visible(old_displayer_id == "text");
 
     // Get available fields from the current data source - use Rc to avoid cloning
+    log::info!("=== GETTING available_fields from source START ===");
+    let start_fields = std::time::Instant::now();
     let available_fields = Rc::new(panel_guard.source.fields());
+    log::info!("=== GETTING available_fields DONE in {:?}, got {} fields ===", start_fields.elapsed(), available_fields.len());
 
     // Create placeholder box for lazy widget creation
     let text_placeholder = GtkBox::new(Orientation::Vertical, 0);
@@ -928,13 +931,11 @@ pub(crate) fn show_panel_properties_dialog(
 
     // Only create LCARS widget if this is the active displayer (lazy init)
     if old_displayer_id == "lcars" {
-        log::info!("=== Creating LcarsConfigWidget (lazy init), old_displayer='{}', old_source='{}' ===", old_displayer_id, old_source_id);
         let widget = crate::ui::LcarsConfigWidget::new((*available_fields).clone());
 
         // Load existing LCARS config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
         let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) = panel_guard.displayer.get_typed_config() {
-            log::info!("=== Loading LCARS config from displayer.get_typed_config() ===");
             widget.set_theme(lcars_config.frame.theme.clone());
             widget.set_config(lcars_config);
             true
@@ -945,7 +946,6 @@ pub(crate) fn show_panel_properties_dialog(
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("lcars_config") {
                 if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
-                    log::info!("=== Loading LCARS config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
                 }
@@ -4233,6 +4233,16 @@ pub(crate) fn show_panel_properties_dialog(
     // The combo_config_widget has async callbacks that hold Rc references,
     // so we must explicitly clear it to allow cleanup.
     let combo_widget_for_cleanup = combo_config_widget.clone();
+    let lcars_widget_for_cleanup = lcars_config_widget.clone();
+    let cyberpunk_widget_for_cleanup = cyberpunk_config_widget.clone();
+    let material_widget_for_cleanup = material_config_widget.clone();
+    let industrial_widget_for_cleanup = industrial_config_widget.clone();
+    let retro_terminal_widget_for_cleanup = retro_terminal_config_widget.clone();
+    let fighter_hud_widget_for_cleanup = fighter_hud_config_widget.clone();
+    let synthwave_widget_for_cleanup = synthwave_config_widget.clone();
+    let art_deco_widget_for_cleanup = art_deco_config_widget.clone();
+    let art_nouveau_widget_for_cleanup = art_nouveau_config_widget.clone();
+    let steampunk_widget_for_cleanup = steampunk_config_widget.clone();
     dialog.connect_close_request(move |_| {
         PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
             *dialog_ref.borrow_mut() = None;
@@ -4240,10 +4250,22 @@ pub(crate) fn show_panel_properties_dialog(
         // Clean up and clear the combo config widget to break Rc reference cycles.
         // Call cleanup() first to cancel async callbacks, then clear the reference.
         if let Some(ref widget) = *combo_widget_for_cleanup.borrow() {
-            log::debug!("Cleaning up ComboSourceConfigWidget on dialog close");
             widget.cleanup();
         }
         *combo_widget_for_cleanup.borrow_mut() = None;
+
+        // Clear all combo displayer config widgets to release their memory
+        *lcars_widget_for_cleanup.borrow_mut() = None;
+        *cyberpunk_widget_for_cleanup.borrow_mut() = None;
+        *material_widget_for_cleanup.borrow_mut() = None;
+        *industrial_widget_for_cleanup.borrow_mut() = None;
+        *retro_terminal_widget_for_cleanup.borrow_mut() = None;
+        *fighter_hud_widget_for_cleanup.borrow_mut() = None;
+        *synthwave_widget_for_cleanup.borrow_mut() = None;
+        *art_deco_widget_for_cleanup.borrow_mut() = None;
+        *art_nouveau_widget_for_cleanup.borrow_mut() = None;
+        *steampunk_widget_for_cleanup.borrow_mut() = None;
+
         gtk4::glib::Propagation::Proceed
     });
 

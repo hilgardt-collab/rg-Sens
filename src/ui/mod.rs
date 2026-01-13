@@ -105,9 +105,9 @@ pub use disk_source_config_widget::{DiskSourceConfigWidget, DiskSourceConfig, Di
 pub use bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig, render_bar};
 pub use bar_config_widget::{BarConfigWidget, LazyBarConfigWidget};
 pub use arc_display::{ArcDisplayConfig, ArcCapStyle, ArcTaperStyle, ColorTransitionStyle, ColorApplicationMode, render_arc};
-pub use arc_config_widget::ArcConfigWidget;
+pub use arc_config_widget::{ArcConfigWidget, LazyArcConfigWidget};
 pub use speedometer_display::{SpeedometerConfig, NeedleStyle, NeedleTailStyle, TickStyle, BezelStyle, ValueZone, TickLabelConfig, render_speedometer};
-pub use speedometer_config_widget::SpeedometerConfigWidget;
+pub use speedometer_config_widget::{SpeedometerConfigWidget, LazySpeedometerConfigWidget};
 pub use graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode, AxisConfig, Margin, DataPoint, render_graph};
 pub use graph_config_widget::{GraphConfigWidget, LazyGraphConfigWidget};
 pub use clipboard::{PanelStyle, CLIPBOARD};
@@ -128,11 +128,11 @@ pub use lcars_display::{
 };
 pub use lcars_config_widget::LcarsConfigWidget;
 pub use core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
-pub use core_bars_config_widget::CoreBarsConfigWidget;
+pub use core_bars_config_widget::{CoreBarsConfigWidget, LazyCoreBarsConfigWidget};
 pub use indicator_config_widget::IndicatorConfigWidget;
 pub use test_source_config_widget::TestSourceConfigWidget;
 pub use static_text_config_widget::StaticTextConfigWidget;
-pub use static_config_widget::StaticConfigWidget;
+pub use static_config_widget::{StaticConfigWidget, LazyStaticConfigWidget};
 pub use global_theme_widget::GlobalThemeWidget;
 pub use cyberpunk_display::{
     CyberpunkFrameConfig, CornerStyle as CyberpunkCornerStyle, HeaderStyle as CyberpunkHeaderStyle,

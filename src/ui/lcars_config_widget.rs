@@ -2224,6 +2224,12 @@ impl LcarsConfigWidget {
     }
 }
 
+impl Drop for LcarsConfigWidget {
+    fn drop(&mut self) {
+        log::info!("=== LcarsConfigWidget DROPPED ===");
+    }
+}
+
 impl Default for LcarsConfigWidget {
     fn default() -> Self {
         Self::new(Vec::new())
