@@ -280,19 +280,14 @@ impl DataSource for TestSource {
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
-        // DO NOT modify the global TEST_SOURCE_STATE here!
-        // The global state is controlled exclusively by the Test Source Dialog.
-        // This method is called when config dialogs open/create sources for preview,
-        // and we don't want that to reset the running test source state.
-        //
-        // Only update the update_interval_ms which is a per-panel setting
-        // that doesn't affect the running value generation.
-
+        // Apply the full test config from saved settings
+        // This is called when loading panels from disk at startup
         if let Some(test_config_value) = config.get("test_config") {
             if let Ok(test_config) = serde_json::from_value::<TestSourceConfig>(test_config_value.clone()) {
-                // Only update update_interval_ms, not mode/values
                 if let Ok(mut state) = TEST_SOURCE_STATE.lock() {
-                    state.config.update_interval_ms = test_config.update_interval_ms;
+                    state.config = test_config;
+                    // Reset start time when loading config so oscillations start fresh
+                    state.start_time = Instant::now();
                 }
             }
         }
