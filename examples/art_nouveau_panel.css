@@ -15,12 +15,27 @@
  * - Gold/Ochre:     #c9a227, #d4a574, #8b6914
  * - Dark Olive:     #3c3228, #2a241e
  * - Soft Lavender:  #9d8fa9
+ *
+ * Typography (Art Nouveau inspired Google Fonts):
+ * - Amarante:           Display font for time and titles
+ * - Cinzel:             Classical serif for labels
+ * - Cormorant Garamond: Elegant serif for values and body
  */
+
+/* ============================================
+   Google Fonts Import
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Amarante&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
 /* ============================================
    Base Styles & Variables
    ============================================ */
 :root {
+    /* Font families */
+    --font-display: 'Amarante', 'Palatino Linotype', serif;
+    --font-title: 'Cinzel', 'Times New Roman', serif;
+    --font-body: 'Cormorant Garamond', 'Palatino Linotype', Georgia, serif;
+
     /* Primary colors */
     --cream-light: #f5f0e6;
     --cream: #ebe5d9;
@@ -56,7 +71,7 @@
 }
 
 body {
-    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+    font-family: var(--font-body);
     background: transparent;
     width: 480px;
     height: 1920px;
@@ -264,8 +279,9 @@ body {
 }
 
 .time-value {
+    font-family: var(--font-display);
     font-size: 52px;
-    font-weight: 300;
+    font-weight: 400;
     color: var(--olive-darker);
     letter-spacing: 4px;
     text-shadow: 1px 1px 2px rgba(201, 162, 39, 0.3);
@@ -294,8 +310,9 @@ body {
 }
 
 .title-text {
+    font-family: var(--font-title);
     font-size: 18px;
-    font-weight: 400;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 4px;
     color: var(--olive-dark);
@@ -362,7 +379,9 @@ body {
 }
 
 .gauge-label {
+    font-family: var(--font-title);
     font-size: 12px;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 2px;
     color: var(--olive-dark);
@@ -404,8 +423,9 @@ body {
 }
 
 .gauge-value {
+    font-family: var(--font-body);
     font-size: 24px;
-    font-weight: 300;
+    font-weight: 500;
     color: var(--olive-darker);
 }
 
@@ -539,7 +559,9 @@ body {
 }
 
 .bar-label {
+    font-family: var(--font-title);
     font-size: 14px;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 2px;
     color: var(--olive-dark);
@@ -550,8 +572,9 @@ body {
 }
 
 .bar-value {
+    font-family: var(--font-body);
     font-size: 28px;
-    font-weight: 300;
+    font-weight: 500;
     color: var(--olive-darker);
 }
 
@@ -721,8 +744,9 @@ body {
 
 .circular-value {
     display: block;
+    font-family: var(--font-body);
     font-size: 28px;
-    font-weight: 300;
+    font-weight: 500;
     color: var(--olive-darker);
 }
 
@@ -734,7 +758,9 @@ body {
 }
 
 .circular-label {
+    font-family: var(--font-title);
     font-size: 13px;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 2px;
     color: var(--olive-dark);
