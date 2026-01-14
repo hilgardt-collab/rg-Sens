@@ -182,7 +182,7 @@
                     <div class="deco-bar">
                         <div class="bar-end left"></div>
                         <div class="bar-track">
-                            <div class="bar-fill temp-fill" id="temp1Fill"></div>
+                            <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="2" data-max-id="4"></div>
                         </div>
                         <div class="bar-end right"></div>
                     </div>
@@ -200,7 +200,7 @@
                     <div class="deco-bar">
                         <div class="bar-end left"></div>
                         <div class="bar-track">
-                            <div class="bar-fill temp-fill" id="temp2Fill"></div>
+                            <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="6" data-max-id="8"></div>
                         </div>
                         <div class="bar-end right"></div>
                     </div>
@@ -218,7 +218,7 @@
                     <div class="deco-bar">
                         <div class="bar-end left"></div>
                         <div class="bar-track">
-                            <div class="bar-fill temp-fill" id="temp3Fill"></div>
+                            <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="10" data-max-id="12"></div>
                         </div>
                         <div class="bar-end right"></div>
                     </div>
@@ -242,7 +242,7 @@
                         <div class="deco-bar featured-bar">
                             <div class="bar-end left"></div>
                             <div class="bar-track">
-                                <div class="bar-fill temp-fill" id="gpuTempFill"></div>
+                                <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="14" data-max-id="16"></div>
                             </div>
                             <div class="bar-end right"></div>
                         </div>
@@ -292,7 +292,7 @@
                 <div class="deco-bar memory-bar">
                     <div class="bar-end left"></div>
                     <div class="bar-track segmented">
-                        <div class="bar-fill memory-fill" id="memFill"></div>
+                        <div class="bar-fill memory-fill" data-gauge="bar" data-value-id="18" data-max-id="20"></div>
                         <div class="bar-segments">
                             <span></span><span></span><span></span><span></span><span></span>
                             <span></span><span></span><span></span><span></span>
@@ -337,7 +337,7 @@
                     <div class="arc-gauge">
                         <svg viewBox="0 0 100 60" class="arc-svg">
                             <path d="M10,55 A45,45 0 0,1 90,55" class="arc-track"/>
-                            <path d="M10,55 A45,45 0 0,1 90,55" class="arc-fill" id="disk1Arc"/>
+                            <path d="M10,55 A45,45 0 0,1 90,55" class="arc-fill" data-gauge="arc" data-value-id="22" data-max-id="24" data-length="141"/>
                         </svg>
                         <div class="arc-value-container">
                             <span class="arc-value" id="disk1Value">{{22}}</span>
@@ -354,7 +354,7 @@
                     <div class="arc-gauge">
                         <svg viewBox="0 0 100 60" class="arc-svg">
                             <path d="M10,55 A45,45 0 0,1 90,55" class="arc-track"/>
-                            <path d="M10,55 A45,45 0 0,1 90,55" class="arc-fill" id="disk2Arc"/>
+                            <path d="M10,55 A45,45 0 0,1 90,55" class="arc-fill" data-gauge="arc" data-value-id="26" data-max-id="28" data-length="141"/>
                         </svg>
                         <div class="arc-value-container">
                             <span class="arc-value" id="disk2Value">{{26}}</span>
@@ -398,7 +398,7 @@
                     <div class="hex-gauge">
                         <svg viewBox="0 0 100 100" class="hex-svg">
                             <polygon points="50,5 93,27 93,73 50,95 7,73 7,27" class="hex-track"/>
-                            <polygon points="50,5 93,27 93,73 50,95 7,73 7,27" class="hex-fill" id="cpuUseFill"/>
+                            <polygon points="50,5 93,27 93,73 50,95 7,73 7,27" class="hex-fill" data-gauge="polygon" data-value-id="30" data-max-id="32" data-perimeter="258"/>
                         </svg>
                         <div class="hex-value-container">
                             <span class="hex-value" id="cpuUseValue">{{30}}</span>
@@ -414,7 +414,7 @@
                     <div class="hex-gauge">
                         <svg viewBox="0 0 100 100" class="hex-svg">
                             <polygon points="50,5 93,27 93,73 50,95 7,73 7,27" class="hex-track"/>
-                            <polygon points="50,5 93,27 93,73 50,95 7,73 7,27" class="hex-fill" id="gpuUseFill"/>
+                            <polygon points="50,5 93,27 93,73 50,95 7,73 7,27" class="hex-fill" data-gauge="polygon" data-value-id="34" data-max-id="36" data-perimeter="258"/>
                         </svg>
                         <div class="hex-value-container">
                             <span class="hex-value" id="gpuUseValue">{{34}}</span>
@@ -446,124 +446,7 @@
         </footer>
     </div>
 
-    <script>
-        // Art Deco Panel - JavaScript Bridge for dynamic updates
-        window.updateValues = function(values) {
-            // Helper to calculate percentage
-            function calcPercent(value, max) {
-                const v = parseFloat(value) || 0;
-                const m = parseFloat(max) || 100;
-                return m > 0 ? Math.min(100, Math.max(0, (v / m) * 100)) : 0;
-            }
-
-            // Arc path length (approximate for the semicircle)
-            const arcLength = 141; // For A45,45 arc
-            // Hexagon perimeter
-            const hexPerimeter = 258; // Approximate for this hexagon
-
-            // Update CPU Temp 1 bar (value={{2}}, max={{4}})
-            if (values['2'] !== undefined || values['4'] !== undefined) {
-                const value = values['2'] !== undefined ? values['2'] : document.getElementById('temp1Value')?.textContent || '0';
-                const max = values['4'] !== undefined ? values['4'] : document.getElementById('temp1Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('temp1Fill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update CPU Temp 2 bar (value={{6}}, max={{8}})
-            if (values['6'] !== undefined || values['8'] !== undefined) {
-                const value = values['6'] !== undefined ? values['6'] : document.getElementById('temp2Value')?.textContent || '0';
-                const max = values['8'] !== undefined ? values['8'] : document.getElementById('temp2Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('temp2Fill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update CPU Temp 3 bar (value={{10}}, max={{12}})
-            if (values['10'] !== undefined || values['12'] !== undefined) {
-                const value = values['10'] !== undefined ? values['10'] : document.getElementById('temp3Value')?.textContent || '0';
-                const max = values['12'] !== undefined ? values['12'] : document.getElementById('temp3Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('temp3Fill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update GPU Temp bar (value={{14}}, max={{16}})
-            if (values['14'] !== undefined || values['16'] !== undefined) {
-                const value = values['14'] !== undefined ? values['14'] : document.getElementById('gpuTempValue')?.textContent || '0';
-                const max = values['16'] !== undefined ? values['16'] : document.getElementById('gpuTempMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('gpuTempFill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update Memory bar (value={{18}}, max={{20}})
-            if (values['18'] !== undefined || values['20'] !== undefined) {
-                const value = values['18'] !== undefined ? values['18'] : document.getElementById('memValue')?.textContent || '0';
-                const max = values['20'] !== undefined ? values['20'] : document.getElementById('memMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('memFill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update Disk 1 arc (value={{22}}, max={{24}})
-            if (values['22'] !== undefined || values['24'] !== undefined) {
-                const value = values['22'] !== undefined ? values['22'] : document.getElementById('disk1Value')?.textContent || '0';
-                const max = values['24'] !== undefined ? values['24'] : document.getElementById('disk1Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const arc = document.getElementById('disk1Arc');
-                if (arc) {
-                    const offset = arcLength * (1 - percent / 100);
-                    arc.style.strokeDasharray = arcLength;
-                    arc.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update Disk 2 arc (value={{26}}, max={{28}})
-            if (values['26'] !== undefined || values['28'] !== undefined) {
-                const value = values['26'] !== undefined ? values['26'] : document.getElementById('disk2Value')?.textContent || '0';
-                const max = values['28'] !== undefined ? values['28'] : document.getElementById('disk2Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const arc = document.getElementById('disk2Arc');
-                if (arc) {
-                    const offset = arcLength * (1 - percent / 100);
-                    arc.style.strokeDasharray = arcLength;
-                    arc.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update CPU Usage hexagon (value={{30}}, max={{32}})
-            if (values['30'] !== undefined || values['32'] !== undefined) {
-                const value = values['30'] !== undefined ? values['30'] : document.getElementById('cpuUseValue')?.textContent || '0';
-                const max = values['32'] !== undefined ? values['32'] : document.getElementById('cpuUseMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const hex = document.getElementById('cpuUseFill');
-                if (hex) {
-                    const offset = hexPerimeter * (1 - percent / 100);
-                    hex.style.strokeDasharray = hexPerimeter;
-                    hex.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update GPU Usage hexagon (value={{34}}, max={{36}})
-            if (values['34'] !== undefined || values['36'] !== undefined) {
-                const value = values['34'] !== undefined ? values['34'] : document.getElementById('gpuUseValue')?.textContent || '0';
-                const max = values['36'] !== undefined ? values['36'] : document.getElementById('gpuUseMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const hex = document.getElementById('gpuUseFill');
-                if (hex) {
-                    const offset = hexPerimeter * (1 - percent / 100);
-                    hex.style.strokeDasharray = hexPerimeter;
-                    hex.style.strokeDashoffset = offset;
-                }
-            }
-        };
-
-        // Initialize on load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize all gauges to 0 or current values
-            window.updateValues({});
-        });
-    </script>
+    <!-- rg-sens-gauges.js handles all gauge animations via data attributes -->
+    <script src="rg-sens-gauges.js"></script>
 </body>
 </html>

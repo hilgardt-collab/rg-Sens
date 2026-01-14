@@ -192,7 +192,7 @@
                     <div class="arc-gauge-container">
                         <svg class="arc-gauge-svg" viewBox="0 0 120 70">
                             <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
-                            <path class="arc-fill temp-arc" id="cpuTemp1Arc" d="M10,60 A50,50 0 0,1 110,60"/>
+                            <path class="arc-fill temp-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="2" data-max-id="4" data-length="157"/>
                         </svg>
                         <div class="gauge-value-container">
                             <span class="gauge-value" id="cpuTemp1Value">{{2}}</span>
@@ -207,7 +207,7 @@
                     <div class="arc-gauge-container">
                         <svg class="arc-gauge-svg" viewBox="0 0 120 70">
                             <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
-                            <path class="arc-fill temp-arc" id="cpuTemp2Arc" d="M10,60 A50,50 0 0,1 110,60"/>
+                            <path class="arc-fill temp-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="6" data-max-id="8" data-length="157"/>
                         </svg>
                         <div class="gauge-value-container">
                             <span class="gauge-value" id="cpuTemp2Value">{{6}}</span>
@@ -222,7 +222,7 @@
                     <div class="arc-gauge-container">
                         <svg class="arc-gauge-svg" viewBox="0 0 120 70">
                             <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
-                            <path class="arc-fill temp-arc" id="cpuTemp3Arc" d="M10,60 A50,50 0 0,1 110,60"/>
+                            <path class="arc-fill temp-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="10" data-max-id="12" data-length="157"/>
                         </svg>
                         <div class="gauge-value-container">
                             <span class="gauge-value" id="cpuTemp3Value">{{10}}</span>
@@ -244,7 +244,7 @@
                     <div class="large-gauge-container">
                         <svg class="large-arc-svg" viewBox="0 0 160 90">
                             <path class="arc-track-large" d="M10,80 A70,70 0 0,1 150,80"/>
-                            <path class="arc-fill-large gpu-arc" id="gpuTempArc" d="M10,80 A70,70 0 0,1 150,80"/>
+                            <path class="arc-fill-large gpu-arc" d="M10,80 A70,70 0 0,1 150,80" data-gauge="arc" data-value-id="14" data-max-id="16" data-length="220"/>
                         </svg>
                         <div class="large-gauge-value">
                             <span class="value" id="gpuTempValue">{{14}}</span>
@@ -277,7 +277,7 @@
                 </div>
                 <div class="art-nouveau-bar">
                     <div class="bar-track">
-                        <div class="bar-fill memory-fill" id="memFill"></div>
+                        <div class="bar-fill memory-fill" data-gauge="bar" data-value-id="18" data-max-id="20"></div>
                         <div class="bar-shine"></div>
                     </div>
                     <div class="bar-end-cap left"></div>
@@ -303,7 +303,7 @@
                     <div class="circular-gauge">
                         <svg class="circular-svg" viewBox="0 0 100 100">
                             <circle class="circular-track" cx="50" cy="50" r="40"/>
-                            <circle class="circular-fill disk-fill" id="disk1Fill" cx="50" cy="50" r="40"/>
+                            <circle class="circular-fill disk-fill" cx="50" cy="50" r="40" data-gauge="ring" data-value-id="22" data-max-id="24" data-circumference="251.3"/>
                         </svg>
                         <div class="circular-content">
                             <span class="circular-value" id="disk1Value">{{22}}</span>
@@ -318,7 +318,7 @@
                     <div class="circular-gauge">
                         <svg class="circular-svg" viewBox="0 0 100 100">
                             <circle class="circular-track" cx="50" cy="50" r="40"/>
-                            <circle class="circular-fill disk-fill" id="disk2Fill" cx="50" cy="50" r="40"/>
+                            <circle class="circular-fill disk-fill" cx="50" cy="50" r="40" data-gauge="ring" data-value-id="26" data-max-id="28" data-circumference="251.3"/>
                         </svg>
                         <div class="circular-content">
                             <span class="circular-value" id="disk2Value">{{26}}</span>
@@ -353,7 +353,7 @@
                 </div>
                 <div class="art-nouveau-bar">
                     <div class="bar-track">
-                        <div class="bar-fill cpu-fill" id="cpuUseFill"></div>
+                        <div class="bar-fill cpu-fill" data-gauge="bar" data-value-id="30" data-max-id="32"></div>
                         <div class="bar-shine"></div>
                     </div>
                     <div class="bar-end-cap left"></div>
@@ -373,7 +373,7 @@
                 </div>
                 <div class="art-nouveau-bar">
                     <div class="bar-track">
-                        <div class="bar-fill gpu-fill" id="gpuUseFill"></div>
+                        <div class="bar-fill gpu-fill" data-gauge="bar" data-value-id="34" data-max-id="36"></div>
                         <div class="bar-shine"></div>
                     </div>
                     <div class="bar-end-cap left"></div>
@@ -396,151 +396,7 @@
         </div>
     </div>
 
-    <script>
-        // Art Nouveau Panel - JavaScript Bridge
-        window.updateValues = function(values) {
-            // Helper to calculate percentage
-            function calcPercent(value, max) {
-                const v = parseFloat(value) || 0;
-                const m = parseFloat(max) || 100;
-                return m > 0 ? Math.min(100, Math.max(0, (v / m) * 100)) : 0;
-            }
-
-            // Arc path length for 180-degree arc
-            const arcLength = 157; // Approximate for radius 50
-            const largeArcLength = 220; // Approximate for radius 70
-            const circleLength = 251.3; // 2 * PI * 40
-
-            // Update CPU Temp 1 arc (value={{2}}, max={{4}})
-            if (values['2'] !== undefined || values['4'] !== undefined) {
-                const value = values['2'] !== undefined ? values['2'] : document.getElementById('cpuTemp1Value')?.textContent || '0';
-                const max = values['4'] !== undefined ? values['4'] : document.getElementById('cpuTemp1Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const arc = document.getElementById('cpuTemp1Arc');
-                if (arc) {
-                    const offset = arcLength * (1 - percent / 100);
-                    arc.style.strokeDasharray = arcLength;
-                    arc.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update CPU Temp 2 arc (value={{6}}, max={{8}})
-            if (values['6'] !== undefined || values['8'] !== undefined) {
-                const value = values['6'] !== undefined ? values['6'] : document.getElementById('cpuTemp2Value')?.textContent || '0';
-                const max = values['8'] !== undefined ? values['8'] : document.getElementById('cpuTemp2Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const arc = document.getElementById('cpuTemp2Arc');
-                if (arc) {
-                    const offset = arcLength * (1 - percent / 100);
-                    arc.style.strokeDasharray = arcLength;
-                    arc.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update CPU Temp 3 arc (value={{10}}, max={{12}})
-            if (values['10'] !== undefined || values['12'] !== undefined) {
-                const value = values['10'] !== undefined ? values['10'] : document.getElementById('cpuTemp3Value')?.textContent || '0';
-                const max = values['12'] !== undefined ? values['12'] : document.getElementById('cpuTemp3Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const arc = document.getElementById('cpuTemp3Arc');
-                if (arc) {
-                    const offset = arcLength * (1 - percent / 100);
-                    arc.style.strokeDasharray = arcLength;
-                    arc.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update GPU Temp arc (value={{14}}, max={{16}})
-            if (values['14'] !== undefined || values['16'] !== undefined) {
-                const value = values['14'] !== undefined ? values['14'] : document.getElementById('gpuTempValue')?.textContent || '0';
-                const max = values['16'] !== undefined ? values['16'] : document.getElementById('gpuTempMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const arc = document.getElementById('gpuTempArc');
-                if (arc) {
-                    const offset = largeArcLength * (1 - percent / 100);
-                    arc.style.strokeDasharray = largeArcLength;
-                    arc.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update Memory bar (value={{18}}, max={{20}})
-            if (values['18'] !== undefined || values['20'] !== undefined) {
-                const value = values['18'] !== undefined ? values['18'] : document.getElementById('memValue')?.textContent || '0';
-                const max = values['20'] !== undefined ? values['20'] : document.getElementById('memMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('memFill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update Disk 1 circular (value={{22}}, max={{24}})
-            if (values['22'] !== undefined || values['24'] !== undefined) {
-                const value = values['22'] !== undefined ? values['22'] : document.getElementById('disk1Value')?.textContent || '0';
-                const max = values['24'] !== undefined ? values['24'] : document.getElementById('disk1Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('disk1Fill');
-                if (fill) {
-                    const offset = circleLength * (1 - percent / 100);
-                    fill.style.strokeDasharray = circleLength;
-                    fill.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update Disk 2 circular (value={{26}}, max={{28}})
-            if (values['26'] !== undefined || values['28'] !== undefined) {
-                const value = values['26'] !== undefined ? values['26'] : document.getElementById('disk2Value')?.textContent || '0';
-                const max = values['28'] !== undefined ? values['28'] : document.getElementById('disk2Max')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('disk2Fill');
-                if (fill) {
-                    const offset = circleLength * (1 - percent / 100);
-                    fill.style.strokeDasharray = circleLength;
-                    fill.style.strokeDashoffset = offset;
-                }
-            }
-
-            // Update CPU Use bar (value={{30}}, max={{32}})
-            if (values['30'] !== undefined || values['32'] !== undefined) {
-                const value = values['30'] !== undefined ? values['30'] : document.getElementById('cpuUseValue')?.textContent || '0';
-                const max = values['32'] !== undefined ? values['32'] : document.getElementById('cpuUseMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('cpuUseFill');
-                if (fill) fill.style.width = percent + '%';
-            }
-
-            // Update GPU Use bar (value={{34}}, max={{36}})
-            if (values['34'] !== undefined || values['36'] !== undefined) {
-                const value = values['34'] !== undefined ? values['34'] : document.getElementById('gpuUseValue')?.textContent || '0';
-                const max = values['36'] !== undefined ? values['36'] : document.getElementById('gpuUseMax')?.textContent || '100';
-                const percent = calcPercent(value, max);
-                const fill = document.getElementById('gpuUseFill');
-                if (fill) fill.style.width = percent + '%';
-            }
-        };
-
-        // Initialize gauges on load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize all arc gauges
-            document.querySelectorAll('.arc-fill, .arc-fill-large').forEach(arc => {
-                arc.style.strokeDasharray = '157';
-                arc.style.strokeDashoffset = '157';
-            });
-
-            document.querySelectorAll('.arc-fill-large').forEach(arc => {
-                arc.style.strokeDasharray = '220';
-                arc.style.strokeDashoffset = '220';
-            });
-
-            // Initialize circular gauges
-            document.querySelectorAll('.circular-fill').forEach(circle => {
-                circle.style.strokeDasharray = '251.3';
-                circle.style.strokeDashoffset = '251.3';
-            });
-
-            // Initialize bars
-            document.querySelectorAll('.bar-fill').forEach(bar => {
-                bar.style.width = '0%';
-            });
-        });
-    </script>
+    <!-- rg-sens-gauges.js handles all gauge animations via data attributes -->
+    <script src="rg-sens-gauges.js"></script>
 </body>
 </html>
