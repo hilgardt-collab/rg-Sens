@@ -13,15 +13,20 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource, deserialize_color_or_source, deserialize_font_or_source};
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as MaterialContentType, ContentItemConfig as MaterialContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as MaterialContentType, ContentItemConfig as MaterialContentItemConfig,
+};
 
 /// Card elevation level (affects shadow intensity)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -94,53 +99,113 @@ pub enum HeaderAlignment {
     Right,
 }
 
-fn default_corner_radius() -> f64 { 12.0 }
-fn default_card_padding() -> f64 { 16.0 }
-fn default_content_padding() -> f64 { 20.0 }
-fn default_item_spacing() -> f64 { 12.0 }
-fn default_header_height() -> f64 { 40.0 }
-fn default_shadow_blur() -> f64 { 8.0 }
-fn default_shadow_offset_y() -> f64 { 2.0 }
-fn default_divider_spacing() -> f64 { 16.0 }
-fn default_group_count() -> usize { 2 }
+fn default_corner_radius() -> f64 {
+    12.0
+}
+fn default_card_padding() -> f64 {
+    16.0
+}
+fn default_content_padding() -> f64 {
+    20.0
+}
+fn default_item_spacing() -> f64 {
+    12.0
+}
+fn default_header_height() -> f64 {
+    40.0
+}
+fn default_shadow_blur() -> f64 {
+    8.0
+}
+fn default_shadow_offset_y() -> f64 {
+    2.0
+}
+fn default_divider_spacing() -> f64 {
+    16.0
+}
+fn default_group_count() -> usize {
+    2
+}
 
 fn default_accent_color() -> ColorSource {
     ColorSource::theme(3) // Theme color 3 (accent)
 }
 
 fn default_surface_color_light() -> Color {
-    Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 } // White
+    Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    } // White
 }
 
 fn default_surface_color_dark() -> Color {
-    Color { r: 0.12, g: 0.12, b: 0.12, a: 1.0 } // Dark gray
+    Color {
+        r: 0.12,
+        g: 0.12,
+        b: 0.12,
+        a: 1.0,
+    } // Dark gray
 }
 
 fn default_background_color_light() -> Color {
-    Color { r: 0.96, g: 0.96, b: 0.96, a: 1.0 } // Light gray
+    Color {
+        r: 0.96,
+        g: 0.96,
+        b: 0.96,
+        a: 1.0,
+    } // Light gray
 }
 
 fn default_background_color_dark() -> Color {
-    Color { r: 0.06, g: 0.06, b: 0.06, a: 1.0 } // Near black
+    Color {
+        r: 0.06,
+        g: 0.06,
+        b: 0.06,
+        a: 1.0,
+    } // Near black
 }
 
 fn default_text_color_light() -> Color {
-    Color { r: 0.13, g: 0.13, b: 0.13, a: 1.0 } // Near black
+    Color {
+        r: 0.13,
+        g: 0.13,
+        b: 0.13,
+        a: 1.0,
+    } // Near black
 }
 
 fn default_text_color_dark() -> Color {
-    Color { r: 0.93, g: 0.93, b: 0.93, a: 1.0 } // Near white
+    Color {
+        r: 0.93,
+        g: 0.93,
+        b: 0.93,
+        a: 1.0,
+    } // Near white
 }
 
 fn default_shadow_color() -> Color {
-    Color { r: 0.0, g: 0.0, b: 0.0, a: 0.15 } // Subtle black shadow
+    Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.15,
+    } // Subtle black shadow
 }
 
 fn default_divider_color() -> ColorSource {
-    ColorSource::custom(Color { r: 0.5, g: 0.5, b: 0.5, a: 0.2 }) // Subtle gray
+    ColorSource::custom(Color {
+        r: 0.5,
+        g: 0.5,
+        b: 0.5,
+        a: 0.2,
+    }) // Subtle gray
 }
 
-fn default_header_font_source() -> FontSource { FontSource::theme(1, 14.0) } // Theme font 1
+fn default_header_font_source() -> FontSource {
+    FontSource::theme(1, 14.0)
+} // Theme font 1
 
 /// Main configuration for the Material Cards frame
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,7 +213,10 @@ pub struct MaterialFrameConfig {
     // Theme variant (light/dark)
     #[serde(default)]
     pub theme_variant: ThemeVariant,
-    #[serde(default = "default_accent_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_accent_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub accent_color: ColorSource,
 
     // Card styling
@@ -190,7 +258,10 @@ pub struct MaterialFrameConfig {
     pub header_text: String,
     #[serde(default)]
     pub header_style: HeaderStyle,
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
@@ -225,7 +296,10 @@ pub struct MaterialFrameConfig {
     // Dividers
     #[serde(default)]
     pub divider_style: DividerStyle,
-    #[serde(default = "default_divider_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_divider_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub divider_color: ColorSource,
     #[serde(default = "default_divider_spacing")]
     pub divider_spacing: f64,
@@ -245,8 +319,12 @@ pub struct MaterialFrameConfig {
     pub theme: crate::ui::theme::ComboThemeConfig,
 }
 
-fn default_animation_enabled() -> bool { true }
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_enabled() -> bool {
+    true
+}
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 fn default_material_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_material()
@@ -390,8 +468,7 @@ impl FrameRenderer for MaterialRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_material_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_material_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -464,8 +541,20 @@ fn draw_rounded_rect(cr: &Context, x: f64, y: f64, w: f64, h: f64, radius: f64) 
     cr.new_sub_path();
     cr.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
     cr.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    cr.arc(x + r, y + h - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
-    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
+    cr.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    cr.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::FRAC_PI_2,
+    );
     cr.close_path();
 }
 
@@ -484,15 +573,23 @@ fn calculate_aligned_text_x(
         HeaderAlignment::Left => area_x + padding,
         HeaderAlignment::Center => {
             let extents = pango_text_extents(
-                cr, text, font_family,
-                cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size
+                cr,
+                text,
+                font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
             );
             area_x + (area_w - extents.width()) / 2.0
         }
         HeaderAlignment::Right => {
             let extents = pango_text_extents(
-                cr, text, font_family,
-                cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size
+                cr,
+                text,
+                font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
             );
             area_x + area_w - padding - extents.width()
         }
@@ -605,7 +702,14 @@ fn draw_group_header(
 
                 let text_y = y + bar_h + 8.0 + font_size;
                 cr.move_to(x + config.card_padding, text_y);
-                pango_show_text(cr, header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+                pango_show_text(
+                    cr,
+                    header_text,
+                    &font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                    font_size,
+                );
                 cr.restore().ok();
 
                 return bar_h + font_size + 16.0;
@@ -624,7 +728,14 @@ fn draw_group_header(
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
             cr.move_to(x + config.card_padding, text_y);
-            pango_show_text(cr, header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            pango_show_text(
+                cr,
+                header_text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
 
             cr.restore().ok();
             header_h
@@ -641,7 +752,14 @@ fn draw_group_header(
 
             let text_y = y + config.card_padding + font_size;
             cr.move_to(x + config.card_padding, text_y);
-            pango_show_text(cr, header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            pango_show_text(
+                cr,
+                header_text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
 
             cr.restore().ok();
             font_size + config.card_padding * 2.0
@@ -694,10 +812,34 @@ fn draw_divider(
 
             if horizontal {
                 let gradient = cairo::LinearGradient::new(x, y, x + length, y);
-                gradient.add_color_stop_rgba(0.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
-                gradient.add_color_stop_rgba(0.3, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
-                gradient.add_color_stop_rgba(0.7, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
-                gradient.add_color_stop_rgba(1.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
+                gradient.add_color_stop_rgba(
+                    0.0,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    0.0,
+                );
+                gradient.add_color_stop_rgba(
+                    0.3,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    0.7,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    1.0,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    0.0,
+                );
 
                 cr.set_source(&gradient).ok();
                 cr.set_line_width(1.0);
@@ -706,10 +848,34 @@ fn draw_divider(
                 cr.stroke().ok();
             } else {
                 let gradient = cairo::LinearGradient::new(x, y, x, y + length);
-                gradient.add_color_stop_rgba(0.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
-                gradient.add_color_stop_rgba(0.3, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
-                gradient.add_color_stop_rgba(0.7, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
-                gradient.add_color_stop_rgba(1.0, divider_color.r, divider_color.g, divider_color.b, 0.0);
+                gradient.add_color_stop_rgba(
+                    0.0,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    0.0,
+                );
+                gradient.add_color_stop_rgba(
+                    0.3,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    0.7,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    1.0,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    0.0,
+                );
 
                 cr.set_source(&gradient).ok();
                 cr.set_line_width(1.0);
@@ -803,9 +969,25 @@ fn draw_main_header(
             let actual_font_size = font_size + 2.0;
 
             let text_y = y + bar_h + 12.0 + font_size;
-            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment, &font_family, actual_font_size);
+            let text_x = calculate_aligned_text_x(
+                cr,
+                &config.header_text,
+                x,
+                w,
+                config.card_padding,
+                config.header_alignment,
+                &font_family,
+                actual_font_size,
+            );
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, actual_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                actual_font_size,
+            );
             cr.restore().ok();
 
             bar_h + font_size + 24.0
@@ -821,9 +1003,25 @@ fn draw_main_header(
             let actual_font_size = font_size + 2.0;
 
             let text_y = y + header_h / 2.0 + font_size / 3.0;
-            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment, &font_family, actual_font_size);
+            let text_x = calculate_aligned_text_x(
+                cr,
+                &config.header_text,
+                x,
+                w,
+                config.card_padding,
+                config.header_alignment,
+                &font_family,
+                actual_font_size,
+            );
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, actual_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                actual_font_size,
+            );
 
             cr.restore().ok();
             header_h
@@ -835,9 +1033,25 @@ fn draw_main_header(
             let actual_font_size = font_size + 2.0;
 
             let text_y = y + config.card_padding + font_size;
-            let text_x = calculate_aligned_text_x(cr, &config.header_text, x, w, config.card_padding, config.header_alignment, &font_family, actual_font_size);
+            let text_x = calculate_aligned_text_x(
+                cr,
+                &config.header_text,
+                x,
+                w,
+                config.card_padding,
+                config.header_alignment,
+                &font_family,
+                actual_font_size,
+            );
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, actual_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                actual_font_size,
+            );
 
             cr.restore().ok();
             font_size + config.card_padding * 2.0

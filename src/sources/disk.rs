@@ -1,7 +1,7 @@
 //! Disk usage data source implementation
 
+use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB, BYTES_PER_TB};
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
-use crate::core::constants::{BYTES_PER_MB, BYTES_PER_GB, BYTES_PER_TB};
 use crate::ui::{DiskField, DiskSourceConfig, DiskUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -89,17 +89,19 @@ impl DiskSource {
     /// UI interaction. The cache is populated once and reused for the lifetime
     /// of the application. Restart the app to detect newly mounted disks.
     pub fn get_available_disks() -> Vec<(String, String)> {
-        CACHED_DISKS.get_or_init(|| {
-            let disks = Disks::new_with_refreshed_list();
-            disks
-                .iter()
-                .map(|disk| {
-                    let mount_point = disk.mount_point().to_string_lossy().to_string();
-                    let name = disk.name().to_string_lossy().to_string();
-                    (mount_point, name)
-                })
-                .collect()
-        }).clone()
+        CACHED_DISKS
+            .get_or_init(|| {
+                let disks = Disks::new_with_refreshed_list();
+                disks
+                    .iter()
+                    .map(|disk| {
+                        let mount_point = disk.mount_point().to_string_lossy().to_string();
+                        let name = disk.name().to_string_lossy().to_string();
+                        (mount_point, name)
+                    })
+                    .collect()
+            })
+            .clone()
     }
 
     /// Convert disk space from bytes to configured unit
@@ -236,9 +238,10 @@ impl DataSource for DiskSource {
         disks.refresh();
 
         // Find the disk matching our configured path and cache all values
-        if let Some(disk) = disks.iter().find(|d| {
-            d.mount_point().to_string_lossy() == self.config.disk_path
-        }) {
+        if let Some(disk) = disks
+            .iter()
+            .find(|d| d.mount_point().to_string_lossy() == self.config.disk_path)
+        {
             self.total_space = disk.total_space();
             self.available_space = disk.available_space();
             self.file_system = disk.file_system().to_string_lossy().into_owned();
@@ -255,19 +258,29 @@ impl DataSource for DiskSource {
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();
 
-        let caption = self.config.custom_caption.clone()
+        let caption = self
+            .config
+            .custom_caption
+            .clone()
             .unwrap_or_else(|| self.generate_auto_caption());
 
-        self.values.insert("mount_point".to_string(), Value::from(self.config.disk_path.as_str()));
+        self.values.insert(
+            "mount_point".to_string(),
+            Value::from(self.config.disk_path.as_str()),
+        );
 
         // Use cached file system type (cached during update() to avoid double lookup)
         if !self.file_system.is_empty() {
-            self.values.insert("file_system".to_string(), Value::from(self.file_system.as_str()));
+            self.values.insert(
+                "file_system".to_string(),
+                Value::from(self.file_system.as_str()),
+            );
         }
 
         if self.total_space == 0 {
             // Disk not found or has no space
-            self.values.insert("caption".to_string(), Value::from(caption));
+            self.values
+                .insert("caption".to_string(), Value::from(caption));
             self.values.insert("value".to_string(), Value::from("N/A"));
             self.values.insert("unit".to_string(), Value::from(""));
             return Ok(());
@@ -281,10 +294,16 @@ impl DataSource for DiskSource {
         };
 
         // Provide all raw data
-        self.values.insert("raw_used_bytes".to_string(), Value::from(used_space));
-        self.values.insert("raw_free_bytes".to_string(), Value::from(self.available_space));
-        self.values.insert("raw_total_bytes".to_string(), Value::from(self.total_space));
-        self.values.insert("percent".to_string(), Value::from(percent));
+        self.values
+            .insert("raw_used_bytes".to_string(), Value::from(used_space));
+        self.values.insert(
+            "raw_free_bytes".to_string(),
+            Value::from(self.available_space),
+        );
+        self.values
+            .insert("raw_total_bytes".to_string(), Value::from(self.total_space));
+        self.values
+            .insert("percent".to_string(), Value::from(percent));
 
         // Calculate limits based on field
         let (min_limit, max_limit) = match self.config.field {
@@ -292,16 +311,24 @@ impl DataSource for DiskSource {
                 if self.config.auto_detect_limits {
                     (0.0, self.convert_space(self.total_space))
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0),
-                     self.config.max_limit.unwrap_or(self.convert_space(self.total_space)))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config
+                            .max_limit
+                            .unwrap_or(self.convert_space(self.total_space)),
+                    )
                 }
             }
             DiskField::Free => {
                 if self.config.auto_detect_limits {
                     (0.0, self.convert_space(self.total_space))
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0),
-                     self.config.max_limit.unwrap_or(self.convert_space(self.total_space)))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config
+                            .max_limit
+                            .unwrap_or(self.convert_space(self.total_space)),
+                    )
                 }
             }
             DiskField::Total => {
@@ -309,58 +336,82 @@ impl DataSource for DiskSource {
                 if self.config.auto_detect_limits {
                     (0.0, total)
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0),
-                     self.config.max_limit.unwrap_or(total))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(total),
+                    )
                 }
             }
             DiskField::Percent => {
                 if self.config.auto_detect_limits {
                     (0.0, 100.0)
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0),
-                     self.config.max_limit.unwrap_or(100.0))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(100.0),
+                    )
                 }
             }
         };
 
-        self.values.insert("min_limit".to_string(), Value::from(min_limit));
-        self.values.insert("max_limit".to_string(), Value::from(max_limit));
+        self.values
+            .insert("min_limit".to_string(), Value::from(min_limit));
+        self.values
+            .insert("max_limit".to_string(), Value::from(max_limit));
 
         // Set field-specific values
         match self.config.field {
             DiskField::Used => {
                 let used = self.convert_space(used_space);
-                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
                 self.values.insert("value".to_string(), Value::from(used));
                 self.values.insert("used".to_string(), Value::from(used));
-                self.values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
+                self.values
+                    .insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
             }
             DiskField::Free => {
                 let free = self.convert_space(self.available_space);
-                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
                 self.values.insert("value".to_string(), Value::from(free));
                 self.values.insert("free".to_string(), Value::from(free));
-                self.values.insert("available".to_string(), Value::from(free));
-                self.values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
+                self.values
+                    .insert("available".to_string(), Value::from(free));
+                self.values
+                    .insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
             }
             DiskField::Total => {
                 let total = self.convert_space(self.total_space);
-                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
                 self.values.insert("value".to_string(), Value::from(total));
                 self.values.insert("total".to_string(), Value::from(total));
-                self.values.insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
+                self.values
+                    .insert("unit".to_string(), Value::from(self.get_disk_unit_string()));
             }
             DiskField::Percent => {
-                self.values.insert("caption".to_string(), Value::from(caption));
-                self.values.insert("value".to_string(), Value::from(percent));
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("value".to_string(), Value::from(percent));
                 self.values.insert("unit".to_string(), Value::from("%"));
             }
         }
 
         // Also provide converted space values for all fields
-        self.values.insert("used_converted".to_string(), Value::from(self.convert_space(used_space)));
-        self.values.insert("free_converted".to_string(), Value::from(self.convert_space(self.available_space)));
-        self.values.insert("total_converted".to_string(), Value::from(self.convert_space(self.total_space)));
+        self.values.insert(
+            "used_converted".to_string(),
+            Value::from(self.convert_space(used_space)),
+        );
+        self.values.insert(
+            "free_converted".to_string(),
+            Value::from(self.convert_space(self.available_space)),
+        );
+        self.values.insert(
+            "total_converted".to_string(),
+            Value::from(self.convert_space(self.total_space)),
+        );
 
         Ok(())
     }
@@ -377,7 +428,9 @@ impl DataSource for DiskSource {
         // Look for disk_config in the configuration
         if let Some(disk_config_value) = config.get("disk_config") {
             // Try to deserialize it into DiskSourceConfig
-            if let Ok(disk_config) = serde_json::from_value::<DiskSourceConfig>(disk_config_value.clone()) {
+            if let Ok(disk_config) =
+                serde_json::from_value::<DiskSourceConfig>(disk_config_value.clone())
+            {
                 self.set_config(disk_config);
             }
         }

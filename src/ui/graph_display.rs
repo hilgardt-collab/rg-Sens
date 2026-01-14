@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 
 use super::background::Color;
 use super::pango_text::{pango_show_text, pango_text_extents};
-use super::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
+use super::theme::{deserialize_color_or_source, ColorSource, ComboThemeConfig};
 use crate::displayers::TextLineConfig;
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 
@@ -92,8 +92,7 @@ where
 }
 
 /// Graph type
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum GraphType {
     #[default]
     Line,
@@ -102,10 +101,8 @@ pub enum GraphType {
     SteppedLine,
 }
 
-
 /// Graph line style
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum LineStyle {
     #[default]
     Solid,
@@ -113,17 +110,14 @@ pub enum LineStyle {
     Dotted,
 }
 
-
 /// Graph fill mode
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum FillMode {
     #[default]
     None,
     Solid,
     Gradient,
 }
-
 
 /// Axis configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,16 +151,31 @@ impl Default for AxisConfig {
     fn default() -> Self {
         Self {
             show: true,
-            color: ColorSource::custom(Color { r: 0.7, g: 0.7, b: 0.7, a: 1.0 }),
+            color: ColorSource::custom(Color {
+                r: 0.7,
+                g: 0.7,
+                b: 0.7,
+                a: 1.0,
+            }),
             width: 1.0,
             show_labels: true,
-            label_color: ColorSource::custom(Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 }),
+            label_color: ColorSource::custom(Color {
+                r: 0.8,
+                g: 0.8,
+                b: 0.8,
+                a: 1.0,
+            }),
             label_font_family: "Sans".to_string(),
             label_font_size: 10.0,
             label_bold: false,
             label_italic: false,
             show_grid: true,
-            grid_color: ColorSource::custom(Color { r: 0.3, g: 0.3, b: 0.3, a: 0.5 }),
+            grid_color: ColorSource::custom(Color {
+                r: 0.3,
+                g: 0.3,
+                b: 0.3,
+                a: 0.5,
+            }),
             grid_width: 0.5,
             grid_line_style: LineStyle::Dotted,
         }
@@ -256,7 +265,12 @@ fn default_update_interval() -> f64 {
 
 impl Default for GraphDisplayConfig {
     fn default() -> Self {
-        let default_graph_color = Color { r: 0.2, g: 0.8, b: 0.4, a: 1.0 };
+        let default_graph_color = Color {
+            r: 0.2,
+            g: 0.8,
+            b: 0.4,
+            a: 1.0,
+        };
         Self {
             graph_type: GraphType::Line,
             line_style: LineStyle::Solid,
@@ -264,9 +278,24 @@ impl Default for GraphDisplayConfig {
             line_color: ColorSource::custom(default_graph_color),
 
             fill_mode: FillMode::Gradient,
-            fill_color: ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.4, a: 0.3 }),
-            fill_gradient_start: ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.4, a: 0.6 }),
-            fill_gradient_end: ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.4, a: 0.0 }),
+            fill_color: ColorSource::custom(Color {
+                r: 0.2,
+                g: 0.8,
+                b: 0.4,
+                a: 0.3,
+            }),
+            fill_gradient_start: ColorSource::custom(Color {
+                r: 0.2,
+                g: 0.8,
+                b: 0.4,
+                a: 0.6,
+            }),
+            fill_gradient_end: ColorSource::custom(Color {
+                r: 0.2,
+                g: 0.8,
+                b: 0.4,
+                a: 0.0,
+            }),
             fill_opacity: 0.3,
 
             max_data_points: 60,
@@ -283,8 +312,18 @@ impl Default for GraphDisplayConfig {
             y_axis: AxisConfig::default(),
 
             margin: Margin::default(),
-            background_color: Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-            plot_background_color: Color { r: 0.1, g: 0.1, b: 0.1, a: 0.5 },
+            background_color: Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            },
+            plot_background_color: Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.1,
+                a: 0.5,
+            },
 
             smooth_lines: true,
             animate_new_points: false,
@@ -332,7 +371,16 @@ pub fn render_graph(
     scroll_offset: f64,
 ) -> Result<()> {
     // Use theme from config for color/font resolution
-    render_graph_with_theme(cr, config, data, source_values, width, height, scroll_offset, Some(&config.theme))
+    render_graph_with_theme(
+        cr,
+        config,
+        data,
+        source_values,
+        width,
+        height,
+        scroll_offset,
+        Some(&config.theme),
+    )
 }
 
 /// Render graph display with optional theme for color resolution
@@ -402,7 +450,10 @@ pub fn render_graph_with_theme(
     // Priority: 1) auto_scale from data, 2) source limits, 3) config values
     let (min_val, max_val) = if config.auto_scale && !data.is_empty() {
         let data_min = data.iter().map(|p| p.value).fold(f64::INFINITY, f64::min);
-        let data_max = data.iter().map(|p| p.value).fold(f64::NEG_INFINITY, f64::max);
+        let data_max = data
+            .iter()
+            .map(|p| p.value)
+            .fold(f64::NEG_INFINITY, f64::max);
         let range = data_max - data_min;
         let padding = range * (config.value_padding / 100.0);
         (data_min - padding, data_max + padding)
@@ -422,7 +473,11 @@ pub fn render_graph_with_theme(
     let (min_val, max_val, value_range) = if value_range == 0.0 || value_range.abs() < 0.001 {
         // Use the data value as center with a range of 10% of its absolute value, or 1.0 if near zero
         let center = if !data.is_empty() { data[0].value } else { 0.0 };
-        let half_range = if center.abs() > 0.001 { center.abs() * 0.1 } else { 0.5 };
+        let half_range = if center.abs() > 0.001 {
+            center.abs() * 0.1
+        } else {
+            0.5
+        };
         (center - half_range, center + half_range, half_range * 2.0)
     } else {
         (min_val, max_val, value_range)
@@ -539,12 +594,8 @@ pub fn render_graph_with_theme(
                             cr.fill()?;
                         }
                         FillMode::Gradient => {
-                            let gradient = cairo::LinearGradient::new(
-                                0.0,
-                                plot_y,
-                                0.0,
-                                plot_y + plot_height,
-                            );
+                            let gradient =
+                                cairo::LinearGradient::new(0.0, plot_y, 0.0, plot_y + plot_height);
                             gradient.add_color_stop_rgba(
                                 0.0,
                                 fill_gradient_start.r,
@@ -571,12 +622,7 @@ pub fn render_graph_with_theme(
                 // Draw line
                 if points.len() > 1 {
                     cr.save()?;
-                    cr.set_source_rgba(
-                        line_color.r,
-                        line_color.g,
-                        line_color.b,
-                        line_color.a,
-                    );
+                    cr.set_source_rgba(line_color.r, line_color.g, line_color.b, line_color.a);
                     cr.set_line_width(config.line_width);
                     apply_line_style(cr, config.line_style, config.line_width);
                     cr.set_line_cap(LineCap::Round);
@@ -584,7 +630,10 @@ pub fn render_graph_with_theme(
 
                     cr.move_to(points[0].0, points[0].1);
 
-                    if config.smooth_lines && config.graph_type != GraphType::SteppedLine && points.len() > 2 {
+                    if config.smooth_lines
+                        && config.graph_type != GraphType::SteppedLine
+                        && points.len() > 2
+                    {
                         // Draw smooth Bezier curves
                         for i in 0..points.len() - 1 {
                             let p0 = points[i];
@@ -595,7 +644,11 @@ pub fn render_graph_with_theme(
 
                             // Get surrounding points for better curve calculation
                             let p_prev = if i > 0 { points[i - 1] } else { p0 };
-                            let p_next = if i + 2 < points.len() { points[i + 2] } else { p3 };
+                            let p_next = if i + 2 < points.len() {
+                                points[i + 2]
+                            } else {
+                                p3
+                            };
 
                             // Control point 1 (near p0)
                             let cp1_x = p0.0 + (p3.0 - p_prev.0) * tension;
@@ -623,12 +676,7 @@ pub fn render_graph_with_theme(
                 // Draw points if enabled
                 if config.show_points {
                     cr.save()?;
-                    cr.set_source_rgba(
-                        point_color.r,
-                        point_color.g,
-                        point_color.b,
-                        point_color.a,
-                    );
+                    cr.set_source_rgba(point_color.r, point_color.g, point_color.b, point_color.a);
                     for &(x, y) in &points {
                         cr.arc(x, y, config.point_radius, 0.0, 2.0 * std::f64::consts::PI);
                         cr.fill()?;
@@ -639,12 +687,7 @@ pub fn render_graph_with_theme(
             GraphType::Bar => {
                 let bar_width = (plot_width / config.max_data_points as f64) * 0.8;
                 cr.save()?;
-                cr.set_source_rgba(
-                    line_color.r,
-                    line_color.g,
-                    line_color.b,
-                    line_color.a,
-                );
+                cr.set_source_rgba(line_color.r, line_color.g, line_color.b, line_color.a);
 
                 for &(x, y) in &points {
                     let bar_height = plot_y + plot_height - y;
@@ -709,11 +752,25 @@ pub fn render_graph_with_theme(
                 };
                 let y = plot_y + (i as f64 / num_labels as f64) * plot_height;
 
-                let extents = pango_text_extents(cr, &label, &config.y_axis.label_font_family, font_slant, font_weight, config.y_axis.label_font_size);
+                let extents = pango_text_extents(
+                    cr,
+                    &label,
+                    &config.y_axis.label_font_family,
+                    font_slant,
+                    font_weight,
+                    config.y_axis.label_font_size,
+                );
                 // Ensure label stays within panel bounds
                 let label_x = (plot_x - extents.width() - 5.0).max(2.0);
                 cr.move_to(label_x, y + extents.height() / 2.0);
-                pango_show_text(cr, &label, &config.y_axis.label_font_family, font_slant, font_weight, config.y_axis.label_font_size);
+                pango_show_text(
+                    cr,
+                    &label,
+                    &config.y_axis.label_font_family,
+                    font_slant,
+                    font_weight,
+                    config.y_axis.label_font_size,
+                );
             }
             cr.restore()?;
         }
@@ -750,7 +807,10 @@ pub fn render_graph_with_theme(
             Some(theme),
         );
     } else {
-        log::debug!("Graph text overlay is disabled, source_values keys: {:?}", source_values.keys().collect::<Vec<_>>());
+        log::debug!(
+            "Graph text overlay is disabled, source_values keys: {:?}",
+            source_values.keys().collect::<Vec<_>>()
+        );
     }
 
     Ok(())

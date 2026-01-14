@@ -173,8 +173,12 @@ pub fn transform_template(html: &str) -> String {
     let re = Regex::new(r"\{\{(\d+)\}\}").expect("Invalid regex");
     re.replace_all(html, |caps: &regex::Captures| {
         let idx = &caps[1];
-        format!(r#"<span data-placeholder="{}" class="rg-placeholder">--</span>"#, idx)
-    }).to_string()
+        format!(
+            r#"<span data-placeholder="{}" class="rg-placeholder">--</span>"#,
+            idx
+        )
+    })
+    .to_string()
 }
 
 /// Generate the JavaScript bridge code for value updates
@@ -327,8 +331,12 @@ pub fn prepare_html_document(
         result
     } else {
         // Template is just content - wrap in full HTML structure
-        let user_css_block = user_css.map(|css| format!("<style>{}</style>", css)).unwrap_or_default();
-        let embedded_css_block = embedded_css.map(|css| format!("<style>{}</style>", css)).unwrap_or_default();
+        let user_css_block = user_css
+            .map(|css| format!("<style>{}</style>", css))
+            .unwrap_or_default();
+        let embedded_css_block = embedded_css
+            .map(|css| format!("<style>{}</style>", css))
+            .unwrap_or_default();
 
         format!(
             r#"<!DOCTYPE html>
@@ -345,11 +353,7 @@ pub fn prepare_html_document(
 <script>{}</script>
 </body>
 </html>"#,
-            base_styles,
-            user_css_block,
-            embedded_css_block,
-            transformed_html,
-            bridge_script
+            base_styles, user_css_block, embedded_css_block, transformed_html, bridge_script
         )
     }
 }
@@ -379,9 +383,7 @@ pub fn format_value(value: f64, format: Option<&str>) -> String {
             }
             value.to_string()
         }
-        Some(fmt) if fmt.contains("{}") => {
-            fmt.replace("{}", &value.to_string())
-        }
+        Some(fmt) if fmt.contains("{}") => fmt.replace("{}", &value.to_string()),
         Some(_) | None => value.to_string(),
     }
 }

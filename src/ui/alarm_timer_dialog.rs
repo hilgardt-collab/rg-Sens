@@ -3,13 +3,15 @@
 //! This dialog provides full control over multiple alarms and timers using the global manager.
 //! Timers can be edited inline when stopped. Changes are reflected on all clock displays.
 
-use crate::core::{global_timer_manager, play_preview_sound, stop_all_sounds, AlarmConfig, TimerConfig, TimerState};
+use crate::core::{
+    global_timer_manager, play_preview_sound, stop_all_sounds, AlarmConfig, TimerConfig, TimerState,
+};
+use gtk4::glib::WeakRef;
 use gtk4::prelude::*;
 use gtk4::{
     Adjustment, Box as GtkBox, Button, CheckButton, Entry, FileDialog, FileFilter, Frame, Label,
     ListBox, ListBoxRow, Orientation, ScrolledWindow, Separator, SpinButton, Window,
 };
-use gtk4::glib::WeakRef;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -113,7 +115,12 @@ impl AlarmTimerDialog {
         if let Ok(manager) = global_timer_manager().read() {
             let sound = manager.get_global_timer_sound();
             sound_check.set_active(sound.enabled);
-            sound_path_label.set_text(sound.custom_sound_path.as_deref().unwrap_or("System default"));
+            sound_path_label.set_text(
+                sound
+                    .custom_sound_path
+                    .as_deref()
+                    .unwrap_or("System default"),
+            );
         }
 
         add_row.append(&sound_check);
@@ -189,9 +196,8 @@ impl AlarmTimerDialog {
         // Use weak references so the timer stops when widgets are destroyed
         let timer_list_box_weak = timer_list_box.downgrade();
         let alarm_list_box_weak = alarm_list_box.downgrade();
-        let refresh_id = gtk4::glib::timeout_add_local(
-            std::time::Duration::from_secs(1),
-            move || {
+        let refresh_id =
+            gtk4::glib::timeout_add_local(std::time::Duration::from_secs(1), move || {
                 // Check if widgets are still alive - stop timer if not
                 let Some(timer_list_box) = timer_list_box_weak.upgrade() else {
                     return gtk4::glib::ControlFlow::Break;
@@ -209,7 +215,9 @@ impl AlarmTimerDialog {
                 // If lock is held, skip this refresh cycle
                 let needs_refresh = if let Ok(manager) = global_timer_manager().try_read() {
                     manager.timers.iter().any(|t| {
-                        t.state == TimerState::Running || t.state == TimerState::Paused || t.state == TimerState::Finished
+                        t.state == TimerState::Running
+                            || t.state == TimerState::Paused
+                            || t.state == TimerState::Finished
                     }) || !manager.triggered_alarms.is_empty()
                 } else {
                     false // Lock is busy, skip this cycle
@@ -220,8 +228,7 @@ impl AlarmTimerDialog {
                     Self::refresh_alarm_list_static(&alarm_list_box);
                 }
                 gtk4::glib::ControlFlow::Continue
-            },
-        );
+            });
         *dialog.refresh_source_id.borrow_mut() = Some(refresh_id);
 
         // Global sound checkbox handler
@@ -342,7 +349,7 @@ impl AlarmTimerDialog {
                 if let Some(window) = weak.upgrade() {
                     // Only reuse if window is still mapped (not being destroyed)
                     if window.is_mapped() {
-                        window.present();  // Bring to front
+                        window.present(); // Bring to front
                         return;
                     }
                 }
@@ -427,7 +434,9 @@ impl AlarmTimerDialog {
         play_pause_btn.connect_clicked(move |_| {
             // Read current state from manager at click time
             let action_taken = if let Ok(mut manager) = global_timer_manager().write() {
-                let current_state = manager.timers.iter()
+                let current_state = manager
+                    .timers
+                    .iter()
                     .find(|t| t.id == tid)
                     .map(|t| t.state)
                     .unwrap_or(TimerState::Stopped);
@@ -679,7 +688,11 @@ impl AlarmTimerDialog {
         let alarm_clone = alarm.clone();
         let lb_edit = list_box.clone();
         edit_btn.connect_clicked(move |btn| {
-            Self::show_alarm_edit_dialog(&alarm_clone, lb_edit.clone(), btn.root().and_downcast::<Window>().as_ref());
+            Self::show_alarm_edit_dialog(
+                &alarm_clone,
+                lb_edit.clone(),
+                btn.root().and_downcast::<Window>().as_ref(),
+            );
         });
         hbox.append(&edit_btn);
 
@@ -790,7 +803,11 @@ impl AlarmTimerDialog {
         let sound_box = GtkBox::new(Orientation::Horizontal, 6);
         sound_box.append(&Label::new(Some("Sound:")));
         let sound_label = Label::new(Some(
-            alarm.sound.custom_sound_path.as_deref().unwrap_or("System default")
+            alarm
+                .sound
+                .custom_sound_path
+                .as_deref()
+                .unwrap_or("System default"),
         ));
         sound_label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
         sound_label.set_hexpand(true);
@@ -893,7 +910,11 @@ impl AlarmTimerDialog {
                     a.days = days;
 
                     let label_text = label_entry.text().to_string();
-                    a.label = if label_text.is_empty() { None } else { Some(label_text) };
+                    a.label = if label_text.is_empty() {
+                        None
+                    } else {
+                        Some(label_text)
+                    };
                     a.sound.enabled = sound_check.is_active();
                     a.sound.visual_enabled = flash_check.is_active();
                 });

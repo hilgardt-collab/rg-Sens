@@ -18,16 +18,19 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
+    ANIMATION_SNAP_THRESHOLD,
+};
 use crate::displayers::combo_utils::{self, AnimatedValue};
+use crate::ui::arc_display::render_arc;
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
-    get_content_bounds, render_content_background, render_content_bar, render_content_text,
-    render_content_graph, render_content_core_bars, render_content_static, render_divider,
-    render_lcars_frame, calculate_item_layouts_with_orientation,
-    ContentDisplayType, ContentItemConfig, LcarsFrameConfig, SplitOrientation,
+    calculate_item_layouts_with_orientation, get_content_bounds, render_content_background,
+    render_content_bar, render_content_core_bars, render_content_graph, render_content_static,
+    render_content_text, render_divider, render_lcars_frame, ContentDisplayType, ContentItemConfig,
+    LcarsFrameConfig, SplitOrientation,
 };
-use crate::ui::arc_display::render_arc;
 use crate::ui::speedometer_display::render_speedometer_with_theme;
 
 /// Full LCARS display configuration
@@ -153,7 +156,9 @@ impl LcarsComboDisplayer {
         }
 
         // Get item orientation for this group (default to layout orientation)
-        let item_orientation = config.frame.group_item_orientations
+        let item_orientation = config
+            .frame
+            .group_item_orientations
             .get(group_idx)
             .copied()
             .unwrap_or(config.frame.layout_orientation);
@@ -165,7 +170,12 @@ impl LcarsComboDisplayer {
             let item_config = config.frame.content_items.get(prefix);
             if let Some(cfg) = item_config {
                 // Use fixed size if auto_height is disabled or for Graph/LevelBar display types
-                if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph | ContentDisplayType::LevelBar) {
+                if !cfg.auto_height
+                    || matches!(
+                        cfg.display_as,
+                        ContentDisplayType::Graph | ContentDisplayType::LevelBar
+                    )
+                {
                     fixed_sizes.insert(i, cfg.item_height);
                 }
             }
@@ -173,7 +183,14 @@ impl LcarsComboDisplayer {
 
         // Calculate layouts with the specified orientation
         let layouts = calculate_item_layouts_with_orientation(
-            x, y, w, h, count, config.frame.item_spacing, &fixed_sizes, item_orientation
+            x,
+            y,
+            w,
+            h,
+            count,
+            config.frame.item_spacing,
+            &fixed_sizes,
+            item_orientation,
         );
 
         // Pre-allocate bar_key buffer to avoid repeated allocations
@@ -186,7 +203,10 @@ impl LcarsComboDisplayer {
             let slot_values = combo_utils::get_slot_values(values, prefix);
 
             // Get item config (or use default)
-            let item_config = config.frame.content_items.get(prefix)
+            let item_config = config
+                .frame
+                .content_items
+                .get(prefix)
                 .cloned()
                 .unwrap_or_default();
 
@@ -276,16 +296,21 @@ impl LcarsComboDisplayer {
                 ContentDisplayType::CoreBars => {
                     // Use animated core values if available, otherwise fall back to raw values
                     let core_bars_config = &item_config.core_bars_config;
-                    let core_values: Vec<f64> = if let Some(animated) = core_bar_values.get(prefix) {
+                    let core_values: Vec<f64> = if let Some(animated) = core_bar_values.get(prefix)
+                    {
                         // Use animated current values
                         animated.iter().map(|av| av.current).collect()
                     } else {
                         // Fall back to raw values (for first frame before animation starts)
-                        let capacity = core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
+                        let capacity = core_bars_config
+                            .end_core
+                            .saturating_sub(core_bars_config.start_core)
+                            + 1;
                         let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
                         for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            let value = values.get(&core_key)
+                            let value = values
+                                .get(&core_key)
                                 .and_then(|v| v.as_f64())
                                 .unwrap_or(0.0);
                             raw_values.push(value / 100.0);
@@ -406,14 +431,11 @@ impl Displayer for LcarsComboDisplayer {
                 data.transform.apply(cr, w, h);
 
                 // Check if frame cache is valid
-                let cache_valid = frame_cache_clone
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|cache| {
-                        cache.width == width
-                            && cache.height == height
-                            && cache.config_version == data.config_version
-                    });
+                let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
+                    cache.width == width
+                        && cache.height == height
+                        && cache.config_version == data.config_version
+                });
 
                 // Either use cached frame or render fresh
                 let (content_bounds, group_layouts) = if cache_valid {
@@ -427,15 +449,12 @@ impl Displayer for LcarsComboDisplayer {
                     (cache.content_bounds, cache.group_layouts.clone())
                 } else {
                     // Try to create cache surface
-                    let cache_result = cairo::ImageSurface::create(
-                        cairo::Format::ARgb32,
-                        width,
-                        height,
-                    )
-                    .ok()
-                    .and_then(|surface| {
-                        cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
-                    });
+                    let cache_result =
+                        cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                            .ok()
+                            .and_then(|surface| {
+                                cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
+                            });
 
                     if let Some((surface, cache_cr)) = cache_result {
                         // Render frame to cache
@@ -444,7 +463,9 @@ impl Displayer for LcarsComboDisplayer {
                         }
 
                         // Render content background to cache
-                        if let Err(e) = render_content_background(&cache_cr, &data.config.frame, w, h) {
+                        if let Err(e) =
+                            render_content_background(&cache_cr, &data.config.frame, w, h)
+                        {
                             log::debug!("LCARS content background render error: {}", e);
                         }
 
@@ -468,23 +489,43 @@ impl Displayer for LcarsComboDisplayer {
                             let num_dividers = (group_count - 1) as f64;
 
                             let total_weight: f64 = (0..group_count)
-                                .map(|i| data.config.frame.group_size_weights.get(i).copied().unwrap_or(1.0))
+                                .map(|i| {
+                                    data.config
+                                        .frame
+                                        .group_size_weights
+                                        .get(i)
+                                        .copied()
+                                        .unwrap_or(1.0)
+                                })
                                 .sum();
-                            let total_weight = if total_weight <= 0.0 { 1.0 } else { total_weight };
+                            let total_weight = if total_weight <= 0.0 {
+                                1.0
+                            } else {
+                                total_weight
+                            };
 
                             match data.config.frame.layout_orientation {
                                 SplitOrientation::Vertical => {
-                                    let available_w = content_w - num_dividers * total_divider_space;
+                                    let available_w =
+                                        content_w - num_dividers * total_divider_space;
                                     let mut current_x = content_x;
 
                                     for group_idx in 0..group_count {
-                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let weight = data
+                                            .config
+                                            .frame
+                                            .group_size_weights
+                                            .get(group_idx)
+                                            .copied()
+                                            .unwrap_or(1.0);
                                         let group_w = (weight / total_weight) * available_w;
 
-                                        group_layouts.push((current_x, content_y, group_w, content_h));
+                                        group_layouts
+                                            .push((current_x, content_y, group_w, content_h));
 
                                         if group_idx < group_count - 1 {
-                                            let divider_x = current_x + group_w + divider_config.spacing_before;
+                                            let divider_x =
+                                                current_x + group_w + divider_config.spacing_before;
                                             let _ = render_divider(
                                                 &cache_cr,
                                                 divider_x,
@@ -495,22 +536,33 @@ impl Displayer for LcarsComboDisplayer {
                                                 SplitOrientation::Vertical,
                                                 &data.config.frame.theme,
                                             );
-                                            current_x = divider_x + divider_config.width + divider_config.spacing_after;
+                                            current_x = divider_x
+                                                + divider_config.width
+                                                + divider_config.spacing_after;
                                         }
                                     }
                                 }
                                 SplitOrientation::Horizontal => {
-                                    let available_h = content_h - num_dividers * total_divider_space;
+                                    let available_h =
+                                        content_h - num_dividers * total_divider_space;
                                     let mut current_y = content_y;
 
                                     for group_idx in 0..group_count {
-                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let weight = data
+                                            .config
+                                            .frame
+                                            .group_size_weights
+                                            .get(group_idx)
+                                            .copied()
+                                            .unwrap_or(1.0);
                                         let group_h = (weight / total_weight) * available_h;
 
-                                        group_layouts.push((content_x, current_y, content_w, group_h));
+                                        group_layouts
+                                            .push((content_x, current_y, content_w, group_h));
 
                                         if group_idx < group_count - 1 {
-                                            let divider_y = current_y + group_h + divider_config.spacing_before;
+                                            let divider_y =
+                                                current_y + group_h + divider_config.spacing_before;
                                             let _ = render_divider(
                                                 &cache_cr,
                                                 content_x,
@@ -521,7 +573,9 @@ impl Displayer for LcarsComboDisplayer {
                                                 SplitOrientation::Horizontal,
                                                 &data.config.frame.theme,
                                             );
-                                            current_y = divider_y + divider_config.width + divider_config.spacing_after;
+                                            current_y = divider_y
+                                                + divider_config.width
+                                                + divider_config.spacing_after;
                                         }
                                     }
                                 }
@@ -576,22 +630,42 @@ impl Displayer for LcarsComboDisplayer {
                             let num_dividers = (group_count - 1) as f64;
 
                             let total_weight: f64 = (0..group_count)
-                                .map(|i| data.config.frame.group_size_weights.get(i).copied().unwrap_or(1.0))
+                                .map(|i| {
+                                    data.config
+                                        .frame
+                                        .group_size_weights
+                                        .get(i)
+                                        .copied()
+                                        .unwrap_or(1.0)
+                                })
                                 .sum();
-                            let total_weight = if total_weight <= 0.0 { 1.0 } else { total_weight };
+                            let total_weight = if total_weight <= 0.0 {
+                                1.0
+                            } else {
+                                total_weight
+                            };
 
                             match data.config.frame.layout_orientation {
                                 SplitOrientation::Vertical => {
-                                    let available_w = content_w - num_dividers * total_divider_space;
+                                    let available_w =
+                                        content_w - num_dividers * total_divider_space;
                                     let mut current_x = content_x;
 
                                     for group_idx in 0..group_count {
-                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let weight = data
+                                            .config
+                                            .frame
+                                            .group_size_weights
+                                            .get(group_idx)
+                                            .copied()
+                                            .unwrap_or(1.0);
                                         let group_w = (weight / total_weight) * available_w;
-                                        group_layouts.push((current_x, content_y, group_w, content_h));
+                                        group_layouts
+                                            .push((current_x, content_y, group_w, content_h));
 
                                         if group_idx < group_count - 1 {
-                                            let divider_x = current_x + group_w + divider_config.spacing_before;
+                                            let divider_x =
+                                                current_x + group_w + divider_config.spacing_before;
                                             let _ = render_divider(
                                                 cr,
                                                 divider_x,
@@ -602,21 +676,32 @@ impl Displayer for LcarsComboDisplayer {
                                                 SplitOrientation::Vertical,
                                                 &data.config.frame.theme,
                                             );
-                                            current_x = divider_x + divider_config.width + divider_config.spacing_after;
+                                            current_x = divider_x
+                                                + divider_config.width
+                                                + divider_config.spacing_after;
                                         }
                                     }
                                 }
                                 SplitOrientation::Horizontal => {
-                                    let available_h = content_h - num_dividers * total_divider_space;
+                                    let available_h =
+                                        content_h - num_dividers * total_divider_space;
                                     let mut current_y = content_y;
 
                                     for group_idx in 0..group_count {
-                                        let weight = data.config.frame.group_size_weights.get(group_idx).copied().unwrap_or(1.0);
+                                        let weight = data
+                                            .config
+                                            .frame
+                                            .group_size_weights
+                                            .get(group_idx)
+                                            .copied()
+                                            .unwrap_or(1.0);
                                         let group_h = (weight / total_weight) * available_h;
-                                        group_layouts.push((content_x, current_y, content_w, group_h));
+                                        group_layouts
+                                            .push((content_x, current_y, content_w, group_h));
 
                                         if group_idx < group_count - 1 {
-                                            let divider_y = current_y + group_h + divider_config.spacing_before;
+                                            let divider_y =
+                                                current_y + group_h + divider_config.spacing_before;
                                             let _ = render_divider(
                                                 cr,
                                                 content_x,
@@ -627,7 +712,9 @@ impl Displayer for LcarsComboDisplayer {
                                                 SplitOrientation::Horizontal,
                                                 &data.config.frame.theme,
                                             );
-                                            current_y = divider_y + divider_config.width + divider_config.spacing_after;
+                                            current_y = divider_y
+                                                + divider_config.width
+                                                + divider_config.spacing_after;
                                         }
                                     }
                                 }
@@ -647,7 +734,11 @@ impl Displayer for LcarsComboDisplayer {
 
                 // Draw dynamic content items for each group
                 for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
-                    let prefixes = data.group_prefixes.get(group_idx).map(|v| v.as_slice()).unwrap_or(&[]);
+                    let prefixes = data
+                        .group_prefixes
+                        .get(group_idx)
+                        .map(|v| v.as_slice())
+                        .unwrap_or(&[]);
                     let _ = Self::draw_content_items(
                         cr,
                         gx,
@@ -683,10 +774,14 @@ impl Displayer for LcarsComboDisplayer {
                 if data.config.animation_enabled {
                     // Quick check: any animations in progress?
                     // This avoids Instant::now() and iteration when nothing is animating
-                    let has_bar_animations = data.bar_values.values()
+                    let has_bar_animations = data
+                        .bar_values
+                        .values()
                         .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
-                    let has_core_animations = data.core_bar_values.values()
-                        .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD));
+                    let has_core_animations = data.core_bar_values.values().any(|v| {
+                        v.iter()
+                            .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
+                    });
 
                     if has_bar_animations || has_core_animations {
                         let now = Instant::now();
@@ -702,7 +797,8 @@ impl Displayer for LcarsComboDisplayer {
                                     let delta = (anim.target - anim.current) * speed * elapsed;
                                     anim.current += delta;
 
-                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD
+                                    {
                                         anim.current = anim.target;
                                     }
                                     redraw = true;
@@ -714,11 +810,14 @@ impl Displayer for LcarsComboDisplayer {
                         if has_core_animations {
                             for (_key, core_anims) in data.core_bar_values.iter_mut() {
                                 for anim in core_anims.iter_mut() {
-                                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
+                                    if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD
+                                    {
                                         let delta = (anim.target - anim.current) * speed * elapsed;
                                         anim.current += delta;
 
-                                        if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                        if (anim.current - anim.target).abs()
+                                            < ANIMATION_SNAP_THRESHOLD
+                                        {
                                             anim.current = anim.target;
                                         }
                                         redraw = true;
@@ -744,7 +843,13 @@ impl Displayer for LcarsComboDisplayer {
             let timestamp = display_data.graph_start_time.elapsed().as_secs_f64();
 
             // Convert group_item_counts to usize for generate_prefixes
-            let group_item_counts: Vec<usize> = display_data.config.frame.group_item_counts.iter().map(|&x| x as usize).collect();
+            let group_item_counts: Vec<usize> = display_data
+                .config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
 
             // Generate prefixes and filter values using optimized utils
             let prefixes = combo_utils::generate_prefixes(&group_item_counts);
@@ -753,13 +858,20 @@ impl Displayer for LcarsComboDisplayer {
             // Cache per-group prefixes for efficient draw loop (avoids format! allocations)
             // Only rebuild if group structure changed
             let needs_rebuild = display_data.group_prefixes.len() != group_item_counts.len()
-                || display_data.group_prefixes.iter().zip(group_item_counts.iter())
+                || display_data
+                    .group_prefixes
+                    .iter()
+                    .zip(group_item_counts.iter())
                     .any(|(cached, &count)| cached.len() != count);
             if needs_rebuild {
-                display_data.group_prefixes = group_item_counts.iter().enumerate()
+                display_data.group_prefixes = group_item_counts
+                    .iter()
+                    .enumerate()
                     .map(|(group_idx, &count)| {
                         let group_num = group_idx + 1;
-                        (1..=count).map(|item_idx| format!("group{}_{}", group_num, item_idx)).collect()
+                        (1..=count)
+                            .map(|item_idx| format!("group{}_{}", group_num, item_idx))
+                            .collect()
                     })
                     .collect();
             }
@@ -767,11 +879,21 @@ impl Displayer for LcarsComboDisplayer {
             // Update each item
             for prefix in &prefixes {
                 let item_data = combo_utils::get_item_data(data, prefix);
-                combo_utils::update_bar_animation(&mut display_data.bar_values, prefix, item_data.percent(), animation_enabled);
+                combo_utils::update_bar_animation(
+                    &mut display_data.bar_values,
+                    prefix,
+                    item_data.percent(),
+                    animation_enabled,
+                );
 
                 // Get item config and extract what we need before mutable borrows
                 let default_config = ContentItemConfig::default();
-                let item_config = display_data.config.frame.content_items.get(prefix).unwrap_or(&default_config);
+                let item_config = display_data
+                    .config
+                    .frame
+                    .content_items
+                    .get(prefix)
+                    .unwrap_or(&default_config);
                 let display_as = item_config.display_as;
                 let graph_max_points = item_config.graph_config.max_data_points;
                 let core_bars_config = item_config.core_bars_config.clone();
@@ -860,7 +982,9 @@ impl Displayer for LcarsComboDisplayer {
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Check for full lcars_config first
         if let Some(lcars_config_value) = config.get("lcars_config") {
-            if let Ok(mut lcars_config) = serde_json::from_value::<LcarsDisplayConfig>(lcars_config_value.clone()) {
+            if let Ok(mut lcars_config) =
+                serde_json::from_value::<LcarsDisplayConfig>(lcars_config_value.clone())
+            {
                 // Migrate legacy primary/secondary format to groups format
                 lcars_config.frame.migrate_legacy();
                 if let Ok(mut display_data) = self.data.lock() {
@@ -877,7 +1001,9 @@ impl Displayer for LcarsComboDisplayer {
                 display_data.config.frame.sidebar_width = sidebar_width;
             }
 
-            if let Some(animation_enabled) = config.get("animation_enabled").and_then(|v| v.as_bool()) {
+            if let Some(animation_enabled) =
+                config.get("animation_enabled").and_then(|v| v.as_bool())
+            {
                 display_data.config.animation_enabled = animation_enabled;
             }
 
@@ -899,7 +1025,9 @@ impl Displayer for LcarsComboDisplayer {
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         // Use try_lock to avoid blocking the GTK main thread
         if let Ok(display_data) = self.data.try_lock() {
-            Some(crate::core::DisplayerConfig::Lcars(display_data.config.clone()))
+            Some(crate::core::DisplayerConfig::Lcars(
+                display_data.config.clone(),
+            ))
         } else {
             None
         }

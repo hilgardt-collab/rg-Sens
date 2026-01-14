@@ -10,21 +10,20 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::core::FieldMetadata;
+use crate::displayers::LcarsDisplayConfig;
+use crate::ui::background::Color;
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::theme::{ColorSource, FontSource};
-use crate::ui::theme_font_selector::ThemeFontSelector;
-use crate::ui::lcars_display::{
-    render_lcars_frame, render_content_background, SidebarPosition,
-    ExtensionMode, CornerStyle, HeaderPosition, HeaderShape, HeaderAlign, SegmentConfig,
-    DividerCapStyle, SplitOrientation,
-};
-use crate::ui::background::Color;
-use crate::displayers::LcarsDisplayConfig;
-use crate::core::FieldMetadata;
 use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
+use crate::ui::lcars_display::{
+    render_content_background, render_lcars_frame, CornerStyle, DividerCapStyle, ExtensionMode,
+    HeaderAlign, HeaderPosition, HeaderShape, SegmentConfig, SidebarPosition, SplitOrientation,
+};
+use crate::ui::theme::{ColorSource, FontSource};
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::widget_builder::{create_section_header, ConfigWidgetBuilder};
 
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {
@@ -80,7 +79,17 @@ struct SegmentsWidgets {
     /// Notebook containing per-segment tabs
     segments_notebook: Notebook,
     /// Store segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
-    segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>>,
+    segment_widgets: Rc<
+        RefCell<
+            Vec<(
+                Entry,
+                Rc<ThemeColorSelector>,
+                Rc<ThemeColorSelector>,
+                SpinButton,
+                Rc<ThemeFontSelector>,
+            )>,
+        >,
+    >,
 }
 
 /// Holds references to Content tab widgets for updating when config changes
@@ -146,12 +155,17 @@ pub struct LcarsConfigWidget {
 
 impl LcarsConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        log::info!("=== LcarsConfigWidget::new() called with {} fields ===", available_fields.len());
+        log::info!(
+            "=== LcarsConfigWidget::new() called with {} fields ===",
+            available_fields.len()
+        );
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(LcarsDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let headers_widgets: Rc<RefCell<Option<HeadersWidgets>>> = Rc::new(RefCell::new(None));
         let segments_widgets: Rc<RefCell<Option<SegmentsWidgets>>> = Rc::new(RefCell::new(None));
@@ -159,7 +173,8 @@ impl LcarsConfigWidget {
         let split_widgets: Rc<RefCell<Option<SplitWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -181,35 +196,71 @@ impl LcarsConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme (first for easy access)
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Frame
-        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets, &theme_ref_refreshers);
+        let frame_page = Self::create_frame_page(
+            &config,
+            &on_change,
+            &preview,
+            &frame_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
 
         // Tab 3: Headers
-        let headers_page = Self::create_headers_page(&config, &on_change, &preview, &headers_widgets, &theme_ref_refreshers);
+        let headers_page = Self::create_headers_page(
+            &config,
+            &on_change,
+            &preview,
+            &headers_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&headers_page, Some(&Label::new(Some("Headers"))));
 
         // Tab 4: Segments
-        let segments_page = Self::create_segments_page(&config, &on_change, &preview, &segments_widgets, &split_widgets, &theme_ref_refreshers);
+        let segments_page = Self::create_segments_page(
+            &config,
+            &on_change,
+            &preview,
+            &segments_widgets,
+            &split_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&segments_page, Some(&Label::new(Some("Segments"))));
 
         // Tab 5: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &content_widgets, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &content_widgets,
+            &available_fields,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 6: Layout
@@ -228,21 +279,23 @@ impl LcarsConfigWidget {
         {
             let headers_widgets_clone = headers_widgets.clone();
             if let Some(ref frame_w) = *frame_widgets.borrow() {
-                frame_w.ext_dropdown.connect_selected_notify(move |dropdown| {
-                    let ext_mode = match dropdown.selected() {
-                        0 => ExtensionMode::Top,
-                        1 => ExtensionMode::Bottom,
-                        2 => ExtensionMode::Both,
-                        _ => ExtensionMode::None,
-                    };
-                    if let Some(ref hw) = *headers_widgets_clone.borrow() {
-                        Self::update_headers_tab_visibility(
-                            &hw.top_tab_label,
-                            &hw.bottom_tab_label,
-                            ext_mode,
-                        );
-                    }
-                });
+                frame_w
+                    .ext_dropdown
+                    .connect_selected_notify(move |dropdown| {
+                        let ext_mode = match dropdown.selected() {
+                            0 => ExtensionMode::Top,
+                            1 => ExtensionMode::Bottom,
+                            2 => ExtensionMode::Both,
+                            _ => ExtensionMode::None,
+                        };
+                        if let Some(ref hw) = *headers_widgets_clone.borrow() {
+                            Self::update_headers_tab_visibility(
+                                &hw.top_tab_label,
+                                &hw.bottom_tab_label,
+                                ext_mode,
+                            );
+                        }
+                    });
             }
         }
 
@@ -310,17 +363,22 @@ impl LcarsConfigWidget {
         combo_config_base::set_page_margins(&page);
 
         // Theme reference section
-        let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            config,
-            |cfg| cfg.frame.theme.clone(),
-        );
+        let (theme_ref_section, theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(config, |cfg| {
+                cfg.frame.theme.clone()
+            });
         theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
         page.append(&theme_ref_section);
 
         let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
         let sidebar_spin = builder.spin_row(
-            &page, "Sidebar Width:", 50.0, 300.0, 5.0, config.borrow().frame.sidebar_width,
+            &page,
+            "Sidebar Width:",
+            50.0,
+            300.0,
+            5.0,
+            config.borrow().frame.sidebar_width,
             |cfg, v| cfg.frame.sidebar_width = v,
         );
 
@@ -329,8 +387,17 @@ impl LcarsConfigWidget {
             SidebarPosition::Right => 1,
         };
         let pos_dropdown = builder.dropdown_row(
-            &page, "Sidebar Position:", &["Left", "Right"], pos_idx,
-            |cfg, idx| cfg.frame.sidebar_position = if idx == 0 { SidebarPosition::Left } else { SidebarPosition::Right },
+            &page,
+            "Sidebar Position:",
+            &["Left", "Right"],
+            pos_idx,
+            |cfg, idx| {
+                cfg.frame.sidebar_position = if idx == 0 {
+                    SidebarPosition::Left
+                } else {
+                    SidebarPosition::Right
+                }
+            },
         );
 
         let ext_idx = match config.borrow().frame.extension_mode {
@@ -340,27 +407,47 @@ impl LcarsConfigWidget {
             ExtensionMode::None => 3,
         };
         let ext_dropdown = builder.dropdown_row(
-            &page, "Extensions:", &["Top", "Bottom", "Both", "None"], ext_idx,
-            |cfg, idx| cfg.frame.extension_mode = match idx {
-                0 => ExtensionMode::Top,
-                1 => ExtensionMode::Bottom,
-                2 => ExtensionMode::Both,
-                _ => ExtensionMode::None,
+            &page,
+            "Extensions:",
+            &["Top", "Bottom", "Both", "None"],
+            ext_idx,
+            |cfg, idx| {
+                cfg.frame.extension_mode = match idx {
+                    0 => ExtensionMode::Top,
+                    1 => ExtensionMode::Bottom,
+                    2 => ExtensionMode::Both,
+                    _ => ExtensionMode::None,
+                }
             },
         );
 
         let top_spin = builder.spin_row(
-            &page, "Top Bar Height:", 20.0, 100.0, 2.0, config.borrow().frame.top_bar_height,
+            &page,
+            "Top Bar Height:",
+            20.0,
+            100.0,
+            2.0,
+            config.borrow().frame.top_bar_height,
             |cfg, v| cfg.frame.top_bar_height = v,
         );
 
         let bottom_spin = builder.spin_row(
-            &page, "Bottom Bar Height:", 20.0, 100.0, 2.0, config.borrow().frame.bottom_bar_height,
+            &page,
+            "Bottom Bar Height:",
+            20.0,
+            100.0,
+            2.0,
+            config.borrow().frame.bottom_bar_height,
             |cfg, v| cfg.frame.bottom_bar_height = v,
         );
 
         let corner_spin = builder.spin_row(
-            &page, "Corner Radius:", 0.0, 100.0, 5.0, config.borrow().frame.corner_radius,
+            &page,
+            "Corner Radius:",
+            0.0,
+            100.0,
+            5.0,
+            config.borrow().frame.corner_radius,
             |cfg, v| cfg.frame.corner_radius = v,
         );
 
@@ -369,14 +456,25 @@ impl LcarsConfigWidget {
             CornerStyle::Round => 1,
         };
         let ext_corner_dropdown = builder.dropdown_row(
-            &page, "Extension Corners:", &["Square", "Round"], ext_corner_idx,
-            |cfg, idx| cfg.frame.extension_corner_style = if idx == 0 { CornerStyle::Square } else { CornerStyle::Round },
+            &page,
+            "Extension Corners:",
+            &["Square", "Round"],
+            ext_corner_idx,
+            |cfg, idx| {
+                cfg.frame.extension_corner_style = if idx == 0 {
+                    CornerStyle::Square
+                } else {
+                    CornerStyle::Round
+                }
+            },
         );
 
         // Content background color (keep manual - uses ColorButtonWidget directly)
         let content_color_box = GtkBox::new(Orientation::Horizontal, 6);
         content_color_box.append(&Label::new(Some("Content Background:")));
-        let content_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.content_bg_color));
+        let content_color_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.content_bg_color,
+        ));
         content_color_box.append(content_color_widget.widget());
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -384,7 +482,9 @@ impl LcarsConfigWidget {
         content_color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.content_bg_color = color;
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
         page.append(&content_color_box);
 
@@ -392,27 +492,52 @@ impl LcarsConfigWidget {
         page.append(&create_section_header("Content Padding"));
 
         let padding_spin = builder.spin_row(
-            &page, "Overall:", 0.0, 50.0, 1.0, config.borrow().frame.content_padding,
+            &page,
+            "Overall:",
+            0.0,
+            50.0,
+            1.0,
+            config.borrow().frame.content_padding,
             |cfg, v| cfg.frame.content_padding = v,
         );
 
         let padding_top_spin = builder.spin_row(
-            &page, "Top:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_top,
+            &page,
+            "Top:",
+            -50.0,
+            50.0,
+            1.0,
+            config.borrow().frame.content_padding_top,
             |cfg, v| cfg.frame.content_padding_top = v,
         );
 
         let padding_left_spin = builder.spin_row(
-            &page, "Left:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_left,
+            &page,
+            "Left:",
+            -50.0,
+            50.0,
+            1.0,
+            config.borrow().frame.content_padding_left,
             |cfg, v| cfg.frame.content_padding_left = v,
         );
 
         let padding_right_spin = builder.spin_row(
-            &page, "Right:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_right,
+            &page,
+            "Right:",
+            -50.0,
+            50.0,
+            1.0,
+            config.borrow().frame.content_padding_right,
             |cfg, v| cfg.frame.content_padding_right = v,
         );
 
         let padding_bottom_spin = builder.spin_row(
-            &page, "Bottom:", -50.0, 50.0, 1.0, config.borrow().frame.content_padding_bottom,
+            &page,
+            "Bottom:",
+            -50.0,
+            50.0,
+            1.0,
+            config.borrow().frame.content_padding_bottom,
             |cfg, v| cfg.frame.content_padding_bottom = v,
         );
 
@@ -447,10 +572,10 @@ impl LcarsConfigWidget {
         combo_config_base::set_page_margins(&page);
 
         // Theme reference section for quick access to theme colors/fonts
-        let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            config,
-            |cfg| cfg.frame.theme.clone(),
-        );
+        let (theme_ref_section, theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(config, |cfg| {
+                cfg.frame.theme.clone()
+            });
         theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
         page.append(&theme_ref_section);
 
@@ -580,7 +705,9 @@ impl LcarsConfigWidget {
         // Top header colors row
         let top_colors_box = GtkBox::new(Orientation::Horizontal, 6);
         top_colors_box.append(&Label::new(Some("Background:")));
-        let top_bg_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.top_header.bg_color.clone()));
+        let top_bg_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.top_header.bg_color.clone(),
+        ));
         top_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         top_colors_box.append(top_bg_widget.widget());
 
@@ -596,7 +723,9 @@ impl LcarsConfigWidget {
         });
 
         top_colors_box.append(&Label::new(Some("Text:")));
-        let top_text_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.top_header.text_color.clone()));
+        let top_text_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.top_header.text_color.clone(),
+        ));
         top_text_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         top_colors_box.append(top_text_color_widget.widget());
 
@@ -616,7 +745,9 @@ impl LcarsConfigWidget {
         let top_font_box = GtkBox::new(Orientation::Horizontal, 6);
         top_font_box.append(&Label::new(Some("Font:")));
 
-        let top_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.top_header.font.clone()));
+        let top_font_selector = Rc::new(ThemeFontSelector::new(
+            config.borrow().frame.top_header.font.clone(),
+        ));
         top_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         top_font_box.append(top_font_selector.widget());
 
@@ -641,7 +772,11 @@ impl LcarsConfigWidget {
         top_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font_source(cfg.frame.top_header.font.clone(), cfg.frame.top_header.font_bold, false);
+                clipboard.copy_font_source(
+                    cfg.frame.top_header.font.clone(),
+                    cfg.frame.top_header.font_bold,
+                    false,
+                );
             }
         });
 
@@ -708,7 +843,8 @@ impl LcarsConfigWidget {
 
         // Bottom header show toggle
         let bottom_show_check = CheckButton::with_label("Show Bottom Header");
-        bottom_show_check.set_active(config.borrow().frame.bottom_header.position == HeaderPosition::Bottom);
+        bottom_show_check
+            .set_active(config.borrow().frame.bottom_header.position == HeaderPosition::Bottom);
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -766,7 +902,8 @@ impl LcarsConfigWidget {
         let bottom_shape_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_shape_box.append(&Label::new(Some("Shape:")));
         let bottom_shape_list = StringList::new(&["Pill", "Square"]);
-        let bottom_shape_dropdown = DropDown::new(Some(bottom_shape_list), None::<gtk4::Expression>);
+        let bottom_shape_dropdown =
+            DropDown::new(Some(bottom_shape_list), None::<gtk4::Expression>);
         let bottom_shape_idx = match config.borrow().frame.bottom_header.shape {
             HeaderShape::Pill => 0,
             HeaderShape::Square => 1,
@@ -821,7 +958,9 @@ impl LcarsConfigWidget {
         // Bottom header colors row
         let bottom_colors_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_colors_box.append(&Label::new(Some("Background:")));
-        let bottom_bg_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.bottom_header.bg_color.clone()));
+        let bottom_bg_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.bottom_header.bg_color.clone(),
+        ));
         bottom_bg_widget.set_theme_config(config.borrow().frame.theme.clone());
         bottom_colors_box.append(bottom_bg_widget.widget());
 
@@ -837,7 +976,9 @@ impl LcarsConfigWidget {
         });
 
         bottom_colors_box.append(&Label::new(Some("Text:")));
-        let bottom_text_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.bottom_header.text_color.clone()));
+        let bottom_text_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.bottom_header.text_color.clone(),
+        ));
         bottom_text_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         bottom_colors_box.append(bottom_text_color_widget.widget());
 
@@ -857,7 +998,9 @@ impl LcarsConfigWidget {
         let bottom_font_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_font_box.append(&Label::new(Some("Font:")));
 
-        let bottom_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.bottom_header.font.clone()));
+        let bottom_font_selector = Rc::new(ThemeFontSelector::new(
+            config.borrow().frame.bottom_header.font.clone(),
+        ));
         bottom_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         bottom_font_box.append(bottom_font_selector.widget());
 
@@ -882,7 +1025,11 @@ impl LcarsConfigWidget {
         bottom_copy_font_btn.connect_clicked(move |_| {
             let cfg = config_clone.borrow();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font_source(cfg.frame.bottom_header.font.clone(), cfg.frame.bottom_header.font_bold, false);
+                clipboard.copy_font_source(
+                    cfg.frame.bottom_header.font.clone(),
+                    cfg.frame.bottom_header.font_bold,
+                    false,
+                );
             }
         });
 
@@ -913,7 +1060,8 @@ impl LcarsConfigWidget {
         let bottom_align_box = GtkBox::new(Orientation::Horizontal, 6);
         bottom_align_box.append(&Label::new(Some("Align (from sidebar):")));
         let bottom_align_list = StringList::new(&["Near", "Center", "Far"]);
-        let bottom_align_dropdown = DropDown::new(Some(bottom_align_list), None::<gtk4::Expression>);
+        let bottom_align_dropdown =
+            DropDown::new(Some(bottom_align_list), None::<gtk4::Expression>);
         let bottom_align_idx = match config.borrow().frame.bottom_header.align {
             HeaderAlign::Left => 0,
             HeaderAlign::Center => 1,
@@ -941,7 +1089,11 @@ impl LcarsConfigWidget {
         let _bottom_page_num = headers_notebook.append_page(&bottom_page, Some(&bottom_tab_label));
 
         // Set initial tab visibility based on extension mode
-        Self::update_headers_tab_visibility(&top_tab_label, &bottom_tab_label, config.borrow().frame.extension_mode);
+        Self::update_headers_tab_visibility(
+            &top_tab_label,
+            &bottom_tab_label,
+            config.borrow().frame.extension_mode,
+        );
 
         page.append(&headers_notebook);
 
@@ -979,9 +1131,19 @@ impl LcarsConfigWidget {
     /// - Top only: show only Top tab
     /// - Bottom only: show only Bottom tab
     /// - Both or None: show both tabs
-    fn update_headers_tab_visibility(top_tab_label: &Label, bottom_tab_label: &Label, extension_mode: ExtensionMode) {
-        let show_top = matches!(extension_mode, ExtensionMode::Top | ExtensionMode::Both | ExtensionMode::None);
-        let show_bottom = matches!(extension_mode, ExtensionMode::Bottom | ExtensionMode::Both | ExtensionMode::None);
+    fn update_headers_tab_visibility(
+        top_tab_label: &Label,
+        bottom_tab_label: &Label,
+        extension_mode: ExtensionMode,
+    ) {
+        let show_top = matches!(
+            extension_mode,
+            ExtensionMode::Top | ExtensionMode::Both | ExtensionMode::None
+        );
+        let show_bottom = matches!(
+            extension_mode,
+            ExtensionMode::Bottom | ExtensionMode::Both | ExtensionMode::None
+        );
 
         // Set visibility on the tab labels themselves
         top_tab_label.set_visible(show_top);
@@ -1000,10 +1162,10 @@ impl LcarsConfigWidget {
         combo_config_base::set_page_margins(&page);
 
         // Theme reference section for quick access to theme colors/fonts
-        let (theme_ref_section, theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            config,
-            |cfg| cfg.frame.theme.clone(),
-        );
+        let (theme_ref_section, theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(config, |cfg| {
+                cfg.frame.theme.clone()
+            });
         theme_ref_refreshers.borrow_mut().push(theme_refresh_cb);
         page.append(&theme_ref_section);
 
@@ -1022,7 +1184,17 @@ impl LcarsConfigWidget {
         segments_notebook.set_scrollable(true);
 
         // Store per-segment widget refs: (label_entry, color_widget, label_color_widget, weight_spin, font_selector)
-        let segment_widgets: Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>> = Rc::new(RefCell::new(Vec::new()));
+        let segment_widgets: Rc<
+            RefCell<
+                Vec<(
+                    Entry,
+                    Rc<ThemeColorSelector>,
+                    Rc<ThemeColorSelector>,
+                    SpinButton,
+                    Rc<ThemeFontSelector>,
+                )>,
+            >,
+        > = Rc::new(RefCell::new(Vec::new()));
 
         // Build initial segment tabs
         let initial_count = config.borrow().frame.segment_count as usize;
@@ -1093,7 +1265,17 @@ impl LcarsConfigWidget {
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-        segment_widgets: &Rc<RefCell<Vec<(Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)>>>,
+        segment_widgets: &Rc<
+            RefCell<
+                Vec<(
+                    Entry,
+                    Rc<ThemeColorSelector>,
+                    Rc<ThemeColorSelector>,
+                    SpinButton,
+                    Rc<ThemeFontSelector>,
+                )>,
+            >,
+        >,
     ) {
         // Clear existing tabs
         while notebook.n_pages() > 0 {
@@ -1103,7 +1285,8 @@ impl LcarsConfigWidget {
 
         // Create tabs for each segment
         for seg_idx in 0..count {
-            let (tab_content, widgets) = Self::create_segment_tab_content(seg_idx, config, on_change, preview);
+            let (tab_content, widgets) =
+                Self::create_segment_tab_content(seg_idx, config, on_change, preview);
             let tab_label = Label::new(Some(&format!("Seg {}", seg_idx + 1)));
             notebook.append_page(&tab_content, Some(&tab_label));
             segment_widgets.borrow_mut().push(widgets);
@@ -1114,7 +1297,9 @@ impl LcarsConfigWidget {
             let placeholder = GtkBox::new(Orientation::Vertical, 8);
             placeholder.set_valign(gtk4::Align::Center);
             placeholder.set_halign(gtk4::Align::Center);
-            let label = Label::new(Some("No segments configured.\nIncrease the segment count above to add segments."));
+            let label = Label::new(Some(
+                "No segments configured.\nIncrease the segment count above to add segments.",
+            ));
             label.add_css_class("dim-label");
             placeholder.append(&label);
             notebook.append_page(&placeholder, Some(&Label::new(Some("Info"))));
@@ -1127,7 +1312,16 @@ impl LcarsConfigWidget {
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-    ) -> (GtkBox, (Entry, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, SpinButton, Rc<ThemeFontSelector>)) {
+    ) -> (
+        GtkBox,
+        (
+            Entry,
+            Rc<ThemeColorSelector>,
+            Rc<ThemeColorSelector>,
+            SpinButton,
+            Rc<ThemeFontSelector>,
+        ),
+    ) {
         let seg_box = GtkBox::new(Orientation::Vertical, 8);
         seg_box.set_margin_start(12);
         seg_box.set_margin_end(12);
@@ -1161,7 +1355,11 @@ impl LcarsConfigWidget {
         // Colors row (segment color + label color)
         let colors_box = GtkBox::new(Orientation::Horizontal, 12);
         colors_box.append(&Label::new(Some("Segment Color:")));
-        let seg_color = config.borrow().frame.segments.get(seg_idx)
+        let seg_color = config
+            .borrow()
+            .frame
+            .segments
+            .get(seg_idx)
             .map(|s| s.color.clone())
             .unwrap_or_else(|| ColorSource::custom(Color::new(0.8, 0.4, 0.4, 1.0)));
         let color_widget = Rc::new(ThemeColorSelector::new(seg_color));
@@ -1185,7 +1383,11 @@ impl LcarsConfigWidget {
         });
 
         colors_box.append(&Label::new(Some("Label Color:")));
-        let label_color = config.borrow().frame.segments.get(seg_idx)
+        let label_color = config
+            .borrow()
+            .frame
+            .segments
+            .get(seg_idx)
             .map(|s| s.label_color.clone())
             .unwrap_or_else(|| ColorSource::custom(Color::new(0.0, 0.0, 0.0, 1.0)));
         let label_color_widget = Rc::new(ThemeColorSelector::new(label_color));
@@ -1306,7 +1508,16 @@ impl LcarsConfigWidget {
         });
         seg_box.append(&font_box);
 
-        (seg_box, (label_entry, color_widget.clone(), label_color_widget.clone(), weight_spin.clone(), font_selector.clone()))
+        (
+            seg_box,
+            (
+                label_entry,
+                color_widget.clone(),
+                label_color_widget.clone(),
+                weight_spin.clone(),
+                font_selector.clone(),
+            ),
+        )
     }
 
     fn create_content_page(
@@ -1349,7 +1560,7 @@ impl LcarsConfigWidget {
         // Note about configuring sources first
         let note_label = Label::new(Some(
             "Configure data sources in the 'Data Source' tab first.\n\
-             Each slot's tab shows its source and allows display type configuration."
+             Each slot's tab shows its source and allows display type configuration.",
         ));
         note_label.set_halign(gtk4::Align::Start);
         note_label.add_css_class("dim-label");
@@ -1364,7 +1575,15 @@ impl LcarsConfigWidget {
         drop(nb);
 
         // Build initial tabs based on source summaries
-        Self::rebuild_content_notebook_tabs(content_notebook, source_summaries, config, on_change, preview, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_notebook_tabs(
+            content_notebook,
+            source_summaries,
+            config,
+            on_change,
+            preview,
+            available_fields,
+            theme_ref_refreshers,
+        );
 
         // Store widget references for updating when config changes
         *content_widgets_out.borrow_mut() = Some(ContentWidgets {
@@ -1409,7 +1628,9 @@ impl LcarsConfigWidget {
         combo_config_base::set_page_margins(&page);
 
         // Info label
-        let info_label = Label::new(Some("Configure how groups are arranged and the dividers between them."));
+        let info_label = Label::new(Some(
+            "Configure how groups are arranged and the dividers between them.",
+        ));
         info_label.set_halign(gtk4::Align::Start);
         info_label.set_wrap(true);
         page.append(&info_label);
@@ -1471,7 +1692,9 @@ impl LcarsConfigWidget {
         // Divider color
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Divider Color:")));
-        let div_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.divider_config.color.clone()));
+        let div_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.divider_config.color.clone(),
+        ));
         div_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(div_color_widget.widget());
 
@@ -1548,7 +1771,11 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let preview_clone = preview.clone();
         spacing_before_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.divider_config.spacing_before = spin.value();
+            config_clone
+                .borrow_mut()
+                .frame
+                .divider_config
+                .spacing_before = spin.value();
             combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
         });
 
@@ -1568,7 +1795,8 @@ impl LcarsConfigWidget {
         page.append(&spacing_box);
 
         // Sync segments with groups checkbox
-        let sync_segments_check = CheckButton::with_label("Sync segment heights with group heights");
+        let sync_segments_check =
+            CheckButton::with_label("Sync segment heights with group heights");
         sync_segments_check.set_active(config.borrow().frame.sync_segments_to_groups);
         sync_segments_check.set_margin_top(12);
 
@@ -1581,7 +1809,9 @@ impl LcarsConfigWidget {
         };
         sync_segments_check.set_sensitive(can_sync);
         if !can_sync {
-            sync_segments_check.set_tooltip_text(Some("Requires: Layout = Horizontal (stacked) and Segment count = Group count"));
+            sync_segments_check.set_tooltip_text(Some(
+                "Requires: Layout = Horizontal (stacked) and Segment count = Group count",
+            ));
         } else {
             sync_segments_check.set_tooltip_text(None);
         }
@@ -1630,7 +1860,9 @@ impl LcarsConfigWidget {
             && cfg.frame.group_count > 0;
         check.set_sensitive(can_sync);
         if !can_sync {
-            check.set_tooltip_text(Some("Requires: Layout = Horizontal (stacked) and Segment count = Group count"));
+            check.set_tooltip_text(Some(
+                "Requires: Layout = Horizontal (stacked) and Segment count = Group count",
+            ));
         } else {
             check.set_tooltip_text(None);
         }
@@ -1679,7 +1911,7 @@ impl LcarsConfigWidget {
         // Speed explanation
         let note_label = Label::new(Some(
             "Animation speed controls how quickly bar values\n\
-             lerp toward their target. Higher = faster."
+             lerp toward their target. Higher = faster.",
         ));
         note_label.set_halign(gtk4::Align::Start);
         note_label.set_margin_top(12);
@@ -1728,7 +1960,9 @@ impl LcarsConfigWidget {
 
         // Update frame widgets to reflect the new config
         if let Some(ref widgets) = *self.frame_widgets.borrow() {
-            widgets.sidebar_spin.set_value(new_config.frame.sidebar_width);
+            widgets
+                .sidebar_spin
+                .set_value(new_config.frame.sidebar_width);
 
             // Update sidebar position dropdown
             let pos_idx = match new_config.frame.sidebar_position {
@@ -1747,8 +1981,12 @@ impl LcarsConfigWidget {
             widgets.ext_dropdown.set_selected(ext_idx);
 
             widgets.top_spin.set_value(new_config.frame.top_bar_height);
-            widgets.bottom_spin.set_value(new_config.frame.bottom_bar_height);
-            widgets.corner_spin.set_value(new_config.frame.corner_radius);
+            widgets
+                .bottom_spin
+                .set_value(new_config.frame.bottom_bar_height);
+            widgets
+                .corner_spin
+                .set_value(new_config.frame.corner_radius);
 
             // Update extension corner style dropdown
             let ext_corner_idx = match new_config.frame.extension_corner_style {
@@ -1758,29 +1996,53 @@ impl LcarsConfigWidget {
             widgets.ext_corner_dropdown.set_selected(ext_corner_idx);
 
             // Update content background color widget
-            widgets.content_color_widget.set_color(new_config.frame.content_bg_color);
+            widgets
+                .content_color_widget
+                .set_color(new_config.frame.content_bg_color);
 
-            widgets.padding_spin.set_value(new_config.frame.content_padding);
-            widgets.padding_top_spin.set_value(new_config.frame.content_padding_top);
-            widgets.padding_left_spin.set_value(new_config.frame.content_padding_left);
-            widgets.padding_right_spin.set_value(new_config.frame.content_padding_right);
-            widgets.padding_bottom_spin.set_value(new_config.frame.content_padding_bottom);
+            widgets
+                .padding_spin
+                .set_value(new_config.frame.content_padding);
+            widgets
+                .padding_top_spin
+                .set_value(new_config.frame.content_padding_top);
+            widgets
+                .padding_left_spin
+                .set_value(new_config.frame.content_padding_left);
+            widgets
+                .padding_right_spin
+                .set_value(new_config.frame.content_padding_right);
+            widgets
+                .padding_bottom_spin
+                .set_value(new_config.frame.content_padding_bottom);
         }
 
         // Update headers widgets
         if let Some(ref widgets) = *self.headers_widgets.borrow() {
             // Top header
-            widgets.top_show_check.set_active(config_to_use.frame.top_header.position == HeaderPosition::Top);
-            widgets.top_text_entry.set_text(&config_to_use.frame.top_header.text);
+            widgets
+                .top_show_check
+                .set_active(config_to_use.frame.top_header.position == HeaderPosition::Top);
+            widgets
+                .top_text_entry
+                .set_text(&config_to_use.frame.top_header.text);
             let top_shape_idx = match config_to_use.frame.top_header.shape {
                 HeaderShape::Pill => 0,
                 HeaderShape::Square => 1,
             };
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
-            widgets.top_bg_widget.set_source(config_to_use.frame.top_header.bg_color.clone());
-            widgets.top_text_color_widget.set_source(config_to_use.frame.top_header.text_color.clone());
-            widgets.top_font_selector.set_source(config_to_use.frame.top_header.font.clone());
-            widgets.top_bold_check.set_active(config_to_use.frame.top_header.font_bold);
+            widgets
+                .top_bg_widget
+                .set_source(config_to_use.frame.top_header.bg_color.clone());
+            widgets
+                .top_text_color_widget
+                .set_source(config_to_use.frame.top_header.text_color.clone());
+            widgets
+                .top_font_selector
+                .set_source(config_to_use.frame.top_header.font.clone());
+            widgets
+                .top_bold_check
+                .set_active(config_to_use.frame.top_header.font_bold);
             let top_align_idx = match config_to_use.frame.top_header.align {
                 HeaderAlign::Left => 0,
                 HeaderAlign::Center => 1,
@@ -1789,17 +2051,29 @@ impl LcarsConfigWidget {
             widgets.top_align_dropdown.set_selected(top_align_idx);
 
             // Bottom header
-            widgets.bottom_show_check.set_active(config_to_use.frame.bottom_header.position == HeaderPosition::Bottom);
-            widgets.bottom_text_entry.set_text(&config_to_use.frame.bottom_header.text);
+            widgets
+                .bottom_show_check
+                .set_active(config_to_use.frame.bottom_header.position == HeaderPosition::Bottom);
+            widgets
+                .bottom_text_entry
+                .set_text(&config_to_use.frame.bottom_header.text);
             let bottom_shape_idx = match config_to_use.frame.bottom_header.shape {
                 HeaderShape::Pill => 0,
                 HeaderShape::Square => 1,
             };
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
-            widgets.bottom_bg_widget.set_source(config_to_use.frame.bottom_header.bg_color.clone());
-            widgets.bottom_text_color_widget.set_source(config_to_use.frame.bottom_header.text_color.clone());
-            widgets.bottom_font_selector.set_source(config_to_use.frame.bottom_header.font.clone());
-            widgets.bottom_bold_check.set_active(config_to_use.frame.bottom_header.font_bold);
+            widgets
+                .bottom_bg_widget
+                .set_source(config_to_use.frame.bottom_header.bg_color.clone());
+            widgets
+                .bottom_text_color_widget
+                .set_source(config_to_use.frame.bottom_header.text_color.clone());
+            widgets
+                .bottom_font_selector
+                .set_source(config_to_use.frame.bottom_header.font.clone());
+            widgets
+                .bottom_bold_check
+                .set_active(config_to_use.frame.bottom_header.font_bold);
             let bottom_align_idx = match config_to_use.frame.bottom_header.align {
                 HeaderAlign::Left => 0,
                 HeaderAlign::Center => 1,
@@ -1812,7 +2086,9 @@ impl LcarsConfigWidget {
 
         // Update segments widgets
         if let Some(ref widgets) = *self.segments_widgets.borrow() {
-            widgets.count_spin.set_value(new_config.frame.segment_count as f64);
+            widgets
+                .count_spin
+                .set_value(new_config.frame.segment_count as f64);
 
             // Rebuild segment tabs with new config
             let count = new_config.frame.segment_count as usize;
@@ -1828,7 +2104,9 @@ impl LcarsConfigWidget {
 
         // Update content widgets
         if let Some(ref widgets) = *self.content_widgets.borrow() {
-            widgets.spacing_spin.set_value(new_config.frame.item_spacing);
+            widgets
+                .spacing_spin
+                .set_value(new_config.frame.item_spacing);
         }
 
         // Update layout widgets
@@ -1838,8 +2116,12 @@ impl LcarsConfigWidget {
                 SplitOrientation::Horizontal => 1,
             };
             widgets.orient_dropdown.set_selected(orient_idx);
-            widgets.divider_spin.set_value(new_config.frame.divider_config.width);
-            widgets.div_color_widget.set_source(new_config.frame.divider_config.color.clone());
+            widgets
+                .divider_spin
+                .set_value(new_config.frame.divider_config.width);
+            widgets
+                .div_color_widget
+                .set_source(new_config.frame.divider_config.color.clone());
             let start_cap_idx = match new_config.frame.divider_config.cap_start {
                 DividerCapStyle::Square => 0,
                 DividerCapStyle::Round => 1,
@@ -1854,22 +2136,54 @@ impl LcarsConfigWidget {
 
         // Update animation widgets
         if let Some(ref widgets) = *self.animation_widgets.borrow() {
-            widgets.enable_check.set_active(new_config.animation_enabled);
+            widgets
+                .enable_check
+                .set_active(new_config.animation_enabled);
             widgets.speed_scale.set_value(new_config.animation_speed);
         }
 
         // Update theme widgets (fonts and colors)
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.common.color1_widget.set_color(new_config.frame.theme.color1);
-            widgets.common.color2_widget.set_color(new_config.frame.theme.color2);
-            widgets.common.color3_widget.set_color(new_config.frame.theme.color3);
-            widgets.common.color4_widget.set_color(new_config.frame.theme.color4);
-            widgets.common.gradient_editor.set_theme_config(new_config.frame.theme.clone());
-            widgets.common.gradient_editor.set_gradient_source_config(&new_config.frame.theme.gradient);
-            widgets.common.font1_btn.set_label(&new_config.frame.theme.font1_family);
-            widgets.common.font1_size_spin.set_value(new_config.frame.theme.font1_size);
-            widgets.common.font2_btn.set_label(&new_config.frame.theme.font2_family);
-            widgets.common.font2_size_spin.set_value(new_config.frame.theme.font2_size);
+            widgets
+                .common
+                .color1_widget
+                .set_color(new_config.frame.theme.color1);
+            widgets
+                .common
+                .color2_widget
+                .set_color(new_config.frame.theme.color2);
+            widgets
+                .common
+                .color3_widget
+                .set_color(new_config.frame.theme.color3);
+            widgets
+                .common
+                .color4_widget
+                .set_color(new_config.frame.theme.color4);
+            widgets
+                .common
+                .gradient_editor
+                .set_theme_config(new_config.frame.theme.clone());
+            widgets
+                .common
+                .gradient_editor
+                .set_gradient_source_config(&new_config.frame.theme.gradient);
+            widgets
+                .common
+                .font1_btn
+                .set_label(&new_config.frame.theme.font1_family);
+            widgets
+                .common
+                .font1_size_spin
+                .set_value(new_config.frame.theme.font1_size);
+            widgets
+                .common
+                .font2_btn
+                .set_label(&new_config.frame.theme.font2_family);
+            widgets
+                .common
+                .font2_size_spin
+                .set_value(new_config.frame.theme.font2_size);
         }
 
         *self.config.borrow_mut() = new_config;
@@ -1887,7 +2201,9 @@ impl LcarsConfigWidget {
         let config = self.config.borrow().clone();
         // Debug log text_overlay for each content item
         for (slot_name, item) in &config.frame.content_items {
-            if item.graph_config.text_overlay.enabled && !item.graph_config.text_overlay.text_config.lines.is_empty() {
+            if item.graph_config.text_overlay.enabled
+                && !item.graph_config.text_overlay.text_config.lines.is_empty()
+            {
                 log::debug!(
                     "LcarsConfigWidget::get_config - slot '{}' has {} text_overlay lines",
                     slot_name,
@@ -1913,20 +2229,29 @@ impl LcarsConfigWidget {
         self.config.borrow_mut().frame.theme = theme.clone();
         // Update gradient editor with new theme colors
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.common.gradient_editor.set_theme_config(theme.clone());
+            widgets
+                .common
+                .gradient_editor
+                .set_theme_config(theme.clone());
         }
         // Update header widgets with new theme colors and fonts
         if let Some(ref widgets) = *self.headers_widgets.borrow() {
             widgets.top_bg_widget.set_theme_config(theme.clone());
-            widgets.top_text_color_widget.set_theme_config(theme.clone());
+            widgets
+                .top_text_color_widget
+                .set_theme_config(theme.clone());
             widgets.top_font_selector.set_theme_config(theme.clone());
             widgets.bottom_bg_widget.set_theme_config(theme.clone());
-            widgets.bottom_text_color_widget.set_theme_config(theme.clone());
+            widgets
+                .bottom_text_color_widget
+                .set_theme_config(theme.clone());
             widgets.bottom_font_selector.set_theme_config(theme.clone());
         }
         // Update segment widgets with new theme colors and fonts
         if let Some(ref widgets) = *self.segments_widgets.borrow() {
-            for (_, color_widget, label_color_widget, _, font_selector) in widgets.segment_widgets.borrow().iter() {
+            for (_, color_widget, label_color_widget, _, font_selector) in
+                widgets.segment_widgets.borrow().iter()
+            {
                 color_widget.set_theme_config(theme.clone());
                 label_color_widget.set_theme_config(theme.clone());
                 font_selector.set_theme_config(theme.clone());
@@ -1949,7 +2274,8 @@ impl LcarsConfigWidget {
     /// summaries: Vec of (slot_name, source_summary, group_num, item_idx)
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1960,7 +2286,8 @@ impl LcarsConfigWidget {
         // Convert to sorted vec
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<u32> = group_nums.iter()
+        let group_counts: Vec<u32> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0))
             .collect();
 
@@ -2040,7 +2367,10 @@ impl LcarsConfigWidget {
 
     /// Apply transferable configuration from another combo panel.
     /// This preserves theme-specific settings while updating layout and content.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count as u32;

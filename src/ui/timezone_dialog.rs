@@ -1,10 +1,10 @@
 //! Timezone selection dialog with search functionality
 
+use gtk4::glib::WeakRef;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, Entry, Label, ListBox, ListBoxRow, Orientation, ScrolledWindow, Window,
 };
-use gtk4::glib::WeakRef;
 use std::cell::RefCell;
 use std::rc::Rc;
 

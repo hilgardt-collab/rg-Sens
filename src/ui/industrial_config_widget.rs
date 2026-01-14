@@ -5,24 +5,24 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList, ScrolledWindow,
+    Scale, ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::core::FieldMetadata;
+use crate::displayers::IndustrialDisplayConfig;
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::combo_config_base;
 use crate::ui::industrial_display::{
-    render_industrial_frame, SurfaceTexture, RivetStyle, WarningStripePosition,
-    HeaderStyle, DividerStyle,
+    render_industrial_frame, DividerStyle, HeaderStyle, RivetStyle, SurfaceTexture,
+    WarningStripePosition,
 };
 use crate::ui::lcars_display::SplitOrientation;
-use crate::displayers::IndustrialDisplayConfig;
-use crate::core::FieldMetadata;
-use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header, create_dropdown_row};
 use crate::ui::theme::{ColorSource, FontSource};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::widget_builder::{create_dropdown_row, create_section_header, ConfigWidgetBuilder};
 
 /// Holds references to Surface tab widgets
 struct SurfaceWidgets {
@@ -122,8 +122,10 @@ impl IndustrialConfigWidget {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(IndustrialDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let surface_widgets: Rc<RefCell<Option<SurfaceWidgets>>> = Rc::new(RefCell::new(None));
         let border_widgets: Rc<RefCell<Option<BorderWidgets>>> = Rc::new(RefCell::new(None));
         let rivet_widgets: Rc<RefCell<Option<RivetWidgets>>> = Rc::new(RefCell::new(None));
@@ -132,7 +134,8 @@ impl IndustrialConfigWidget {
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -153,26 +156,46 @@ impl IndustrialConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme (first for easy access)
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Surface
-        let surface_page = Self::create_surface_page(&config, &on_change, &preview, &surface_widgets, &theme_ref_refreshers);
+        let surface_page = Self::create_surface_page(
+            &config,
+            &on_change,
+            &preview,
+            &surface_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&surface_page, Some(&Label::new(Some("Surface"))));
 
         // Tab 3: Border
-        let border_page = Self::create_border_page(&config, &on_change, &preview, &border_widgets, &theme_ref_refreshers);
+        let border_page = Self::create_border_page(
+            &config,
+            &on_change,
+            &preview,
+            &border_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&border_page, Some(&Label::new(Some("Border"))));
 
         // Tab 4: Rivets
@@ -180,20 +203,46 @@ impl IndustrialConfigWidget {
         notebook.append_page(&rivet_page, Some(&Label::new(Some("Rivets"))));
 
         // Tab 5: Warning Stripes
-        let warning_page = Self::create_warning_page(&config, &on_change, &preview, &warning_widgets, &theme_ref_refreshers);
+        let warning_page = Self::create_warning_page(
+            &config,
+            &on_change,
+            &preview,
+            &warning_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&warning_page, Some(&Label::new(Some("Warning"))));
 
         // Tab 6: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
+        let header_page = Self::create_header_page(
+            &config,
+            &on_change,
+            &preview,
+            &header_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
         // Tab 7: Layout
-        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets, &theme_ref_refreshers);
+        let layout_page = Self::create_layout_page(
+            &config,
+            &on_change,
+            &preview,
+            &layout_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
         // Tab 8: Content
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &available_fields,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 9: Animation
@@ -241,7 +290,10 @@ impl IndustrialConfigWidget {
             SurfaceTexture::DiamondPlate => 2,
             SurfaceTexture::Solid => 3,
         };
-        let (texture_box, texture_dropdown) = create_dropdown_row("Texture:", &["Brushed Metal", "Carbon Fiber", "Diamond Plate", "Solid"]);
+        let (texture_box, texture_dropdown) = create_dropdown_row(
+            "Texture:",
+            &["Brushed Metal", "Carbon Fiber", "Diamond Plate", "Solid"],
+        );
         texture_dropdown.set_selected(texture_idx);
 
         let config_clone = config.clone();
@@ -272,9 +324,9 @@ impl IndustrialConfigWidget {
         // Surface color (theme-aware)
         let surface_box = GtkBox::new(Orientation::Horizontal, 6);
         surface_box.append(&Label::new(Some("Base Color:")));
-        let surface_color_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.surface_color),
-        ));
+        let surface_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.surface_color,
+        )));
         surface_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         surface_box.append(surface_color_widget.widget());
 
@@ -297,9 +349,9 @@ impl IndustrialConfigWidget {
         // Dark surface color (theme-aware)
         let surface_dark_box = GtkBox::new(Orientation::Horizontal, 6);
         surface_dark_box.append(&Label::new(Some("Dark Color:")));
-        let surface_dark_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.surface_color_dark),
-        ));
+        let surface_dark_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.surface_color_dark,
+        )));
         surface_dark_widget.set_theme_config(config.borrow().frame.theme.clone());
         surface_dark_box.append(surface_dark_widget.widget());
 
@@ -322,9 +374,9 @@ impl IndustrialConfigWidget {
         // Highlight color (theme-aware)
         let highlight_box = GtkBox::new(Orientation::Horizontal, 6);
         highlight_box.append(&Label::new(Some("Highlight:")));
-        let highlight_color_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.highlight_color),
-        ));
+        let highlight_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.highlight_color,
+        )));
         highlight_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         highlight_box.append(highlight_color_widget.widget());
 
@@ -395,9 +447,9 @@ impl IndustrialConfigWidget {
         // Border color (theme-aware)
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Border Color:")));
-        let border_color_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.border_color),
-        ));
+        let border_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.border_color,
+        )));
         border_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         color_box.append(border_color_widget.widget());
 
@@ -493,7 +545,10 @@ impl IndustrialConfigWidget {
             RivetStyle::Flat => 2,
             RivetStyle::None => 3,
         };
-        let (style_box, rivet_style_dropdown) = create_dropdown_row("Rivet Style:", &["Hex Bolt", "Phillips Screw", "Flat Rivet", "None"]);
+        let (style_box, rivet_style_dropdown) = create_dropdown_row(
+            "Rivet Style:",
+            &["Hex Bolt", "Phillips Screw", "Flat Rivet", "None"],
+        );
         rivet_style_dropdown.set_selected(style_idx);
 
         let config_clone = config.clone();
@@ -622,7 +677,8 @@ impl IndustrialConfigWidget {
         // Position
         let position_box = GtkBox::new(Orientation::Horizontal, 6);
         position_box.append(&Label::new(Some("Position:")));
-        let position_list = StringList::new(&["None", "Top", "Bottom", "Left", "Right", "All Edges"]);
+        let position_list =
+            StringList::new(&["None", "Top", "Bottom", "Left", "Right", "All Edges"]);
         let position_dropdown = DropDown::new(Some(position_list), None::<gtk4::Expression>);
         let pos_idx = match config.borrow().frame.warning_stripe_position {
             WarningStripePosition::None => 0,
@@ -683,9 +739,9 @@ impl IndustrialConfigWidget {
         // Color 1 (theme-aware)
         let color1_box = GtkBox::new(Orientation::Horizontal, 6);
         color1_box.append(&Label::new(Some("Color 1:")));
-        let color1_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.warning_color_1),
-        ));
+        let color1_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.warning_color_1,
+        )));
         color1_widget.set_theme_config(config.borrow().frame.theme.clone());
         color1_box.append(color1_widget.widget());
 
@@ -708,9 +764,9 @@ impl IndustrialConfigWidget {
         // Color 2 (theme-aware)
         let color2_box = GtkBox::new(Orientation::Horizontal, 6);
         color2_box.append(&Label::new(Some("Color 2:")));
-        let color2_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.warning_color_2),
-        ));
+        let color2_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.warning_color_2,
+        )));
         color2_widget.set_theme_config(config.borrow().frame.theme.clone());
         color2_box.append(color2_widget.widget());
 
@@ -851,12 +907,10 @@ impl IndustrialConfigWidget {
         page.append(&font_label);
 
         // Header font (theme-aware)
-        let header_font_selector = Rc::new(ThemeFontSelector::new(
-            FontSource::custom(
-                config.borrow().frame.header_font.clone(),
-                config.borrow().frame.header_font_size,
-            ),
-        ));
+        let header_font_selector = Rc::new(ThemeFontSelector::new(FontSource::custom(
+            config.borrow().frame.header_font.clone(),
+            config.borrow().frame.header_font_size,
+        )));
         header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         page.append(header_font_selector.widget());
 
@@ -879,9 +933,9 @@ impl IndustrialConfigWidget {
         // Header color (theme-aware)
         let header_color_box = GtkBox::new(Orientation::Horizontal, 6);
         header_color_box.append(&Label::new(Some("Text Color:")));
-        let header_color_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.header_color),
-        ));
+        let header_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.header_color,
+        )));
         header_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         header_color_box.append(header_color_widget.widget());
 
@@ -924,17 +978,36 @@ impl IndustrialConfigWidget {
             SplitOrientation::Vertical => 1,
         };
         let split_orientation_dropdown = builder.dropdown_row(
-            &page, "Group Direction:", &["Horizontal (side by side)", "Vertical (stacked)"], orient_idx,
-            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Horizontal } else { SplitOrientation::Vertical },
+            &page,
+            "Group Direction:",
+            &["Horizontal (side by side)", "Vertical (stacked)"],
+            orient_idx,
+            |cfg, idx| {
+                cfg.frame.split_orientation = if idx == 0 {
+                    SplitOrientation::Horizontal
+                } else {
+                    SplitOrientation::Vertical
+                }
+            },
         );
 
         let content_padding_spin = builder.spin_row(
-            &page, "Content Padding:", 4.0, 48.0, 4.0, config.borrow().frame.content_padding,
+            &page,
+            "Content Padding:",
+            4.0,
+            48.0,
+            4.0,
+            config.borrow().frame.content_padding,
             |cfg, v| cfg.frame.content_padding = v,
         );
 
         let item_spacing_spin = builder.spin_row(
-            &page, "Item Spacing:", 2.0, 32.0, 2.0, config.borrow().frame.item_spacing,
+            &page,
+            "Item Spacing:",
+            2.0,
+            32.0,
+            2.0,
+            config.borrow().frame.item_spacing,
             |cfg, v| cfg.frame.item_spacing = v,
         );
 
@@ -950,26 +1023,36 @@ impl IndustrialConfigWidget {
             DividerStyle::None => 3,
         };
         let divider_style_dropdown = builder.dropdown_row(
-            &page, "Style:", &["Groove", "Raised Bar", "Warning Stripes", "None"], div_style_idx,
-            |cfg, idx| cfg.frame.divider_style = match idx {
-                0 => DividerStyle::Groove,
-                1 => DividerStyle::Raised,
-                2 => DividerStyle::Warning,
-                _ => DividerStyle::None,
+            &page,
+            "Style:",
+            &["Groove", "Raised Bar", "Warning Stripes", "None"],
+            div_style_idx,
+            |cfg, idx| {
+                cfg.frame.divider_style = match idx {
+                    0 => DividerStyle::Groove,
+                    1 => DividerStyle::Raised,
+                    2 => DividerStyle::Warning,
+                    _ => DividerStyle::None,
+                }
             },
         );
 
         let divider_width_spin = builder.spin_row(
-            &page, "Width:", 2.0, 16.0, 1.0, config.borrow().frame.divider_width,
+            &page,
+            "Width:",
+            2.0,
+            16.0,
+            1.0,
+            config.borrow().frame.divider_width,
             |cfg, v| cfg.frame.divider_width = v,
         );
 
         // Divider color (theme-aware, resolves to Color)
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Color:")));
-        let divider_color_widget = Rc::new(ThemeColorSelector::new(
-            ColorSource::custom(config.borrow().frame.divider_color),
-        ));
+        let divider_color_widget = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            config.borrow().frame.divider_color,
+        )));
         divider_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(divider_color_widget.widget());
         let config_clone = config.clone();
@@ -1140,7 +1223,15 @@ impl IndustrialConfigWidget {
         page.append(&scrolled);
 
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_tabs(
+            config,
+            on_change,
+            preview,
+            content_notebook,
+            source_summaries,
+            available_fields,
+            theme_ref_refreshers,
+        );
 
         page
     }
@@ -1174,8 +1265,11 @@ impl IndustrialConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_bar_config_industrial() -> crate::ui::BarDisplayConfig {
-        use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
         use crate::ui::background::Color;
+        use crate::ui::bar_display::{
+            BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
+            BarStyle, BorderConfig,
+        };
 
         let mut config = BarDisplayConfig::default();
         config.style = BarStyle::Full;
@@ -1184,14 +1278,29 @@ impl IndustrialConfigWidget {
 
         // Industrial green/amber
         config.foreground = BarFillType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.2, g: 0.7, b: 0.2, a: 1.0 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.2,
+                g: 0.7,
+                b: 0.2,
+                a: 1.0,
+            }),
         };
         config.background = BarBackgroundType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.2,
+                g: 0.2,
+                b: 0.2,
+                a: 1.0,
+            }),
         };
         config.border = BorderConfig {
             enabled: true,
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.4, g: 0.4, b: 0.4, a: 1.0 }),
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.4,
+                g: 0.4,
+                b: 0.4,
+                a: 1.0,
+            }),
             width: 2.0,
         };
         config.corner_radius = 2.0;
@@ -1203,23 +1312,58 @@ impl IndustrialConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_graph_config_industrial() -> crate::ui::GraphDisplayConfig {
-        use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
         use crate::ui::background::Color;
+        use crate::ui::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 
         let mut config = GraphDisplayConfig::default();
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 2.0;
-        config.line_color = ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.2, a: 1.0 });  // Industrial green
+        config.line_color = ColorSource::custom(Color {
+            r: 0.2,
+            g: 0.8,
+            b: 0.2,
+            a: 1.0,
+        }); // Industrial green
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.2, a: 0.3 });
-        config.fill_gradient_end = ColorSource::custom(Color { r: 0.2, g: 0.8, b: 0.2, a: 0.0 });
-        config.background_color = Color { r: 0.15, g: 0.15, b: 0.15, a: 1.0 };
-        config.plot_background_color = Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 };
+        config.fill_gradient_start = ColorSource::custom(Color {
+            r: 0.2,
+            g: 0.8,
+            b: 0.2,
+            a: 0.3,
+        });
+        config.fill_gradient_end = ColorSource::custom(Color {
+            r: 0.2,
+            g: 0.8,
+            b: 0.2,
+            a: 0.0,
+        });
+        config.background_color = Color {
+            r: 0.15,
+            g: 0.15,
+            b: 0.15,
+            a: 1.0,
+        };
+        config.plot_background_color = Color {
+            r: 0.1,
+            g: 0.1,
+            b: 0.1,
+            a: 1.0,
+        };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 });
+        config.x_axis.grid_color = ColorSource::custom(Color {
+            r: 0.25,
+            g: 0.25,
+            b: 0.25,
+            a: 1.0,
+        });
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 });
+        config.y_axis.grid_color = ColorSource::custom(Color {
+            r: 0.25,
+            g: 0.25,
+            b: 0.25,
+            a: 1.0,
+        });
 
         config
     }
@@ -1312,91 +1456,155 @@ impl IndustrialConfigWidget {
 
         // Update Surface widgets
         if let Some(widgets) = self.surface_widgets.borrow().as_ref() {
-            widgets.texture_dropdown.set_selected(match config.frame.surface_texture {
-                SurfaceTexture::BrushedMetal => 0,
-                SurfaceTexture::CarbonFiber => 1,
-                SurfaceTexture::DiamondPlate => 2,
-                SurfaceTexture::Solid => 3,
-            });
-            widgets.surface_color_widget.set_color(config.frame.surface_color);
-            widgets.surface_dark_widget.set_color(config.frame.surface_color_dark);
-            widgets.highlight_color_widget.set_color(config.frame.highlight_color);
+            widgets
+                .texture_dropdown
+                .set_selected(match config.frame.surface_texture {
+                    SurfaceTexture::BrushedMetal => 0,
+                    SurfaceTexture::CarbonFiber => 1,
+                    SurfaceTexture::DiamondPlate => 2,
+                    SurfaceTexture::Solid => 3,
+                });
+            widgets
+                .surface_color_widget
+                .set_color(config.frame.surface_color);
+            widgets
+                .surface_dark_widget
+                .set_color(config.frame.surface_color_dark);
+            widgets
+                .highlight_color_widget
+                .set_color(config.frame.highlight_color);
         }
 
         // Update Border widgets
         if let Some(widgets) = self.border_widgets.borrow().as_ref() {
-            widgets.show_border_check.set_active(config.frame.show_border);
-            widgets.border_width_spin.set_value(config.frame.border_width);
-            widgets.border_color_widget.set_color(config.frame.border_color);
-            widgets.corner_radius_spin.set_value(config.frame.corner_radius);
-            widgets.show_bevel_check.set_active(config.frame.show_beveled_edge);
+            widgets
+                .show_border_check
+                .set_active(config.frame.show_border);
+            widgets
+                .border_width_spin
+                .set_value(config.frame.border_width);
+            widgets
+                .border_color_widget
+                .set_color(config.frame.border_color);
+            widgets
+                .corner_radius_spin
+                .set_value(config.frame.corner_radius);
+            widgets
+                .show_bevel_check
+                .set_active(config.frame.show_beveled_edge);
             widgets.bevel_width_spin.set_value(config.frame.bevel_width);
         }
 
         // Update Rivet widgets
         if let Some(widgets) = self.rivet_widgets.borrow().as_ref() {
-            widgets.rivet_style_dropdown.set_selected(match config.frame.rivet_style {
-                RivetStyle::Hex => 0,
-                RivetStyle::Phillips => 1,
-                RivetStyle::Flat => 2,
-                RivetStyle::None => 3,
-            });
+            widgets
+                .rivet_style_dropdown
+                .set_selected(match config.frame.rivet_style {
+                    RivetStyle::Hex => 0,
+                    RivetStyle::Phillips => 1,
+                    RivetStyle::Flat => 2,
+                    RivetStyle::None => 3,
+                });
             widgets.rivet_size_spin.set_value(config.frame.rivet_size);
-            widgets.rivet_color_widget.set_color(config.frame.rivet_color);
-            widgets.rivet_spacing_spin.set_value(config.frame.rivet_spacing);
-            widgets.show_corner_rivets_check.set_active(config.frame.show_corner_rivets);
-            widgets.show_edge_rivets_check.set_active(config.frame.show_edge_rivets);
+            widgets
+                .rivet_color_widget
+                .set_color(config.frame.rivet_color);
+            widgets
+                .rivet_spacing_spin
+                .set_value(config.frame.rivet_spacing);
+            widgets
+                .show_corner_rivets_check
+                .set_active(config.frame.show_corner_rivets);
+            widgets
+                .show_edge_rivets_check
+                .set_active(config.frame.show_edge_rivets);
         }
 
         // Update Warning widgets
         if let Some(widgets) = self.warning_widgets.borrow().as_ref() {
-            widgets.position_dropdown.set_selected(match config.frame.warning_stripe_position {
-                WarningStripePosition::None => 0,
-                WarningStripePosition::Top => 1,
-                WarningStripePosition::Bottom => 2,
-                WarningStripePosition::Left => 3,
-                WarningStripePosition::Right => 4,
-                WarningStripePosition::All => 5,
-            });
-            widgets.stripe_width_spin.set_value(config.frame.warning_stripe_width);
-            widgets.color1_widget.set_color(config.frame.warning_color_1);
-            widgets.color2_widget.set_color(config.frame.warning_color_2);
-            widgets.angle_spin.set_value(config.frame.warning_stripe_angle);
+            widgets
+                .position_dropdown
+                .set_selected(match config.frame.warning_stripe_position {
+                    WarningStripePosition::None => 0,
+                    WarningStripePosition::Top => 1,
+                    WarningStripePosition::Bottom => 2,
+                    WarningStripePosition::Left => 3,
+                    WarningStripePosition::Right => 4,
+                    WarningStripePosition::All => 5,
+                });
+            widgets
+                .stripe_width_spin
+                .set_value(config.frame.warning_stripe_width);
+            widgets
+                .color1_widget
+                .set_color(config.frame.warning_color_1);
+            widgets
+                .color2_widget
+                .set_color(config.frame.warning_color_2);
+            widgets
+                .angle_spin
+                .set_value(config.frame.warning_stripe_angle);
         }
 
         // Update Header widgets
         if let Some(widgets) = self.header_widgets.borrow().as_ref() {
-            widgets.show_header_check.set_active(config.frame.show_header);
-            widgets.header_text_entry.set_text(&config.frame.header_text);
-            widgets.header_style_dropdown.set_selected(match config.frame.header_style {
-                HeaderStyle::Plate => 0,
-                HeaderStyle::Stencil => 1,
-                HeaderStyle::Label => 2,
-                HeaderStyle::None => 3,
-            });
-            widgets.header_height_spin.set_value(config.frame.header_height);
+            widgets
+                .show_header_check
+                .set_active(config.frame.show_header);
+            widgets
+                .header_text_entry
+                .set_text(&config.frame.header_text);
+            widgets
+                .header_style_dropdown
+                .set_selected(match config.frame.header_style {
+                    HeaderStyle::Plate => 0,
+                    HeaderStyle::Stencil => 1,
+                    HeaderStyle::Label => 2,
+                    HeaderStyle::None => 3,
+                });
+            widgets
+                .header_height_spin
+                .set_value(config.frame.header_height);
             widgets.header_font_btn.set_label(&config.frame.header_font);
-            widgets.header_font_size_spin.set_value(config.frame.header_font_size);
-            widgets.header_color_widget.set_color(config.frame.header_color);
+            widgets
+                .header_font_size_spin
+                .set_value(config.frame.header_font_size);
+            widgets
+                .header_color_widget
+                .set_color(config.frame.header_color);
         }
 
         // Update Layout widgets
         if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            widgets.split_orientation_dropdown.set_selected(match config.frame.split_orientation {
-                SplitOrientation::Horizontal => 0,
-                SplitOrientation::Vertical => 1,
-            });
-            widgets.content_padding_spin.set_value(config.frame.content_padding);
-            widgets.item_spacing_spin.set_value(config.frame.item_spacing);
-            widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
-                DividerStyle::Groove => 0,
-                DividerStyle::Raised => 1,
-                DividerStyle::Warning => 2,
-                DividerStyle::None => 3,
-            });
-            widgets.divider_width_spin.set_value(config.frame.divider_width);
-            widgets.divider_color_widget.set_source(ColorSource::custom(config.frame.divider_color));
-            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets
+                .split_orientation_dropdown
+                .set_selected(match config.frame.split_orientation {
+                    SplitOrientation::Horizontal => 0,
+                    SplitOrientation::Vertical => 1,
+                });
+            widgets
+                .content_padding_spin
+                .set_value(config.frame.content_padding);
+            widgets
+                .item_spacing_spin
+                .set_value(config.frame.item_spacing);
+            widgets
+                .divider_style_dropdown
+                .set_selected(match config.frame.divider_style {
+                    DividerStyle::Groove => 0,
+                    DividerStyle::Raised => 1,
+                    DividerStyle::Warning => 2,
+                    DividerStyle::None => 3,
+                });
+            widgets
+                .divider_width_spin
+                .set_value(config.frame.divider_width);
+            widgets
+                .divider_color_widget
+                .set_source(ColorSource::custom(config.frame.divider_color));
+            widgets
+                .divider_color_widget
+                .set_theme_config(config.frame.theme.clone());
 
             combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,
@@ -1415,16 +1623,46 @@ impl IndustrialConfigWidget {
 
         // Update Theme widgets (fonts and colors)
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.common.color1_widget.set_color(config.frame.theme.color1);
-            widgets.common.color2_widget.set_color(config.frame.theme.color2);
-            widgets.common.color3_widget.set_color(config.frame.theme.color3);
-            widgets.common.color4_widget.set_color(config.frame.theme.color4);
-            widgets.common.gradient_editor.set_theme_config(config.frame.theme.clone());
-            widgets.common.gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
-            widgets.common.font1_btn.set_label(&config.frame.theme.font1_family);
-            widgets.common.font1_size_spin.set_value(config.frame.theme.font1_size);
-            widgets.common.font2_btn.set_label(&config.frame.theme.font2_family);
-            widgets.common.font2_size_spin.set_value(config.frame.theme.font2_size);
+            widgets
+                .common
+                .color1_widget
+                .set_color(config.frame.theme.color1);
+            widgets
+                .common
+                .color2_widget
+                .set_color(config.frame.theme.color2);
+            widgets
+                .common
+                .color3_widget
+                .set_color(config.frame.theme.color3);
+            widgets
+                .common
+                .color4_widget
+                .set_color(config.frame.theme.color4);
+            widgets
+                .common
+                .gradient_editor
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .common
+                .gradient_editor
+                .set_gradient_source_config(&config.frame.theme.gradient);
+            widgets
+                .common
+                .font1_btn
+                .set_label(&config.frame.theme.font1_family);
+            widgets
+                .common
+                .font1_size_spin
+                .set_value(config.frame.theme.font1_size);
+            widgets
+                .common
+                .font2_btn
+                .set_label(&config.frame.theme.font2_family);
+            widgets
+                .common
+                .font2_size_spin
+                .set_value(config.frame.theme.font2_size);
         }
 
         // Rebuild content tabs
@@ -1449,7 +1687,8 @@ impl IndustrialConfigWidget {
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1459,7 +1698,8 @@ impl IndustrialConfigWidget {
 
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<usize> = group_nums.iter()
+        let group_counts: Vec<usize> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
             .collect();
 
@@ -1518,7 +1758,12 @@ impl IndustrialConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -1531,11 +1776,18 @@ impl IndustrialConfigWidget {
     }
 
     /// Apply transferable configuration from another combo panel.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;

@@ -1,9 +1,7 @@
 //! Memory source configuration widget
 
 use gtk4::prelude::*;
-use gtk4::{
-    Box as GtkBox, DropDown, Entry, Label, Orientation, SpinButton, StringList,
-};
+use gtk4::{Box as GtkBox, DropDown, Entry, Label, Orientation, SpinButton, StringList};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -12,8 +10,7 @@ use super::MemoryUnit;
 use crate::ui::widget_builder::create_page_container;
 
 /// Memory field selection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum MemoryField {
     Used,
     Free,
@@ -23,7 +20,6 @@ pub enum MemoryField {
     SwapUsed,
     SwapPercent,
 }
-
 
 impl MemoryField {
     pub fn as_str(&self) -> &'static str {
@@ -239,10 +235,7 @@ impl MemorySourceConfigWidget {
         // Show/hide unit selector based on field
         let show_unit = matches!(
             config.field,
-            MemoryField::Used
-                | MemoryField::Free
-                | MemoryField::Available
-                | MemoryField::SwapUsed
+            MemoryField::Used | MemoryField::Free | MemoryField::Available | MemoryField::SwapUsed
         );
         self.unit_box.set_visible(show_unit);
 

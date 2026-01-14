@@ -105,7 +105,11 @@ impl SystemTempConfig {
                 self.sensor_index = idx;
                 return idx;
             } else {
-                log::warn!("Sensor label '{}' not found, falling back to index {}", label, self.sensor_index);
+                log::warn!(
+                    "Sensor label '{}' not found, falling back to index {}",
+                    label,
+                    self.sensor_index
+                );
             }
         }
         self.sensor_index
@@ -126,7 +130,10 @@ static SYSTEM_SENSORS: Lazy<Vec<SensorInfo>> = Lazy::new(|| {
     let all_temps = shared_sensors::get_refreshed_temperatures();
     let sensors = discover_all_sensors_from_list(&all_temps);
 
-    log::warn!("System temperature discovery complete: {} sensors found", sensors.len());
+    log::warn!(
+        "System temperature discovery complete: {} sensors found",
+        sensors.len()
+    );
 
     sensors
 });
@@ -236,7 +243,8 @@ impl SystemTempSource {
             metadata: SourceMetadata {
                 id: "system_temp".to_string(),
                 name: "System Temperature".to_string(),
-                description: "Temperature from any system sensor (motherboard, drives, etc.)".to_string(),
+                description: "Temperature from any system sensor (motherboard, drives, etc.)"
+                    .to_string(),
                 available_keys: vec![
                     "temperature".to_string(),
                     "sensor_label".to_string(),
@@ -334,7 +342,9 @@ impl DataSource for SystemTempSource {
 
     fn update(&mut self) -> Result<()> {
         // Get temperature from shared sensors (handles refresh internally)
-        if let Some(temp_celsius) = shared_sensors::get_temperature_by_index(self.config.sensor_index) {
+        if let Some(temp_celsius) =
+            shared_sensors::get_temperature_by_index(self.config.sensor_index)
+        {
             self.current_temp = self.convert_temperature(temp_celsius as f64);
 
             // Update detected limits if auto-detect is enabled
@@ -343,18 +353,21 @@ impl DataSource for SystemTempSource {
                 self.detected_min = Some(
                     self.detected_min
                         .map(|min| min.min(self.current_temp))
-                        .unwrap_or(self.current_temp)
+                        .unwrap_or(self.current_temp),
                 );
 
                 // Update max
                 self.detected_max = Some(
                     self.detected_max
                         .map(|max| max.max(self.current_temp))
-                        .unwrap_or(self.current_temp)
+                        .unwrap_or(self.current_temp),
                 );
             }
         } else {
-            log::warn!("Selected sensor index {} not found", self.config.sensor_index);
+            log::warn!(
+                "Selected sensor index {} not found",
+                self.config.sensor_index
+            );
             self.current_temp = 0.0;
         }
 
@@ -362,24 +375,31 @@ impl DataSource for SystemTempSource {
         self.values.clear();
 
         // Temperature value - MUST provide "value" key for displayers
-        self.values.insert("value".to_string(), Value::from(self.current_temp));
-        self.values.insert("temperature".to_string(), Value::from(self.current_temp)); // Keep for compatibility
+        self.values
+            .insert("value".to_string(), Value::from(self.current_temp));
+        self.values
+            .insert("temperature".to_string(), Value::from(self.current_temp)); // Keep for compatibility
 
         // Sensor label
         let sensor_label = SYSTEM_SENSORS
             .get(self.config.sensor_index)
             .map(|s| s.label.as_str())
             .unwrap_or("Unknown");
-        self.values.insert("sensor_label".to_string(), Value::from(sensor_label));
+        self.values
+            .insert("sensor_label".to_string(), Value::from(sensor_label));
 
         // Unit
-        self.values.insert("unit".to_string(), Value::from(self.unit_suffix()));
+        self.values
+            .insert("unit".to_string(), Value::from(self.unit_suffix()));
 
         // Caption (custom or auto-generated)
-        let caption = self.config.custom_caption.clone().unwrap_or_else(|| {
-            format!("{} Temp", sensor_label)
-        });
-        self.values.insert("caption".to_string(), Value::from(caption));
+        let caption = self
+            .config
+            .custom_caption
+            .clone()
+            .unwrap_or_else(|| format!("{} Temp", sensor_label));
+        self.values
+            .insert("caption".to_string(), Value::from(caption));
 
         // Limits
         let min_limit = if self.config.auto_detect_limits {
@@ -398,23 +418,29 @@ impl DataSource for SystemTempSource {
         // This prevents the arc displayer from showing 0 when min == max
         if let (Some(min), Some(max)) = (min_limit, max_limit) {
             if max > min {
-                self.values.insert("min_limit".to_string(), Value::from(min));
-                self.values.insert("max_limit".to_string(), Value::from(max));
+                self.values
+                    .insert("min_limit".to_string(), Value::from(min));
+                self.values
+                    .insert("max_limit".to_string(), Value::from(max));
             } else if !self.config.auto_detect_limits {
                 // For manual limits, always provide them even if equal
                 // (user explicitly set them, might be intentional)
-                self.values.insert("min_limit".to_string(), Value::from(min));
-                self.values.insert("max_limit".to_string(), Value::from(max));
+                self.values
+                    .insert("min_limit".to_string(), Value::from(min));
+                self.values
+                    .insert("max_limit".to_string(), Value::from(max));
             }
             // For auto-detect with min == max, don't provide limits yet
             // Let the displayer use fallback logic (percentage mode)
         } else if min_limit.is_some() || max_limit.is_some() {
             // Provide partial limits if available (one but not both)
             if let Some(min) = min_limit {
-                self.values.insert("min_limit".to_string(), Value::from(min));
+                self.values
+                    .insert("min_limit".to_string(), Value::from(min));
             }
             if let Some(max) = max_limit {
-                self.values.insert("max_limit".to_string(), Value::from(max));
+                self.values
+                    .insert("max_limit".to_string(), Value::from(max));
             }
         }
 

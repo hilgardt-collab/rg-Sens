@@ -4,23 +4,25 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList, ScrolledWindow,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation, Scale,
+    ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::core::FieldMetadata;
+use crate::displayers::CyberpunkDisplayConfig;
+use crate::ui::combo_config_base;
 use crate::ui::cyberpunk_display::{
-    render_cyberpunk_frame, CornerStyle, HeaderStyle, DividerStyle,
+    render_cyberpunk_frame, CornerStyle, DividerStyle, HeaderStyle,
 };
 use crate::ui::lcars_display::SplitOrientation;
-use crate::displayers::CyberpunkDisplayConfig;
-use crate::core::FieldMetadata;
-use crate::ui::combo_config_base;
 use crate::ui::theme::ColorSource;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, ConfigWidgetBuilderThemeSelectorExt, create_section_header};
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::widget_builder::{
+    create_section_header, ConfigWidgetBuilder, ConfigWidgetBuilderThemeSelectorExt,
+};
 
 /// Holds references to Frame tab widgets for updating when config changes
 struct FrameWidgets {
@@ -108,19 +110,25 @@ pub struct CyberpunkConfigWidget {
 
 impl CyberpunkConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        log::info!("=== CyberpunkConfigWidget::new() called with {} fields ===", available_fields.len());
+        log::info!(
+            "=== CyberpunkConfigWidget::new() called with {} fields ===",
+            available_fields.len()
+        );
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(CyberpunkDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let effects_widgets: Rc<RefCell<Option<EffectsWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -146,39 +154,79 @@ impl CyberpunkConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme (first for easy access to theme colors/fonts)
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Frame
-        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets, &theme_ref_refreshers);
+        let frame_page = Self::create_frame_page(
+            &config,
+            &on_change,
+            &preview,
+            &frame_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
 
         // Tab 3: Effects
-        let effects_page = Self::create_effects_page(&config, &on_change, &preview, &effects_widgets, &theme_ref_refreshers);
+        let effects_page = Self::create_effects_page(
+            &config,
+            &on_change,
+            &preview,
+            &effects_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&effects_page, Some(&Label::new(Some("Effects"))));
 
         // Tab 4: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
+        let header_page = Self::create_header_page(
+            &config,
+            &on_change,
+            &preview,
+            &header_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
         // Tab 5: Layout
-        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets, &theme_ref_refreshers);
+        let layout_page = Self::create_layout_page(
+            &config,
+            &on_change,
+            &preview,
+            &layout_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
         // Tab 6: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &available_fields,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 7: Animation
@@ -221,14 +269,19 @@ impl CyberpunkConfigWidget {
 
         // Border width
         let border_width_spin = builder.spin_row(
-            &page, "Border Width:", 0.5, 10.0, 0.5,
+            &page,
+            "Border Width:",
+            0.5,
+            10.0,
+            0.5,
             config.borrow().frame.border_width,
             |cfg, val| cfg.frame.border_width = val,
         );
 
         // Border color (theme-aware)
         let border_color_widget = builder.theme_color_selector_row(
-            &page, "Border Color:",
+            &page,
+            "Border Color:",
             config.borrow().frame.border_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.border_color = source,
@@ -236,7 +289,11 @@ impl CyberpunkConfigWidget {
 
         // Glow intensity
         let glow_spin = builder.spin_row(
-            &page, "Glow Intensity:", 0.0, 1.0, 0.1,
+            &page,
+            "Glow Intensity:",
+            0.0,
+            1.0,
+            0.1,
             config.borrow().frame.glow_intensity,
             |cfg, val| cfg.frame.glow_intensity = val,
         );
@@ -249,7 +306,8 @@ impl CyberpunkConfigWidget {
             CornerStyle::Angular => 2,
         };
         let corner_style_dropdown = builder.dropdown_row(
-            &page, "Corner Style:",
+            &page,
+            "Corner Style:",
             &["Chamfer (45°)", "Bracket [ ]", "Angular"],
             corner_idx,
             |cfg, idx| {
@@ -263,14 +321,19 @@ impl CyberpunkConfigWidget {
 
         // Corner size
         let corner_size_spin = builder.spin_row(
-            &page, "Corner Size:", 4.0, 50.0, 2.0,
+            &page,
+            "Corner Size:",
+            4.0,
+            50.0,
+            2.0,
             config.borrow().frame.corner_size,
             |cfg, val| cfg.frame.corner_size = val,
         );
 
         // Background color (theme-aware)
         let bg_color_widget = builder.theme_color_selector_row(
-            &page, "Background:",
+            &page,
+            "Background:",
             config.borrow().frame.background_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.background_color = source,
@@ -278,7 +341,11 @@ impl CyberpunkConfigWidget {
 
         // Content padding
         let padding_spin = builder.spin_row(
-            &page, "Content Padding:", 0.0, 50.0, 2.0,
+            &page,
+            "Content Padding:",
+            0.0,
+            50.0,
+            2.0,
             config.borrow().frame.content_padding,
             |cfg, val| cfg.frame.content_padding = val,
         );
@@ -323,20 +390,26 @@ impl CyberpunkConfigWidget {
         page.append(&create_section_header("Grid Pattern"));
 
         let show_grid_check = builder.check_button(
-            &page, "Show Grid",
+            &page,
+            "Show Grid",
             config.borrow().frame.show_grid,
             |cfg, active| cfg.frame.show_grid = active,
         );
 
         let grid_color_widget = builder.theme_color_selector_row(
-            &page, "Grid Color:",
+            &page,
+            "Grid Color:",
             config.borrow().frame.grid_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.grid_color = source,
         );
 
         let grid_spacing_spin = builder.spin_row(
-            &page, "Grid Spacing:", 5.0, 100.0, 5.0,
+            &page,
+            "Grid Spacing:",
+            5.0,
+            100.0,
+            5.0,
             config.borrow().frame.grid_spacing,
             |cfg, val| cfg.frame.grid_spacing = val,
         );
@@ -347,13 +420,18 @@ impl CyberpunkConfigWidget {
         page.append(&scanline_label);
 
         let show_scanlines_check = builder.check_button(
-            &page, "Show Scanlines",
+            &page,
+            "Show Scanlines",
             config.borrow().frame.show_scanlines,
             |cfg, active| cfg.frame.show_scanlines = active,
         );
 
         let scanline_opacity_spin = builder.spin_row(
-            &page, "Opacity:", 0.0, 0.5, 0.02,
+            &page,
+            "Opacity:",
+            0.0,
+            0.5,
+            0.02,
             config.borrow().frame.scanline_opacity,
             |cfg, val| cfg.frame.scanline_opacity = val,
         );
@@ -365,20 +443,23 @@ impl CyberpunkConfigWidget {
         page.append(&item_frame_label);
 
         let item_frame_check = builder.check_button(
-            &page, "Show Item Frames",
+            &page,
+            "Show Item Frames",
             config.borrow().frame.item_frame_enabled,
             |cfg, active| cfg.frame.item_frame_enabled = active,
         );
 
         let item_frame_color_widget = builder.theme_color_selector_row(
-            &page, "Frame Color:",
+            &page,
+            "Frame Color:",
             config.borrow().frame.item_frame_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.item_frame_color = source,
         );
 
         let item_glow_check = builder.check_button(
-            &page, "Item Frame Glow",
+            &page,
+            "Item Frame Glow",
             config.borrow().frame.item_glow_enabled,
             |cfg, active| cfg.frame.item_glow_enabled = active,
         );
@@ -422,14 +503,16 @@ impl CyberpunkConfigWidget {
 
         // Show header checkbox
         let show_header_check = builder.check_button(
-            &page, "Show Header",
+            &page,
+            "Show Header",
             config.borrow().frame.show_header,
             |cfg, active| cfg.frame.show_header = active,
         );
 
         // Header text entry
         let header_text_entry = builder.entry_row(
-            &page, "Header Text:",
+            &page,
+            "Header Text:",
             &config.borrow().frame.header_text,
             |cfg, text| cfg.frame.header_text = text,
         );
@@ -442,7 +525,8 @@ impl CyberpunkConfigWidget {
             HeaderStyle::None => 3,
         };
         let header_style_dropdown = builder.dropdown_row(
-            &page, "Style:",
+            &page,
+            "Style:",
             &["Brackets", "Underline", "Box", "None"],
             style_idx,
             |cfg, idx| {
@@ -457,7 +541,8 @@ impl CyberpunkConfigWidget {
 
         // Header color (theme-aware)
         let header_color_widget = builder.theme_color_selector_row(
-            &page, "Text Color:",
+            &page,
+            "Text Color:",
             config.borrow().frame.header_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.header_color = source,
@@ -465,7 +550,8 @@ impl CyberpunkConfigWidget {
 
         // Header font (theme-aware)
         let header_font_selector = builder.theme_font_selector_row(
-            &page, "Font:",
+            &page,
+            "Font:",
             config.borrow().frame.header_font.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.header_font = source,
@@ -503,7 +589,12 @@ impl CyberpunkConfigWidget {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
 
-        let builder = ConfigWidgetBuilder::with_theme_refreshers(config, preview, on_change, theme_ref_refreshers);
+        let builder = ConfigWidgetBuilder::with_theme_refreshers(
+            config,
+            preview,
+            on_change,
+            theme_ref_refreshers,
+        );
 
         // Layout section
         page.append(&create_section_header("Layout"));
@@ -513,8 +604,17 @@ impl CyberpunkConfigWidget {
             SplitOrientation::Horizontal => 1,
         };
         let orientation_dropdown = builder.dropdown_row(
-            &page, "Split Direction:", &["Vertical", "Horizontal"], orient_idx,
-            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
+            &page,
+            "Split Direction:",
+            &["Vertical", "Horizontal"],
+            orient_idx,
+            |cfg, idx| {
+                cfg.frame.split_orientation = if idx == 0 {
+                    SplitOrientation::Vertical
+                } else {
+                    SplitOrientation::Horizontal
+                }
+            },
         );
 
         // Dividers section
@@ -530,18 +630,24 @@ impl CyberpunkConfigWidget {
             DividerStyle::None => 4,
         };
         let divider_style_dropdown = builder.dropdown_row(
-            &page, "Style:", &["Line", "Dashed", "Glow", "Dots", "None"], div_style_idx,
-            |cfg, idx| cfg.frame.divider_style = match idx {
-                0 => DividerStyle::Line,
-                1 => DividerStyle::Dashed,
-                2 => DividerStyle::Glow,
-                3 => DividerStyle::Dots,
-                _ => DividerStyle::None,
+            &page,
+            "Style:",
+            &["Line", "Dashed", "Glow", "Dots", "None"],
+            div_style_idx,
+            |cfg, idx| {
+                cfg.frame.divider_style = match idx {
+                    0 => DividerStyle::Line,
+                    1 => DividerStyle::Dashed,
+                    2 => DividerStyle::Glow,
+                    3 => DividerStyle::Dots,
+                    _ => DividerStyle::None,
+                }
             },
         );
 
         let divider_color_widget = builder.theme_color_selector_row(
-            &page, "Color:",
+            &page,
+            "Color:",
             config.borrow().frame.divider_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, color| cfg.frame.divider_color = color,
@@ -554,11 +660,21 @@ impl CyberpunkConfigWidget {
         }));
 
         let divider_width_spin = builder.spin_row(
-            &page, "Width:", 0.5, 5.0, 0.5, config.borrow().frame.divider_width,
+            &page,
+            "Width:",
+            0.5,
+            5.0,
+            0.5,
+            config.borrow().frame.divider_width,
             |cfg, v| cfg.frame.divider_width = v,
         );
         let divider_padding_spin = builder.spin_row(
-            &page, "Padding:", 0.0, 20.0, 1.0, config.borrow().frame.divider_padding,
+            &page,
+            "Padding:",
+            0.0,
+            20.0,
+            1.0,
+            config.borrow().frame.divider_padding,
             |cfg, v| cfg.frame.divider_padding = v,
         );
 
@@ -715,7 +831,15 @@ impl CyberpunkConfigWidget {
 
         // Initial build of content tabs
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_tabs(
+            config,
+            on_change,
+            preview,
+            content_notebook,
+            source_summaries,
+            available_fields,
+            theme_ref_refreshers,
+        );
 
         page
     }
@@ -749,8 +873,11 @@ impl CyberpunkConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_bar_config_cyberpunk() -> crate::ui::BarDisplayConfig {
-        use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
         use crate::ui::background::Color;
+        use crate::ui::bar_display::{
+            BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
+            BarStyle, BorderConfig,
+        };
 
         let mut config = BarDisplayConfig::default();
         config.style = BarStyle::Full;
@@ -760,17 +887,43 @@ impl CyberpunkConfigWidget {
         // Cyberpunk cyan to magenta gradient
         config.foreground = BarFillType::Gradient {
             stops: vec![
-                crate::ui::theme::ColorStopSource::custom(0.0, Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }),  // Cyan
-                crate::ui::theme::ColorStopSource::custom(1.0, Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 }),  // Magenta
+                crate::ui::theme::ColorStopSource::custom(
+                    0.0,
+                    Color {
+                        r: 0.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                ), // Cyan
+                crate::ui::theme::ColorStopSource::custom(
+                    1.0,
+                    Color {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                ), // Magenta
             ],
             angle: 0.0,
         };
         config.background = BarBackgroundType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.1, g: 0.1, b: 0.15, a: 0.8 })  // Dark background
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.15,
+                a: 0.8,
+            }), // Dark background
         };
         config.border = BorderConfig {
             enabled: true,
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.5 }),  // Cyan border
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.5,
+            }), // Cyan border
             width: 1.0,
         };
 
@@ -781,23 +934,58 @@ impl CyberpunkConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_graph_config_cyberpunk() -> crate::ui::GraphDisplayConfig {
-        use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
         use crate::ui::background::Color;
+        use crate::ui::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 
         let mut config = GraphDisplayConfig::default();
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 2.0;
-        config.line_color = ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 });  // Cyan
+        config.line_color = ColorSource::custom(Color {
+            r: 0.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        }); // Cyan
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 });  // Cyan start
-        config.fill_gradient_end = ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.0 });    // Transparent end
-        config.background_color = Color { r: 0.04, g: 0.06, b: 0.1, a: 0.8 };
-        config.plot_background_color = Color { r: 0.04, g: 0.06, b: 0.1, a: 0.6 };
+        config.fill_gradient_start = ColorSource::custom(Color {
+            r: 0.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.4,
+        }); // Cyan start
+        config.fill_gradient_end = ColorSource::custom(Color {
+            r: 0.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.0,
+        }); // Transparent end
+        config.background_color = Color {
+            r: 0.04,
+            g: 0.06,
+            b: 0.1,
+            a: 0.8,
+        };
+        config.plot_background_color = Color {
+            r: 0.04,
+            g: 0.06,
+            b: 0.1,
+            a: 0.6,
+        };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 });  // Cyan grid
+        config.x_axis.grid_color = ColorSource::custom(Color {
+            r: 0.0,
+            g: 0.5,
+            b: 0.5,
+            a: 0.3,
+        }); // Cyan grid
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.0, g: 0.5, b: 0.5, a: 0.3 });  // Cyan grid
+        config.y_axis.grid_color = ColorSource::custom(Color {
+            r: 0.0,
+            g: 0.5,
+            b: 0.5,
+            a: 0.3,
+        }); // Cyan grid
 
         config
     }
@@ -806,9 +994,9 @@ impl CyberpunkConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_core_bars_config_cyberpunk() -> crate::ui::CoreBarsConfig {
-        use crate::ui::core_bars_display::CoreBarsConfig;
-        use crate::ui::bar_display::{BarStyle, BarFillType, BarBackgroundType, BorderConfig};
         use crate::ui::background::Color;
+        use crate::ui::bar_display::{BarBackgroundType, BarFillType, BarStyle, BorderConfig};
+        use crate::ui::core_bars_display::CoreBarsConfig;
 
         let mut config = CoreBarsConfig::default();
         config.bar_style = BarStyle::Full;
@@ -816,18 +1004,52 @@ impl CyberpunkConfigWidget {
         // Cyberpunk cyan to yellow to magenta gradient
         config.foreground = BarFillType::Gradient {
             stops: vec![
-                crate::ui::theme::ColorStopSource::custom(0.0, Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }),  // Cyan (low)
-                crate::ui::theme::ColorStopSource::custom(0.5, Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 }),  // Yellow (mid)
-                crate::ui::theme::ColorStopSource::custom(1.0, Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 }),  // Magenta (high)
+                crate::ui::theme::ColorStopSource::custom(
+                    0.0,
+                    Color {
+                        r: 0.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                ), // Cyan (low)
+                crate::ui::theme::ColorStopSource::custom(
+                    0.5,
+                    Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 0.0,
+                        a: 1.0,
+                    },
+                ), // Yellow (mid)
+                crate::ui::theme::ColorStopSource::custom(
+                    1.0,
+                    Color {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                ), // Magenta (high)
             ],
             angle: 90.0,
         };
         config.background = BarBackgroundType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.15,
+                a: 0.6,
+            }),
         };
         config.border = BorderConfig {
             enabled: true,
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.0, g: 1.0, b: 1.0, a: 0.3 }),
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.3,
+            }),
             width: 1.0,
         };
 
@@ -846,12 +1068,49 @@ impl CyberpunkConfigWidget {
 
         // Cyberpunk cyan to magenta gradient
         config.color_stops = vec![
-            ColorStopSource { position: 0.0, color: ColorSource::Custom { color: Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 } } },   // Cyan
-            ColorStopSource { position: 0.5, color: ColorSource::Custom { color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } } },   // Magenta
-            ColorStopSource { position: 1.0, color: ColorSource::Custom { color: Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } } },   // Yellow
+            ColorStopSource {
+                position: 0.0,
+                color: ColorSource::Custom {
+                    color: Color {
+                        r: 0.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                },
+            }, // Cyan
+            ColorStopSource {
+                position: 0.5,
+                color: ColorSource::Custom {
+                    color: Color {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                },
+            }, // Magenta
+            ColorStopSource {
+                position: 1.0,
+                color: ColorSource::Custom {
+                    color: Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 0.0,
+                        a: 1.0,
+                    },
+                },
+            }, // Yellow
         ];
         config.show_background_arc = true;
-        config.background_color = ColorSource::Custom { color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 } };
+        config.background_color = ColorSource::Custom {
+            color: Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.15,
+                a: 0.6,
+            },
+        };
         config.animate = true;
 
         config
@@ -861,28 +1120,87 @@ impl CyberpunkConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_speedometer_config_cyberpunk() -> crate::ui::SpeedometerConfig {
-        use crate::ui::speedometer_display::SpeedometerConfig;
         use crate::ui::background::Color;
+        use crate::ui::speedometer_display::SpeedometerConfig;
         use crate::ui::theme::{ColorSource, ColorStopSource};
         let mut config = SpeedometerConfig::default();
 
         // Cyberpunk colored track
-        config.track_color = ColorSource::Custom { color: Color { r: 0.1, g: 0.1, b: 0.15, a: 0.6 } };
+        config.track_color = ColorSource::Custom {
+            color: Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.15,
+                a: 0.6,
+            },
+        };
         config.track_color_stops = vec![
-            ColorStopSource::custom(0.0, Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }),   // Cyan (low)
-            ColorStopSource::custom(0.6, Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 }),   // Yellow (mid)
-            ColorStopSource::custom(1.0, Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 }),   // Magenta (high)
+            ColorStopSource::custom(
+                0.0,
+                Color {
+                    r: 0.0,
+                    g: 1.0,
+                    b: 1.0,
+                    a: 1.0,
+                },
+            ), // Cyan (low)
+            ColorStopSource::custom(
+                0.6,
+                Color {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+            ), // Yellow (mid)
+            ColorStopSource::custom(
+                1.0,
+                Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 1.0,
+                    a: 1.0,
+                },
+            ), // Magenta (high)
         ];
 
         // Cyberpunk tick colors
-        config.major_tick_color = ColorSource::Custom { color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.8 } };  // Cyan
-        config.minor_tick_color = ColorSource::Custom { color: Color { r: 0.0, g: 1.0, b: 1.0, a: 0.4 } };  // Dimmer cyan
+        config.major_tick_color = ColorSource::Custom {
+            color: Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.8,
+            },
+        }; // Cyan
+        config.minor_tick_color = ColorSource::Custom {
+            color: Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.4,
+            },
+        }; // Dimmer cyan
 
         // Cyberpunk needle - magenta with glow effect
-        config.needle_color = ColorSource::Custom { color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } };  // Magenta
+        config.needle_color = ColorSource::Custom {
+            color: Color {
+                r: 1.0,
+                g: 0.0,
+                b: 1.0,
+                a: 1.0,
+            },
+        }; // Magenta
 
         // Center hub - dark with cyan accent
-        config.center_hub_color = ColorSource::Custom { color: Color { r: 0.0, g: 0.4, b: 0.4, a: 1.0 } };  // Dark cyan
+        config.center_hub_color = ColorSource::Custom {
+            color: Color {
+                r: 0.0,
+                g: 0.4,
+                b: 0.4,
+                a: 1.0,
+            },
+        }; // Dark cyan
         config.center_hub_3d = true;
 
         config
@@ -975,7 +1293,11 @@ impl CyberpunkConfigWidget {
             config.frame.content_items.len()
         );
         for (slot_name, item_cfg) in &config.frame.content_items {
-            log::debug!("  loading content_item '{}': display_as={:?}", slot_name, item_cfg.display_as);
+            log::debug!(
+                "  loading content_item '{}': display_as={:?}",
+                slot_name,
+                item_cfg.display_as
+            );
         }
 
         // IMPORTANT: Temporarily disable on_change callback to prevent signal cascade.
@@ -987,68 +1309,124 @@ impl CyberpunkConfigWidget {
 
         // Update Frame widgets
         if let Some(widgets) = self.frame_widgets.borrow().as_ref() {
-            widgets.border_width_spin.set_value(config.frame.border_width);
-            widgets.border_color_widget.set_source(config.frame.border_color.clone());
-            widgets.border_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets
+                .border_width_spin
+                .set_value(config.frame.border_width);
+            widgets
+                .border_color_widget
+                .set_source(config.frame.border_color.clone());
+            widgets
+                .border_color_widget
+                .set_theme_config(config.frame.theme.clone());
             widgets.glow_spin.set_value(config.frame.glow_intensity);
-            widgets.corner_style_dropdown.set_selected(match config.frame.corner_style {
-                CornerStyle::Chamfer => 0,
-                CornerStyle::Bracket => 1,
-                CornerStyle::Angular => 2,
-            });
+            widgets
+                .corner_style_dropdown
+                .set_selected(match config.frame.corner_style {
+                    CornerStyle::Chamfer => 0,
+                    CornerStyle::Bracket => 1,
+                    CornerStyle::Angular => 2,
+                });
             widgets.corner_size_spin.set_value(config.frame.corner_size);
-            widgets.bg_color_widget.set_source(config.frame.background_color.clone());
-            widgets.bg_color_widget.set_theme_config(config.frame.theme.clone());
+            widgets
+                .bg_color_widget
+                .set_source(config.frame.background_color.clone());
+            widgets
+                .bg_color_widget
+                .set_theme_config(config.frame.theme.clone());
             widgets.padding_spin.set_value(config.frame.content_padding);
         }
 
         // Update Effects widgets
         if let Some(widgets) = self.effects_widgets.borrow().as_ref() {
             widgets.show_grid_check.set_active(config.frame.show_grid);
-            widgets.grid_color_widget.set_source(config.frame.grid_color.clone());
-            widgets.grid_color_widget.set_theme_config(config.frame.theme.clone());
-            widgets.grid_spacing_spin.set_value(config.frame.grid_spacing);
-            widgets.show_scanlines_check.set_active(config.frame.show_scanlines);
-            widgets.scanline_opacity_spin.set_value(config.frame.scanline_opacity);
-            widgets.item_frame_check.set_active(config.frame.item_frame_enabled);
-            widgets.item_frame_color_widget.set_source(config.frame.item_frame_color.clone());
-            widgets.item_frame_color_widget.set_theme_config(config.frame.theme.clone());
-            widgets.item_glow_check.set_active(config.frame.item_glow_enabled);
+            widgets
+                .grid_color_widget
+                .set_source(config.frame.grid_color.clone());
+            widgets
+                .grid_color_widget
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .grid_spacing_spin
+                .set_value(config.frame.grid_spacing);
+            widgets
+                .show_scanlines_check
+                .set_active(config.frame.show_scanlines);
+            widgets
+                .scanline_opacity_spin
+                .set_value(config.frame.scanline_opacity);
+            widgets
+                .item_frame_check
+                .set_active(config.frame.item_frame_enabled);
+            widgets
+                .item_frame_color_widget
+                .set_source(config.frame.item_frame_color.clone());
+            widgets
+                .item_frame_color_widget
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .item_glow_check
+                .set_active(config.frame.item_glow_enabled);
         }
 
         // Update Header widgets
         if let Some(widgets) = self.header_widgets.borrow().as_ref() {
-            widgets.show_header_check.set_active(config.frame.show_header);
-            widgets.header_text_entry.set_text(&config.frame.header_text);
-            widgets.header_style_dropdown.set_selected(match config.frame.header_style {
-                HeaderStyle::Brackets => 0,
-                HeaderStyle::Underline => 1,
-                HeaderStyle::Box => 2,
-                HeaderStyle::None => 3,
-            });
-            widgets.header_color_widget.set_source(config.frame.header_color.clone());
-            widgets.header_color_widget.set_theme_config(config.frame.theme.clone());
-            widgets.header_font_selector.set_source(config.frame.header_font.clone());
-            widgets.header_font_selector.set_theme_config(config.frame.theme.clone());
+            widgets
+                .show_header_check
+                .set_active(config.frame.show_header);
+            widgets
+                .header_text_entry
+                .set_text(&config.frame.header_text);
+            widgets
+                .header_style_dropdown
+                .set_selected(match config.frame.header_style {
+                    HeaderStyle::Brackets => 0,
+                    HeaderStyle::Underline => 1,
+                    HeaderStyle::Box => 2,
+                    HeaderStyle::None => 3,
+                });
+            widgets
+                .header_color_widget
+                .set_source(config.frame.header_color.clone());
+            widgets
+                .header_color_widget
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .header_font_selector
+                .set_source(config.frame.header_font.clone());
+            widgets
+                .header_font_selector
+                .set_theme_config(config.frame.theme.clone());
         }
 
         // Update Layout widgets
         if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            widgets.orientation_dropdown.set_selected(match config.frame.split_orientation {
-                SplitOrientation::Vertical => 0,
-                SplitOrientation::Horizontal => 1,
-            });
-            widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
-                DividerStyle::Line => 0,
-                DividerStyle::Dashed => 1,
-                DividerStyle::Glow => 2,
-                DividerStyle::Dots => 3,
-                DividerStyle::None => 4,
-            });
-            widgets.divider_color_widget.set_source(config.frame.divider_color.clone());
-            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
-            widgets.divider_width_spin.set_value(config.frame.divider_width);
-            widgets.divider_padding_spin.set_value(config.frame.divider_padding);
+            widgets
+                .orientation_dropdown
+                .set_selected(match config.frame.split_orientation {
+                    SplitOrientation::Vertical => 0,
+                    SplitOrientation::Horizontal => 1,
+                });
+            widgets
+                .divider_style_dropdown
+                .set_selected(match config.frame.divider_style {
+                    DividerStyle::Line => 0,
+                    DividerStyle::Dashed => 1,
+                    DividerStyle::Glow => 2,
+                    DividerStyle::Dots => 3,
+                    DividerStyle::None => 4,
+                });
+            widgets
+                .divider_color_widget
+                .set_source(config.frame.divider_color.clone());
+            widgets
+                .divider_color_widget
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .divider_width_spin
+                .set_value(config.frame.divider_width);
+            widgets
+                .divider_padding_spin
+                .set_value(config.frame.divider_padding);
 
             // Rebuild combined group settings
             combo_config_base::rebuild_combined_group_settings(
@@ -1068,16 +1446,46 @@ impl CyberpunkConfigWidget {
 
         // Update Theme widgets (fonts and colors)
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.common.color1_widget.set_color(config.frame.theme.color1);
-            widgets.common.color2_widget.set_color(config.frame.theme.color2);
-            widgets.common.color3_widget.set_color(config.frame.theme.color3);
-            widgets.common.color4_widget.set_color(config.frame.theme.color4);
-            widgets.common.gradient_editor.set_theme_config(config.frame.theme.clone());
-            widgets.common.gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
-            widgets.common.font1_btn.set_label(&config.frame.theme.font1_family);
-            widgets.common.font1_size_spin.set_value(config.frame.theme.font1_size);
-            widgets.common.font2_btn.set_label(&config.frame.theme.font2_family);
-            widgets.common.font2_size_spin.set_value(config.frame.theme.font2_size);
+            widgets
+                .common
+                .color1_widget
+                .set_color(config.frame.theme.color1);
+            widgets
+                .common
+                .color2_widget
+                .set_color(config.frame.theme.color2);
+            widgets
+                .common
+                .color3_widget
+                .set_color(config.frame.theme.color3);
+            widgets
+                .common
+                .color4_widget
+                .set_color(config.frame.theme.color4);
+            widgets
+                .common
+                .gradient_editor
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .common
+                .gradient_editor
+                .set_gradient_source_config(&config.frame.theme.gradient);
+            widgets
+                .common
+                .font1_btn
+                .set_label(&config.frame.theme.font1_family);
+            widgets
+                .common
+                .font1_size_spin
+                .set_value(config.frame.theme.font1_size);
+            widgets
+                .common
+                .font2_btn
+                .set_label(&config.frame.theme.font2_family);
+            widgets
+                .common
+                .font2_size_spin
+                .set_value(config.frame.theme.font2_size);
         }
 
         // Rebuild content tabs
@@ -1106,10 +1514,16 @@ impl CyberpunkConfigWidget {
             summaries.len()
         );
         for (slot_name, _, group_num, item_idx) in &summaries {
-            log::debug!("  summary: slot='{}', group={}, item={}", slot_name, group_num, item_idx);
+            log::debug!(
+                "  summary: slot='{}', group={}, item={}",
+                slot_name,
+                group_num,
+                item_idx
+            );
         }
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1120,7 +1534,8 @@ impl CyberpunkConfigWidget {
         // Convert to sorted vec
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<usize> = group_nums.iter()
+        let group_counts: Vec<usize> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
             .collect();
 
@@ -1178,7 +1593,12 @@ impl CyberpunkConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -1192,11 +1612,18 @@ impl CyberpunkConfigWidget {
 
     /// Apply transferable configuration from another combo panel.
     /// This preserves theme-specific settings while updating layout and content.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;

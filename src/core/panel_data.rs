@@ -7,43 +7,43 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::core::PanelBorderConfig;
 use crate::core::PanelGeometry;
 use crate::ui::BackgroundConfig;
-use crate::core::PanelBorderConfig;
 
 // Re-export source configs
-pub use crate::ui::CpuSourceConfig;
-pub use crate::ui::GpuSourceConfig;
-pub use crate::ui::MemorySourceConfig;
-pub use crate::ui::DiskSourceConfig;
 pub use crate::sources::ClockSourceConfig;
 pub use crate::sources::ComboSourceConfig;
-pub use crate::sources::SystemTempConfig;
 pub use crate::sources::FanSpeedConfig;
-pub use crate::sources::TestSourceConfig;
 pub use crate::sources::StaticTextSourceConfig;
+pub use crate::sources::SystemTempConfig;
+pub use crate::sources::TestSourceConfig;
+pub use crate::ui::CpuSourceConfig;
+pub use crate::ui::DiskSourceConfig;
+pub use crate::ui::GpuSourceConfig;
+pub use crate::ui::MemorySourceConfig;
 
 // Re-export displayer configs
-pub use crate::displayers::TextDisplayerConfig;
-pub use crate::ui::BarDisplayConfig;
-pub use crate::ui::ArcDisplayConfig;
-pub use crate::ui::SpeedometerConfig;
-pub use crate::ui::GraphDisplayConfig;
-pub use crate::ui::AnalogClockConfig;
-pub use crate::displayers::DigitalClockConfig;
-pub use crate::displayers::LcarsDisplayConfig;
-pub use crate::ui::CoreBarsConfig;
-pub use crate::displayers::IndicatorConfig;
-pub use crate::displayers::CyberpunkDisplayConfig;
-pub use crate::displayers::MaterialDisplayConfig;
-pub use crate::displayers::IndustrialDisplayConfig;
-pub use crate::displayers::RetroTerminalDisplayConfig;
-pub use crate::displayers::FighterHudDisplayConfig;
-pub use crate::displayers::SynthwaveDisplayConfig;
 pub use crate::displayers::ArtDecoDisplayConfig;
 pub use crate::displayers::ArtNouveauDisplayConfig;
+pub use crate::displayers::CyberpunkDisplayConfig;
+pub use crate::displayers::DigitalClockConfig;
+pub use crate::displayers::FighterHudDisplayConfig;
+pub use crate::displayers::IndicatorConfig;
+pub use crate::displayers::IndustrialDisplayConfig;
+pub use crate::displayers::LcarsDisplayConfig;
+pub use crate::displayers::MaterialDisplayConfig;
+pub use crate::displayers::RetroTerminalDisplayConfig;
 pub use crate::displayers::SteampunkDisplayConfig;
+pub use crate::displayers::SynthwaveDisplayConfig;
+pub use crate::displayers::TextDisplayerConfig;
 pub use crate::ui::css_template_display::CssTemplateDisplayConfig;
+pub use crate::ui::AnalogClockConfig;
+pub use crate::ui::ArcDisplayConfig;
+pub use crate::ui::BarDisplayConfig;
+pub use crate::ui::CoreBarsConfig;
+pub use crate::ui::GraphDisplayConfig;
+pub use crate::ui::SpeedometerConfig;
 
 /// Type-safe enum for all source configurations.
 /// Uses serde tag for JSON serialization: {"type": "cpu", ...}
@@ -193,7 +193,10 @@ impl SourceConfig {
     ///
     /// This looks for the appropriate config key based on source type
     /// (e.g., "cpu_config" for cpu source) and deserializes it.
-    pub fn extract_from_hashmap(config: &HashMap<String, serde_json::Value>, source_type: &str) -> Option<Self> {
+    pub fn extract_from_hashmap(
+        config: &HashMap<String, serde_json::Value>,
+        source_type: &str,
+    ) -> Option<Self> {
         let config_key = match source_type {
             "cpu" => "cpu_config",
             "gpu" => "gpu_config",
@@ -208,30 +211,38 @@ impl SourceConfig {
             _ => return None,
         };
 
-        config.get(config_key).and_then(|value| {
-            match source_type {
-                "cpu" => serde_json::from_value::<CpuSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Cpu),
-                "gpu" => serde_json::from_value::<GpuSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Gpu),
-                "memory" => serde_json::from_value::<MemorySourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Memory),
-                "disk" => serde_json::from_value::<DiskSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Disk),
-                "clock" => serde_json::from_value::<ClockSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Clock),
-                "combination" => serde_json::from_value::<ComboSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Combo),
-                "system_temp" => serde_json::from_value::<SystemTempConfig>(value.clone())
-                    .ok().map(SourceConfig::SystemTemp),
-                "fan_speed" => serde_json::from_value::<FanSpeedConfig>(value.clone())
-                    .ok().map(SourceConfig::FanSpeed),
-                "test" => serde_json::from_value::<TestSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::Test),
-                "static_text" => serde_json::from_value::<StaticTextSourceConfig>(value.clone())
-                    .ok().map(SourceConfig::StaticText),
-                _ => None,
-            }
+        config.get(config_key).and_then(|value| match source_type {
+            "cpu" => serde_json::from_value::<CpuSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Cpu),
+            "gpu" => serde_json::from_value::<GpuSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Gpu),
+            "memory" => serde_json::from_value::<MemorySourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Memory),
+            "disk" => serde_json::from_value::<DiskSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Disk),
+            "clock" => serde_json::from_value::<ClockSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Clock),
+            "combination" => serde_json::from_value::<ComboSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Combo),
+            "system_temp" => serde_json::from_value::<SystemTempConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::SystemTemp),
+            "fan_speed" => serde_json::from_value::<FanSpeedConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::FanSpeed),
+            "test" => serde_json::from_value::<TestSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Test),
+            "static_text" => serde_json::from_value::<StaticTextSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::StaticText),
+            _ => None,
         })
     }
 }
@@ -458,14 +469,24 @@ impl DisplayerConfig {
             "indicator" => Some(DisplayerConfig::Indicator(IndicatorConfig::default())),
             "cyberpunk" => Some(DisplayerConfig::Cyberpunk(CyberpunkDisplayConfig::default())),
             "material" => Some(DisplayerConfig::Material(MaterialDisplayConfig::default())),
-            "industrial" => Some(DisplayerConfig::Industrial(IndustrialDisplayConfig::default())),
-            "retro_terminal" => Some(DisplayerConfig::RetroTerminal(RetroTerminalDisplayConfig::default())),
-            "fighter_hud" => Some(DisplayerConfig::FighterHud(FighterHudDisplayConfig::default())),
+            "industrial" => Some(DisplayerConfig::Industrial(
+                IndustrialDisplayConfig::default(),
+            )),
+            "retro_terminal" => Some(DisplayerConfig::RetroTerminal(
+                RetroTerminalDisplayConfig::default(),
+            )),
+            "fighter_hud" => Some(DisplayerConfig::FighterHud(
+                FighterHudDisplayConfig::default(),
+            )),
             "synthwave" => Some(DisplayerConfig::Synthwave(SynthwaveDisplayConfig::default())),
             "art_deco" => Some(DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::default())),
-            "art_nouveau" => Some(DisplayerConfig::ArtNouveau(ArtNouveauDisplayConfig::default())),
+            "art_nouveau" => Some(DisplayerConfig::ArtNouveau(
+                ArtNouveauDisplayConfig::default(),
+            )),
             "steampunk" => Some(DisplayerConfig::Steampunk(SteampunkDisplayConfig::default())),
-            "css_template" => Some(DisplayerConfig::CssTemplate(CssTemplateDisplayConfig::default())),
+            "css_template" => Some(DisplayerConfig::CssTemplate(
+                CssTemplateDisplayConfig::default(),
+            )),
             _ => None,
         }
     }
@@ -481,26 +502,62 @@ impl DisplayerConfig {
 
         // Fall back to parsing as the inner config type directly
         match displayer_type {
-            "text" => serde_json::from_value(value).ok().map(DisplayerConfig::Text),
+            "text" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Text),
             "bar" => serde_json::from_value(value).ok().map(DisplayerConfig::Bar),
             "arc" => serde_json::from_value(value).ok().map(DisplayerConfig::Arc),
-            "speedometer" => serde_json::from_value(value).ok().map(DisplayerConfig::Speedometer),
-            "graph" => serde_json::from_value(value).ok().map(DisplayerConfig::Graph),
-            "clock_analog" => serde_json::from_value(value).ok().map(DisplayerConfig::ClockAnalog),
-            "clock_digital" => serde_json::from_value(value).ok().map(DisplayerConfig::ClockDigital),
-            "lcars" | "lcars_combo" => serde_json::from_value(value).ok().map(DisplayerConfig::Lcars),
-            "cpu_cores" => serde_json::from_value(value).ok().map(DisplayerConfig::CpuCores),
-            "indicator" => serde_json::from_value(value).ok().map(DisplayerConfig::Indicator),
-            "cyberpunk" => serde_json::from_value(value).ok().map(DisplayerConfig::Cyberpunk),
-            "material" => serde_json::from_value(value).ok().map(DisplayerConfig::Material),
-            "industrial" => serde_json::from_value(value).ok().map(DisplayerConfig::Industrial),
-            "retro_terminal" => serde_json::from_value(value).ok().map(DisplayerConfig::RetroTerminal),
-            "fighter_hud" => serde_json::from_value(value).ok().map(DisplayerConfig::FighterHud),
-            "synthwave" => serde_json::from_value(value).ok().map(DisplayerConfig::Synthwave),
-            "art_deco" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtDeco),
-            "art_nouveau" => serde_json::from_value(value).ok().map(DisplayerConfig::ArtNouveau),
-            "steampunk" => serde_json::from_value(value).ok().map(DisplayerConfig::Steampunk),
-            "css_template" => serde_json::from_value(value).ok().map(DisplayerConfig::CssTemplate),
+            "speedometer" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Speedometer),
+            "graph" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Graph),
+            "clock_analog" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::ClockAnalog),
+            "clock_digital" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::ClockDigital),
+            "lcars" | "lcars_combo" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Lcars),
+            "cpu_cores" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::CpuCores),
+            "indicator" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Indicator),
+            "cyberpunk" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Cyberpunk),
+            "material" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Material),
+            "industrial" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Industrial),
+            "retro_terminal" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::RetroTerminal),
+            "fighter_hud" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::FighterHud),
+            "synthwave" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Synthwave),
+            "art_deco" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::ArtDeco),
+            "art_nouveau" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::ArtNouveau),
+            "steampunk" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::Steampunk),
+            "css_template" => serde_json::from_value(value)
+                .ok()
+                .map(DisplayerConfig::CssTemplate),
             _ => None,
         }
     }
@@ -628,10 +685,8 @@ impl PanelData {
         Self {
             id,
             geometry,
-            source_config: SourceConfig::default_for_type(source_type)
-                .unwrap_or_default(),
-            displayer_config: DisplayerConfig::default_for_type(displayer_type)
-                .unwrap_or_default(),
+            source_config: SourceConfig::default_for_type(source_type).unwrap_or_default(),
+            displayer_config: DisplayerConfig::default_for_type(displayer_type).unwrap_or_default(),
             appearance: PanelAppearance::default(),
         }
     }
@@ -698,7 +753,12 @@ mod tests {
     fn test_panel_data_serialization() {
         let data = PanelData::with_types(
             "test-panel".to_string(),
-            PanelGeometry { x: 0, y: 0, width: 2, height: 1 },
+            PanelGeometry {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 1,
+            },
             "cpu",
             "bar",
         );

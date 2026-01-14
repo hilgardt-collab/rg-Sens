@@ -25,24 +25,20 @@ pub enum GpuField {
 }
 
 /// Memory unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum MemoryUnit {
     MB,
     #[default]
     GB,
 }
 
-
 /// Frequency unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum FrequencyUnit {
     #[default]
     MHz,
     GHz,
 }
-
 
 use crate::ui::TemperatureUnit;
 
@@ -208,11 +204,8 @@ impl GpuSourceConfigWidget {
         let config_clone = config.clone();
         caption_entry.connect_changed(move |entry| {
             let text = entry.text().to_string();
-            config_clone.borrow_mut().custom_caption = if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            };
+            config_clone.borrow_mut().custom_caption =
+                if text.is_empty() { None } else { Some(text) };
         });
 
         let config_clone = config.clone();
@@ -427,11 +420,14 @@ impl GpuSourceConfigWidget {
         }
 
         self.gpu_combo.set_selected(config.gpu_index);
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
 
         self.auto_detect_check.set_active(config.auto_detect_limits);
-        self.min_limit_spin.set_sensitive(!config.auto_detect_limits);
-        self.max_limit_spin.set_sensitive(!config.auto_detect_limits);
+        self.min_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
+        self.max_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
 
         if let Some(min) = config.min_limit {
             self.min_limit_spin.set_value(min);

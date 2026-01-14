@@ -1,6 +1,8 @@
 //! Text displayer implementation
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, register_animation};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform,
+};
 use crate::displayers::TextDisplayerConfig;
 use crate::ui::theme::ComboThemeConfig;
 use anyhow::Result;
@@ -129,7 +131,12 @@ impl Displayer for TextDisplayer {
             // Extract only needed values for text lines (avoids cloning entire HashMap)
             // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
             // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-            let field_ids: Vec<_> = display_data.config.lines.iter().map(|l| l.field_id.clone()).collect();
+            let field_ids: Vec<_> = display_data
+                .config
+                .lines
+                .iter()
+                .map(|l| l.field_id.clone())
+                .collect();
             display_data.values.clear();
             for field_id in field_ids {
                 if let Some(value) = data.get(&field_id) {
@@ -180,7 +187,9 @@ impl Displayer for TextDisplayer {
 
         // Check for full text_config first (new format from PanelData)
         if let Some(text_config_value) = config.get("text_config") {
-            if let Ok(text_config) = serde_json::from_value::<TextDisplayerConfig>(text_config_value.clone()) {
+            if let Ok(text_config) =
+                serde_json::from_value::<TextDisplayerConfig>(text_config_value.clone())
+            {
                 if let Ok(mut data) = self.data.lock() {
                     data.config = text_config;
                 }
@@ -191,7 +200,7 @@ impl Displayer for TextDisplayer {
         // Fallback: Try legacy format with "lines" key
         if let Some(lines_value) = config.get("lines") {
             if let Ok(text_config) = serde_json::from_value::<TextDisplayerConfig>(
-                serde_json::json!({ "lines": lines_value })
+                serde_json::json!({ "lines": lines_value }),
             ) {
                 if let Ok(mut data) = self.data.lock() {
                     data.config = text_config;

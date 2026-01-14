@@ -2,27 +2,27 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label,
-    Notebook, Orientation, SpinButton, Stack,
+    Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
+    SpinButton, Stack,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::bar_display::{
-    BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
-    BarStyle, BarTaperAlignment, BarTaperStyle, render_bar,
-};
+use crate::core::FieldMetadata;
 use crate::ui::background::{Color, ColorStop};
+use crate::ui::bar_display::{
+    render_bar, BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
+    BarStyle, BarTaperAlignment, BarTaperStyle,
+};
 use crate::ui::render_utils::render_checkerboard;
-use crate::ui::GradientEditor;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::widget_builder::{
-    create_page_container, create_dropdown_row, create_spin_row_with_value,
-    create_percent_spin_row_with_value, DEFAULT_MARGIN,
+    create_dropdown_row, create_page_container, create_percent_spin_row_with_value,
+    create_spin_row_with_value, DEFAULT_MARGIN,
 };
-use crate::core::FieldMetadata;
+use crate::ui::GradientEditor;
 
 /// Bar configuration widget
 pub struct BarConfigWidget {
@@ -100,15 +100,25 @@ impl BarConfigWidget {
         let style_page = create_page_container();
 
         // Style selector
-        let (style_row, style_dropdown) = create_dropdown_row("Style:", &["Full Panel", "Rectangle", "Segmented"]);
+        let (style_row, style_dropdown) =
+            create_dropdown_row("Style:", &["Full Panel", "Rectangle", "Segmented"]);
         style_page.append(&style_row);
 
         // Orientation selector
-        let (orientation_row, orientation_dropdown) = create_dropdown_row("Orientation:", &["Horizontal", "Vertical"]);
+        let (orientation_row, orientation_dropdown) =
+            create_dropdown_row("Orientation:", &["Horizontal", "Vertical"]);
         style_page.append(&orientation_row);
 
         // Fill direction selector
-        let (direction_row, direction_dropdown) = create_dropdown_row("Fill Direction:", &["Left to Right", "Right to Left", "Bottom to Top", "Top to Bottom"]);
+        let (direction_row, direction_dropdown) = create_dropdown_row(
+            "Fill Direction:",
+            &[
+                "Left to Right",
+                "Right to Left",
+                "Bottom to Top",
+                "Top to Bottom",
+            ],
+        );
         style_page.append(&direction_row);
 
         // Preview
@@ -130,7 +140,15 @@ impl BarConfigWidget {
             let mut preview_values = std::collections::HashMap::new();
             preview_values.insert("value".to_string(), serde_json::json!(75.0));
             preview_values.insert("percent".to_string(), serde_json::json!(75.0));
-            let _ = render_bar(cr, &cfg, &thm, 0.75, &preview_values, width as f64, height as f64);
+            let _ = render_bar(
+                cr,
+                &cfg,
+                &thm,
+                0.75,
+                &preview_values,
+                width as f64,
+                height as f64,
+            );
         });
 
         style_page.append(&preview);
@@ -200,11 +218,14 @@ impl BarConfigWidget {
         // Background solid color - using ThemeColorSelector
         let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_color_box.append(&Label::new(Some("Solid Color:")));
-        let initial_bg_source = if let BarBackgroundType::Solid { color } = &config.borrow().background {
-            color.clone()
-        } else {
-            ColorSource::Custom { color: Color::new(0.15, 0.15, 0.15, 0.8) }
-        };
+        let initial_bg_source =
+            if let BarBackgroundType::Solid { color } = &config.borrow().background {
+                color.clone()
+            } else {
+                ColorSource::Custom {
+                    color: Color::new(0.15, 0.15, 0.15, 0.8),
+                }
+            };
         let bg_color_widget = Rc::new(ThemeColorSelector::new(initial_bg_source));
         bg_color_widget.set_theme_config(theme.borrow().clone());
         bg_color_box.append(bg_color_widget.widget());
@@ -237,12 +258,16 @@ impl BarConfigWidget {
             BarTaperStyle::End => 2,
             BarTaperStyle::Both => 3,
         };
-        let (taper_row, taper_style_dropdown) = create_dropdown_row("Taper Style:", &["None", "Start", "End", "Both"]);
+        let (taper_row, taper_style_dropdown) =
+            create_dropdown_row("Taper Style:", &["None", "Start", "End", "Both"]);
         taper_style_dropdown.set_selected(taper_index);
         options_page.append(&taper_row);
 
         // Taper amount
-        let (taper_amount_row, taper_amount_spin) = create_percent_spin_row_with_value("Taper Amount (%):", config.borrow().taper_amount * 100.0);
+        let (taper_amount_row, taper_amount_spin) = create_percent_spin_row_with_value(
+            "Taper Amount (%):",
+            config.borrow().taper_amount * 100.0,
+        );
         options_page.append(&taper_amount_row);
 
         // Taper alignment selector
@@ -251,7 +276,10 @@ impl BarConfigWidget {
             BarTaperAlignment::Center => 1,
             BarTaperAlignment::End => 2,
         };
-        let (taper_align_row, taper_alignment_dropdown) = create_dropdown_row("Taper Alignment:", &["Top / Left", "Center", "Bottom / Right"]);
+        let (taper_align_row, taper_alignment_dropdown) = create_dropdown_row(
+            "Taper Alignment:",
+            &["Top / Left", "Center", "Bottom / Right"],
+        );
         taper_alignment_dropdown.set_selected(align_index);
         options_page.append(&taper_align_row);
 
@@ -311,8 +339,14 @@ impl BarConfigWidget {
             Self::create_rectangle_options(&config, &preview, &on_change);
         style_stack.add_named(&rect_page, Some("rectangle"));
 
-        let (seg_page, segment_count_spin, segment_spacing_spin, segment_width_spin, segment_height_spin, segment_corner_radius_spin) =
-            Self::create_segmented_options(&config, &preview, &on_change);
+        let (
+            seg_page,
+            segment_count_spin,
+            segment_spacing_spin,
+            segment_width_spin,
+            segment_height_spin,
+            segment_corner_radius_spin,
+        ) = Self::create_segmented_options(&config, &preview, &on_change);
         style_stack.add_named(&seg_page, Some("segmented"));
 
         let empty_page = GtkBox::new(Orientation::Vertical, 0);
@@ -338,7 +372,10 @@ impl BarConfigWidget {
                 }
             });
         }
-        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text Overlay"))));
+        notebook.append_page(
+            text_overlay_widget.widget(),
+            Some(&Label::new(Some("Text Overlay"))),
+        );
 
         // === Tab 6: Border ===
         let border_page = create_page_container();
@@ -346,13 +383,16 @@ impl BarConfigWidget {
         let border_check = CheckButton::with_label("Show Border");
         border_page.append(&border_check);
 
-        let (border_width_row, border_width_spin) = create_spin_row_with_value("Width:", 1.0, 10.0, 0.5, 1.0);
+        let (border_width_row, border_width_spin) =
+            create_spin_row_with_value("Width:", 1.0, 10.0, 0.5, 1.0);
         border_page.append(&border_width_row);
 
         // Border color - using ThemeColorSelector
         let border_color_box = GtkBox::new(Orientation::Horizontal, 6);
         border_color_box.append(&Label::new(Some("Color:")));
-        let border_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().border.color.clone()));
+        let border_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().border.color.clone(),
+        ));
         border_color_widget.set_theme_config(theme.borrow().clone());
         border_color_box.append(border_color_widget.widget());
         border_page.append(&border_color_box);
@@ -366,12 +406,20 @@ impl BarConfigWidget {
         animate_check.set_active(config.borrow().smooth_animation);
         animation_page.append(&animate_check);
 
-        let (speed_row, animation_speed_spin) = create_spin_row_with_value("Animation Speed:", 0.1, 1.0, 0.1, config.borrow().animation_speed);
+        let (speed_row, animation_speed_spin) = create_spin_row_with_value(
+            "Animation Speed:",
+            0.1,
+            1.0,
+            0.1,
+            config.borrow().animation_speed,
+        );
         animation_speed_spin.set_digits(1);
         animation_page.append(&speed_row);
 
         // Help text
-        let help_label = Label::new(Some("Animation smoothly transitions the bar value.\nHigher speed = faster transition."));
+        let help_label = Label::new(Some(
+            "Animation smoothly transitions the bar value.\nHigher speed = faster transition.",
+        ));
         help_label.set_halign(gtk4::Align::Start);
         help_label.add_css_class("dim-label");
         animation_page.append(&help_label);
@@ -644,7 +692,8 @@ impl BarConfigWidget {
                     }
                     BarFillType::Gradient { stops, .. } => {
                         fg_gradient_radio_paste.set_active(true);
-                        fg_gradient_editor_paste.set_stops(stops.iter().map(|s| s.resolve(&thm)).collect());
+                        fg_gradient_editor_paste
+                            .set_stops(stops.iter().map(|s| s.resolve(&thm)).collect());
                     }
                 }
 
@@ -656,7 +705,8 @@ impl BarConfigWidget {
                     }
                     BarBackgroundType::Gradient { stops, .. } => {
                         bg_gradient_radio_paste.set_active(true);
-                        bg_gradient_editor_paste.set_stops(stops.iter().map(|s| s.resolve(&thm)).collect());
+                        bg_gradient_editor_paste
+                            .set_stops(stops.iter().map(|s| s.resolve(&thm)).collect());
                     }
                     BarBackgroundType::Transparent => {
                         bg_transparent_radio_paste.set_active(true);
@@ -744,7 +794,6 @@ impl BarConfigWidget {
         }
     }
 
-
     fn setup_fg_handlers(
         config: &Rc<RefCell<BarDisplayConfig>>,
         theme: &Rc<RefCell<ComboThemeConfig>>,
@@ -788,7 +837,9 @@ impl BarConfigWidget {
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().foreground = BarFillType::Solid { color: color_source };
+            config_clone.borrow_mut().foreground = BarFillType::Solid {
+                color: color_source,
+            };
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -806,7 +857,10 @@ impl BarConfigWidget {
             let stops_source = gradient_editor_clone.get_stops_source();
             let angle = gradient_editor_clone.get_gradient().angle;
             let mut cfg = config_clone.borrow_mut();
-            cfg.foreground = BarFillType::Gradient { stops: stops_source, angle };
+            cfg.foreground = BarFillType::Gradient {
+                stops: stops_source,
+                angle,
+            };
             drop(cfg);
 
             preview_clone.queue_draw();
@@ -826,7 +880,8 @@ impl BarConfigWidget {
             let thm = theme_for_copy.borrow();
             if let BarFillType::Gradient { stops, .. } = &cfg.foreground {
                 // Resolve to ColorStop for clipboard
-                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
+                let resolved_stops: Vec<ColorStop> =
+                    stops.iter().map(|s| s.resolve(&thm)).collect();
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
                     clipboard.copy_gradient_stops(resolved_stops);
                     log::info!("Bar foreground gradient copied to clipboard");
@@ -845,19 +900,25 @@ impl BarConfigWidget {
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
                     // Get current angle from config or use default
-                    let angle = if let BarFillType::Gradient { angle, .. } = config_for_paste.borrow().foreground {
+                    let angle = if let BarFillType::Gradient { angle, .. } =
+                        config_for_paste.borrow().foreground
+                    {
                         angle
                     } else {
                         90.0
                     };
 
                     // Convert ColorStop to ColorStopSource (as custom colors)
-                    let stops_source: Vec<ColorStopSource> = stops.iter()
+                    let stops_source: Vec<ColorStopSource> = stops
+                        .iter()
                         .map(|s| ColorStopSource::custom(s.position, s.color))
                         .collect();
 
                     let mut cfg = config_for_paste.borrow_mut();
-                    cfg.foreground = BarFillType::Gradient { stops: stops_source.clone(), angle };
+                    cfg.foreground = BarFillType::Gradient {
+                        stops: stops_source.clone(),
+                        angle,
+                    };
                     drop(cfg);
 
                     // Update gradient editor with ColorStopSource
@@ -963,7 +1024,9 @@ impl BarConfigWidget {
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         color_widget.set_on_change(move |color_source| {
-            config_clone.borrow_mut().background = BarBackgroundType::Solid { color: color_source };
+            config_clone.borrow_mut().background = BarBackgroundType::Solid {
+                color: color_source,
+            };
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -981,7 +1044,10 @@ impl BarConfigWidget {
             let stops_source = gradient_editor_clone.get_stops_source();
             let angle = gradient_editor_clone.get_gradient().angle;
             let mut cfg = config_clone.borrow_mut();
-            cfg.background = BarBackgroundType::Gradient { stops: stops_source, angle };
+            cfg.background = BarBackgroundType::Gradient {
+                stops: stops_source,
+                angle,
+            };
             drop(cfg);
 
             preview_clone.queue_draw();
@@ -1001,7 +1067,8 @@ impl BarConfigWidget {
             let thm = theme_for_copy.borrow();
             if let BarBackgroundType::Gradient { stops, .. } = &cfg.background {
                 // Resolve to ColorStop for clipboard
-                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(&thm)).collect();
+                let resolved_stops: Vec<ColorStop> =
+                    stops.iter().map(|s| s.resolve(&thm)).collect();
                 if let Ok(mut clipboard) = CLIPBOARD.lock() {
                     clipboard.copy_gradient_stops(resolved_stops);
                     log::info!("Bar background gradient copied to clipboard");
@@ -1020,19 +1087,25 @@ impl BarConfigWidget {
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some(stops) = clipboard.paste_gradient_stops() {
                     // Get current angle from config or use default
-                    let angle = if let BarBackgroundType::Gradient { angle, .. } = config_for_paste.borrow().background {
+                    let angle = if let BarBackgroundType::Gradient { angle, .. } =
+                        config_for_paste.borrow().background
+                    {
                         angle
                     } else {
                         90.0
                     };
 
                     // Convert ColorStop to ColorStopSource (as custom colors)
-                    let stops_source: Vec<ColorStopSource> = stops.iter()
+                    let stops_source: Vec<ColorStopSource> = stops
+                        .iter()
                         .map(|s| ColorStopSource::custom(s.position, s.color))
                         .collect();
 
                     let mut cfg = config_for_paste.borrow_mut();
-                    cfg.background = BarBackgroundType::Gradient { stops: stops_source.clone(), angle };
+                    cfg.background = BarBackgroundType::Gradient {
+                        stops: stops_source.clone(),
+                        angle,
+                    };
                     drop(cfg);
 
                     // Update gradient editor with ColorStopSource
@@ -1063,22 +1136,26 @@ impl BarConfigWidget {
         let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Width
-        let (width_row, width_spin) = create_spin_row_with_value("Width (%):", 10.0, 100.0, 1.0, 80.0);
+        let (width_row, width_spin) =
+            create_spin_row_with_value("Width (%):", 10.0, 100.0, 1.0, 80.0);
         page.append(&width_row);
         handler.connect_spin_percent(&width_spin, |cfg, val| cfg.rectangle_width = val);
 
         // Height
-        let (height_row, height_spin) = create_spin_row_with_value("Height (%):", 10.0, 100.0, 1.0, 60.0);
+        let (height_row, height_spin) =
+            create_spin_row_with_value("Height (%):", 10.0, 100.0, 1.0, 60.0);
         page.append(&height_row);
         handler.connect_spin_percent(&height_spin, |cfg, val| cfg.rectangle_height = val);
 
         // Corner radius
-        let (radius_row, radius_spin) = create_spin_row_with_value("Corner Radius:", 0.0, 50.0, 1.0, 5.0);
+        let (radius_row, radius_spin) =
+            create_spin_row_with_value("Corner Radius:", 0.0, 50.0, 1.0, 5.0);
         page.append(&radius_row);
         handler.connect_spin(&radius_spin, |cfg, val| cfg.corner_radius = val);
 
         // Padding
-        let (padding_row, padding_spin) = create_spin_row_with_value("Padding:", 0.0, 50.0, 1.0, 4.0);
+        let (padding_row, padding_spin) =
+            create_spin_row_with_value("Padding:", 0.0, 50.0, 1.0, 4.0);
         page.append(&padding_row);
         handler.connect_spin(&padding_spin, |cfg, val| cfg.padding = val);
 
@@ -1089,38 +1166,57 @@ impl BarConfigWidget {
         config: &Rc<RefCell<BarDisplayConfig>>,
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, SpinButton, SpinButton, SpinButton, SpinButton, SpinButton) {
+    ) -> (
+        GtkBox,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+    ) {
         use crate::ui::widget_builder::SpinChangeHandler;
 
         let page = GtkBox::new(Orientation::Vertical, 12);
         let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Segment count
-        let (count_row, count_spin) = create_spin_row_with_value("Segments:", 2.0, 100.0, 1.0, 10.0);
+        let (count_row, count_spin) =
+            create_spin_row_with_value("Segments:", 2.0, 100.0, 1.0, 10.0);
         page.append(&count_row);
         handler.connect_spin_int(&count_spin, |cfg, val| cfg.segment_count = val as u32);
 
         // Segment spacing
-        let (spacing_row, spacing_spin) = create_spin_row_with_value("Spacing:", 0.0, 20.0, 0.5, 2.0);
+        let (spacing_row, spacing_spin) =
+            create_spin_row_with_value("Spacing:", 0.0, 20.0, 0.5, 2.0);
         page.append(&spacing_row);
         handler.connect_spin(&spacing_spin, |cfg, val| cfg.segment_spacing = val);
 
         // Width
-        let (width_row, width_spin) = create_spin_row_with_value("Width (%):", 10.0, 100.0, 1.0, 90.0);
+        let (width_row, width_spin) =
+            create_spin_row_with_value("Width (%):", 10.0, 100.0, 1.0, 90.0);
         page.append(&width_row);
         handler.connect_spin_percent(&width_spin, |cfg, val| cfg.segment_width = val);
 
         // Height
-        let (height_row, height_spin) = create_spin_row_with_value("Height (%):", 10.0, 100.0, 1.0, 80.0);
+        let (height_row, height_spin) =
+            create_spin_row_with_value("Height (%):", 10.0, 100.0, 1.0, 80.0);
         page.append(&height_row);
         handler.connect_spin_percent(&height_spin, |cfg, val| cfg.segment_height = val);
 
         // Corner radius
-        let (radius_row, corner_radius_spin) = create_spin_row_with_value("Corner Radius:", 0.0, 50.0, 1.0, 5.0);
+        let (radius_row, corner_radius_spin) =
+            create_spin_row_with_value("Corner Radius:", 0.0, 50.0, 1.0, 5.0);
         page.append(&radius_row);
         handler.connect_spin(&corner_radius_spin, |cfg, val| cfg.corner_radius = val);
 
-        (page, count_spin, spacing_spin, width_spin, height_spin, corner_radius_spin)
+        (
+            page,
+            count_spin,
+            spacing_spin,
+            width_spin,
+            height_spin,
+            corner_radius_spin,
+        )
     }
 
     pub fn widget(&self) -> &GtkBox {
@@ -1163,17 +1259,24 @@ impl BarConfigWidget {
         self.direction_dropdown.set_selected(direction_index);
 
         // Update rectangle options
-        self.rect_width_spin.set_value(new_config.rectangle_width * 100.0);
-        self.rect_height_spin.set_value(new_config.rectangle_height * 100.0);
+        self.rect_width_spin
+            .set_value(new_config.rectangle_width * 100.0);
+        self.rect_height_spin
+            .set_value(new_config.rectangle_height * 100.0);
         self.corner_radius_spin.set_value(new_config.corner_radius);
         self.padding_spin.set_value(new_config.padding);
 
         // Update segmented options
-        self.segment_count_spin.set_value(new_config.segment_count as f64);
-        self.segment_spacing_spin.set_value(new_config.segment_spacing);
-        self.segment_width_spin.set_value(new_config.segment_width * 100.0);
-        self.segment_height_spin.set_value(new_config.segment_height * 100.0);
-        self.segment_corner_radius_spin.set_value(new_config.corner_radius);
+        self.segment_count_spin
+            .set_value(new_config.segment_count as f64);
+        self.segment_spacing_spin
+            .set_value(new_config.segment_spacing);
+        self.segment_width_spin
+            .set_value(new_config.segment_width * 100.0);
+        self.segment_height_spin
+            .set_value(new_config.segment_height * 100.0);
+        self.segment_corner_radius_spin
+            .set_value(new_config.corner_radius);
 
         // Update taper options
         let taper_index = match new_config.taper_style {
@@ -1183,7 +1286,8 @@ impl BarConfigWidget {
             BarTaperStyle::Both => 3,
         };
         self.taper_style_dropdown.set_selected(taper_index);
-        self.taper_amount_spin.set_value(new_config.taper_amount * 100.0);
+        self.taper_amount_spin
+            .set_value(new_config.taper_amount * 100.0);
         let align_index = match new_config.taper_alignment {
             BarTaperAlignment::Start => 0,
             BarTaperAlignment::Center => 1,
@@ -1197,7 +1301,8 @@ impl BarConfigWidget {
 
         // Update animation
         self.animate_check.set_active(new_config.smooth_animation);
-        self.animation_speed_spin.set_value(new_config.animation_speed);
+        self.animation_speed_spin
+            .set_value(new_config.animation_speed);
 
         // Update foreground UI - preserving theme color references
         match &new_config.foreground {
@@ -1212,7 +1317,8 @@ impl BarConfigWidget {
                 self.fg_color_widget.widget().set_visible(false);
                 self.fg_gradient_editor.widget().set_visible(true);
                 // Load gradient with ColorStopSource to preserve theme references
-                self.fg_gradient_editor.set_gradient_source(*angle, stops.clone());
+                self.fg_gradient_editor
+                    .set_gradient_source(*angle, stops.clone());
             }
         }
 
@@ -1229,7 +1335,8 @@ impl BarConfigWidget {
                 self.bg_color_widget.widget().set_visible(false);
                 self.bg_gradient_editor.widget().set_visible(true);
                 // Load gradient with ColorStopSource to preserve theme references
-                self.bg_gradient_editor.set_gradient_source(*angle, stops.clone());
+                self.bg_gradient_editor
+                    .set_gradient_source(*angle, stops.clone());
             }
             BarBackgroundType::Transparent => {
                 self.bg_transparent_radio.set_active(true);
@@ -1239,7 +1346,8 @@ impl BarConfigWidget {
         }
 
         // Update border color
-        self.border_color_widget.set_source(new_config.border.color.clone());
+        self.border_color_widget
+            .set_source(new_config.border.color.clone());
 
         // Update text overlay widget
         self.text_overlay_widget.set_config(new_config.text_overlay);

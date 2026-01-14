@@ -14,15 +14,20 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as ArtNouveauContentType, ContentItemConfig as ArtNouveauContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as ArtNouveauContentType, ContentItemConfig as ArtNouveauContentItemConfig,
+};
 
 /// Border style for the frame
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -107,15 +112,33 @@ pub enum DividerStyle {
     None,
 }
 
-fn default_border_width() -> f64 { 3.0 }
-fn default_corner_size() -> f64 { 28.0 }
-fn default_accent_width() -> f64 { 2.0 }
-fn default_pattern_spacing() -> f64 { 24.0 }
-fn default_content_padding() -> f64 { 12.0 }
-fn default_divider_width() -> f64 { 2.0 }
-fn default_divider_padding() -> f64 { 8.0 }
-fn default_group_count() -> usize { 2 }
-fn default_wave_frequency() -> f64 { 3.0 }
+fn default_border_width() -> f64 {
+    3.0
+}
+fn default_corner_size() -> f64 {
+    28.0
+}
+fn default_accent_width() -> f64 {
+    2.0
+}
+fn default_pattern_spacing() -> f64 {
+    24.0
+}
+fn default_content_padding() -> f64 {
+    12.0
+}
+fn default_divider_width() -> f64 {
+    2.0
+}
+fn default_divider_padding() -> f64 {
+    8.0
+}
+fn default_group_count() -> usize {
+    2
+}
+fn default_wave_frequency() -> f64 {
+    3.0
+}
 
 // ColorSource defaults for theme-aware fields
 fn default_border_color_source() -> ColorSource {
@@ -158,7 +181,10 @@ pub struct ArtNouveauFrameConfig {
     pub border_style: BorderStyle,
     #[serde(default = "default_border_width")]
     pub border_width: f64,
-    #[serde(default = "default_border_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_border_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub border_color: ColorSource,
 
     // Corner decorations
@@ -166,17 +192,26 @@ pub struct ArtNouveauFrameConfig {
     pub corner_style: CornerStyle,
     #[serde(default = "default_corner_size")]
     pub corner_size: f64,
-    #[serde(default = "default_accent_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_accent_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub accent_color: ColorSource,
     #[serde(default = "default_accent_width")]
     pub accent_width: f64,
 
     // Background
-    #[serde(default = "default_background_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_background_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub background_color: ColorSource,
     #[serde(default)]
     pub background_pattern: BackgroundPattern,
-    #[serde(default = "default_pattern_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_pattern_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub pattern_color: ColorSource,
     #[serde(default = "default_pattern_spacing")]
     pub pattern_spacing: f64,
@@ -188,9 +223,15 @@ pub struct ArtNouveauFrameConfig {
     pub show_header: bool,
     #[serde(default)]
     pub header_text: String,
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
-    #[serde(default = "default_header_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub header_color: ColorSource,
     #[serde(default)]
     pub header_style: HeaderStyle,
@@ -213,7 +254,10 @@ pub struct ArtNouveauFrameConfig {
     // Dividers
     #[serde(default)]
     pub divider_style: DividerStyle,
-    #[serde(default = "default_divider_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_divider_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub divider_color: ColorSource,
     #[serde(default = "default_divider_width")]
     pub divider_width: f64,
@@ -378,8 +422,7 @@ impl FrameRenderer for ArtNouveauRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_art_nouveau_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_art_nouveau_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -423,28 +466,33 @@ fn draw_flourish_corner(
     // Main flourish spiral
     cr.move_to(0.0, 0.0);
     cr.curve_to(
-        size * 0.3, -size * 0.1,
-        size * 0.5, -size * 0.4,
-        size * 0.7, -size * 0.3,
+        size * 0.3,
+        -size * 0.1,
+        size * 0.5,
+        -size * 0.4,
+        size * 0.7,
+        -size * 0.3,
     );
     cr.curve_to(
-        size * 0.85, -size * 0.2,
-        size * 0.9, 0.0,
-        size * 0.7, size * 0.15,
+        size * 0.85,
+        -size * 0.2,
+        size * 0.9,
+        0.0,
+        size * 0.7,
+        size * 0.15,
     );
-    cr.curve_to(
-        size * 0.5, size * 0.3,
-        size * 0.2, size * 0.2,
-        0.0, 0.0,
-    );
+    cr.curve_to(size * 0.5, size * 0.3, size * 0.2, size * 0.2, 0.0, 0.0);
     cr.stroke().ok();
 
     // Secondary tendril
     cr.move_to(size * 0.2, -size * 0.05);
     cr.curve_to(
-        size * 0.35, -size * 0.25,
-        size * 0.5, -size * 0.35,
-        size * 0.45, -size * 0.5,
+        size * 0.35,
+        -size * 0.25,
+        size * 0.5,
+        -size * 0.35,
+        size * 0.45,
+        -size * 0.5,
     );
     cr.stroke().ok();
 
@@ -470,15 +518,14 @@ fn draw_leaf_corner(
     // Draw a stylized leaf
     cr.move_to(0.0, 0.0);
     cr.curve_to(
-        size * 0.3, -size * 0.2,
-        size * 0.5, -size * 0.5,
-        size * 0.7, -size * 0.4,
+        size * 0.3,
+        -size * 0.2,
+        size * 0.5,
+        -size * 0.5,
+        size * 0.7,
+        -size * 0.4,
     );
-    cr.curve_to(
-        size * 0.6, -size * 0.2,
-        size * 0.4, 0.0,
-        0.0, 0.0,
-    );
+    cr.curve_to(size * 0.6, -size * 0.2, size * 0.4, 0.0, 0.0, 0.0);
     cr.close_path();
     cr.fill().ok();
 
@@ -487,9 +534,12 @@ fn draw_leaf_corner(
     cr.set_line_width(line_width * 0.5);
     cr.move_to(0.0, 0.0);
     cr.curve_to(
-        size * 0.2, -size * 0.15,
-        size * 0.4, -size * 0.3,
-        size * 0.55, -size * 0.35,
+        size * 0.2,
+        -size * 0.15,
+        size * 0.4,
+        -size * 0.3,
+        size * 0.55,
+        -size * 0.35,
     );
     cr.stroke().ok();
 
@@ -550,18 +600,21 @@ fn draw_bracket_corner(
 
     // Curved L-bracket
     cr.move_to(0.0, -size * 0.6);
-    cr.curve_to(
-        0.0, -size * 0.2,
-        size * 0.1, 0.0,
-        size * 0.6, 0.0,
-    );
+    cr.curve_to(0.0, -size * 0.2, size * 0.1, 0.0, size * 0.6, 0.0);
     cr.stroke().ok();
 
     cr.restore().ok();
 }
 
 /// Draw corner decorations for all four corners
-fn draw_corner_decorations(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+fn draw_corner_decorations(
+    cr: &Context,
+    config: &ArtNouveauFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let accent_color = config.accent_color.resolve(&config.theme);
     let size = config.corner_size;
     let line_width = config.accent_width;
@@ -569,27 +622,123 @@ fn draw_corner_decorations(cr: &Context, config: &ArtNouveauFrameConfig, x: f64,
     match config.corner_style {
         CornerStyle::Flourish => {
             draw_flourish_corner(cr, x + 8.0, y + 8.0, size, 0.0, &accent_color, line_width);
-            draw_flourish_corner(cr, x + w - 8.0, y + 8.0, size, PI / 2.0, &accent_color, line_width);
-            draw_flourish_corner(cr, x + w - 8.0, y + h - 8.0, size, PI, &accent_color, line_width);
-            draw_flourish_corner(cr, x + 8.0, y + h - 8.0, size, -PI / 2.0, &accent_color, line_width);
+            draw_flourish_corner(
+                cr,
+                x + w - 8.0,
+                y + 8.0,
+                size,
+                PI / 2.0,
+                &accent_color,
+                line_width,
+            );
+            draw_flourish_corner(
+                cr,
+                x + w - 8.0,
+                y + h - 8.0,
+                size,
+                PI,
+                &accent_color,
+                line_width,
+            );
+            draw_flourish_corner(
+                cr,
+                x + 8.0,
+                y + h - 8.0,
+                size,
+                -PI / 2.0,
+                &accent_color,
+                line_width,
+            );
         }
         CornerStyle::Leaf => {
             draw_leaf_corner(cr, x + 8.0, y + 8.0, size, 0.0, &accent_color, line_width);
-            draw_leaf_corner(cr, x + w - 8.0, y + 8.0, size, PI / 2.0, &accent_color, line_width);
-            draw_leaf_corner(cr, x + w - 8.0, y + h - 8.0, size, PI, &accent_color, line_width);
-            draw_leaf_corner(cr, x + 8.0, y + h - 8.0, size, -PI / 2.0, &accent_color, line_width);
+            draw_leaf_corner(
+                cr,
+                x + w - 8.0,
+                y + 8.0,
+                size,
+                PI / 2.0,
+                &accent_color,
+                line_width,
+            );
+            draw_leaf_corner(
+                cr,
+                x + w - 8.0,
+                y + h - 8.0,
+                size,
+                PI,
+                &accent_color,
+                line_width,
+            );
+            draw_leaf_corner(
+                cr,
+                x + 8.0,
+                y + h - 8.0,
+                size,
+                -PI / 2.0,
+                &accent_color,
+                line_width,
+            );
         }
         CornerStyle::Spiral => {
             draw_spiral_corner(cr, x + 8.0, y + 8.0, size, 0.0, &accent_color, line_width);
-            draw_spiral_corner(cr, x + w - 8.0, y + 8.0, size, PI / 2.0, &accent_color, line_width);
-            draw_spiral_corner(cr, x + w - 8.0, y + h - 8.0, size, PI, &accent_color, line_width);
-            draw_spiral_corner(cr, x + 8.0, y + h - 8.0, size, -PI / 2.0, &accent_color, line_width);
+            draw_spiral_corner(
+                cr,
+                x + w - 8.0,
+                y + 8.0,
+                size,
+                PI / 2.0,
+                &accent_color,
+                line_width,
+            );
+            draw_spiral_corner(
+                cr,
+                x + w - 8.0,
+                y + h - 8.0,
+                size,
+                PI,
+                &accent_color,
+                line_width,
+            );
+            draw_spiral_corner(
+                cr,
+                x + 8.0,
+                y + h - 8.0,
+                size,
+                -PI / 2.0,
+                &accent_color,
+                line_width,
+            );
         }
         CornerStyle::Bracket => {
             draw_bracket_corner(cr, x + 8.0, y + 8.0, size, 0.0, &accent_color, line_width);
-            draw_bracket_corner(cr, x + w - 8.0, y + 8.0, size, PI / 2.0, &accent_color, line_width);
-            draw_bracket_corner(cr, x + w - 8.0, y + h - 8.0, size, PI, &accent_color, line_width);
-            draw_bracket_corner(cr, x + 8.0, y + h - 8.0, size, -PI / 2.0, &accent_color, line_width);
+            draw_bracket_corner(
+                cr,
+                x + w - 8.0,
+                y + 8.0,
+                size,
+                PI / 2.0,
+                &accent_color,
+                line_width,
+            );
+            draw_bracket_corner(
+                cr,
+                x + w - 8.0,
+                y + h - 8.0,
+                size,
+                PI,
+                &accent_color,
+                line_width,
+            );
+            draw_bracket_corner(
+                cr,
+                x + 8.0,
+                y + h - 8.0,
+                size,
+                -PI / 2.0,
+                &accent_color,
+                line_width,
+            );
         }
         CornerStyle::None => {}
     }
@@ -641,7 +790,12 @@ fn draw_border(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
     let line_width = config.border_width;
 
     cr.save().ok();
-    cr.set_source_rgba(border_color.r, border_color.g, border_color.b, border_color.a);
+    cr.set_source_rgba(
+        border_color.r,
+        border_color.g,
+        border_color.b,
+        border_color.a,
+    );
     cr.set_line_width(line_width);
     cr.set_line_cap(cairo::LineCap::Round);
     cr.set_line_join(cairo::LineJoin::Round);
@@ -651,10 +805,50 @@ fn draw_border(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
             // Flowing vine border with subtle waves
             let amplitude = 3.0;
             let freq = config.wave_frequency;
-            draw_wave_edge(cr, x, y, x + w, y, amplitude, freq, &border_color, line_width);
-            draw_wave_edge(cr, x + w, y, x + w, y + h, amplitude, freq, &border_color, line_width);
-            draw_wave_edge(cr, x + w, y + h, x, y + h, amplitude, freq, &border_color, line_width);
-            draw_wave_edge(cr, x, y + h, x, y, amplitude, freq, &border_color, line_width);
+            draw_wave_edge(
+                cr,
+                x,
+                y,
+                x + w,
+                y,
+                amplitude,
+                freq,
+                &border_color,
+                line_width,
+            );
+            draw_wave_edge(
+                cr,
+                x + w,
+                y,
+                x + w,
+                y + h,
+                amplitude,
+                freq,
+                &border_color,
+                line_width,
+            );
+            draw_wave_edge(
+                cr,
+                x + w,
+                y + h,
+                x,
+                y + h,
+                amplitude,
+                freq,
+                &border_color,
+                line_width,
+            );
+            draw_wave_edge(
+                cr,
+                x,
+                y + h,
+                x,
+                y,
+                amplitude,
+                freq,
+                &border_color,
+                line_width,
+            );
         }
         BorderStyle::Whiplash => {
             // Classic whiplash S-curves at corners
@@ -665,14 +859,35 @@ fn draw_border(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
             cr.curve_to(x + curve_size / 2.0, y - 5.0, x + 5.0, y, x, y + curve_size);
             cr.move_to(x + curve_size, y);
             cr.line_to(x + w - curve_size, y);
-            cr.curve_to(x + w - curve_size / 2.0, y - 5.0, x + w - 5.0, y, x + w, y + curve_size);
+            cr.curve_to(
+                x + w - curve_size / 2.0,
+                y - 5.0,
+                x + w - 5.0,
+                y,
+                x + w,
+                y + curve_size,
+            );
 
             // Bottom edge
             cr.move_to(x + curve_size, y + h);
-            cr.curve_to(x + curve_size / 2.0, y + h + 5.0, x + 5.0, y + h, x, y + h - curve_size);
+            cr.curve_to(
+                x + curve_size / 2.0,
+                y + h + 5.0,
+                x + 5.0,
+                y + h,
+                x,
+                y + h - curve_size,
+            );
             cr.move_to(x + curve_size, y + h);
             cr.line_to(x + w - curve_size, y + h);
-            cr.curve_to(x + w - curve_size / 2.0, y + h + 5.0, x + w - 5.0, y + h, x + w, y + h - curve_size);
+            cr.curve_to(
+                x + w - curve_size / 2.0,
+                y + h + 5.0,
+                x + w - 5.0,
+                y + h,
+                x + w,
+                y + h - curve_size,
+            );
 
             // Side edges
             cr.move_to(x, y + curve_size);
@@ -690,19 +905,72 @@ fn draw_border(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
             // Add small leaf accents at midpoints
             let accent_color = config.accent_color.resolve(&config.theme);
             let leaf_size = 8.0;
-            draw_leaf_corner(cr, x + w / 2.0, y, leaf_size, PI / 2.0, &accent_color, line_width * 0.8);
-            draw_leaf_corner(cr, x + w / 2.0, y + h, leaf_size, -PI / 2.0, &accent_color, line_width * 0.8);
-            draw_leaf_corner(cr, x, y + h / 2.0, leaf_size, 0.0, &accent_color, line_width * 0.8);
-            draw_leaf_corner(cr, x + w, y + h / 2.0, leaf_size, PI, &accent_color, line_width * 0.8);
+            draw_leaf_corner(
+                cr,
+                x + w / 2.0,
+                y,
+                leaf_size,
+                PI / 2.0,
+                &accent_color,
+                line_width * 0.8,
+            );
+            draw_leaf_corner(
+                cr,
+                x + w / 2.0,
+                y + h,
+                leaf_size,
+                -PI / 2.0,
+                &accent_color,
+                line_width * 0.8,
+            );
+            draw_leaf_corner(
+                cr,
+                x,
+                y + h / 2.0,
+                leaf_size,
+                0.0,
+                &accent_color,
+                line_width * 0.8,
+            );
+            draw_leaf_corner(
+                cr,
+                x + w,
+                y + h / 2.0,
+                leaf_size,
+                PI,
+                &accent_color,
+                line_width * 0.8,
+            );
         }
         BorderStyle::Organic => {
             // Slightly curved organic border
             let bulge = 2.0;
 
             cr.move_to(x, y);
-            cr.curve_to(x + w / 3.0, y - bulge, x + 2.0 * w / 3.0, y + bulge, x + w, y);
-            cr.curve_to(x + w + bulge, y + h / 3.0, x + w - bulge, y + 2.0 * h / 3.0, x + w, y + h);
-            cr.curve_to(x + 2.0 * w / 3.0, y + h + bulge, x + w / 3.0, y + h - bulge, x, y + h);
+            cr.curve_to(
+                x + w / 3.0,
+                y - bulge,
+                x + 2.0 * w / 3.0,
+                y + bulge,
+                x + w,
+                y,
+            );
+            cr.curve_to(
+                x + w + bulge,
+                y + h / 3.0,
+                x + w - bulge,
+                y + 2.0 * h / 3.0,
+                x + w,
+                y + h,
+            );
+            cr.curve_to(
+                x + 2.0 * w / 3.0,
+                y + h + bulge,
+                x + w / 3.0,
+                y + h - bulge,
+                x,
+                y + h,
+            );
             cr.curve_to(x - bulge, y + 2.0 * h / 3.0, x + bulge, y + h / 3.0, x, y);
             cr.stroke().ok();
         }
@@ -728,7 +996,12 @@ fn draw_border(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
                 cr.stroke().ok();
 
                 // Inner dot
-                cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+                cr.set_source_rgba(
+                    accent_color.r,
+                    accent_color.g,
+                    accent_color.b,
+                    accent_color.a,
+                );
                 cr.arc(ex, ey, eye_size * 0.4, 0.0, 2.0 * PI);
                 cr.fill().ok();
             }
@@ -739,7 +1012,14 @@ fn draw_border(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
 }
 
 /// Draw background pattern
-fn draw_background_pattern(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+fn draw_background_pattern(
+    cr: &Context,
+    config: &ArtNouveauFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let pattern_color = config.pattern_color.resolve(&config.theme);
     let faint_color = Color::new(pattern_color.r, pattern_color.g, pattern_color.b, 0.1);
 
@@ -773,7 +1053,12 @@ fn draw_background_pattern(cr: &Context, config: &ArtNouveauFrameConfig, x: f64,
         }
         BackgroundPattern::Leaves => {
             // Scattered small leaves
-            cr.set_source_rgba(faint_color.r, faint_color.g, faint_color.b, faint_color.a * 1.5);
+            cr.set_source_rgba(
+                faint_color.r,
+                faint_color.g,
+                faint_color.b,
+                faint_color.a * 1.5,
+            );
             let spacing = config.pattern_spacing;
 
             let mut yy = y + spacing / 2.0;
@@ -820,7 +1105,12 @@ fn draw_background_pattern(cr: &Context, config: &ArtNouveauFrameConfig, x: f64,
         }
         BackgroundPattern::Peacock => {
             // Peacock feather eye pattern
-            cr.set_source_rgba(faint_color.r, faint_color.g, faint_color.b, faint_color.a * 2.0);
+            cr.set_source_rgba(
+                faint_color.r,
+                faint_color.g,
+                faint_color.b,
+                faint_color.a * 2.0,
+            );
 
             let spacing = config.pattern_spacing * 1.5;
             let eye_size = 8.0;
@@ -866,7 +1156,14 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
     // Measure text
     let header_height = font_size + 20.0;
 
-    let text_extents = pango_text_extents(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        font_size,
+    );
     let (text_width, text_height) = (text_extents.width(), text_extents.height().max(font_size));
 
     let text_x = x + (w - text_width) / 2.0;
@@ -880,9 +1177,12 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
             cr.line_to(x + w, y);
             cr.line_to(x + w, y + header_height - 5.0);
             cr.curve_to(
-                x + 2.0 * w / 3.0, y + header_height + 3.0,
-                x + w / 3.0, y + header_height - 3.0,
-                x, y + header_height - 5.0,
+                x + 2.0 * w / 3.0,
+                y + header_height + 3.0,
+                x + w / 3.0,
+                y + header_height - 3.0,
+                x,
+                y + header_height - 5.0,
             );
             cr.close_path();
             cr.fill().ok();
@@ -892,9 +1192,12 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
             cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, 0.15);
             cr.move_to(x, y + header_height);
             cr.curve_to(
-                x + w / 4.0, y,
-                x + 3.0 * w / 4.0, y,
-                x + w, y + header_height,
+                x + w / 4.0,
+                y,
+                x + 3.0 * w / 4.0,
+                y,
+                x + w,
+                y + header_height,
             );
             cr.close_path();
             cr.fill().ok();
@@ -914,9 +1217,12 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
                 // Left flourish
                 cr.move_to(x + 10.0, text_y);
                 cr.curve_to(
-                    x + flourish_width / 3.0, text_y - 5.0,
-                    x + 2.0 * flourish_width / 3.0, text_y + 3.0,
-                    text_x - 10.0, text_y,
+                    x + flourish_width / 3.0,
+                    text_y - 5.0,
+                    x + 2.0 * flourish_width / 3.0,
+                    text_y + 3.0,
+                    text_x - 10.0,
+                    text_y,
                 );
                 cr.stroke().ok();
 
@@ -924,9 +1230,12 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
                 let right_start = text_x + text_width + 10.0;
                 cr.move_to(right_start, text_y);
                 cr.curve_to(
-                    right_start + flourish_width / 3.0, text_y + 3.0,
-                    right_start + 2.0 * flourish_width / 3.0, text_y - 5.0,
-                    x + w - 10.0, text_y,
+                    right_start + flourish_width / 3.0,
+                    text_y + 3.0,
+                    right_start + 2.0 * flourish_width / 3.0,
+                    text_y - 5.0,
+                    x + w - 10.0,
+                    text_y,
                 );
                 cr.stroke().ok();
             }
@@ -935,9 +1244,21 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
     }
 
     // Draw header text
-    cr.set_source_rgba(header_color.r, header_color.g, header_color.b, header_color.a);
+    cr.set_source_rgba(
+        header_color.r,
+        header_color.g,
+        header_color.b,
+        header_color.a,
+    );
     cr.move_to(text_x, text_y);
-    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Normal, font_size);
+    pango_show_text(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        font_size,
+    );
 
     cr.restore().ok();
 
@@ -945,7 +1266,14 @@ fn draw_header(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, w: 
 }
 
 /// Draw a divider between content groups
-fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, length: f64, horizontal: bool) {
+fn draw_divider(
+    cr: &Context,
+    config: &ArtNouveauFrameConfig,
+    x: f64,
+    y: f64,
+    length: f64,
+    horizontal: bool,
+) {
     if matches!(config.divider_style, DividerStyle::None) {
         return;
     }
@@ -953,7 +1281,12 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
     let divider_color = config.divider_color.resolve(&config.theme);
 
     cr.save().ok();
-    cr.set_source_rgba(divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+    cr.set_source_rgba(
+        divider_color.r,
+        divider_color.g,
+        divider_color.b,
+        divider_color.a,
+    );
     cr.set_line_width(config.divider_width);
     cr.set_line_cap(cairo::LineCap::Round);
 
@@ -981,9 +1314,12 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
 
                     cr.move_to(px, y + wave);
                     cr.curve_to(
-                        px + 3.0, y + wave + direction * 3.0,
-                        px + 6.0, y + wave + direction * 5.0,
-                        px + 5.0, y + wave + direction * 8.0,
+                        px + 3.0,
+                        y + wave + direction * 3.0,
+                        px + 6.0,
+                        y + wave + direction * 5.0,
+                        px + 5.0,
+                        y + wave + direction * 8.0,
                     );
                     cr.stroke().ok();
                 }
@@ -1005,9 +1341,12 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
 
                     cr.move_to(x + wave, py);
                     cr.curve_to(
-                        x + wave + direction * 3.0, py + 3.0,
-                        x + wave + direction * 5.0, py + 6.0,
-                        x + wave + direction * 8.0, py + 5.0,
+                        x + wave + direction * 3.0,
+                        py + 3.0,
+                        x + wave + direction * 5.0,
+                        py + 6.0,
+                        x + wave + direction * 8.0,
+                        py + 5.0,
                     );
                     cr.stroke().ok();
                 }
@@ -1019,9 +1358,29 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
             let freq = config.wave_frequency;
 
             if horizontal {
-                draw_wave_edge(cr, x, y, x + length, y, amplitude, freq, &divider_color, config.divider_width);
+                draw_wave_edge(
+                    cr,
+                    x,
+                    y,
+                    x + length,
+                    y,
+                    amplitude,
+                    freq,
+                    &divider_color,
+                    config.divider_width,
+                );
             } else {
-                draw_wave_edge(cr, x, y, x, y + length, amplitude, freq, &divider_color, config.divider_width);
+                draw_wave_edge(
+                    cr,
+                    x,
+                    y,
+                    x,
+                    y + length,
+                    amplitude,
+                    freq,
+                    &divider_color,
+                    config.divider_width,
+                );
             }
         }
         DividerStyle::Tendril => {
@@ -1029,14 +1388,20 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
             if horizontal {
                 cr.move_to(x, y);
                 cr.curve_to(
-                    x + length * 0.25, y - 5.0,
-                    x + length * 0.5, y + 5.0,
-                    x + length * 0.75, y - 3.0,
+                    x + length * 0.25,
+                    y - 5.0,
+                    x + length * 0.5,
+                    y + 5.0,
+                    x + length * 0.75,
+                    y - 3.0,
                 );
                 cr.curve_to(
-                    x + length * 0.85, y - 5.0,
-                    x + length * 0.95, y,
-                    x + length, y,
+                    x + length * 0.85,
+                    y - 5.0,
+                    x + length * 0.95,
+                    y,
+                    x + length,
+                    y,
                 );
                 cr.stroke().ok();
 
@@ -1047,14 +1412,20 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
             } else {
                 cr.move_to(x, y);
                 cr.curve_to(
-                    x - 5.0, y + length * 0.25,
-                    x + 5.0, y + length * 0.5,
-                    x - 3.0, y + length * 0.75,
+                    x - 5.0,
+                    y + length * 0.25,
+                    x + 5.0,
+                    y + length * 0.5,
+                    x - 3.0,
+                    y + length * 0.75,
                 );
                 cr.curve_to(
-                    x - 5.0, y + length * 0.85,
-                    x, y + length * 0.95,
-                    x, y + length,
+                    x - 5.0,
+                    y + length * 0.85,
+                    x,
+                    y + length * 0.95,
+                    x,
+                    y + length,
                 );
                 cr.stroke().ok();
 
@@ -1068,16 +1439,22 @@ fn draw_divider(cr: &Context, config: &ArtNouveauFrameConfig, x: f64, y: f64, le
             if horizontal {
                 cr.move_to(x, y);
                 cr.curve_to(
-                    x + length / 3.0, y - 2.0,
-                    x + 2.0 * length / 3.0, y + 2.0,
-                    x + length, y,
+                    x + length / 3.0,
+                    y - 2.0,
+                    x + 2.0 * length / 3.0,
+                    y + 2.0,
+                    x + length,
+                    y,
                 );
             } else {
                 cr.move_to(x, y);
                 cr.curve_to(
-                    x - 2.0, y + length / 3.0,
-                    x + 2.0, y + 2.0 * length / 3.0,
-                    x, y + length,
+                    x - 2.0,
+                    y + length / 3.0,
+                    x + 2.0,
+                    y + 2.0 * length / 3.0,
+                    x,
+                    y + length,
                 );
             }
             cr.stroke().ok();
@@ -1162,7 +1539,8 @@ pub fn calculate_group_layouts(
 
     let total_weight: f64 = weights.iter().sum();
     let divider_count = group_count.saturating_sub(1);
-    let divider_space = divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
+    let divider_space =
+        divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
 
     match config.split_orientation {
         SplitOrientation::Vertical => {

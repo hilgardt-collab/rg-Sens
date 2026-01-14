@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
+use crate::core::{register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::displayers::TextPosition;
 use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
@@ -29,7 +29,7 @@ struct DisplayData {
     second: f64,
     alarm_triggered: bool,
     alarm_enabled: bool,
-    next_alarm_time: Option<String>,  // Next alarm time to display (e.g., "08:30")
+    next_alarm_time: Option<String>, // Next alarm time to display (e.g., "08:30")
     next_alarm_label: Option<String>, // Optional label for next alarm
     timer_state: String,
     timer_display: String,
@@ -117,17 +117,24 @@ impl Displayer for ClockAnalogDisplayer {
                 let second = data.second;
 
                 // Determine if indicator should be shown (icon always shown if show_icon is true)
-                let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
+                let timer_active = data.timer_state == "running"
+                    || data.timer_state == "paused"
+                    || data.timer_state == "finished";
 
                 // Get indicator text and calculate its size (clone to avoid borrow conflicts)
                 let icon_font = data.config.icon_font.clone();
                 let icon_text = data.config.icon_text.clone();
                 let icon_size_pct = data.config.icon_size;
                 let icon_bold = data.config.icon_bold;
-                let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+                let font_weight = if icon_bold {
+                    cairo::FontWeight::Bold
+                } else {
+                    cairo::FontWeight::Normal
+                };
 
                 // Calculate indicator height for layout purposes - reserve space if shrink_for_indicator is enabled
-                let indicator_height = if data.config.show_icon && data.config.shrink_for_indicator {
+                let indicator_height = if data.config.show_icon && data.config.shrink_for_indicator
+                {
                     let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
                     font_size + 16.0 // Font height + padding
                 } else {
@@ -135,13 +142,18 @@ impl Displayer for ClockAnalogDisplayer {
                 };
 
                 // Calculate clock area - shrink if icon is shown and shrink option enabled
-                let (clock_width, clock_height, clock_offset_y) = if data.config.show_icon && data.config.shrink_for_indicator {
-                    let available_height = height - indicator_height;
-                    let clock_size = width.min(available_height);
-                    (clock_size, clock_size, (available_height - clock_size) / 2.0)
-                } else {
-                    (width, height, 0.0)
-                };
+                let (clock_width, clock_height, clock_offset_y) =
+                    if data.config.show_icon && data.config.shrink_for_indicator {
+                        let available_height = height - indicator_height;
+                        let clock_size = width.min(available_height);
+                        (
+                            clock_size,
+                            clock_size,
+                            (available_height - clock_size) / 2.0,
+                        )
+                    } else {
+                        (width, height, 0.0)
+                    };
 
                 // Draw clock in calculated area
                 cr.save().ok();
@@ -162,7 +174,8 @@ impl Displayer for ClockAnalogDisplayer {
                 );
 
                 // Flash effect when alarm/timer triggers
-                let show_flash = (data.alarm_triggered || data.timer_state == "finished") && data.flash_state;
+                let show_flash =
+                    (data.alarm_triggered || data.timer_state == "finished") && data.flash_state;
                 if show_flash {
                     cr.set_source_rgba(1.0, 0.3, 0.3, 0.4);
                     cr.arc(
@@ -197,7 +210,14 @@ impl Displayer for ClockAnalogDisplayer {
                         icon_text.clone()
                     };
 
-                    let te = pango_text_extents(cr, &display_text, &icon_font, cairo::FontSlant::Normal, font_weight, font_size);
+                    let te = pango_text_extents(
+                        cr,
+                        &display_text,
+                        &icon_font,
+                        cairo::FontSlant::Normal,
+                        font_weight,
+                        font_size,
+                    );
                     // Use actual text dimensions for positioning
                     let text_w = te.width().max(1.0);
                     let text_h = te.height().max(font_size);
@@ -213,7 +233,9 @@ impl Displayer for ClockAnalogDisplayer {
                         // Middle row: baseline at center + text_h/2 so text is vertically centered
                         TextPosition::CenterLeft => (padding, (height + text_h) / 2.0),
                         TextPosition::Center => ((width - text_w) / 2.0, (height + text_h) / 2.0),
-                        TextPosition::CenterRight => (width - text_w - padding, (height + text_h) / 2.0),
+                        TextPosition::CenterRight => {
+                            (width - text_w - padding, (height + text_h) / 2.0)
+                        }
                         // Bottom row: baseline at height - padding so text bottom is at height - padding
                         TextPosition::BottomLeft => (padding, height - padding),
                         TextPosition::BottomCenter => ((width - text_w) / 2.0, height - padding),
@@ -236,7 +258,9 @@ impl Displayer for ClockAnalogDisplayer {
                     cr.save().ok();
 
                     // Background for readability
-                    let show_background = timer_active || (data.next_alarm_time.is_some() && data.alarm_enabled) || data.alarm_triggered;
+                    let show_background = timer_active
+                        || (data.next_alarm_time.is_some() && data.alarm_enabled)
+                        || data.alarm_triggered;
                     if show_background {
                         cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
                         cr.rectangle(
@@ -274,7 +298,14 @@ impl Displayer for ClockAnalogDisplayer {
                     }
 
                     cr.move_to(text_x, text_y);
-                    pango_show_text(cr, &display_text, &icon_font, cairo::FontSlant::Normal, font_weight, font_size);
+                    pango_show_text(
+                        cr,
+                        &display_text,
+                        &icon_font,
+                        cairo::FontSlant::Normal,
+                        font_weight,
+                        font_size,
+                    );
                     cr.restore().ok();
                 } else {
                     // No icon shown, clear bounds
@@ -352,7 +383,10 @@ impl Displayer for ClockAnalogDisplayer {
                 }
             } else if let Some(second) = values.get("second") {
                 if let Some(s) = second.as_f64() {
-                    let ms = values.get("millisecond").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let ms = values
+                        .get("millisecond")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
                     data.second = if data.config.smooth_seconds {
                         s + ms / 1000.0
                     } else {
@@ -489,7 +523,9 @@ impl Displayer for ClockAnalogDisplayer {
 
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         if let Ok(data) = self.data.lock() {
-            Some(crate::core::DisplayerConfig::ClockAnalog(data.config.clone()))
+            Some(crate::core::DisplayerConfig::ClockAnalog(
+                data.config.clone(),
+            ))
         } else {
             None
         }

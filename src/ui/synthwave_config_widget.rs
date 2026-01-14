@@ -4,23 +4,23 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation, Scale,
+    SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::synthwave_display::{
-    render_synthwave_frame, SynthwaveFrameStyle,
-    GridStyle, SynthwaveHeaderStyle, SynthwaveDividerStyle, SynthwaveColorScheme,
-};
-use crate::ui::lcars_display::SplitOrientation;
-use crate::ui::ThemeFontSelector;
-use crate::ui::theme::FontSource;
-use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
-use crate::displayers::SynthwaveDisplayConfig;
 use crate::core::FieldMetadata;
+use crate::displayers::SynthwaveDisplayConfig;
+use crate::ui::combo_config_base;
+use crate::ui::lcars_display::SplitOrientation;
+use crate::ui::synthwave_display::{
+    render_synthwave_frame, GridStyle, SynthwaveColorScheme, SynthwaveDividerStyle,
+    SynthwaveFrameStyle, SynthwaveHeaderStyle,
+};
+use crate::ui::theme::FontSource;
+use crate::ui::widget_builder::{create_section_header, ConfigWidgetBuilder};
+use crate::ui::ThemeFontSelector;
 
 /// Holds references to Theme tab widgets
 struct ThemeWidgets {
@@ -101,15 +101,18 @@ impl SynthwaveConfigWidget {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(SynthwaveDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let grid_widgets: Rc<RefCell<Option<GridWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -130,18 +133,26 @@ impl SynthwaveConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Frame
@@ -367,23 +378,38 @@ impl SynthwaveConfigWidget {
             SynthwaveFrameStyle::None => 4,
         };
         let style_dropdown = builder.dropdown_row(
-            &page, "Frame Style:", &["Neon Border", "Chrome", "Minimal", "Retro Double", "None"], style_idx,
-            |cfg, idx| cfg.frame.frame_style = match idx {
-                0 => SynthwaveFrameStyle::NeonBorder,
-                1 => SynthwaveFrameStyle::Chrome,
-                2 => SynthwaveFrameStyle::Minimal,
-                3 => SynthwaveFrameStyle::RetroDouble,
-                _ => SynthwaveFrameStyle::None,
+            &page,
+            "Frame Style:",
+            &["Neon Border", "Chrome", "Minimal", "Retro Double", "None"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.frame_style = match idx {
+                    0 => SynthwaveFrameStyle::NeonBorder,
+                    1 => SynthwaveFrameStyle::Chrome,
+                    2 => SynthwaveFrameStyle::Minimal,
+                    3 => SynthwaveFrameStyle::RetroDouble,
+                    _ => SynthwaveFrameStyle::None,
+                }
             },
         );
 
         let frame_width_spin = builder.spin_row(
-            &page, "Frame Width:", 0.5, 6.0, 0.5, config.borrow().frame.frame_width,
+            &page,
+            "Frame Width:",
+            0.5,
+            6.0,
+            0.5,
+            config.borrow().frame.frame_width,
             |cfg, v| cfg.frame.frame_width = v,
         );
 
         let corner_radius_spin = builder.spin_row(
-            &page, "Corner Radius:", 0.0, 30.0, 2.0, config.borrow().frame.corner_radius,
+            &page,
+            "Corner Radius:",
+            0.0,
+            30.0,
+            2.0,
+            config.borrow().frame.corner_radius,
             |cfg, v| cfg.frame.corner_radius = v,
         );
 
@@ -409,7 +435,9 @@ impl SynthwaveConfigWidget {
         let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
         let show_grid_check = builder.check_button(
-            &page, "Show Grid", config.borrow().frame.show_grid,
+            &page,
+            "Show Grid",
+            config.borrow().frame.show_grid,
             |cfg, v| cfg.frame.show_grid = v,
         );
 
@@ -421,33 +449,58 @@ impl SynthwaveConfigWidget {
             GridStyle::None => 4,
         };
         let grid_style_dropdown = builder.dropdown_row(
-            &page, "Grid Style:", &["Perspective", "Flat", "Hexagon", "Scanlines", "None"], style_idx,
-            |cfg, idx| cfg.frame.grid_style = match idx {
-                0 => GridStyle::Perspective,
-                1 => GridStyle::Flat,
-                2 => GridStyle::Hexagon,
-                3 => GridStyle::Scanlines,
-                _ => GridStyle::None,
+            &page,
+            "Grid Style:",
+            &["Perspective", "Flat", "Hexagon", "Scanlines", "None"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.grid_style = match idx {
+                    0 => GridStyle::Perspective,
+                    1 => GridStyle::Flat,
+                    2 => GridStyle::Hexagon,
+                    3 => GridStyle::Scanlines,
+                    _ => GridStyle::None,
+                }
             },
         );
 
         let grid_spacing_spin = builder.spin_row(
-            &page, "Grid Spacing:", 10.0, 100.0, 5.0, config.borrow().frame.grid_spacing,
+            &page,
+            "Grid Spacing:",
+            10.0,
+            100.0,
+            5.0,
+            config.borrow().frame.grid_spacing,
             |cfg, v| cfg.frame.grid_spacing = v,
         );
 
         let grid_line_width_spin = builder.spin_row(
-            &page, "Line Width:", 0.5, 4.0, 0.5, config.borrow().frame.grid_line_width,
+            &page,
+            "Line Width:",
+            0.5,
+            4.0,
+            0.5,
+            config.borrow().frame.grid_line_width,
             |cfg, v| cfg.frame.grid_line_width = v,
         );
 
         let horizon_scale = builder.scale_row(
-            &page, "Horizon:", 0.1, 0.9, 0.05, config.borrow().frame.grid_horizon,
+            &page,
+            "Horizon:",
+            0.1,
+            0.9,
+            0.05,
+            config.borrow().frame.grid_horizon,
             |cfg, v| cfg.frame.grid_horizon = v,
         );
 
         let perspective_scale = builder.scale_row(
-            &page, "Perspective:", 0.0, 1.0, 0.1, config.borrow().frame.grid_perspective,
+            &page,
+            "Perspective:",
+            0.0,
+            1.0,
+            0.1,
+            config.borrow().frame.grid_perspective,
             |cfg, v| cfg.frame.grid_perspective = v,
         );
 
@@ -457,12 +510,19 @@ impl SynthwaveConfigWidget {
         page.append(&sun_label);
 
         let show_sun_check = builder.check_button(
-            &page, "Show Sun", config.borrow().frame.show_sun,
+            &page,
+            "Show Sun",
+            config.borrow().frame.show_sun,
             |cfg, v| cfg.frame.show_sun = v,
         );
 
         let sun_position_scale = builder.scale_row(
-            &page, "Sun Position:", 0.0, 1.0, 0.1, config.borrow().frame.sun_position,
+            &page,
+            "Sun Position:",
+            0.0,
+            1.0,
+            0.1,
+            config.borrow().frame.sun_position,
             |cfg, v| cfg.frame.sun_position = v,
         );
 
@@ -493,12 +553,16 @@ impl SynthwaveConfigWidget {
         let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
         let show_header_check = builder.check_button(
-            &page, "Show Header", config.borrow().frame.show_header,
+            &page,
+            "Show Header",
+            config.borrow().frame.show_header,
             |cfg, v| cfg.frame.show_header = v,
         );
 
         let header_text_entry = builder.entry_row(
-            &page, "Header Text:", &config.borrow().frame.header_text,
+            &page,
+            "Header Text:",
+            &config.borrow().frame.header_text,
             |cfg, v| cfg.frame.header_text = v,
         );
 
@@ -510,18 +574,28 @@ impl SynthwaveConfigWidget {
             SynthwaveHeaderStyle::None => 4,
         };
         let header_style_dropdown = builder.dropdown_row(
-            &page, "Header Style:", &["Chrome", "Neon", "Outline", "Simple", "None"], style_idx,
-            |cfg, idx| cfg.frame.header_style = match idx {
-                0 => SynthwaveHeaderStyle::Chrome,
-                1 => SynthwaveHeaderStyle::Neon,
-                2 => SynthwaveHeaderStyle::Outline,
-                3 => SynthwaveHeaderStyle::Simple,
-                _ => SynthwaveHeaderStyle::None,
+            &page,
+            "Header Style:",
+            &["Chrome", "Neon", "Outline", "Simple", "None"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.header_style = match idx {
+                    0 => SynthwaveHeaderStyle::Chrome,
+                    1 => SynthwaveHeaderStyle::Neon,
+                    2 => SynthwaveHeaderStyle::Outline,
+                    3 => SynthwaveHeaderStyle::Simple,
+                    _ => SynthwaveHeaderStyle::None,
+                }
             },
         );
 
         let header_height_spin = builder.spin_row(
-            &page, "Header Height:", 20.0, 60.0, 2.0, config.borrow().frame.header_height,
+            &page,
+            "Header Height:",
+            20.0,
+            60.0,
+            2.0,
+            config.borrow().frame.header_height,
             |cfg, v| cfg.frame.header_height = v,
         );
 
@@ -532,9 +606,10 @@ impl SynthwaveConfigWidget {
 
         let current_font = config.borrow().frame.header_font.clone();
         let current_size = config.borrow().frame.header_font_size;
-        let header_font_selector = Rc::new(ThemeFontSelector::new(
-            FontSource::Custom { family: current_font, size: current_size }
-        ));
+        let header_font_selector = Rc::new(ThemeFontSelector::new(FontSource::Custom {
+            family: current_font,
+            size: current_size,
+        }));
         header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
 
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -589,17 +664,36 @@ impl SynthwaveConfigWidget {
             SplitOrientation::Horizontal => 1,
         };
         let split_orientation_dropdown = builder.dropdown_row(
-            &page, "Split Orientation:", &["Vertical", "Horizontal"], orient_idx,
-            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
+            &page,
+            "Split Orientation:",
+            &["Vertical", "Horizontal"],
+            orient_idx,
+            |cfg, idx| {
+                cfg.frame.split_orientation = if idx == 0 {
+                    SplitOrientation::Vertical
+                } else {
+                    SplitOrientation::Horizontal
+                }
+            },
         );
 
         let content_padding_spin = builder.spin_row(
-            &page, "Content Padding:", 4.0, 32.0, 2.0, config.borrow().frame.content_padding,
+            &page,
+            "Content Padding:",
+            4.0,
+            32.0,
+            2.0,
+            config.borrow().frame.content_padding,
             |cfg, v| cfg.frame.content_padding = v,
         );
 
         let item_spacing_spin = builder.spin_row(
-            &page, "Item Spacing:", 0.0, 20.0, 1.0, config.borrow().frame.item_spacing,
+            &page,
+            "Item Spacing:",
+            0.0,
+            20.0,
+            1.0,
+            config.borrow().frame.item_spacing,
             |cfg, v| cfg.frame.item_spacing = v,
         );
 
@@ -616,18 +710,28 @@ impl SynthwaveConfigWidget {
             SynthwaveDividerStyle::None => 4,
         };
         let divider_style_dropdown = builder.dropdown_row(
-            &page, "Divider Style:", &["Neon Line", "Gradient", "Neon Dots", "Line", "None"], div_style_idx,
-            |cfg, idx| cfg.frame.divider_style = match idx {
-                0 => SynthwaveDividerStyle::NeonLine,
-                1 => SynthwaveDividerStyle::Gradient,
-                2 => SynthwaveDividerStyle::NeonDots,
-                3 => SynthwaveDividerStyle::Line,
-                _ => SynthwaveDividerStyle::None,
+            &page,
+            "Divider Style:",
+            &["Neon Line", "Gradient", "Neon Dots", "Line", "None"],
+            div_style_idx,
+            |cfg, idx| {
+                cfg.frame.divider_style = match idx {
+                    0 => SynthwaveDividerStyle::NeonLine,
+                    1 => SynthwaveDividerStyle::Gradient,
+                    2 => SynthwaveDividerStyle::NeonDots,
+                    3 => SynthwaveDividerStyle::Line,
+                    _ => SynthwaveDividerStyle::None,
+                }
             },
         );
 
         let divider_padding_spin = builder.spin_row(
-            &page, "Divider Padding:", 2.0, 20.0, 1.0, config.borrow().frame.divider_padding,
+            &page,
+            "Divider Padding:",
+            2.0,
+            20.0,
+            1.0,
+            config.borrow().frame.divider_padding,
             |cfg, v| cfg.frame.divider_padding = v,
         );
 
@@ -669,7 +773,9 @@ impl SynthwaveConfigWidget {
         let on_change_clone = on_change.clone();
         enable_check.connect_toggled(move |check| {
             config_clone.borrow_mut().animation_enabled = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
         page.append(&enable_check);
 
@@ -683,7 +789,9 @@ impl SynthwaveConfigWidget {
         let on_change_clone = on_change.clone();
         speed_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().animation_speed = spin.value();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
         page.append(&speed_box);
 
@@ -693,7 +801,9 @@ impl SynthwaveConfigWidget {
         let on_change_clone = on_change.clone();
         scanline_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.scanline_effect = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
         page.append(&scanline_check);
 
@@ -898,7 +1008,8 @@ impl SynthwaveConfigWidget {
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -909,7 +1020,8 @@ impl SynthwaveConfigWidget {
         // Convert to sorted vec (same approach as LCARS)
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<usize> = group_nums.iter()
+        let group_counts: Vec<usize> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
             .collect();
 
@@ -972,7 +1084,12 @@ impl SynthwaveConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -985,11 +1102,18 @@ impl SynthwaveConfigWidget {
     }
 
     /// Apply transferable configuration from another combo panel.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;

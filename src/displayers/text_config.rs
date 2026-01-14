@@ -83,16 +83,16 @@ impl TextPosition {
 pub enum CombineDirection {
     #[default]
     Horizontal, // Lines flow left-to-right (existing behavior)
-    Vertical,   // Lines stack top-to-bottom
+    Vertical, // Lines stack top-to-bottom
 }
 
 /// Legacy alignment for combined text groups (kept for backward compatibility)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum CombineAlignment {
-    Start,  // Left for horizontal, Top for vertical
+    Start, // Left for horizontal, Top for vertical
     #[default]
     Center, // Center alignment
-    End,    // Right for horizontal, Bottom for vertical
+    End,   // Right for horizontal, Bottom for vertical
 }
 
 impl CombineAlignment {
@@ -165,9 +165,10 @@ impl TextFillType {
                     }
                 }
             }
-            TextFillType::LinearGradient { stops, .. } => {
-                stops.first().map(|s| s.color).unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0))
-            }
+            TextFillType::LinearGradient { stops, .. } => stops
+                .first()
+                .map(|s| s.color)
+                .unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0)),
         }
     }
 
@@ -176,7 +177,10 @@ impl TextFillType {
         match self {
             TextFillType::Solid { color } => color.clone(),
             TextFillType::LinearGradient { stops, .. } => {
-                let c = stops.first().map(|s| s.color).unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0));
+                let c = stops
+                    .first()
+                    .map(|s| s.color)
+                    .unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0));
                 ColorSource::Custom { color: c }
             }
         }
@@ -236,9 +240,10 @@ impl TextBackgroundType {
                     }
                 })
             }
-            TextBackgroundType::LinearGradient { stops, .. } => {
-                stops.first().map(|s| s.color.resolve(theme.unwrap_or(&ComboThemeConfig::default())))
-            }
+            TextBackgroundType::LinearGradient { stops, .. } => stops.first().map(|s| {
+                s.color
+                    .resolve(theme.unwrap_or(&ComboThemeConfig::default()))
+            }),
         }
     }
 
@@ -248,15 +253,16 @@ impl TextBackgroundType {
     }
 
     /// Resolve the gradient to concrete colors using theme
-    pub fn resolve_gradient(&self, theme: Option<&ComboThemeConfig>) -> Option<(Vec<ColorStop>, f64)> {
+    pub fn resolve_gradient(
+        &self,
+        theme: Option<&ComboThemeConfig>,
+    ) -> Option<(Vec<ColorStop>, f64)> {
         match self {
             TextBackgroundType::LinearGradient { stops, angle } => {
                 let default_theme = ComboThemeConfig::default();
                 let theme_ref = theme.unwrap_or(&default_theme);
-                let resolved_stops: Vec<ColorStop> = stops
-                    .iter()
-                    .map(|s| s.resolve(theme_ref))
-                    .collect();
+                let resolved_stops: Vec<ColorStop> =
+                    stops.iter().map(|s| s.resolve(theme_ref)).collect();
                 Some((resolved_stops, *angle))
             }
             _ => None,
@@ -428,10 +434,12 @@ impl TextLineConfig {
 
     /// Get the font source (for UI). Returns current font_source or creates Custom from legacy fields.
     pub fn get_font_source(&self) -> FontSource {
-        self.font_source.clone().unwrap_or_else(|| FontSource::Custom {
-            family: self.font_family.clone(),
-            size: self.font_size,
-        })
+        self.font_source
+            .clone()
+            .unwrap_or_else(|| FontSource::Custom {
+                family: self.font_family.clone(),
+                size: self.font_size,
+            })
     }
 
     /// Resolve font against a theme, returning (family, size)

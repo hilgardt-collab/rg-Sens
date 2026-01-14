@@ -53,20 +53,15 @@ impl ThemeColorSelector {
         let custom_color = Rc::new(RefCell::new(initial_custom));
 
         // Track which theme button is selected (None = custom mode)
-        let selected_index: Rc<RefCell<Option<u8>>> = Rc::new(RefCell::new(
-            match &initial_source {
+        let selected_index: Rc<RefCell<Option<u8>>> =
+            Rc::new(RefCell::new(match &initial_source {
                 ColorSource::Theme { index } => Some(*index),
                 ColorSource::Custom { .. } => None,
-            }
-        ));
+            }));
 
         // Create theme buttons with drawing areas inside
-        let theme_buttons: [Button; 4] = [
-            Button::new(),
-            Button::new(),
-            Button::new(),
-            Button::new(),
-        ];
+        let theme_buttons: [Button; 4] =
+            [Button::new(), Button::new(), Button::new(), Button::new()];
 
         let theme_drawings: [DrawingArea; 4] = [
             DrawingArea::new(),
@@ -247,9 +242,7 @@ impl ThemeColorSelector {
             let current_source = source_for_copy.borrow().clone();
             let c = match &current_source {
                 ColorSource::Custom { color } => *color,
-                ColorSource::Theme { index } => {
-                    theme_config_for_copy.borrow().get_color(*index)
-                }
+                ColorSource::Theme { index } => theme_config_for_copy.borrow().get_color(*index),
             };
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
                 clipboard.copy_color(c.r, c.g, c.b, c.a);
@@ -356,15 +349,19 @@ impl ThemeColorSelector {
         let source = self.source.borrow().clone();
         match &source {
             ColorSource::Custom { color } => *color,
-            ColorSource::Theme { index } => {
-                self.theme_config.borrow().get_color(*index)
-            }
+            ColorSource::Theme { index } => self.theme_config.borrow().get_color(*index),
         }
     }
 }
 
 /// Draw a theme color button with selection indicator.
-fn draw_theme_button(cr: &gtk4::cairo::Context, width: i32, height: i32, color: Color, is_selected: bool) {
+fn draw_theme_button(
+    cr: &gtk4::cairo::Context,
+    width: i32,
+    height: i32,
+    color: Color,
+    is_selected: bool,
+) {
     let w = width as f64;
     let h = height as f64;
 
@@ -407,7 +404,13 @@ fn draw_theme_button(cr: &gtk4::cairo::Context, width: i32, height: i32, color: 
 }
 
 /// Draw the custom color swatch.
-fn draw_custom_swatch(cr: &gtk4::cairo::Context, width: i32, height: i32, color: Color, is_custom_mode: bool) {
+fn draw_custom_swatch(
+    cr: &gtk4::cairo::Context,
+    width: i32,
+    height: i32,
+    color: Color,
+    is_custom_mode: bool,
+) {
     let w = width as f64;
     let h = height as f64;
 

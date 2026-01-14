@@ -121,9 +121,9 @@ impl Default for RadialGradientConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PolygonConfig {
     pub tile_size: u32,           // Size of each tile
-    pub num_sides: u32,            // Number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, etc.)
-    pub rotation_angle: f64,       // Rotation angle in degrees
-    pub colors: Vec<ColorSource>,  // Colors that alternate for tiles (theme-aware)
+    pub num_sides: u32, // Number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, etc.)
+    pub rotation_angle: f64, // Rotation angle in degrees
+    pub colors: Vec<ColorSource>, // Colors that alternate for tiles (theme-aware)
 }
 
 impl Default for PolygonConfig {
@@ -141,20 +141,18 @@ impl Default for PolygonConfig {
 }
 
 /// Image display mode
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum ImageDisplayMode {
     #[serde(rename = "fit")]
     #[default]
-    Fit,       // Scale to fit (maintain aspect ratio, may have empty space)
+    Fit, // Scale to fit (maintain aspect ratio, may have empty space)
     #[serde(rename = "stretch")]
-    Stretch,   // Stretch to fill (may distort image)
+    Stretch, // Stretch to fill (may distort image)
     #[serde(rename = "zoom")]
-    Zoom,      // Scale to fill (maintain aspect ratio, may crop)
+    Zoom, // Scale to fill (maintain aspect ratio, may crop)
     #[serde(rename = "tile")]
-    Tile,      // Tile/repeat the image
+    Tile, // Tile/repeat the image
 }
-
 
 /// Background type configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -217,10 +215,10 @@ pub struct IndicatorBackgroundConfig {
 
 fn default_indicator_gradient() -> Vec<ColorStop> {
     vec![
-        ColorStop::new(0.0, Color::new(0.0, 0.5, 1.0, 1.0)),   // Blue at 0%
-        ColorStop::new(0.4, Color::new(0.0, 1.0, 0.0, 1.0)),   // Green at 40%
-        ColorStop::new(0.7, Color::new(1.0, 1.0, 0.0, 1.0)),   // Yellow at 70%
-        ColorStop::new(1.0, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 100%
+        ColorStop::new(0.0, Color::new(0.0, 0.5, 1.0, 1.0)), // Blue at 0%
+        ColorStop::new(0.4, Color::new(0.0, 1.0, 0.0, 1.0)), // Green at 40%
+        ColorStop::new(0.7, Color::new(1.0, 1.0, 0.0, 1.0)), // Yellow at 70%
+        ColorStop::new(1.0, Color::new(1.0, 0.0, 0.0, 1.0)), // Red at 100%
     ]
 }
 
@@ -281,12 +279,10 @@ impl Default for BackgroundType {
 }
 
 /// Background configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct BackgroundConfig {
     pub background: BackgroundType,
 }
-
 
 /// Render a background to a Cairo context
 pub fn render_background(
@@ -323,7 +319,11 @@ pub fn render_background_with_theme(
         BackgroundType::RadialGradient(grad) => {
             render_radial_gradient(cr, grad, width, height)?;
         }
-        BackgroundType::Image { path, display_mode, alpha } => {
+        BackgroundType::Image {
+            path,
+            display_mode,
+            alpha,
+        } => {
             render_image_background(cr, path, *display_mode, *alpha, width, height)?;
         }
         BackgroundType::Polygons(poly) => {
@@ -507,7 +507,9 @@ fn render_image_background(
         ImageDisplayMode::Tile => unreachable!(),
     };
 
-    if let Some(scaled_surface) = get_cached_scaled_surface(path, target_width, target_height, mode_code, alpha) {
+    if let Some(scaled_surface) =
+        get_cached_scaled_surface(path, target_width, target_height, mode_code, alpha)
+    {
         // Fast path: just paint the pre-scaled, pre-alpha'd surface
         cr.set_source_surface(&scaled_surface, 0.0, 0.0)?;
         cr.paint()?;
@@ -536,9 +538,7 @@ fn render_polygon_background(
     // Resolve colors from ColorSource using theme (or default if no theme provided)
     let default_theme = ComboThemeConfig::default();
     let theme = theme.unwrap_or(&default_theme);
-    let resolved_colors: Vec<Color> = config.colors.iter()
-        .map(|cs| cs.resolve(theme))
-        .collect();
+    let resolved_colors: Vec<Color> = config.colors.iter().map(|cs| cs.resolve(theme)).collect();
 
     let size = config.tile_size as f64;
     let sides = config.num_sides.max(3); // Minimum 3 sides
@@ -548,7 +548,9 @@ fn render_polygon_background(
         3 => render_triangle_tiling(cr, size, angle, &resolved_colors, width, height)?,
         4 => render_square_tiling(cr, size, angle, &resolved_colors, width, height)?,
         6 => render_hexagon_tiling(cr, size, angle, &resolved_colors, width, height)?,
-        _ => render_generic_polygon_tiling(cr, size, sides, angle, &resolved_colors, width, height)?,
+        _ => {
+            render_generic_polygon_tiling(cr, size, sides, angle, &resolved_colors, width, height)?
+        }
     }
 
     Ok(())

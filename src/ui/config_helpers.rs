@@ -38,29 +38,37 @@ pub fn show_save_dialog(
     let grid_layout_clone = grid_layout.clone();
     let app_config_clone = app_config.clone();
 
-    dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
-        match response {
-            Ok(2) => {
-                // Save button (index 2)
-                info!("User chose to save configuration");
-                // Use with_panels to avoid cloning the Vec
-                grid_layout_clone.borrow().with_panels(|panels| {
-                    save_config_with_app_config(&mut app_config_clone.borrow_mut(), &window_clone, panels);
-                });
-                window_clone.destroy(); // Use destroy to bypass close handler
+    dialog.choose(
+        Some(window),
+        gtk4::gio::Cancellable::NONE,
+        move |response| {
+            match response {
+                Ok(2) => {
+                    // Save button (index 2)
+                    info!("User chose to save configuration");
+                    // Use with_panels to avoid cloning the Vec
+                    grid_layout_clone.borrow().with_panels(|panels| {
+                        save_config_with_app_config(
+                            &mut app_config_clone.borrow_mut(),
+                            &window_clone,
+                            panels,
+                        );
+                    });
+                    window_clone.destroy(); // Use destroy to bypass close handler
+                }
+                Ok(0) => {
+                    // Don't Save button (index 0)
+                    info!("User chose not to save configuration");
+                    window_clone.destroy(); // Use destroy to bypass close handler
+                }
+                Ok(1) | Err(_) => {
+                    // Cancel button (index 1) or dialog dismissed
+                    info!("User cancelled close operation");
+                }
+                _ => {}
             }
-            Ok(0) => {
-                // Don't Save button (index 0)
-                info!("User chose not to save configuration");
-                window_clone.destroy(); // Use destroy to bypass close handler
-            }
-            Ok(1) | Err(_) => {
-                // Cancel button (index 1) or dialog dismissed
-                info!("User cancelled close operation");
-            }
-            _ => {}
-        }
-    });
+        },
+    );
 }
 
 /// Get the connector name of the monitor the window is currently on

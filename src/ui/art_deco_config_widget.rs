@@ -5,26 +5,27 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    SpinButton, StringList, ScrolledWindow,
+    ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::shared_font_dialog::show_font_dialog;
-use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::art_deco_display::{
-    render_art_deco_frame, BorderStyle, CornerStyle, BackgroundPattern,
-    HeaderStyle, DividerStyle,
-};
-use crate::ui::lcars_display::SplitOrientation;
-use crate::ui::{GradientEditor, ThemeFontSelector};
-use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_page_container, create_section_header};
-use crate::ui::background::Color;
-use crate::ui::theme::{ComboThemeConfig, LinearGradientSourceConfig, ColorStopSource};
-use crate::displayers::ArtDecoDisplayConfig;
 use crate::core::FieldMetadata;
+use crate::displayers::ArtDecoDisplayConfig;
+use crate::ui::art_deco_display::{
+    render_art_deco_frame, BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, HeaderStyle,
+};
+use crate::ui::background::Color;
+use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::combo_config_base;
+use crate::ui::lcars_display::SplitOrientation;
+use crate::ui::shared_font_dialog::show_font_dialog;
+use crate::ui::theme::{ColorStopSource, ComboThemeConfig, LinearGradientSourceConfig};
+use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::widget_builder::{
+    create_page_container, create_section_header, ConfigWidgetBuilder,
+};
+use crate::ui::{GradientEditor, ThemeFontSelector};
 
 /// Art Deco color preset names
 const ART_DECO_PRESETS: &[&str] = &[
@@ -212,15 +213,19 @@ impl ArtDecoConfigWidget {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(ArtDecoDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
-        let background_widgets: Rc<RefCell<Option<BackgroundWidgets>>> = Rc::new(RefCell::new(None));
+        let background_widgets: Rc<RefCell<Option<BackgroundWidgets>>> =
+            Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -241,13 +246,15 @@ impl ArtDecoConfigWidget {
         });
 
         // Theme reference section
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
 
         // Push main theme callback FIRST so it's preserved when rebuild_content_tabs clears
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Main tabbed notebook
         let notebook = Notebook::new();
@@ -299,12 +306,8 @@ impl ArtDecoConfigWidget {
 
         let content_page = Self::create_content_page(&content_notebook);
 
-        let animation_page = Self::create_animation_page(
-            &config,
-            &on_change,
-            &preview,
-            &animation_widgets,
-        );
+        let animation_page =
+            Self::create_animation_page(&config, &on_change, &preview, &animation_widgets);
 
         // Add pages to notebook (Theme first)
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
@@ -422,7 +425,8 @@ impl ArtDecoConfigWidget {
         color1_label.set_halign(gtk4::Align::End);
         color1_label.set_width_chars(14);
         colors_grid.attach(&color1_label, 0, 0, 1, 1);
-        let theme_color1_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
+        let theme_color1_widget =
+            Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color1));
         colors_grid.attach(theme_color1_widget.widget(), 1, 0, 1, 1);
 
         // Color 2 (Secondary) - row 0, col 2-3
@@ -431,7 +435,8 @@ impl ArtDecoConfigWidget {
         color2_label.set_width_chars(14);
         color2_label.set_margin_start(12);
         colors_grid.attach(&color2_label, 2, 0, 1, 1);
-        let theme_color2_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
+        let theme_color2_widget =
+            Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color2));
         colors_grid.attach(theme_color2_widget.widget(), 3, 0, 1, 1);
 
         // Color 3 (Tertiary) - row 1, col 0-1
@@ -439,7 +444,8 @@ impl ArtDecoConfigWidget {
         color3_label.set_halign(gtk4::Align::End);
         color3_label.set_width_chars(14);
         colors_grid.attach(&color3_label, 0, 1, 1, 1);
-        let theme_color3_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
+        let theme_color3_widget =
+            Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color3));
         colors_grid.attach(theme_color3_widget.widget(), 1, 1, 1, 1);
 
         // Color 4 (Background) - row 1, col 2-3
@@ -448,7 +454,8 @@ impl ArtDecoConfigWidget {
         color4_label.set_width_chars(14);
         color4_label.set_margin_start(12);
         colors_grid.attach(&color4_label, 2, 1, 1, 1);
-        let theme_color4_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
+        let theme_color4_widget =
+            Rc::new(ColorButtonWidget::new(config.borrow().frame.theme.color4));
         colors_grid.attach(theme_color4_widget.widget(), 3, 1, 1, 1);
 
         inner_box.append(&colors_grid);
@@ -511,7 +518,8 @@ impl ArtDecoConfigWidget {
         let color2_widget_clone = theme_color2_widget.clone();
         let color3_widget_clone = theme_color3_widget.clone();
         let color4_widget_clone = theme_color4_widget.clone();
-        let gradient_editor_for_preset: Rc<RefCell<Option<Rc<GradientEditor>>>> = Rc::new(RefCell::new(None));
+        let gradient_editor_for_preset: Rc<RefCell<Option<Rc<GradientEditor>>>> =
+            Rc::new(RefCell::new(None));
         let gradient_editor_for_preset_clone = gradient_editor_for_preset.clone();
         preset_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
@@ -570,7 +578,8 @@ impl ArtDecoConfigWidget {
         let gradient_editor_clone = theme_gradient_editor.clone();
         let preset_dropdown_clone = preset_dropdown.clone();
         theme_gradient_editor.set_on_change(move || {
-            config_clone.borrow_mut().frame.theme.gradient = gradient_editor_clone.get_gradient_source_config();
+            config_clone.borrow_mut().frame.theme.gradient =
+                gradient_editor_clone.get_gradient_source_config();
             // Switch to Custom when manually changing gradient
             preset_dropdown_clone.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
             combo_config_base::refresh_theme_refs(&refreshers_clone);
@@ -621,7 +630,8 @@ impl ArtDecoConfigWidget {
             let current_font = config_clone.borrow().frame.theme.font1_family.clone();
             let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
             show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                let family = font_desc.family()
+                let family = font_desc
+                    .family()
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "sans-serif".to_string());
                 config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
@@ -670,7 +680,8 @@ impl ArtDecoConfigWidget {
             let current_font = config_clone.borrow().frame.theme.font2_family.clone();
             let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
             show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                let family = font_desc.family()
+                let family = font_desc
+                    .family()
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "sans-serif".to_string());
                 config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
@@ -730,25 +741,37 @@ impl ArtDecoConfigWidget {
             BorderStyle::Ornate => 4,
         };
         let border_style_dropdown = builder.dropdown_row(
-            &page, "Border Style:", &["Sunburst", "Chevron", "Stepped", "Geometric", "Ornate"], style_idx,
-            |cfg, idx| cfg.frame.border_style = match idx {
-                0 => BorderStyle::Sunburst,
-                1 => BorderStyle::Chevron,
-                2 => BorderStyle::Stepped,
-                3 => BorderStyle::Geometric,
-                _ => BorderStyle::Ornate,
+            &page,
+            "Border Style:",
+            &["Sunburst", "Chevron", "Stepped", "Geometric", "Ornate"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.border_style = match idx {
+                    0 => BorderStyle::Sunburst,
+                    1 => BorderStyle::Chevron,
+                    2 => BorderStyle::Stepped,
+                    3 => BorderStyle::Geometric,
+                    _ => BorderStyle::Ornate,
+                }
             },
         );
 
         let border_width_spin = builder.spin_row(
-            &page, "Border Width:", 1.0, 10.0, 0.5, config.borrow().frame.border_width,
+            &page,
+            "Border Width:",
+            1.0,
+            10.0,
+            0.5,
+            config.borrow().frame.border_width,
             |cfg, v| cfg.frame.border_width = v,
         );
 
         // Border color (theme-aware)
         let border_color_box = GtkBox::new(Orientation::Horizontal, 6);
         border_color_box.append(&Label::new(Some("Border Color:")));
-        let border_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.border_color.clone()));
+        let border_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.border_color.clone(),
+        ));
         border_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         border_color_box.append(border_color_widget.widget());
 
@@ -778,30 +801,47 @@ impl ArtDecoConfigWidget {
             CornerStyle::None => 4,
         };
         let corner_style_dropdown = builder.dropdown_row(
-            &page, "Style:", &["Fan", "Ziggurat", "Diamond", "Bracket", "None"], corner_idx,
-            |cfg, idx| cfg.frame.corner_style = match idx {
-                0 => CornerStyle::Fan,
-                1 => CornerStyle::Ziggurat,
-                2 => CornerStyle::Diamond,
-                3 => CornerStyle::Bracket,
-                _ => CornerStyle::None,
+            &page,
+            "Style:",
+            &["Fan", "Ziggurat", "Diamond", "Bracket", "None"],
+            corner_idx,
+            |cfg, idx| {
+                cfg.frame.corner_style = match idx {
+                    0 => CornerStyle::Fan,
+                    1 => CornerStyle::Ziggurat,
+                    2 => CornerStyle::Diamond,
+                    3 => CornerStyle::Bracket,
+                    _ => CornerStyle::None,
+                }
             },
         );
 
         let corner_size_spin = builder.spin_row(
-            &page, "Size:", 8.0, 64.0, 2.0, config.borrow().frame.corner_size,
+            &page,
+            "Size:",
+            8.0,
+            64.0,
+            2.0,
+            config.borrow().frame.corner_size,
             |cfg, v| cfg.frame.corner_size = v,
         );
 
         let accent_width_spin = builder.spin_row(
-            &page, "Accent Width:", 0.5, 5.0, 0.5, config.borrow().frame.accent_width,
+            &page,
+            "Accent Width:",
+            0.5,
+            5.0,
+            0.5,
+            config.borrow().frame.accent_width,
             |cfg, v| cfg.frame.accent_width = v,
         );
 
         // Accent color (theme-aware)
         let accent_color_box = GtkBox::new(Orientation::Horizontal, 6);
         accent_color_box.append(&Label::new(Some("Accent Color:")));
-        let accent_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.accent_color.clone()));
+        let accent_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.accent_color.clone(),
+        ));
         accent_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         accent_color_box.append(accent_color_widget.widget());
 
@@ -847,7 +887,9 @@ impl ArtDecoConfigWidget {
         // Background color (theme-aware) - keep manual for ThemeColorSelector
         let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_color_box.append(&Label::new(Some("Background Color:")));
-        let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.background_color.clone()));
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.background_color.clone(),
+        ));
         bg_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         bg_color_box.append(bg_color_widget.widget());
 
@@ -877,30 +919,53 @@ impl ArtDecoConfigWidget {
             BackgroundPattern::Chevrons => 4,
         };
         let pattern_dropdown = builder.dropdown_row(
-            &page, "Pattern:", &["Solid", "Vertical Lines", "Diamond Grid", "Sunburst", "Chevrons"], pattern_idx,
-            |cfg, idx| cfg.frame.background_pattern = match idx {
-                0 => BackgroundPattern::Solid,
-                1 => BackgroundPattern::VerticalLines,
-                2 => BackgroundPattern::DiamondGrid,
-                3 => BackgroundPattern::Sunburst,
-                _ => BackgroundPattern::Chevrons,
+            &page,
+            "Pattern:",
+            &[
+                "Solid",
+                "Vertical Lines",
+                "Diamond Grid",
+                "Sunburst",
+                "Chevrons",
+            ],
+            pattern_idx,
+            |cfg, idx| {
+                cfg.frame.background_pattern = match idx {
+                    0 => BackgroundPattern::Solid,
+                    1 => BackgroundPattern::VerticalLines,
+                    2 => BackgroundPattern::DiamondGrid,
+                    3 => BackgroundPattern::Sunburst,
+                    _ => BackgroundPattern::Chevrons,
+                }
             },
         );
 
         let pattern_spacing_spin = builder.spin_row(
-            &page, "Pattern Spacing:", 8.0, 64.0, 2.0, config.borrow().frame.pattern_spacing,
+            &page,
+            "Pattern Spacing:",
+            8.0,
+            64.0,
+            2.0,
+            config.borrow().frame.pattern_spacing,
             |cfg, v| cfg.frame.pattern_spacing = v,
         );
 
         let sunburst_rays_spin = builder.spin_row(
-            &page, "Sunburst Rays:", 6.0, 36.0, 2.0, config.borrow().frame.sunburst_rays as f64,
+            &page,
+            "Sunburst Rays:",
+            6.0,
+            36.0,
+            2.0,
+            config.borrow().frame.sunburst_rays as f64,
             |cfg, v| cfg.frame.sunburst_rays = v as usize,
         );
 
         // Pattern color (theme-aware)
         let pattern_color_box = GtkBox::new(Orientation::Horizontal, 6);
         pattern_color_box.append(&Label::new(Some("Pattern Color:")));
-        let pattern_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.pattern_color.clone()));
+        let pattern_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.pattern_color.clone(),
+        ));
         pattern_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         pattern_color_box.append(pattern_color_widget.widget());
 
@@ -942,12 +1007,16 @@ impl ArtDecoConfigWidget {
         let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
         let show_header_check = builder.check_button(
-            &page, "Show Header", config.borrow().frame.show_header,
+            &page,
+            "Show Header",
+            config.borrow().frame.show_header,
             |cfg, v| cfg.frame.show_header = v,
         );
 
         let header_text_entry = builder.entry_row(
-            &page, "Header Text:", &config.borrow().frame.header_text.clone(),
+            &page,
+            "Header Text:",
+            &config.borrow().frame.header_text.clone(),
             |cfg, s| cfg.frame.header_text = s,
         );
 
@@ -958,19 +1027,26 @@ impl ArtDecoConfigWidget {
             HeaderStyle::None => 3,
         };
         let header_style_dropdown = builder.dropdown_row(
-            &page, "Style:", &["Centered", "Banner", "Stepped", "None"], style_idx,
-            |cfg, idx| cfg.frame.header_style = match idx {
-                0 => HeaderStyle::Centered,
-                1 => HeaderStyle::Banner,
-                2 => HeaderStyle::Stepped,
-                _ => HeaderStyle::None,
+            &page,
+            "Style:",
+            &["Centered", "Banner", "Stepped", "None"],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.header_style = match idx {
+                    0 => HeaderStyle::Centered,
+                    1 => HeaderStyle::Banner,
+                    2 => HeaderStyle::Stepped,
+                    _ => HeaderStyle::None,
+                }
             },
         );
 
         // Header font
         let font_box = GtkBox::new(Orientation::Horizontal, 6);
         font_box.append(&Label::new(Some("Font:")));
-        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        let header_font_selector = Rc::new(ThemeFontSelector::new(
+            config.borrow().frame.header_font.clone(),
+        ));
         header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         font_box.append(header_font_selector.widget());
 
@@ -992,7 +1068,9 @@ impl ArtDecoConfigWidget {
         // Header color (theme-aware)
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Header Color:")));
-        let header_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.header_color.clone()));
+        let header_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.header_color.clone(),
+        ));
         header_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         color_box.append(header_color_widget.widget());
 
@@ -1039,15 +1117,25 @@ impl ArtDecoConfigWidget {
             SplitOrientation::Vertical => 1,
         };
         let split_orientation_dropdown = builder.dropdown_row(
-            &page, "Group Direction:", &["Horizontal", "Vertical"], orient_idx,
-            |cfg, idx| cfg.frame.split_orientation = match idx {
-                0 => SplitOrientation::Horizontal,
-                _ => SplitOrientation::Vertical,
+            &page,
+            "Group Direction:",
+            &["Horizontal", "Vertical"],
+            orient_idx,
+            |cfg, idx| {
+                cfg.frame.split_orientation = match idx {
+                    0 => SplitOrientation::Horizontal,
+                    _ => SplitOrientation::Vertical,
+                }
             },
         );
 
         let content_padding_spin = builder.spin_row(
-            &page, "Content Padding:", 4.0, 48.0, 2.0, config.borrow().frame.content_padding,
+            &page,
+            "Content Padding:",
+            4.0,
+            48.0,
+            2.0,
+            config.borrow().frame.content_padding,
             |cfg, v| cfg.frame.content_padding = v,
         );
 
@@ -1062,30 +1150,47 @@ impl ArtDecoConfigWidget {
             DividerStyle::None => 4,
         };
         let divider_style_dropdown = builder.dropdown_row(
-            &page, "Style:", &["Chevron", "Double Line", "Line", "Stepped", "None"], div_style_idx,
-            |cfg, idx| cfg.frame.divider_style = match idx {
-                0 => DividerStyle::Chevron,
-                1 => DividerStyle::DoubleLine,
-                2 => DividerStyle::Line,
-                3 => DividerStyle::Stepped,
-                _ => DividerStyle::None,
+            &page,
+            "Style:",
+            &["Chevron", "Double Line", "Line", "Stepped", "None"],
+            div_style_idx,
+            |cfg, idx| {
+                cfg.frame.divider_style = match idx {
+                    0 => DividerStyle::Chevron,
+                    1 => DividerStyle::DoubleLine,
+                    2 => DividerStyle::Line,
+                    3 => DividerStyle::Stepped,
+                    _ => DividerStyle::None,
+                }
             },
         );
 
         let divider_width_spin = builder.spin_row(
-            &page, "Width:", 1.0, 8.0, 0.5, config.borrow().frame.divider_width,
+            &page,
+            "Width:",
+            1.0,
+            8.0,
+            0.5,
+            config.borrow().frame.divider_width,
             |cfg, v| cfg.frame.divider_width = v,
         );
 
         let divider_padding_spin = builder.spin_row(
-            &page, "Padding:", 2.0, 24.0, 2.0, config.borrow().frame.divider_padding,
+            &page,
+            "Padding:",
+            2.0,
+            24.0,
+            2.0,
+            config.borrow().frame.divider_padding,
             |cfg, v| cfg.frame.divider_padding = v,
         );
 
         // Divider color (theme-aware)
         let div_color_box = GtkBox::new(Orientation::Horizontal, 6);
         div_color_box.append(&Label::new(Some("Color:")));
-        let divider_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().frame.divider_color.clone()));
+        let divider_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().frame.divider_color.clone(),
+        ));
         divider_color_widget.set_theme_config(config.borrow().frame.theme.clone());
         div_color_box.append(divider_color_widget.widget());
 
@@ -1130,7 +1235,9 @@ impl ArtDecoConfigWidget {
     fn create_content_page(content_notebook: &Rc<RefCell<Notebook>>) -> GtkBox {
         let page = create_page_container();
 
-        let info_label = Label::new(Some("Content configuration will appear here based on the connected data source."));
+        let info_label = Label::new(Some(
+            "Content configuration will appear here based on the connected data source.",
+        ));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
         page.append(&info_label);
@@ -1153,12 +1260,19 @@ impl ArtDecoConfigWidget {
         let builder = ConfigWidgetBuilder::new(config, preview, on_change);
 
         let enable_check = builder.check_button(
-            &page, "Enable Animation", config.borrow().animation_enabled,
+            &page,
+            "Enable Animation",
+            config.borrow().animation_enabled,
             |cfg, v| cfg.animation_enabled = v,
         );
 
         let speed_spin = builder.spin_row(
-            &page, "Animation Speed:", 1.0, 20.0, 0.5, config.borrow().animation_speed,
+            &page,
+            "Animation Speed:",
+            1.0,
+            20.0,
+            0.5,
+            config.borrow().animation_speed,
             |cfg, v| cfg.animation_speed = v,
         );
 
@@ -1178,80 +1292,130 @@ impl ArtDecoConfigWidget {
 
         // Update Theme widgets
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.theme_color1_widget.set_color(config.frame.theme.color1);
-            widgets.theme_color2_widget.set_color(config.frame.theme.color2);
-            widgets.theme_color3_widget.set_color(config.frame.theme.color3);
-            widgets.theme_color4_widget.set_color(config.frame.theme.color4);
-            widgets.theme_gradient_editor.set_theme_config(config.frame.theme.clone());
-            widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
-            widgets.font1_btn.set_label(&config.frame.theme.font1_family);
-            widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
-            widgets.font2_btn.set_label(&config.frame.theme.font2_family);
-            widgets.font2_size_spin.set_value(config.frame.theme.font2_size);
+            widgets
+                .theme_color1_widget
+                .set_color(config.frame.theme.color1);
+            widgets
+                .theme_color2_widget
+                .set_color(config.frame.theme.color2);
+            widgets
+                .theme_color3_widget
+                .set_color(config.frame.theme.color3);
+            widgets
+                .theme_color4_widget
+                .set_color(config.frame.theme.color4);
+            widgets
+                .theme_gradient_editor
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .theme_gradient_editor
+                .set_gradient_source_config(&config.frame.theme.gradient);
+            widgets
+                .font1_btn
+                .set_label(&config.frame.theme.font1_family);
+            widgets
+                .font1_size_spin
+                .set_value(config.frame.theme.font1_size);
+            widgets
+                .font2_btn
+                .set_label(&config.frame.theme.font2_family);
+            widgets
+                .font2_size_spin
+                .set_value(config.frame.theme.font2_size);
         }
 
         // Update Frame widgets
         if let Some(ref widgets) = *self.frame_widgets.borrow() {
-            widgets.border_style_dropdown.set_selected(match config.frame.border_style {
-                BorderStyle::Sunburst => 0,
-                BorderStyle::Chevron => 1,
-                BorderStyle::Stepped => 2,
-                BorderStyle::Geometric => 3,
-                BorderStyle::Ornate => 4,
-            });
-            widgets.border_width_spin.set_value(config.frame.border_width);
-            widgets.corner_style_dropdown.set_selected(match config.frame.corner_style {
-                CornerStyle::Fan => 0,
-                CornerStyle::Ziggurat => 1,
-                CornerStyle::Diamond => 2,
-                CornerStyle::Bracket => 3,
-                CornerStyle::None => 4,
-            });
+            widgets
+                .border_style_dropdown
+                .set_selected(match config.frame.border_style {
+                    BorderStyle::Sunburst => 0,
+                    BorderStyle::Chevron => 1,
+                    BorderStyle::Stepped => 2,
+                    BorderStyle::Geometric => 3,
+                    BorderStyle::Ornate => 4,
+                });
+            widgets
+                .border_width_spin
+                .set_value(config.frame.border_width);
+            widgets
+                .corner_style_dropdown
+                .set_selected(match config.frame.corner_style {
+                    CornerStyle::Fan => 0,
+                    CornerStyle::Ziggurat => 1,
+                    CornerStyle::Diamond => 2,
+                    CornerStyle::Bracket => 3,
+                    CornerStyle::None => 4,
+                });
             widgets.corner_size_spin.set_value(config.frame.corner_size);
-            widgets.accent_width_spin.set_value(config.frame.accent_width);
+            widgets
+                .accent_width_spin
+                .set_value(config.frame.accent_width);
         }
 
         // Update Background widgets
         if let Some(ref widgets) = *self.background_widgets.borrow() {
-            widgets.pattern_dropdown.set_selected(match config.frame.background_pattern {
-                BackgroundPattern::Solid => 0,
-                BackgroundPattern::VerticalLines => 1,
-                BackgroundPattern::DiamondGrid => 2,
-                BackgroundPattern::Sunburst => 3,
-                BackgroundPattern::Chevrons => 4,
-            });
-            widgets.pattern_spacing_spin.set_value(config.frame.pattern_spacing);
-            widgets.sunburst_rays_spin.set_value(config.frame.sunburst_rays as f64);
+            widgets
+                .pattern_dropdown
+                .set_selected(match config.frame.background_pattern {
+                    BackgroundPattern::Solid => 0,
+                    BackgroundPattern::VerticalLines => 1,
+                    BackgroundPattern::DiamondGrid => 2,
+                    BackgroundPattern::Sunburst => 3,
+                    BackgroundPattern::Chevrons => 4,
+                });
+            widgets
+                .pattern_spacing_spin
+                .set_value(config.frame.pattern_spacing);
+            widgets
+                .sunburst_rays_spin
+                .set_value(config.frame.sunburst_rays as f64);
         }
 
         // Update Header widgets
         if let Some(ref widgets) = *self.header_widgets.borrow() {
-            widgets.show_header_check.set_active(config.frame.show_header);
-            widgets.header_text_entry.set_text(&config.frame.header_text);
-            widgets.header_style_dropdown.set_selected(match config.frame.header_style {
-                HeaderStyle::Centered => 0,
-                HeaderStyle::Banner => 1,
-                HeaderStyle::Stepped => 2,
-                HeaderStyle::None => 3,
-            });
+            widgets
+                .show_header_check
+                .set_active(config.frame.show_header);
+            widgets
+                .header_text_entry
+                .set_text(&config.frame.header_text);
+            widgets
+                .header_style_dropdown
+                .set_selected(match config.frame.header_style {
+                    HeaderStyle::Centered => 0,
+                    HeaderStyle::Banner => 1,
+                    HeaderStyle::Stepped => 2,
+                    HeaderStyle::None => 3,
+                });
         }
 
         // Update Layout widgets
         if let Some(ref widgets) = *self.layout_widgets.borrow() {
-            widgets.split_orientation_dropdown.set_selected(match config.frame.split_orientation {
-                SplitOrientation::Horizontal => 0,
-                SplitOrientation::Vertical => 1,
-            });
-            widgets.content_padding_spin.set_value(config.frame.content_padding);
-            widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
-                DividerStyle::Chevron => 0,
-                DividerStyle::DoubleLine => 1,
-                DividerStyle::Line => 2,
-                DividerStyle::Stepped => 3,
-                DividerStyle::None => 4,
-            });
-            widgets.divider_width_spin.set_value(config.frame.divider_width);
-            widgets.divider_padding_spin.set_value(config.frame.divider_padding);
+            widgets
+                .split_orientation_dropdown
+                .set_selected(match config.frame.split_orientation {
+                    SplitOrientation::Horizontal => 0,
+                    SplitOrientation::Vertical => 1,
+                });
+            widgets
+                .content_padding_spin
+                .set_value(config.frame.content_padding);
+            widgets
+                .divider_style_dropdown
+                .set_selected(match config.frame.divider_style {
+                    DividerStyle::Chevron => 0,
+                    DividerStyle::DoubleLine => 1,
+                    DividerStyle::Line => 2,
+                    DividerStyle::Stepped => 3,
+                    DividerStyle::None => 4,
+                });
+            widgets
+                .divider_width_spin
+                .set_value(config.frame.divider_width);
+            widgets
+                .divider_padding_spin
+                .set_value(config.frame.divider_padding);
 
             combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,
@@ -1287,7 +1451,8 @@ impl ArtDecoConfigWidget {
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1297,7 +1462,8 @@ impl ArtDecoConfigWidget {
 
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<usize> = group_nums.iter()
+        let group_counts: Vec<usize> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
             .collect();
 
@@ -1356,7 +1522,12 @@ impl ArtDecoConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -1369,11 +1540,18 @@ impl ArtDecoConfigWidget {
     }
 
     /// Apply transferable configuration from another combo panel.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;
@@ -1403,7 +1581,9 @@ impl ArtDecoConfigWidget {
             source_summaries,
             available_fields,
             |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| { cfg.frame.content_items.insert(slot_name.to_string(), item); },
+            |cfg, slot_name, item| {
+                cfg.frame.content_items.insert(slot_name.to_string(), item);
+            },
             theme_ref_refreshers,
             |cfg| cfg.frame.theme.clone(),
         );

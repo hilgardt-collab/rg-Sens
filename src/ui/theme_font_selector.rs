@@ -31,7 +31,10 @@ pub struct ThemeFontSelector {
 impl ThemeFontSelector {
     /// Create a new ThemeFontSelector with the given initial source.
     pub fn new(initial_source: FontSource) -> Self {
-        log::trace!("ThemeFontSelector::new() initial_source={:?}", initial_source);
+        log::trace!(
+            "ThemeFontSelector::new() initial_source={:?}",
+            initial_source
+        );
         let container = GtkBox::new(Orientation::Horizontal, 4);
         let on_change: Rc<RefCell<Option<Box<dyn Fn(FontSource)>>>> = Rc::new(RefCell::new(None));
         let theme_config: Rc<RefCell<Option<ComboThemeConfig>>> = Rc::new(RefCell::new(None));
@@ -63,7 +66,11 @@ impl ThemeFontSelector {
         // (GTK4 widget state may not be properly applied before realization)
         if let Some(idx) = initial_theme_index {
             let btn_idx = (idx as usize).saturating_sub(1).min(1);
-            log::trace!("ThemeFontSelector: setting btn[{}] active for theme index {}", btn_idx, idx);
+            log::trace!(
+                "ThemeFontSelector: setting btn[{}] active for theme index {}",
+                btn_idx,
+                idx
+            );
             theme_buttons[btn_idx].set_active(true);
         }
 
@@ -98,7 +105,8 @@ impl ThemeFontSelector {
             let custom_family_clone = custom_family.clone();
             let on_change_clone = on_change.clone();
             let size_spin_clone = size_spin.clone();
-            let other_buttons: Vec<ToggleButton> = theme_buttons_vec.iter()
+            let other_buttons: Vec<ToggleButton> = theme_buttons_vec
+                .iter()
                 .enumerate()
                 .filter(|(j, _)| *j != i)
                 .map(|(_, b)| b.clone())
@@ -122,7 +130,10 @@ impl ThemeFontSelector {
                     }
 
                     // Emit change with Theme font source including current size
-                    let source = FontSource::Theme { index: idx, size: size_spin_clone.value() };
+                    let source = FontSource::Theme {
+                        index: idx,
+                        size: size_spin_clone.value(),
+                    };
                     if let Some(ref callback) = *on_change_clone.borrow() {
                         callback(source);
                     }
@@ -199,7 +210,10 @@ impl ThemeFontSelector {
             if let Some(ref callback) = *on_change_for_spin.borrow() {
                 // Preserve theme selection, update size
                 if let Some(idx) = *theme_index_for_spin.borrow() {
-                    callback(FontSource::Theme { index: idx, size: spin.value() });
+                    callback(FontSource::Theme {
+                        index: idx,
+                        size: spin.value(),
+                    });
                 } else {
                     callback(FontSource::Custom {
                         family: custom_family_for_spin.borrow().clone(),
@@ -227,7 +241,10 @@ impl ThemeFontSelector {
 
     pub fn source(&self) -> FontSource {
         if let Some(idx) = *self.theme_index.borrow() {
-            FontSource::Theme { index: idx, size: self.size_spin.value() }
+            FontSource::Theme {
+                index: idx,
+                size: self.size_spin.value(),
+            }
         } else {
             FontSource::Custom {
                 family: self.custom_family.borrow().clone(),
@@ -268,12 +285,26 @@ impl ThemeFontSelector {
         // Update T1/T2 button tooltips with actual theme font names
         let (font1_family, font1_size) = config.get_font(1);
         let (font2_family, font2_size) = config.get_font(2);
-        self.theme_buttons[0].set_tooltip_text(Some(&format!("Theme Font 1: {} {:.0}pt", font1_family, font1_size)));
-        self.theme_buttons[1].set_tooltip_text(Some(&format!("Theme Font 2: {} {:.0}pt", font2_family, font2_size)));
+        self.theme_buttons[0].set_tooltip_text(Some(&format!(
+            "Theme Font 1: {} {:.0}pt",
+            font1_family, font1_size
+        )));
+        self.theme_buttons[1].set_tooltip_text(Some(&format!(
+            "Theme Font 2: {} {:.0}pt",
+            font2_family, font2_size
+        )));
 
         // Update T1/T2 button labels to show font name abbreviation
-        let abbrev1 = if font1_family.len() > 8 { &font1_family[..8] } else { &font1_family };
-        let abbrev2 = if font2_family.len() > 8 { &font2_family[..8] } else { &font2_family };
+        let abbrev1 = if font1_family.len() > 8 {
+            &font1_family[..8]
+        } else {
+            &font1_family
+        };
+        let abbrev2 = if font2_family.len() > 8 {
+            &font2_family[..8]
+        } else {
+            &font2_family
+        };
         self.theme_buttons[0].set_label(&format!("T1:{}", abbrev1));
         self.theme_buttons[1].set_label(&format!("T2:{}", abbrev2));
 

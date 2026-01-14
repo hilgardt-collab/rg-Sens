@@ -61,10 +61,9 @@ pub fn show_font_dialog<F>(
 
     // Spawn async font selection
     gtk4::glib::MainContext::default().spawn_local(async move {
-        let result = dialog.choose_font_future(
-            parent_window.as_ref(),
-            initial.as_ref(),
-        ).await;
+        let result = dialog
+            .choose_font_future(parent_window.as_ref(), initial.as_ref())
+            .await;
 
         if let Ok(font_desc) = result {
             on_selected(font_desc);

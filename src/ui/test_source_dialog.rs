@@ -4,8 +4,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, DropDown, HeaderBar, Label, Orientation, Scale, SpinButton,
-    StringList, Window,
+    Box as GtkBox, Button, DropDown, HeaderBar, Label, Orientation, Scale, SpinButton, StringList,
+    Window,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -252,7 +252,11 @@ fn show_test_source_dialog_inner(
             TestMode::Square => {
                 let elapsed = state.start_time.elapsed().as_secs_f64();
                 let phase = (elapsed / config.period).fract();
-                if phase < 0.5 { config.min_value } else { config.max_value }
+                if phase < 0.5 {
+                    config.min_value
+                } else {
+                    config.max_value
+                }
             }
         };
 

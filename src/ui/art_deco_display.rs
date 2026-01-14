@@ -13,15 +13,20 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as ArtDecoContentType, ContentItemConfig as ArtDecoContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as ArtDecoContentType, ContentItemConfig as ArtDecoContentItemConfig,
+};
 
 /// Border style for the frame
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -106,15 +111,33 @@ pub enum DividerStyle {
     None,
 }
 
-fn default_border_width() -> f64 { 3.0 }
-fn default_corner_size() -> f64 { 24.0 }
-fn default_accent_width() -> f64 { 2.0 }
-fn default_pattern_spacing() -> f64 { 16.0 }
-fn default_content_padding() -> f64 { 12.0 }
-fn default_divider_width() -> f64 { 2.0 }
-fn default_divider_padding() -> f64 { 6.0 }
-fn default_group_count() -> usize { 2 }
-fn default_sunburst_rays() -> usize { 12 }
+fn default_border_width() -> f64 {
+    3.0
+}
+fn default_corner_size() -> f64 {
+    24.0
+}
+fn default_accent_width() -> f64 {
+    2.0
+}
+fn default_pattern_spacing() -> f64 {
+    16.0
+}
+fn default_content_padding() -> f64 {
+    12.0
+}
+fn default_divider_width() -> f64 {
+    2.0
+}
+fn default_divider_padding() -> f64 {
+    6.0
+}
+fn default_group_count() -> usize {
+    2
+}
+fn default_sunburst_rays() -> usize {
+    12
+}
 
 // ColorSource defaults for theme-aware fields
 fn default_border_color_source() -> ColorSource {
@@ -157,7 +180,10 @@ pub struct ArtDecoFrameConfig {
     pub border_style: BorderStyle,
     #[serde(default = "default_border_width")]
     pub border_width: f64,
-    #[serde(default = "default_border_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_border_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub border_color: ColorSource,
 
     // Corner decorations
@@ -165,17 +191,26 @@ pub struct ArtDecoFrameConfig {
     pub corner_style: CornerStyle,
     #[serde(default = "default_corner_size")]
     pub corner_size: f64,
-    #[serde(default = "default_accent_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_accent_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub accent_color: ColorSource,
     #[serde(default = "default_accent_width")]
     pub accent_width: f64,
 
     // Background
-    #[serde(default = "default_background_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_background_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub background_color: ColorSource,
     #[serde(default)]
     pub background_pattern: BackgroundPattern,
-    #[serde(default = "default_pattern_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_pattern_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub pattern_color: ColorSource,
     #[serde(default = "default_pattern_spacing")]
     pub pattern_spacing: f64,
@@ -187,9 +222,15 @@ pub struct ArtDecoFrameConfig {
     pub show_header: bool,
     #[serde(default)]
     pub header_text: String,
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
-    #[serde(default = "default_header_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub header_color: ColorSource,
     #[serde(default)]
     pub header_style: HeaderStyle,
@@ -212,7 +253,10 @@ pub struct ArtDecoFrameConfig {
     // Dividers
     #[serde(default)]
     pub divider_style: DividerStyle,
-    #[serde(default = "default_divider_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_divider_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub divider_color: ColorSource,
     #[serde(default = "default_divider_width")]
     pub divider_width: f64,
@@ -377,8 +421,7 @@ impl FrameRenderer for ArtDecoRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_art_deco_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_art_deco_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -520,7 +563,15 @@ fn draw_diamond(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color, filled
 }
 
 /// Draw chevron/arrow pattern
-fn draw_chevron(cr: &Context, x: f64, y: f64, width: f64, height: f64, color: &Color, line_width: f64) {
+fn draw_chevron(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    color: &Color,
+    line_width: f64,
+) {
     cr.save().ok();
     cr.set_source_rgba(color.r, color.g, color.b, color.a);
     cr.set_line_width(line_width);
@@ -536,7 +587,15 @@ fn draw_chevron(cr: &Context, x: f64, y: f64, width: f64, height: f64, color: &C
 }
 
 /// Draw vertical lines background pattern
-fn draw_vertical_lines_pattern(cr: &Context, x: f64, y: f64, w: f64, h: f64, spacing: f64, color: &Color) {
+fn draw_vertical_lines_pattern(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    spacing: f64,
+    color: &Color,
+) {
     cr.save().ok();
     cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.15);
     cr.set_line_width(1.0);
@@ -552,7 +611,15 @@ fn draw_vertical_lines_pattern(cr: &Context, x: f64, y: f64, w: f64, h: f64, spa
 }
 
 /// Draw diamond grid background pattern
-fn draw_diamond_grid_pattern(cr: &Context, x: f64, y: f64, w: f64, h: f64, spacing: f64, color: &Color) {
+fn draw_diamond_grid_pattern(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    spacing: f64,
+    color: &Color,
+) {
     cr.save().ok();
     cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.1);
     cr.set_line_width(0.5);
@@ -581,7 +648,15 @@ fn draw_diamond_grid_pattern(cr: &Context, x: f64, y: f64, w: f64, h: f64, spaci
 }
 
 /// Draw sunburst background pattern from center
-fn draw_sunburst_background(cr: &Context, x: f64, y: f64, w: f64, h: f64, rays: usize, color: &Color) {
+fn draw_sunburst_background(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    rays: usize,
+    color: &Color,
+) {
     cr.save().ok();
     cr.rectangle(x, y, w, h);
     cr.clip();
@@ -605,7 +680,15 @@ fn draw_sunburst_background(cr: &Context, x: f64, y: f64, w: f64, h: f64, rays: 
 }
 
 /// Draw chevron background pattern
-fn draw_chevron_background(cr: &Context, x: f64, y: f64, w: f64, h: f64, spacing: f64, color: &Color) {
+fn draw_chevron_background(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    spacing: f64,
+    color: &Color,
+) {
     cr.save().ok();
     cr.rectangle(x, y, w, h);
     cr.clip();
@@ -628,39 +711,167 @@ fn draw_chevron_background(cr: &Context, x: f64, y: f64, w: f64, h: f64, spacing
 }
 
 /// Draw corner decorations based on style
-fn draw_corner_decorations(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+fn draw_corner_decorations(
+    cr: &Context,
+    config: &ArtDecoFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let accent_color = config.accent_color.resolve(&config.theme);
     let size = config.corner_size;
 
     match config.corner_style {
         CornerStyle::Fan => {
             // Top-left
-            draw_sunburst_corner(cr, x, y, size, 8, 0.0, std::f64::consts::FRAC_PI_2, &accent_color, config.accent_width);
+            draw_sunburst_corner(
+                cr,
+                x,
+                y,
+                size,
+                8,
+                0.0,
+                std::f64::consts::FRAC_PI_2,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right
-            draw_sunburst_corner(cr, x + w, y, size, 8, std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2, &accent_color, config.accent_width);
+            draw_sunburst_corner(
+                cr,
+                x + w,
+                y,
+                size,
+                8,
+                std::f64::consts::FRAC_PI_2,
+                std::f64::consts::FRAC_PI_2,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right
-            draw_sunburst_corner(cr, x + w, y + h, size, 8, std::f64::consts::PI, std::f64::consts::FRAC_PI_2, &accent_color, config.accent_width);
+            draw_sunburst_corner(
+                cr,
+                x + w,
+                y + h,
+                size,
+                8,
+                std::f64::consts::PI,
+                std::f64::consts::FRAC_PI_2,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left
-            draw_sunburst_corner(cr, x, y + h, size, 8, -std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2, &accent_color, config.accent_width);
+            draw_sunburst_corner(
+                cr,
+                x,
+                y + h,
+                size,
+                8,
+                -std::f64::consts::FRAC_PI_2,
+                std::f64::consts::FRAC_PI_2,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::Ziggurat => {
             // Draw stepped corners
-            draw_ziggurat_corner(cr, x, y, size, 4, true, false, false, false, &accent_color, config.accent_width);
-            draw_ziggurat_corner(cr, x + w - size, y, size, 4, false, true, false, false, &accent_color, config.accent_width);
-            draw_ziggurat_corner(cr, x + w - size, y + h - size, size, 4, false, false, false, true, &accent_color, config.accent_width);
-            draw_ziggurat_corner(cr, x, y + h - size, size, 4, false, false, true, false, &accent_color, config.accent_width);
+            draw_ziggurat_corner(
+                cr,
+                x,
+                y,
+                size,
+                4,
+                true,
+                false,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
+            draw_ziggurat_corner(
+                cr,
+                x + w - size,
+                y,
+                size,
+                4,
+                false,
+                true,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
+            draw_ziggurat_corner(
+                cr,
+                x + w - size,
+                y + h - size,
+                size,
+                4,
+                false,
+                false,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
+            draw_ziggurat_corner(
+                cr,
+                x,
+                y + h - size,
+                size,
+                4,
+                false,
+                false,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::Diamond => {
             let diamond_size = size / 3.0;
             // Corner diamonds
-            draw_diamond(cr, x + size / 2.0, y + size / 2.0, diamond_size, &accent_color, true);
-            draw_diamond(cr, x + w - size / 2.0, y + size / 2.0, diamond_size, &accent_color, true);
-            draw_diamond(cr, x + w - size / 2.0, y + h - size / 2.0, diamond_size, &accent_color, true);
-            draw_diamond(cr, x + size / 2.0, y + h - size / 2.0, diamond_size, &accent_color, true);
+            draw_diamond(
+                cr,
+                x + size / 2.0,
+                y + size / 2.0,
+                diamond_size,
+                &accent_color,
+                true,
+            );
+            draw_diamond(
+                cr,
+                x + w - size / 2.0,
+                y + size / 2.0,
+                diamond_size,
+                &accent_color,
+                true,
+            );
+            draw_diamond(
+                cr,
+                x + w - size / 2.0,
+                y + h - size / 2.0,
+                diamond_size,
+                &accent_color,
+                true,
+            );
+            draw_diamond(
+                cr,
+                x + size / 2.0,
+                y + h - size / 2.0,
+                diamond_size,
+                &accent_color,
+                true,
+            );
         }
         CornerStyle::Bracket => {
             cr.save().ok();
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+            cr.set_source_rgba(
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
             cr.set_line_width(config.accent_width);
 
             // Top-left
@@ -698,7 +909,12 @@ fn draw_border(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
     let border_color = config.border_color.resolve(&config.theme);
 
     cr.save().ok();
-    cr.set_source_rgba(border_color.r, border_color.g, border_color.b, border_color.a);
+    cr.set_source_rgba(
+        border_color.r,
+        border_color.g,
+        border_color.b,
+        border_color.a,
+    );
     cr.set_line_width(config.border_width);
 
     match config.border_style {
@@ -714,8 +930,24 @@ fn draw_border(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
 
             // Add small chevrons at edge midpoints
             let chevron_size = 8.0;
-            draw_chevron(cr, x + w / 2.0 - chevron_size / 2.0, y - chevron_size / 2.0, chevron_size, chevron_size / 2.0, &border_color, config.border_width);
-            draw_chevron(cr, x + w / 2.0 - chevron_size / 2.0, y + h - chevron_size / 2.0, chevron_size, chevron_size / 2.0, &border_color, config.border_width);
+            draw_chevron(
+                cr,
+                x + w / 2.0 - chevron_size / 2.0,
+                y - chevron_size / 2.0,
+                chevron_size,
+                chevron_size / 2.0,
+                &border_color,
+                config.border_width,
+            );
+            draw_chevron(
+                cr,
+                x + w / 2.0 - chevron_size / 2.0,
+                y + h - chevron_size / 2.0,
+                chevron_size,
+                chevron_size / 2.0,
+                &border_color,
+                config.border_width,
+            );
         }
         BorderStyle::Stepped => {
             // Draw stepped border with insets
@@ -756,7 +988,14 @@ fn draw_border(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
 }
 
 /// Draw background pattern
-fn draw_background_pattern(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+fn draw_background_pattern(
+    cr: &Context,
+    config: &ArtDecoFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let pattern_color = config.pattern_color.resolve(&config.theme);
 
     match config.background_pattern {
@@ -791,7 +1030,14 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
 
     cr.save().ok();
 
-    let text_extents = pango_text_extents(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
     let (text_width, text_height) = (text_extents.width(), text_extents.height());
     let text_x = x + (w - text_width) / 2.0;
     let text_y = y + header_height / 2.0 + text_height / 2.0;
@@ -799,7 +1045,12 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
     match config.header_style {
         HeaderStyle::Centered => {
             // Draw decorative lines on sides
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+            cr.set_source_rgba(
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
             cr.set_line_width(2.0);
 
             // Left side decoration
@@ -808,13 +1059,27 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
                 cr.move_to(x + padding, y + header_height / 2.0);
                 cr.line_to(left_end - 10.0, y + header_height / 2.0);
                 cr.stroke().ok();
-                draw_diamond(cr, left_end - 5.0, y + header_height / 2.0, 4.0, &accent_color, true);
+                draw_diamond(
+                    cr,
+                    left_end - 5.0,
+                    y + header_height / 2.0,
+                    4.0,
+                    &accent_color,
+                    true,
+                );
             }
 
             // Right side decoration
             let right_start = text_x + text_width + 20.0;
             if right_start < x + w - padding {
-                draw_diamond(cr, right_start + 5.0, y + header_height / 2.0, 4.0, &accent_color, true);
+                draw_diamond(
+                    cr,
+                    right_start + 5.0,
+                    y + header_height / 2.0,
+                    4.0,
+                    &accent_color,
+                    true,
+                );
                 cr.move_to(right_start + 10.0, y + header_height / 2.0);
                 cr.line_to(x + w - padding, y + header_height / 2.0);
                 cr.stroke().ok();
@@ -827,7 +1092,12 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
             cr.fill().ok();
 
             // Banner border
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+            cr.set_source_rgba(
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
             cr.set_line_width(1.0);
             cr.move_to(x, y + header_height);
             cr.line_to(x + w, y + header_height);
@@ -850,9 +1120,21 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
     }
 
     // Draw header text
-    cr.set_source_rgba(header_color.r, header_color.g, header_color.b, header_color.a);
+    cr.set_source_rgba(
+        header_color.r,
+        header_color.g,
+        header_color.b,
+        header_color.a,
+    );
     cr.move_to(text_x, text_y);
-    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    pango_show_text(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
 
     cr.restore().ok();
 
@@ -860,7 +1142,14 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
 }
 
 /// Draw a divider between content groups
-fn draw_divider(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, length: f64, horizontal: bool) {
+fn draw_divider(
+    cr: &Context,
+    config: &ArtDecoFrameConfig,
+    x: f64,
+    y: f64,
+    length: f64,
+    horizontal: bool,
+) {
     if matches!(config.divider_style, DividerStyle::None) {
         return;
     }
@@ -868,7 +1157,12 @@ fn draw_divider(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, lengt
     let divider_color = config.divider_color.resolve(&config.theme);
 
     cr.save().ok();
-    cr.set_source_rgba(divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+    cr.set_source_rgba(
+        divider_color.r,
+        divider_color.g,
+        divider_color.b,
+        divider_color.a,
+    );
     cr.set_line_width(config.divider_width);
 
     match config.divider_style {
@@ -879,7 +1173,15 @@ fn draw_divider(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, lengt
             if horizontal {
                 for i in 0..chevron_count {
                     let cx = x + i as f64 * chevron_width + chevron_width / 2.0;
-                    draw_chevron(cr, cx - 4.0, y - 3.0, 8.0, 6.0, &divider_color, config.divider_width);
+                    draw_chevron(
+                        cr,
+                        cx - 4.0,
+                        y - 3.0,
+                        8.0,
+                        6.0,
+                        &divider_color,
+                        config.divider_width,
+                    );
                 }
             } else {
                 // Rotated chevrons for vertical divider
@@ -1025,7 +1327,8 @@ pub fn calculate_group_layouts(
 
     let total_weight: f64 = weights.iter().sum();
     let divider_count = group_count.saturating_sub(1);
-    let divider_space = divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
+    let divider_space =
+        divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
 
     match config.split_orientation {
         SplitOrientation::Vertical => {

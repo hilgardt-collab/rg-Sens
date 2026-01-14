@@ -22,7 +22,9 @@ impl NvidiaBackend {
     pub fn new(index: u32) -> Result<Self> {
         let nvml = Nvml::init()?;
         let device = nvml.device_by_index(index)?;
-        let name = device.name().unwrap_or_else(|_| format!("NVIDIA GPU {}", index));
+        let name = device
+            .name()
+            .unwrap_or_else(|_| format!("NVIDIA GPU {}", index));
 
         Ok(Self {
             info: GpuInfo {
@@ -51,7 +53,9 @@ impl GpuBackend for NvidiaBackend {
     fn update(&mut self) -> Result<()> {
         #[cfg(feature = "nvidia")]
         {
-            let device = self.nvml.device_by_index(self.device_index)
+            let device = self
+                .nvml
+                .device_by_index(self.device_index)
                 .map_err(|e| anyhow!("Failed to get NVIDIA GPU device: {}", e))?;
 
             // Temperature
@@ -76,8 +80,12 @@ impl GpuBackend for NvidiaBackend {
             self.metrics.fan_speed = device.fan_speed(0).ok();
 
             // Clock speeds
-            self.metrics.clock_core = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics).ok();
-            self.metrics.clock_memory = device.clock_info(nvml_wrapper::enum_wrappers::device::Clock::Memory).ok();
+            self.metrics.clock_core = device
+                .clock_info(nvml_wrapper::enum_wrappers::device::Clock::Graphics)
+                .ok();
+            self.metrics.clock_memory = device
+                .clock_info(nvml_wrapper::enum_wrappers::device::Clock::Memory)
+                .ok();
 
             Ok(())
         }

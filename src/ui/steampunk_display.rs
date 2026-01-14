@@ -15,12 +15,15 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource, deserialize_color_or_source, deserialize_font_or_source};
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 /// Border style for the steampunk frame
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -105,16 +108,36 @@ pub enum DividerStyle {
     None,
 }
 
-fn default_border_width() -> f64 { 4.0 }
-fn default_corner_size() -> f64 { 28.0 }
-fn default_rivet_size() -> f64 { 6.0 }
-fn default_rivet_spacing() -> f64 { 24.0 }
-fn default_content_padding() -> f64 { 14.0 }
-fn default_divider_width() -> f64 { 8.0 }
-fn default_divider_padding() -> f64 { 6.0 }
-fn default_group_count() -> usize { 2 }
-fn default_gear_teeth() -> usize { 12 }
-fn default_patina_intensity() -> f64 { 0.3 }
+fn default_border_width() -> f64 {
+    4.0
+}
+fn default_corner_size() -> f64 {
+    28.0
+}
+fn default_rivet_size() -> f64 {
+    6.0
+}
+fn default_rivet_spacing() -> f64 {
+    24.0
+}
+fn default_content_padding() -> f64 {
+    14.0
+}
+fn default_divider_width() -> f64 {
+    8.0
+}
+fn default_divider_padding() -> f64 {
+    6.0
+}
+fn default_group_count() -> usize {
+    2
+}
+fn default_gear_teeth() -> usize {
+    12
+}
+fn default_patina_intensity() -> f64 {
+    0.3
+}
 
 // ColorSource defaults for theme-aware fields
 fn default_border_color_source() -> ColorSource {
@@ -142,7 +165,9 @@ fn default_divider_color_source() -> ColorSource {
 }
 
 fn default_patina_color_source() -> ColorSource {
-    ColorSource::Custom { color: Color::new(0.2, 0.5, 0.4, 0.4) } // Verdigris
+    ColorSource::Custom {
+        color: Color::new(0.2, 0.5, 0.4, 0.4),
+    } // Verdigris
 }
 
 fn default_header_font_source() -> FontSource {
@@ -161,7 +186,10 @@ pub struct SteampunkFrameConfig {
     pub border_style: BorderStyle,
     #[serde(default = "default_border_width")]
     pub border_width: f64,
-    #[serde(default = "default_border_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_border_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub border_color: ColorSource,
 
     // Corner decorations
@@ -169,17 +197,26 @@ pub struct SteampunkFrameConfig {
     pub corner_style: CornerStyle,
     #[serde(default = "default_corner_size")]
     pub corner_size: f64,
-    #[serde(default = "default_accent_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_accent_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub accent_color: ColorSource,
     #[serde(default = "default_gear_teeth")]
     pub gear_teeth: usize,
 
     // Background
-    #[serde(default = "default_background_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_background_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub background_color: ColorSource,
     #[serde(default)]
     pub background_texture: BackgroundTexture,
-    #[serde(default = "default_patina_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_patina_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub patina_color: ColorSource,
     #[serde(default = "default_patina_intensity")]
     pub patina_intensity: f64,
@@ -191,7 +228,10 @@ pub struct SteampunkFrameConfig {
     pub rivet_size: f64,
     #[serde(default = "default_rivet_spacing")]
     pub rivet_spacing: f64,
-    #[serde(default = "default_rivet_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_rivet_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub rivet_color: ColorSource,
 
     // Header
@@ -199,9 +239,15 @@ pub struct SteampunkFrameConfig {
     pub show_header: bool,
     #[serde(default)]
     pub header_text: String,
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
-    #[serde(default = "default_header_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub header_color: ColorSource,
     #[serde(default)]
     pub header_style: HeaderStyle,
@@ -223,7 +269,10 @@ pub struct SteampunkFrameConfig {
     // Dividers
     #[serde(default)]
     pub divider_style: DividerStyle,
-    #[serde(default = "default_divider_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_divider_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub divider_color: ColorSource,
     #[serde(default = "default_divider_width")]
     pub divider_width: f64,
@@ -245,8 +294,12 @@ pub struct SteampunkFrameConfig {
     pub theme: ComboThemeConfig,
 }
 
-fn default_animation_enabled() -> bool { true }
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_enabled() -> bool {
+    true
+}
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 impl Default for SteampunkFrameConfig {
     fn default() -> Self {
@@ -384,8 +437,7 @@ impl FrameRenderer for SteampunkRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_steampunk_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_steampunk_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -459,7 +511,13 @@ fn draw_gear(
         cy,
         outer_radius,
     );
-    gradient.add_color_stop_rgba(0.0, highlight_color.r, highlight_color.g, highlight_color.b, highlight_color.a);
+    gradient.add_color_stop_rgba(
+        0.0,
+        highlight_color.r,
+        highlight_color.g,
+        highlight_color.b,
+        highlight_color.a,
+    );
     gradient.add_color_stop_rgba(0.5, color.r, color.g, color.b, color.a);
     gradient.add_color_stop_rgba(1.0, color.r * 0.6, color.g * 0.6, color.b * 0.6, color.a);
     cr.set_source(&gradient).ok();
@@ -495,14 +553,7 @@ fn draw_rivet(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color) {
     cr.fill().ok();
 
     // Main rivet body
-    let gradient = cairo::RadialGradient::new(
-        cx - size * 0.3,
-        cy - size * 0.3,
-        0.0,
-        cx,
-        cy,
-        size,
-    );
+    let gradient = cairo::RadialGradient::new(cx - size * 0.3, cy - size * 0.3, 0.0, cx, cy, size);
     gradient.add_color_stop_rgba(0.0, color.r + 0.3, color.g + 0.25, color.b + 0.2, color.a);
     gradient.add_color_stop_rgba(0.5, color.r, color.g, color.b, color.a);
     gradient.add_color_stop_rgba(1.0, color.r * 0.6, color.g * 0.5, color.b * 0.4, color.a);
@@ -526,7 +577,15 @@ fn draw_rivet(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color) {
 }
 
 /// Draw a Victorian flourish
-fn draw_flourish(cr: &Context, x: f64, y: f64, size: f64, flip_h: bool, flip_v: bool, color: &Color) {
+fn draw_flourish(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    size: f64,
+    flip_h: bool,
+    flip_v: bool,
+    color: &Color,
+) {
     cr.save().ok();
     cr.translate(x, y);
     if flip_h {
@@ -542,20 +601,62 @@ fn draw_flourish(cr: &Context, x: f64, y: f64, size: f64, flip_h: bool, flip_v: 
     // Main curl
     cr.new_path();
     cr.move_to(0.0, 0.0);
-    cr.curve_to(size * 0.3, 0.0, size * 0.5, size * 0.2, size * 0.6, size * 0.4);
-    cr.curve_to(size * 0.7, size * 0.6, size * 0.5, size * 0.7, size * 0.3, size * 0.6);
-    cr.curve_to(size * 0.1, size * 0.5, size * 0.15, size * 0.3, size * 0.25, size * 0.25);
+    cr.curve_to(
+        size * 0.3,
+        0.0,
+        size * 0.5,
+        size * 0.2,
+        size * 0.6,
+        size * 0.4,
+    );
+    cr.curve_to(
+        size * 0.7,
+        size * 0.6,
+        size * 0.5,
+        size * 0.7,
+        size * 0.3,
+        size * 0.6,
+    );
+    cr.curve_to(
+        size * 0.1,
+        size * 0.5,
+        size * 0.15,
+        size * 0.3,
+        size * 0.25,
+        size * 0.25,
+    );
     cr.stroke().ok();
 
     // Secondary curl
     cr.move_to(size * 0.2, size * 0.1);
-    cr.curve_to(size * 0.35, size * 0.15, size * 0.4, size * 0.3, size * 0.35, size * 0.4);
+    cr.curve_to(
+        size * 0.35,
+        size * 0.15,
+        size * 0.4,
+        size * 0.3,
+        size * 0.35,
+        size * 0.4,
+    );
     cr.stroke().ok();
 
     // Leaf accent
     cr.move_to(size * 0.5, size * 0.3);
-    cr.curve_to(size * 0.7, size * 0.2, size * 0.8, size * 0.25, size * 0.85, size * 0.35);
-    cr.curve_to(size * 0.8, size * 0.4, size * 0.6, size * 0.45, size * 0.5, size * 0.4);
+    cr.curve_to(
+        size * 0.7,
+        size * 0.2,
+        size * 0.8,
+        size * 0.25,
+        size * 0.85,
+        size * 0.35,
+    );
+    cr.curve_to(
+        size * 0.8,
+        size * 0.4,
+        size * 0.6,
+        size * 0.45,
+        size * 0.5,
+        size * 0.4,
+    );
     cr.fill().ok();
 
     cr.restore().ok();
@@ -568,7 +669,12 @@ fn draw_pipe_joint(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color) {
     let pipe_width = size * 0.4;
 
     // Horizontal pipe segment
-    let gradient_h = cairo::LinearGradient::new(cx - size, cy - pipe_width / 2.0, cx - size, cy + pipe_width / 2.0);
+    let gradient_h = cairo::LinearGradient::new(
+        cx - size,
+        cy - pipe_width / 2.0,
+        cx - size,
+        cy + pipe_width / 2.0,
+    );
     gradient_h.add_color_stop_rgba(0.0, color.r + 0.2, color.g + 0.15, color.b + 0.1, color.a);
     gradient_h.add_color_stop_rgba(0.5, color.r, color.g, color.b, color.a);
     gradient_h.add_color_stop_rgba(1.0, color.r * 0.6, color.g * 0.5, color.b * 0.4, color.a);
@@ -578,7 +684,8 @@ fn draw_pipe_joint(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color) {
     cr.fill().ok();
 
     // Vertical pipe segment
-    let gradient_v = cairo::LinearGradient::new(cx - pipe_width / 2.0, cy, cx + pipe_width / 2.0, cy);
+    let gradient_v =
+        cairo::LinearGradient::new(cx - pipe_width / 2.0, cy, cx + pipe_width / 2.0, cy);
     gradient_v.add_color_stop_rgba(0.0, color.r + 0.2, color.g + 0.15, color.b + 0.1, color.a);
     gradient_v.add_color_stop_rgba(0.5, color.r, color.g, color.b, color.a);
     gradient_v.add_color_stop_rgba(1.0, color.r * 0.6, color.g * 0.5, color.b * 0.4, color.a);
@@ -645,7 +752,16 @@ fn draw_brushed_brass(cr: &Context, x: f64, y: f64, w: f64, h: f64, color: &Colo
 }
 
 /// Draw weathered patina texture
-fn draw_patina_texture(cr: &Context, x: f64, y: f64, w: f64, h: f64, base_color: &Color, patina_color: &Color, intensity: f64) {
+fn draw_patina_texture(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    base_color: &Color,
+    patina_color: &Color,
+    intensity: f64,
+) {
     cr.save().ok();
 
     // Clip to bounds once at the start (not per-spot)
@@ -666,7 +782,13 @@ fn draw_patina_texture(cr: &Context, x: f64, y: f64, w: f64, h: f64, base_color:
         let radius = 8.0 + seed * 20.0;
 
         let gradient = cairo::RadialGradient::new(px, py, 0.0, px, py, radius);
-        gradient.add_color_stop_rgba(0.0, patina_color.r, patina_color.g, patina_color.b, patina_color.a * intensity);
+        gradient.add_color_stop_rgba(
+            0.0,
+            patina_color.r,
+            patina_color.g,
+            patina_color.b,
+            patina_color.a * intensity,
+        );
         gradient.add_color_stop_rgba(1.0, patina_color.r, patina_color.g, patina_color.b, 0.0);
 
         // Draw spot without per-spot clipping (already clipped to bounds)
@@ -737,7 +859,16 @@ fn draw_leather_texture(cr: &Context, x: f64, y: f64, w: f64, h: f64, color: &Co
 }
 
 /// Draw metal plate texture with rivets
-fn draw_metal_plate_texture(cr: &Context, x: f64, y: f64, w: f64, h: f64, color: &Color, rivet_color: &Color, rivet_spacing: f64) {
+fn draw_metal_plate_texture(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    color: &Color,
+    rivet_color: &Color,
+    rivet_spacing: f64,
+) {
     cr.save().ok();
 
     // Base metal with beveled edge effect
@@ -787,7 +918,14 @@ fn draw_metal_plate_texture(cr: &Context, x: f64, y: f64, w: f64, h: f64, color:
 }
 
 /// Draw corner decorations based on style
-fn draw_corner_decorations(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+fn draw_corner_decorations(
+    cr: &Context,
+    config: &SteampunkFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let accent_color = config.accent_color.resolve(&config.theme);
     let highlight_color = Color::new(
         (accent_color.r + 0.3).min(1.0),
@@ -801,27 +939,119 @@ fn draw_corner_decorations(cr: &Context, config: &SteampunkFrameConfig, x: f64, 
         CornerStyle::Gear => {
             let outer_r = size / 2.0;
             let inner_r = size / 3.0;
-            draw_gear(cr, x + size / 2.0, y + size / 2.0, outer_r, inner_r, config.gear_teeth, &accent_color, &highlight_color);
-            draw_gear(cr, x + w - size / 2.0, y + size / 2.0, outer_r, inner_r, config.gear_teeth, &accent_color, &highlight_color);
-            draw_gear(cr, x + w - size / 2.0, y + h - size / 2.0, outer_r, inner_r, config.gear_teeth, &accent_color, &highlight_color);
-            draw_gear(cr, x + size / 2.0, y + h - size / 2.0, outer_r, inner_r, config.gear_teeth, &accent_color, &highlight_color);
+            draw_gear(
+                cr,
+                x + size / 2.0,
+                y + size / 2.0,
+                outer_r,
+                inner_r,
+                config.gear_teeth,
+                &accent_color,
+                &highlight_color,
+            );
+            draw_gear(
+                cr,
+                x + w - size / 2.0,
+                y + size / 2.0,
+                outer_r,
+                inner_r,
+                config.gear_teeth,
+                &accent_color,
+                &highlight_color,
+            );
+            draw_gear(
+                cr,
+                x + w - size / 2.0,
+                y + h - size / 2.0,
+                outer_r,
+                inner_r,
+                config.gear_teeth,
+                &accent_color,
+                &highlight_color,
+            );
+            draw_gear(
+                cr,
+                x + size / 2.0,
+                y + h - size / 2.0,
+                outer_r,
+                inner_r,
+                config.gear_teeth,
+                &accent_color,
+                &highlight_color,
+            );
         }
         CornerStyle::Flourish => {
-            draw_flourish(cr, x + 4.0, y + 4.0, size * 0.8, false, false, &accent_color);
-            draw_flourish(cr, x + w - 4.0, y + 4.0, size * 0.8, true, false, &accent_color);
-            draw_flourish(cr, x + w - 4.0, y + h - 4.0, size * 0.8, true, true, &accent_color);
-            draw_flourish(cr, x + 4.0, y + h - 4.0, size * 0.8, false, true, &accent_color);
+            draw_flourish(
+                cr,
+                x + 4.0,
+                y + 4.0,
+                size * 0.8,
+                false,
+                false,
+                &accent_color,
+            );
+            draw_flourish(
+                cr,
+                x + w - 4.0,
+                y + 4.0,
+                size * 0.8,
+                true,
+                false,
+                &accent_color,
+            );
+            draw_flourish(
+                cr,
+                x + w - 4.0,
+                y + h - 4.0,
+                size * 0.8,
+                true,
+                true,
+                &accent_color,
+            );
+            draw_flourish(
+                cr,
+                x + 4.0,
+                y + h - 4.0,
+                size * 0.8,
+                false,
+                true,
+                &accent_color,
+            );
         }
         CornerStyle::Rivet => {
             let rivet_color = config.rivet_color.resolve(&config.theme);
             let rivet_r = size / 3.0;
             draw_rivet(cr, x + size / 2.0, y + size / 2.0, rivet_r, &rivet_color);
-            draw_rivet(cr, x + w - size / 2.0, y + size / 2.0, rivet_r, &rivet_color);
-            draw_rivet(cr, x + w - size / 2.0, y + h - size / 2.0, rivet_r, &rivet_color);
-            draw_rivet(cr, x + size / 2.0, y + h - size / 2.0, rivet_r, &rivet_color);
+            draw_rivet(
+                cr,
+                x + w - size / 2.0,
+                y + size / 2.0,
+                rivet_r,
+                &rivet_color,
+            );
+            draw_rivet(
+                cr,
+                x + w - size / 2.0,
+                y + h - size / 2.0,
+                rivet_r,
+                &rivet_color,
+            );
+            draw_rivet(
+                cr,
+                x + size / 2.0,
+                y + h - size / 2.0,
+                rivet_r,
+                &rivet_color,
+            );
         }
         CornerStyle::PipeJoint => {
-            draw_pipe_joint(cr, x + size * 0.6, y + size * 0.6, size * 0.5, &accent_color);
+            draw_pipe_joint(
+                cr,
+                x + size * 0.6,
+                y + size * 0.6,
+                size * 0.5,
+                &accent_color,
+            );
             cr.save().ok();
             cr.translate(x + w, y);
             cr.scale(-1.0, 1.0);
@@ -852,7 +1082,12 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
     match config.border_style {
         BorderStyle::Victorian => {
             // Ornate double border with flourishes
-            cr.set_source_rgba(border_color.r, border_color.g, border_color.b, border_color.a);
+            cr.set_source_rgba(
+                border_color.r,
+                border_color.g,
+                border_color.b,
+                border_color.a,
+            );
             cr.set_line_width(config.border_width);
             cr.rectangle(x, y, w, h);
             cr.stroke().ok();
@@ -864,7 +1099,12 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 
             // Small decorative dots at midpoints
             let dot_size = 3.0;
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+            cr.set_source_rgba(
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
             cr.arc(x + w / 2.0, y, dot_size, 0.0, 2.0 * PI);
             cr.fill().ok();
             cr.arc(x + w / 2.0, y + h, dot_size, 0.0, 2.0 * PI);
@@ -880,9 +1120,27 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 
             // Top pipe
             let gradient_t = cairo::LinearGradient::new(x, y, x, y + pipe_width);
-            gradient_t.add_color_stop_rgba(0.0, border_color.r + 0.2, border_color.g + 0.15, border_color.b + 0.1, border_color.a);
-            gradient_t.add_color_stop_rgba(0.5, border_color.r, border_color.g, border_color.b, border_color.a);
-            gradient_t.add_color_stop_rgba(1.0, border_color.r * 0.6, border_color.g * 0.5, border_color.b * 0.4, border_color.a);
+            gradient_t.add_color_stop_rgba(
+                0.0,
+                border_color.r + 0.2,
+                border_color.g + 0.15,
+                border_color.b + 0.1,
+                border_color.a,
+            );
+            gradient_t.add_color_stop_rgba(
+                0.5,
+                border_color.r,
+                border_color.g,
+                border_color.b,
+                border_color.a,
+            );
+            gradient_t.add_color_stop_rgba(
+                1.0,
+                border_color.r * 0.6,
+                border_color.g * 0.5,
+                border_color.b * 0.4,
+                border_color.a,
+            );
             cr.rectangle(x, y, w, pipe_width);
             cr.set_source(&gradient_t).ok();
             cr.fill().ok();
@@ -894,21 +1152,49 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 
             // Left pipe
             let gradient_l = cairo::LinearGradient::new(x, y, x + pipe_width, y);
-            gradient_l.add_color_stop_rgba(0.0, border_color.r + 0.2, border_color.g + 0.15, border_color.b + 0.1, border_color.a);
-            gradient_l.add_color_stop_rgba(0.5, border_color.r, border_color.g, border_color.b, border_color.a);
-            gradient_l.add_color_stop_rgba(1.0, border_color.r * 0.6, border_color.g * 0.5, border_color.b * 0.4, border_color.a);
+            gradient_l.add_color_stop_rgba(
+                0.0,
+                border_color.r + 0.2,
+                border_color.g + 0.15,
+                border_color.b + 0.1,
+                border_color.a,
+            );
+            gradient_l.add_color_stop_rgba(
+                0.5,
+                border_color.r,
+                border_color.g,
+                border_color.b,
+                border_color.a,
+            );
+            gradient_l.add_color_stop_rgba(
+                1.0,
+                border_color.r * 0.6,
+                border_color.g * 0.5,
+                border_color.b * 0.4,
+                border_color.a,
+            );
             cr.rectangle(x, y + pipe_width, pipe_width, h - pipe_width * 2.0);
             cr.set_source(&gradient_l).ok();
             cr.fill().ok();
 
             // Right pipe
-            cr.rectangle(x + w - pipe_width, y + pipe_width, pipe_width, h - pipe_width * 2.0);
+            cr.rectangle(
+                x + w - pipe_width,
+                y + pipe_width,
+                pipe_width,
+                h - pipe_width * 2.0,
+            );
             cr.set_source(&gradient_l).ok();
             cr.fill().ok();
         }
         BorderStyle::Riveted => {
             // Simple border with rivets
-            cr.set_source_rgba(border_color.r, border_color.g, border_color.b, border_color.a);
+            cr.set_source_rgba(
+                border_color.r,
+                border_color.g,
+                border_color.b,
+                border_color.a,
+            );
             cr.set_line_width(config.border_width);
             cr.rectangle(x, y, w, h);
             cr.stroke().ok();
@@ -940,7 +1226,12 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
             let bevel = 3.0;
 
             // Outer highlight
-            cr.set_source_rgba(border_color.r + 0.2, border_color.g + 0.15, border_color.b + 0.1, border_color.a);
+            cr.set_source_rgba(
+                border_color.r + 0.2,
+                border_color.g + 0.15,
+                border_color.b + 0.1,
+                border_color.a,
+            );
             cr.set_line_width(config.border_width);
             cr.move_to(x, y + h);
             cr.line_to(x, y);
@@ -948,21 +1239,36 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
             cr.stroke().ok();
 
             // Outer shadow
-            cr.set_source_rgba(border_color.r * 0.6, border_color.g * 0.5, border_color.b * 0.4, border_color.a);
+            cr.set_source_rgba(
+                border_color.r * 0.6,
+                border_color.g * 0.5,
+                border_color.b * 0.4,
+                border_color.a,
+            );
             cr.move_to(x + w, y);
             cr.line_to(x + w, y + h);
             cr.line_to(x, y + h);
             cr.stroke().ok();
 
             // Inner line
-            cr.set_source_rgba(border_color.r, border_color.g, border_color.b, border_color.a);
+            cr.set_source_rgba(
+                border_color.r,
+                border_color.g,
+                border_color.b,
+                border_color.a,
+            );
             cr.set_line_width(config.border_width / 2.0);
             cr.rectangle(x + bevel, y + bevel, w - bevel * 2.0, h - bevel * 2.0);
             cr.stroke().ok();
         }
         BorderStyle::GearBorder => {
             // Border with small gears at intervals
-            cr.set_source_rgba(border_color.r, border_color.g, border_color.b, border_color.a);
+            cr.set_source_rgba(
+                border_color.r,
+                border_color.g,
+                border_color.b,
+                border_color.a,
+            );
             cr.set_line_width(config.border_width);
             cr.rectangle(x, y, w, h);
             cr.stroke().ok();
@@ -980,8 +1286,26 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
             // Top and bottom edges
             let mut gx = x + gear_spacing;
             while gx < x + w - gear_spacing {
-                draw_gear(cr, gx, y, gear_size, gear_size * 0.6, 8, &accent_color, &highlight);
-                draw_gear(cr, gx, y + h, gear_size, gear_size * 0.6, 8, &accent_color, &highlight);
+                draw_gear(
+                    cr,
+                    gx,
+                    y,
+                    gear_size,
+                    gear_size * 0.6,
+                    8,
+                    &accent_color,
+                    &highlight,
+                );
+                draw_gear(
+                    cr,
+                    gx,
+                    y + h,
+                    gear_size,
+                    gear_size * 0.6,
+                    8,
+                    &accent_color,
+                    &highlight,
+                );
                 gx += gear_spacing;
             }
         }
@@ -991,7 +1315,14 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 }
 
 /// Draw background texture
-fn draw_background_texture(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+fn draw_background_texture(
+    cr: &Context,
+    config: &SteampunkFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     let bg_color = config.background_color.resolve(&config.theme);
     let patina_color = config.patina_color.resolve(&config.theme);
     let rivet_color = config.rivet_color.resolve(&config.theme);
@@ -1001,13 +1332,31 @@ fn draw_background_texture(cr: &Context, config: &SteampunkFrameConfig, x: f64, 
             draw_brushed_brass(cr, x, y, w, h, &bg_color);
         }
         BackgroundTexture::Patina => {
-            draw_patina_texture(cr, x, y, w, h, &bg_color, &patina_color, config.patina_intensity);
+            draw_patina_texture(
+                cr,
+                x,
+                y,
+                w,
+                h,
+                &bg_color,
+                &patina_color,
+                config.patina_intensity,
+            );
         }
         BackgroundTexture::Leather => {
             draw_leather_texture(cr, x, y, w, h, &bg_color);
         }
         BackgroundTexture::MetalPlate => {
-            draw_metal_plate_texture(cr, x, y, w, h, &bg_color, &rivet_color, config.rivet_spacing);
+            draw_metal_plate_texture(
+                cr,
+                x,
+                y,
+                w,
+                h,
+                &bg_color,
+                &rivet_color,
+                config.rivet_spacing,
+            );
         }
         BackgroundTexture::Solid => {
             cr.rectangle(x, y, w, h);
@@ -1033,7 +1382,14 @@ fn draw_header(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 
     cr.save().ok();
 
-    let text_extents = pango_text_extents(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
     let (text_width, text_height) = (text_extents.width(), text_extents.height());
     let text_x = x + (w - text_width) / 2.0;
     let text_y = y + header_height / 2.0 + text_height / 2.0;
@@ -1048,10 +1404,34 @@ fn draw_header(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 
             // Plate background with gradient
             let gradient = cairo::LinearGradient::new(plate_x, plate_y, plate_x, plate_y + plate_h);
-            gradient.add_color_stop_rgba(0.0, accent_color.r + 0.2, accent_color.g + 0.15, accent_color.b + 0.1, accent_color.a);
-            gradient.add_color_stop_rgba(0.3, accent_color.r, accent_color.g, accent_color.b, accent_color.a);
-            gradient.add_color_stop_rgba(0.7, accent_color.r * 0.9, accent_color.g * 0.85, accent_color.b * 0.75, accent_color.a);
-            gradient.add_color_stop_rgba(1.0, accent_color.r * 0.7, accent_color.g * 0.65, accent_color.b * 0.55, accent_color.a);
+            gradient.add_color_stop_rgba(
+                0.0,
+                accent_color.r + 0.2,
+                accent_color.g + 0.15,
+                accent_color.b + 0.1,
+                accent_color.a,
+            );
+            gradient.add_color_stop_rgba(
+                0.3,
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
+            gradient.add_color_stop_rgba(
+                0.7,
+                accent_color.r * 0.9,
+                accent_color.g * 0.85,
+                accent_color.b * 0.75,
+                accent_color.a,
+            );
+            gradient.add_color_stop_rgba(
+                1.0,
+                accent_color.r * 0.7,
+                accent_color.g * 0.65,
+                accent_color.b * 0.55,
+                accent_color.a,
+            );
 
             cr.rectangle(plate_x, plate_y, plate_w, plate_h);
             cr.set_source(&gradient).ok();
@@ -1073,30 +1453,81 @@ fn draw_header(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 
             // Corner rivets
             let rivet_margin = 8.0;
-            draw_rivet(cr, plate_x + rivet_margin, plate_y + plate_h / 2.0, 4.0, &rivet_color);
-            draw_rivet(cr, plate_x + plate_w - rivet_margin, plate_y + plate_h / 2.0, 4.0, &rivet_color);
+            draw_rivet(
+                cr,
+                plate_x + rivet_margin,
+                plate_y + plate_h / 2.0,
+                4.0,
+                &rivet_color,
+            );
+            draw_rivet(
+                cr,
+                plate_x + plate_w - rivet_margin,
+                plate_y + plate_h / 2.0,
+                4.0,
+                &rivet_color,
+            );
         }
         HeaderStyle::Banner => {
             // Full-width Victorian banner
             let gradient = cairo::LinearGradient::new(x, y, x, y + header_height);
-            gradient.add_color_stop_rgba(0.0, accent_color.r * 0.3, accent_color.g * 0.25, accent_color.b * 0.2, 0.8);
-            gradient.add_color_stop_rgba(0.5, accent_color.r * 0.2, accent_color.g * 0.15, accent_color.b * 0.1, 0.6);
-            gradient.add_color_stop_rgba(1.0, accent_color.r * 0.15, accent_color.g * 0.1, accent_color.b * 0.08, 0.4);
+            gradient.add_color_stop_rgba(
+                0.0,
+                accent_color.r * 0.3,
+                accent_color.g * 0.25,
+                accent_color.b * 0.2,
+                0.8,
+            );
+            gradient.add_color_stop_rgba(
+                0.5,
+                accent_color.r * 0.2,
+                accent_color.g * 0.15,
+                accent_color.b * 0.1,
+                0.6,
+            );
+            gradient.add_color_stop_rgba(
+                1.0,
+                accent_color.r * 0.15,
+                accent_color.g * 0.1,
+                accent_color.b * 0.08,
+                0.4,
+            );
 
             cr.rectangle(x + padding, y, w - padding * 2.0, header_height);
             cr.set_source(&gradient).ok();
             cr.fill().ok();
 
             // Decorative line below
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+            cr.set_source_rgba(
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
             cr.set_line_width(2.0);
             cr.move_to(x + padding, y + header_height);
             cr.line_to(x + w - padding, y + header_height);
             cr.stroke().ok();
 
             // Small flourishes at ends
-            draw_flourish(cr, x + padding + 10.0, y + header_height - 8.0, 16.0, false, true, &accent_color);
-            draw_flourish(cr, x + w - padding - 10.0, y + header_height - 8.0, 16.0, true, true, &accent_color);
+            draw_flourish(
+                cr,
+                x + padding + 10.0,
+                y + header_height - 8.0,
+                16.0,
+                false,
+                true,
+                &accent_color,
+            );
+            draw_flourish(
+                cr,
+                x + w - padding - 10.0,
+                y + header_height - 8.0,
+                16.0,
+                true,
+                true,
+                &accent_color,
+            );
         }
         HeaderStyle::Industrial => {
             // Industrial label plate style
@@ -1111,7 +1542,12 @@ fn draw_header(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
             cr.fill().ok();
 
             // Border
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, accent_color.a);
+            cr.set_source_rgba(
+                accent_color.r,
+                accent_color.g,
+                accent_color.b,
+                accent_color.a,
+            );
             cr.set_line_width(2.0);
             cr.rectangle(plate_x, plate_y, plate_w, plate_h);
             cr.stroke().ok();
@@ -1123,12 +1559,31 @@ fn draw_header(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
     // Shadow
     cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
     cr.move_to(text_x + 1.0, text_y + 1.0);
-    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    pango_show_text(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
 
     // Main text
-    cr.set_source_rgba(header_color.r, header_color.g, header_color.b, header_color.a);
+    cr.set_source_rgba(
+        header_color.r,
+        header_color.g,
+        header_color.b,
+        header_color.a,
+    );
     cr.move_to(text_x, text_y);
-    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    pango_show_text(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
 
     cr.restore().ok();
 
@@ -1136,7 +1591,14 @@ fn draw_header(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
 }
 
 /// Draw a divider between content groups
-fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, length: f64, horizontal: bool) {
+fn draw_divider(
+    cr: &Context,
+    config: &SteampunkFrameConfig,
+    x: f64,
+    y: f64,
+    length: f64,
+    horizontal: bool,
+) {
     if matches!(config.divider_style, DividerStyle::None) {
         return;
     }
@@ -1152,10 +1614,29 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
 
             if horizontal {
                 // Horizontal pipe
-                let gradient = cairo::LinearGradient::new(x, y - pipe_width / 2.0, x, y + pipe_width / 2.0);
-                gradient.add_color_stop_rgba(0.0, divider_color.r + 0.2, divider_color.g + 0.15, divider_color.b + 0.1, divider_color.a);
-                gradient.add_color_stop_rgba(0.5, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
-                gradient.add_color_stop_rgba(1.0, divider_color.r * 0.6, divider_color.g * 0.5, divider_color.b * 0.4, divider_color.a);
+                let gradient =
+                    cairo::LinearGradient::new(x, y - pipe_width / 2.0, x, y + pipe_width / 2.0);
+                gradient.add_color_stop_rgba(
+                    0.0,
+                    divider_color.r + 0.2,
+                    divider_color.g + 0.15,
+                    divider_color.b + 0.1,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    0.5,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    1.0,
+                    divider_color.r * 0.6,
+                    divider_color.g * 0.5,
+                    divider_color.b * 0.4,
+                    divider_color.a,
+                );
 
                 cr.rectangle(x, y - pipe_width / 2.0, length, pipe_width);
                 cr.set_source(&gradient).ok();
@@ -1172,9 +1653,27 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
                     y,
                     gauge_radius,
                 );
-                gauge_gradient.add_color_stop_rgba(0.0, accent_color.r + 0.3, accent_color.g + 0.25, accent_color.b + 0.15, accent_color.a);
-                gauge_gradient.add_color_stop_rgba(0.7, accent_color.r, accent_color.g, accent_color.b, accent_color.a);
-                gauge_gradient.add_color_stop_rgba(1.0, accent_color.r * 0.5, accent_color.g * 0.4, accent_color.b * 0.3, accent_color.a);
+                gauge_gradient.add_color_stop_rgba(
+                    0.0,
+                    accent_color.r + 0.3,
+                    accent_color.g + 0.25,
+                    accent_color.b + 0.15,
+                    accent_color.a,
+                );
+                gauge_gradient.add_color_stop_rgba(
+                    0.7,
+                    accent_color.r,
+                    accent_color.g,
+                    accent_color.b,
+                    accent_color.a,
+                );
+                gauge_gradient.add_color_stop_rgba(
+                    1.0,
+                    accent_color.r * 0.5,
+                    accent_color.g * 0.4,
+                    accent_color.b * 0.3,
+                    accent_color.a,
+                );
 
                 cr.arc(gauge_cx, y, gauge_radius, 0.0, 2.0 * PI);
                 cr.set_source(&gauge_gradient).ok();
@@ -1190,14 +1689,36 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
                 cr.set_line_width(1.5);
                 let needle_angle: f64 = -0.3; // Slightly above center
                 cr.move_to(gauge_cx, y);
-                cr.line_to(gauge_cx + gauge_radius * 0.5 * needle_angle.cos(), y + gauge_radius * 0.5 * needle_angle.sin());
+                cr.line_to(
+                    gauge_cx + gauge_radius * 0.5 * needle_angle.cos(),
+                    y + gauge_radius * 0.5 * needle_angle.sin(),
+                );
                 cr.stroke().ok();
             } else {
                 // Vertical pipe
-                let gradient = cairo::LinearGradient::new(x - pipe_width / 2.0, y, x + pipe_width / 2.0, y);
-                gradient.add_color_stop_rgba(0.0, divider_color.r + 0.2, divider_color.g + 0.15, divider_color.b + 0.1, divider_color.a);
-                gradient.add_color_stop_rgba(0.5, divider_color.r, divider_color.g, divider_color.b, divider_color.a);
-                gradient.add_color_stop_rgba(1.0, divider_color.r * 0.6, divider_color.g * 0.5, divider_color.b * 0.4, divider_color.a);
+                let gradient =
+                    cairo::LinearGradient::new(x - pipe_width / 2.0, y, x + pipe_width / 2.0, y);
+                gradient.add_color_stop_rgba(
+                    0.0,
+                    divider_color.r + 0.2,
+                    divider_color.g + 0.15,
+                    divider_color.b + 0.1,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    0.5,
+                    divider_color.r,
+                    divider_color.g,
+                    divider_color.b,
+                    divider_color.a,
+                );
+                gradient.add_color_stop_rgba(
+                    1.0,
+                    divider_color.r * 0.6,
+                    divider_color.g * 0.5,
+                    divider_color.b * 0.4,
+                    divider_color.a,
+                );
 
                 cr.rectangle(x - pipe_width / 2.0, y, pipe_width, length);
                 cr.set_source(&gradient).ok();
@@ -1214,9 +1735,27 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
                     gauge_cy,
                     gauge_radius,
                 );
-                gauge_gradient.add_color_stop_rgba(0.0, accent_color.r + 0.3, accent_color.g + 0.25, accent_color.b + 0.15, accent_color.a);
-                gauge_gradient.add_color_stop_rgba(0.7, accent_color.r, accent_color.g, accent_color.b, accent_color.a);
-                gauge_gradient.add_color_stop_rgba(1.0, accent_color.r * 0.5, accent_color.g * 0.4, accent_color.b * 0.3, accent_color.a);
+                gauge_gradient.add_color_stop_rgba(
+                    0.0,
+                    accent_color.r + 0.3,
+                    accent_color.g + 0.25,
+                    accent_color.b + 0.15,
+                    accent_color.a,
+                );
+                gauge_gradient.add_color_stop_rgba(
+                    0.7,
+                    accent_color.r,
+                    accent_color.g,
+                    accent_color.b,
+                    accent_color.a,
+                );
+                gauge_gradient.add_color_stop_rgba(
+                    1.0,
+                    accent_color.r * 0.5,
+                    accent_color.g * 0.4,
+                    accent_color.b * 0.3,
+                    accent_color.a,
+                );
 
                 cr.arc(x, gauge_cy, gauge_radius, 0.0, 2.0 * PI);
                 cr.set_source(&gauge_gradient).ok();
@@ -1240,13 +1779,31 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
             if horizontal {
                 let mut gx = x + gear_spacing / 2.0;
                 while gx < x + length - gear_spacing / 2.0 {
-                    draw_gear(cr, gx, y, gear_size, gear_size * 0.6, 8, &divider_color, &highlight);
+                    draw_gear(
+                        cr,
+                        gx,
+                        y,
+                        gear_size,
+                        gear_size * 0.6,
+                        8,
+                        &divider_color,
+                        &highlight,
+                    );
                     gx += gear_spacing;
                 }
             } else {
                 let mut gy = y + gear_spacing / 2.0;
                 while gy < y + length - gear_spacing / 2.0 {
-                    draw_gear(cr, x, gy, gear_size, gear_size * 0.6, 8, &divider_color, &highlight);
+                    draw_gear(
+                        cr,
+                        x,
+                        gy,
+                        gear_size,
+                        gear_size * 0.6,
+                        8,
+                        &divider_color,
+                        &highlight,
+                    );
                     gy += gear_spacing;
                 }
             }
@@ -1255,7 +1812,12 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
             let bar_thickness = config.divider_width * 0.6;
             let rivet_color = config.rivet_color.resolve(&config.theme);
 
-            cr.set_source_rgba(divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+            cr.set_source_rgba(
+                divider_color.r,
+                divider_color.g,
+                divider_color.b,
+                divider_color.a,
+            );
 
             if horizontal {
                 cr.rectangle(x, y - bar_thickness / 2.0, length, bar_thickness);
@@ -1279,7 +1841,12 @@ fn draw_divider(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, len
             }
         }
         DividerStyle::Ornament => {
-            cr.set_source_rgba(divider_color.r, divider_color.g, divider_color.b, divider_color.a);
+            cr.set_source_rgba(
+                divider_color.r,
+                divider_color.g,
+                divider_color.b,
+                divider_color.a,
+            );
             cr.set_line_width(1.5);
 
             if horizontal {
@@ -1370,7 +1937,8 @@ pub fn calculate_group_layouts(
 
     let total_weight: f64 = weights.iter().sum();
     let divider_count = group_count.saturating_sub(1);
-    let divider_space = divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
+    let divider_space =
+        divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
 
     match config.split_orientation {
         SplitOrientation::Vertical => {

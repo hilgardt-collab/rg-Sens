@@ -2,19 +2,19 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation, Scale,
+    SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::displayers::{IndicatorConfig, IndicatorShape, render_indicator};
 use crate::displayers::FieldMetadata;
-use crate::ui::render_utils::render_checkerboard;
+use crate::displayers::{render_indicator, IndicatorConfig, IndicatorShape};
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::gradient_editor::GradientEditor;
+use crate::ui::render_utils::render_checkerboard;
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
-use crate::ui::widget_builder::{create_page_container, create_labeled_row};
+use crate::ui::widget_builder::{create_labeled_row, create_page_container};
 
 /// Indicator configuration widget
 pub struct IndicatorConfigWidget {
@@ -221,7 +221,13 @@ impl IndicatorConfigWidget {
             }
         });
 
-        (page, shape_dropdown, polygon_sides_spin, shape_size_scale, rotation_spin)
+        (
+            page,
+            shape_dropdown,
+            polygon_sides_spin,
+            shape_size_scale,
+            rotation_spin,
+        )
     }
 
     fn create_color_page(
@@ -229,8 +235,8 @@ impl IndicatorConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
     ) -> (GtkBox, Rc<GradientEditor>) {
-        use gtk4::Button;
         use crate::ui::clipboard::CLIPBOARD;
+        use gtk4::Button;
 
         let page = create_page_container();
 

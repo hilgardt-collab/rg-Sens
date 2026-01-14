@@ -31,12 +31,17 @@ impl AmdBackend {
         // Verify it's an AMD GPU by checking vendor
         let vendor_id = Self::read_hex_file(&device_path.join("vendor"))?;
         if vendor_id != 0x1002 {
-            return Err(anyhow!("card{} is not an AMD GPU (vendor ID: 0x{:04x})", card_index, vendor_id));
+            return Err(anyhow!(
+                "card{} is not an AMD GPU (vendor ID: 0x{:04x})",
+                card_index,
+                vendor_id
+            ));
         }
 
         // Get GPU name from device ID
         let device_id = Self::read_hex_file(&device_path.join("device"))?;
-        let name = Self::get_gpu_name(device_id).unwrap_or_else(|| format!("AMD GPU {}", card_index));
+        let name =
+            Self::get_gpu_name(device_id).unwrap_or_else(|| format!("AMD GPU {}", card_index));
 
         // Find hwmon directory for sensors
         let hwmon_path = Self::find_hwmon_path(&device_path)?;
@@ -69,7 +74,9 @@ impl AmdBackend {
     fn read_int_file(path: &Path) -> Result<i64> {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
-        content.trim().parse::<i64>()
+        content
+            .trim()
+            .parse::<i64>()
             .with_context(|| format!("Failed to parse integer from {}", path.display()))
     }
 
@@ -84,7 +91,12 @@ impl AmdBackend {
         for entry in fs::read_dir(&hwmon_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("hwmon")) {
+            if path.is_dir()
+                && path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("hwmon"))
+            {
                 return Ok(Some(path));
             }
         }
@@ -204,7 +216,9 @@ impl AmdBackend {
                 if let Ok(rpm) = Self::read_int_file(&fan_path) {
                     if let Ok(max_rpm) = Self::read_int_file(&fan_max_path) {
                         if max_rpm > 0 {
-                            return Some(((rpm as f64 / max_rpm as f64) * 100.0).clamp(0.0, 100.0) as u32);
+                            return Some(
+                                ((rpm as f64 / max_rpm as f64) * 100.0).clamp(0.0, 100.0) as u32
+                            );
                         }
                     }
                 }

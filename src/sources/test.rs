@@ -9,8 +9,8 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use std::time::Duration;
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use std::time::Duration;
 
 /// Test value generation mode
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
@@ -218,15 +218,20 @@ impl DataSource for TestSource {
         // try_lock was causing values to reset to defaults during any lock contention
         let Ok(state) = TEST_SOURCE_STATE.lock() else {
             // Return default values only if lock is poisoned (thread panic)
-            self.values.insert("caption".to_string(), Value::from("Test"));
+            self.values
+                .insert("caption".to_string(), Value::from("Test"));
             self.values.insert("value".to_string(), Value::from(50.0));
             self.values.insert("unit".to_string(), Value::from(""));
-            self.values.insert("normalized".to_string(), Value::from(50.0));
-            self.values.insert("numerical_value".to_string(), Value::from(50.0));
+            self.values
+                .insert("normalized".to_string(), Value::from(50.0));
+            self.values
+                .insert("numerical_value".to_string(), Value::from(50.0));
             self.values.insert("min".to_string(), Value::from(0.0));
             self.values.insert("max".to_string(), Value::from(100.0));
-            self.values.insert("min_limit".to_string(), Value::from(0.0));
-            self.values.insert("max_limit".to_string(), Value::from(100.0));
+            self.values
+                .insert("min_limit".to_string(), Value::from(0.0));
+            self.values
+                .insert("max_limit".to_string(), Value::from(100.0));
             return Ok(());
         };
         let value = Self::calculate_value(&state);
@@ -248,17 +253,24 @@ impl DataSource for TestSource {
             TestMode::Triangle => "Tri",
             TestMode::Square => "Sqr",
         };
-        self.values.insert("caption".to_string(), Value::from(caption));
+        self.values
+            .insert("caption".to_string(), Value::from(caption));
         self.values.insert("value".to_string(), Value::from(value));
         self.values.insert("unit".to_string(), Value::from(""));
-        self.values.insert("normalized".to_string(), Value::from(normalized));
-        self.values.insert("min".to_string(), Value::from(config.min_value));
-        self.values.insert("max".to_string(), Value::from(config.max_value));
+        self.values
+            .insert("normalized".to_string(), Value::from(normalized));
+        self.values
+            .insert("min".to_string(), Value::from(config.min_value));
+        self.values
+            .insert("max".to_string(), Value::from(config.max_value));
         // Also provide min_limit/max_limit for displayers that expect these names
-        self.values.insert("min_limit".to_string(), Value::from(config.min_value));
-        self.values.insert("max_limit".to_string(), Value::from(config.max_value));
+        self.values
+            .insert("min_limit".to_string(), Value::from(config.min_value));
+        self.values
+            .insert("max_limit".to_string(), Value::from(config.max_value));
         // Provide numerical_value for LCARS compatibility
-        self.values.insert("numerical_value".to_string(), Value::from(value));
+        self.values
+            .insert("numerical_value".to_string(), Value::from(value));
 
         Ok(())
     }
@@ -283,7 +295,9 @@ impl DataSource for TestSource {
         // Apply the full test config from saved settings
         // This is called when loading panels from disk at startup
         if let Some(test_config_value) = config.get("test_config") {
-            if let Ok(test_config) = serde_json::from_value::<TestSourceConfig>(test_config_value.clone()) {
+            if let Ok(test_config) =
+                serde_json::from_value::<TestSourceConfig>(test_config_value.clone())
+            {
                 if let Ok(mut state) = TEST_SOURCE_STATE.lock() {
                     state.config = test_config;
                     // Reset start time when loading config so oscillations start fresh

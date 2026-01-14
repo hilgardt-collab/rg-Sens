@@ -1,16 +1,22 @@
 //! Background configuration widget
 
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, DropDown, DrawingArea, Entry, Label, Orientation, Scale, SpinButton, Stack, StringList};
+use gtk4::{
+    Box as GtkBox, Button, DrawingArea, DropDown, Entry, Label, Orientation, Scale, SpinButton,
+    Stack, StringList,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
-use crate::ui::background::{BackgroundConfig, BackgroundType, Color, ImageDisplayMode, LinearGradientConfig, RadialGradientConfig, PolygonConfig, IndicatorBackgroundConfig};
+use crate::ui::background::{
+    BackgroundConfig, BackgroundType, Color, ImageDisplayMode, IndicatorBackgroundConfig,
+    LinearGradientConfig, PolygonConfig, RadialGradientConfig,
+};
 use crate::ui::render_utils::render_checkerboard;
-use crate::ui::GradientEditor;
 use crate::ui::theme::{ColorSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::GradientEditor;
 
 /// Background configuration widget
 pub struct BackgroundConfigWidget {
@@ -90,7 +96,8 @@ impl BackgroundConfigWidget {
 
             let cfg = config_clone.borrow();
             let theme = theme_for_preview.borrow();
-            let _ = render_background_with_theme(cr, &cfg, width as f64, height as f64, Some(&theme));
+            let _ =
+                render_background_with_theme(cr, &cfg, width as f64, height as f64, Some(&theme));
         });
 
         container.append(&preview);
@@ -100,15 +107,18 @@ impl BackgroundConfigWidget {
         config_stack.set_vexpand(true);
 
         // Solid color configuration
-        let (solid_page, solid_color_selector) = Self::create_solid_config(&config, &preview, &on_change, &theme_config);
+        let (solid_page, solid_color_selector) =
+            Self::create_solid_config(&config, &preview, &on_change, &theme_config);
         config_stack.add_named(&solid_page, Some("solid"));
 
         // Linear gradient configuration
-        let (linear_page, linear_gradient_editor) = Self::create_linear_gradient_config(&config, &preview, &on_change);
+        let (linear_page, linear_gradient_editor) =
+            Self::create_linear_gradient_config(&config, &preview, &on_change);
         config_stack.add_named(&linear_page, Some("linear_gradient"));
 
         // Radial gradient configuration
-        let (radial_page, radial_gradient_editor) = Self::create_radial_gradient_config(&config, &preview, &on_change);
+        let (radial_page, radial_gradient_editor) =
+            Self::create_radial_gradient_config(&config, &preview, &on_change);
         config_stack.add_named(&radial_page, Some("radial_gradient"));
 
         // Image configuration
@@ -126,8 +136,21 @@ impl BackgroundConfigWidget {
         let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
 
         // Indicator configuration
-        let (indicator_page, indicator_gradient_editor, indicator_field_dropdown, indicator_field_list, indicator_field_entry, indicator_field_dropdown_box, indicator_field_entry_box, indicator_field_dropdown_handler_id) =
-            Self::create_indicator_config(&config, &preview, &on_change, &syncing_indicator_dropdown);
+        let (
+            indicator_page,
+            indicator_gradient_editor,
+            indicator_field_dropdown,
+            indicator_field_list,
+            indicator_field_entry,
+            indicator_field_dropdown_box,
+            indicator_field_entry_box,
+            indicator_field_dropdown_handler_id,
+        ) = Self::create_indicator_config(
+            &config,
+            &preview,
+            &on_change,
+            &syncing_indicator_dropdown,
+        );
         config_stack.add_named(&indicator_page, Some("indicator"));
 
         container.append(&config_stack);
@@ -276,11 +299,12 @@ impl BackgroundConfigWidget {
         let color_box = GtkBox::new(Orientation::Horizontal, 6);
         color_box.append(&Label::new(Some("Color:")));
 
-        let initial_color_source = if let BackgroundType::Solid { color } = &config.borrow().background {
-            color.clone()
-        } else {
-            ColorSource::custom(Color::default())
-        };
+        let initial_color_source =
+            if let BackgroundType::Solid { color } = &config.borrow().background {
+                color.clone()
+            } else {
+                ColorSource::custom(Color::default())
+            };
         let color_selector = Rc::new(ThemeColorSelector::new(initial_color_source));
         color_selector.set_theme_config(theme_config.borrow().clone());
         color_box.append(color_selector.widget());
@@ -290,7 +314,9 @@ impl BackgroundConfigWidget {
         let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         color_selector.set_on_change(move |new_color_source| {
-            config_clone.borrow_mut().background = BackgroundType::Solid { color: new_color_source };
+            config_clone.borrow_mut().background = BackgroundType::Solid {
+                color: new_color_source,
+            };
             preview_clone.queue_draw();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -621,7 +647,11 @@ impl BackgroundConfigWidget {
             };
 
             let mut cfg = config_clone.borrow_mut();
-            if let BackgroundType::Image { display_mode: ref mut dm, .. } = cfg.background {
+            if let BackgroundType::Image {
+                display_mode: ref mut dm,
+                ..
+            } = cfg.background
+            {
                 *dm = display_mode;
                 drop(cfg);
                 preview_clone.queue_draw();
@@ -825,7 +855,16 @@ impl BackgroundConfigWidget {
         preview: &DrawingArea,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         syncing_flag: &Rc<RefCell<bool>>,
-    ) -> (GtkBox, Rc<GradientEditor>, DropDown, StringList, Entry, GtkBox, GtkBox, gtk4::glib::SignalHandlerId) {
+    ) -> (
+        GtkBox,
+        Rc<GradientEditor>,
+        DropDown,
+        StringList,
+        Entry,
+        GtkBox,
+        GtkBox,
+        gtk4::glib::SignalHandlerId,
+    ) {
         use crate::ui::background::IndicatorBackgroundShape;
 
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -837,7 +876,9 @@ impl BackgroundConfigWidget {
         // Shape selection
         let shape_box = GtkBox::new(Orientation::Horizontal, 6);
         shape_box.append(&Label::new(Some("Shape:")));
-        let shape_list = StringList::new(&["Fill", "Circle", "Square", "Triangle", "Pentagon", "Hexagon"]);
+        let shape_list = StringList::new(&[
+            "Fill", "Circle", "Square", "Triangle", "Pentagon", "Hexagon",
+        ]);
         let shape_dropdown = DropDown::new(Some(shape_list), gtk4::Expression::NONE);
         shape_dropdown.set_hexpand(true);
         shape_box.append(&shape_dropdown);
@@ -1095,7 +1136,16 @@ impl BackgroundConfigWidget {
             }
         });
 
-        (page, gradient_editor, field_dropdown, field_list, field_entry, field_dropdown_box, field_entry_box, field_dropdown_handler_id)
+        (
+            page,
+            gradient_editor,
+            field_dropdown,
+            field_list,
+            field_entry,
+            field_dropdown_box,
+            field_entry_box,
+            field_dropdown_handler_id,
+        )
     }
 
     /// Get the container widget
@@ -1135,7 +1185,8 @@ impl BackgroundConfigWidget {
             }
         }
         if let BackgroundType::Indicator(ref ind) = new_config.background {
-            self.indicator_gradient_editor.set_stops(ind.gradient_stops.clone());
+            self.indicator_gradient_editor
+                .set_stops(ind.gradient_stops.clone());
             // Update the field entry with saved value (for combo sources)
             self.indicator_field_entry.set_text(&ind.value_field);
         }
@@ -1143,13 +1194,15 @@ impl BackgroundConfigWidget {
         *self.config.borrow_mut() = new_config;
 
         // Block the signal handler to prevent it from overwriting our config
-        self.type_dropdown.block_signal(&self.type_dropdown_handler_id);
+        self.type_dropdown
+            .block_signal(&self.type_dropdown_handler_id);
 
         // Update the dropdown selection (this won't trigger the handler now)
         self.type_dropdown.set_selected(type_index);
 
         // Unblock the signal handler
-        self.type_dropdown.unblock_signal(&self.type_dropdown_handler_id);
+        self.type_dropdown
+            .unblock_signal(&self.type_dropdown_handler_id);
 
         // Update the visible stack page to match the background type
         let page_name = match type_index {
@@ -1217,8 +1270,14 @@ impl BackgroundConfigWidget {
         for field in &fields {
             // Only show fields that can provide numerical values for the indicator
             // Filter by FieldType (Numerical or Percentage) and FieldPurpose (Value or SecondaryValue)
-            let is_numerical = matches!(field.field_type, FieldType::Numerical | FieldType::Percentage);
-            let is_value_field = matches!(field.purpose, FieldPurpose::Value | FieldPurpose::SecondaryValue);
+            let is_numerical = matches!(
+                field.field_type,
+                FieldType::Numerical | FieldType::Percentage
+            );
+            let is_value_field = matches!(
+                field.purpose,
+                FieldPurpose::Value | FieldPurpose::SecondaryValue
+            );
 
             if is_numerical && is_value_field {
                 self.indicator_field_list.append(&field.id);
@@ -1272,7 +1331,8 @@ impl BackgroundConfigWidget {
         // Update gradient editors
         self.linear_gradient_editor.set_theme_config(theme.clone());
         self.radial_gradient_editor.set_theme_config(theme.clone());
-        self.indicator_gradient_editor.set_theme_config(theme.clone());
+        self.indicator_gradient_editor
+            .set_theme_config(theme.clone());
 
         // Update polygon color selectors
         self.polygon_color1_selector.set_theme_config(theme.clone());

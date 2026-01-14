@@ -5,16 +5,16 @@
 //! 2. Update each shared source ONCE (regardless of how many panels use it)
 //! 3. Update each panel's displayer with the cached values from its shared source
 
-use super::Panel;
 use super::panel_data::SourceConfig;
 use super::shared_source_manager::global_shared_source_manager;
+use super::Panel;
 use anyhow::Result;
-use log::{error, trace, info, debug};
+use log::{debug, error, info, trace};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::RwLock;
 use tokio::time::Instant;
 
 /// Minimum interval between config hash checks (1 second)
@@ -144,8 +144,8 @@ struct SharedSourceUpdateState {
 /// when config is saved and don't need to be detected by the update manager.
 /// This avoids expensive serde serialization every 500ms.
 fn compute_config_hash_from_data(source_config: &SourceConfig) -> u64 {
-    use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
 
@@ -162,8 +162,8 @@ fn compute_config_hash_from_data(source_config: &SourceConfig) -> u64 {
 /// Avoids full JSON serialization. Iterates through actual config keys instead of
 /// searching for each possible key.
 fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
-    use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
 
@@ -186,7 +186,10 @@ fn compute_config_hash(config: &HashMap<String, serde_json::Value>) -> u64 {
 /// Optimized to directly extract `update_interval_ms` field from JSON without
 /// deserializing the entire config struct. Iterates through actual config keys
 /// instead of searching for each possible key.
-fn extract_update_interval(config: &HashMap<String, serde_json::Value>, _panel_id: &str) -> Duration {
+fn extract_update_interval(
+    config: &HashMap<String, serde_json::Value>,
+    _panel_id: &str,
+) -> Duration {
     // Iterate through actual keys in config (typically just 1-2 keys)
     for (key, config_value) in config.iter() {
         if key.ends_with("_config") {
@@ -242,7 +245,8 @@ impl UpdateManager {
 
     /// Signal the update manager to stop
     pub fn stop(&self) {
-        self.should_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.should_stop
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Check if the update manager has been signaled to stop
@@ -262,7 +266,10 @@ impl UpdateManager {
     /// Queue a panel to be removed by ID (can be called from sync code)
     pub fn queue_remove_panel(&self, panel_id: String) {
         // Use try_send for non-blocking send from sync code
-        if let Err(e) = self.sender.try_send(UpdateManagerMessage::RemovePanel(panel_id)) {
+        if let Err(e) = self
+            .sender
+            .try_send(UpdateManagerMessage::RemovePanel(panel_id))
+        {
             error!("Failed to queue panel for removal: {}", e);
         }
     }
@@ -293,7 +300,12 @@ impl UpdateManager {
             if let Some(ref data) = panel_guard.data {
                 let hash = compute_config_hash_from_data(&data.source_config);
                 let interval = Duration::from_millis(data.source_config.update_interval_ms());
-                (panel_guard.id.clone(), hash, interval, panel_guard.source_key.clone())
+                (
+                    panel_guard.id.clone(),
+                    hash,
+                    interval,
+                    panel_guard.source_key.clone(),
+                )
             } else {
                 // Fall back to legacy HashMap config
                 let hash = compute_config_hash(&panel_guard.config);
@@ -319,7 +331,10 @@ impl UpdateManager {
                         circuit_breaker: CircuitBreaker::new(),
                     },
                 );
-                debug!("Registered shared source {} with interval {:?}", key, interval);
+                debug!(
+                    "Registered shared source {} with interval {:?}",
+                    key, interval
+                );
             }
         }
 
@@ -389,7 +404,8 @@ impl UpdateManager {
         let mut panels = self.panels.write().await;
         let panel_count = panels.len();
         // Use Arc<str> for tasks to avoid cloning String for each task spawn
-        let mut tasks: Vec<(Arc<str>, tokio::task::JoinHandle<()>)> = Vec::with_capacity(panel_count);
+        let mut tasks: Vec<(Arc<str>, tokio::task::JoinHandle<()>)> =
+            Vec::with_capacity(panel_count);
         // Use HashMap for O(1) lookup instead of Vec with O(n) linear search
         let mut config_updates: HashMap<String, (u64, Duration, Option<String>)> = HashMap::new();
 
@@ -399,12 +415,14 @@ impl UpdateManager {
 
         for (panel_id, state) in panels.iter() {
             // Only check config hash if enough time has elapsed (throttle to avoid CPU waste)
-            let should_check_config = now.duration_since(state.last_config_check) >= CONFIG_CHECK_INTERVAL;
+            let should_check_config =
+                now.duration_since(state.last_config_check) >= CONFIG_CHECK_INTERVAL;
 
             // Create Arc<str> lazily when first needed (avoids allocation if not needed)
             let mut panel_id_arc: Option<Arc<str>> = None;
             let get_arc = |arc: &mut Option<Arc<str>>| -> Arc<str> {
-                arc.get_or_insert_with(|| Arc::from(panel_id.as_str())).clone()
+                arc.get_or_insert_with(|| Arc::from(panel_id.as_str()))
+                    .clone()
             };
 
             let (current_hash, new_interval, new_source_key) = if should_check_config {
@@ -412,7 +430,8 @@ impl UpdateManager {
                 if let Ok(panel_guard) = state.panel.try_read() {
                     if let Some(ref data) = panel_guard.data {
                         let hash = compute_config_hash_from_data(&data.source_config);
-                        let interval = Duration::from_millis(data.source_config.update_interval_ms());
+                        let interval =
+                            Duration::from_millis(data.source_config.update_interval_ms());
                         (hash, Some(interval), panel_guard.source_key.clone())
                     } else {
                         // Legacy config - still need to track source_key for shared source updates
@@ -438,9 +457,15 @@ impl UpdateManager {
                         state.cached_interval
                     }
                 });
-                config_updates.insert(panel_id.clone(), (current_hash, interval, new_source_key.clone()));
+                config_updates.insert(
+                    panel_id.clone(),
+                    (current_hash, interval, new_source_key.clone()),
+                );
                 if source_key_changed {
-                    debug!("Panel {} source_key changed from {:?} to {:?}", panel_id, state.source_key, new_source_key);
+                    debug!(
+                        "Panel {} source_key changed from {:?} to {:?}",
+                        panel_id, state.source_key, new_source_key
+                    );
                 }
             }
 
@@ -513,7 +538,10 @@ impl UpdateManager {
                                     circuit_breaker: CircuitBreaker::new(),
                                 },
                             );
-                            debug!("Registered new shared source {} for panel {} with interval {:?}", new_key, panel_id, interval);
+                            debug!(
+                                "Registered new shared source {} for panel {} with interval {:?}",
+                                new_key, panel_id, interval
+                            );
                         }
                     }
                 }
@@ -521,7 +549,10 @@ impl UpdateManager {
                 state.config_hash = new_hash;
                 state.cached_interval = new_interval;
                 state.source_key = new_source_key;
-                info!("Updated cached interval for panel {}: {:?}", panel_id, state.cached_interval);
+                info!(
+                    "Updated cached interval for panel {}: {:?}",
+                    panel_id, state.cached_interval
+                );
             }
         }
 
@@ -538,10 +569,15 @@ impl UpdateManager {
         if !old_source_keys.is_empty() {
             let mut shared_sources = self.shared_sources.write().await;
             for old_key in old_source_keys {
-                let is_still_active = panels.values().any(|s| s.source_key.as_ref() == Some(&old_key));
+                let is_still_active = panels
+                    .values()
+                    .any(|s| s.source_key.as_ref() == Some(&old_key));
                 if !is_still_active {
                     shared_sources.remove(&old_key);
-                    debug!("Removed unused shared source {} from update manager", old_key);
+                    debug!(
+                        "Removed unused shared source {} from update manager",
+                        old_key
+                    );
                 }
             }
         }

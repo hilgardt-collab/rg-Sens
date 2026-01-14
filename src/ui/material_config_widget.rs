@@ -5,24 +5,27 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList, ScrolledWindow,
+    Scale, ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::shared_font_dialog::show_font_dialog;
-use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::material_display::{
-    render_material_frame, CardElevation, HeaderStyle, HeaderAlignment, DividerStyle, ThemeVariant,
-};
-use crate::ui::lcars_display::SplitOrientation;
-use crate::displayers::MaterialDisplayConfig;
 use crate::core::FieldMetadata;
+use crate::displayers::MaterialDisplayConfig;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::combo_config_base;
+use crate::ui::lcars_display::SplitOrientation;
+use crate::ui::material_display::{
+    render_material_frame, CardElevation, DividerStyle, HeaderAlignment, HeaderStyle, ThemeVariant,
+};
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::{ColorSource, ComboThemeConfig};
-use crate::ui::theme_font_selector::ThemeFontSelector;
 use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, ConfigWidgetBuilderColorExt, ConfigWidgetBuilderThemeSelectorExt, create_section_header};
+use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::widget_builder::{
+    create_section_header, ConfigWidgetBuilder, ConfigWidgetBuilderColorExt,
+    ConfigWidgetBuilderThemeSelectorExt,
+};
 
 /// Holds references to Theme tab widgets (combo theme colors, fonts, gradient, and appearance)
 #[allow(dead_code)]
@@ -106,14 +109,17 @@ impl MaterialConfigWidget {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(MaterialDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let card_widgets: Rc<RefCell<Option<CardWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -134,18 +140,26 @@ impl MaterialConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme (combo theme colors, fonts, gradient, appearance) - first for visibility
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Card
@@ -153,16 +167,36 @@ impl MaterialConfigWidget {
         notebook.append_page(&card_page, Some(&Label::new(Some("Card"))));
 
         // Tab 3: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
+        let header_page = Self::create_header_page(
+            &config,
+            &on_change,
+            &preview,
+            &header_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
         // Tab 4: Layout
-        let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets, &theme_ref_refreshers);
+        let layout_page = Self::create_layout_page(
+            &config,
+            &on_change,
+            &preview,
+            &layout_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
         // Tab 5: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &available_fields,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 6: Animation
@@ -240,7 +274,9 @@ impl MaterialConfigWidget {
         variant_box.append(&variant_row);
 
         // Info about default colors
-        let variant_info = Label::new(Some("Changing the variant will reset theme colors to defaults."));
+        let variant_info = Label::new(Some(
+            "Changing the variant will reset theme colors to defaults.",
+        ));
         variant_info.set_halign(gtk4::Align::Start);
         variant_info.add_css_class("dim-label");
         variant_box.append(&variant_info);
@@ -407,7 +443,8 @@ impl MaterialConfigWidget {
                 let btn_c = font1_btn_clone.clone();
                 let refreshers_c = refreshers_for_font1.clone();
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                    let family = font_desc.family()
+                    let family = font_desc
+                        .family()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "Roboto".to_string());
                     config_c.borrow_mut().frame.theme.font1_family = family.clone();
@@ -454,7 +491,8 @@ impl MaterialConfigWidget {
                 let btn_c = font2_btn_clone.clone();
                 let refreshers_c = refreshers_for_font2.clone();
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                    let family = font_desc.family()
+                    let family = font_desc
+                        .family()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "Roboto".to_string());
                     config_c.borrow_mut().frame.theme.font2_family = family.clone();
@@ -561,7 +599,9 @@ impl MaterialConfigWidget {
 
         let surface_light_row = GtkBox::new(Orientation::Horizontal, 8);
         surface_light_row.append(&Label::new(Some("Light Theme:")));
-        let surface_light_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.surface_color_light));
+        let surface_light_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.surface_color_light,
+        ));
         surface_light_row.append(surface_light_widget.widget());
         surface_light_widget.widget().set_hexpand(true);
 
@@ -576,7 +616,9 @@ impl MaterialConfigWidget {
 
         let surface_dark_row = GtkBox::new(Orientation::Horizontal, 8);
         surface_dark_row.append(&Label::new(Some("Dark Theme:")));
-        let surface_dark_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.surface_color_dark));
+        let surface_dark_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.surface_color_dark,
+        ));
         surface_dark_row.append(surface_dark_widget.widget());
         surface_dark_widget.widget().set_hexpand(true);
 
@@ -602,7 +644,9 @@ impl MaterialConfigWidget {
 
         let bg_light_row = GtkBox::new(Orientation::Horizontal, 8);
         bg_light_row.append(&Label::new(Some("Light Theme:")));
-        let bg_light_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color_light));
+        let bg_light_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.background_color_light,
+        ));
         bg_light_row.append(bg_light_widget.widget());
         bg_light_widget.widget().set_hexpand(true);
 
@@ -617,7 +661,9 @@ impl MaterialConfigWidget {
 
         let bg_dark_row = GtkBox::new(Orientation::Horizontal, 8);
         bg_dark_row.append(&Label::new(Some("Dark Theme:")));
-        let bg_dark_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color_dark));
+        let bg_dark_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.background_color_dark,
+        ));
         bg_dark_row.append(bg_dark_widget.widget());
         bg_dark_widget.widget().set_hexpand(true);
 
@@ -651,10 +697,22 @@ impl MaterialConfigWidget {
             }
             // Set theme variant and default colors
             let (variant, theme) = match selected {
-                0 => (ThemeVariant::Light, ComboThemeConfig::default_for_material_light()),
-                1 => (ThemeVariant::Dark, ComboThemeConfig::default_for_material_dark()),
-                2 => (ThemeVariant::Teal, ComboThemeConfig::default_for_material_teal()),
-                _ => (ThemeVariant::Purple, ComboThemeConfig::default_for_material_purple()),
+                0 => (
+                    ThemeVariant::Light,
+                    ComboThemeConfig::default_for_material_light(),
+                ),
+                1 => (
+                    ThemeVariant::Dark,
+                    ComboThemeConfig::default_for_material_dark(),
+                ),
+                2 => (
+                    ThemeVariant::Teal,
+                    ComboThemeConfig::default_for_material_teal(),
+                ),
+                _ => (
+                    ThemeVariant::Purple,
+                    ComboThemeConfig::default_for_material_purple(),
+                ),
             };
             {
                 let mut cfg = config_for_variant.borrow_mut();
@@ -744,14 +802,22 @@ impl MaterialConfigWidget {
 
         // Corner radius
         let corner_radius_spin = builder.spin_row(
-            &page, "Corner Radius:", 0.0, 32.0, 2.0,
+            &page,
+            "Corner Radius:",
+            0.0,
+            32.0,
+            2.0,
             config.borrow().frame.corner_radius,
             |cfg, val| cfg.frame.corner_radius = val,
         );
 
         // Card padding
         let card_padding_spin = builder.spin_row(
-            &page, "Card Padding:", 4.0, 48.0, 2.0,
+            &page,
+            "Card Padding:",
+            4.0,
+            48.0,
+            2.0,
             config.borrow().frame.card_padding,
             |cfg, val| cfg.frame.card_padding = val,
         );
@@ -763,21 +829,30 @@ impl MaterialConfigWidget {
 
         // Shadow blur
         let shadow_blur_spin = builder.spin_row(
-            &page, "Shadow Blur:", 0.0, 32.0, 2.0,
+            &page,
+            "Shadow Blur:",
+            0.0,
+            32.0,
+            2.0,
             config.borrow().frame.shadow_blur,
             |cfg, val| cfg.frame.shadow_blur = val,
         );
 
         // Shadow offset
         let shadow_offset_spin = builder.spin_row(
-            &page, "Shadow Offset Y:", 0.0, 16.0, 1.0,
+            &page,
+            "Shadow Offset Y:",
+            0.0,
+            16.0,
+            1.0,
             config.borrow().frame.shadow_offset_y,
             |cfg, val| cfg.frame.shadow_offset_y = val,
         );
 
         // Shadow color
         let shadow_color_widget = builder.color_row(
-            &page, "Shadow Color:",
+            &page,
+            "Shadow Color:",
             config.borrow().frame.shadow_color,
             |cfg, color| cfg.frame.shadow_color = color,
         );
@@ -809,14 +884,16 @@ impl MaterialConfigWidget {
 
         // Show header checkbox
         let show_header_check = builder.check_button(
-            &page, "Show Header",
+            &page,
+            "Show Header",
             config.borrow().frame.show_header,
             |cfg, active| cfg.frame.show_header = active,
         );
 
         // Header text entry
         let header_text_entry = builder.entry_row(
-            &page, "Header Text:",
+            &page,
+            "Header Text:",
             &config.borrow().frame.header_text,
             |cfg, text| cfg.frame.header_text = text,
         );
@@ -829,7 +906,8 @@ impl MaterialConfigWidget {
             HeaderStyle::None => 3,
         };
         let header_style_dropdown = builder.dropdown_row(
-            &page, "Style:",
+            &page,
+            "Style:",
             &["Color Bar", "Filled", "Text Only", "None"],
             style_idx,
             |cfg, idx| {
@@ -849,7 +927,8 @@ impl MaterialConfigWidget {
             HeaderAlignment::Right => 2,
         };
         let header_alignment_dropdown = builder.dropdown_row(
-            &page, "Alignment:",
+            &page,
+            "Alignment:",
             &["Left", "Center", "Right"],
             align_idx,
             |cfg, idx| {
@@ -863,7 +942,8 @@ impl MaterialConfigWidget {
 
         // Header color (theme-aware)
         let header_color_selector = builder.theme_color_selector_row(
-            &page, "Header Color:",
+            &page,
+            "Header Color:",
             config.borrow().frame.accent_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.accent_color = source,
@@ -873,19 +953,25 @@ impl MaterialConfigWidget {
         let header_color_for_refresh = header_color_selector.clone();
         let config_for_color_refresh = config.clone();
         theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
-            header_color_for_refresh.set_theme_config(config_for_color_refresh.borrow().frame.theme.clone());
+            header_color_for_refresh
+                .set_theme_config(config_for_color_refresh.borrow().frame.theme.clone());
         }));
 
         // Header height
         let header_height_spin = builder.spin_row(
-            &page, "Header Height:", 24.0, 72.0, 4.0,
+            &page,
+            "Header Height:",
+            24.0,
+            72.0,
+            4.0,
             config.borrow().frame.header_height,
             |cfg, val| cfg.frame.header_height = val,
         );
 
         // Header font selector (theme-aware)
         let header_font_selector = builder.theme_font_selector_row(
-            &page, "Header Font:",
+            &page,
+            "Header Font:",
             config.borrow().frame.header_font.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.header_font = source,
@@ -930,7 +1016,8 @@ impl MaterialConfigWidget {
             SplitOrientation::Horizontal => 1,
         };
         let orientation_dropdown = builder.dropdown_row(
-            &page, "Split Direction:",
+            &page,
+            "Split Direction:",
             &["Vertical", "Horizontal"],
             orient_idx,
             |cfg, idx| {
@@ -943,14 +1030,22 @@ impl MaterialConfigWidget {
 
         // Content padding
         let content_padding_spin = builder.spin_row(
-            &page, "Content Padding:", 8.0, 48.0, 4.0,
+            &page,
+            "Content Padding:",
+            8.0,
+            48.0,
+            4.0,
             config.borrow().frame.content_padding,
             |cfg, val| cfg.frame.content_padding = val,
         );
 
         // Item spacing
         let item_spacing_spin = builder.spin_row(
-            &page, "Item Spacing:", 4.0, 32.0, 2.0,
+            &page,
+            "Item Spacing:",
+            4.0,
+            32.0,
+            2.0,
             config.borrow().frame.item_spacing,
             |cfg, val| cfg.frame.item_spacing = val,
         );
@@ -967,7 +1062,8 @@ impl MaterialConfigWidget {
             DividerStyle::Fade => 2,
         };
         let divider_style_dropdown = builder.dropdown_row(
-            &page, "Style:",
+            &page,
+            "Style:",
             &["Space", "Line", "Fade"],
             div_style_idx,
             |cfg, idx| {
@@ -981,14 +1077,19 @@ impl MaterialConfigWidget {
 
         // Divider spacing
         let divider_spacing_spin = builder.spin_row(
-            &page, "Spacing:", 8.0, 48.0, 4.0,
+            &page,
+            "Spacing:",
+            8.0,
+            48.0,
+            4.0,
             config.borrow().frame.divider_spacing,
             |cfg, val| cfg.frame.divider_spacing = val,
         );
 
         // Divider color (theme-aware)
         let divider_color_widget = builder.theme_color_selector_row(
-            &page, "Color:",
+            &page,
+            "Color:",
             config.borrow().frame.divider_color.clone(),
             config.borrow().frame.theme.clone(),
             |cfg, source| cfg.frame.divider_color = source,
@@ -998,7 +1099,8 @@ impl MaterialConfigWidget {
         let divider_color_for_refresh = divider_color_widget.clone();
         let config_for_refresh = config.clone();
         theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
-            divider_color_for_refresh.set_theme_config(config_for_refresh.borrow().frame.theme.clone());
+            divider_color_for_refresh
+                .set_theme_config(config_for_refresh.borrow().frame.theme.clone());
         }));
 
         // Combined group settings section (weight + orientation per group)
@@ -1052,7 +1154,15 @@ impl MaterialConfigWidget {
         page.append(&scrolled);
 
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_tabs(
+            config,
+            on_change,
+            preview,
+            content_notebook,
+            source_summaries,
+            available_fields,
+            theme_ref_refreshers,
+        );
 
         page
     }
@@ -1085,8 +1195,11 @@ impl MaterialConfigWidget {
     /// Default bar config with Material Design colors
     #[allow(dead_code, clippy::field_reassign_with_default)]
     fn default_bar_config_material() -> crate::ui::BarDisplayConfig {
-        use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
         use crate::ui::background::Color;
+        use crate::ui::bar_display::{
+            BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
+            BarStyle, BorderConfig,
+        };
 
         let mut config = BarDisplayConfig::default();
         config.style = BarStyle::Full;
@@ -1095,14 +1208,29 @@ impl MaterialConfigWidget {
 
         // Material Blue 500
         config.foreground = BarFillType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 1.0 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.24,
+                g: 0.47,
+                b: 0.96,
+                a: 1.0,
+            }),
         };
         config.background = BarBackgroundType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.9,
+                g: 0.9,
+                b: 0.9,
+                a: 1.0,
+            }),
         };
         config.border = BorderConfig {
             enabled: false,
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 }),
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.8,
+                g: 0.8,
+                b: 0.8,
+                a: 1.0,
+            }),
             width: 1.0,
         };
         config.corner_radius = 4.0;
@@ -1113,23 +1241,58 @@ impl MaterialConfigWidget {
     /// Default graph config with Material Design colors
     #[allow(dead_code, clippy::field_reassign_with_default)]
     fn default_graph_config_material() -> crate::ui::GraphDisplayConfig {
-        use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
         use crate::ui::background::Color;
+        use crate::ui::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 
         let mut config = GraphDisplayConfig::default();
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 2.0;
-        config.line_color = ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 1.0 });  // Material Blue
+        config.line_color = ColorSource::custom(Color {
+            r: 0.24,
+            g: 0.47,
+            b: 0.96,
+            a: 1.0,
+        }); // Material Blue
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 0.3 });
-        config.fill_gradient_end = ColorSource::custom(Color { r: 0.24, g: 0.47, b: 0.96, a: 0.0 });
-        config.background_color = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
-        config.plot_background_color = Color { r: 0.98, g: 0.98, b: 0.98, a: 1.0 };
+        config.fill_gradient_start = ColorSource::custom(Color {
+            r: 0.24,
+            g: 0.47,
+            b: 0.96,
+            a: 0.3,
+        });
+        config.fill_gradient_end = ColorSource::custom(Color {
+            r: 0.24,
+            g: 0.47,
+            b: 0.96,
+            a: 0.0,
+        });
+        config.background_color = Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        };
+        config.plot_background_color = Color {
+            r: 0.98,
+            g: 0.98,
+            b: 0.98,
+            a: 1.0,
+        };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 });
+        config.x_axis.grid_color = ColorSource::custom(Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        });
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 });
+        config.y_axis.grid_color = ColorSource::custom(Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        });
 
         config
     }
@@ -1225,83 +1388,155 @@ impl MaterialConfigWidget {
         // Update Theme widgets (theme variant, combo theme, surface/background colors)
         if let Some(widgets) = self.theme_widgets.borrow().as_ref() {
             // Theme variant dropdown
-            widgets.theme_variant_dropdown.set_selected(match config.frame.theme_variant {
-                ThemeVariant::Light => 0,
-                ThemeVariant::Dark => 1,
-                ThemeVariant::Teal => 2,
-                ThemeVariant::Purple => 3,
-            });
+            widgets
+                .theme_variant_dropdown
+                .set_selected(match config.frame.theme_variant {
+                    ThemeVariant::Light => 0,
+                    ThemeVariant::Dark => 1,
+                    ThemeVariant::Teal => 2,
+                    ThemeVariant::Purple => 3,
+                });
             // Theme colors
-            widgets.theme_color1_widget.set_color(config.frame.theme.color1);
-            widgets.theme_color2_widget.set_color(config.frame.theme.color2);
-            widgets.theme_color3_widget.set_color(config.frame.theme.color3);
-            widgets.theme_color4_widget.set_color(config.frame.theme.color4);
-            widgets.theme_gradient_editor.set_theme_config(config.frame.theme.clone());
-            widgets.theme_gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
-            widgets.font1_btn.set_label(&config.frame.theme.font1_family);
-            widgets.font1_size_spin.set_value(config.frame.theme.font1_size);
-            widgets.font2_btn.set_label(&config.frame.theme.font2_family);
-            widgets.font2_size_spin.set_value(config.frame.theme.font2_size);
+            widgets
+                .theme_color1_widget
+                .set_color(config.frame.theme.color1);
+            widgets
+                .theme_color2_widget
+                .set_color(config.frame.theme.color2);
+            widgets
+                .theme_color3_widget
+                .set_color(config.frame.theme.color3);
+            widgets
+                .theme_color4_widget
+                .set_color(config.frame.theme.color4);
+            widgets
+                .theme_gradient_editor
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .theme_gradient_editor
+                .set_gradient_source_config(&config.frame.theme.gradient);
+            widgets
+                .font1_btn
+                .set_label(&config.frame.theme.font1_family);
+            widgets
+                .font1_size_spin
+                .set_value(config.frame.theme.font1_size);
+            widgets
+                .font2_btn
+                .set_label(&config.frame.theme.font2_family);
+            widgets
+                .font2_size_spin
+                .set_value(config.frame.theme.font2_size);
             // Surface and background colors
-            widgets.surface_light_widget.set_color(config.frame.surface_color_light);
-            widgets.surface_dark_widget.set_color(config.frame.surface_color_dark);
-            widgets.bg_light_widget.set_color(config.frame.background_color_light);
-            widgets.bg_dark_widget.set_color(config.frame.background_color_dark);
+            widgets
+                .surface_light_widget
+                .set_color(config.frame.surface_color_light);
+            widgets
+                .surface_dark_widget
+                .set_color(config.frame.surface_color_dark);
+            widgets
+                .bg_light_widget
+                .set_color(config.frame.background_color_light);
+            widgets
+                .bg_dark_widget
+                .set_color(config.frame.background_color_dark);
         }
 
         // Update Card widgets
         if let Some(widgets) = self.card_widgets.borrow().as_ref() {
-            widgets.elevation_dropdown.set_selected(match config.frame.elevation {
-                CardElevation::Flat => 0,
-                CardElevation::Low => 1,
-                CardElevation::Medium => 2,
-                CardElevation::High => 3,
-            });
-            widgets.corner_radius_spin.set_value(config.frame.corner_radius);
-            widgets.card_padding_spin.set_value(config.frame.card_padding);
+            widgets
+                .elevation_dropdown
+                .set_selected(match config.frame.elevation {
+                    CardElevation::Flat => 0,
+                    CardElevation::Low => 1,
+                    CardElevation::Medium => 2,
+                    CardElevation::High => 3,
+                });
+            widgets
+                .corner_radius_spin
+                .set_value(config.frame.corner_radius);
+            widgets
+                .card_padding_spin
+                .set_value(config.frame.card_padding);
             widgets.shadow_blur_spin.set_value(config.frame.shadow_blur);
-            widgets.shadow_offset_spin.set_value(config.frame.shadow_offset_y);
-            widgets.shadow_color_widget.set_color(config.frame.shadow_color);
+            widgets
+                .shadow_offset_spin
+                .set_value(config.frame.shadow_offset_y);
+            widgets
+                .shadow_color_widget
+                .set_color(config.frame.shadow_color);
         }
 
         // Update Header widgets
         if let Some(widgets) = self.header_widgets.borrow().as_ref() {
-            widgets.show_header_check.set_active(config.frame.show_header);
-            widgets.header_text_entry.set_text(&config.frame.header_text);
-            widgets.header_style_dropdown.set_selected(match config.frame.header_style {
-                HeaderStyle::ColorBar => 0,
-                HeaderStyle::Filled => 1,
-                HeaderStyle::TextOnly => 2,
-                HeaderStyle::None => 3,
-            });
-            widgets.header_alignment_dropdown.set_selected(match config.frame.header_alignment {
-                HeaderAlignment::Left => 0,
-                HeaderAlignment::Center => 1,
-                HeaderAlignment::Right => 2,
-            });
-            widgets.header_color_selector.set_theme_config(config.frame.theme.clone());
-            widgets.header_color_selector.set_source(config.frame.accent_color.clone());
-            widgets.header_height_spin.set_value(config.frame.header_height);
-            widgets.header_font_selector.set_theme_config(config.frame.theme.clone());
-            widgets.header_font_selector.set_source(config.frame.header_font.clone());
+            widgets
+                .show_header_check
+                .set_active(config.frame.show_header);
+            widgets
+                .header_text_entry
+                .set_text(&config.frame.header_text);
+            widgets
+                .header_style_dropdown
+                .set_selected(match config.frame.header_style {
+                    HeaderStyle::ColorBar => 0,
+                    HeaderStyle::Filled => 1,
+                    HeaderStyle::TextOnly => 2,
+                    HeaderStyle::None => 3,
+                });
+            widgets
+                .header_alignment_dropdown
+                .set_selected(match config.frame.header_alignment {
+                    HeaderAlignment::Left => 0,
+                    HeaderAlignment::Center => 1,
+                    HeaderAlignment::Right => 2,
+                });
+            widgets
+                .header_color_selector
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .header_color_selector
+                .set_source(config.frame.accent_color.clone());
+            widgets
+                .header_height_spin
+                .set_value(config.frame.header_height);
+            widgets
+                .header_font_selector
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .header_font_selector
+                .set_source(config.frame.header_font.clone());
         }
 
         // Update Layout widgets
         if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            widgets.orientation_dropdown.set_selected(match config.frame.split_orientation {
-                SplitOrientation::Vertical => 0,
-                SplitOrientation::Horizontal => 1,
-            });
-            widgets.content_padding_spin.set_value(config.frame.content_padding);
-            widgets.item_spacing_spin.set_value(config.frame.item_spacing);
-            widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
-                DividerStyle::Space => 0,
-                DividerStyle::Line => 1,
-                DividerStyle::Fade => 2,
-            });
-            widgets.divider_spacing_spin.set_value(config.frame.divider_spacing);
-            widgets.divider_color_widget.set_theme_config(config.frame.theme.clone());
-            widgets.divider_color_widget.set_source(config.frame.divider_color.clone());
+            widgets
+                .orientation_dropdown
+                .set_selected(match config.frame.split_orientation {
+                    SplitOrientation::Vertical => 0,
+                    SplitOrientation::Horizontal => 1,
+                });
+            widgets
+                .content_padding_spin
+                .set_value(config.frame.content_padding);
+            widgets
+                .item_spacing_spin
+                .set_value(config.frame.item_spacing);
+            widgets
+                .divider_style_dropdown
+                .set_selected(match config.frame.divider_style {
+                    DividerStyle::Space => 0,
+                    DividerStyle::Line => 1,
+                    DividerStyle::Fade => 2,
+                });
+            widgets
+                .divider_spacing_spin
+                .set_value(config.frame.divider_spacing);
+            widgets
+                .divider_color_widget
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .divider_color_widget
+                .set_source(config.frame.divider_color.clone());
 
             combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,
@@ -1340,7 +1575,8 @@ impl MaterialConfigWidget {
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1350,7 +1586,8 @@ impl MaterialConfigWidget {
 
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<usize> = group_nums.iter()
+        let group_counts: Vec<usize> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
             .collect();
 
@@ -1405,7 +1642,12 @@ impl MaterialConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -1418,11 +1660,18 @@ impl MaterialConfigWidget {
     }
 
     /// Apply transferable configuration from another combo panel.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;

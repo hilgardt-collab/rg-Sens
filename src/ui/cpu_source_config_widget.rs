@@ -2,7 +2,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton, StringList,
+    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
+    StringList,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -27,8 +28,7 @@ pub enum TemperatureUnit {
 }
 
 /// Frequency units
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum FrequencyUnit {
     #[default]
     MHz,
@@ -70,7 +70,6 @@ fn default_update_interval() -> u64 {
 fn default_auto_detect_limits() -> bool {
     false
 }
-
 
 impl Default for CpuSourceConfig {
     fn default() -> Self {
@@ -284,7 +283,7 @@ impl CpuSourceConfigWidget {
                         2 => "K",
                         _ => "°C",
                     }
-                },
+                }
                 CpuField::Usage => "%",
                 CpuField::Frequency => {
                     let freq_unit = freq_combo_clone.selected();
@@ -293,7 +292,7 @@ impl CpuSourceConfigWidget {
                         1 => "GHz",
                         _ => "MHz",
                     }
-                },
+                }
             };
             min_unit_label_clone.set_text(unit_text);
             max_unit_label_clone.set_text(unit_text);
@@ -302,11 +301,8 @@ impl CpuSourceConfigWidget {
         let config_clone = config.clone();
         caption_entry.connect_changed(move |entry| {
             let text = entry.text().to_string();
-            config_clone.borrow_mut().custom_caption = if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            };
+            config_clone.borrow_mut().custom_caption =
+                if text.is_empty() { None } else { Some(text) };
         });
 
         let config_clone = config.clone();
@@ -527,12 +523,15 @@ impl CpuSourceConfigWidget {
         }
 
         // Set update interval
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
 
         // Set auto-detect checkbox and limits
         self.auto_detect_check.set_active(config.auto_detect_limits);
-        self.min_limit_spin.set_sensitive(!config.auto_detect_limits);
-        self.max_limit_spin.set_sensitive(!config.auto_detect_limits);
+        self.min_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
+        self.max_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
 
         if let Some(min) = config.min_limit {
             self.min_limit_spin.set_value(min);
@@ -567,7 +566,8 @@ impl CpuSourceConfigWidget {
             sensors.iter().map(|s| s.label.clone()).collect()
         };
 
-        let sensor_list = StringList::new(&sensor_names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        let sensor_list =
+            StringList::new(&sensor_names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         self.sensor_combo.set_model(Some(&sensor_list));
 
         // Set to first sensor by default

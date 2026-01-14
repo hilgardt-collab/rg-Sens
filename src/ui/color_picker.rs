@@ -1,8 +1,8 @@
 //! Color picker dialog with alpha channel support
 
-use gtk4::Window;
 use crate::ui::background::Color;
 use crate::ui::custom_color_picker::CustomColorPicker;
+use gtk4::Window;
 
 /// Color picker dialog
 pub struct ColorPickerDialog;

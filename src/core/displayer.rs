@@ -124,13 +124,16 @@ impl PanelTransform {
     /// Extract transform from data values
     pub fn from_values(values: &HashMap<String, Value>) -> Self {
         Self {
-            scale: values.get("_panel_scale")
+            scale: values
+                .get("_panel_scale")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0),
-            translate_x: values.get("_panel_translate_x")
+            translate_x: values
+                .get("_panel_translate_x")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0),
-            translate_y: values.get("_panel_translate_y")
+            translate_y: values
+                .get("_panel_translate_y")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0),
         }
@@ -144,8 +147,16 @@ impl PanelTransform {
         cr.save().ok();
 
         // Validate translation values - skip if NaN or infinite
-        let translate_x = if self.translate_x.is_finite() { self.translate_x } else { 0.0 };
-        let translate_y = if self.translate_y.is_finite() { self.translate_y } else { 0.0 };
+        let translate_x = if self.translate_x.is_finite() {
+            self.translate_x
+        } else {
+            0.0
+        };
+        let translate_y = if self.translate_y.is_finite() {
+            self.translate_y
+        } else {
+            0.0
+        };
 
         // Apply translation first
         cr.translate(translate_x, translate_y);

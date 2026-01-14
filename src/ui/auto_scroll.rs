@@ -81,29 +81,43 @@ fn schedule_auto_scroll(
 
         // Calculate effective scroll bounds and container size
         // When whole_pages is enabled, align to complete page boundaries
-        let (max_h_scroll, max_v_scroll, container_width, container_height) = if whole_pages && viewport_width > 0.0 && viewport_height > 0.0 {
-            // Calculate number of complete pages needed to cover content
-            let h_pages = (content_width / viewport_width).ceil() as i32;
-            let v_pages = (content_height / viewport_height).ceil() as i32;
-            // Max scroll position is (pages - 1) * viewport_size
-            let max_h = ((h_pages - 1).max(0) as f64) * viewport_width;
-            let max_v = ((v_pages - 1).max(0) as f64) * viewport_height;
-            // Container size must be large enough to scroll to all page boundaries
-            // Size = pages * viewport_size (so we can scroll to the last page)
-            let cont_w = (h_pages as f64 * viewport_width) as i32;
-            let cont_h = (v_pages as f64 * viewport_height) as i32;
-            (max_h, max_v, cont_w, cont_h)
-        } else {
-            // Default: scroll to content bounds
-            ((content_width - viewport_width).max(0.0), (content_height - viewport_height).max(0.0), content_size.0, content_size.1)
-        };
+        let (max_h_scroll, max_v_scroll, container_width, container_height) =
+            if whole_pages && viewport_width > 0.0 && viewport_height > 0.0 {
+                // Calculate number of complete pages needed to cover content
+                let h_pages = (content_width / viewport_width).ceil() as i32;
+                let v_pages = (content_height / viewport_height).ceil() as i32;
+                // Max scroll position is (pages - 1) * viewport_size
+                let max_h = ((h_pages - 1).max(0) as f64) * viewport_width;
+                let max_v = ((v_pages - 1).max(0) as f64) * viewport_height;
+                // Container size must be large enough to scroll to all page boundaries
+                // Size = pages * viewport_size (so we can scroll to the last page)
+                let cont_w = (h_pages as f64 * viewport_width) as i32;
+                let cont_h = (v_pages as f64 * viewport_height) as i32;
+                (max_h, max_v, cont_w, cont_h)
+            } else {
+                // Default: scroll to content bounds
+                (
+                    (content_width - viewport_width).max(0.0),
+                    (content_height - viewport_height).max(0.0),
+                    content_size.0,
+                    content_size.1,
+                )
+            };
 
         let needs_h_scroll = max_h_scroll > 1.0;
         let needs_v_scroll = max_v_scroll > 1.0;
 
         if !needs_h_scroll && !needs_v_scroll {
             // No scrolling needed, reschedule check
-            schedule_auto_scroll(scrolled, config, layout, active, generation, current_gen, bg);
+            schedule_auto_scroll(
+                scrolled,
+                config,
+                layout,
+                active,
+                generation,
+                current_gen,
+                bg,
+            );
             return;
         }
 
@@ -157,7 +171,15 @@ fn schedule_auto_scroll(
 
             if *frame >= total_frames {
                 // Animation done, schedule next scroll after delay
-                schedule_auto_scroll(scrolled.clone(), config.clone(), layout.clone(), active.clone(), generation.clone(), current_gen, bg.clone());
+                schedule_auto_scroll(
+                    scrolled.clone(),
+                    config.clone(),
+                    layout.clone(),
+                    active.clone(),
+                    generation.clone(),
+                    current_gen,
+                    bg.clone(),
+                );
                 return gtk4::glib::ControlFlow::Break;
             }
 

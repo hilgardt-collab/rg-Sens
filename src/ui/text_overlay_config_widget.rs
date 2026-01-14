@@ -185,7 +185,8 @@ impl LazyTextOverlayConfigWidget {
     /// when the widget becomes visible (mapped), or when explicitly initialized.
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 0);
-        let inner_widget: Rc<RefCell<Option<TextOverlayConfigWidget>>> = Rc::new(RefCell::new(None));
+        let inner_widget: Rc<RefCell<Option<TextOverlayConfigWidget>>> =
+            Rc::new(RefCell::new(None));
         let deferred_config = Rc::new(RefCell::new(TextOverlayConfig::default()));
         let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));

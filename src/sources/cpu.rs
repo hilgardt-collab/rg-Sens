@@ -1,7 +1,7 @@
 //! CPU data source implementation
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
-use crate::ui::{CpuField, CpuSourceConfig, CoreSelection, FrequencyUnit, TemperatureUnit};
+use crate::ui::{CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;
@@ -49,9 +49,8 @@ static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
     let sensors = discover_cpu_sensors_from_list(&all_temps);
 
     // Create temporary system to get core count
-    let system = System::new_with_specifics(
-        RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
-    );
+    let system =
+        System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
     let core_count = system.cpus().len();
 
     // Pre-compute per-core usage key names to avoid format! allocation in hot path
@@ -61,16 +60,22 @@ static CPU_HARDWARE_INFO: Lazy<CpuHardwareInfo> = Lazy::new(|| {
 
     // Pre-compute per-core field metadata to avoid format! allocation in fields()
     let core_field_metadata: Vec<FieldMetadata> = (0..core_count)
-        .map(|i| FieldMetadata::new(
-            format!("core{}_usage", i),
-            format!("Core {} Usage", i),
-            format!("CPU core {} usage percentage", i),
-            FieldType::Percentage,
-            FieldPurpose::Value,
-        ))
+        .map(|i| {
+            FieldMetadata::new(
+                format!("core{}_usage", i),
+                format!("Core {} Usage", i),
+                format!("CPU core {} usage percentage", i),
+                FieldType::Percentage,
+                FieldPurpose::Value,
+            )
+        })
         .collect();
 
-    log::warn!("CPU hardware discovery complete: {} sensors, {} cores", sensors.len(), core_count);
+    log::warn!(
+        "CPU hardware discovery complete: {} sensors, {} cores",
+        sensors.len(),
+        core_count
+    );
 
     CpuHardwareInfo {
         sensors,
@@ -106,8 +111,8 @@ fn discover_cpu_sensors_from_list(temps: &[(String, f32)]) -> Vec<CpuSensor> {
             || label_lower.contains("tccd")
             || label_lower.contains("tdie")
             || label_lower.contains("core")
-            || label_lower.starts_with("k10temp") {
-
+            || label_lower.starts_with("k10temp")
+        {
             sensors.push(CpuSensor {
                 index,
                 label: label.clone(),
@@ -151,7 +156,8 @@ impl CpuSource {
         let metadata = SourceMetadata {
             id: "cpu".to_string(),
             name: "CPU Information".to_string(),
-            description: "Comprehensive CPU metrics including usage, temperature, and frequency".to_string(),
+            description: "Comprehensive CPU metrics including usage, temperature, and frequency"
+                .to_string(),
             available_keys: vec![
                 "caption".to_string(),
                 "usage".to_string(),
@@ -288,12 +294,17 @@ impl CpuSource {
             &sensor.label
         } else if let Some(first_sensor) = self.cpu_sensors.first() {
             // If configured index is out of bounds, use first sensor
-            log::warn!("Sensor index {} out of bounds (max: {}), using first sensor",
-                      sensor_index, self.cpu_sensors.len().saturating_sub(1));
+            log::warn!(
+                "Sensor index {} out of bounds (max: {}), using first sensor",
+                sensor_index,
+                self.cpu_sensors.len().saturating_sub(1)
+            );
             &first_sensor.label
         } else {
             // No sensors available at all (should be caught by earlier check, but be defensive)
-            log::error!("No CPU temperature sensors available after check - this should not happen");
+            log::error!(
+                "No CPU temperature sensors available after check - this should not happen"
+            );
             return None;
         };
 
@@ -408,8 +419,12 @@ impl DataSource for CpuSource {
         // Get temperature from shared sensors (they handle refresh internally)
         self.cpu_temperature = self.find_cpu_temperature();
 
-        log::debug!("CPU update complete - cores: {}, temp: {:?}, freq: {}",
-                   self.per_core_usage.len(), self.cpu_temperature, self.cpu_frequency);
+        log::debug!(
+            "CPU update complete - cores: {}, temp: {:?}, freq: {}",
+            self.per_core_usage.len(),
+            self.cpu_temperature,
+            self.cpu_frequency
+        );
 
         // Auto-detect limits if enabled (track for first 10 updates)
         if self.config.auto_detect_limits && self.update_count < 10 {
@@ -426,12 +441,10 @@ impl DataSource for CpuSource {
                     };
                     Some(usage as f64)
                 }
-                CpuField::Temperature => {
-                    self.cpu_temperature.map(|t| self.convert_temperature(t) as f64)
-                }
-                CpuField::Frequency => {
-                    Some(self.convert_frequency(self.cpu_frequency))
-                }
+                CpuField::Temperature => self
+                    .cpu_temperature
+                    .map(|t| self.convert_temperature(t) as f64),
+                CpuField::Frequency => Some(self.convert_frequency(self.cpu_frequency)),
             };
 
             // Update detected min/max
@@ -439,9 +452,13 @@ impl DataSource for CpuSource {
                 self.detected_min = Some(self.detected_min.map_or(value, |min| min.min(value)));
                 self.detected_max = Some(self.detected_max.map_or(value, |max| max.max(value)));
 
-                log::debug!("Auto-detect limits update {}: value={:.2}, min={:.2}, max={:.2}",
-                           self.update_count, value,
-                           self.detected_min.unwrap_or(value), self.detected_max.unwrap_or(value));
+                log::debug!(
+                    "Auto-detect limits update {}: value={:.2}, min={:.2}, max={:.2}",
+                    self.update_count,
+                    value,
+                    self.detected_min.unwrap_or(value),
+                    self.detected_max.unwrap_or(value)
+                );
             }
         }
 
@@ -463,7 +480,9 @@ impl DataSource for CpuSource {
         let temperature_value = self.cpu_temperature.map(|t| self.convert_temperature(t));
 
         // Generate caption (use custom if provided, otherwise auto-generate)
-        let caption = self.config.custom_caption
+        let caption = self
+            .config
+            .custom_caption
             .as_ref()
             .cloned()
             .unwrap_or_else(|| self.generate_auto_caption());
@@ -472,40 +491,58 @@ impl DataSource for CpuSource {
         // Use consistent field names ("caption", "value", "unit") for easier text displayer config
         match self.config.field {
             CpuField::Usage => {
-                self.values.insert("caption".to_string(), Value::from(caption));
-                self.values.insert("value".to_string(), Value::from(usage_value));
-                self.values.insert("usage".to_string(), Value::from(usage_value)); // Keep for compatibility
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("value".to_string(), Value::from(usage_value));
+                self.values
+                    .insert("usage".to_string(), Value::from(usage_value)); // Keep for compatibility
                 self.values.insert("unit".to_string(), Value::from("%"));
             }
             CpuField::Temperature => {
-                self.values.insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
                 if let Some(temp) = temperature_value {
                     self.values.insert("value".to_string(), Value::from(temp));
-                    self.values.insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
-                    self.values.insert("unit".to_string(), Value::from(self.get_temperature_unit_string()));
+                    self.values
+                        .insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
+                    self.values.insert(
+                        "unit".to_string(),
+                        Value::from(self.get_temperature_unit_string()),
+                    );
                 } else {
                     self.values.insert("value".to_string(), Value::from("N/A"));
-                    self.values.insert("temperature".to_string(), Value::from("N/A")); // Keep for compatibility
+                    self.values
+                        .insert("temperature".to_string(), Value::from("N/A")); // Keep for compatibility
                     self.values.insert("unit".to_string(), Value::from(""));
                 }
             }
             CpuField::Frequency => {
                 let converted_freq = self.convert_frequency(frequency_value);
-                self.values.insert("caption".to_string(), Value::from(caption));
-                self.values.insert("value".to_string(), Value::from(converted_freq));
-                self.values.insert("frequency".to_string(), Value::from(converted_freq)); // Keep for compatibility
-                self.values.insert("unit".to_string(), Value::from(self.get_frequency_unit_string()));
+                self.values
+                    .insert("caption".to_string(), Value::from(caption));
+                self.values
+                    .insert("value".to_string(), Value::from(converted_freq));
+                self.values
+                    .insert("frequency".to_string(), Value::from(converted_freq)); // Keep for compatibility
+                self.values.insert(
+                    "unit".to_string(),
+                    Value::from(self.get_frequency_unit_string()),
+                );
             }
         }
 
         // Also provide all raw data for advanced use cases
-        self.values.insert("raw_usage".to_string(), Value::from(self.global_usage));
+        self.values
+            .insert("raw_usage".to_string(), Value::from(self.global_usage));
 
         if let Some(temp) = self.cpu_temperature {
-            self.values.insert("raw_temperature_celsius".to_string(), Value::from(temp));
+            self.values
+                .insert("raw_temperature_celsius".to_string(), Value::from(temp));
         }
 
-        self.values.insert("raw_frequency".to_string(), Value::from(self.cpu_frequency));
+        self.values
+            .insert("raw_frequency".to_string(), Value::from(self.cpu_frequency));
 
         // Per-core data (always available) - use cached key names to avoid allocation
         for (i, usage) in self.per_core_usage.iter().enumerate() {
@@ -536,11 +573,13 @@ impl DataSource for CpuSource {
         };
 
         if let Some(min) = min_limit {
-            self.values.insert("min_limit".to_string(), Value::from(min));
+            self.values
+                .insert("min_limit".to_string(), Value::from(min));
         }
 
         if let Some(max) = max_limit {
-            self.values.insert("max_limit".to_string(), Value::from(max));
+            self.values
+                .insert("max_limit".to_string(), Value::from(max));
         }
 
         Ok(())
@@ -563,7 +602,9 @@ impl DataSource for CpuSource {
         // Look for cpu_config in the configuration
         if let Some(cpu_config_value) = config.get("cpu_config") {
             // Try to deserialize it into CpuSourceConfig
-            if let Ok(cpu_config) = serde_json::from_value::<CpuSourceConfig>(cpu_config_value.clone()) {
+            if let Ok(cpu_config) =
+                serde_json::from_value::<CpuSourceConfig>(cpu_config_value.clone())
+            {
                 self.set_config(cpu_config);
             }
         }

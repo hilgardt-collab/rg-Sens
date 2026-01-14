@@ -11,12 +11,12 @@ use gtk4::{ApplicationWindow, DrawingArea, Popover};
 use log::{info, warn};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::config::AppConfig;
 use crate::core::PanelData;
-use crate::ui::{GridLayout, new_panel_dialog, window_settings_dialog, config_helpers};
+use crate::ui::{config_helpers, new_panel_dialog, window_settings_dialog, GridLayout};
 
 /// Create and show the context menu popover at the given coordinates
 #[allow(clippy::too_many_arguments)]
@@ -34,7 +34,7 @@ pub fn show_context_menu<F>(
 ) where
     F: Fn() + 'static,
 {
-    use gtk4::{Box as GtkBox, Button, Separator, Orientation};
+    use gtk4::{Box as GtkBox, Button, Orientation, Separator};
 
     // Create a custom popover with buttons
     let popover = Popover::new();
@@ -98,12 +98,7 @@ pub fn show_context_menu<F>(
     popover.set_child(Some(&menu_box));
 
     // Position at click location
-    popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-        x as i32,
-        y as i32,
-        1,
-        1,
-    )));
+    popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
 
     // Store references for button handlers
     let popover_ref = popover.clone();
@@ -119,7 +114,10 @@ pub fn show_context_menu<F>(
     let popover_for_new = popover_ref.clone();
     new_panel_btn.connect_clicked(move |_| {
         popover_for_new.popdown();
-        info!("New panel requested at grid position ({}, {})", grid_x, grid_y);
+        info!(
+            "New panel requested at grid position ({}, {})",
+            grid_x, grid_y
+        );
         new_panel_dialog::show_new_panel_dialog(
             &window_for_new,
             &grid_layout_for_new,
@@ -275,7 +273,11 @@ pub fn show_context_menu<F>(
         info!("Save layout requested");
         // Use with_panels to avoid cloning the Vec
         grid_layout_for_save.borrow().with_panels(|panels| {
-            config_helpers::save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, panels);
+            config_helpers::save_config_with_app_config(
+                &mut app_config_for_save.borrow_mut(),
+                &window_for_save,
+                panels,
+            );
         });
         config_dirty_for_save.store(false, Ordering::Relaxed);
     });
@@ -295,15 +297,16 @@ pub fn show_context_menu<F>(
         let config_dirty = config_dirty_for_save_file.clone();
 
         gtk4::glib::MainContext::default().spawn_local(async move {
-            use gtk4::FileDialog;
             use gtk4::gio;
+            use gtk4::FileDialog;
 
             info!("Creating save file dialog");
 
             // Get initial directory (config dir)
-            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
-                .map(|d| d.config_dir().to_path_buf())
-                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+            let initial_dir =
+                directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
             // Create file filter for JSON files
             let json_filter = gtk4::FileFilter::new();
@@ -335,15 +338,16 @@ pub fn show_context_menu<F>(
 
                         let (width, height) = (window.default_width(), window.default_height());
                         // Use with_panels to avoid cloning the Vec
-                        let panel_data_list: Vec<PanelData> = grid_layout.borrow().with_panels(|panels| {
-                            panels
-                                .iter()
-                                .map(|panel| {
-                                    let panel_guard = panel.blocking_read();
-                                    panel_guard.to_data()
-                                })
-                                .collect()
-                        });
+                        let panel_data_list: Vec<PanelData> =
+                            grid_layout.borrow().with_panels(|panels| {
+                                panels
+                                    .iter()
+                                    .map(|panel| {
+                                        let panel_guard = panel.blocking_read();
+                                        panel_guard.to_data()
+                                    })
+                                    .collect()
+                            });
 
                         // Update config in place instead of cloning
                         {
@@ -389,15 +393,16 @@ pub fn show_context_menu<F>(
         let config_dirty = config_dirty_for_load_file.clone();
 
         gtk4::glib::MainContext::default().spawn_local(async move {
-            use gtk4::FileDialog;
             use gtk4::gio;
+            use gtk4::FileDialog;
 
             info!("Creating load file dialog");
 
             // Get initial directory (config dir)
-            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
-                .map(|d| d.config_dir().to_path_buf())
-                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+            let initial_dir =
+                directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
             // Create file filter for JSON files
             let json_filter = gtk4::FileFilter::new();
@@ -435,12 +440,16 @@ pub fn show_context_menu<F>(
                                 let registry = crate::core::global_registry();
                                 for panel_data in loaded_config.get_panels() {
                                     let panel_id = panel_data.id.clone();
-                                    match new_panel_dialog::create_panel_from_data(panel_data, registry) {
+                                    match new_panel_dialog::create_panel_from_data(
+                                        panel_data, registry,
+                                    ) {
                                         Ok(panel) => {
                                             grid_layout.borrow_mut().add_panel(panel.clone());
 
                                             // Register with update manager so panels get periodic updates
-                                            if let Some(update_manager) = crate::core::global_update_manager() {
+                                            if let Some(update_manager) =
+                                                crate::core::global_update_manager()
+                                            {
                                                 update_manager.queue_add_panel(panel.clone());
                                             }
                                         }
@@ -490,7 +499,9 @@ pub fn show_context_menu<F>(
                     if let Ok(mut panel_guard) = panel.try_write() {
                         if panel_guard.source.metadata().id == "test" {
                             if let Ok(config_json) = serde_json::to_value(test_config) {
-                                panel_guard.config.insert("test_config".to_string(), config_json);
+                                panel_guard
+                                    .config
+                                    .insert("test_config".to_string(), config_json);
                                 log::debug!("Saved test source config to panel {}", panel_guard.id);
                             }
                         }
@@ -554,7 +565,7 @@ pub fn create_app_menu_popover<F>(
 where
     F: Fn() + 'static,
 {
-    use gtk4::{Box as GtkBox, Button, Separator, Orientation};
+    use gtk4::{Box as GtkBox, Button, Orientation, Separator};
 
     // Create the popover
     let popover = Popover::new();
@@ -655,7 +666,11 @@ where
         popover_for_save.popdown();
         info!("Save layout requested");
         grid_layout_for_save.borrow().with_panels(|panels| {
-            config_helpers::save_config_with_app_config(&mut app_config_for_save.borrow_mut(), &window_for_save, panels);
+            config_helpers::save_config_with_app_config(
+                &mut app_config_for_save.borrow_mut(),
+                &window_for_save,
+                panels,
+            );
         });
         config_dirty_for_save.store(false, Ordering::Relaxed);
     });
@@ -675,13 +690,14 @@ where
         let config_dirty = config_dirty_for_save_file.clone();
 
         gtk4::glib::MainContext::default().spawn_local(async move {
-            use gtk4::FileDialog;
             use gtk4::gio;
+            use gtk4::FileDialog;
 
             // Get initial directory (config dir)
-            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
-                .map(|d| d.config_dir().to_path_buf())
-                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+            let initial_dir =
+                directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
             // Create file filter for JSON files
             let json_filter = gtk4::FileFilter::new();
@@ -711,15 +727,16 @@ where
                         info!("Saving layout to {:?}", path);
 
                         let (width, height) = (window.default_width(), window.default_height());
-                        let panel_data_list: Vec<PanelData> = grid_layout.borrow().with_panels(|panels| {
-                            panels
-                                .iter()
-                                .map(|panel| {
-                                    let panel_guard = panel.blocking_read();
-                                    panel_guard.to_data()
-                                })
-                                .collect()
-                        });
+                        let panel_data_list: Vec<PanelData> =
+                            grid_layout.borrow().with_panels(|panels| {
+                                panels
+                                    .iter()
+                                    .map(|panel| {
+                                        let panel_guard = panel.blocking_read();
+                                        panel_guard.to_data()
+                                    })
+                                    .collect()
+                            });
 
                         {
                             let mut config = app_config.borrow_mut();
@@ -761,13 +778,14 @@ where
         let config_dirty = config_dirty_for_load_file.clone();
 
         gtk4::glib::MainContext::default().spawn_local(async move {
-            use gtk4::FileDialog;
             use gtk4::gio;
+            use gtk4::FileDialog;
 
             // Get initial directory (config dir)
-            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
-                .map(|d| d.config_dir().to_path_buf())
-                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+            let initial_dir =
+                directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                    .map(|d| d.config_dir().to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
             // Create file filter for JSON files
             let json_filter = gtk4::FileFilter::new();
@@ -804,11 +822,15 @@ where
                                 let registry = crate::core::global_registry();
                                 for panel_data in loaded_config.get_panels() {
                                     let panel_id = panel_data.id.clone();
-                                    match new_panel_dialog::create_panel_from_data(panel_data, registry) {
+                                    match new_panel_dialog::create_panel_from_data(
+                                        panel_data, registry,
+                                    ) {
                                         Ok(panel) => {
                                             grid_layout.borrow_mut().add_panel(panel.clone());
 
-                                            if let Some(update_manager) = crate::core::global_update_manager() {
+                                            if let Some(update_manager) =
+                                                crate::core::global_update_manager()
+                                            {
                                                 update_manager.queue_add_panel(panel.clone());
                                             }
                                         }
@@ -848,10 +870,16 @@ where
         let is_fullscreen = window_for_fullscreen.is_fullscreen();
         if is_fullscreen {
             window_for_fullscreen.unfullscreen();
-            app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = false;
+            app_config_for_fullscreen
+                .borrow_mut()
+                .window
+                .fullscreen_enabled = false;
         } else {
             window_for_fullscreen.fullscreen();
-            app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
+            app_config_for_fullscreen
+                .borrow_mut()
+                .window
+                .fullscreen_enabled = true;
         }
         config_dirty_for_fullscreen.store(true, Ordering::Relaxed);
         info!("Toggled fullscreen: {}", !is_fullscreen);
@@ -939,9 +967,12 @@ fn show_about_dialog(window: &ApplicationWindow) {
         .build();
 
     // Try to load the application icon
-    if let Ok(pixbuf) = gtk4::gdk_pixbuf::Pixbuf::from_file("/usr/share/icons/hicolor/256x256/apps/rg-sens.png")
-        .or_else(|_| gtk4::gdk_pixbuf::Pixbuf::from_file("rg-sens.png"))
-        .or_else(|_| gtk4::gdk_pixbuf::Pixbuf::from_file("data/icons/hicolor/256x256/apps/rg-sens.png"))
+    if let Ok(pixbuf) =
+        gtk4::gdk_pixbuf::Pixbuf::from_file("/usr/share/icons/hicolor/256x256/apps/rg-sens.png")
+            .or_else(|_| gtk4::gdk_pixbuf::Pixbuf::from_file("rg-sens.png"))
+            .or_else(|_| {
+                gtk4::gdk_pixbuf::Pixbuf::from_file("data/icons/hicolor/256x256/apps/rg-sens.png")
+            })
     {
         let texture = gtk4::gdk::Texture::for_pixbuf(&pixbuf);
         about.set_logo(Some(&texture));

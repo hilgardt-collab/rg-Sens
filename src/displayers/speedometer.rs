@@ -7,7 +7,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
+    ANIMATION_SNAP_THRESHOLD,
+};
 use crate::ui::speedometer_display::{render_speedometer_with_theme, SpeedometerConfig};
 use crate::ui::theme::ComboThemeConfig;
 
@@ -28,7 +31,7 @@ struct DisplayData {
     last_update: std::time::Instant,
     values: HashMap<String, Value>, // All source data for text overlay
     transform: PanelTransform,
-    dirty: bool, // Flag to indicate data has changed and needs redraw
+    dirty: bool,       // Flag to indicate data has changed and needs redraw
     initialized: bool, // Flag to track if animated_value has been set
 }
 
@@ -91,7 +94,15 @@ impl Displayer for SpeedometerDisplayer {
                 } else {
                     data.value
                 };
-                let _ = render_speedometer_with_theme(cr, &data.config, display_value, &data.values, width as f64, height as f64, &data.theme);
+                let _ = render_speedometer_with_theme(
+                    cr,
+                    &data.config,
+                    display_value,
+                    &data.values,
+                    width as f64,
+                    height as f64,
+                    &data.theme,
+                );
                 data.transform.restore(cr);
 
                 cr.restore().ok();
@@ -118,7 +129,9 @@ impl Displayer for SpeedometerDisplayer {
                 }
 
                 // Check if animation is active
-                if data.config.animate && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD {
+                if data.config.animate
+                    && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD
+                {
                     // Use exponential decay formula for smooth animation
                     // This ensures the needle reaches ~95% of target in animation_duration seconds
                     let duration = data.config.animation_duration.max(0.05);
@@ -174,10 +187,8 @@ impl Displayer for SpeedometerDisplayer {
             }
 
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            let mut values = super::extract_text_values(
-                data,
-                &display_data.config.text_overlay.text_config,
-            );
+            let mut values =
+                super::extract_text_values(data, &display_data.config.text_overlay.text_config);
             // Also include min/max limits for tick label calculation
             if let Some(v) = data.get("min_limit") {
                 values.insert("min_limit".to_string(), v.clone());
@@ -203,8 +214,16 @@ impl Displayer for SpeedometerDisplayer {
             } else {
                 data.value
             };
-            render_speedometer_with_theme(cr, &data.config, display_value, &data.values, width, height, &data.theme)
-                .map_err(|e| anyhow::anyhow!("Failed to render speedometer: {}", e))?;
+            render_speedometer_with_theme(
+                cr,
+                &data.config,
+                display_value,
+                &data.values,
+                width,
+                height,
+                &data.theme,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to render speedometer: {}", e))?;
             data.transform.restore(cr);
         }
         Ok(())
@@ -212,15 +231,13 @@ impl Displayer for SpeedometerDisplayer {
 
     fn config_schema(&self) -> ConfigSchema {
         ConfigSchema {
-            options: vec![
-                ConfigOption {
-                    key: "speedometer_config".to_string(),
-                    name: "Speedometer Configuration".to_string(),
-                    description: "Configuration for speedometer display".to_string(),
-                    value_type: "speedometer_config".to_string(),
-                    default: serde_json::to_value(SpeedometerConfig::default()).unwrap_or(Value::Null),
-                },
-            ],
+            options: vec![ConfigOption {
+                key: "speedometer_config".to_string(),
+                name: "Speedometer Configuration".to_string(),
+                description: "Configuration for speedometer display".to_string(),
+                value_type: "speedometer_config".to_string(),
+                default: serde_json::to_value(SpeedometerConfig::default()).unwrap_or(Value::Null),
+            }],
         }
     }
 
@@ -247,7 +264,9 @@ impl Displayer for SpeedometerDisplayer {
 
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         if let Ok(data) = self.data.lock() {
-            Some(crate::core::DisplayerConfig::Speedometer(data.config.clone()))
+            Some(crate::core::DisplayerConfig::Speedometer(
+                data.config.clone(),
+            ))
         } else {
             None
         }

@@ -20,15 +20,13 @@ pub enum DiskField {
 }
 
 /// Disk capacity unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum DiskUnit {
     MB,
     #[default]
     GB,
     TB,
 }
-
 
 /// Disk source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,12 +106,8 @@ impl DiskSourceConfigWidget {
         let field_box = GtkBox::new(Orientation::Horizontal, 6);
         field_box.append(&Label::new(Some("Field:")));
 
-        let field_options = StringList::new(&[
-            "Used Space",
-            "Free Space",
-            "Total Space",
-            "Usage Percent",
-        ]);
+        let field_options =
+            StringList::new(&["Used Space", "Free Space", "Total Space", "Usage Percent"]);
         let field_combo = DropDown::new(Some(field_options), Option::<gtk4::Expression>::None);
         field_combo.set_selected(3); // Percent by default
         field_box.append(&field_combo);
@@ -183,11 +177,8 @@ impl DiskSourceConfigWidget {
         let config_clone = config.clone();
         caption_entry.connect_changed(move |entry| {
             let text = entry.text().to_string();
-            config_clone.borrow_mut().custom_caption = if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            };
+            config_clone.borrow_mut().custom_caption =
+                if text.is_empty() { None } else { Some(text) };
         });
 
         let config_clone = config.clone();
@@ -307,11 +298,14 @@ impl DiskSourceConfigWidget {
             self.caption_entry.set_text("");
         }
 
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
 
         self.auto_detect_check.set_active(config.auto_detect_limits);
-        self.min_limit_spin.set_sensitive(!config.auto_detect_limits);
-        self.max_limit_spin.set_sensitive(!config.auto_detect_limits);
+        self.min_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
+        self.max_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
 
         if let Some(min) = config.min_limit {
             self.min_limit_spin.set_value(min);
@@ -343,13 +337,16 @@ impl DiskSourceConfigWidget {
         let names: Vec<String> = if disks.is_empty() {
             vec!["No disks detected".to_string()]
         } else {
-            disks.iter().map(|(mount, name)| {
-                if name.is_empty() {
-                    mount.clone()
-                } else {
-                    format!("{} ({})", mount, name)
-                }
-            }).collect()
+            disks
+                .iter()
+                .map(|(mount, name)| {
+                    if name.is_empty() {
+                        mount.clone()
+                    } else {
+                        format!("{} ({})", mount, name)
+                    }
+                })
+                .collect()
         };
 
         let disk_list = StringList::new(&names.iter().map(|s| s.as_str()).collect::<Vec<_>>());

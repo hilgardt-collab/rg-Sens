@@ -6,8 +6,8 @@
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, FileDialog, Label,
-    Notebook, Orientation, ScrolledWindow, SpinButton, StringList,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, FileDialog, Label, Notebook, Orientation,
+    ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -15,7 +15,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
-use crate::ui::css_template_display::{extract_placeholder_hints, CssTemplateDisplayConfig, PlaceholderMapping};
+use crate::ui::css_template_display::{
+    extract_placeholder_hints, CssTemplateDisplayConfig, PlaceholderMapping,
+};
 use crate::ui::widget_builder::{create_page_container, create_section_header};
 
 /// CSS Template configuration widget
@@ -61,8 +63,12 @@ impl CssTemplateConfigWidget {
         notebook.append_page(&template_page, Some(&Label::new(Some("Template"))));
 
         // Mappings Tab
-        let (mappings_page, mappings_container) =
-            Self::create_mappings_tab(config.clone(), on_change.clone(), source_summaries.clone(), placeholder_hints.clone());
+        let (mappings_page, mappings_container) = Self::create_mappings_tab(
+            config.clone(),
+            on_change.clone(),
+            source_summaries.clone(),
+            placeholder_hints.clone(),
+        );
         notebook.append_page(&mappings_page, Some(&Label::new(Some("Mappings"))));
 
         // Display Tab
@@ -258,7 +264,8 @@ impl CssTemplateConfigWidget {
         let options_section = create_section_header("Options");
         page.append(&options_section);
 
-        let hot_reload_check = CheckButton::with_label("Hot Reload (auto-refresh when files change)");
+        let hot_reload_check =
+            CheckButton::with_label("Hot Reload (auto-refresh when files change)");
         hot_reload_check.set_active(true);
         page.append(&hot_reload_check);
 

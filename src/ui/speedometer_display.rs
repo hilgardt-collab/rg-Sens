@@ -7,68 +7,62 @@ use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{deserialize_color_or_source, ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
+use crate::ui::theme::{
+    deserialize_color_or_source, ColorSource, ColorStopSource, ComboThemeConfig,
+};
 
 /// Needle style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum NeedleStyle {
     #[serde(rename = "arrow")]
     #[default]
-    Arrow,        // Traditional pointed arrow
+    Arrow, // Traditional pointed arrow
     #[serde(rename = "line")]
-    Line,         // Simple line
+    Line, // Simple line
     #[serde(rename = "tapered")]
-    Tapered,      // Tapered line (wider at base)
+    Tapered, // Tapered line (wider at base)
     #[serde(rename = "triangle")]
-    Triangle,     // Solid triangle
+    Triangle, // Solid triangle
 }
-
 
 /// Needle tail style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum NeedleTailStyle {
     #[serde(rename = "none")]
-    None,         // No tail
+    None, // No tail
     #[serde(rename = "short")]
     #[default]
-    Short,        // Short tail opposite direction
+    Short, // Short tail opposite direction
     #[serde(rename = "balanced")]
-    Balanced,     // Balanced tail for counterweight
+    Balanced, // Balanced tail for counterweight
 }
 
-
 /// Tick mark style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum TickStyle {
     #[serde(rename = "line")]
     #[default]
-    Line,         // Simple lines
+    Line, // Simple lines
     #[serde(rename = "wedge")]
-    Wedge,        // Wedge-shaped ticks
+    Wedge, // Wedge-shaped ticks
     #[serde(rename = "dot")]
-    Dot,          // Dots at tick positions
+    Dot, // Dots at tick positions
 }
-
 
 /// Bezel style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum BezelStyle {
     #[serde(rename = "none")]
-    None,         // No bezel
+    None, // No bezel
     #[serde(rename = "simple")]
     #[default]
-    Simple,       // Simple ring
+    Simple, // Simple ring
     #[serde(rename = "3d")]
-    ThreeD,       // 3D effect with gradient
+    ThreeD, // 3D effect with gradient
     #[serde(rename = "chrome")]
-    Chrome,       // Metallic chrome effect
+    Chrome, // Metallic chrome effect
 }
-
 
 /// Tick label configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -87,7 +81,14 @@ impl Default for TickLabelConfig {
         Self {
             font_family: "Sans".to_string(),
             font_size: 12.0,
-            color: ColorSource::Custom { color: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 } },
+            color: ColorSource::Custom {
+                color: Color {
+                    r: 0.9,
+                    g: 0.9,
+                    b: 0.9,
+                    a: 1.0,
+                },
+            },
             bold: false,
             italic: false,
             use_percentage: false,
@@ -100,11 +101,11 @@ impl Default for TickLabelConfig {
 pub struct SpeedometerConfig {
     // Arc geometry
     #[serde(default = "default_start_angle")]
-    pub start_angle: f64,  // Degrees (0 = right, 90 = down, 180 = left, 270 = up)
+    pub start_angle: f64, // Degrees (0 = right, 90 = down, 180 = left, 270 = up)
     #[serde(default = "default_end_angle")]
-    pub end_angle: f64,    // Degrees
+    pub end_angle: f64, // Degrees
     #[serde(default = "default_arc_width")]
-    pub arc_width: f64,    // Percentage of radius (0.0 to 1.0)
+    pub arc_width: f64, // Percentage of radius (0.0 to 1.0)
     #[serde(default = "default_radius_percent")]
     pub radius_percent: f64, // Percentage of available space (0.0 to 1.0)
 
@@ -183,7 +184,10 @@ pub struct SpeedometerConfig {
     #[serde(default)]
     pub bezel_background: crate::ui::BackgroundConfig,
     /// Theme-aware solid color for bezel (used when bezel_background is solid)
-    #[serde(default = "default_bezel_solid_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_bezel_solid_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub bezel_solid_color: ColorSource,
 
     // Value zones/regions (danger zone, warning zone, etc.)
@@ -206,11 +210,11 @@ pub struct SpeedometerConfig {
 /// Value zone configuration (colored regions on gauge)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ValueZone {
-    pub start_percent: f64,  // 0.0 to 1.0
-    pub end_percent: f64,    // 0.0 to 1.0
+    pub start_percent: f64, // 0.0 to 1.0
+    pub end_percent: f64,   // 0.0 to 1.0
     pub color: Color,
     #[serde(default = "default_zone_alpha")]
-    pub alpha: f64,          // Transparency
+    pub alpha: f64, // Transparency
 }
 
 fn default_zone_alpha() -> f64 {
@@ -243,14 +247,45 @@ fn default_false() -> bool {
 }
 
 fn default_track_color_source() -> ColorSource {
-    ColorSource::Custom { color: Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 } }
+    ColorSource::Custom {
+        color: Color {
+            r: 0.2,
+            g: 0.2,
+            b: 0.2,
+            a: 1.0,
+        },
+    }
 }
 
 fn default_color_stops() -> Vec<ColorStopSource> {
     vec![
-        ColorStopSource::custom(0.0, Color { r: 0.0, g: 0.8, b: 0.0, a: 1.0 }),
-        ColorStopSource::custom(0.7, Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 }),
-        ColorStopSource::custom(0.9, Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }),
+        ColorStopSource::custom(
+            0.0,
+            Color {
+                r: 0.0,
+                g: 0.8,
+                b: 0.0,
+                a: 1.0,
+            },
+        ),
+        ColorStopSource::custom(
+            0.7,
+            Color {
+                r: 1.0,
+                g: 0.8,
+                b: 0.0,
+                a: 1.0,
+            },
+        ),
+        ColorStopSource::custom(
+            0.9,
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        ),
     ]
 }
 
@@ -279,7 +314,14 @@ fn default_minor_tick_width() -> f64 {
 }
 
 fn default_tick_color_source() -> ColorSource {
-    ColorSource::Custom { color: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 } }
+    ColorSource::Custom {
+        color: Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        },
+    }
 }
 
 fn default_needle_length() -> f64 {
@@ -291,7 +333,14 @@ fn default_needle_width() -> f64 {
 }
 
 fn default_needle_color_source() -> ColorSource {
-    ColorSource::Custom { color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 } }
+    ColorSource::Custom {
+        color: Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+    }
 }
 
 fn default_hub_radius() -> f64 {
@@ -299,7 +348,14 @@ fn default_hub_radius() -> f64 {
 }
 
 fn default_hub_color_source() -> ColorSource {
-    ColorSource::Custom { color: Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 } }
+    ColorSource::Custom {
+        color: Color {
+            r: 0.3,
+            g: 0.3,
+            b: 0.3,
+            a: 1.0,
+        },
+    }
 }
 
 fn default_bezel_width() -> f64 {
@@ -307,7 +363,9 @@ fn default_bezel_width() -> f64 {
 }
 
 fn default_bezel_solid_color() -> ColorSource {
-    ColorSource::Custom { color: Color::new(0.3, 0.3, 0.3, 1.0) }
+    ColorSource::Custom {
+        color: Color::new(0.3, 0.3, 0.3, 1.0),
+    }
 }
 
 fn default_animation_duration() -> f64 {
@@ -372,7 +430,15 @@ pub fn render_speedometer(
     height: f64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Use default theme for standalone rendering (e.g., from non-combo panels)
-    render_speedometer_with_theme(cr, config, value, values, width, height, &ComboThemeConfig::default())
+    render_speedometer_with_theme(
+        cr,
+        config,
+        value,
+        values,
+        width,
+        height,
+        &ComboThemeConfig::default(),
+    )
 }
 
 /// Render a speedometer gauge with theme support
@@ -407,17 +473,23 @@ pub fn render_speedometer_with_theme(
 
     // Draw value zones
     for zone in &config.zones {
-        draw_zone(cr, center_x, center_y, radius, start_rad, sweep, config, zone)?;
+        draw_zone(
+            cr, center_x, center_y, radius, start_rad, sweep, config, zone,
+        )?;
     }
 
     // Draw track
     if config.show_track {
-        draw_track(cr, center_x, center_y, radius, start_rad, end_rad, sweep, config, theme)?;
+        draw_track(
+            cr, center_x, center_y, radius, start_rad, end_rad, sweep, config, theme,
+        )?;
     }
 
     // Draw ticks and labels
     if config.show_major_ticks || config.show_minor_ticks || config.show_tick_labels {
-        draw_ticks(cr, center_x, center_y, radius, start_rad, sweep, config, values, theme)?;
+        draw_ticks(
+            cr, center_x, center_y, radius, start_rad, sweep, config, values, theme,
+        )?;
     }
 
     // Draw needle
@@ -469,10 +541,22 @@ fn draw_bezel(
     // Create clipping path for the bezel ring (donut shape)
     // Use new_sub_path() to prevent Cairo from drawing a line between the arcs
     cr.new_path();
-    cr.arc(center_x, center_y, bezel_outer, 0.0, 2.0 * std::f64::consts::PI);
+    cr.arc(
+        center_x,
+        center_y,
+        bezel_outer,
+        0.0,
+        2.0 * std::f64::consts::PI,
+    );
     cr.close_path();
     cr.new_sub_path();
-    cr.arc(center_x, center_y, bezel_inner, 0.0, 2.0 * std::f64::consts::PI);
+    cr.arc(
+        center_x,
+        center_y,
+        bezel_inner,
+        0.0,
+        2.0 * std::f64::consts::PI,
+    );
     cr.close_path();
     cr.set_fill_rule(cairo::FillRule::EvenOdd);
     cr.clip();
@@ -489,7 +573,13 @@ fn draw_bezel(
         }
         _ => {
             // For gradients, images, and polygons, use theme-aware background rendering
-            crate::ui::background::render_background_with_theme(cr, &config.bezel_background, width, height, Some(theme))?;
+            crate::ui::background::render_background_with_theme(
+                cr,
+                &config.bezel_background,
+                width,
+                height,
+                Some(theme),
+            )?;
         }
     }
 
@@ -508,7 +598,7 @@ fn draw_zone(
     zone: &ValueZone,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
-    cr.new_path();  // Clear any existing path to prevent spurious lines
+    cr.new_path(); // Clear any existing path to prevent spurious lines
 
     let zone_start = start_rad + sweep * zone.start_percent;
     let zone_end = start_rad + sweep * zone.end_percent;
@@ -539,14 +629,15 @@ fn draw_track(
     theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
-    cr.new_path();  // Clear any existing path to prevent spurious lines
+    cr.new_path(); // Clear any existing path to prevent spurious lines
 
     let arc_width_pixels = radius * config.arc_width;
 
     // If we have color stops, create gradient
     if config.track_color_stops.len() > 1 {
         // Resolve theme-aware color stops to concrete colors
-        let resolved_stops: Vec<ColorStop> = config.track_color_stops
+        let resolved_stops: Vec<ColorStop> = config
+            .track_color_stops
             .iter()
             .map(|stop| stop.resolve(theme))
             .collect();
@@ -593,7 +684,7 @@ fn draw_ticks(
     theme: &ComboThemeConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
-    cr.new_path();  // Clear any existing path
+    cr.new_path(); // Clear any existing path
 
     let arc_width_pixels = radius * config.arc_width;
     let tick_base_radius = radius + arc_width_pixels / 2.0;
@@ -604,8 +695,14 @@ fn draw_ticks(
     let tick_label_color = config.tick_label_config.color.resolve(theme);
 
     // Get min/max for label calculation
-    let min_val = values.get("min_limit").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let max_val = values.get("max_limit").and_then(|v| v.as_f64()).unwrap_or(100.0);
+    let min_val = values
+        .get("min_limit")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let max_val = values
+        .get("max_limit")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(100.0);
 
     // Draw major ticks and labels
     for i in 0..=config.major_tick_count {
@@ -710,7 +807,7 @@ fn draw_single_tick(
             cr.move_to(x_base, y_base);
             cr.line_to(x_tip, y_tip);
             cr.stroke()?;
-        },
+        }
         TickStyle::Wedge => {
             // Draw wedge shape
             let perp_x = -angle.sin();
@@ -722,11 +819,11 @@ fn draw_single_tick(
             cr.line_to(x_tip, y_tip);
             cr.close_path();
             cr.fill()?;
-        },
+        }
         TickStyle::Dot => {
             cr.arc(x_tip, y_tip, width, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill()?;
-        },
+        }
     }
 
     cr.restore()?;
@@ -756,14 +853,33 @@ fn draw_tick_label(
         cairo::FontWeight::Normal
     };
 
-    cr.set_source_rgba(resolved_color.r, resolved_color.g, resolved_color.b, resolved_color.a);
+    cr.set_source_rgba(
+        resolved_color.r,
+        resolved_color.g,
+        resolved_color.b,
+        resolved_color.a,
+    );
 
-    let extents = pango_text_extents(cr, text, &label_config.font_family, font_slant, font_weight, label_config.font_size);
+    let extents = pango_text_extents(
+        cr,
+        text,
+        &label_config.font_family,
+        font_slant,
+        font_weight,
+        label_config.font_size,
+    );
     let x = center_x + label_radius * angle.cos() - extents.width() / 2.0;
     let y = center_y + label_radius * angle.sin() + extents.height() / 2.0;
 
     cr.move_to(x, y);
-    pango_show_text(cr, text, &label_config.font_family, font_slant, font_weight, label_config.font_size);
+    pango_show_text(
+        cr,
+        text,
+        &label_config.font_family,
+        font_slant,
+        font_weight,
+        label_config.font_size,
+    );
 
     cr.restore()?;
     Ok(())
@@ -791,14 +907,35 @@ fn draw_needle(
     if config.needle_shadow {
         cr.save()?;
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
-        draw_needle_shape(cr, center_x + 2.0, center_y + 2.0, angle, needle_length, tail_length, config)?;
+        draw_needle_shape(
+            cr,
+            center_x + 2.0,
+            center_y + 2.0,
+            angle,
+            needle_length,
+            tail_length,
+            config,
+        )?;
         cr.restore()?;
     }
 
     // Draw needle
     let needle_color = config.needle_color.resolve(theme);
-    cr.set_source_rgba(needle_color.r, needle_color.g, needle_color.b, needle_color.a);
-    draw_needle_shape(cr, center_x, center_y, angle, needle_length, tail_length, config)?;
+    cr.set_source_rgba(
+        needle_color.r,
+        needle_color.g,
+        needle_color.b,
+        needle_color.a,
+    );
+    draw_needle_shape(
+        cr,
+        center_x,
+        center_y,
+        angle,
+        needle_length,
+        tail_length,
+        config,
+    )?;
 
     cr.restore()?;
     Ok(())
@@ -827,17 +964,23 @@ fn draw_needle_shape(
             cr.move_to(tail_x, tail_y);
             cr.line_to(tip_x, tip_y);
             cr.stroke()?;
-        },
+        }
         NeedleStyle::Arrow => {
             let half_width = config.needle_width / 2.0;
             cr.move_to(tail_x + perp_x * half_width, tail_y + perp_y * half_width);
             cr.line_to(tail_x - perp_x * half_width, tail_y - perp_y * half_width);
-            cr.line_to(center_x - perp_x * half_width, center_y - perp_y * half_width);
+            cr.line_to(
+                center_x - perp_x * half_width,
+                center_y - perp_y * half_width,
+            );
             cr.line_to(tip_x, tip_y);
-            cr.line_to(center_x + perp_x * half_width, center_y + perp_y * half_width);
+            cr.line_to(
+                center_x + perp_x * half_width,
+                center_y + perp_y * half_width,
+            );
             cr.close_path();
             cr.fill()?;
-        },
+        }
         NeedleStyle::Tapered => {
             let base_width = config.needle_width;
             let tip_width = config.needle_width * 0.3;
@@ -847,15 +990,21 @@ fn draw_needle_shape(
             cr.line_to(tip_x + perp_x * tip_width, tip_y + perp_y * tip_width);
             cr.close_path();
             cr.fill()?;
-        },
+        }
         NeedleStyle::Triangle => {
             let half_width = config.needle_width / 2.0;
-            cr.move_to(center_x + perp_x * half_width, center_y + perp_y * half_width);
-            cr.line_to(center_x - perp_x * half_width, center_y - perp_y * half_width);
+            cr.move_to(
+                center_x + perp_x * half_width,
+                center_y + perp_y * half_width,
+            );
+            cr.line_to(
+                center_x - perp_x * half_width,
+                center_y - perp_y * half_width,
+            );
             cr.line_to(tip_x, tip_y);
             cr.close_path();
             cr.fill()?;
-        },
+        }
     }
 
     Ok(())
@@ -884,22 +1033,25 @@ fn draw_center_hub(
             center_y,
             hub_radius,
         );
-        gradient.add_color_stop_rgb(0.0,
+        gradient.add_color_stop_rgb(
+            0.0,
             (hub_color.r * 1.5).min(1.0),
             (hub_color.g * 1.5).min(1.0),
-            (hub_color.b * 1.5).min(1.0)
+            (hub_color.b * 1.5).min(1.0),
         );
-        gradient.add_color_stop_rgb(1.0,
-            hub_color.r * 0.5,
-            hub_color.g * 0.5,
-            hub_color.b * 0.5
-        );
+        gradient.add_color_stop_rgb(1.0, hub_color.r * 0.5, hub_color.g * 0.5, hub_color.b * 0.5);
         cr.set_source(&gradient)?;
     } else {
         cr.set_source_rgba(hub_color.r, hub_color.g, hub_color.b, hub_color.a);
     }
 
-    cr.arc(center_x, center_y, hub_radius, 0.0, 2.0 * std::f64::consts::PI);
+    cr.arc(
+        center_x,
+        center_y,
+        hub_radius,
+        0.0,
+        2.0 * std::f64::consts::PI,
+    );
     cr.fill()?;
 
     cr.restore()?;
@@ -910,7 +1062,12 @@ fn interpolate_color_stops(stops: &[ColorStop], t: f64) -> Color {
     use crate::ui::render_cache::get_cached_color_at;
 
     if stops.is_empty() {
-        return Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+        return Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        };
     }
 
     get_cached_color_at(stops, t)

@@ -12,15 +12,20 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, FontSource, ComboThemeConfig, deserialize_color_or_source, deserialize_font_or_source};
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as CyberpunkContentType, ContentItemConfig as CyberpunkContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as CyberpunkContentType, ContentItemConfig as CyberpunkContentItemConfig,
+};
 
 /// Corner style for the frame
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -67,15 +72,33 @@ pub enum DividerStyle {
     None,
 }
 
-fn default_border_width() -> f64 { 2.0 }
-fn default_glow_intensity() -> f64 { 0.6 }
-fn default_corner_size() -> f64 { 12.0 }
-fn default_grid_spacing() -> f64 { 20.0 }
-fn default_scanline_opacity() -> f64 { 0.08 }
-fn default_content_padding() -> f64 { 10.0 }
-fn default_divider_width() -> f64 { 1.0 }
-fn default_divider_padding() -> f64 { 4.0 }
-fn default_group_count() -> usize { 2 }
+fn default_border_width() -> f64 {
+    2.0
+}
+fn default_glow_intensity() -> f64 {
+    0.6
+}
+fn default_corner_size() -> f64 {
+    12.0
+}
+fn default_grid_spacing() -> f64 {
+    20.0
+}
+fn default_scanline_opacity() -> f64 {
+    0.08
+}
+fn default_content_padding() -> f64 {
+    10.0
+}
+fn default_divider_width() -> f64 {
+    1.0
+}
+fn default_divider_padding() -> f64 {
+    4.0
+}
+fn default_group_count() -> usize {
+    2
+}
 
 // ColorSource defaults for theme-aware fields
 fn default_border_color_source() -> ColorSource {
@@ -83,7 +106,12 @@ fn default_border_color_source() -> ColorSource {
 }
 
 fn default_background_color_source() -> ColorSource {
-    ColorSource::custom(Color { r: 0.04, g: 0.06, b: 0.1, a: 0.9 }) // Dark blue-black
+    ColorSource::custom(Color {
+        r: 0.04,
+        g: 0.06,
+        b: 0.1,
+        a: 0.9,
+    }) // Dark blue-black
 }
 
 fn default_grid_color_source() -> ColorSource {
@@ -113,7 +141,10 @@ pub struct CyberpunkFrameConfig {
     #[serde(default = "default_border_width")]
     pub border_width: f64,
     /// Theme-aware border color (replaces border_color)
-    #[serde(default = "default_border_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_border_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub border_color: ColorSource,
     #[serde(default = "default_glow_intensity")]
     pub glow_intensity: f64,
@@ -124,12 +155,18 @@ pub struct CyberpunkFrameConfig {
 
     // Background
     /// Theme-aware background color (replaces background_color)
-    #[serde(default = "default_background_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_background_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub background_color: ColorSource,
     #[serde(default = "default_true")]
     pub show_grid: bool,
     /// Theme-aware grid color (replaces grid_color)
-    #[serde(default = "default_grid_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_grid_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub grid_color: ColorSource,
     #[serde(default = "default_grid_spacing")]
     pub grid_spacing: f64,
@@ -146,9 +183,15 @@ pub struct CyberpunkFrameConfig {
     #[serde(default)]
     pub header_text: String,
     /// Theme-aware header font (replaces header_font)
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
-    #[serde(default = "default_header_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub header_color: ColorSource,
     #[serde(default)]
     pub header_style: HeaderStyle,
@@ -172,7 +215,10 @@ pub struct CyberpunkFrameConfig {
     #[serde(default)]
     pub divider_style: DividerStyle,
     /// Theme-aware divider color (replaces divider_color)
-    #[serde(default = "default_divider_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_divider_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub divider_color: ColorSource,
     #[serde(default = "default_divider_width")]
     pub divider_width: f64,
@@ -184,7 +230,10 @@ pub struct CyberpunkFrameConfig {
     #[serde(default)]
     pub item_frame_enabled: bool,
     /// Theme-aware item frame color (replaces item_frame_color)
-    #[serde(default = "default_item_frame_color_source", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_item_frame_color_source",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub item_frame_color: ColorSource,
     #[serde(default)]
     pub item_glow_enabled: bool,
@@ -204,14 +253,20 @@ pub struct CyberpunkFrameConfig {
     pub theme: ComboThemeConfig,
 }
 
-fn default_animation_enabled() -> bool { true }
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_enabled() -> bool {
+    true
+}
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 fn default_cyberpunk_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_cyberpunk()
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 impl Default for CyberpunkFrameConfig {
     fn default() -> Self {
@@ -348,8 +403,7 @@ impl FrameRenderer for CyberpunkRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_cyberpunk_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_cyberpunk_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -423,13 +477,13 @@ fn draw_angular_rect(cr: &Context, x: f64, y: f64, w: f64, h: f64, point_size: f
 
     // Start from top-left, going clockwise
     cr.move_to(x - p, y + h / 2.0); // Left point
-    cr.line_to(x, y);               // To top-left
+    cr.line_to(x, y); // To top-left
     cr.line_to(x + w / 2.0, y - p); // Top point
-    cr.line_to(x + w, y);           // To top-right
+    cr.line_to(x + w, y); // To top-right
     cr.line_to(x + w + p, y + h / 2.0); // Right point
-    cr.line_to(x + w, y + h);       // To bottom-right
+    cr.line_to(x + w, y + h); // To bottom-right
     cr.line_to(x + w / 2.0, y + h + p); // Bottom point
-    cr.line_to(x, y + h);           // To bottom-left
+    cr.line_to(x, y + h); // To bottom-left
     cr.close_path();
 }
 
@@ -447,12 +501,7 @@ fn draw_glow(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f64
         let alpha = config.glow_intensity * (i as f64 / glow_steps as f64) * 0.25;
         let extra_width = i as f64 * 2.0;
 
-        cr.set_source_rgba(
-            border_color.r,
-            border_color.g,
-            border_color.b,
-            alpha,
-        );
+        cr.set_source_rgba(border_color.r, border_color.g, border_color.b, alpha);
         cr.set_line_width(config.border_width + extra_width);
 
         match config.corner_style {
@@ -582,7 +631,14 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
 
     cr.save().ok();
 
-    let text_extents = pango_text_extents(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
     let text_width = text_extents.width();
     let text_height = text_extents.height();
     let text_x = x + (w - text_width) / 2.0;
@@ -619,12 +675,7 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
         }
         HeaderStyle::Underline => {
             // Draw underline
-            cr.set_source_rgba(
-                border_color.r,
-                border_color.g,
-                border_color.b,
-                0.6,
-            );
+            cr.set_source_rgba(border_color.r, border_color.g, border_color.b, 0.6);
             cr.set_line_width(1.0);
             cr.move_to(x + padding, y + header_height - 4.0);
             cr.line_to(x + w - padding, y + header_height - 4.0);
@@ -637,12 +688,7 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
             let box_w = text_width + 20.0;
             let box_h = header_height - 8.0;
 
-            cr.set_source_rgba(
-                border_color.r,
-                border_color.g,
-                border_color.b,
-                0.3,
-            );
+            cr.set_source_rgba(border_color.r, border_color.g, border_color.b, 0.3);
             draw_chamfered_rect(cr, box_x, box_y, box_w, box_h, 4.0);
             cr.fill().ok();
 
@@ -667,7 +713,14 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
         header_color.a,
     );
     cr.move_to(text_x, text_y);
-    pango_show_text(cr, &config.header_text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    pango_show_text(
+        cr,
+        &config.header_text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
 
     cr.restore().ok();
 
@@ -675,7 +728,14 @@ fn draw_header(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f
 }
 
 /// Draw a divider between content groups
-fn draw_divider(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, length: f64, horizontal: bool) {
+fn draw_divider(
+    cr: &Context,
+    config: &CyberpunkFrameConfig,
+    x: f64,
+    y: f64,
+    length: f64,
+    horizontal: bool,
+) {
     if matches!(config.divider_style, DividerStyle::None) {
         return;
     }
@@ -722,12 +782,7 @@ fn draw_divider(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, len
             // Draw glow layers
             for i in (1..=3).rev() {
                 let alpha = divider_color.a * (i as f64 / 3.0) * 0.3;
-                cr.set_source_rgba(
-                    divider_color.r,
-                    divider_color.g,
-                    divider_color.b,
-                    alpha,
-                );
+                cr.set_source_rgba(divider_color.r, divider_color.g, divider_color.b, alpha);
                 cr.set_line_width(config.divider_width + i as f64 * 2.0);
                 if horizontal {
                     cr.move_to(x, y);
@@ -781,7 +836,14 @@ fn draw_divider(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, len
 }
 
 /// Draw an optional frame around a content item
-pub fn draw_item_frame(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+pub fn draw_item_frame(
+    cr: &Context,
+    config: &CyberpunkFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) {
     if !config.item_frame_enabled {
         return;
     }
@@ -897,7 +959,15 @@ pub fn render_cyberpunk_frame(
             cr.rectangle(frame_x, frame_y, frame_w, frame_h);
             cr.stroke()?;
             // Draw bracket corners on top
-            draw_bracket_corners(cr, frame_x, frame_y, frame_w, frame_h, config.corner_size, config.border_width);
+            draw_bracket_corners(
+                cr,
+                frame_x,
+                frame_y,
+                frame_w,
+                frame_h,
+                config.corner_size,
+                config.border_width,
+            );
         }
     }
 
@@ -938,7 +1008,8 @@ pub fn calculate_group_layouts(
 
     let total_weight: f64 = weights.iter().sum();
     let divider_count = group_count.saturating_sub(1);
-    let divider_space = divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
+    let divider_space =
+        divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
 
     match config.split_orientation {
         SplitOrientation::Vertical => {

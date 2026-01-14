@@ -111,7 +111,8 @@ impl ClockDigitalConfigWidget {
 
         let initial_time_font = config.borrow().time_font.clone();
         let initial_time_size = config.borrow().time_size;
-        let time_font_button = Button::with_label(&format!("{} {:.0}", initial_time_font, initial_time_size));
+        let time_font_button =
+            Button::with_label(&format!("{} {:.0}", initial_time_font, initial_time_size));
         time_font_button.set_hexpand(true);
         time_font_row.append(&time_font_button);
 
@@ -165,7 +166,8 @@ impl ClockDigitalConfigWidget {
 
         let initial_date_font = config.borrow().date_font.clone();
         let initial_date_size = config.borrow().date_size;
-        let date_font_button = Button::with_label(&format!("{} {:.0}", initial_date_font, initial_date_size));
+        let date_font_button =
+            Button::with_label(&format!("{} {:.0}", initial_date_font, initial_date_size));
         date_font_button.set_hexpand(true);
         date_font_row.append(&date_font_button);
 
@@ -256,7 +258,11 @@ impl ClockDigitalConfigWidget {
         // Icon font
         let icon_font_row = GtkBox::new(Orientation::Horizontal, 6);
         icon_font_row.append(&Label::new(Some("Icon Font:")));
-        let icon_font_button = Button::with_label(&format!("{} {:.0}px", config.borrow().icon_font, config.borrow().icon_size));
+        let icon_font_button = Button::with_label(&format!(
+            "{} {:.0}px",
+            config.borrow().icon_font,
+            config.borrow().icon_size
+        ));
         icon_font_button.set_hexpand(true);
         icon_font_row.append(&icon_font_button);
         icon_box.append(&icon_font_row);
@@ -329,7 +335,10 @@ impl ClockDigitalConfigWidget {
 
             if let Some(win) = window {
                 show_font_dialog(Some(&win), None, move |font_desc| {
-                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Monospace".to_string());
+                    let family = font_desc
+                        .family()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "Monospace".to_string());
                     config_clone.borrow_mut().time_font = family.clone();
                     let size = size_spin.value();
                     font_btn.set_label(&format!("{} {:.0}", family, size));
@@ -417,7 +426,10 @@ impl ClockDigitalConfigWidget {
 
             if let Some(win) = window {
                 show_font_dialog(Some(&win), None, move |font_desc| {
-                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                    let family = font_desc
+                        .family()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "Sans".to_string());
                     config_clone.borrow_mut().date_font = family.clone();
                     let size = size_spin.value();
                     font_btn.set_label(&format!("{} {:.0}", family, size));
@@ -529,7 +541,10 @@ impl ClockDigitalConfigWidget {
 
             if let Some(win) = window {
                 show_font_dialog(Some(&win), None, move |font_desc| {
-                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                    let family = font_desc
+                        .family()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "Sans".to_string());
                     config_clone.borrow_mut().icon_font = family.clone();
                     let size_px = size_spin.value();
                     font_btn.set_label(&format!("{} {:.0}px", family, size_px));
@@ -609,18 +624,21 @@ impl ClockDigitalConfigWidget {
         self.show_date_check.set_active(config.show_date);
         self.show_day_name_check.set_active(config.show_day_name);
         self.show_timer_check.set_active(config.show_timer);
-        self.show_alarm_check.set_active(config.show_alarm_indicator);
+        self.show_alarm_check
+            .set_active(config.show_alarm_indicator);
         self.blink_colon_check.set_active(config.blink_colon);
 
         // Time font
-        self.time_font_button.set_label(&format!("{} {:.0}", config.time_font, config.time_size));
+        self.time_font_button
+            .set_label(&format!("{} {:.0}", config.time_font, config.time_size));
         self.time_size_spin.set_value(config.time_size);
         self.time_bold_check.set_active(config.time_bold);
         self.time_italic_check.set_active(config.time_italic);
         self.time_color_widget.set_color(config.time_color);
 
         // Date font
-        self.date_font_button.set_label(&format!("{} {:.0}", config.date_font, config.date_size));
+        self.date_font_button
+            .set_label(&format!("{} {:.0}", config.date_font, config.date_size));
         self.date_size_spin.set_value(config.date_size);
         self.date_bold_check.set_active(config.date_bold);
         self.date_italic_check.set_active(config.date_italic);
@@ -633,7 +651,8 @@ impl ClockDigitalConfigWidget {
         // Icon config
         self.show_icon_check.set_active(config.show_icon);
         self.icon_text_entry.set_text(&config.icon_text);
-        self.icon_font_button.set_label(&format!("{} {:.0}px", config.icon_font, config.icon_size));
+        self.icon_font_button
+            .set_label(&format!("{} {:.0}px", config.icon_font, config.icon_size));
         self.icon_size_spin.set_value(config.icon_size);
         self.icon_bold_check.set_active(config.icon_bold);
 

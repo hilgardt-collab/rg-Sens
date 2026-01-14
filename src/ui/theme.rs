@@ -57,7 +57,10 @@ pub fn apply_system_color_scheme() {
 
     if let Some(settings) = gtk4::Settings::default() {
         settings.set_gtk_application_prefer_dark_theme(prefer_dark);
-        info!("Applied system color scheme: {}", if prefer_dark { "dark" } else { "light" });
+        info!(
+            "Applied system color scheme: {}",
+            if prefer_dark { "dark" } else { "light" }
+        );
     }
 
     // Listen for changes to the system color scheme
@@ -77,7 +80,10 @@ pub fn setup_color_scheme_listener() {
         None => return,
     };
 
-    if schema_source.lookup("org.gnome.desktop.interface", true).is_some() {
+    if schema_source
+        .lookup("org.gnome.desktop.interface", true)
+        .is_some()
+    {
         let settings = gtk4::gio::Settings::new("org.gnome.desktop.interface");
         settings.connect_changed(Some("color-scheme"), |settings, _key| {
             let color_scheme: String = settings.string("color-scheme").to_string();
@@ -85,7 +91,10 @@ pub fn setup_color_scheme_listener() {
 
             if let Some(gtk_settings) = gtk4::Settings::default() {
                 gtk_settings.set_gtk_application_prefer_dark_theme(prefer_dark);
-                info!("System color scheme changed: {}", if prefer_dark { "dark" } else { "light" });
+                info!(
+                    "System color scheme changed: {}",
+                    if prefer_dark { "dark" } else { "light" }
+                );
             }
         });
         // Store settings in thread-local to keep it alive for the lifetime of the app
@@ -100,20 +109,30 @@ pub fn detect_system_dark_mode() -> bool {
     // Method 1: Check freedesktop portal settings via GSettings
     // This works on GNOME, KDE Plasma 5.24+, and other modern desktops
     if let Some(prefer_dark) = check_portal_color_scheme() {
-        info!("Detected color scheme from freedesktop portal: {}", if prefer_dark { "dark" } else { "light" });
+        info!(
+            "Detected color scheme from freedesktop portal: {}",
+            if prefer_dark { "dark" } else { "light" }
+        );
         return prefer_dark;
     }
 
     // Method 2: Check GNOME settings directly
     if let Some(prefer_dark) = check_gnome_color_scheme() {
-        info!("Detected color scheme from GNOME settings: {}", if prefer_dark { "dark" } else { "light" });
+        info!(
+            "Detected color scheme from GNOME settings: {}",
+            if prefer_dark { "dark" } else { "light" }
+        );
         return prefer_dark;
     }
 
     // Method 3: Check GTK_THEME environment variable for dark variant
     if let Ok(theme) = std::env::var("GTK_THEME") {
         let is_dark = theme.to_lowercase().contains("dark");
-        info!("Detected color scheme from GTK_THEME env ({}): {}", theme, if is_dark { "dark" } else { "light" });
+        info!(
+            "Detected color scheme from GTK_THEME env ({}): {}",
+            theme,
+            if is_dark { "dark" } else { "light" }
+        );
         if is_dark {
             return true;
         }
@@ -145,10 +164,16 @@ fn check_portal_color_scheme() -> Option<bool> {
     let schema_source = gtk4::gio::SettingsSchemaSource::default()?;
 
     // Check if the schema exists before creating Settings
-    if schema_source.lookup("org.freedesktop.appearance", true).is_some() {
+    if schema_source
+        .lookup("org.freedesktop.appearance", true)
+        .is_some()
+    {
         let settings = gtk4::gio::Settings::new("org.freedesktop.appearance");
         let color_scheme: u32 = settings.uint("color-scheme");
-        log::debug!("freedesktop.appearance color-scheme value: {} (0=none, 1=dark, 2=light)", color_scheme);
+        log::debug!(
+            "freedesktop.appearance color-scheme value: {} (0=none, 1=dark, 2=light)",
+            color_scheme
+        );
         // 0 = no preference (don't use this method, try next)
         // 1 = prefer dark
         // 2 = prefer light
@@ -167,7 +192,10 @@ fn check_gnome_color_scheme() -> Option<bool> {
     let schema_source = gtk4::gio::SettingsSchemaSource::default()?;
 
     // Check if the schema exists
-    if schema_source.lookup("org.gnome.desktop.interface", true).is_some() {
+    if schema_source
+        .lookup("org.gnome.desktop.interface", true)
+        .is_some()
+    {
         let settings = gtk4::gio::Settings::new("org.gnome.desktop.interface");
         let color_scheme: String = settings.string("color-scheme").to_string();
         log::debug!("GNOME color-scheme value: '{}'", color_scheme);
@@ -184,9 +212,9 @@ fn check_gnome_color_scheme() -> Option<bool> {
 // Combo Panel Theme System
 // ============================================================================
 
+use super::background::{Color, ColorStop, LinearGradientConfig};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use super::background::{Color, ColorStop, LinearGradientConfig};
 
 // ============================================================================
 // Serde Migration Helpers
@@ -217,17 +245,21 @@ where
 /// Deserialize a ColorStopSource from either:
 /// - New format: { "position": 0.5, "color": { "type": "Theme", "index": 1 } }
 /// - Legacy format: { "position": 0.5, "color": { "r": 1.0, ... } } (raw ColorStop)
-pub fn deserialize_color_stop_or_source<'de, D>(deserializer: D) -> Result<ColorStopSource, D::Error>
+pub fn deserialize_color_stop_or_source<'de, D>(
+    deserializer: D,
+) -> Result<ColorStopSource, D::Error>
 where
     D: Deserializer<'de>,
 {
     let value = Value::deserialize(deserializer)?;
 
-    let position = value.get("position")
+    let position = value
+        .get("position")
         .and_then(|v| v.as_f64())
         .ok_or_else(|| serde::de::Error::custom("Missing position field"))?;
 
-    let color_value = value.get("color")
+    let color_value = value
+        .get("color")
         .ok_or_else(|| serde::de::Error::custom("Missing color field"))?;
 
     // Check if color is new ColorSource format or legacy Color format
@@ -236,35 +268,44 @@ where
         ColorSource::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?
     } else if color_value.get("r").is_some() {
         // Legacy format - raw Color
-        let raw_color: Color = Color::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?;
+        let raw_color: Color =
+            Color::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?;
         ColorSource::Custom { color: raw_color }
     } else {
-        return Err(serde::de::Error::custom("Invalid color format in ColorStopSource"));
+        return Err(serde::de::Error::custom(
+            "Invalid color format in ColorStopSource",
+        ));
     };
 
     Ok(ColorStopSource { position, color })
 }
 
 /// Deserialize a Vec<ColorStopSource> from either format
-pub fn deserialize_color_stops_vec<'de, D>(deserializer: D) -> Result<Vec<ColorStopSource>, D::Error>
+pub fn deserialize_color_stops_vec<'de, D>(
+    deserializer: D,
+) -> Result<Vec<ColorStopSource>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let values: Vec<Value> = Vec::deserialize(deserializer)?;
 
-    values.into_iter()
+    values
+        .into_iter()
         .map(|value| {
-            let position = value.get("position")
+            let position = value
+                .get("position")
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| serde::de::Error::custom("Missing position field"))?;
 
-            let color_value = value.get("color")
+            let color_value = value
+                .get("color")
                 .ok_or_else(|| serde::de::Error::custom("Missing color field"))?;
 
             let color = if color_value.get("type").is_some() {
                 ColorSource::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?
             } else if color_value.get("r").is_some() {
-                let raw_color: Color = Color::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?;
+                let raw_color: Color =
+                    Color::deserialize(color_value.clone()).map_err(serde::de::Error::custom)?;
                 ColorSource::Custom { color: raw_color }
             } else {
                 return Err(serde::de::Error::custom("Invalid color format"));
@@ -294,7 +335,9 @@ impl Default for ColorSource {
 impl ColorSource {
     /// Create a theme color reference
     pub fn theme(index: u8) -> Self {
-        ColorSource::Theme { index: index.clamp(1, 4) }
+        ColorSource::Theme {
+            index: index.clamp(1, 4),
+        }
     }
 
     /// Create a custom color
@@ -339,9 +382,14 @@ where
         FontSource::deserialize(value).map_err(serde::de::Error::custom)
     } else if let Some(family) = value.as_str() {
         // Legacy format - just a font family string, use default size
-        Ok(FontSource::Custom { family: family.to_string(), size: 12.0 })
+        Ok(FontSource::Custom {
+            family: family.to_string(),
+            size: 12.0,
+        })
     } else {
-        Err(serde::de::Error::custom("Expected FontSource or font family string"))
+        Err(serde::de::Error::custom(
+            "Expected FontSource or font family string",
+        ))
     }
 }
 
@@ -365,14 +413,20 @@ fn default_font_size() -> f64 {
 
 impl Default for FontSource {
     fn default() -> Self {
-        FontSource::Theme { index: 1, size: 14.0 }
+        FontSource::Theme {
+            index: 1,
+            size: 14.0,
+        }
     }
 }
 
 impl FontSource {
     /// Create a theme font reference with size
     pub fn theme(index: u8, size: f64) -> Self {
-        FontSource::Theme { index: index.clamp(1, 2), size }
+        FontSource::Theme {
+            index: index.clamp(1, 2),
+            size,
+        }
     }
 
     /// Create a custom font
@@ -403,8 +457,14 @@ impl FontSource {
     /// Create a new FontSource with updated size
     pub fn with_size(&self, new_size: f64) -> Self {
         match self {
-            FontSource::Theme { index, .. } => FontSource::Theme { index: *index, size: new_size },
-            FontSource::Custom { family, .. } => FontSource::Custom { family: family.clone(), size: new_size },
+            FontSource::Theme { index, .. } => FontSource::Theme {
+                index: *index,
+                size: new_size,
+            },
+            FontSource::Custom { family, .. } => FontSource::Custom {
+                family: family.clone(),
+                size: new_size,
+            },
         }
     }
 
@@ -441,7 +501,10 @@ impl FontOrString {
         match self {
             FontOrString::Source(source) => Some(source),
             FontOrString::LegacyFamily(family) if family.is_empty() => None,
-            FontOrString::LegacyFamily(family) => Some(FontSource::Custom { family, size: default_size }),
+            FontOrString::LegacyFamily(family) => Some(FontSource::Custom {
+                family,
+                size: default_size,
+            }),
         }
     }
 }
@@ -501,7 +564,9 @@ impl LinearGradientSourceConfig {
     pub fn from_concrete(config: &LinearGradientConfig) -> Self {
         Self {
             angle: config.angle,
-            stops: config.stops.iter()
+            stops: config
+                .stops
+                .iter()
                 .map(|s| ColorStopSource::custom(s.position, s.color))
                 .collect(),
         }
@@ -511,9 +576,7 @@ impl LinearGradientSourceConfig {
     pub fn resolve(&self, theme: &ComboThemeConfig) -> LinearGradientConfig {
         LinearGradientConfig {
             angle: self.angle,
-            stops: self.stops.iter()
-                .map(|s| s.resolve(theme))
-                .collect(),
+            stops: self.stops.iter().map(|s| s.resolve(theme)).collect(),
         }
     }
 }
@@ -630,10 +693,10 @@ impl ComboThemeConfig {
     /// Default theme for LCARS panels
     pub fn default_for_lcars() -> Self {
         Self {
-            color1: Color::new(1.0, 0.6, 0.2, 1.0),       // Orange #ff9933
-            color2: Color::new(0.8, 0.6, 1.0, 1.0),       // Purple #cc99ff
-            color3: Color::new(0.6, 0.8, 0.8, 1.0),       // Teal #99cccc
-            color4: Color::new(1.0, 0.8, 0.6, 1.0),       // Beige #ffcc99
+            color1: Color::new(1.0, 0.6, 0.2, 1.0), // Orange #ff9933
+            color2: Color::new(0.8, 0.6, 1.0, 1.0), // Purple #cc99ff
+            color3: Color::new(0.6, 0.8, 0.8, 1.0), // Teal #99cccc
+            color4: Color::new(1.0, 0.8, 0.6, 1.0), // Beige #ffcc99
             gradient: LinearGradientSourceConfig {
                 angle: 180.0,
                 stops: vec![
@@ -719,9 +782,9 @@ impl ComboThemeConfig {
     /// Default theme for Material Design panels (Teal variant)
     pub fn default_for_material_teal() -> Self {
         Self {
-            color1: Color::new(0.0, 0.588, 0.533, 1.0),   // Teal 500 #009688 - Primary
-            color2: Color::new(0.0, 0.447, 0.420, 1.0),   // Teal 700 #00796b - Secondary
-            color3: Color::new(1.0, 0.341, 0.133, 1.0),   // Deep Orange #ff5722 - Accent
+            color1: Color::new(0.0, 0.588, 0.533, 1.0), // Teal 500 #009688 - Primary
+            color2: Color::new(0.0, 0.447, 0.420, 1.0), // Teal 700 #00796b - Secondary
+            color3: Color::new(1.0, 0.341, 0.133, 1.0), // Deep Orange #ff5722 - Accent
             color4: Color::new(0.459, 0.459, 0.459, 1.0), // Gray #757575 - Highlight
             gradient: LinearGradientSourceConfig {
                 angle: 180.0,
@@ -803,9 +866,9 @@ impl ComboThemeConfig {
     /// Default theme for Fighter HUD panels
     pub fn default_for_fighter_hud() -> Self {
         Self {
-            color1: Color::new(0.0, 0.902, 0.302, 1.0),   // Military green #00e64d
-            color2: Color::new(0.0, 0.451, 0.149, 1.0),   // Dim green #007326
-            color3: Color::new(0.0, 1.0, 0.333, 1.0),     // Bright green #00ff55
+            color1: Color::new(0.0, 0.902, 0.302, 1.0), // Military green #00e64d
+            color2: Color::new(0.0, 0.451, 0.149, 1.0), // Dim green #007326
+            color3: Color::new(0.0, 1.0, 0.333, 1.0),   // Bright green #00ff55
             color4: Color::new(0.039, 0.039, 0.039, 1.0), // Black #0a0a0a
             gradient: LinearGradientSourceConfig {
                 angle: 180.0,

@@ -141,11 +141,15 @@ impl Displayer for SynthwaveDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("synthwave_config") {
-            if let Ok(display_config) = serde_json::from_value::<SynthwaveDisplayConfig>(config_value.clone()) {
+            if let Ok(display_config) =
+                serde_json::from_value::<SynthwaveDisplayConfig>(config_value.clone())
+            {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
-            if let Ok(frame_config) = serde_json::from_value::<SynthwaveFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) =
+                serde_json::from_value::<SynthwaveFrameConfig>(config_value.clone())
+            {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }
@@ -158,8 +162,8 @@ impl Displayer for SynthwaveDisplayer {
     }
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
-        self.inner.get_config().map(|frame| {
-            DisplayerConfig::Synthwave(SynthwaveDisplayConfig::from_frame(frame))
-        })
+        self.inner
+            .get_config()
+            .map(|frame| DisplayerConfig::Synthwave(SynthwaveDisplayConfig::from_frame(frame)))
     }
 }

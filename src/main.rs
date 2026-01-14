@@ -5,12 +5,15 @@ use gtk4::Application;
 use log::{error, info, warn};
 use rg_sens::config::AppConfig;
 use rg_sens::core::{PanelData, PanelGeometry, UpdateManager};
-use rg_sens::ui::{GridConfig as UiGridConfig, GridLayout, theme, window_settings_dialog, new_panel_dialog, config_helpers, context_menu, auto_scroll};
+use rg_sens::ui::{
+    auto_scroll, config_helpers, context_menu, new_panel_dialog, theme, window_settings_dialog,
+    GridConfig as UiGridConfig, GridLayout,
+};
 use rg_sens::{displayers, sources};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 const APP_ID: &str = "rg-sens";
@@ -83,9 +86,13 @@ fn parse_coordinates(s: &str) -> Result<(i32, i32), String> {
     if parts.len() != 2 {
         return Err(format!("Expected format: X,Y (e.g., 50,50), got: {}", s));
     }
-    let x = parts[0].trim().parse::<i32>()
+    let x = parts[0]
+        .trim()
+        .parse::<i32>()
         .map_err(|e| format!("Invalid X coordinate: {}", e))?;
-    let y = parts[1].trim().parse::<i32>()
+    let y = parts[1]
+        .trim()
+        .parse::<i32>()
         .map_err(|e| format!("Invalid Y coordinate: {}", e))?;
     Ok((x, y))
 }
@@ -105,7 +112,7 @@ fn set_app_icon() {
     // Add search paths for the icon theme
     // GTK expects: {search_path}/hicolor/{size}/apps/rg-sens.png
     let search_paths = [
-        concat!(env!("CARGO_MANIFEST_DIR"), "/data/icons"),  // Development: data/icons
+        concat!(env!("CARGO_MANIFEST_DIR"), "/data/icons"), // Development: data/icons
         "/usr/share/icons",
         "/usr/local/share/icons",
     ];
@@ -122,7 +129,10 @@ fn set_app_icon() {
     if icon_theme.has_icon("rg-sens") {
         info!("Application icon 'rg-sens' found in icon theme");
     } else {
-        warn!("Application icon 'rg-sens' not found. Search paths: {:?}", search_paths);
+        warn!(
+            "Application icon 'rg-sens' not found. Search paths: {:?}",
+            search_paths
+        );
     }
 }
 
@@ -156,7 +166,10 @@ fn main() {
         // Log the default renderer being used
         info!("Using default GTK renderer (use --renderer to change)");
     } else {
-        info!("Using GSK_RENDERER={} from environment", std::env::var("GSK_RENDERER").unwrap());
+        info!(
+            "Using GSK_RENDERER={} from environment",
+            std::env::var("GSK_RENDERER").unwrap()
+        );
     }
 
     // Handle --list option (list monitors and exit)
@@ -197,15 +210,18 @@ fn list_available_monitors() {
         for i in 0..n_monitors {
             if let Some(obj) = display.monitors().item(i) {
                 if let Ok(monitor) = obj.downcast::<gtk4::gdk::Monitor>() {
-                    let connector = monitor.connector()
+                    let connector = monitor
+                        .connector()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| format!("Monitor {}", i));
 
-                    let model = monitor.model()
+                    let model = monitor
+                        .model()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "Unknown".to_string());
 
-                    let manufacturer = monitor.manufacturer()
+                    let manufacturer = monitor
+                        .manufacturer()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "Unknown".to_string());
 
@@ -215,7 +231,12 @@ fn list_available_monitors() {
 
                     println!("  {} - {} {}", i, manufacturer, model);
                     println!("      Connector: {}", connector);
-                    println!("      Resolution: {}x{} @ {:.0}Hz", geometry.width(), geometry.height(), refresh);
+                    println!(
+                        "      Resolution: {}x{} @ {:.0}Hz",
+                        geometry.width(),
+                        geometry.height(),
+                        refresh
+                    );
                     println!("      Position: ({}, {})", geometry.x(), geometry.y());
                     println!("      Scale factor: {}", scale);
                     println!();
@@ -300,7 +321,11 @@ fn build_ui(app: &Application) {
                 cfg.alarms.clone(),
                 Some(cfg.global_timer_sound.clone()),
             );
-            info!("Loaded {} timers and {} alarms from config", cfg.timers.len(), cfg.alarms.len());
+            info!(
+                "Loaded {} timers and {} alarms from config",
+                cfg.timers.len(),
+                cfg.alarms.len()
+            );
         }
     }
 
@@ -369,9 +394,39 @@ fn build_ui(app: &Application) {
 
         // Create default panels using PanelData
         let default_panels = vec![
-            PanelData::with_types("panel-1".to_string(), PanelGeometry { x: 0, y: 0, width: 1, height: 1 }, "cpu", "text"),
-            PanelData::with_types("panel-2".to_string(), PanelGeometry { x: 1, y: 0, width: 1, height: 1 }, "cpu", "text"),
-            PanelData::with_types("panel-3".to_string(), PanelGeometry { x: 0, y: 1, width: 2, height: 1 }, "cpu", "text"),
+            PanelData::with_types(
+                "panel-1".to_string(),
+                PanelGeometry {
+                    x: 0,
+                    y: 0,
+                    width: 1,
+                    height: 1,
+                },
+                "cpu",
+                "text",
+            ),
+            PanelData::with_types(
+                "panel-2".to_string(),
+                PanelGeometry {
+                    x: 1,
+                    y: 0,
+                    width: 1,
+                    height: 1,
+                },
+                "cpu",
+                "text",
+            ),
+            PanelData::with_types(
+                "panel-3".to_string(),
+                PanelGeometry {
+                    x: 0,
+                    y: 1,
+                    width: 2,
+                    height: 1,
+                },
+                "cpu",
+                "text",
+            ),
         ];
 
         for panel_data in default_panels {
@@ -430,7 +485,13 @@ fn build_ui(app: &Application) {
     window_background.set_draw_func(move |_, cr, width, height| {
         use rg_sens::ui::background::render_background_with_theme;
         let cfg = app_config_for_bg.borrow();
-        let _ = render_background_with_theme(cr, &cfg.window.background, width as f64, height as f64, Some(&cfg.global_theme));
+        let _ = render_background_with_theme(
+            cr,
+            &cfg.window.background,
+            width as f64,
+            height as f64,
+            Some(&cfg.global_theme),
+        );
     });
 
     // Set initial background size to match grid content size
@@ -498,8 +559,10 @@ fn build_ui(app: &Application) {
     // Only restore if:
     // - Not fullscreen (CLI or config)
     // - No CLI options that override window state (--windowed, -f, -b, -a)
-    let cli_overrides_maximized = cli.windowed || cli.fullscreen.is_some() || cli.borderless.is_some() || cli.at.is_some();
-    let should_maximize = !should_fullscreen && !cli_overrides_maximized && app_config.borrow().window.maximized;
+    let cli_overrides_maximized =
+        cli.windowed || cli.fullscreen.is_some() || cli.borderless.is_some() || cli.at.is_some();
+    let should_maximize =
+        !should_fullscreen && !cli_overrides_maximized && app_config.borrow().window.maximized;
     if should_maximize {
         window.maximize();
         info!("Restored maximized window state");
@@ -521,10 +584,16 @@ fn build_ui(app: &Application) {
                 if let Some(mon) = display.monitors().item(monitor_idx) {
                     if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
                         let geometry = monitor.geometry();
-                        info!("Targeting borderless window on monitor {} ({}) at ({}, {})",
-                              monitor_idx,
-                              monitor.connector().map(|s| s.to_string()).unwrap_or_default(),
-                              geometry.x(), geometry.y());
+                        info!(
+                            "Targeting borderless window on monitor {} ({}) at ({}, {})",
+                            monitor_idx,
+                            monitor
+                                .connector()
+                                .map(|s| s.to_string())
+                                .unwrap_or_default(),
+                            geometry.x(),
+                            geometry.y()
+                        );
                         // Note: GTK4 doesn't have direct window positioning API
                         // The window manager will place the window, but we store
                         // the monitor info so we can restore fullscreen correctly
@@ -566,7 +635,8 @@ fn build_ui(app: &Application) {
     // Mark config as dirty and update background size when panels are moved
     let config_dirty_clone = config_dirty.clone();
     let window_bg_for_change = window_background.clone();
-    let grid_layout_for_change = Rc::new(RefCell::new(None::<Rc<RefCell<rg_sens::ui::GridLayout>>>));
+    let grid_layout_for_change =
+        Rc::new(RefCell::new(None::<Rc<RefCell<rg_sens::ui::GridLayout>>>));
     let grid_layout_for_change_clone = grid_layout_for_change.clone();
     grid_layout.set_on_change(move || {
         config_dirty_clone.store(true, Ordering::Relaxed);
@@ -590,7 +660,13 @@ fn build_ui(app: &Application) {
     const EDGE_THRESHOLD: f64 = 10.0;
 
     /// Detect which edge/corner the cursor is near, if any
-    fn detect_edge(x: f64, y: f64, width: f64, height: f64, threshold: f64) -> Option<gtk4::gdk::SurfaceEdge> {
+    fn detect_edge(
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        threshold: f64,
+    ) -> Option<gtk4::gdk::SurfaceEdge> {
         let near_left = x < threshold;
         let near_right = x > width - threshold;
         let near_top = y < threshold;
@@ -613,8 +689,12 @@ fn build_ui(app: &Application) {
         // Check if Ctrl is pressed (via event modifiers) and borderless mode is enabled
         // Note: Using Ctrl instead of Shift because Shift triggers GNOME's edge snapping
         let event = gesture.current_event();
-        let is_ctrl = event.as_ref()
-            .map(|e| e.modifier_state().contains(gtk4::gdk::ModifierType::CONTROL_MASK))
+        let is_ctrl = event
+            .as_ref()
+            .map(|e| {
+                e.modifier_state()
+                    .contains(gtk4::gdk::ModifierType::CONTROL_MASK)
+            })
             .unwrap_or(false);
         let is_borderless = app_config_for_drag.borrow().window.borderless;
         let is_fullscreen = window_for_drag.is_fullscreen();
@@ -678,7 +758,12 @@ fn build_ui(app: &Application) {
 
         // Check if near an edge for resize, otherwise move
         if let Some(edge) = detect_edge(win_x, win_y, win_width, win_height, EDGE_THRESHOLD) {
-            log::info!("Borderless window resize: Ctrl+drag at ({}, {}) edge {:?}", x, y, edge);
+            log::info!(
+                "Borderless window resize: Ctrl+drag at ({}, {}) edge {:?}",
+                x,
+                y,
+                edge
+            );
             toplevel.begin_resize(edge, Some(dev), button, win_x, win_y, timestamp);
         } else {
             log::info!("Borderless window move: Ctrl+drag at ({}, {})", x, y);
@@ -724,7 +809,10 @@ fn build_ui(app: &Application) {
         // Check if Ctrl is pressed
         let is_ctrl = controller
             .current_event()
-            .map(|e| e.modifier_state().contains(gtk4::gdk::ModifierType::CONTROL_MASK))
+            .map(|e| {
+                e.modifier_state()
+                    .contains(gtk4::gdk::ModifierType::CONTROL_MASK)
+            })
             .unwrap_or(false);
 
         if !is_ctrl {
@@ -781,10 +869,11 @@ fn build_ui(app: &Application) {
         // Schedule hide after 500ms of no resize events
         let grid_layout_hide = grid_layout_for_resize_w.clone();
         let timer_ref = resize_timer_w.clone();
-        let source_id = glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
-            grid_layout_hide.borrow().set_grid_visible(false);
-            *timer_ref.borrow_mut() = None;
-        });
+        let source_id =
+            glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+                grid_layout_hide.borrow().set_grid_visible(false);
+                *timer_ref.borrow_mut() = None;
+            });
         *resize_timer_w.borrow_mut() = Some(source_id);
     });
 
@@ -806,10 +895,11 @@ fn build_ui(app: &Application) {
         // Schedule hide after 500ms of no resize events
         let grid_layout_hide = grid_layout_for_resize_h.clone();
         let timer_ref = resize_timer_h.clone();
-        let source_id = glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
-            grid_layout_hide.borrow().set_grid_visible(false);
-            *timer_ref.borrow_mut() = None;
-        });
+        let source_id =
+            glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+                grid_layout_hide.borrow().set_grid_visible(false);
+                *timer_ref.borrow_mut() = None;
+            });
         *resize_timer_h.borrow_mut() = Some(source_id);
     });
 
@@ -829,7 +919,6 @@ fn build_ui(app: &Application) {
         };
         grid_layout.borrow().set_viewport_size(vp_width, vp_height);
     }
-
 
     // Setup auto-scroll using the auto_scroll module
     let start_auto_scroll = auto_scroll::create_auto_scroll_starter(
@@ -892,7 +981,7 @@ fn build_ui(app: &Application) {
             border: none;
             box-shadow: none;
             min-height: 0;
-        }"
+        }",
     );
     gtk4::style_context_add_provider_for_display(
         &gtk4::prelude::WidgetExt::display(&window),
@@ -924,10 +1013,16 @@ fn build_ui(app: &Application) {
             let is_fullscreen = window_for_fullscreen.is_fullscreen();
             if is_fullscreen {
                 window_for_fullscreen.unfullscreen();
-                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = false;
+                app_config_for_fullscreen
+                    .borrow_mut()
+                    .window
+                    .fullscreen_enabled = false;
             } else {
                 window_for_fullscreen.fullscreen();
-                app_config_for_fullscreen.borrow_mut().window.fullscreen_enabled = true;
+                app_config_for_fullscreen
+                    .borrow_mut()
+                    .window
+                    .fullscreen_enabled = true;
                 // Briefly show the auto-hide menu to indicate fullscreen mode
                 revealer_for_fullscreen.set_reveal_child(true);
                 let revealer_hide = revealer_for_fullscreen.clone();
@@ -1041,8 +1136,8 @@ fn build_ui(app: &Application) {
 
     key_controller.connect_key_pressed(move |_, key, _code, modifiers| {
         // Ctrl+Comma opens settings
-        if modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK)
-            && key == gtk4::gdk::Key::comma {
+        if modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK) && key == gtk4::gdk::Key::comma
+        {
             window_settings_dialog::show_window_settings_dialog(
                 &window_clone_for_settings,
                 &app_config_for_settings,
@@ -1106,7 +1201,9 @@ fn build_ui(app: &Application) {
     // Hide grid when space is released
     key_controller.connect_key_released(move |_, key, _code, _modifiers| {
         if key == gtk4::gdk::Key::space {
-            grid_layout_for_space_release.borrow().set_grid_visible(false);
+            grid_layout_for_space_release
+                .borrow()
+                .set_grid_visible(false);
         }
     });
 
@@ -1161,16 +1258,14 @@ fn setup_auto_hide_header(
         let popover_check = popover.clone();
         let mouse_over_check = mouse_over_header.clone();
         let timer_ref = timer.clone();
-        let source_id = glib::timeout_add_local_once(
-            std::time::Duration::from_millis(delay_ms),
-            move || {
+        let source_id =
+            glib::timeout_add_local_once(std::time::Duration::from_millis(delay_ms), move || {
                 // Only hide if popover is not visible and mouse is not over header
                 if !popover_check.is_visible() && !*mouse_over_check.borrow() {
                     revealer_hide.set_reveal_child(false);
                 }
                 *timer_ref.borrow_mut() = None;
-            },
-        );
+            });
         *timer.borrow_mut() = Some(source_id);
     }
 
@@ -1192,7 +1287,13 @@ fn setup_auto_hide_header(
         *mouse_over_header_exit.borrow_mut() = false;
         // Schedule hide when leaving header area (unless popover is open)
         if revealer_header_leave.reveals_child() && !popover_header_leave.is_visible() {
-            schedule_hide(&hide_timer_header_leave, &revealer_header_leave, &popover_header_leave, &mouse_over_header_exit, 2000);
+            schedule_hide(
+                &hide_timer_header_leave,
+                &revealer_header_leave,
+                &popover_header_leave,
+                &mouse_over_header_exit,
+                2000,
+            );
         }
     });
 
@@ -1205,16 +1306,34 @@ fn setup_auto_hide_header(
             // Mouse at top - show menu immediately
             cancel_hide_timer(&hide_timer_motion);
             revealer_motion.set_reveal_child(true);
-        } else if revealer_motion.reveals_child() && !popover_motion.is_visible() && !*mouse_over_header_motion.borrow() {
+        } else if revealer_motion.reveals_child()
+            && !popover_motion.is_visible()
+            && !*mouse_over_header_motion.borrow()
+        {
             // Mouse moved away, popover is not open, and not over header - schedule hide
-            schedule_hide(&hide_timer_motion, &revealer_motion, &popover_motion, &mouse_over_header_motion, 2000);
+            schedule_hide(
+                &hide_timer_motion,
+                &revealer_motion,
+                &popover_motion,
+                &mouse_over_header_motion,
+                2000,
+            );
         }
     });
 
     motion_controller.connect_leave(move |_| {
         // Mouse left window - hide menu after delay (unless popover is open or over header)
-        if revealer_leave.reveals_child() && !popover_leave.is_visible() && !*mouse_over_header_leave.borrow() {
-            schedule_hide(&hide_timer_leave, &revealer_leave, &popover_leave, &mouse_over_header_leave, 2000);
+        if revealer_leave.reveals_child()
+            && !popover_leave.is_visible()
+            && !*mouse_over_header_leave.borrow()
+        {
+            schedule_hide(
+                &hide_timer_leave,
+                &revealer_leave,
+                &popover_leave,
+                &mouse_over_header_leave,
+                2000,
+            );
         }
     });
 
@@ -1228,8 +1347,13 @@ fn setup_auto_hide_header(
     popover.connect_closed(move |_| {
         // When popover closes, schedule hide after delay
         if revealer_popover.reveals_child() {
-            schedule_hide(&hide_timer_popover, &revealer_popover, &popover_for_close, &mouse_over_header_popover, 2000);
+            schedule_hide(
+                &hide_timer_popover,
+                &revealer_popover,
+                &popover_for_close,
+                &mouse_over_header_popover,
+                2000,
+            );
         }
     });
 }
-

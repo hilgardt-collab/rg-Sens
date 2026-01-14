@@ -4,25 +4,25 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList, ScrolledWindow,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation, Scale,
+    ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::color_button_widget::ColorButtonWidget;
-use crate::ui::retro_terminal_display::{
-    render_retro_terminal_frame, PhosphorColor, BezelStyle,
-    TerminalHeaderStyle, TerminalDividerStyle,
-};
-use crate::ui::lcars_display::SplitOrientation;
-use crate::ui::background::Color;
-use crate::displayers::RetroTerminalDisplayConfig;
 use crate::core::FieldMetadata;
+use crate::displayers::RetroTerminalDisplayConfig;
+use crate::ui::background::Color;
+use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
+use crate::ui::lcars_display::SplitOrientation;
+use crate::ui::retro_terminal_display::{
+    render_retro_terminal_frame, BezelStyle, PhosphorColor, TerminalDividerStyle,
+    TerminalHeaderStyle,
+};
 use crate::ui::theme::ColorSource;
 use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::widget_builder::{create_section_header, ConfigWidgetBuilder};
 
 /// Holds references to Colors tab widgets
 struct ColorsWidgets {
@@ -111,8 +111,10 @@ impl RetroTerminalConfigWidget {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(RetroTerminalDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let colors_widgets: Rc<RefCell<Option<ColorsWidgets>>> = Rc::new(RefCell::new(None));
         let effects_widgets: Rc<RefCell<Option<EffectsWidgets>>> = Rc::new(RefCell::new(None));
         let bezel_widgets: Rc<RefCell<Option<BezelWidgets>>> = Rc::new(RefCell::new(None));
@@ -120,7 +122,8 @@ impl RetroTerminalConfigWidget {
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -141,30 +144,52 @@ impl RetroTerminalConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme (consolidated with Colors)
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers, &colors_widgets);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+            &colors_widgets,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: CRT Effects
-        let effects_page = Self::create_effects_page(&config, &on_change, &preview, &effects_widgets);
+        let effects_page =
+            Self::create_effects_page(&config, &on_change, &preview, &effects_widgets);
         notebook.append_page(&effects_page, Some(&Label::new(Some("CRT Effects"))));
 
         // Tab 3: Bezel
-        let bezel_page = Self::create_bezel_page(&config, &on_change, &preview, &bezel_widgets, &theme_ref_refreshers);
+        let bezel_page = Self::create_bezel_page(
+            &config,
+            &on_change,
+            &preview,
+            &bezel_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&bezel_page, Some(&Label::new(Some("Bezel"))));
 
         // Tab 4: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
+        let header_page = Self::create_header_page(
+            &config,
+            &on_change,
+            &preview,
+            &header_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
         // Tab 5: Layout
@@ -173,7 +198,15 @@ impl RetroTerminalConfigWidget {
 
         // Tab 6: Content - with dynamic per-slot notebook
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &available_fields,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 7: Animation
@@ -218,12 +251,22 @@ impl RetroTerminalConfigWidget {
         page.append(&create_section_header("Scanlines"));
 
         let scanline_intensity_scale = builder.scale_row(
-            &page, "Intensity:", 0.0, 1.0, 0.05, config.borrow().frame.scanline_intensity,
+            &page,
+            "Intensity:",
+            0.0,
+            1.0,
+            0.05,
+            config.borrow().frame.scanline_intensity,
             |cfg, v| cfg.frame.scanline_intensity = v,
         );
 
         let scanline_spacing_spin = builder.spin_row(
-            &page, "Spacing:", 1.0, 8.0, 0.5, config.borrow().frame.scanline_spacing,
+            &page,
+            "Spacing:",
+            1.0,
+            8.0,
+            0.5,
+            config.borrow().frame.scanline_spacing,
             |cfg, v| cfg.frame.scanline_spacing = v,
         );
 
@@ -233,22 +276,39 @@ impl RetroTerminalConfigWidget {
         page.append(&crt_label);
 
         let curvature_scale = builder.scale_row(
-            &page, "Curvature:", 0.0, 0.1, 0.01, config.borrow().frame.curvature_amount,
+            &page,
+            "Curvature:",
+            0.0,
+            0.1,
+            0.01,
+            config.borrow().frame.curvature_amount,
             |cfg, v| cfg.frame.curvature_amount = v,
         );
 
         let vignette_scale = builder.scale_row(
-            &page, "Vignette:", 0.0, 1.0, 0.05, config.borrow().frame.vignette_intensity,
+            &page,
+            "Vignette:",
+            0.0,
+            1.0,
+            0.05,
+            config.borrow().frame.vignette_intensity,
             |cfg, v| cfg.frame.vignette_intensity = v,
         );
 
         let glow_scale = builder.scale_row(
-            &page, "Screen Glow:", 0.0, 1.0, 0.05, config.borrow().frame.screen_glow,
+            &page,
+            "Screen Glow:",
+            0.0,
+            1.0,
+            0.05,
+            config.borrow().frame.screen_glow,
             |cfg, v| cfg.frame.screen_glow = v,
         );
 
         let flicker_check = builder.check_button(
-            &page, "Enable Screen Flicker", config.borrow().frame.flicker_enabled,
+            &page,
+            "Enable Screen Flicker",
+            config.borrow().frame.flicker_enabled,
             |cfg, v| cfg.frame.flicker_enabled = v,
         );
 
@@ -363,7 +423,9 @@ impl RetroTerminalConfigWidget {
         // LED color
         let led_color_box = GtkBox::new(Orientation::Horizontal, 6);
         led_color_box.append(&Label::new(Some("LED Color:")));
-        let led_color_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.power_led_color));
+        let led_color_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.power_led_color,
+        ));
         led_color_box.append(led_color_widget.widget());
 
         let config_clone = config.clone();
@@ -485,7 +547,9 @@ impl RetroTerminalConfigWidget {
         page.append(&font_label);
 
         // Header font selector (theme-aware)
-        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        let header_font_selector = Rc::new(ThemeFontSelector::new(
+            config.borrow().frame.header_font.clone(),
+        ));
         header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         page.append(header_font_selector.widget());
 
@@ -530,8 +594,10 @@ impl RetroTerminalConfigWidget {
         // Split orientation
         let orientation_box = GtkBox::new(Orientation::Horizontal, 6);
         orientation_box.append(&Label::new(Some("Group Direction:")));
-        let orientation_list = StringList::new(&["Horizontal (side by side)", "Vertical (stacked)"]);
-        let split_orientation_dropdown = DropDown::new(Some(orientation_list), None::<gtk4::Expression>);
+        let orientation_list =
+            StringList::new(&["Horizontal (side by side)", "Vertical (stacked)"]);
+        let split_orientation_dropdown =
+            DropDown::new(Some(orientation_list), None::<gtk4::Expression>);
         let orient_idx = match config.borrow().frame.split_orientation {
             SplitOrientation::Horizontal => 0,
             SplitOrientation::Vertical => 1,
@@ -583,7 +649,14 @@ impl RetroTerminalConfigWidget {
         // Divider style
         let div_style_box = GtkBox::new(Orientation::Horizontal, 6);
         div_style_box.append(&Label::new(Some("Style:")));
-        let div_style_list = StringList::new(&["Dashed ------", "Solid ======", "Box Drawing", "Pipe |||", "ASCII ====", "None"]);
+        let div_style_list = StringList::new(&[
+            "Dashed ------",
+            "Solid ======",
+            "Box Drawing",
+            "Pipe |||",
+            "ASCII ====",
+            "None",
+        ]);
         let divider_style_dropdown = DropDown::new(Some(div_style_list), None::<gtk4::Expression>);
         let div_style_idx = match config.borrow().frame.divider_style {
             TerminalDividerStyle::Dashed => 0,
@@ -660,38 +733,128 @@ impl RetroTerminalConfigWidget {
     fn theme_colors_for_phosphor(phosphor: &PhosphorColor) -> [Color; 4] {
         match phosphor {
             PhosphorColor::Green => [
-                Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 },   // Primary: bright green
-                Color { r: 0.1, g: 0.6, b: 0.1, a: 1.0 },   // Secondary: dark green
-                Color { r: 0.3, g: 0.8, b: 0.3, a: 1.0 },   // Accent: medium green
-                Color { r: 0.5, g: 1.0, b: 0.5, a: 1.0 },   // Highlight: light green
+                Color {
+                    r: 0.2,
+                    g: 1.0,
+                    b: 0.2,
+                    a: 1.0,
+                }, // Primary: bright green
+                Color {
+                    r: 0.1,
+                    g: 0.6,
+                    b: 0.1,
+                    a: 1.0,
+                }, // Secondary: dark green
+                Color {
+                    r: 0.3,
+                    g: 0.8,
+                    b: 0.3,
+                    a: 1.0,
+                }, // Accent: medium green
+                Color {
+                    r: 0.5,
+                    g: 1.0,
+                    b: 0.5,
+                    a: 1.0,
+                }, // Highlight: light green
             ],
             PhosphorColor::Amber => [
-                Color { r: 1.0, g: 0.69, b: 0.0, a: 1.0 },  // Primary: bright amber
-                Color { r: 0.6, g: 0.4, b: 0.0, a: 1.0 },   // Secondary: dark amber
-                Color { r: 0.8, g: 0.55, b: 0.0, a: 1.0 },  // Accent: medium amber
-                Color { r: 1.0, g: 0.8, b: 0.3, a: 1.0 },   // Highlight: light amber
+                Color {
+                    r: 1.0,
+                    g: 0.69,
+                    b: 0.0,
+                    a: 1.0,
+                }, // Primary: bright amber
+                Color {
+                    r: 0.6,
+                    g: 0.4,
+                    b: 0.0,
+                    a: 1.0,
+                }, // Secondary: dark amber
+                Color {
+                    r: 0.8,
+                    g: 0.55,
+                    b: 0.0,
+                    a: 1.0,
+                }, // Accent: medium amber
+                Color {
+                    r: 1.0,
+                    g: 0.8,
+                    b: 0.3,
+                    a: 1.0,
+                }, // Highlight: light amber
             ],
             PhosphorColor::White => [
-                Color { r: 0.9, g: 0.9, b: 0.85, a: 1.0 },  // Primary: white
-                Color { r: 0.5, g: 0.5, b: 0.48, a: 1.0 },  // Secondary: gray
-                Color { r: 0.7, g: 0.7, b: 0.67, a: 1.0 },  // Accent: light gray
-                Color { r: 1.0, g: 1.0, b: 0.95, a: 1.0 },  // Highlight: bright white
+                Color {
+                    r: 0.9,
+                    g: 0.9,
+                    b: 0.85,
+                    a: 1.0,
+                }, // Primary: white
+                Color {
+                    r: 0.5,
+                    g: 0.5,
+                    b: 0.48,
+                    a: 1.0,
+                }, // Secondary: gray
+                Color {
+                    r: 0.7,
+                    g: 0.7,
+                    b: 0.67,
+                    a: 1.0,
+                }, // Accent: light gray
+                Color {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 0.95,
+                    a: 1.0,
+                }, // Highlight: bright white
             ],
             PhosphorColor::Blue => [
-                Color { r: 0.4, g: 0.6, b: 1.0, a: 1.0 },   // Primary: bright blue
-                Color { r: 0.2, g: 0.3, b: 0.6, a: 1.0 },   // Secondary: dark blue
-                Color { r: 0.3, g: 0.5, b: 0.8, a: 1.0 },   // Accent: medium blue
-                Color { r: 0.6, g: 0.8, b: 1.0, a: 1.0 },   // Highlight: light blue
+                Color {
+                    r: 0.4,
+                    g: 0.6,
+                    b: 1.0,
+                    a: 1.0,
+                }, // Primary: bright blue
+                Color {
+                    r: 0.2,
+                    g: 0.3,
+                    b: 0.6,
+                    a: 1.0,
+                }, // Secondary: dark blue
+                Color {
+                    r: 0.3,
+                    g: 0.5,
+                    b: 0.8,
+                    a: 1.0,
+                }, // Accent: medium blue
+                Color {
+                    r: 0.6,
+                    g: 0.8,
+                    b: 1.0,
+                    a: 1.0,
+                }, // Highlight: light blue
             ],
             PhosphorColor::Custom(c) => {
                 // For custom, generate variations based on the custom color
-                let dim = Color { r: c.r * 0.6, g: c.g * 0.6, b: c.b * 0.6, a: c.a };
-                let accent = Color { r: c.r * 0.8, g: c.g * 0.8, b: c.b * 0.8, a: c.a };
+                let dim = Color {
+                    r: c.r * 0.6,
+                    g: c.g * 0.6,
+                    b: c.b * 0.6,
+                    a: c.a,
+                };
+                let accent = Color {
+                    r: c.r * 0.8,
+                    g: c.g * 0.8,
+                    b: c.b * 0.8,
+                    a: c.a,
+                };
                 let highlight = Color {
                     r: (c.r * 1.2).min(1.0),
                     g: (c.g * 1.2).min(1.0),
                     b: (c.b * 1.2).min(1.0),
-                    a: c.a
+                    a: c.a,
                 };
                 [*c, dim, accent, highlight]
             }
@@ -734,7 +897,8 @@ impl RetroTerminalConfigWidget {
         // Phosphor color preset
         let phosphor_box = GtkBox::new(Orientation::Horizontal, 6);
         phosphor_box.append(&Label::new(Some("Phosphor Color:")));
-        let phosphor_list = StringList::new(&["Green (P1)", "Amber (P3)", "White (P4)", "Blue", "Custom"]);
+        let phosphor_list =
+            StringList::new(&["Green (P1)", "Amber (P3)", "White (P4)", "Blue", "Custom"]);
         let phosphor_dropdown = DropDown::new(Some(phosphor_list), None::<gtk4::Expression>);
         let phosphor_idx = match &config.borrow().frame.phosphor_color {
             PhosphorColor::Green => 0,
@@ -754,7 +918,12 @@ impl RetroTerminalConfigWidget {
         let custom_color = if let PhosphorColor::Custom(c) = &config.borrow().frame.phosphor_color {
             *c
         } else {
-            Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 }
+            Color {
+                r: 0.2,
+                g: 1.0,
+                b: 0.2,
+                a: 1.0,
+            }
         };
         let custom_phosphor_widget = Rc::new(ColorButtonWidget::new(custom_color));
         custom_phosphor_box.append(custom_phosphor_widget.widget());
@@ -764,7 +933,9 @@ impl RetroTerminalConfigWidget {
         // Background color
         let bg_box = GtkBox::new(Orientation::Horizontal, 6);
         bg_box.append(&Label::new(Some("Screen Background:")));
-        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
+        let background_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.background_color,
+        ));
         bg_box.append(background_widget.widget());
         terminal_colors_box.append(&bg_box);
 
@@ -996,7 +1167,15 @@ impl RetroTerminalConfigWidget {
         page.append(&scrolled);
 
         drop(notebook);
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_tabs(
+            config,
+            on_change,
+            preview,
+            content_notebook,
+            source_summaries,
+            available_fields,
+            theme_ref_refreshers,
+        );
 
         page
     }
@@ -1030,7 +1209,10 @@ impl RetroTerminalConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_bar_config_terminal() -> crate::ui::BarDisplayConfig {
-        use crate::ui::bar_display::{BarDisplayConfig, BarStyle, BarOrientation, BarFillDirection, BarFillType, BarBackgroundType, BorderConfig};
+        use crate::ui::bar_display::{
+            BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
+            BarStyle, BorderConfig,
+        };
 
         let mut config = BarDisplayConfig::default();
         config.style = BarStyle::Full;
@@ -1039,14 +1221,29 @@ impl RetroTerminalConfigWidget {
 
         // Terminal green phosphor
         config.foreground = BarFillType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.2,
+                g: 1.0,
+                b: 0.2,
+                a: 1.0,
+            }),
         };
         config.background = BarBackgroundType::Solid {
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.05, g: 0.1, b: 0.05, a: 1.0 })
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.05,
+                g: 0.1,
+                b: 0.05,
+                a: 1.0,
+            }),
         };
         config.border = BorderConfig {
             enabled: true,
-            color: crate::ui::theme::ColorSource::custom(Color { r: 0.1, g: 0.5, b: 0.1, a: 1.0 }),
+            color: crate::ui::theme::ColorSource::custom(Color {
+                r: 0.1,
+                g: 0.5,
+                b: 0.1,
+                a: 1.0,
+            }),
             width: 1.0,
         };
         config.corner_radius = 0.0;
@@ -1058,22 +1255,57 @@ impl RetroTerminalConfigWidget {
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
     fn default_graph_config_terminal() -> crate::ui::GraphDisplayConfig {
-        use crate::ui::graph_display::{GraphDisplayConfig, GraphType, LineStyle, FillMode};
+        use crate::ui::graph_display::{FillMode, GraphDisplayConfig, GraphType, LineStyle};
 
         let mut config = GraphDisplayConfig::default();
         config.graph_type = GraphType::Line;
         config.line_style = LineStyle::Solid;
         config.line_width = 1.5;
-        config.line_color = ColorSource::custom(Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 });  // Phosphor green
+        config.line_color = ColorSource::custom(Color {
+            r: 0.2,
+            g: 1.0,
+            b: 0.2,
+            a: 1.0,
+        }); // Phosphor green
         config.fill_mode = FillMode::Gradient;
-        config.fill_gradient_start = ColorSource::custom(Color { r: 0.1, g: 0.5, b: 0.1, a: 0.3 });
-        config.fill_gradient_end = ColorSource::custom(Color { r: 0.05, g: 0.2, b: 0.05, a: 0.0 });
-        config.background_color = Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 };
-        config.plot_background_color = Color { r: 0.02, g: 0.05, b: 0.02, a: 1.0 };
+        config.fill_gradient_start = ColorSource::custom(Color {
+            r: 0.1,
+            g: 0.5,
+            b: 0.1,
+            a: 0.3,
+        });
+        config.fill_gradient_end = ColorSource::custom(Color {
+            r: 0.05,
+            g: 0.2,
+            b: 0.05,
+            a: 0.0,
+        });
+        config.background_color = Color {
+            r: 0.02,
+            g: 0.02,
+            b: 0.02,
+            a: 1.0,
+        };
+        config.plot_background_color = Color {
+            r: 0.02,
+            g: 0.05,
+            b: 0.02,
+            a: 1.0,
+        };
         config.x_axis.show_grid = true;
-        config.x_axis.grid_color = ColorSource::custom(Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 });
+        config.x_axis.grid_color = ColorSource::custom(Color {
+            r: 0.05,
+            g: 0.2,
+            b: 0.05,
+            a: 1.0,
+        });
         config.y_axis.show_grid = true;
-        config.y_axis.grid_color = ColorSource::custom(Color { r: 0.05, g: 0.2, b: 0.05, a: 1.0 });
+        config.y_axis.grid_color = ColorSource::custom(Color {
+            r: 0.05,
+            g: 0.2,
+            b: 0.05,
+            a: 1.0,
+        });
 
         config
     }
@@ -1187,64 +1419,102 @@ impl RetroTerminalConfigWidget {
             if let PhosphorColor::Custom(c) = &config.frame.phosphor_color {
                 widgets.custom_phosphor_widget.set_color(*c);
             }
-            widgets.background_widget.set_color(config.frame.background_color);
-            widgets.brightness_scale.set_value(config.frame.text_brightness);
+            widgets
+                .background_widget
+                .set_color(config.frame.background_color);
+            widgets
+                .brightness_scale
+                .set_value(config.frame.text_brightness);
         }
 
         // Update Effects widgets
         if let Some(widgets) = self.effects_widgets.borrow().as_ref() {
-            widgets.scanline_intensity_scale.set_value(config.frame.scanline_intensity);
-            widgets.scanline_spacing_spin.set_value(config.frame.scanline_spacing);
-            widgets.curvature_scale.set_value(config.frame.curvature_amount);
-            widgets.vignette_scale.set_value(config.frame.vignette_intensity);
+            widgets
+                .scanline_intensity_scale
+                .set_value(config.frame.scanline_intensity);
+            widgets
+                .scanline_spacing_spin
+                .set_value(config.frame.scanline_spacing);
+            widgets
+                .curvature_scale
+                .set_value(config.frame.curvature_amount);
+            widgets
+                .vignette_scale
+                .set_value(config.frame.vignette_intensity);
             widgets.glow_scale.set_value(config.frame.screen_glow);
-            widgets.flicker_check.set_active(config.frame.flicker_enabled);
+            widgets
+                .flicker_check
+                .set_active(config.frame.flicker_enabled);
         }
 
         // Update Bezel widgets
         if let Some(widgets) = self.bezel_widgets.borrow().as_ref() {
-            widgets.style_dropdown.set_selected(match config.frame.bezel_style {
-                BezelStyle::Classic => 0,
-                BezelStyle::Slim => 1,
-                BezelStyle::Industrial => 2,
-                BezelStyle::None => 3,
-            });
+            widgets
+                .style_dropdown
+                .set_selected(match config.frame.bezel_style {
+                    BezelStyle::Classic => 0,
+                    BezelStyle::Slim => 1,
+                    BezelStyle::Industrial => 2,
+                    BezelStyle::None => 3,
+                });
             widgets.color_widget.set_color(config.frame.bezel_color);
             widgets.width_spin.set_value(config.frame.bezel_width);
-            widgets.show_led_check.set_active(config.frame.show_power_led);
-            widgets.led_color_widget.set_color(config.frame.power_led_color);
+            widgets
+                .show_led_check
+                .set_active(config.frame.show_power_led);
+            widgets
+                .led_color_widget
+                .set_color(config.frame.power_led_color);
         }
 
         // Update Header widgets
         if let Some(widgets) = self.header_widgets.borrow().as_ref() {
-            widgets.show_header_check.set_active(config.frame.show_header);
-            widgets.header_text_entry.set_text(&config.frame.header_text);
-            widgets.header_style_dropdown.set_selected(match config.frame.header_style {
-                TerminalHeaderStyle::TitleBar => 0,
-                TerminalHeaderStyle::StatusLine => 1,
-                TerminalHeaderStyle::Prompt => 2,
-                TerminalHeaderStyle::None => 3,
-            });
-            widgets.header_height_spin.set_value(config.frame.header_height);
-            widgets.header_font_selector.set_source(config.frame.header_font.clone());
+            widgets
+                .show_header_check
+                .set_active(config.frame.show_header);
+            widgets
+                .header_text_entry
+                .set_text(&config.frame.header_text);
+            widgets
+                .header_style_dropdown
+                .set_selected(match config.frame.header_style {
+                    TerminalHeaderStyle::TitleBar => 0,
+                    TerminalHeaderStyle::StatusLine => 1,
+                    TerminalHeaderStyle::Prompt => 2,
+                    TerminalHeaderStyle::None => 3,
+                });
+            widgets
+                .header_height_spin
+                .set_value(config.frame.header_height);
+            widgets
+                .header_font_selector
+                .set_source(config.frame.header_font.clone());
         }
 
         // Update Layout widgets
         if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            widgets.split_orientation_dropdown.set_selected(match config.frame.split_orientation {
-                SplitOrientation::Horizontal => 0,
-                SplitOrientation::Vertical => 1,
-            });
-            widgets.content_padding_spin.set_value(config.frame.content_padding);
-            widgets.divider_style_dropdown.set_selected(match config.frame.divider_style {
-                TerminalDividerStyle::Dashed => 0,
-                TerminalDividerStyle::Solid => 1,
-                TerminalDividerStyle::BoxDrawing => 2,
-                TerminalDividerStyle::Pipe => 3,
-                TerminalDividerStyle::Ascii => 4,
-                TerminalDividerStyle::None => 5,
-            });
-            widgets.divider_padding_spin.set_value(config.frame.divider_padding);
+            widgets
+                .split_orientation_dropdown
+                .set_selected(match config.frame.split_orientation {
+                    SplitOrientation::Horizontal => 0,
+                    SplitOrientation::Vertical => 1,
+                });
+            widgets
+                .content_padding_spin
+                .set_value(config.frame.content_padding);
+            widgets
+                .divider_style_dropdown
+                .set_selected(match config.frame.divider_style {
+                    TerminalDividerStyle::Dashed => 0,
+                    TerminalDividerStyle::Solid => 1,
+                    TerminalDividerStyle::BoxDrawing => 2,
+                    TerminalDividerStyle::Pipe => 3,
+                    TerminalDividerStyle::Ascii => 4,
+                    TerminalDividerStyle::None => 5,
+                });
+            widgets
+                .divider_padding_spin
+                .set_value(config.frame.divider_padding);
 
             combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,
@@ -1258,22 +1528,56 @@ impl RetroTerminalConfigWidget {
         // Update Animation widgets
         if let Some(widgets) = self.animation_widgets.borrow().as_ref() {
             widgets.enable_check.set_active(config.animation_enabled);
-            widgets.cursor_blink_check.set_active(config.frame.cursor_blink);
-            widgets.typewriter_check.set_active(config.frame.typewriter_effect);
+            widgets
+                .cursor_blink_check
+                .set_active(config.frame.cursor_blink);
+            widgets
+                .typewriter_check
+                .set_active(config.frame.typewriter_effect);
         }
 
         // Update Theme widgets (fonts and colors)
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets.common.color1_widget.set_color(config.frame.theme.color1);
-            widgets.common.color2_widget.set_color(config.frame.theme.color2);
-            widgets.common.color3_widget.set_color(config.frame.theme.color3);
-            widgets.common.color4_widget.set_color(config.frame.theme.color4);
-            widgets.common.gradient_editor.set_theme_config(config.frame.theme.clone());
-            widgets.common.gradient_editor.set_gradient_source_config(&config.frame.theme.gradient);
-            widgets.common.font1_btn.set_label(&config.frame.theme.font1_family);
-            widgets.common.font1_size_spin.set_value(config.frame.theme.font1_size);
-            widgets.common.font2_btn.set_label(&config.frame.theme.font2_family);
-            widgets.common.font2_size_spin.set_value(config.frame.theme.font2_size);
+            widgets
+                .common
+                .color1_widget
+                .set_color(config.frame.theme.color1);
+            widgets
+                .common
+                .color2_widget
+                .set_color(config.frame.theme.color2);
+            widgets
+                .common
+                .color3_widget
+                .set_color(config.frame.theme.color3);
+            widgets
+                .common
+                .color4_widget
+                .set_color(config.frame.theme.color4);
+            widgets
+                .common
+                .gradient_editor
+                .set_theme_config(config.frame.theme.clone());
+            widgets
+                .common
+                .gradient_editor
+                .set_gradient_source_config(&config.frame.theme.gradient);
+            widgets
+                .common
+                .font1_btn
+                .set_label(&config.frame.theme.font1_family);
+            widgets
+                .common
+                .font1_size_spin
+                .set_value(config.frame.theme.font1_size);
+            widgets
+                .common
+                .font2_btn
+                .set_label(&config.frame.theme.font2_family);
+            widgets
+                .common
+                .font2_size_spin
+                .set_value(config.frame.theme.font2_size);
         }
 
         // Rebuild content tabs
@@ -1298,7 +1602,8 @@ impl RetroTerminalConfigWidget {
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1308,7 +1613,8 @@ impl RetroTerminalConfigWidget {
 
         let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
         group_nums.sort();
-        let group_counts: Vec<usize> = group_nums.iter()
+        let group_counts: Vec<usize> = group_nums
+            .iter()
             .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
             .collect();
 
@@ -1367,7 +1673,12 @@ impl RetroTerminalConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -1380,11 +1691,18 @@ impl RetroTerminalConfigWidget {
     }
 
     /// Apply transferable configuration from another combo panel.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;

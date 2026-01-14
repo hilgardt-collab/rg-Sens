@@ -10,12 +10,12 @@ use gtk4::ApplicationWindow;
 use log::{info, warn};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use std::collections::HashMap;
 use serde_json;
+use std::collections::HashMap;
 
 use crate::config::AppConfig;
 use crate::core::{Panel, PanelData, PanelGeometry};
@@ -37,14 +37,15 @@ pub fn create_panel_from_config(
     settings: HashMap<String, serde_json::Value>,
     registry: &crate::core::Registry,
 ) -> anyhow::Result<Arc<RwLock<Panel>>> {
-    use crate::core::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
     use crate::config::DefaultsConfig;
+    use crate::core::{DisplayerConfig, PanelAppearance, PanelData, SourceConfig};
 
     // Load defaults to check for displayer-specific defaults
     let defaults = DefaultsConfig::load();
 
     // Try to use saved displayer default, fall back to built-in default
-    let displayer_config = if let Some(saved_config) = defaults.get_displayer_default(displayer_id) {
+    let displayer_config = if let Some(saved_config) = defaults.get_displayer_default(displayer_id)
+    {
         // Try to deserialize the saved config into the proper DisplayerConfig type
         DisplayerConfig::from_value_for_type(displayer_id, saved_config.clone())
             .unwrap_or_else(|| DisplayerConfig::default_for_type(displayer_id).unwrap_or_default())
@@ -55,7 +56,12 @@ pub fn create_panel_from_config(
     // Create PanelData with proper defaults for the source and displayer types
     let panel_data = PanelData {
         id: id.to_string(),
-        geometry: PanelGeometry { x, y, width, height },
+        geometry: PanelGeometry {
+            x,
+            y,
+            width,
+            height,
+        },
         source_config: SourceConfig::default_for_type(source_id).unwrap_or_default(),
         displayer_config,
         appearance: PanelAppearance {
@@ -99,7 +105,10 @@ pub fn show_new_panel_dialog(
     app_config: &Rc<RefCell<AppConfig>>,
     mouse_coords: Option<(f64, f64)>,
 ) {
-    use gtk4::{Adjustment, Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList, Window};
+    use gtk4::{
+        Adjustment, Box as GtkBox, Button, DropDown, Label, Orientation, SpinButton, StringList,
+        Window,
+    };
 
     let dialog = Window::builder()
         .title("New Panel")
@@ -184,7 +193,10 @@ pub fn show_new_panel_dialog(
     let registry = crate::core::global_registry();
     let source_infos = registry.list_sources_with_info();
     let source_ids: Vec<String> = source_infos.iter().map(|s| s.id.clone()).collect();
-    let source_display_names: Vec<String> = source_infos.iter().map(|s| s.display_name.clone()).collect();
+    let source_display_names: Vec<String> = source_infos
+        .iter()
+        .map(|s| s.display_name.clone())
+        .collect();
     let source_strings: Vec<&str> = source_display_names.iter().map(|s| s.as_str()).collect();
     let source_list = StringList::new(&source_strings);
     let source_combo = DropDown::new(Some(source_list), Option::<gtk4::Expression>::None);
@@ -200,9 +212,12 @@ pub fn show_new_panel_dialog(
     let first_source_id = source_ids.first().map(|s| s.as_str()).unwrap_or("cpu");
     let displayer_infos = registry.get_compatible_displayers(first_source_id);
     let displayer_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
-        displayer_infos.iter().map(|d| d.id.clone()).collect()
+        displayer_infos.iter().map(|d| d.id.clone()).collect(),
     ));
-    let displayer_display_names: Vec<String> = displayer_infos.iter().map(|d| d.display_name.clone()).collect();
+    let displayer_display_names: Vec<String> = displayer_infos
+        .iter()
+        .map(|d| d.display_name.clone())
+        .collect();
     let displayer_strings: Vec<&str> = displayer_display_names.iter().map(|s| s.as_str()).collect();
     let displayer_list = StringList::new(&displayer_strings);
     let displayer_combo = DropDown::new(Some(displayer_list), Option::<gtk4::Expression>::None);
@@ -217,8 +232,12 @@ pub fn show_new_panel_dialog(
         let selected_idx = combo.selected() as usize;
         if let Some(source_id) = source_ids_for_change.get(selected_idx) {
             let new_displayer_infos = registry.get_compatible_displayers(source_id);
-            let new_displayer_ids: Vec<String> = new_displayer_infos.iter().map(|d| d.id.clone()).collect();
-            let new_display_names: Vec<String> = new_displayer_infos.iter().map(|d| d.display_name.clone()).collect();
+            let new_displayer_ids: Vec<String> =
+                new_displayer_infos.iter().map(|d| d.id.clone()).collect();
+            let new_display_names: Vec<String> = new_displayer_infos
+                .iter()
+                .map(|d| d.display_name.clone())
+                .collect();
 
             // Update stored displayer IDs
             *displayer_ids_for_change.borrow_mut() = new_displayer_ids;
@@ -288,8 +307,10 @@ pub fn show_new_panel_dialog(
         // Generate unique ID
         let id = format!("panel_{}", uuid::Uuid::new_v4());
 
-        info!("Creating new panel: id={}, pos=({},{}), size={}x{}, source={}, displayer={}",
-              id, x, y, width, height, source_id, displayer_id);
+        info!(
+            "Creating new panel: id={}, pos=({},{}), size={}x{}, source={}, displayer={}",
+            id, x, y, width, height, source_id, displayer_id
+        );
 
         // Load defaults for appearance
         let defaults = crate::config::DefaultsConfig::load();
@@ -336,4 +357,3 @@ pub fn show_new_panel_dialog(
 
     dialog.present();
 }
-

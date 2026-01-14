@@ -2,28 +2,28 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
-    Scale, SpinButton,
+    Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation, Scale,
+    SpinButton,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::displayers::FieldMetadata;
 use crate::ui::arc_display::{
     render_arc, ArcCapStyle, ArcDisplayConfig, ArcTaperStyle, ColorApplicationMode,
     ColorTransitionStyle,
 };
+use crate::ui::background::ColorStop;
 use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::render_utils::render_checkerboard;
+use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::background::ColorStop;
-use crate::ui::GradientEditor;
 use crate::ui::widget_builder::{
-    create_page_container, create_labeled_row, create_dropdown_row, create_spin_row_with_value,
+    create_dropdown_row, create_labeled_row, create_page_container, create_spin_row_with_value,
     SpinChangeHandler,
 };
-use crate::displayers::FieldMetadata;
-use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
+use crate::ui::GradientEditor;
 
 /// Arc gauge configuration widget
 pub struct ArcConfigWidget {
@@ -76,12 +76,14 @@ fn color_stop_sources_to_stops(sources: &[ColorStopSource]) -> Vec<ColorStop> {
 
 /// Convert ColorStop back to ColorStopSource (as Custom colors)
 fn stops_to_color_stop_sources(stops: &[ColorStop]) -> Vec<ColorStopSource> {
-    stops.iter().map(|s| ColorStopSource {
-        position: s.position,
-        color: ColorSource::Custom { color: s.color },
-    }).collect()
+    stops
+        .iter()
+        .map(|s| ColorStopSource {
+            position: s.position,
+            color: ColorSource::Custom { color: s.color },
+        })
+        .collect()
 }
-
 
 impl ArcConfigWidget {
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
@@ -109,7 +111,15 @@ impl ArcConfigWidget {
             let mut preview_values = std::collections::HashMap::new();
             preview_values.insert("value".to_string(), serde_json::json!(75.0));
             preview_values.insert("percent".to_string(), serde_json::json!(75.0));
-            let _ = render_arc(cr, &cfg, &thm, 0.75, &preview_values, width as f64, height as f64);
+            let _ = render_arc(
+                cr,
+                &cfg,
+                &thm,
+                0.75,
+                &preview_values,
+                width as f64,
+                height as f64,
+            );
         });
 
         // Create notebook for tabbed interface
@@ -117,16 +127,30 @@ impl ArcConfigWidget {
         notebook.set_vexpand(true);
 
         // === Tab 1: Geometry ===
-        let (geom_page, start_angle_spin, end_angle_spin, arc_width_scale, radius_scale,
-             segmented_check, segment_count_spin, segment_spacing_spin) =
-            Self::create_geometry_page(&config, &on_change, &preview);
+        let (
+            geom_page,
+            start_angle_spin,
+            end_angle_spin,
+            arc_width_scale,
+            radius_scale,
+            segmented_check,
+            segment_count_spin,
+            segment_spacing_spin,
+        ) = Self::create_geometry_page(&config, &on_change, &preview);
         notebook.append_page(&geom_page, Some(&Label::new(Some("Geometry"))));
 
         // === Tab 2: Style ===
-        let (style_page, cap_style_dropdown, taper_style_dropdown, taper_amount_spin,
-             show_bg_arc_check, overlay_bg_check, bg_color_widget,
-             animate_check, animation_duration_spin) =
-            Self::create_style_page(&config, &theme, &on_change, &preview);
+        let (
+            style_page,
+            cap_style_dropdown,
+            taper_style_dropdown,
+            taper_amount_spin,
+            show_bg_arc_check,
+            overlay_bg_check,
+            bg_color_widget,
+            animate_check,
+            animation_duration_spin,
+        ) = Self::create_style_page(&config, &theme, &on_change, &preview);
         notebook.append_page(&style_page, Some(&Label::new(Some("Style"))));
 
         // === Tab 3: Colors ===
@@ -150,7 +174,10 @@ impl ArcConfigWidget {
                 }
             });
         }
-        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text"))));
+        notebook.append_page(
+            text_overlay_widget.widget(),
+            Some(&Label::new(Some("Text"))),
+        );
 
         container.append(&preview);
 
@@ -293,17 +320,33 @@ impl ArcConfigWidget {
         config: &Rc<RefCell<ArcDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-    ) -> (GtkBox, SpinButton, SpinButton, Scale, Scale, CheckButton, SpinButton, SpinButton) {
+    ) -> (
+        GtkBox,
+        SpinButton,
+        SpinButton,
+        Scale,
+        Scale,
+        CheckButton,
+        SpinButton,
+        SpinButton,
+    ) {
         let page = create_page_container();
         let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
         // Start angle
-        let (start_row, start_spin) = create_spin_row_with_value("Start Angle:", -360.0, 360.0, 1.0, config.borrow().start_angle);
+        let (start_row, start_spin) = create_spin_row_with_value(
+            "Start Angle:",
+            -360.0,
+            360.0,
+            1.0,
+            config.borrow().start_angle,
+        );
         page.append(&start_row);
         handler.connect_spin(&start_spin, |cfg, val| cfg.start_angle = val);
 
         // End angle
-        let (end_row, end_spin) = create_spin_row_with_value("End Angle:", -360.0, 360.0, 1.0, config.borrow().end_angle);
+        let (end_row, end_spin) =
+            create_spin_row_with_value("End Angle:", -360.0, 360.0, 1.0, config.borrow().end_angle);
         page.append(&end_row);
         handler.connect_spin(&end_spin, |cfg, val| cfg.end_angle = val);
 
@@ -323,7 +366,9 @@ impl ArcConfigWidget {
         width_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().arc_width = scale.value();
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
 
         // Radius
@@ -342,7 +387,9 @@ impl ArcConfigWidget {
         radius_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().radius_percent = scale.value();
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
 
         // Segmentation
@@ -352,17 +399,37 @@ impl ArcConfigWidget {
         handler.connect_check(&seg_check, |cfg, val| cfg.segmented = val);
 
         // Segment count
-        let (count_row, count_spin) = create_spin_row_with_value("Segment Count:", 5.0, 50.0, 1.0, config.borrow().segment_count as f64);
+        let (count_row, count_spin) = create_spin_row_with_value(
+            "Segment Count:",
+            5.0,
+            50.0,
+            1.0,
+            config.borrow().segment_count as f64,
+        );
         page.append(&count_row);
         handler.connect_spin_int(&count_spin, |cfg, val| cfg.segment_count = val as u32);
 
         // Segment spacing
-        let (spacing_row, spacing_spin) = create_spin_row_with_value("Segment Spacing (degrees):", 0.0, 10.0, 0.5, config.borrow().segment_spacing);
+        let (spacing_row, spacing_spin) = create_spin_row_with_value(
+            "Segment Spacing (degrees):",
+            0.0,
+            10.0,
+            0.5,
+            config.borrow().segment_spacing,
+        );
         page.append(&spacing_row);
         handler.connect_spin(&spacing_spin, |cfg, val| cfg.segment_spacing = val);
 
-        (page, start_spin, end_spin, width_scale, radius_scale,
-         seg_check, count_spin, spacing_spin)
+        (
+            page,
+            start_spin,
+            end_spin,
+            width_scale,
+            radius_scale,
+            seg_check,
+            count_spin,
+            spacing_spin,
+        )
     }
 
     fn create_style_page(
@@ -370,7 +437,17 @@ impl ArcConfigWidget {
         theme: &Rc<RefCell<ComboThemeConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         preview: &DrawingArea,
-    ) -> (GtkBox, DropDown, DropDown, SpinButton, CheckButton, CheckButton, Rc<ThemeColorSelector>, CheckButton, SpinButton) {
+    ) -> (
+        GtkBox,
+        DropDown,
+        DropDown,
+        SpinButton,
+        CheckButton,
+        CheckButton,
+        Rc<ThemeColorSelector>,
+        CheckButton,
+        SpinButton,
+    ) {
         let page = create_page_container();
         let handler = SpinChangeHandler::new(config.clone(), preview.clone(), on_change.clone());
 
@@ -380,7 +457,8 @@ impl ArcConfigWidget {
             ArcCapStyle::Round => 1,
             ArcCapStyle::Pointed => 2,
         };
-        let (cap_row, cap_dropdown) = create_dropdown_row("End Cap Style:", &["Butt", "Round", "Pointed"]);
+        let (cap_row, cap_dropdown) =
+            create_dropdown_row("End Cap Style:", &["Butt", "Round", "Pointed"]);
         cap_dropdown.set_selected(cap_index);
         page.append(&cap_row);
 
@@ -399,7 +477,8 @@ impl ArcConfigWidget {
             ArcTaperStyle::End => 2,
             ArcTaperStyle::Both => 3,
         };
-        let (taper_row, taper_dropdown) = create_dropdown_row("Taper Style:", &["None", "Start", "End", "Both"]);
+        let (taper_row, taper_dropdown) =
+            create_dropdown_row("Taper Style:", &["None", "Start", "End", "Both"]);
         taper_dropdown.set_selected(taper_index);
         page.append(&taper_row);
 
@@ -413,7 +492,13 @@ impl ArcConfigWidget {
         });
 
         // Taper amount
-        let (amount_row, amount_spin) = create_spin_row_with_value("Taper Amount (%):", 0.0, 100.0, 5.0, config.borrow().taper_amount * 100.0);
+        let (amount_row, amount_spin) = create_spin_row_with_value(
+            "Taper Amount (%):",
+            0.0,
+            100.0,
+            5.0,
+            config.borrow().taper_amount * 100.0,
+        );
         amount_spin.set_digits(0);
         page.append(&amount_row);
         handler.connect_spin_percent(&amount_spin, |cfg, val| cfg.taper_amount = val);
@@ -431,7 +516,9 @@ impl ArcConfigWidget {
         handler.connect_check(&overlay_check, |cfg, val| cfg.overlay_background = val);
 
         // Background arc color - using ThemeColorSelector
-        let bg_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().background_color.clone()));
+        let bg_color_widget = Rc::new(ThemeColorSelector::new(
+            config.borrow().background_color.clone(),
+        ));
         bg_color_widget.set_theme_config(theme.borrow().clone());
         let bg_color_row = create_labeled_row("Background Arc Color:", bg_color_widget.widget());
         page.append(&bg_color_row);
@@ -442,7 +529,9 @@ impl ArcConfigWidget {
         bg_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().background_color = color_source;
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
 
         // Animation
@@ -452,7 +541,13 @@ impl ArcConfigWidget {
         handler.connect_check(&animate_check, |cfg, val| cfg.animate = val);
 
         // Animation duration
-        let (duration_row, duration_spin) = create_spin_row_with_value("Animation Duration (ms):", 50.0, 2000.0, 50.0, config.borrow().animation_duration * 1000.0);
+        let (duration_row, duration_spin) = create_spin_row_with_value(
+            "Animation Duration (ms):",
+            50.0,
+            2000.0,
+            50.0,
+            config.borrow().animation_duration * 1000.0,
+        );
         duration_spin.set_digits(0);
         page.append(&duration_row);
 
@@ -462,11 +557,22 @@ impl ArcConfigWidget {
         duration_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().animation_duration = spin.value() / 1000.0;
             preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() { cb(); }
+            if let Some(cb) = on_change_clone.borrow().as_ref() {
+                cb();
+            }
         });
 
-        (page, cap_dropdown, taper_dropdown, amount_spin, bg_check, overlay_check, bg_color_widget,
-         animate_check, duration_spin)
+        (
+            page,
+            cap_dropdown,
+            taper_dropdown,
+            amount_spin,
+            bg_check,
+            overlay_check,
+            bg_color_widget,
+            animate_check,
+            duration_spin,
+        )
     }
 
     fn create_color_page(
@@ -482,7 +588,8 @@ impl ArcConfigWidget {
             ColorTransitionStyle::Smooth => 0,
             ColorTransitionStyle::Abrupt => 1,
         };
-        let (transition_row, transition_dropdown) = create_dropdown_row("Color Transition:", &["Smooth", "Abrupt"]);
+        let (transition_row, transition_dropdown) =
+            create_dropdown_row("Color Transition:", &["Smooth", "Abrupt"]);
         transition_dropdown.set_selected(trans_index);
         page.append(&transition_row);
 
@@ -498,7 +605,8 @@ impl ArcConfigWidget {
             ColorApplicationMode::Progressive => 0,
             ColorApplicationMode::Segments => 1,
         };
-        let (mode_row, mode_dropdown) = create_dropdown_row("Color Mode:", &["Progressive", "Segments"]);
+        let (mode_row, mode_dropdown) =
+            create_dropdown_row("Color Mode:", &["Progressive", "Segments"]);
         mode_dropdown.set_selected(mode_index);
         page.append(&mode_row);
 
@@ -585,7 +693,12 @@ impl ArcConfigWidget {
         gradient_editor_ref.widget().set_vexpand(true);
         page.append(gradient_editor_ref.widget());
 
-        (page, transition_dropdown, mode_dropdown, gradient_editor_ref)
+        (
+            page,
+            transition_dropdown,
+            mode_dropdown,
+            gradient_editor_ref,
+        )
     }
 
     pub fn widget(&self) -> &GtkBox {
@@ -601,8 +714,10 @@ impl ArcConfigWidget {
         self.arc_width_scale.set_value(new_config.arc_width);
         self.radius_scale.set_value(new_config.radius_percent);
         self.segmented_check.set_active(new_config.segmented);
-        self.segment_count_spin.set_value(new_config.segment_count as f64);
-        self.segment_spacing_spin.set_value(new_config.segment_spacing);
+        self.segment_count_spin
+            .set_value(new_config.segment_count as f64);
+        self.segment_spacing_spin
+            .set_value(new_config.segment_spacing);
 
         let cap_index = match new_config.cap_style {
             ArcCapStyle::Butt => 0,
@@ -619,7 +734,8 @@ impl ArcConfigWidget {
         };
         self.taper_style_dropdown.set_selected(taper_index);
 
-        self.taper_amount_spin.set_value(new_config.taper_amount * 100.0);
+        self.taper_amount_spin
+            .set_value(new_config.taper_amount * 100.0);
 
         let trans_index = match new_config.color_transition {
             ColorTransitionStyle::Smooth => 0,
@@ -633,14 +749,18 @@ impl ArcConfigWidget {
         };
         self.color_mode_dropdown.set_selected(mode_index);
 
-        self.show_bg_arc_check.set_active(new_config.show_background_arc);
-        self.overlay_bg_check.set_active(new_config.overlay_background);
+        self.show_bg_arc_check
+            .set_active(new_config.show_background_arc);
+        self.overlay_bg_check
+            .set_active(new_config.overlay_background);
 
         self.animate_check.set_active(new_config.animate);
-        self.animation_duration_spin.set_value(new_config.animation_duration * 1000.0);
+        self.animation_duration_spin
+            .set_value(new_config.animation_duration * 1000.0);
 
         // Update gradient editor with theme-aware color stops
-        self.gradient_editor.set_stops_source(new_config.color_stops.clone());
+        self.gradient_editor
+            .set_stops_source(new_config.color_stops.clone());
 
         // Update text overlay widget
         self.text_overlay_widget.set_config(new_config.text_overlay);

@@ -9,7 +9,7 @@
 //! - `pango_show_text()` replaces `cr.show_text()`
 
 use cairo::Context;
-use pango::{FontDescription, Weight as PangoWeight, Style as PangoStyle};
+use pango::{FontDescription, Style as PangoStyle, Weight as PangoWeight};
 use pangocairo::functions::{create_layout, show_layout};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -104,7 +104,9 @@ impl FontDescriptionCache {
 
         // Evict if full (simple eviction - just clear half)
         if self.cache.len() >= self.max_entries {
-            let keys_to_remove: Vec<_> = self.cache.keys()
+            let keys_to_remove: Vec<_> = self
+                .cache
+                .keys()
                 .take(self.max_entries / 2)
                 .cloned()
                 .collect();
@@ -179,7 +181,9 @@ pub fn pango_text_extents(
     let pango_style = cairo_slant_to_pango(slant);
 
     FONT_DESC_CACHE.with(|cache| {
-        let font_desc = cache.borrow_mut().get_or_create(family, pango_weight, pango_style, size);
+        let font_desc = cache
+            .borrow_mut()
+            .get_or_create(family, pango_weight, pango_style, size);
 
         // Create layout
         let layout = create_layout(cr);
@@ -237,7 +241,9 @@ pub fn pango_show_text(
     let pango_style = cairo_slant_to_pango(slant);
 
     FONT_DESC_CACHE.with(|cache| {
-        let font_desc = cache.borrow_mut().get_or_create(family, pango_weight, pango_style, size);
+        let font_desc = cache
+            .borrow_mut()
+            .get_or_create(family, pango_weight, pango_style, size);
 
         let layout = create_layout(cr);
         layout.set_font_description(Some(&font_desc));
@@ -317,7 +323,9 @@ pub fn get_font_description(
     let pango_style = cairo_slant_to_pango(slant);
 
     FONT_DESC_CACHE.with(|cache| {
-        cache.borrow_mut().get_or_create(family, pango_weight, pango_style, size)
+        cache
+            .borrow_mut()
+            .get_or_create(family, pango_weight, pango_style, size)
     })
 }
 
@@ -375,7 +383,9 @@ pub fn get_font_metrics(
     let pango_style = cairo_slant_to_pango(slant);
 
     FONT_DESC_CACHE.with(|cache| {
-        let font_desc = cache.borrow_mut().get_or_create(family, pango_weight, pango_style, size);
+        let font_desc = cache
+            .borrow_mut()
+            .get_or_create(family, pango_weight, pango_style, size);
 
         let layout = create_layout(cr);
         layout.set_font_description(Some(&font_desc));

@@ -12,8 +12,8 @@ use gtk4::ApplicationWindow;
 use log::info;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::config::AppConfig;
 use crate::ui::GridLayout;
@@ -29,9 +29,12 @@ pub fn show_window_settings_dialog<F>(
 ) where
     F: Fn() + 'static,
 {
-    use gtk4::{Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
-    use crate::ui::BackgroundConfigWidget;
     use crate::config::DefaultsConfig;
+    use crate::ui::BackgroundConfigWidget;
+    use gtk4::{
+        Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, Orientation, SpinButton,
+        StringList, Window,
+    };
 
     let dialog = Window::builder()
         .title("Window Settings")
@@ -177,7 +180,9 @@ pub fn show_window_settings_dialog<F>(
     defaults_tab_box.append(&border_color_btn);
 
     // Store border color in a shared Rc<RefCell>
-    let border_color = Rc::new(RefCell::new(defaults_config.borrow().general.default_border.color));
+    let border_color = Rc::new(RefCell::new(
+        defaults_config.borrow().general.default_border.color,
+    ));
 
     // Border color button handler
     {
@@ -189,7 +194,9 @@ pub fn show_window_settings_dialog<F>(
             let border_color_clone2 = border_color_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = crate::ui::ColorPickerDialog::pick_color(Some(&window_opt), current_color).await {
+                if let Some(new_color) =
+                    crate::ui::ColorPickerDialog::pick_color(Some(&window_opt), current_color).await
+                {
                     *border_color_clone2.borrow_mut() = new_color;
                 }
             });
@@ -219,7 +226,9 @@ pub fn show_window_settings_dialog<F>(
     displayer_defaults_label.set_margin_top(12);
     defaults_tab_box.append(&displayer_defaults_label);
 
-    let displayer_help = Label::new(Some("Right-click a panel and select 'Set as Default Style' to save displayer defaults"));
+    let displayer_help = Label::new(Some(
+        "Right-click a panel and select 'Set as Default Style' to save displayer defaults",
+    ));
     displayer_help.set_halign(gtk4::Align::Start);
     displayer_help.set_margin_start(12);
     displayer_help.add_css_class("dim-label");
@@ -268,7 +277,9 @@ pub fn show_window_settings_dialog<F>(
                     let id_clone = id.clone();
                     let refresh_clone = refresh_self.clone();
                     clear_btn.connect_clicked(move |_| {
-                        defaults_clone.borrow_mut().remove_displayer_default(&id_clone);
+                        defaults_clone
+                            .borrow_mut()
+                            .remove_displayer_default(&id_clone);
                         if let Err(e) = defaults_clone.borrow().save() {
                             log::warn!("Failed to save defaults after clearing: {}", e);
                         }
@@ -302,7 +313,9 @@ pub fn show_window_settings_dialog<F>(
     let defaults_for_clear_all = defaults_config.clone();
     let refresh_for_clear_all = refresh_displayer_list.clone();
     clear_all_btn.connect_clicked(move |_| {
-        defaults_for_clear_all.borrow_mut().clear_displayer_defaults();
+        defaults_for_clear_all
+            .borrow_mut()
+            .clear_displayer_defaults();
         if let Err(e) = defaults_for_clear_all.borrow().save() {
             log::warn!("Failed to save defaults after clearing all: {}", e);
         }
@@ -366,17 +379,19 @@ pub fn show_window_settings_dialog<F>(
         let n_monitors = display.monitors().n_items();
         (0..n_monitors)
             .filter_map(|i| {
-                display.monitors().item(i)
+                display
+                    .monitors()
+                    .item(i)
                     .and_then(|obj| obj.downcast::<gtk4::gdk::Monitor>().ok())
                     .map(|monitor| {
                         // Try to get connector name (e.g., "HDMI-1", "DP-1")
-                        let connector = monitor.connector()
+                        let connector = monitor
+                            .connector()
                             .map(|s| s.to_string())
                             .unwrap_or_else(|| format!("Monitor {}", i));
 
                         // Get model name if available
-                        let model = monitor.model()
-                            .map(|s| s.to_string());
+                        let model = monitor.model().map(|s| s.to_string());
 
                         // Combine connector and model for a descriptive name
                         match model {
@@ -400,7 +415,7 @@ pub fn show_window_settings_dialog<F>(
 
     // Set selected monitor from config
     let selected_idx = match app_config.borrow().window.fullscreen_monitor {
-        None => 0, // "Current Monitor"
+        None => 0,                     // "Current Monitor"
         Some(idx) => (idx + 1) as u32, // Offset by 1 for "Current Monitor" option
     };
     monitor_dropdown.set_selected(selected_idx);
@@ -408,7 +423,9 @@ pub fn show_window_settings_dialog<F>(
     window_mode_tab_box.append(&monitor_box);
 
     // Help text for fullscreen
-    let fullscreen_help_label = Label::new(Some("Tip: Double-click the window background to toggle fullscreen"));
+    let fullscreen_help_label = Label::new(Some(
+        "Tip: Double-click the window background to toggle fullscreen",
+    ));
     fullscreen_help_label.set_halign(gtk4::Align::Start);
     fullscreen_help_label.set_margin_start(12);
     fullscreen_help_label.set_margin_top(6);
@@ -423,7 +440,8 @@ pub fn show_window_settings_dialog<F>(
     window_mode_tab_box.append(&borderless_label);
 
     // Borderless enabled
-    let borderless_check = CheckButton::with_label("Remove window decorations (title bar, borders)");
+    let borderless_check =
+        CheckButton::with_label("Remove window decorations (title bar, borders)");
     borderless_check.set_active(app_config.borrow().window.borderless);
     borderless_check.set_margin_start(12);
     window_mode_tab_box.append(&borderless_check);
@@ -440,14 +458,14 @@ pub fn show_window_settings_dialog<F>(
     borderless_info_box.set_margin_top(8);
     borderless_info_box.set_margin_bottom(8);
 
-    let info_icon = Label::new(Some("\u{2139}"));  // ℹ info symbol
+    let info_icon = Label::new(Some("\u{2139}")); // ℹ info symbol
     info_icon.add_css_class("dim-label");
     borderless_info_box.append(&info_icon);
 
     let borderless_info_label = Label::new(Some(
         "When borderless mode is active, hold Ctrl and drag:\n\
          • Near edges/corners to resize the window\n\
-         • In center area to move the window"
+         • In center area to move the window",
     ));
     borderless_info_label.set_halign(gtk4::Align::Start);
     borderless_info_label.set_wrap(true);
@@ -473,7 +491,8 @@ pub fn show_window_settings_dialog<F>(
     window_mode_tab_box.append(&auto_scroll_label);
 
     // Auto-scroll enabled
-    let auto_scroll_check = CheckButton::with_label("Auto-scroll when content extends beyond window");
+    let auto_scroll_check =
+        CheckButton::with_label("Auto-scroll when content extends beyond window");
     auto_scroll_check.set_active(app_config.borrow().window.auto_scroll_enabled);
     auto_scroll_check.set_margin_start(12);
     window_mode_tab_box.append(&auto_scroll_check);
@@ -572,7 +591,10 @@ pub fn show_window_settings_dialog<F>(
             if let Some(mon) = monitors.item(i) {
                 if let Ok(monitor) = mon.downcast::<gtk4::gdk::Monitor>() {
                     let geom = monitor.geometry();
-                    let name = monitor.model().map(|s| s.to_string()).unwrap_or_else(|| format!("Monitor {}", i));
+                    let name = monitor
+                        .model()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| format!("Monitor {}", i));
                     monitor_list.append(&format!("{} ({}x{})", name, geom.width(), geom.height()));
                 }
             }
@@ -651,7 +673,7 @@ pub fn show_window_settings_dialog<F>(
     let grid_shortcuts_help = Label::new(Some(
         "• Hold Space to show the cell grid and viewport boundaries\n\
          • Grid also appears automatically when resizing the window\n\
-         • Grid appears when dragging panels"
+         • Grid appears when dragging panels",
     ));
     grid_shortcuts_help.set_halign(gtk4::Align::Start);
     grid_shortcuts_help.set_margin_start(12);
@@ -794,14 +816,21 @@ pub fn show_window_settings_dialog<F>(
         drop(cfg);
 
         // Update grid layout viewport size for drag visualization
-        grid_layout_clone.borrow().set_viewport_size(vp_width, vp_height);
+        grid_layout_clone
+            .borrow()
+            .set_viewport_size(vp_width, vp_height);
 
         // Apply borderless state to parent window
         // Note: On some compositors (especially Wayland), decoration changes require
         // hiding and showing the window for them to take effect
         let current_decorated = parent_window_clone.is_decorated();
         let target_decorated = !borderless;
-        log::info!("Setting window decorated: {} -> {} (borderless: {})", current_decorated, target_decorated, borderless);
+        log::info!(
+            "Setting window decorated: {} -> {} (borderless: {})",
+            current_decorated,
+            target_decorated,
+            borderless
+        );
 
         if current_decorated != target_decorated {
             parent_window_clone.set_decorated(target_decorated);
@@ -833,7 +862,11 @@ pub fn show_window_settings_dialog<F>(
         window_background_clone.queue_draw();
 
         // Update grid layout
-        grid_layout_clone.borrow_mut().update_grid_size(new_cell_width, new_cell_height, new_spacing);
+        grid_layout_clone.borrow_mut().update_grid_size(
+            new_cell_width,
+            new_cell_height,
+            new_spacing,
+        );
 
         // Apply global theme to all panel displayers
         {
@@ -885,4 +918,3 @@ pub fn show_window_settings_dialog<F>(
     dialog.set_child(Some(&vbox));
     dialog.present();
 }
-

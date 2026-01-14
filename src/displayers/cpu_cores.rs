@@ -11,7 +11,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
+    ANIMATION_SNAP_THRESHOLD,
+};
 use crate::ui::core_bars_display::{render_core_bars_with_values, CoreBarsConfig};
 use crate::ui::theme::ComboThemeConfig;
 
@@ -45,8 +48,8 @@ struct DisplayData {
     config: CoreBarsConfig,
     theme: ComboThemeConfig,
     core_values: Vec<AnimatedValue>, // Animated values per displayed core
-    render_cache: Vec<f64>,          // Cached current values for rendering (avoids allocation per frame)
-    detected_core_count: usize,      // Total cores detected from source
+    render_cache: Vec<f64>, // Cached current values for rendering (avoids allocation per frame)
+    detected_core_count: usize, // Total cores detected from source
     source_values: HashMap<String, Value>, // Source values for text overlay
     last_update: Instant,
     transform: PanelTransform,
@@ -88,9 +91,7 @@ impl CpuCoresDisplayer {
         for (key, value) in data {
             // Match keys like "core0_usage", "core1_usage", etc.
             if key.starts_with("core") && key.ends_with("_usage") {
-                let index_str = key
-                    .trim_start_matches("core")
-                    .trim_end_matches("_usage");
+                let index_str = key.trim_start_matches("core").trim_end_matches("_usage");
 
                 if let Ok(index) = index_str.parse::<usize>() {
                     // Sanity check: reasonable max cores to prevent memory issues
@@ -99,11 +100,7 @@ impl CpuCoresDisplayer {
                     }
                     if let Some(usage) = value.as_f64() {
                         // Normalize from 0-100 to 0-1
-                        let normalized = if usage > 1.0 {
-                            usage / 100.0
-                        } else {
-                            usage
-                        };
+                        let normalized = if usage > 1.0 { usage / 100.0 } else { usage };
                         cores.push((index, normalized.clamp(0.0, 1.0)));
                     }
                 }
@@ -177,7 +174,8 @@ impl Displayer for CpuCoresDisplayer {
                         } else {
                             let diff = (val.target - val.current).abs();
                             if diff > ANIMATION_SNAP_THRESHOLD {
-                                val.current += (val.target - val.current) * (speed * delta).min(1.0);
+                                val.current +=
+                                    (val.target - val.current) * (speed * delta).min(1.0);
                                 any_animating = true;
                             } else {
                                 val.current = val.target;
@@ -252,10 +250,8 @@ impl Displayer for CpuCoresDisplayer {
             }
 
             // Extract source values for text overlay
-            display_data.source_values = super::extract_text_values(
-                data,
-                &display_data.config.text_overlay.text_config,
-            );
+            display_data.source_values =
+                super::extract_text_values(data, &display_data.config.text_overlay.text_config);
 
             // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);
@@ -332,7 +328,8 @@ impl Displayer for CpuCoresDisplayer {
 
         // Check for full core_bars_config first
         if let Some(config_value) = config.get("core_bars_config") {
-            if let Ok(bars_config) = serde_json::from_value::<CoreBarsConfig>(config_value.clone()) {
+            if let Ok(bars_config) = serde_json::from_value::<CoreBarsConfig>(config_value.clone())
+            {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = bars_config;
                     display_data.dirty = true;

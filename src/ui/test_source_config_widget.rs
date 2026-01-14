@@ -1,9 +1,7 @@
 //! Configuration widget for Test source
 
 use gtk4::prelude::*;
-use gtk4::{
-    Adjustment, Box as GtkBox, Button, Label, Orientation, SpinButton,
-};
+use gtk4::{Adjustment, Box as GtkBox, Button, Label, Orientation, SpinButton};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -103,7 +101,8 @@ impl TestSourceConfigWidget {
         self.config.borrow_mut().update_interval_ms = config.update_interval_ms;
 
         // Update UI
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
     }
 }
 

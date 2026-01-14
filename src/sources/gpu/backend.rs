@@ -1,8 +1,8 @@
 //! Abstract GPU backend trait
 
-use anyhow::Result;
-use super::nvidia::NvidiaBackend;
 use super::amd::AmdBackend;
+use super::nvidia::NvidiaBackend;
+use anyhow::Result;
 
 /// GPU information structure
 #[derive(Debug, Clone)]
@@ -36,14 +36,14 @@ impl GpuVendor {
 /// GPU metrics structure
 #[derive(Debug, Clone, Default)]
 pub struct GpuMetrics {
-    pub temperature: Option<f32>,         // Temperature in Celsius
-    pub utilization: Option<u32>,         // GPU utilization in %
-    pub memory_used: Option<u64>,         // Memory used in bytes
-    pub memory_total: Option<u64>,        // Total memory in bytes
-    pub power_usage: Option<f32>,         // Power usage in Watts
-    pub fan_speed: Option<u32>,           // Fan speed in %
-    pub clock_core: Option<u32>,          // Core clock in MHz
-    pub clock_memory: Option<u32>,        // Memory clock in MHz
+    pub temperature: Option<f32>,  // Temperature in Celsius
+    pub utilization: Option<u32>,  // GPU utilization in %
+    pub memory_used: Option<u64>,  // Memory used in bytes
+    pub memory_total: Option<u64>, // Total memory in bytes
+    pub power_usage: Option<f32>,  // Power usage in Watts
+    pub fan_speed: Option<u32>,    // Fan speed in %
+    pub clock_core: Option<u32>,   // Core clock in MHz
+    pub clock_memory: Option<u32>, // Memory clock in MHz
 }
 
 /// Abstract GPU backend trait

@@ -1,9 +1,12 @@
 //! Graph displayer implementation
 
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
+    ANIMATION_SNAP_THRESHOLD,
+};
+use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use anyhow::Result;
 use cairo::Context;
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
-use crate::ui::graph_display::{render_graph, DataPoint, GraphDisplayConfig};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Widget};
 use serde_json::Value;
@@ -28,7 +31,7 @@ struct GraphData {
     last_update_time: f64,
     last_frame_time: std::time::Instant, // For smooth animation timing
     scroll_offset: f64, // 0.0 to 1.0, represents progress toward next point position
-    dirty: bool, // Flag to indicate data has changed and needs redraw
+    dirty: bool,        // Flag to indicate data has changed and needs redraw
 }
 
 impl GraphDisplayer {
@@ -191,11 +194,12 @@ impl Displayer for GraphDisplayer {
                     let len = data_guard.animated_points.len();
                     for i in 0..len {
                         // Get target values first (immutable borrow)
-                        let (target_value, target_timestamp) = if let Some(target) = data_guard.data_points.get(i) {
-                            (target.value, target.timestamp)
-                        } else {
-                            continue;
-                        };
+                        let (target_value, target_timestamp) =
+                            if let Some(target) = data_guard.data_points.get(i) {
+                                (target.value, target.timestamp)
+                            } else {
+                                continue;
+                            };
                         // Then update animated point (mutable borrow)
                         if let Some(animated) = data_guard.animated_points.get_mut(i) {
                             // Always update timestamp
@@ -264,10 +268,18 @@ impl Displayer for GraphDisplayer {
 
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
             // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
-            if data.config.text_overlay.enabled && !data.config.text_overlay.text_config.lines.is_empty() {
+            if data.config.text_overlay.enabled
+                && !data.config.text_overlay.text_config.lines.is_empty()
+            {
                 // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-                let field_ids: Vec<_> = data.config.text_overlay.text_config.lines.iter()
-                    .map(|l| l.field_id.clone()).collect();
+                let field_ids: Vec<_> = data
+                    .config
+                    .text_overlay
+                    .text_config
+                    .lines
+                    .iter()
+                    .map(|l| l.field_id.clone())
+                    .collect();
                 data.source_values.clear();
                 for field_id in field_ids {
                     if let Some(value) = values.get(&field_id) {
@@ -340,7 +352,9 @@ impl Displayer for GraphDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(graph_config_value) = config.get("graph_config") {
-            if let Ok(graph_config) = serde_json::from_value::<GraphDisplayConfig>(graph_config_value.clone()) {
+            if let Ok(graph_config) =
+                serde_json::from_value::<GraphDisplayConfig>(graph_config_value.clone())
+            {
                 self.set_config(graph_config);
             }
         }

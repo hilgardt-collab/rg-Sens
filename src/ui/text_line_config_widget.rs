@@ -2,8 +2,8 @@
 
 use crate::core::FieldMetadata;
 use crate::displayers::{
-    CombineDirection, TextBackgroundConfig, TextBackgroundType, TextDisplayerConfig,
-    TextFillType, TextLineConfig,
+    CombineDirection, TextBackgroundConfig, TextBackgroundType, TextDisplayerConfig, TextFillType,
+    TextLineConfig,
 };
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
 use crate::ui::gradient_editor::GradientEditor;
@@ -13,8 +13,8 @@ use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation,
-    ScrolledWindow, SpinButton, Stack, StackSidebar, StringList, Widget,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, ScrolledWindow,
+    SpinButton, Stack, StackSidebar, StringList, Widget,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -37,7 +37,10 @@ pub struct TextLineConfigWidget {
 impl TextLineConfigWidget {
     /// Create a new text line configuration widget
     pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        log::debug!("TextLineConfigWidget::new() called with {} available fields", available_fields.len());
+        log::debug!(
+            "TextLineConfigWidget::new() called with {} available fields",
+            available_fields.len()
+        );
 
         // Main vertical container
         let widget = GtkBox::new(Orientation::Vertical, 6);
@@ -88,9 +91,12 @@ impl TextLineConfigWidget {
         let lines = Rc::new(RefCell::new(Vec::new()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
-        let fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>> = Rc::new(RefCell::new(Vec::new()));
-        let fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>> = Rc::new(RefCell::new(Vec::new()));
-        let font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>> = Rc::new(RefCell::new(Vec::new()));
+        let fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Set up add button - uses a self-contained rebuild callback
         let lines_for_add = lines.clone();
@@ -166,7 +172,10 @@ impl TextLineConfigWidget {
             let new_line_index = {
                 let mut lines = lines_for_add.borrow_mut();
                 let new_line = TextLineConfig::default();
-                log::info!("    Adding new line with default field_id='{}'", new_line.field_id);
+                log::info!(
+                    "    Adding new line with default field_id='{}'",
+                    new_line.field_id
+                );
                 lines.push(new_line);
                 log::info!("    Total lines now: {}", lines.len());
                 lines.len() - 1
@@ -446,7 +455,10 @@ impl TextLineConfigWidget {
                     let mut group_count_with_same_pos = 0;
 
                     for (i, line) in all_lines.iter().enumerate() {
-                        if line.is_combined && line.group_id.as_ref() == Some(group_id) && line.position == this_position {
+                        if line.is_combined
+                            && line.group_id.as_ref() == Some(group_id)
+                            && line.position == this_position
+                        {
                             // Track first line in group with same position
                             if first_index_in_group_with_pos.is_none() {
                                 first_index_in_group_with_pos = Some(i);
@@ -456,7 +468,8 @@ impl TextLineConfigWidget {
                     }
 
                     // Show only if this is the first line in group with same position AND there are 2+ such lines
-                    first_index_in_group_with_pos == Some(list_index) && group_count_with_same_pos >= 2
+                    first_index_in_group_with_pos == Some(list_index)
+                        && group_count_with_same_pos >= 2
                 }
             } else {
                 false
@@ -634,7 +647,9 @@ impl TextLineConfigWidget {
 
         // Set theme config and store in fill_color_selectors for theme updates
         fill_color_widget.set_theme_config(theme.borrow().clone());
-        fill_color_selectors.borrow_mut().push(fill_color_widget.clone());
+        fill_color_selectors
+            .borrow_mut()
+            .push(fill_color_widget.clone());
 
         solid_fill_box.append(fill_color_widget.widget());
         solid_fill_box.set_visible(initial_fill_type_index == 0);
@@ -646,7 +661,9 @@ impl TextLineConfigWidget {
         // Set theme config on gradient editor so theme colors show correctly
         fill_gradient_editor.set_theme_config(theme.borrow().clone());
         // Store in fill_gradient_editors for theme updates
-        fill_gradient_editors.borrow_mut().push(fill_gradient_editor.clone());
+        fill_gradient_editors
+            .borrow_mut()
+            .push(fill_gradient_editor.clone());
         // Initialize gradient editor with current value or defaults
         match &line_config.fill {
             TextFillType::LinearGradient { stops, angle } => {
@@ -661,7 +678,15 @@ impl TextLineConfigWidget {
                 fill_gradient_editor.set_gradient(&LinearGradientConfig {
                     stops: vec![
                         ColorStop::new(0.0, resolved_color),
-                        ColorStop::new(1.0, Color::new(resolved_color.r * 0.5, resolved_color.g * 0.5, resolved_color.b * 0.5, resolved_color.a)),
+                        ColorStop::new(
+                            1.0,
+                            Color::new(
+                                resolved_color.r * 0.5,
+                                resolved_color.g * 0.5,
+                                resolved_color.b * 0.5,
+                                resolved_color.a,
+                            ),
+                        ),
                     ],
                     angle: 0.0,
                 });
@@ -793,12 +818,16 @@ impl TextLineConfigWidget {
         bg_solid_box.append(&Label::new(Some("Color:")));
         let bg_color_source = match &line_config.text_background.background {
             TextBackgroundType::Solid { color } => color.clone(),
-            _ => ColorSource::Custom { color: Color::new(0.0, 0.0, 0.0, 0.5) },
+            _ => ColorSource::Custom {
+                color: Color::new(0.0, 0.0, 0.0, 0.5),
+            },
         };
         let bg_color_widget = Rc::new(ThemeColorSelector::new(bg_color_source));
         // Set theme config and store in fill_color_selectors for theme updates
         bg_color_widget.set_theme_config(theme.borrow().clone());
-        fill_color_selectors.borrow_mut().push(bg_color_widget.clone());
+        fill_color_selectors
+            .borrow_mut()
+            .push(bg_color_widget.clone());
         bg_solid_box.append(bg_color_widget.widget());
         bg_solid_box.set_visible(initial_bg_type_index == 1);
         bg_box.append(&bg_solid_box);
@@ -809,7 +838,9 @@ impl TextLineConfigWidget {
         // Set theme config on gradient editor so theme colors show correctly
         bg_gradient_editor.set_theme_config(theme.borrow().clone());
         // Store in fill_gradient_editors for theme updates (also used for background gradients)
-        fill_gradient_editors.borrow_mut().push(bg_gradient_editor.clone());
+        fill_gradient_editors
+            .borrow_mut()
+            .push(bg_gradient_editor.clone());
         match &line_config.text_background.background {
             TextBackgroundType::LinearGradient { stops, angle } => {
                 // Use set_gradient_source to preserve theme color references
@@ -998,9 +1029,8 @@ impl TextLineConfigWidget {
 
         // Group dropdown with 8 presets + Custom
         let group_options = vec![
-            "Group 1", "Group 2", "Group 3", "Group 4",
-            "Group 5", "Group 6", "Group 7", "Group 8",
-            "Custom"
+            "Group 1", "Group 2", "Group 3", "Group 4", "Group 5", "Group 6", "Group 7", "Group 8",
+            "Custom",
         ];
         let group_list = StringList::new(&group_options);
         let group_combo = DropDown::new(Some(group_list), Option::<gtk4::Expression>::None);
@@ -1171,7 +1201,10 @@ impl TextLineConfigWidget {
                 if i >= index {
                     break;
                 }
-                if line.is_combined && line.group_id.as_ref() == Some(group_id) && line.position == position {
+                if line.is_combined
+                    && line.group_id.as_ref() == Some(group_id)
+                    && line.position == position
+                {
                     return false; // Found an earlier line in the same group at same position
                 }
             }
@@ -1514,7 +1547,9 @@ impl LazyTextLineConfigWidget {
             Rc::new(move || {
                 // Only create if not already created
                 if inner_widget_clone.borrow().is_none() {
-                    log::info!("LazyTextLineConfigWidget: Creating actual TextLineConfigWidget on map");
+                    log::info!(
+                        "LazyTextLineConfigWidget: Creating actual TextLineConfigWidget on map"
+                    );
 
                     // Create the actual widget
                     let widget = TextLineConfigWidget::new(available_fields_clone.clone());

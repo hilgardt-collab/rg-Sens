@@ -15,9 +15,21 @@ const POSITION_LABELS: [[&str; 3]; 3] = [
 
 /// TextPosition values for each grid cell
 const POSITIONS: [[TextPosition; 3]; 3] = [
-    [TextPosition::TopLeft, TextPosition::TopCenter, TextPosition::TopRight],
-    [TextPosition::CenterLeft, TextPosition::Center, TextPosition::CenterRight],
-    [TextPosition::BottomLeft, TextPosition::BottomCenter, TextPosition::BottomRight],
+    [
+        TextPosition::TopLeft,
+        TextPosition::TopCenter,
+        TextPosition::TopRight,
+    ],
+    [
+        TextPosition::CenterLeft,
+        TextPosition::Center,
+        TextPosition::CenterRight,
+    ],
+    [
+        TextPosition::BottomLeft,
+        TextPosition::BottomCenter,
+        TextPosition::BottomRight,
+    ],
 ];
 
 /// Widget for selecting position from a 3x3 grid
@@ -99,9 +111,21 @@ impl PositionGridWidget {
 
                 // Clone all buttons for the closure
                 let buttons_clone: [[ToggleButton; 3]; 3] = [
-                    [buttons[0][0].clone(), buttons[0][1].clone(), buttons[0][2].clone()],
-                    [buttons[1][0].clone(), buttons[1][1].clone(), buttons[1][2].clone()],
-                    [buttons[2][0].clone(), buttons[2][1].clone(), buttons[2][2].clone()],
+                    [
+                        buttons[0][0].clone(),
+                        buttons[0][1].clone(),
+                        buttons[0][2].clone(),
+                    ],
+                    [
+                        buttons[1][0].clone(),
+                        buttons[1][1].clone(),
+                        buttons[1][2].clone(),
+                    ],
+                    [
+                        buttons[2][0].clone(),
+                        buttons[2][1].clone(),
+                        buttons[2][2].clone(),
+                    ],
                 ];
 
                 let current_row = row;

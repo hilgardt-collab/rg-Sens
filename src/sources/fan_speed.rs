@@ -125,7 +125,14 @@ fn discover_all_fans() -> Vec<FanInfo> {
                                             path: Some(fan_path.clone()),
                                         });
 
-                                        log::info!("  [{}] {:?}: {} = {} RPM ({})", index, category, label, speed, fan_path.display());
+                                        log::info!(
+                                            "  [{}] {:?}: {} = {} RPM ({})",
+                                            index,
+                                            category,
+                                            label,
+                                            speed,
+                                            fan_path.display()
+                                        );
                                     }
                                 }
                             }
@@ -196,9 +203,7 @@ fn categorize_fan(label: &str) -> FanCategory {
     }
 
     // PSU fans
-    if label_lower.contains("psu")
-        || label_lower.contains("power supply")
-    {
+    if label_lower.contains("psu") || label_lower.contains("power supply") {
         return FanCategory::PSU;
     }
 
@@ -261,7 +266,6 @@ impl FanSpeedSource {
         &FAN_SENSORS
     }
 }
-
 
 impl DataSource for FanSpeedSource {
     fn metadata(&self) -> &SourceMetadata {
@@ -330,14 +334,14 @@ impl DataSource for FanSpeedSource {
                             self.detected_min = Some(
                                 self.detected_min
                                     .map(|min| min.min(self.current_rpm))
-                                    .unwrap_or(self.current_rpm)
+                                    .unwrap_or(self.current_rpm),
                             );
 
                             // Update max
                             self.detected_max = Some(
                                 self.detected_max
                                     .map(|max| max.max(self.current_rpm))
-                                    .unwrap_or(self.current_rpm)
+                                    .unwrap_or(self.current_rpm),
                             );
                         }
                     } else {
@@ -353,7 +357,10 @@ impl DataSource for FanSpeedSource {
                 self.current_rpm = 0.0;
             }
         } else {
-            log::warn!("Selected fan sensor index {} not found in FAN_SENSORS", self.config.sensor_index);
+            log::warn!(
+                "Selected fan sensor index {} not found in FAN_SENSORS",
+                self.config.sensor_index
+            );
             self.current_rpm = 0.0;
         }
 
@@ -361,24 +368,30 @@ impl DataSource for FanSpeedSource {
         self.values.clear();
 
         // Fan speed value - MUST provide "value" key for displayers
-        self.values.insert("value".to_string(), Value::from(self.current_rpm));
-        self.values.insert("rpm".to_string(), Value::from(self.current_rpm)); // Keep for compatibility
+        self.values
+            .insert("value".to_string(), Value::from(self.current_rpm));
+        self.values
+            .insert("rpm".to_string(), Value::from(self.current_rpm)); // Keep for compatibility
 
         // Sensor label
         let sensor_label = FAN_SENSORS
             .get(self.config.sensor_index)
             .map(|s| s.label.as_str())
             .unwrap_or("Unknown");
-        self.values.insert("sensor_label".to_string(), Value::from(sensor_label));
+        self.values
+            .insert("sensor_label".to_string(), Value::from(sensor_label));
 
         // Unit
         self.values.insert("unit".to_string(), Value::from("RPM"));
 
         // Caption (custom or auto-generated)
-        let caption = self.config.custom_caption.clone().unwrap_or_else(|| {
-            sensor_label.to_string()
-        });
-        self.values.insert("caption".to_string(), Value::from(caption));
+        let caption = self
+            .config
+            .custom_caption
+            .clone()
+            .unwrap_or_else(|| sensor_label.to_string());
+        self.values
+            .insert("caption".to_string(), Value::from(caption));
 
         // Limits
         let min_limit = if self.config.auto_detect_limits {
@@ -397,23 +410,29 @@ impl DataSource for FanSpeedSource {
         // This prevents the arc displayer from showing 0 when min == max
         if let (Some(min), Some(max)) = (min_limit, max_limit) {
             if max > min {
-                self.values.insert("min_limit".to_string(), Value::from(min));
-                self.values.insert("max_limit".to_string(), Value::from(max));
+                self.values
+                    .insert("min_limit".to_string(), Value::from(min));
+                self.values
+                    .insert("max_limit".to_string(), Value::from(max));
             } else if !self.config.auto_detect_limits {
                 // For manual limits, always provide them even if equal
                 // (user explicitly set them, might be intentional)
-                self.values.insert("min_limit".to_string(), Value::from(min));
-                self.values.insert("max_limit".to_string(), Value::from(max));
+                self.values
+                    .insert("min_limit".to_string(), Value::from(min));
+                self.values
+                    .insert("max_limit".to_string(), Value::from(max));
             }
             // For auto-detect with min == max, don't provide limits yet
             // Let the displayer use fallback logic (percentage mode)
         } else if min_limit.is_some() || max_limit.is_some() {
             // Provide partial limits if available (one but not both)
             if let Some(min) = min_limit {
-                self.values.insert("min_limit".to_string(), Value::from(min));
+                self.values
+                    .insert("min_limit".to_string(), Value::from(min));
             }
             if let Some(max) = max_limit {
-                self.values.insert("max_limit".to_string(), Value::from(max));
+                self.values
+                    .insert("max_limit".to_string(), Value::from(max));
             }
         }
 

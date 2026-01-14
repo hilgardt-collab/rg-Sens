@@ -10,20 +10,22 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig};
+use crate::ui::bar_display::{
+    BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig,
+};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
 use crate::ui::text_renderer::render_text_lines_with_theme;
-use crate::ui::theme::{ColorSource, ComboThemeConfig, deserialize_color_or_source};
+use crate::ui::theme::{deserialize_color_or_source, ColorSource, ComboThemeConfig};
 
 /// Label position relative to the bar
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum LabelPosition {
     #[serde(rename = "start")]
     #[default]
-    Start,  // Left for horizontal, Top for vertical
+    Start, // Left for horizontal, Top for vertical
     #[serde(rename = "end")]
-    End,    // Right for horizontal, Bottom for vertical
+    End, // Right for horizontal, Bottom for vertical
     #[serde(rename = "inside")]
     Inside, // Inside the bar
 }
@@ -84,7 +86,10 @@ pub struct CoreBarsConfig {
     pub label_font: String,
     #[serde(default = "default_label_size")]
     pub label_size: f64,
-    #[serde(default = "default_label_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_label_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub label_color: ColorSource,
     #[serde(default)]
     pub label_bold: bool,
@@ -211,7 +216,15 @@ pub fn render_core_bars(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    render_core_bars_with_values(cr, config, theme, core_values, width, height, &HashMap::new())
+    render_core_bars_with_values(
+        cr,
+        config,
+        theme,
+        core_values,
+        width,
+        height,
+        &HashMap::new(),
+    )
 }
 
 /// Render multiple CPU core bars with source values for text overlay
@@ -259,10 +272,26 @@ pub fn render_core_bars_with_values(
     // For vertical bars (arranged horizontally), we divide width
     match config.orientation {
         BarOrientation::Horizontal => {
-            render_horizontal_bars(cr, config, theme, core_values, padded_width, padded_height, label_space)?;
+            render_horizontal_bars(
+                cr,
+                config,
+                theme,
+                core_values,
+                padded_width,
+                padded_height,
+                label_space,
+            )?;
         }
         BarOrientation::Vertical => {
-            render_vertical_bars(cr, config, theme, core_values, padded_width, padded_height, label_space)?;
+            render_vertical_bars(
+                cr,
+                config,
+                theme,
+                core_values,
+                padded_width,
+                padded_height,
+                label_space,
+            )?;
         }
     }
 
@@ -295,7 +324,14 @@ fn calculate_label_space(cr: &cairo::Context, config: &CoreBarsConfig, num_bars:
     let max_index = config.start_core + num_bars - 1;
     let test_label = format!("{}{}", config.label_prefix, max_index);
 
-    let extents = pango_text_extents(cr, &test_label, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
+    let extents = pango_text_extents(
+        cr,
+        &test_label,
+        &config.label_font,
+        cairo::FontSlant::Normal,
+        font_weight,
+        config.label_size,
+    );
     match config.orientation {
         BarOrientation::Horizontal => extents.width() + 8.0,
         BarOrientation::Vertical => extents.height() + 8.0,
@@ -330,17 +366,8 @@ fn render_horizontal_bars(
         // Render the bar
         cr.save()?;
         render_single_bar(
-            cr,
-            config,
-            theme,
-            value,
-            bar_x,
-            bar_y,
-            bar_width,
-            bar_height,
-            true, // horizontal
-            i,
-            num_bars,
+            cr, config, theme, value, bar_x, bar_y, bar_width, bar_height, true, // horizontal
+            i, num_bars,
         )?;
         cr.restore()?;
 
@@ -392,17 +419,8 @@ fn render_vertical_bars(
         // Render the bar
         cr.save()?;
         render_single_bar(
-            cr,
-            config,
-            theme,
-            value,
-            bar_x,
-            bar_y,
-            bar_width,
-            bar_height,
-            false, // vertical
-            i,
-            num_bars,
+            cr, config, theme, value, bar_x, bar_y, bar_width, bar_height, false, // vertical
+            i, num_bars,
         )?;
         cr.restore()?;
 
@@ -479,7 +497,8 @@ fn render_single_bar(
                             0.5
                         };
                         // Resolve color stops and sample
-                        let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+                        let resolved_stops: Vec<ColorStop> =
+                            stops.iter().map(|s| s.resolve(theme)).collect();
                         let color = sample_gradient_color(&resolved_stops, position);
                         color.apply_to_cairo(cr);
                         cr.paint()?;
@@ -502,7 +521,9 @@ fn render_single_bar(
             }
         }
         BarStyle::Segmented => {
-            render_segmented_single_bar(cr, config, theme, value, x, y, width, height, horizontal, bar_index, total_bars)?;
+            render_segmented_single_bar(
+                cr, config, theme, value, x, y, width, height, horizontal, bar_index, total_bars,
+            )?;
         }
     }
 
@@ -530,7 +551,10 @@ fn render_segmented_single_bar(
     if horizontal {
         let total_spacing = spacing * (segment_count - 1) as f64;
         let segment_width = (width - total_spacing) / segment_count as f64;
-        let radius = config.corner_radius.min(segment_width / 2.0).min(height / 2.0);
+        let radius = config
+            .corner_radius
+            .min(segment_width / 2.0)
+            .min(height / 2.0);
 
         for i in 0..segment_count {
             // Determine segment index based on fill direction
@@ -569,7 +593,10 @@ fn render_segmented_single_bar(
     } else {
         let total_spacing = spacing * (segment_count - 1) as f64;
         let segment_height = (height - total_spacing) / segment_count as f64;
-        let radius = config.corner_radius.min(width / 2.0).min(segment_height / 2.0);
+        let radius = config
+            .corner_radius
+            .min(width / 2.0)
+            .min(segment_height / 2.0);
 
         for i in 0..segment_count {
             // Determine segment index based on fill direction
@@ -642,19 +669,44 @@ fn render_segment(
                     0.5
                 };
                 // Resolve color stops and sample
-                let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+                let resolved_stops: Vec<ColorStop> =
+                    stops.iter().map(|s| s.resolve(theme)).collect();
                 let color = sample_gradient_color(&resolved_stops, position);
                 color.apply_to_cairo(cr);
                 cr.paint()?;
             } else {
-                render_foreground(cr, &config.foreground, theme, full_x, full_y, full_width, full_height)?;
+                render_foreground(
+                    cr,
+                    &config.foreground,
+                    theme,
+                    full_x,
+                    full_y,
+                    full_width,
+                    full_height,
+                )?;
             }
         } else {
-            render_foreground(cr, &config.foreground, theme, full_x, full_y, full_width, full_height)?;
+            render_foreground(
+                cr,
+                &config.foreground,
+                theme,
+                full_x,
+                full_y,
+                full_width,
+                full_height,
+            )?;
         }
     } else {
         cr.clip();
-        render_background(cr, &config.background, theme, full_x, full_y, full_width, full_height)?;
+        render_background(
+            cr,
+            &config.background,
+            theme,
+            full_x,
+            full_y,
+            full_width,
+            full_height,
+        )?;
     }
 
     cr.restore()?;
@@ -676,8 +728,8 @@ fn render_label(
     config: &CoreBarsConfig,
     theme: &ComboThemeConfig,
     core_index: usize,
-    bar_pos: f64,     // y for horizontal, x for vertical
-    bar_size: f64,    // height for horizontal, width for vertical
+    bar_pos: f64,  // y for horizontal, x for vertical
+    bar_size: f64, // height for horizontal, width for vertical
     _width: f64,
     height: f64,
     label_space: f64,
@@ -694,7 +746,14 @@ fn render_label(
     let label_color = config.label_color.resolve(theme);
     label_color.apply_to_cairo(cr);
 
-    let extents = pango_text_extents(cr, &label, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
+    let extents = pango_text_extents(
+        cr,
+        &label,
+        &config.label_font,
+        cairo::FontSlant::Normal,
+        font_weight,
+        config.label_size,
+    );
     let text_width = extents.width();
     let text_height = extents.height();
 
@@ -718,7 +777,14 @@ fn render_label(
         cr.move_to(text_x, text_y);
     }
 
-    pango_show_text(cr, &label, &config.label_font, cairo::FontSlant::Normal, font_weight, config.label_size);
+    pango_show_text(
+        cr,
+        &label,
+        &config.label_font,
+        cairo::FontSlant::Normal,
+        font_weight,
+        config.label_size,
+    );
 
     Ok(())
 }
@@ -828,7 +894,11 @@ fn sample_gradient_color(stops: &[ColorStop], position: f64) -> Color {
 
     // Find the two stops to interpolate between
     let mut sorted_stops: Vec<ColorStop> = stops.to_vec();
-    sorted_stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
+    sorted_stops.sort_by(|a, b| {
+        a.position
+            .partial_cmp(&b.position)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Find the stops surrounding our position
     let mut lower_idx = 0;

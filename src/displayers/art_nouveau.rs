@@ -134,11 +134,15 @@ impl Displayer for ArtNouveauDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("art_nouveau_config") {
-            if let Ok(display_config) = serde_json::from_value::<ArtNouveauDisplayConfig>(config_value.clone()) {
+            if let Ok(display_config) =
+                serde_json::from_value::<ArtNouveauDisplayConfig>(config_value.clone())
+            {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
-            if let Ok(frame_config) = serde_json::from_value::<ArtNouveauFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) =
+                serde_json::from_value::<ArtNouveauFrameConfig>(config_value.clone())
+            {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }
@@ -151,8 +155,8 @@ impl Displayer for ArtNouveauDisplayer {
     }
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
-        self.inner.get_config().map(|frame| {
-            DisplayerConfig::ArtNouveau(ArtNouveauDisplayConfig::from_frame(frame))
-        })
+        self.inner
+            .get_config()
+            .map(|frame| DisplayerConfig::ArtNouveau(ArtNouveauDisplayConfig::from_frame(frame)))
     }
 }

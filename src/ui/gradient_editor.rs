@@ -1,7 +1,9 @@
 //! Gradient editor widget for configuring linear and radial gradients
 
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, DrawingArea, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton};
+use gtk4::{
+    Box as GtkBox, Button, DrawingArea, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -67,7 +69,9 @@ impl GradientEditor {
         let theme_config_clone = theme_config.clone();
         preview.set_draw_func(move |_, cr, width, height| {
             use crate::ui::background::render_background;
-            use crate::ui::background::{BackgroundConfig, BackgroundType, LinearGradientConfig, RadialGradientConfig};
+            use crate::ui::background::{
+                BackgroundConfig, BackgroundType, LinearGradientConfig, RadialGradientConfig,
+            };
 
             // Render checkerboard pattern to show transparency
             render_checkerboard(cr, width as f64, height as f64);
@@ -79,9 +83,8 @@ impl GradientEditor {
             let default_theme = ComboThemeConfig::default();
             let theme = theme_config_clone.borrow();
             let theme_ref = theme.as_ref().unwrap_or(&default_theme);
-            let resolved_stops: Vec<ColorStop> = stops_source.iter()
-                .map(|s| s.resolve(theme_ref))
-                .collect();
+            let resolved_stops: Vec<ColorStop> =
+                stops_source.iter().map(|s| s.resolve(theme_ref)).collect();
 
             let config = if use_linear_preview {
                 BackgroundConfig {
@@ -223,7 +226,9 @@ impl GradientEditor {
                 0.5
             } else {
                 let mut positions: Vec<f64> = stops_list.iter().map(|s| s.position).collect();
-                positions.sort_by(|a: &f64, b: &f64| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                positions.sort_by(|a: &f64, b: &f64| {
+                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                });
 
                 let mut max_gap = positions[0];
                 let mut max_gap_pos = positions[0] / 2.0;
@@ -246,7 +251,11 @@ impl GradientEditor {
             // New stops default to custom gray color
             let new_stop = ColorStopSource::custom(position, Color::new(0.5, 0.5, 0.5, 1.0));
             stops_list.push(new_stop);
-            stops_list.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
+            stops_list.sort_by(|a, b| {
+                a.position
+                    .partial_cmp(&b.position)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
             drop(stops_list);
 
@@ -467,7 +476,8 @@ impl GradientEditor {
 
                 // Check if order would change (needs rebuild)
                 let old_index = index;
-                let would_be_index = stops.iter()
+                let would_be_index = stops
+                    .iter()
                     .enumerate()
                     .filter(|(i, _)| *i != index)
                     .filter(|(_, s)| s.position < new_position)
@@ -480,7 +490,11 @@ impl GradientEditor {
                 if let Some(stop) = stops.get_mut(index) {
                     stop.position = new_position;
                 }
-                stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap_or(std::cmp::Ordering::Equal));
+                stops.sort_by(|a, b| {
+                    a.position
+                        .partial_cmp(&b.position)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
 
             // Only rebuild the list if the order changed - defer to idle to avoid
@@ -522,10 +536,10 @@ impl GradientEditor {
             match current.as_ref() {
                 Some(current_config) => {
                     // Compare theme colors - if they're the same, no need to rebuild
-                    current_config.color1 != config.color1 ||
-                    current_config.color2 != config.color2 ||
-                    current_config.color3 != config.color3 ||
-                    current_config.color4 != config.color4
+                    current_config.color1 != config.color1
+                        || current_config.color2 != config.color2
+                        || current_config.color3 != config.color3
+                        || current_config.color4 != config.color4
                 }
                 None => true, // No current theme, need to set it
             }
@@ -617,7 +631,9 @@ impl GradientEditor {
         *self.is_updating.borrow_mut() = true;
 
         // Convert ColorStop to ColorStopSource with Custom colors
-        let stops_source: Vec<ColorStopSource> = config.stops.iter()
+        let stops_source: Vec<ColorStopSource> = config
+            .stops
+            .iter()
             .map(|s| ColorStopSource::custom(s.position, s.color))
             .collect();
 
@@ -652,7 +668,8 @@ impl GradientEditor {
         *self.is_updating.borrow_mut() = true;
 
         // Convert ColorStop to ColorStopSource with Custom colors
-        let stops_source: Vec<ColorStopSource> = stops.iter()
+        let stops_source: Vec<ColorStopSource> = stops
+            .iter()
             .map(|s| ColorStopSource::custom(s.position, s.color))
             .collect();
 
@@ -678,7 +695,9 @@ impl GradientEditor {
         let theme = self.theme_config.borrow();
         let theme_ref = theme.as_ref().unwrap_or(&default_theme);
 
-        self.stops.borrow().iter()
+        self.stops
+            .borrow()
+            .iter()
             .map(|s| s.resolve(theme_ref))
             .collect()
     }

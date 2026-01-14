@@ -6,13 +6,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::audio::AlarmSoundConfig;
+use crate::core::{
+    AlarmConfig, DisplayerConfig, PanelAppearance, PanelBorderConfig, PanelData, PanelGeometry,
+    SourceConfig, TimerConfig,
+};
 use crate::ui::background::BackgroundConfig;
 use crate::ui::theme::ComboThemeConfig;
-use crate::core::{
-    AlarmConfig, PanelBorderConfig, PanelGeometry, PanelData, PanelAppearance, SourceConfig,
-    DisplayerConfig, TimerConfig,
-};
-use crate::audio::AlarmSoundConfig;
 
 /// Current config format version
 pub const CONFIG_VERSION: u32 = 2;
@@ -70,9 +70,7 @@ impl AppConfig {
     pub fn load_from_string(content: &str) -> Result<Self> {
         // Parse JSON once, then use from_value to deserialize into the correct struct
         let raw: serde_json::Value = serde_json::from_str(content)?;
-        let version = raw.get("version")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let version = raw.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
         if version >= 2 {
             // V2 format - use AppConfigLoad which has the correct "panels" field
@@ -153,7 +151,10 @@ impl AppConfig {
 
     /// Set panels from PanelData (stores in v2 format)
     pub fn set_panels(&mut self, panels: Vec<PanelData>) {
-        self.panels_v2 = panels.into_iter().map(PanelConfigV2::from_panel_data).collect();
+        self.panels_v2 = panels
+            .into_iter()
+            .map(PanelConfigV2::from_panel_data)
+            .collect();
         self.panels_v1.clear(); // Clear legacy panels
         self.version = CONFIG_VERSION;
     }
@@ -164,7 +165,10 @@ impl AppConfig {
             self.panels_v2.clone()
         } else {
             // Convert v1 to v2
-            self.panels_v1.iter().map(|p| PanelConfigV2::from_panel_data(p.to_panel_data())).collect()
+            self.panels_v1
+                .iter()
+                .map(|p| PanelConfigV2::from_panel_data(p.to_panel_data()))
+                .collect()
         };
 
         AppConfigSave {
@@ -228,10 +232,14 @@ impl AppConfigV1 {
             version: CONFIG_VERSION,
             window: self.window,
             grid: self.grid,
-            panels_v2: self.panels.iter().map(|p| PanelConfigV2::from_panel_data(p.to_panel_data())).collect(),
+            panels_v2: self
+                .panels
+                .iter()
+                .map(|p| PanelConfigV2::from_panel_data(p.to_panel_data()))
+                .collect(),
             panels_v1: Vec::new(), // Don't keep v1 after migration
-            timers: Vec::new(), // V1 configs don't have global timers
-            alarms: Vec::new(), // V1 configs don't have global alarms
+            timers: Vec::new(),    // V1 configs don't have global timers
+            alarms: Vec::new(),    // V1 configs don't have global alarms
             global_timer_sound: AlarmSoundConfig::default(),
             global_theme: ComboThemeConfig::default(),
         }
@@ -579,7 +587,10 @@ impl PanelConfig {
                 SourceConfig::default_for_type("static_text").unwrap_or_default()
             }
             _ => {
-                warn!("Unknown source type '{}', using default CPU config", self.source);
+                warn!(
+                    "Unknown source type '{}', using default CPU config",
+                    self.source
+                );
                 SourceConfig::default()
             }
         }
@@ -688,7 +699,10 @@ impl PanelConfig {
                 DisplayerConfig::default_for_type("indicator").unwrap_or_default()
             }
             _ => {
-                warn!("Unknown displayer type '{}', using default Text config", self.displayer);
+                warn!(
+                    "Unknown displayer type '{}', using default Text config",
+                    self.displayer
+                );
                 DisplayerConfig::default()
             }
         }

@@ -2,24 +2,26 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label,
-    Notebook, Orientation, Scale, SpinButton, StringList,
+    Adjustment, Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook,
+    Orientation, Scale, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::ui::background::Color;
-use crate::ui::bar_display::{BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle};
-use crate::ui::render_utils::render_checkerboard;
+use crate::ui::bar_display::{
+    BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle,
+};
 use crate::ui::clipboard::CLIPBOARD;
-use crate::ui::core_bars_display::{CoreBarsConfig, LabelPosition, render_core_bars};
+use crate::ui::core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
+use crate::ui::render_utils::render_checkerboard;
 use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
+use crate::ui::widget_builder::{create_dropdown_row, create_spin_row_with_value};
 use crate::ui::GradientEditor;
 use crate::ui::TextOverlayConfigWidget;
-use crate::ui::widget_builder::{create_dropdown_row, create_spin_row_with_value};
 
 /// Core bars configuration widget
 pub struct CoreBarsConfigWidget {
@@ -115,27 +117,60 @@ impl CoreBarsConfigWidget {
         notebook.set_vexpand(true);
 
         // === Tab 1: Cores ===
-        let (cores_page, start_core_spin, end_core_spin, padding_top_spin, padding_bottom_spin, padding_left_spin, padding_right_spin) =
-            Self::create_cores_page(&config, &on_change);
+        let (
+            cores_page,
+            start_core_spin,
+            end_core_spin,
+            padding_top_spin,
+            padding_bottom_spin,
+            padding_left_spin,
+            padding_right_spin,
+        ) = Self::create_cores_page(&config, &on_change);
         notebook.append_page(&cores_page, Some(&Label::new(Some("Cores"))));
 
         // === Tab 2: Bar Style ===
-        let (style_page, style_dropdown, orientation_dropdown, fill_direction_dropdown,
-             corner_radius_spin, bar_spacing_spin, segment_count_spin, segment_spacing_spin) =
-            Self::create_style_page(&config, &on_change);
+        let (
+            style_page,
+            style_dropdown,
+            orientation_dropdown,
+            fill_direction_dropdown,
+            corner_radius_spin,
+            bar_spacing_spin,
+            segment_count_spin,
+            segment_spacing_spin,
+        ) = Self::create_style_page(&config, &on_change);
         notebook.append_page(&style_page, Some(&Label::new(Some("Style"))));
 
         // === Tab 3: Colors ===
-        let (colors_page, fg_solid_radio, fg_gradient_radio, fg_color_widget, fg_gradient_editor,
-             bg_solid_radio, bg_gradient_radio, bg_transparent_radio, bg_color_widget, bg_gradient_editor,
-             border_check, border_width_spin, border_color_widget, gradient_spans_bars_check) =
-            Self::create_colors_page(&config, &theme, &on_change);
+        let (
+            colors_page,
+            fg_solid_radio,
+            fg_gradient_radio,
+            fg_color_widget,
+            fg_gradient_editor,
+            bg_solid_radio,
+            bg_gradient_radio,
+            bg_transparent_radio,
+            bg_color_widget,
+            bg_gradient_editor,
+            border_check,
+            border_width_spin,
+            border_color_widget,
+            gradient_spans_bars_check,
+        ) = Self::create_colors_page(&config, &theme, &on_change);
         notebook.append_page(&colors_page, Some(&Label::new(Some("Colors"))));
 
         // === Tab 4: Labels ===
-        let (labels_page, show_labels_check, label_prefix_entry, label_position_dropdown,
-             label_font_button, label_size_spin, label_color_widget, label_bold_check) =
-            Self::create_labels_page(&config, &theme, &on_change);
+        let (
+            labels_page,
+            show_labels_check,
+            label_prefix_entry,
+            label_position_dropdown,
+            label_font_button,
+            label_size_spin,
+            label_color_widget,
+            label_bold_check,
+        ) = Self::create_labels_page(&config, &theme, &on_change);
         notebook.append_page(&labels_page, Some(&Label::new(Some("Labels"))));
 
         // === Tab 5: Animation ===
@@ -166,7 +201,10 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        notebook.append_page(text_overlay_widget.widget(), Some(&Label::new(Some("Text"))));
+        notebook.append_page(
+            text_overlay_widget.widget(),
+            Some(&Label::new(Some("Text"))),
+        );
 
         // Preview configuration
         preview.set_content_height(150);
@@ -189,7 +227,8 @@ impl CoreBarsConfigWidget {
                 .collect();
 
             if !sample_values.is_empty() {
-                let _ = render_core_bars(cr, &cfg, &thm, &sample_values, width as f64, height as f64);
+                let _ =
+                    render_core_bars(cr, &cfg, &thm, &sample_values, width as f64, height as f64);
             }
         });
 
@@ -244,7 +283,15 @@ impl CoreBarsConfigWidget {
     fn create_cores_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, SpinButton, SpinButton, SpinButton, SpinButton, SpinButton, SpinButton) {
+    ) -> (
+        GtkBox,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+    ) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -365,13 +412,30 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        (page, start_core_spin, end_core_spin, padding_top_spin, padding_bottom_spin, padding_left_spin, padding_right_spin)
+        (
+            page,
+            start_core_spin,
+            end_core_spin,
+            padding_top_spin,
+            padding_bottom_spin,
+            padding_left_spin,
+            padding_right_spin,
+        )
     }
 
     fn create_style_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, DropDown, DropDown, DropDown, SpinButton, SpinButton, SpinButton, SpinButton) {
+    ) -> (
+        GtkBox,
+        DropDown,
+        DropDown,
+        DropDown,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+        SpinButton,
+    ) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -379,23 +443,28 @@ impl CoreBarsConfigWidget {
         page.set_margin_bottom(8);
 
         // Style dropdown
-        let (style_row, style_dropdown) = create_dropdown_row("Style:", &["Full", "Rectangle", "Segmented"]);
+        let (style_row, style_dropdown) =
+            create_dropdown_row("Style:", &["Full", "Rectangle", "Segmented"]);
         page.append(&style_row);
 
         // Orientation dropdown
-        let (orient_row, orientation_dropdown) = create_dropdown_row("Orientation:", &["Horizontal", "Vertical"]);
+        let (orient_row, orientation_dropdown) =
+            create_dropdown_row("Orientation:", &["Horizontal", "Vertical"]);
         page.append(&orient_row);
 
         // Fill direction dropdown (will be populated based on orientation)
-        let (direction_row, fill_direction_dropdown) = create_dropdown_row("Fill Direction:", &["Left to Right", "Right to Left"]);
+        let (direction_row, fill_direction_dropdown) =
+            create_dropdown_row("Fill Direction:", &["Left to Right", "Right to Left"]);
         page.append(&direction_row);
 
         // Corner radius
-        let (radius_row, corner_radius_spin) = create_spin_row_with_value("Corner Radius:", 0.0, 20.0, 1.0, 3.0);
+        let (radius_row, corner_radius_spin) =
+            create_spin_row_with_value("Corner Radius:", 0.0, 20.0, 1.0, 3.0);
         page.append(&radius_row);
 
         // Bar spacing
-        let (spacing_row, bar_spacing_spin) = create_spin_row_with_value("Bar Spacing:", 0.0, 20.0, 1.0, 4.0);
+        let (spacing_row, bar_spacing_spin) =
+            create_spin_row_with_value("Bar Spacing:", 0.0, 20.0, 1.0, 4.0);
         page.append(&spacing_row);
 
         // Segmented options
@@ -403,10 +472,12 @@ impl CoreBarsConfigWidget {
         seg_label.set_xalign(0.0);
         page.append(&seg_label);
 
-        let (seg_count_row, segment_count_spin) = create_spin_row_with_value("Segment Count:", 2.0, 50.0, 1.0, 10.0);
+        let (seg_count_row, segment_count_spin) =
+            create_spin_row_with_value("Segment Count:", 2.0, 50.0, 1.0, 10.0);
         page.append(&seg_count_row);
 
-        let (seg_spacing_row, segment_spacing_spin) = create_spin_row_with_value("Segment Spacing:", 0.0, 10.0, 0.5, 1.0);
+        let (seg_spacing_row, segment_spacing_spin) =
+            create_spin_row_with_value("Segment Spacing:", 0.0, 10.0, 0.5, 1.0);
         segment_spacing_spin.set_digits(1);
         page.append(&seg_spacing_row);
 
@@ -454,11 +525,12 @@ impl CoreBarsConfigWidget {
             fill_direction_dropdown_clone.set_selected(0);
 
             config_clone.borrow_mut().orientation = orientation;
-            config_clone.borrow_mut().fill_direction = if matches!(orientation, BarOrientation::Horizontal) {
-                BarFillDirection::LeftToRight
-            } else {
-                BarFillDirection::BottomToTop
-            };
+            config_clone.borrow_mut().fill_direction =
+                if matches!(orientation, BarOrientation::Horizontal) {
+                    BarFillDirection::LeftToRight
+                } else {
+                    BarFillDirection::BottomToTop
+                };
 
             if let Some(ref cb) = *on_change_clone.borrow() {
                 cb();
@@ -531,17 +603,38 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        (page, style_dropdown, orientation_dropdown, fill_direction_dropdown, corner_radius_spin,
-         bar_spacing_spin, segment_count_spin, segment_spacing_spin)
+        (
+            page,
+            style_dropdown,
+            orientation_dropdown,
+            fill_direction_dropdown,
+            corner_radius_spin,
+            bar_spacing_spin,
+            segment_count_spin,
+            segment_spacing_spin,
+        )
     }
 
     fn create_colors_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
         theme: &Rc<RefCell<ComboThemeConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, CheckButton, CheckButton, Rc<ThemeColorSelector>, Rc<GradientEditor>,
-          CheckButton, CheckButton, CheckButton, Rc<ThemeColorSelector>, Rc<GradientEditor>,
-          CheckButton, SpinButton, Rc<ThemeColorSelector>, CheckButton) {
+    ) -> (
+        GtkBox,
+        CheckButton,
+        CheckButton,
+        Rc<ThemeColorSelector>,
+        Rc<GradientEditor>,
+        CheckButton,
+        CheckButton,
+        CheckButton,
+        Rc<ThemeColorSelector>,
+        Rc<GradientEditor>,
+        CheckButton,
+        SpinButton,
+        Rc<ThemeColorSelector>,
+        CheckButton,
+    ) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -588,7 +681,9 @@ impl CoreBarsConfigWidget {
 
         // Gradient spans bars option
         let gradient_spans_bars_check = CheckButton::with_label("Gradient spans across bars");
-        gradient_spans_bars_check.set_tooltip_text(Some("Each bar shows a single color sampled from the gradient based on its position"));
+        gradient_spans_bars_check.set_tooltip_text(Some(
+            "Each bar shows a single color sampled from the gradient based on its position",
+        ));
         gradient_spans_bars_check.set_active(config.borrow().gradient_spans_bars);
         gradient_spans_bars_check.set_visible(false); // Only visible when gradient is selected
         page.append(&gradient_spans_bars_check);
@@ -693,12 +788,14 @@ impl CoreBarsConfigWidget {
             gradient_spans_bars_check_vis2.set_visible(radio.is_active());
             if radio.is_active() {
                 let gradient = fg_gradient_editor_for_radio.get_gradient();
-                let stops: Vec<ColorStopSource> = gradient.stops.iter()
+                let stops: Vec<ColorStopSource> = gradient
+                    .stops
+                    .iter()
                     .map(|s| ColorStopSource::custom(s.position, s.color))
                     .collect();
                 config_for_fg_gradient.borrow_mut().foreground = BarFillType::Gradient {
                     stops,
-                    angle: gradient.angle
+                    angle: gradient.angle,
                 };
                 if let Some(ref cb) = *on_change_for_fg_gradient_radio.borrow() {
                     cb();
@@ -709,7 +806,9 @@ impl CoreBarsConfigWidget {
         let config_clone2 = config.clone();
         let on_change_clone2 = on_change.clone();
         fg_color_widget.set_on_change(move |color_source| {
-            config_clone2.borrow_mut().foreground = BarFillType::Solid { color: color_source };
+            config_clone2.borrow_mut().foreground = BarFillType::Solid {
+                color: color_source,
+            };
             if let Some(ref cb) = *on_change_clone2.borrow() {
                 cb();
             }
@@ -761,12 +860,14 @@ impl CoreBarsConfigWidget {
             bg_copy_paste_box_vis2.set_visible(radio.is_active());
             if radio.is_active() {
                 let gradient = bg_gradient_editor_for_radio.get_gradient();
-                let stops: Vec<ColorStopSource> = gradient.stops.iter()
+                let stops: Vec<ColorStopSource> = gradient
+                    .stops
+                    .iter()
                     .map(|s| ColorStopSource::custom(s.position, s.color))
                     .collect();
                 config_for_bg_gradient.borrow_mut().background = BarBackgroundType::Gradient {
                     stops,
-                    angle: gradient.angle
+                    angle: gradient.angle,
                 };
                 if let Some(ref cb) = *on_change_for_bg_gradient_radio.borrow() {
                     cb();
@@ -794,7 +895,9 @@ impl CoreBarsConfigWidget {
         let config_clone6 = config.clone();
         let on_change_clone6 = on_change.clone();
         bg_color_widget.set_on_change(move |color_source| {
-            config_clone6.borrow_mut().background = BarBackgroundType::Solid { color: color_source };
+            config_clone6.borrow_mut().background = BarBackgroundType::Solid {
+                color: color_source,
+            };
             if let Some(ref cb) = *on_change_clone6.borrow() {
                 cb();
             }
@@ -831,12 +934,14 @@ impl CoreBarsConfigWidget {
                 if let Some(pasted_stops) = clipboard.paste_gradient_stops() {
                     fg_gradient_editor_for_paste.set_stops(pasted_stops.clone());
                     let gradient = fg_gradient_editor_for_paste.get_gradient();
-                    let stops: Vec<ColorStopSource> = gradient.stops.iter()
+                    let stops: Vec<ColorStopSource> = gradient
+                        .stops
+                        .iter()
                         .map(|s| ColorStopSource::custom(s.position, s.color))
                         .collect();
                     config_for_fg_paste.borrow_mut().foreground = BarFillType::Gradient {
                         stops,
-                        angle: gradient.angle
+                        angle: gradient.angle,
                     };
                     if let Some(ref cb) = *on_change_for_fg_paste.borrow() {
                         cb();
@@ -862,12 +967,14 @@ impl CoreBarsConfigWidget {
                 if let Some(pasted_stops) = clipboard.paste_gradient_stops() {
                     bg_gradient_editor_for_paste.set_stops(pasted_stops.clone());
                     let gradient = bg_gradient_editor_for_paste.get_gradient();
-                    let stops: Vec<ColorStopSource> = gradient.stops.iter()
+                    let stops: Vec<ColorStopSource> = gradient
+                        .stops
+                        .iter()
                         .map(|s| ColorStopSource::custom(s.position, s.color))
                         .collect();
                     config_for_bg_paste.borrow_mut().background = BarBackgroundType::Gradient {
                         stops,
-                        angle: gradient.angle
+                        angle: gradient.angle,
                     };
                     if let Some(ref cb) = *on_change_for_bg_paste.borrow() {
                         cb();
@@ -914,16 +1021,38 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        (page, fg_solid_radio, fg_gradient_radio, fg_color_widget, fg_gradient_editor,
-         bg_solid_radio, bg_gradient_radio, bg_transparent_radio, bg_color_widget, bg_gradient_editor,
-         border_check, border_width_spin, border_color_widget, gradient_spans_bars_check)
+        (
+            page,
+            fg_solid_radio,
+            fg_gradient_radio,
+            fg_color_widget,
+            fg_gradient_editor,
+            bg_solid_radio,
+            bg_gradient_radio,
+            bg_transparent_radio,
+            bg_color_widget,
+            bg_gradient_editor,
+            border_check,
+            border_width_spin,
+            border_color_widget,
+            gradient_spans_bars_check,
+        )
     }
 
     fn create_labels_page(
         config: &Rc<RefCell<CoreBarsConfig>>,
         theme: &Rc<RefCell<ComboThemeConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, CheckButton, Entry, DropDown, Button, SpinButton, Rc<ThemeColorSelector>, CheckButton) {
+    ) -> (
+        GtkBox,
+        CheckButton,
+        Entry,
+        DropDown,
+        Button,
+        SpinButton,
+        Rc<ThemeColorSelector>,
+        CheckButton,
+    ) {
         let page = GtkBox::new(Orientation::Vertical, 8);
         page.set_margin_start(8);
         page.set_margin_end(8);
@@ -946,14 +1075,16 @@ impl CoreBarsConfigWidget {
         page.append(&prefix_row);
 
         // Label position
-        let (pos_row, label_position_dropdown) = create_dropdown_row("Position:", &["Start", "End", "Inside"]);
+        let (pos_row, label_position_dropdown) =
+            create_dropdown_row("Position:", &["Start", "End", "Inside"]);
         page.append(&pos_row);
 
         // Font button with copy/paste
         let font_row = GtkBox::new(Orientation::Horizontal, 8);
         font_row.append(&Label::new(Some("Font:")));
         let cfg = config.borrow();
-        let label_font_button = Button::with_label(&format!("{} {:.0}", cfg.label_font, cfg.label_size));
+        let label_font_button =
+            Button::with_label(&format!("{} {:.0}", cfg.label_font, cfg.label_size));
         label_font_button.set_hexpand(true);
         font_row.append(&label_font_button);
         drop(cfg);
@@ -971,13 +1102,15 @@ impl CoreBarsConfigWidget {
         page.append(&font_row);
 
         // Font size
-        let (size_row, label_size_spin) = create_spin_row_with_value("Size:", 6.0, 32.0, 1.0, config.borrow().label_size);
+        let (size_row, label_size_spin) =
+            create_spin_row_with_value("Size:", 6.0, 32.0, 1.0, config.borrow().label_size);
         page.append(&size_row);
 
         // Font color
         let color_row = GtkBox::new(Orientation::Horizontal, 8);
         color_row.append(&Label::new(Some("Color:")));
-        let label_color_widget = Rc::new(ThemeColorSelector::new(config.borrow().label_color.clone()));
+        let label_color_widget =
+            Rc::new(ThemeColorSelector::new(config.borrow().label_color.clone()));
         label_color_widget.set_theme_config(theme.borrow().clone());
         color_row.append(label_color_widget.widget());
         page.append(&color_row);
@@ -1037,7 +1170,10 @@ impl CoreBarsConfigWidget {
 
             if let Some(win) = window {
                 show_font_dialog(Some(&win), None, move |font_desc| {
-                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Sans".to_string());
+                    let family = font_desc
+                        .family()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "Sans".to_string());
                     config_clone2.borrow_mut().label_font = family.clone();
                     let size = size_spin.value();
                     font_btn.set_label(&format!("{} {:.0}", family, size));
@@ -1086,7 +1222,12 @@ impl CoreBarsConfigWidget {
         copy_font_btn.connect_clicked(move |_| {
             let cfg = config_for_copy.borrow();
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font(cfg.label_font.clone(), cfg.label_size, cfg.label_bold, false);
+                clipboard.copy_font(
+                    cfg.label_font.clone(),
+                    cfg.label_size,
+                    cfg.label_bold,
+                    false,
+                );
             }
         });
 
@@ -1097,7 +1238,9 @@ impl CoreBarsConfigWidget {
         let size_spin_for_paste = label_size_spin.clone();
         let bold_check_for_paste = label_bold_check.clone();
         paste_font_btn.connect_clicked(move |_| {
-            let Ok(clipboard) = CLIPBOARD.lock() else { return };
+            let Ok(clipboard) = CLIPBOARD.lock() else {
+                return;
+            };
             if let Some((family, size, bold, _italic)) = clipboard.paste_font() {
                 let mut cfg = config_for_paste.borrow_mut();
                 cfg.label_font = family.clone();
@@ -1113,8 +1256,16 @@ impl CoreBarsConfigWidget {
             }
         });
 
-        (page, show_labels_check, label_prefix_entry, label_position_dropdown,
-         label_font_button, label_size_spin, label_color_widget, label_bold_check)
+        (
+            page,
+            show_labels_check,
+            label_prefix_entry,
+            label_position_dropdown,
+            label_font_button,
+            label_size_spin,
+            label_color_widget,
+            label_bold_check,
+        )
     }
 
     fn create_animation_page(
@@ -1196,10 +1347,11 @@ impl CoreBarsConfigWidget {
             BarStyle::Segmented => 2,
         });
 
-        self.orientation_dropdown.set_selected(match config.orientation {
-            BarOrientation::Horizontal => 0,
-            BarOrientation::Vertical => 1,
-        });
+        self.orientation_dropdown
+            .set_selected(match config.orientation {
+                BarOrientation::Horizontal => 0,
+                BarOrientation::Vertical => 1,
+            });
 
         // Update fill direction dropdown options based on orientation
         let direction_options = if matches!(config.orientation, BarOrientation::Horizontal) {
@@ -1207,7 +1359,8 @@ impl CoreBarsConfigWidget {
         } else {
             StringList::new(&["Bottom to Top", "Top to Bottom"])
         };
-        self.fill_direction_dropdown.set_model(Some(&direction_options));
+        self.fill_direction_dropdown
+            .set_model(Some(&direction_options));
 
         // Set the correct selection based on orientation
         let selection = match (&config.orientation, &config.fill_direction) {
@@ -1223,7 +1376,8 @@ impl CoreBarsConfigWidget {
 
         self.corner_radius_spin.set_value(config.corner_radius);
         self.bar_spacing_spin.set_value(config.bar_spacing);
-        self.segment_count_spin.set_value(config.segment_count as f64);
+        self.segment_count_spin
+            .set_value(config.segment_count as f64);
         self.segment_spacing_spin.set_value(config.segment_spacing);
 
         // Colors
@@ -1233,7 +1387,8 @@ impl CoreBarsConfigWidget {
                 self.fg_color_widget.set_source(color.clone());
             }
             BarFillType::Gradient { stops, angle } => {
-                self.fg_gradient_editor.set_gradient_source(*angle, stops.clone());
+                self.fg_gradient_editor
+                    .set_gradient_source(*angle, stops.clone());
                 self.fg_gradient_radio.set_active(true);
             }
         }
@@ -1244,7 +1399,8 @@ impl CoreBarsConfigWidget {
                 self.bg_color_widget.set_source(color.clone());
             }
             BarBackgroundType::Gradient { stops, angle } => {
-                self.bg_gradient_editor.set_gradient_source(*angle, stops.clone());
+                self.bg_gradient_editor
+                    .set_gradient_source(*angle, stops.clone());
                 self.bg_gradient_radio.set_active(true);
             }
             BarBackgroundType::Transparent => {
@@ -1254,19 +1410,23 @@ impl CoreBarsConfigWidget {
 
         self.border_check.set_active(config.border.enabled);
         self.border_width_spin.set_value(config.border.width);
-        self.border_color_widget.set_source(config.border.color.clone());
+        self.border_color_widget
+            .set_source(config.border.color.clone());
 
         // Labels
         self.show_labels_check.set_active(config.show_labels);
         self.label_prefix_entry.set_text(&config.label_prefix);
-        self.label_position_dropdown.set_selected(match config.label_position {
-            LabelPosition::Start => 0,
-            LabelPosition::End => 1,
-            LabelPosition::Inside => 2,
-        });
-        self.label_font_button.set_label(&format!("{} {:.0}", config.label_font, config.label_size));
+        self.label_position_dropdown
+            .set_selected(match config.label_position {
+                LabelPosition::Start => 0,
+                LabelPosition::End => 1,
+                LabelPosition::Inside => 2,
+            });
+        self.label_font_button
+            .set_label(&format!("{} {:.0}", config.label_font, config.label_size));
         self.label_size_spin.set_value(config.label_size);
-        self.label_color_widget.set_source(config.label_color.clone());
+        self.label_color_widget
+            .set_source(config.label_color.clone());
         self.label_bold_check.set_active(config.label_bold);
 
         // Animation
@@ -1274,13 +1434,15 @@ impl CoreBarsConfigWidget {
         self.animation_speed_scale.set_value(config.animation_speed);
 
         // Gradient spans bars
-        self.gradient_spans_bars_check.set_active(config.gradient_spans_bars);
+        self.gradient_spans_bars_check
+            .set_active(config.gradient_spans_bars);
         // Update visibility based on foreground type
         let is_gradient = matches!(config.foreground, BarFillType::Gradient { .. });
         self.gradient_spans_bars_check.set_visible(is_gradient);
 
         // Text overlay
-        self.text_overlay_widget.set_config(config.text_overlay.clone());
+        self.text_overlay_widget
+            .set_config(config.text_overlay.clone());
 
         // Store config
         *self.config.borrow_mut() = config;
@@ -1301,8 +1463,12 @@ impl CoreBarsConfigWidget {
     /// Set the maximum core count (call this when CPU source is available)
     pub fn set_max_cores(&self, max_cores: usize) {
         if max_cores > 0 {
-            self.end_core_spin.adjustment().set_upper((max_cores - 1) as f64);
-            self.start_core_spin.adjustment().set_upper((max_cores - 1) as f64);
+            self.end_core_spin
+                .adjustment()
+                .set_upper((max_cores - 1) as f64);
+            self.start_core_spin
+                .adjustment()
+                .set_upper((max_cores - 1) as f64);
         }
     }
 
@@ -1327,14 +1493,38 @@ impl CoreBarsConfigWidget {
 
     /// Create default fields for combo panel core bars slots
     fn default_combo_fields() -> Vec<FieldMetadata> {
-        use crate::core::{FieldType, FieldPurpose};
+        use crate::core::{FieldPurpose, FieldType};
 
         let mut fields = vec![
             // Common slot fields
-            FieldMetadata::new("caption", "Caption", "Slot caption text", FieldType::Text, FieldPurpose::Caption),
-            FieldMetadata::new("value", "Value", "Formatted value string", FieldType::Text, FieldPurpose::Value),
-            FieldMetadata::new("unit", "Unit", "Value unit", FieldType::Text, FieldPurpose::Unit),
-            FieldMetadata::new("numerical_value", "Numerical Value", "Raw numerical value", FieldType::Numerical, FieldPurpose::Value),
+            FieldMetadata::new(
+                "caption",
+                "Caption",
+                "Slot caption text",
+                FieldType::Text,
+                FieldPurpose::Caption,
+            ),
+            FieldMetadata::new(
+                "value",
+                "Value",
+                "Formatted value string",
+                FieldType::Text,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "unit",
+                "Unit",
+                "Value unit",
+                FieldType::Text,
+                FieldPurpose::Unit,
+            ),
+            FieldMetadata::new(
+                "numerical_value",
+                "Numerical Value",
+                "Raw numerical value",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
         ];
 
         // Add core usage fields (core0 through core31 to cover most systems)
@@ -1415,7 +1605,9 @@ impl LazyCoreBarsConfigWidget {
             Rc::new(move || {
                 // Only create if not already created
                 if inner_widget_clone.borrow().is_none() {
-                    log::info!("LazyCoreBarsConfigWidget: Creating actual CoreBarsConfigWidget on map");
+                    log::info!(
+                        "LazyCoreBarsConfigWidget: Creating actual CoreBarsConfigWidget on map"
+                    );
 
                     // Create the actual widget
                     let widget = CoreBarsConfigWidget::new();

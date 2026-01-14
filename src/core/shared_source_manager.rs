@@ -4,12 +4,12 @@
 //! data source instance that polls the hardware. Multiple panels can reference
 //! the same shared source, avoiding duplicate sensor polling.
 
-use super::{BoxedDataSource, Registry};
 use super::panel_data::SourceConfig;
-use anyhow::{Result, anyhow};
-use log::{info, debug, warn};
+use super::{BoxedDataSource, Registry};
+use anyhow::{anyhow, Result};
+use log::{debug, info, warn};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 /// Represents a shared source with its cached values and update tracking
@@ -44,7 +44,8 @@ impl SharedSource {
 
     /// Recalculate min_interval from panel_intervals
     fn recalculate_min_interval(&mut self) {
-        self.min_interval = self.panel_intervals
+        self.min_interval = self
+            .panel_intervals
             .values()
             .copied()
             .min()
@@ -97,8 +98,8 @@ impl SharedSourceManager {
     /// but NOT the update interval (so panels with different intervals
     /// can share the same source).
     pub fn generate_source_key(source_config: &SourceConfig) -> String {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
 
@@ -148,7 +149,10 @@ impl SharedSourceManager {
         // Clone the Arc handle while holding the lock, then release lock before acquiring Mutex
         // This avoids potential deadlock from nested RwLock -> Mutex acquisition
         let existing_handle = {
-            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            let sources = self
+                .sources
+                .read()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
             sources.get(&key).cloned()
         };
         // Read lock released here - now safe to acquire Mutex
@@ -157,7 +161,9 @@ impl SharedSourceManager {
             // Source already exists, increment ref count and track panel interval
             if let Ok(mut shared) = handle.lock() {
                 shared.ref_count += 1;
-                shared.panel_intervals.insert(panel_id.to_string(), interval);
+                shared
+                    .panel_intervals
+                    .insert(panel_id.to_string(), interval);
                 shared.recalculate_min_interval();
                 debug!(
                     "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
@@ -186,7 +192,10 @@ impl SharedSourceManager {
         // Re-check in case another thread created it while we were doing I/O
         // Clone handle while holding lock to avoid nested RwLock -> Mutex deadlock
         let existing_handle = {
-            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            let sources = self
+                .sources
+                .read()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
             sources.get(&key).cloned()
         };
 
@@ -194,7 +203,9 @@ impl SharedSourceManager {
             // Another thread created it - just increment ref count and discard ours
             if let Ok(mut existing) = handle.lock() {
                 existing.ref_count += 1;
-                existing.panel_intervals.insert(panel_id.to_string(), interval);
+                existing
+                    .panel_intervals
+                    .insert(panel_id.to_string(), interval);
                 existing.recalculate_min_interval();
                 debug!(
                     "Source {} was created by another thread, reusing (ref_count: {})",
@@ -203,9 +214,14 @@ impl SharedSourceManager {
             }
         } else {
             // No existing source, insert new one
-            let mut sources = self.sources.write().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            let mut sources = self
+                .sources
+                .write()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
             // Double-check after acquiring write lock (another thread may have inserted)
-            sources.entry(key.clone()).or_insert_with(|| Arc::new(Mutex::new(shared)));
+            sources
+                .entry(key.clone())
+                .or_insert_with(|| Arc::new(Mutex::new(shared)));
         }
 
         Ok(key)
@@ -296,14 +312,19 @@ impl SharedSourceManager {
     pub fn update_source(&self, key: &str) -> Result<Arc<HashMap<String, serde_json::Value>>> {
         // Phase 1: Get the handle with a quick read lock
         let handle = {
-            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            let sources = self
+                .sources
+                .read()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
             sources.get(key).cloned()
         };
         // Collection lock released here before I/O
 
         // Phase 2: Update the source (only source mutex held, not collection lock)
         if let Some(handle) = handle {
-            let mut shared = handle.lock().map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
+            let mut shared = handle
+                .lock()
+                .map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
             shared.update()?;
             Ok(Arc::clone(&shared.cached_values))
         } else {
@@ -335,7 +356,10 @@ impl SharedSourceManager {
                 sources
                     .iter()
                     .filter_map(|(key, handle)| {
-                        handle.lock().ok().map(|shared| (key.clone(), shared.min_interval))
+                        handle
+                            .lock()
+                            .ok()
+                            .map(|shared| (key.clone(), shared.min_interval))
                     })
                     .collect()
             })
@@ -349,7 +373,9 @@ impl SharedSourceManager {
                 if let Ok(mut shared) = handle.lock() {
                     // Update this panel's interval and recalculate minimum
                     let old_min = shared.min_interval;
-                    shared.panel_intervals.insert(panel_id.to_string(), new_interval);
+                    shared
+                        .panel_intervals
+                        .insert(panel_id.to_string(), new_interval);
                     shared.recalculate_min_interval();
 
                     if shared.min_interval != old_min {
@@ -367,13 +393,18 @@ impl SharedSourceManager {
     pub fn configure_source(&self, key: &str, config: &SourceConfig) -> Result<()> {
         // Get handle with read lock (quick)
         let handle = {
-            let sources = self.sources.read().map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            let sources = self
+                .sources
+                .read()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
             sources.get(key).cloned()
         };
 
         // Configure with only source lock held
         if let Some(handle) = handle {
-            let mut shared = handle.lock().map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
+            let mut shared = handle
+                .lock()
+                .map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
             shared.source.configure_typed(config)?;
             Ok(())
         } else {

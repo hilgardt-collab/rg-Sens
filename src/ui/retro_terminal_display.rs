@@ -13,16 +13,19 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
+use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
-use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
-use crate::ui::theme::{FontSource, deserialize_font_or_source};
+use crate::ui::theme::{deserialize_font_or_source, FontSource};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as RetroTerminalContentType, ContentItemConfig as RetroTerminalContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as RetroTerminalContentType,
+    ContentItemConfig as RetroTerminalContentItemConfig,
+};
 
 /// Phosphor color presets (classic CRT colors)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -45,10 +48,30 @@ impl PhosphorColor {
     /// Get the actual color value
     pub fn to_color(&self) -> Color {
         match self {
-            PhosphorColor::Green => Color { r: 0.2, g: 1.0, b: 0.2, a: 1.0 },
-            PhosphorColor::Amber => Color { r: 1.0, g: 0.69, b: 0.0, a: 1.0 },
-            PhosphorColor::White => Color { r: 0.9, g: 0.9, b: 0.85, a: 1.0 },
-            PhosphorColor::Blue => Color { r: 0.4, g: 0.6, b: 1.0, a: 1.0 },
+            PhosphorColor::Green => Color {
+                r: 0.2,
+                g: 1.0,
+                b: 0.2,
+                a: 1.0,
+            },
+            PhosphorColor::Amber => Color {
+                r: 1.0,
+                g: 0.69,
+                b: 0.0,
+                a: 1.0,
+            },
+            PhosphorColor::White => Color {
+                r: 0.9,
+                g: 0.9,
+                b: 0.85,
+                a: 1.0,
+            },
+            PhosphorColor::Blue => Color {
+                r: 0.4,
+                g: 0.6,
+                b: 1.0,
+                a: 1.0,
+            },
             PhosphorColor::Custom(c) => *c,
         }
     }
@@ -56,7 +79,12 @@ impl PhosphorColor {
     /// Get a dimmed version for secondary elements
     pub fn to_dim_color(&self) -> Color {
         let c = self.to_color();
-        Color { r: c.r * 0.5, g: c.g * 0.5, b: c.b * 0.5, a: c.a * 0.7 }
+        Color {
+            r: c.r * 0.5,
+            g: c.g * 0.5,
+            b: c.b * 0.5,
+            a: c.a * 0.7,
+        }
     }
 }
 
@@ -110,29 +138,68 @@ pub enum TerminalDividerStyle {
 }
 
 // Default value functions
-fn default_scanline_intensity() -> f64 { 0.25 }
-fn default_scanline_spacing() -> f64 { 2.0 }
-fn default_curvature_amount() -> f64 { 0.02 }
-fn default_vignette_intensity() -> f64 { 0.4 }
-fn default_screen_glow() -> f64 { 0.5 }
-fn default_bezel_width() -> f64 { 16.0 }
-fn default_content_padding() -> f64 { 12.0 }
-fn default_header_font_source() -> FontSource { FontSource::theme(1, 14.0) } // Theme font 1
-fn default_header_height() -> f64 { 28.0 }
-fn default_divider_padding() -> f64 { 4.0 }
-fn default_group_count() -> usize { 1 }
-fn default_text_brightness() -> f64 { 0.9 }
+fn default_scanline_intensity() -> f64 {
+    0.25
+}
+fn default_scanline_spacing() -> f64 {
+    2.0
+}
+fn default_curvature_amount() -> f64 {
+    0.02
+}
+fn default_vignette_intensity() -> f64 {
+    0.4
+}
+fn default_screen_glow() -> f64 {
+    0.5
+}
+fn default_bezel_width() -> f64 {
+    16.0
+}
+fn default_content_padding() -> f64 {
+    12.0
+}
+fn default_header_font_source() -> FontSource {
+    FontSource::theme(1, 14.0)
+} // Theme font 1
+fn default_header_height() -> f64 {
+    28.0
+}
+fn default_divider_padding() -> f64 {
+    4.0
+}
+fn default_group_count() -> usize {
+    1
+}
+fn default_text_brightness() -> f64 {
+    0.9
+}
 
 fn default_background_color() -> Color {
-    Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 }
+    Color {
+        r: 0.02,
+        g: 0.02,
+        b: 0.02,
+        a: 1.0,
+    }
 }
 
 fn default_bezel_color() -> Color {
-    Color { r: 0.12, g: 0.12, b: 0.10, a: 1.0 }
+    Color {
+        r: 0.12,
+        g: 0.12,
+        b: 0.10,
+        a: 1.0,
+    }
 }
 
 fn default_power_led_color() -> Color {
-    Color { r: 0.2, g: 0.8, b: 0.2, a: 1.0 }
+    Color {
+        r: 0.2,
+        g: 0.8,
+        b: 0.2,
+        a: 1.0,
+    }
 }
 
 /// Main configuration for the Retro Terminal frame
@@ -179,7 +246,10 @@ pub struct RetroTerminalFrameConfig {
     pub header_text: String,
     #[serde(default)]
     pub header_style: TerminalHeaderStyle,
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
@@ -228,9 +298,13 @@ fn default_retro_terminal_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_retro_terminal()
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 impl Default for RetroTerminalFrameConfig {
     fn default() -> Self {
@@ -375,8 +449,7 @@ impl FrameRenderer for RetroTerminalRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_retro_terminal_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_retro_terminal_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -509,7 +582,14 @@ fn draw_bezel(
             // Inner edge
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
             cr.set_line_width(1.0);
-            draw_rounded_rect(cr, bezel_w - 1.0, bezel_w - 1.0, width - 2.0 * bezel_w + 2.0, height - 2.0 * bezel_w + 2.0, 2.0);
+            draw_rounded_rect(
+                cr,
+                bezel_w - 1.0,
+                bezel_w - 1.0,
+                width - 2.0 * bezel_w + 2.0,
+                height - 2.0 * bezel_w + 2.0,
+                2.0,
+            );
             cr.stroke().ok();
         }
         BezelStyle::Industrial => {
@@ -540,7 +620,12 @@ fn draw_bezel(
             // Inner edge
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
             cr.set_line_width(3.0);
-            cr.rectangle(bezel_w - 2.0, bezel_w - 2.0, width - 2.0 * bezel_w + 4.0, height - 2.0 * bezel_w + 4.0);
+            cr.rectangle(
+                bezel_w - 2.0,
+                bezel_w - 2.0,
+                width - 2.0 * bezel_w + 4.0,
+                height - 2.0 * bezel_w + 4.0,
+            );
             cr.stroke().ok();
 
             // Power LED
@@ -564,7 +649,12 @@ fn draw_bezel(
     cr.restore().ok();
 
     // Return screen area (inside bezel)
-    (bezel_w, bezel_w, width - 2.0 * bezel_w, height - 2.0 * bezel_w)
+    (
+        bezel_w,
+        bezel_w,
+        width - 2.0 * bezel_w,
+        height - 2.0 * bezel_w,
+    )
 }
 
 /// Draw a rounded rectangle path
@@ -576,9 +666,21 @@ fn draw_rounded_rect(cr: &Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     cr.line_to(x + w, y + h - r);
     cr.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
     cr.line_to(x + r, y + h);
-    cr.arc(x + r, y + h - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+    cr.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
     cr.line_to(x, y + r);
-    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
+    cr.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::FRAC_PI_2,
+    );
     cr.close_path();
 }
 
@@ -627,14 +729,7 @@ fn draw_screen_background(
 }
 
 /// Draw CRT scanlines effect
-fn draw_scanlines(
-    cr: &Context,
-    config: &RetroTerminalFrameConfig,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-) {
+fn draw_scanlines(cr: &Context, config: &RetroTerminalFrameConfig, x: f64, y: f64, w: f64, h: f64) {
     if config.scanline_intensity <= 0.0 {
         return;
     }
@@ -686,7 +781,13 @@ fn draw_curvature_vignette(
     gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
     gradient.add_color_stop_rgba(0.6, 0.0, 0.0, 0.0, config.vignette_intensity * 0.2);
     gradient.add_color_stop_rgba(0.85, 0.0, 0.0, 0.0, config.vignette_intensity * 0.5);
-    gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, config.vignette_intensity * 0.9 + config.curvature_amount * 2.0);
+    gradient.add_color_stop_rgba(
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        config.vignette_intensity * 0.9 + config.curvature_amount * 2.0,
+    );
 
     cr.set_source(&gradient).ok();
     cr.paint().ok();
@@ -695,13 +796,7 @@ fn draw_curvature_vignette(
 }
 
 /// Draw the terminal header
-fn draw_header(
-    cr: &Context,
-    config: &RetroTerminalFrameConfig,
-    x: f64,
-    y: f64,
-    w: f64,
-) -> f64 {
+fn draw_header(cr: &Context, config: &RetroTerminalFrameConfig, x: f64, y: f64, w: f64) -> f64 {
     if !config.show_header || matches!(config.header_style, TerminalHeaderStyle::None) {
         return 0.0;
     }
@@ -721,7 +816,14 @@ fn draw_header(
         &config.header_text
     };
 
-    let text_extents = pango_text_extents(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        font_size,
+    );
     let (text_width, text_height) = (text_extents.width(), text_extents.height());
 
     match config.header_style {
@@ -746,7 +848,14 @@ fn draw_header(
             if config.screen_glow > 0.0 {
                 cr.set_source_rgba(phosphor.r, phosphor.g, phosphor.b, config.screen_glow * 0.3);
                 cr.move_to(text_x, text_y);
-                pango_show_text(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+                pango_show_text(
+                    cr,
+                    text,
+                    &font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                    font_size,
+                );
             }
 
             // Main text
@@ -757,7 +866,14 @@ fn draw_header(
                 1.0,
             );
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            pango_show_text(
+                cr,
+                text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
         }
         TerminalHeaderStyle::StatusLine => {
             // VT100-style reverse video status line
@@ -771,14 +887,35 @@ fn draw_header(
 
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, text, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            pango_show_text(
+                cr,
+                text,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
 
             // Right-aligned info
             let info = "STATUS: OK";
-            let info_extents = pango_text_extents(cr, info, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            let info_extents = pango_text_extents(
+                cr,
+                info,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
             let info_width = info_extents.width();
             cr.move_to(x + w - info_width - 8.0, text_y);
-            pango_show_text(cr, info, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            pango_show_text(
+                cr,
+                info,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
         }
         TerminalHeaderStyle::Prompt => {
             // Shell prompt style: $ SYSTEM MONITOR _
@@ -791,7 +928,14 @@ fn draw_header(
             if config.screen_glow > 0.0 {
                 cr.set_source_rgba(phosphor.r, phosphor.g, phosphor.b, config.screen_glow * 0.3);
                 cr.move_to(text_x, text_y);
-                pango_show_text(cr, &prompt, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+                pango_show_text(
+                    cr,
+                    &prompt,
+                    &font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                    font_size,
+                );
             }
 
             cr.set_source_rgba(
@@ -801,7 +945,14 @@ fn draw_header(
                 1.0,
             );
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &prompt, &font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+            pango_show_text(
+                cr,
+                &prompt,
+                &font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                font_size,
+            );
         }
         TerminalHeaderStyle::None => {}
     }

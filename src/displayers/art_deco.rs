@@ -137,12 +137,16 @@ impl Displayer for ArtDecoDisplayer {
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Check for full art_deco_config first (wrapper format)
         if let Some(config_value) = config.get("art_deco_config") {
-            if let Ok(display_config) = serde_json::from_value::<ArtDecoDisplayConfig>(config_value.clone()) {
+            if let Ok(display_config) =
+                serde_json::from_value::<ArtDecoDisplayConfig>(config_value.clone())
+            {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
             // Try direct ArtDecoFrameConfig (new format)
-            if let Ok(frame_config) = serde_json::from_value::<ArtDecoFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) =
+                serde_json::from_value::<ArtDecoFrameConfig>(config_value.clone())
+            {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }
@@ -157,8 +161,8 @@ impl Displayer for ArtDecoDisplayer {
     }
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
-        self.inner.get_config().map(|frame| {
-            DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::from_frame(frame))
-        })
+        self.inner
+            .get_config()
+            .map(|frame| DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::from_frame(frame)))
     }
 }

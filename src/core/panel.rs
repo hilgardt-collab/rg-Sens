@@ -1,21 +1,22 @@
 //! Panel - container for a data source and displayer pair
 
-use super::{BoxedDataSource, BoxedDisplayer, Registry, global_registry};
 use super::constants::TRANSFORM_THRESHOLD;
-use super::panel_data::{PanelData, PanelAppearance, SourceConfig, DisplayerConfig};
-use super::shared_source_manager::{SharedSourceManager, global_shared_source_manager};
+use super::panel_data::{DisplayerConfig, PanelAppearance, PanelData, SourceConfig};
+use super::shared_source_manager::{global_shared_source_manager, SharedSourceManager};
+use super::{global_registry, BoxedDataSource, BoxedDisplayer, Registry};
+use crate::ui::{BackgroundConfig, Color};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::ui::{BackgroundConfig, Color};
 
 /// Helper macro to extract and deserialize config from HashMap, reducing boilerplate.
 /// Returns the deserialized config variant or a default if not found/invalid.
 macro_rules! extract_config {
     ($config:expr, $key:expr, $variant:path, $default_type:expr) => {{
-        let result = $config.get($key)
+        let result = $config
+            .get($key)
             .and_then(|val| serde_json::from_value(val.clone()).ok())
             .map(|cfg| $variant(cfg));
         match result {
@@ -28,8 +29,12 @@ macro_rules! extract_config {
 /// Keys to sync from source values to panel.config for UI access
 /// Used by alarm/timer displayers to persist state
 const SYNC_KEYS: &[&str] = &[
-    "alarms", "timers", "triggered_alarm_ids",
-    "timer_state", "alarm_triggered", "alarm_enabled",
+    "alarms",
+    "timers",
+    "triggered_alarm_ids",
+    "timer_state",
+    "alarm_triggered",
+    "alarm_enabled",
 ];
 
 /// Position and size of a panel in the grid
@@ -167,7 +172,11 @@ impl Panel {
 
     /// Create a new panel from PanelData using a specific registry
     pub fn from_data_with_registry(data: PanelData, registry: &Registry) -> Result<Self> {
-        Self::from_data_with_registry_and_source_manager(data, registry, global_shared_source_manager().cloned())
+        Self::from_data_with_registry_and_source_manager(
+            data,
+            registry,
+            global_shared_source_manager().cloned(),
+        )
     }
 
     /// Create a new panel from PanelData with explicit source manager
@@ -233,30 +242,34 @@ impl Panel {
         // SharedSourceManager returns Arc<HashMap>, we store it to keep the borrow alive
         // The _arc_values variable keeps the Arc alive so Cow can borrow from it
         let _arc_values: Option<Arc<HashMap<String, serde_json::Value>>>;
-        let values: Cow<'_, HashMap<String, serde_json::Value>> = if let Some(ref key) = self.source_key {
-            // Use shared source - values are already updated by UpdateManager
-            if let Some(manager) = global_shared_source_manager() {
-                _arc_values = manager.get_values(key);
-                if let Some(ref arc) = _arc_values {
-                    // Borrow from Arc - no clone needed
-                    Cow::Borrowed(arc.as_ref())
+        let values: Cow<'_, HashMap<String, serde_json::Value>> =
+            if let Some(ref key) = self.source_key {
+                // Use shared source - values are already updated by UpdateManager
+                if let Some(manager) = global_shared_source_manager() {
+                    _arc_values = manager.get_values(key);
+                    if let Some(ref arc) = _arc_values {
+                        // Borrow from Arc - no clone needed
+                        Cow::Borrowed(arc.as_ref())
+                    } else {
+                        log::warn!(
+                            "Shared source {} not found, falling back to direct poll",
+                            key
+                        );
+                        self.source.update().ok();
+                        Cow::Owned(self.source.get_values())
+                    }
                 } else {
-                    log::warn!("Shared source {} not found, falling back to direct poll", key);
-                    self.source.update().ok();
+                    // No manager available, fall back to direct poll
+                    _arc_values = None;
+                    self.source.update()?;
                     Cow::Owned(self.source.get_values())
                 }
             } else {
-                // No manager available, fall back to direct poll
+                // No shared source, poll directly (legacy behavior)
                 _arc_values = None;
                 self.source.update()?;
                 Cow::Owned(self.source.get_values())
-            }
-        } else {
-            // No shared source, poll directly (legacy behavior)
-            _arc_values = None;
-            self.source.update()?;
-            Cow::Owned(self.source.get_values())
-        };
+            };
 
         // Only add transform values if panel has non-default transforms
         // Default: scale=1.0, translate_x=0.0, translate_y=0.0
@@ -268,9 +281,18 @@ impl Panel {
         // Only clone when we actually need to modify the HashMap
         if has_transform {
             let mut values_owned = values.into_owned();
-            values_owned.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
-            values_owned.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
-            values_owned.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+            values_owned.insert(
+                "_panel_scale".to_string(),
+                serde_json::Value::from(self.scale),
+            );
+            values_owned.insert(
+                "_panel_translate_x".to_string(),
+                serde_json::Value::from(self.translate_x),
+            );
+            values_owned.insert(
+                "_panel_translate_y".to_string(),
+                serde_json::Value::from(self.translate_y),
+            );
             self.displayer.update_data(&values_owned);
             self.sync_keys_to_config(&values_owned);
         } else {
@@ -313,9 +335,18 @@ impl Panel {
         if has_transform {
             // Clone and add transform values
             let mut values_with_transform = values.clone();
-            values_with_transform.insert("_panel_scale".to_string(), serde_json::Value::from(self.scale));
-            values_with_transform.insert("_panel_translate_x".to_string(), serde_json::Value::from(self.translate_x));
-            values_with_transform.insert("_panel_translate_y".to_string(), serde_json::Value::from(self.translate_y));
+            values_with_transform.insert(
+                "_panel_scale".to_string(),
+                serde_json::Value::from(self.scale),
+            );
+            values_with_transform.insert(
+                "_panel_translate_x".to_string(),
+                serde_json::Value::from(self.translate_x),
+            );
+            values_with_transform.insert(
+                "_panel_translate_y".to_string(),
+                serde_json::Value::from(self.translate_y),
+            );
             self.displayer.update_data(&values_with_transform);
         } else {
             // No transform needed, pass reference directly without cloning
@@ -332,14 +363,20 @@ impl Panel {
 
         // Handle shared source re-registration when config changes
         // Each panel should have its own source instance when configs differ
-        if let Some(typed_config) = SourceConfig::extract_from_hashmap(&config, self.source.metadata().id.as_str()) {
+        if let Some(typed_config) =
+            SourceConfig::extract_from_hashmap(&config, self.source.metadata().id.as_str())
+        {
             use super::shared_source_manager::SharedSourceManager;
 
             let new_key = SharedSourceManager::generate_source_key(&typed_config);
 
             if let Some(manager) = global_shared_source_manager() {
                 // Check if the source key has changed (config is now different)
-                let key_changed = self.source_key.as_ref().map(|k| k != &new_key).unwrap_or(true);
+                let key_changed = self
+                    .source_key
+                    .as_ref()
+                    .map(|k| k != &new_key)
+                    .unwrap_or(true);
 
                 if key_changed {
                     // Release the old source reference if we had one
@@ -356,7 +393,11 @@ impl Panel {
                             self.source_key = Some(key);
                         }
                         Err(e) => {
-                            log::warn!("Failed to create shared source for panel {}: {}", self.id, e);
+                            log::warn!(
+                                "Failed to create shared source for panel {}: {}",
+                                self.id,
+                                e
+                            );
                             self.source_key = None;
                         }
                     }
@@ -389,7 +430,11 @@ impl Panel {
             let new_key = SharedSourceManager::generate_source_key(&data.source_config);
 
             if let Some(manager) = global_shared_source_manager() {
-                let key_changed = self.source_key.as_ref().map(|k| k != &new_key).unwrap_or(true);
+                let key_changed = self
+                    .source_key
+                    .as_ref()
+                    .map(|k| k != &new_key)
+                    .unwrap_or(true);
 
                 if key_changed {
                     // Release the old source reference if we had one
@@ -406,7 +451,11 @@ impl Panel {
                             self.source_key = Some(key);
                         }
                         Err(e) => {
-                            log::warn!("Failed to create shared source for panel {}: {}", self.id, e);
+                            log::warn!(
+                                "Failed to create shared source for panel {}: {}",
+                                self.id,
+                                e
+                            );
                             self.source_key = None;
                         }
                     }
@@ -425,11 +474,15 @@ impl Panel {
         let displayer_type = self.displayer.id();
 
         // Prefer typed source config if available, otherwise extract from HashMap
-        let source_config = self.source.get_typed_config()
+        let source_config = self
+            .source
+            .get_typed_config()
             .unwrap_or_else(|| self.extract_source_config(source_type));
 
         // Prefer typed displayer config if available, otherwise extract from HashMap
-        let displayer_config = self.displayer.get_typed_config()
+        let displayer_config = self
+            .displayer
+            .get_typed_config()
             .unwrap_or_else(|| self.extract_displayer_config(displayer_type));
 
         PanelData {
@@ -453,34 +506,134 @@ impl Panel {
     /// Extract source config from the legacy config HashMap
     fn extract_source_config(&self, source_type: &str) -> SourceConfig {
         match source_type {
-            "cpu" => extract_config!(self.config, "cpu_config", SourceConfig::Cpu, SourceConfig::default_for_type("cpu")),
-            "gpu" => extract_config!(self.config, "gpu_config", SourceConfig::Gpu, SourceConfig::default_for_type("gpu")),
-            "memory" => extract_config!(self.config, "memory_config", SourceConfig::Memory, SourceConfig::default_for_type("memory")),
-            "disk" => extract_config!(self.config, "disk_config", SourceConfig::Disk, SourceConfig::default_for_type("disk")),
-            "clock" => extract_config!(self.config, "clock_config", SourceConfig::Clock, SourceConfig::default_for_type("clock")),
-            "combination" => extract_config!(self.config, "combo_config", SourceConfig::Combo, SourceConfig::default_for_type("combination")),
-            "system_temp" => extract_config!(self.config, "system_temp_config", SourceConfig::SystemTemp, SourceConfig::default_for_type("system_temp")),
-            "fan_speed" => extract_config!(self.config, "fan_speed_config", SourceConfig::FanSpeed, SourceConfig::default_for_type("fan_speed")),
-            "test" => extract_config!(self.config, "test_config", SourceConfig::Test, SourceConfig::default_for_type("test")),
-            "static_text" => extract_config!(self.config, "static_text_config", SourceConfig::StaticText, SourceConfig::default_for_type("static_text")),
-            _ => SourceConfig::default()
+            "cpu" => extract_config!(
+                self.config,
+                "cpu_config",
+                SourceConfig::Cpu,
+                SourceConfig::default_for_type("cpu")
+            ),
+            "gpu" => extract_config!(
+                self.config,
+                "gpu_config",
+                SourceConfig::Gpu,
+                SourceConfig::default_for_type("gpu")
+            ),
+            "memory" => extract_config!(
+                self.config,
+                "memory_config",
+                SourceConfig::Memory,
+                SourceConfig::default_for_type("memory")
+            ),
+            "disk" => extract_config!(
+                self.config,
+                "disk_config",
+                SourceConfig::Disk,
+                SourceConfig::default_for_type("disk")
+            ),
+            "clock" => extract_config!(
+                self.config,
+                "clock_config",
+                SourceConfig::Clock,
+                SourceConfig::default_for_type("clock")
+            ),
+            "combination" => extract_config!(
+                self.config,
+                "combo_config",
+                SourceConfig::Combo,
+                SourceConfig::default_for_type("combination")
+            ),
+            "system_temp" => extract_config!(
+                self.config,
+                "system_temp_config",
+                SourceConfig::SystemTemp,
+                SourceConfig::default_for_type("system_temp")
+            ),
+            "fan_speed" => extract_config!(
+                self.config,
+                "fan_speed_config",
+                SourceConfig::FanSpeed,
+                SourceConfig::default_for_type("fan_speed")
+            ),
+            "test" => extract_config!(
+                self.config,
+                "test_config",
+                SourceConfig::Test,
+                SourceConfig::default_for_type("test")
+            ),
+            "static_text" => extract_config!(
+                self.config,
+                "static_text_config",
+                SourceConfig::StaticText,
+                SourceConfig::default_for_type("static_text")
+            ),
+            _ => SourceConfig::default(),
         }
     }
 
     /// Extract displayer config from the legacy config HashMap
     fn extract_displayer_config(&self, displayer_type: &str) -> DisplayerConfig {
         match displayer_type {
-            "text" => extract_config!(self.config, "text_config", DisplayerConfig::Text, DisplayerConfig::default_for_type("text")),
-            "bar" => extract_config!(self.config, "bar_config", DisplayerConfig::Bar, DisplayerConfig::default_for_type("bar")),
-            "arc" => extract_config!(self.config, "arc_config", DisplayerConfig::Arc, DisplayerConfig::default_for_type("arc")),
-            "speedometer" => extract_config!(self.config, "speedometer_config", DisplayerConfig::Speedometer, DisplayerConfig::default_for_type("speedometer")),
-            "graph" => extract_config!(self.config, "graph_config", DisplayerConfig::Graph, DisplayerConfig::default_for_type("graph")),
-            "clock_analog" => extract_config!(self.config, "clock_analog_config", DisplayerConfig::ClockAnalog, DisplayerConfig::default_for_type("clock_analog")),
-            "clock_digital" => extract_config!(self.config, "clock_digital_config", DisplayerConfig::ClockDigital, DisplayerConfig::default_for_type("clock_digital")),
-            "lcars" => extract_config!(self.config, "lcars_config", DisplayerConfig::Lcars, DisplayerConfig::default_for_type("lcars")),
-            "cpu_cores" => extract_config!(self.config, "core_bars_config", DisplayerConfig::CpuCores, DisplayerConfig::default_for_type("cpu_cores")),
-            "indicator" => extract_config!(self.config, "indicator_config", DisplayerConfig::Indicator, DisplayerConfig::default_for_type("indicator")),
-            _ => DisplayerConfig::default()
+            "text" => extract_config!(
+                self.config,
+                "text_config",
+                DisplayerConfig::Text,
+                DisplayerConfig::default_for_type("text")
+            ),
+            "bar" => extract_config!(
+                self.config,
+                "bar_config",
+                DisplayerConfig::Bar,
+                DisplayerConfig::default_for_type("bar")
+            ),
+            "arc" => extract_config!(
+                self.config,
+                "arc_config",
+                DisplayerConfig::Arc,
+                DisplayerConfig::default_for_type("arc")
+            ),
+            "speedometer" => extract_config!(
+                self.config,
+                "speedometer_config",
+                DisplayerConfig::Speedometer,
+                DisplayerConfig::default_for_type("speedometer")
+            ),
+            "graph" => extract_config!(
+                self.config,
+                "graph_config",
+                DisplayerConfig::Graph,
+                DisplayerConfig::default_for_type("graph")
+            ),
+            "clock_analog" => extract_config!(
+                self.config,
+                "clock_analog_config",
+                DisplayerConfig::ClockAnalog,
+                DisplayerConfig::default_for_type("clock_analog")
+            ),
+            "clock_digital" => extract_config!(
+                self.config,
+                "clock_digital_config",
+                DisplayerConfig::ClockDigital,
+                DisplayerConfig::default_for_type("clock_digital")
+            ),
+            "lcars" => extract_config!(
+                self.config,
+                "lcars_config",
+                DisplayerConfig::Lcars,
+                DisplayerConfig::default_for_type("lcars")
+            ),
+            "cpu_cores" => extract_config!(
+                self.config,
+                "core_bars_config",
+                DisplayerConfig::CpuCores,
+                DisplayerConfig::default_for_type("cpu_cores")
+            ),
+            "indicator" => extract_config!(
+                self.config,
+                "indicator_config",
+                DisplayerConfig::Indicator,
+                DisplayerConfig::default_for_type("indicator")
+            ),
+            _ => DisplayerConfig::default(),
         }
     }
 
@@ -496,15 +649,22 @@ impl Panel {
     }
 
     /// Update the panel from new PanelData using a specific registry
-    pub fn update_from_data_with_registry(&mut self, new_data: PanelData, registry: &Registry) -> Result<()> {
+    pub fn update_from_data_with_registry(
+        &mut self,
+        new_data: PanelData,
+        registry: &Registry,
+    ) -> Result<()> {
         let old_source_key = SharedSourceManager::generate_source_key(
-            self.data.as_ref()
+            self.data
+                .as_ref()
                 .map(|d| &d.source_config)
-                .unwrap_or(&SourceConfig::default())
+                .unwrap_or(&SourceConfig::default()),
         );
         let new_source_key = SharedSourceManager::generate_source_key(&new_data.source_config);
 
-        let old_displayer_type = self.data.as_ref()
+        let old_displayer_type = self
+            .data
+            .as_ref()
             .map(|d| d.displayer_config.displayer_type())
             .unwrap_or_else(|| self.displayer.id());
 
@@ -531,7 +691,11 @@ impl Panel {
                         self.source_key = Some(key);
                     }
                     Err(e) => {
-                        log::warn!("Failed to create shared source for panel {}: {}", self.id, e);
+                        log::warn!(
+                            "Failed to create shared source for panel {}: {}",
+                            self.id,
+                            e
+                        );
                         self.source_key = None;
                     }
                 }
@@ -610,14 +774,16 @@ impl Panel {
 
     /// Get the source type ID string
     pub fn source_type(&self) -> &str {
-        self.data.as_ref()
+        self.data
+            .as_ref()
             .map(|d| d.source_config.source_type())
             .unwrap_or_else(|| self.source.metadata().id.as_str())
     }
 
     /// Get the displayer type ID string
     pub fn displayer_type(&self) -> &str {
-        self.data.as_ref()
+        self.data
+            .as_ref()
             .map(|d| d.displayer_config.displayer_type())
             .unwrap_or_else(|| self.displayer.id())
     }
@@ -639,7 +805,8 @@ impl Panel {
 
     /// Get the update interval from the source config
     pub fn update_interval_ms(&self) -> u64 {
-        self.data.as_ref()
+        self.data
+            .as_ref()
             .map(|d| d.source_config.update_interval_ms())
             .unwrap_or(1000) // Default 1 second
     }
@@ -652,7 +819,11 @@ impl Drop for Panel {
         if let Some(ref source_key) = self.source_key {
             if let Some(manager) = global_shared_source_manager() {
                 manager.release_source(source_key, &self.id);
-                log::debug!("Panel {} dropped, released shared source {}", self.id, source_key);
+                log::debug!(
+                    "Panel {} dropped, released shared source {}",
+                    self.id,
+                    source_key
+                );
             }
         }
     }

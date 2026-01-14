@@ -76,7 +76,8 @@ impl StaticConfigWidget {
             let on_change_clone = on_change.clone();
             let text_widget_for_cb = text_widget.clone();
             text_widget.set_on_change(move || {
-                config_clone.borrow_mut().text_overlay.text_config = text_widget_for_cb.get_config();
+                config_clone.borrow_mut().text_overlay.text_config =
+                    text_widget_for_cb.get_config();
                 if let Some(cb) = on_change_clone.borrow().as_ref() {
                     cb();
                 }
@@ -122,8 +123,10 @@ impl StaticConfigWidget {
         self.background_widget.set_config(new_config.background);
 
         // Update text overlay checkbox and widget
-        self.text_enabled_check.set_active(new_config.text_overlay.enabled);
-        self.text_widget.set_config(new_config.text_overlay.text_config);
+        self.text_enabled_check
+            .set_active(new_config.text_overlay.enabled);
+        self.text_widget
+            .set_config(new_config.text_overlay.text_config);
     }
 
     /// Get the current configuration

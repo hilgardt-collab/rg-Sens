@@ -13,16 +13,18 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
+use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
-use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
-use crate::ui::theme::{ColorSource, FontSource, deserialize_font_or_source};
+use crate::ui::theme::{deserialize_font_or_source, ColorSource, FontSource};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as FighterHudContentType, ContentItemConfig as FighterHudContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as FighterHudContentType, ContentItemConfig as FighterHudContentItemConfig,
+};
 
 /// HUD color presets (military display colors)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -45,10 +47,30 @@ impl HudColorPreset {
     /// Get the actual color value
     pub fn to_color(&self) -> Color {
         match self {
-            HudColorPreset::MilitaryGreen => Color { r: 0.0, g: 0.9, b: 0.3, a: 1.0 },
-            HudColorPreset::Amber => Color { r: 1.0, g: 0.75, b: 0.0, a: 1.0 },
-            HudColorPreset::Cyan => Color { r: 0.0, g: 0.9, b: 1.0, a: 1.0 },
-            HudColorPreset::White => Color { r: 0.95, g: 0.95, b: 0.95, a: 1.0 },
+            HudColorPreset::MilitaryGreen => Color {
+                r: 0.0,
+                g: 0.9,
+                b: 0.3,
+                a: 1.0,
+            },
+            HudColorPreset::Amber => Color {
+                r: 1.0,
+                g: 0.75,
+                b: 0.0,
+                a: 1.0,
+            },
+            HudColorPreset::Cyan => Color {
+                r: 0.0,
+                g: 0.9,
+                b: 1.0,
+                a: 1.0,
+            },
+            HudColorPreset::White => Color {
+                r: 0.95,
+                g: 0.95,
+                b: 0.95,
+                a: 1.0,
+            },
             HudColorPreset::Custom(c) => *c,
         }
     }
@@ -56,7 +78,12 @@ impl HudColorPreset {
     /// Get a dimmed version for secondary elements
     pub fn to_dim_color(&self) -> Color {
         let c = self.to_color();
-        Color { r: c.r * 0.5, g: c.g * 0.5, b: c.b * 0.5, a: c.a * 0.6 }
+        Color {
+            r: c.r * 0.5,
+            g: c.g * 0.5,
+            b: c.b * 0.5,
+            a: c.a * 0.6,
+        }
     }
 
     /// Get a bright version for emphasis
@@ -66,7 +93,7 @@ impl HudColorPreset {
             r: (c.r * 1.2).min(1.0),
             g: (c.g * 1.2).min(1.0),
             b: (c.b * 1.2).min(1.0),
-            a: c.a
+            a: c.a,
         }
     }
 
@@ -137,21 +164,50 @@ pub enum HudDividerStyle {
 }
 
 // Default value functions
-fn default_line_width() -> f64 { 1.5 }
-fn default_bracket_size() -> f64 { 20.0 }
-fn default_bracket_thickness() -> f64 { 2.0 }
-fn default_content_padding() -> f64 { 16.0 }
-fn default_header_font_source() -> FontSource { FontSource::theme(1, 12.0) } // Theme font 1
-fn default_header_height() -> f64 { 24.0 }
-fn default_divider_padding() -> f64 { 6.0 }
-fn default_group_count() -> usize { 1 }
-fn default_glow_intensity() -> f64 { 0.3 }
-fn default_tick_spacing() -> f64 { 8.0 }
-fn default_reticle_size() -> f64 { 0.15 }
-fn default_reticle_color() -> ColorSource { ColorSource::Theme { index: 1 } } // Primary theme color
+fn default_line_width() -> f64 {
+    1.5
+}
+fn default_bracket_size() -> f64 {
+    20.0
+}
+fn default_bracket_thickness() -> f64 {
+    2.0
+}
+fn default_content_padding() -> f64 {
+    16.0
+}
+fn default_header_font_source() -> FontSource {
+    FontSource::theme(1, 12.0)
+} // Theme font 1
+fn default_header_height() -> f64 {
+    24.0
+}
+fn default_divider_padding() -> f64 {
+    6.0
+}
+fn default_group_count() -> usize {
+    1
+}
+fn default_glow_intensity() -> f64 {
+    0.3
+}
+fn default_tick_spacing() -> f64 {
+    8.0
+}
+fn default_reticle_size() -> f64 {
+    0.15
+}
+fn default_reticle_color() -> ColorSource {
+    ColorSource::Theme { index: 1 }
+} // Primary theme color
 
 fn default_background_color() -> Color {
-    Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 } // Transparent by default (HUD overlay)
+    Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    } // Transparent by default (HUD overlay)
 }
 
 /// Main configuration for the Fighter HUD frame
@@ -190,7 +246,10 @@ pub struct FighterHudFrameConfig {
     pub header_text: String,
     #[serde(default)]
     pub header_style: HudHeaderStyle,
-    #[serde(default = "default_header_font_source", deserialize_with = "deserialize_font_or_source")]
+    #[serde(
+        default = "default_header_font_source",
+        deserialize_with = "deserialize_font_or_source"
+    )]
     pub header_font: FontSource,
     #[serde(default = "default_header_height")]
     pub header_height: f64,
@@ -239,9 +298,13 @@ fn default_fighter_hud_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_fighter_hud()
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 impl Default for FighterHudFrameConfig {
     fn default() -> Self {
@@ -382,8 +445,7 @@ impl FrameRenderer for FighterHudRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_fighter_hud_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_fighter_hud_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -511,13 +573,37 @@ fn draw_frame_corners(
             let pip_size = 3.0;
             cr.set_line_width(1.5);
             cr.new_sub_path();
-            cr.arc(x + corner_gap / 2.0, y + corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.arc(
+                x + corner_gap / 2.0,
+                y + corner_gap / 2.0,
+                pip_size,
+                0.0,
+                std::f64::consts::TAU,
+            );
             cr.new_sub_path();
-            cr.arc(x + w - corner_gap / 2.0, y + corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.arc(
+                x + w - corner_gap / 2.0,
+                y + corner_gap / 2.0,
+                pip_size,
+                0.0,
+                std::f64::consts::TAU,
+            );
             cr.new_sub_path();
-            cr.arc(x + corner_gap / 2.0, y + h - corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.arc(
+                x + corner_gap / 2.0,
+                y + h - corner_gap / 2.0,
+                pip_size,
+                0.0,
+                std::f64::consts::TAU,
+            );
             cr.new_sub_path();
-            cr.arc(x + w - corner_gap / 2.0, y + h - corner_gap / 2.0, pip_size, 0.0, std::f64::consts::TAU);
+            cr.arc(
+                x + w - corner_gap / 2.0,
+                y + h - corner_gap / 2.0,
+                pip_size,
+                0.0,
+                std::f64::consts::TAU,
+            );
             cr.stroke().ok();
         }
         HudFrameStyle::TacticalBox => {
@@ -674,13 +760,7 @@ fn draw_center_reticle(
 }
 
 /// Draw the HUD header
-fn draw_header(
-    cr: &Context,
-    config: &FighterHudFrameConfig,
-    x: f64,
-    y: f64,
-    w: f64,
-) -> f64 {
+fn draw_header(cr: &Context, config: &FighterHudFrameConfig, x: f64, y: f64, w: f64) -> f64 {
     if !config.show_header || matches!(config.header_style, HudHeaderStyle::None) {
         return 0.0;
     }
@@ -700,7 +780,14 @@ fn draw_header(
         &config.header_text
     };
 
-    let text_extents = pango_text_extents(cr, text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        text,
+        &header_font_family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        header_font_size,
+    );
     let (_text_width, text_height) = (text_extents.width(), text_extents.height());
 
     match config.header_style {
@@ -721,26 +808,61 @@ fn draw_header(
             if config.glow_intensity > 0.0 {
                 cr.set_source_rgba(color.r, color.g, color.b, config.glow_intensity * 0.4);
                 cr.move_to(text_x, text_y);
-                pango_show_text(cr, &status_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+                pango_show_text(
+                    cr,
+                    &status_text,
+                    &header_font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                    header_font_size,
+                );
             }
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &status_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            pango_show_text(
+                cr,
+                &status_text,
+                &header_font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                header_font_size,
+            );
 
             // Right side status indicators
             let status_right = "ONLINE";
-            let right_extents = pango_text_extents(cr, status_right, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            let right_extents = pango_text_extents(
+                cr,
+                status_right,
+                &header_font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                header_font_size,
+            );
             let right_width = right_extents.width();
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.7);
             cr.move_to(x + w - right_width - 4.0, text_y);
-            pango_show_text(cr, status_right, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            pango_show_text(
+                cr,
+                status_right,
+                &header_font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                header_font_size,
+            );
         }
         HudHeaderStyle::MissionCallout => {
             // Centered mission-style callout
             let callout_text = format!("<<< {} >>>", text.to_uppercase());
-            let callout_extents = pango_text_extents(cr, &callout_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            let callout_extents = pango_text_extents(
+                cr,
+                &callout_text,
+                &header_font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                header_font_size,
+            );
             let callout_width = callout_extents.width();
 
             let text_x = x + (w - callout_width) / 2.0;
@@ -750,12 +872,26 @@ fn draw_header(
             if config.glow_intensity > 0.0 {
                 cr.set_source_rgba(color.r, color.g, color.b, config.glow_intensity * 0.4);
                 cr.move_to(text_x, text_y);
-                pango_show_text(cr, &callout_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+                pango_show_text(
+                    cr,
+                    &callout_text,
+                    &header_font_family,
+                    cairo::FontSlant::Normal,
+                    cairo::FontWeight::Bold,
+                    header_font_size,
+                );
             }
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &callout_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            pango_show_text(
+                cr,
+                &callout_text,
+                &header_font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                header_font_size,
+            );
 
             // Decorative lines on sides
             cr.set_line_width(1.0);
@@ -780,7 +916,14 @@ fn draw_header(
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &id_text, &header_font_family, cairo::FontSlant::Normal, cairo::FontWeight::Bold, header_font_size);
+            pango_show_text(
+                cr,
+                &id_text,
+                &header_font_family,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                header_font_size,
+            );
         }
         HudHeaderStyle::None => {}
     }
@@ -956,11 +1099,24 @@ pub fn render_fighter_hud_frame(
 
     // Draw frame corners
     let frame_margin = config.bracket_size * 0.2;
-    draw_frame_corners(cr, config, frame_margin, frame_margin, width - frame_margin * 2.0, height - frame_margin * 2.0);
+    draw_frame_corners(
+        cr,
+        config,
+        frame_margin,
+        frame_margin,
+        width - frame_margin * 2.0,
+        height - frame_margin * 2.0,
+    );
 
     // Draw header
     let content_x = config.content_padding;
-    let header_height = draw_header(cr, config, content_x, frame_margin, width - config.content_padding * 2.0);
+    let header_height = draw_header(
+        cr,
+        config,
+        content_x,
+        frame_margin,
+        width - config.content_padding * 2.0,
+    );
 
     // Draw center reticle (on top of everything else)
     draw_center_reticle(cr, config, 0.0, 0.0, width, height);

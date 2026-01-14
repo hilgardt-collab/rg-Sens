@@ -3,7 +3,9 @@
 //! Displays a color based on a value mapped to a gradient (0% -> 100%).
 //! Can show full panel fill, circles, squares, or polygons.
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform, register_animation};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, DisplayerConfig, PanelTransform,
+};
 use crate::displayers::TextDisplayerConfig;
 use crate::ui::background::{Color, ColorStop};
 use crate::ui::render_cache::get_cached_color_at;
@@ -47,11 +49,11 @@ impl IndicatorShape {
             IndicatorShape::Fill,
             IndicatorShape::Circle,
             IndicatorShape::Square,
-            IndicatorShape::Polygon(3),  // Triangle
-            IndicatorShape::Polygon(5),  // Pentagon
-            IndicatorShape::Polygon(6),  // Hexagon
-            IndicatorShape::Polygon(7),  // Heptagon
-            IndicatorShape::Polygon(8),  // Octagon
+            IndicatorShape::Polygon(3), // Triangle
+            IndicatorShape::Polygon(5), // Pentagon
+            IndicatorShape::Polygon(6), // Hexagon
+            IndicatorShape::Polygon(7), // Heptagon
+            IndicatorShape::Polygon(8), // Octagon
         ]
     }
 }
@@ -124,10 +126,10 @@ fn default_border_color() -> Color {
 
 fn default_gradient() -> Vec<ColorStop> {
     vec![
-        ColorStop::new(0.0, Color::new(0.0, 0.5, 1.0, 1.0)),   // Blue at 0%
-        ColorStop::new(0.4, Color::new(0.0, 1.0, 0.0, 1.0)),   // Green at 40%
-        ColorStop::new(0.7, Color::new(1.0, 1.0, 0.0, 1.0)),   // Yellow at 70%
-        ColorStop::new(1.0, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 100%
+        ColorStop::new(0.0, Color::new(0.0, 0.5, 1.0, 1.0)), // Blue at 0%
+        ColorStop::new(0.4, Color::new(0.0, 1.0, 0.0, 1.0)), // Green at 40%
+        ColorStop::new(0.7, Color::new(1.0, 1.0, 0.0, 1.0)), // Yellow at 70%
+        ColorStop::new(1.0, Color::new(1.0, 0.0, 0.0, 1.0)), // Red at 100%
     ]
 }
 
@@ -315,13 +317,13 @@ impl IndicatorDisplayer {
         let h = height as f64;
 
         // Get the value from data
-        let value = data.values.get(&data.config.value_field)
-            .and_then(|v| {
-                match v {
-                    Value::Number(n) => n.as_f64(),
-                    Value::String(s) => s.parse::<f64>().ok(),
-                    _ => None,
-                }
+        let value = data
+            .values
+            .get(&data.config.value_field)
+            .and_then(|v| match v {
+                Value::Number(n) => n.as_f64(),
+                Value::String(s) => s.parse::<f64>().ok(),
+                _ => None,
             })
             .unwrap_or(0.0);
 
@@ -434,7 +436,9 @@ impl Displayer for IndicatorDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(indicator_config_value) = config.get("indicator_config") {
-            if let Ok(indicator_config) = serde_json::from_value::<IndicatorConfig>(indicator_config_value.clone()) {
+            if let Ok(indicator_config) =
+                serde_json::from_value::<IndicatorConfig>(indicator_config_value.clone())
+            {
                 if let Ok(mut data) = self.data.lock() {
                     data.config = indicator_config;
                 }

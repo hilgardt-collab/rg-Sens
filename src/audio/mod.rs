@@ -18,10 +18,9 @@ pub struct AudioPlayer {
 impl AudioPlayer {
     /// Create a new audio player
     pub fn new() -> Result<Self> {
-        let (stream, stream_handle) = OutputStream::try_default()
-            .context("Failed to open audio output stream")?;
-        let sink = Sink::try_new(&stream_handle)
-            .context("Failed to create audio sink")?;
+        let (stream, stream_handle) =
+            OutputStream::try_default().context("Failed to open audio output stream")?;
+        let sink = Sink::try_new(&stream_handle).context("Failed to create audio sink")?;
 
         Ok(Self {
             _stream: stream,
@@ -32,8 +31,8 @@ impl AudioPlayer {
 
     /// Play a sound file from the given path
     pub fn play(&self, path: &str) -> Result<()> {
-        let file = File::open(path)
-            .with_context(|| format!("Failed to open sound file: {}", path))?;
+        let file =
+            File::open(path).with_context(|| format!("Failed to open sound file: {}", path))?;
         let source = Decoder::new(BufReader::new(file))
             .with_context(|| format!("Failed to decode sound file: {}", path))?;
 
@@ -45,8 +44,8 @@ impl AudioPlayer {
 
     /// Play a sound file in a loop
     pub fn play_looped(&self, path: &str) -> Result<()> {
-        let file = File::open(path)
-            .with_context(|| format!("Failed to open sound file: {}", path))?;
+        let file =
+            File::open(path).with_context(|| format!("Failed to open sound file: {}", path))?;
         let source = Decoder::new(BufReader::new(file))
             .with_context(|| format!("Failed to decode sound file: {}", path))?
             .repeat_infinite();
@@ -193,7 +192,10 @@ mod tests {
         let result = AudioPlayer::new();
         // Just check it doesn't panic - may fail on systems without audio
         if result.is_err() {
-            eprintln!("Audio player creation failed (expected in CI): {:?}", result.err());
+            eprintln!(
+                "Audio player creation failed (expected in CI): {:?}",
+                result.err()
+            );
         }
     }
 

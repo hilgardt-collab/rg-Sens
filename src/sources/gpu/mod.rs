@@ -1,15 +1,15 @@
 //! GPU data source with multi-vendor support (NVIDIA, AMD)
 
-mod backend;
-mod nvidia;
 mod amd;
+mod backend;
 mod detector;
+mod nvidia;
 
 pub use backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use detector::detect_gpus;
 
+use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB};
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
-use crate::core::constants::{BYTES_PER_MB, BYTES_PER_GB};
 use crate::ui::{GpuField, GpuSourceConfig, MemoryUnit, TemperatureUnit};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
@@ -22,14 +22,22 @@ use std::time::Duration;
 static GPU_MANAGER: Lazy<GpuManager> = Lazy::new(|| {
     let detected = detect_gpus();
     GpuManager {
-        backends: detected.gpus.into_iter().map(|b| Arc::new(Mutex::new(b))).collect(),
+        backends: detected
+            .gpus
+            .into_iter()
+            .map(|b| Arc::new(Mutex::new(b)))
+            .collect(),
         gpu_info: detected.info,
     }
 });
 
 /// Cached GPU names (computed once from GPU_MANAGER)
 static GPU_NAMES: Lazy<Vec<String>> = Lazy::new(|| {
-    GPU_MANAGER.gpu_info.iter().map(|info| info.name.clone()).collect()
+    GPU_MANAGER
+        .gpu_info
+        .iter()
+        .map(|info| info.name.clone())
+        .collect()
 });
 
 /// GPU manager holding all detected GPU backends
@@ -68,7 +76,8 @@ impl GpuSource {
         let metadata = SourceMetadata {
             id: "gpu".to_string(),
             name: "GPU".to_string(),
-            description: "GPU monitoring (NVIDIA/AMD) - temperature, utilization, memory, power".to_string(),
+            description: "GPU monitoring (NVIDIA/AMD) - temperature, utilization, memory, power"
+                .to_string(),
             available_keys: vec![
                 "caption".to_string(),
                 "value".to_string(),
@@ -87,7 +96,9 @@ impl GpuSource {
         let backend = GPU_MANAGER.backends.first().cloned();
 
         // Cache the vendor string to avoid mutex lock in generate_auto_caption
-        let cached_vendor = GPU_MANAGER.gpu_info.first()
+        let cached_vendor = GPU_MANAGER
+            .gpu_info
+            .first()
             .map(|info| info.vendor.as_str().to_string())
             .unwrap_or_else(|| "GPU".to_string());
 
@@ -138,7 +149,8 @@ impl GpuSource {
         if config.gpu_index != self.config.gpu_index {
             self.backend = GPU_MANAGER.backends.get(config.gpu_index as usize).cloned();
             // Update cached vendor for the new GPU
-            self.cached_vendor = GPU_MANAGER.gpu_info
+            self.cached_vendor = GPU_MANAGER
+                .gpu_info
                 .get(config.gpu_index as usize)
                 .map(|info| info.vendor.as_str().to_string())
                 .unwrap_or_else(|| "GPU".to_string());
@@ -256,10 +268,15 @@ impl DataSource for GpuSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        let backend = self.backend.as_ref()
-            .ok_or_else(|| anyhow!("No GPU backend available for index {}", self.config.gpu_index))?;
+        let backend = self.backend.as_ref().ok_or_else(|| {
+            anyhow!(
+                "No GPU backend available for index {}",
+                self.config.gpu_index
+            )
+        })?;
 
-        let mut backend_guard = backend.lock()
+        let mut backend_guard = backend
+            .lock()
             .map_err(|e| anyhow!("Failed to lock GPU backend: {}", e))?;
 
         // Update backend (refresh hardware data)
@@ -279,7 +296,9 @@ impl DataSource for GpuSource {
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();
 
-        let caption = self.config.custom_caption
+        let caption = self
+            .config
+            .custom_caption
             .as_ref()
             .cloned()
             .unwrap_or_else(|| self.generate_auto_caption());
@@ -295,8 +314,12 @@ impl DataSource for GpuSource {
                     let converted = self.convert_temperature(temp);
                     self.values.insert(KEY_CAPTION.into(), Value::from(caption));
                     self.values.insert(KEY_VALUE.into(), Value::from(converted));
-                    self.values.insert("temperature".into(), Value::from(converted));
-                    self.values.insert(KEY_UNIT.into(), Value::from(self.get_temperature_unit_string()));
+                    self.values
+                        .insert("temperature".into(), Value::from(converted));
+                    self.values.insert(
+                        KEY_UNIT.into(),
+                        Value::from(self.get_temperature_unit_string()),
+                    );
                 } else {
                     Self::insert_na_values(&mut self.values, caption);
                 }
@@ -316,8 +339,10 @@ impl DataSource for GpuSource {
                     let converted = self.convert_memory(mem);
                     self.values.insert(KEY_CAPTION.into(), Value::from(caption));
                     self.values.insert(KEY_VALUE.into(), Value::from(converted));
-                    self.values.insert("memory_used".into(), Value::from(converted));
-                    self.values.insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
+                    self.values
+                        .insert("memory_used".into(), Value::from(converted));
+                    self.values
+                        .insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
                 } else {
                     Self::insert_na_values(&mut self.values, caption);
                 }
@@ -328,7 +353,8 @@ impl DataSource for GpuSource {
                         let percent = (used as f64 / total as f64 * 100.0) as u32;
                         self.values.insert(KEY_CAPTION.into(), Value::from(caption));
                         self.values.insert(KEY_VALUE.into(), Value::from(percent));
-                        self.values.insert("memory_percent".into(), Value::from(percent));
+                        self.values
+                            .insert("memory_percent".into(), Value::from(percent));
                         self.values.insert(KEY_UNIT.into(), Value::from("%"));
                     } else {
                         Self::insert_na_values(&mut self.values, caption);
@@ -362,8 +388,10 @@ impl DataSource for GpuSource {
                     let converted = self.convert_memory(mem);
                     self.values.insert(KEY_CAPTION.into(), Value::from(caption));
                     self.values.insert(KEY_VALUE.into(), Value::from(converted));
-                    self.values.insert("memory_total".into(), Value::from(converted));
-                    self.values.insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
+                    self.values
+                        .insert("memory_total".into(), Value::from(converted));
+                    self.values
+                        .insert(KEY_UNIT.into(), Value::from(self.get_memory_unit_string()));
                 } else {
                     Self::insert_na_values(&mut self.values, caption);
                 }
@@ -392,7 +420,8 @@ impl DataSource for GpuSource {
                     };
                     self.values.insert(KEY_CAPTION.into(), Value::from(caption));
                     self.values.insert(KEY_VALUE.into(), Value::from(value));
-                    self.values.insert("clock_memory".into(), Value::from(value));
+                    self.values
+                        .insert("clock_memory".into(), Value::from(value));
                     self.values.insert(KEY_UNIT.into(), Value::from(unit));
                 } else {
                     Self::insert_na_values(&mut self.values, caption);
@@ -402,19 +431,24 @@ impl DataSource for GpuSource {
 
         // Also provide all raw data
         if let Some(temp) = self.temperature {
-            self.values.insert("raw_temperature_celsius".into(), Value::from(temp));
+            self.values
+                .insert("raw_temperature_celsius".into(), Value::from(temp));
         }
         if let Some(util) = self.utilization {
-            self.values.insert("raw_utilization".into(), Value::from(util));
+            self.values
+                .insert("raw_utilization".into(), Value::from(util));
         }
         if let Some(mem_used) = self.memory_used {
-            self.values.insert("raw_memory_used_bytes".into(), Value::from(mem_used));
+            self.values
+                .insert("raw_memory_used_bytes".into(), Value::from(mem_used));
         }
         if let Some(mem_total) = self.memory_total {
-            self.values.insert("raw_memory_total_bytes".into(), Value::from(mem_total));
+            self.values
+                .insert("raw_memory_total_bytes".into(), Value::from(mem_total));
         }
         if let Some(power) = self.power_usage {
-            self.values.insert("raw_power_watts".into(), Value::from(power));
+            self.values
+                .insert("raw_power_watts".into(), Value::from(power));
         }
         if let Some(fan) = self.fan_speed {
             self.values.insert("raw_fan_speed".into(), Value::from(fan));
@@ -427,7 +461,10 @@ impl DataSource for GpuSource {
                     // Auto-detect reasonable temperature range
                     (0.0, 100.0)
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(100.0))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(100.0),
+                    )
                 }
             }
             GpuField::Utilization | GpuField::MemoryPercent | GpuField::FanSpeed => (0.0, 100.0),
@@ -444,14 +481,20 @@ impl DataSource for GpuSource {
                     } else {
                         100.0
                     };
-                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(default_max),
+                    )
                 }
             }
             GpuField::PowerUsage => {
                 if self.config.auto_detect_limits {
                     (0.0, 300.0) // Reasonable default for most GPUs
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(300.0))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(300.0),
+                    )
                 }
             }
             GpuField::MemoryTotal => {
@@ -467,7 +510,10 @@ impl DataSource for GpuSource {
                     } else {
                         100.0
                     };
-                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(default_max),
+                    )
                 }
             }
             GpuField::ClockCore => {
@@ -479,7 +525,10 @@ impl DataSource for GpuSource {
                 if self.config.auto_detect_limits {
                     (0.0, default_max)
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(default_max),
+                    )
                 }
             }
             GpuField::ClockMemory => {
@@ -491,13 +540,18 @@ impl DataSource for GpuSource {
                 if self.config.auto_detect_limits {
                     (0.0, default_max)
                 } else {
-                    (self.config.min_limit.unwrap_or(0.0), self.config.max_limit.unwrap_or(default_max))
+                    (
+                        self.config.min_limit.unwrap_or(0.0),
+                        self.config.max_limit.unwrap_or(default_max),
+                    )
                 }
             }
         };
 
-        self.values.insert("min_limit".into(), Value::from(min_limit));
-        self.values.insert("max_limit".into(), Value::from(max_limit));
+        self.values
+            .insert("min_limit".into(), Value::from(min_limit));
+        self.values
+            .insert("max_limit".into(), Value::from(max_limit));
 
         Ok(())
     }
@@ -514,7 +568,9 @@ impl DataSource for GpuSource {
         // Look for gpu_config in the configuration
         if let Some(gpu_config_value) = config.get("gpu_config") {
             // Try to deserialize it into GpuSourceConfig
-            if let Ok(gpu_config) = serde_json::from_value::<GpuSourceConfig>(gpu_config_value.clone()) {
+            if let Ok(gpu_config) =
+                serde_json::from_value::<GpuSourceConfig>(gpu_config_value.clone())
+            {
                 self.set_config(gpu_config);
             }
         }

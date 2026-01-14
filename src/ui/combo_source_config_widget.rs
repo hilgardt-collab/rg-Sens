@@ -6,16 +6,16 @@
 use crate::core::global_registry;
 use crate::sources::ComboSourceConfig;
 use crate::ui::{
-    CpuSourceConfigWidget, GpuSourceConfigWidget, MemorySourceConfigWidget,
-    SystemTempConfigWidget, FanSpeedConfigWidget, DiskSourceConfigWidget,
-    ClockSourceConfigWidget, StaticTextConfigWidget, TestSourceConfigWidget,
+    ClockSourceConfigWidget, CpuSourceConfigWidget, DiskSourceConfigWidget, FanSpeedConfigWidget,
+    GpuSourceConfigWidget, MemorySourceConfigWidget, StaticTextConfigWidget,
+    SystemTempConfigWidget, TestSourceConfigWidget,
 };
+use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, DropDown, Entry, Frame, Label, Notebook, Orientation, ScrolledWindow,
     SpinButton, StringList, Widget,
 };
-use gtk4::glib;
 use serde_json::Value;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -74,90 +74,75 @@ impl SourceConfigWidgetType {
         }
 
         let json_value = serde_json::to_value(config).unwrap_or_default();
-        log::info!("set_config_from_json: loading config with {} keys", config.len());
+        log::info!(
+            "set_config_from_json: loading config with {} keys",
+            config.len()
+        );
 
         match self {
-            SourceConfigWidgetType::Cpu(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded CPU config");
-                        w.set_config(cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize CPU config: {}", e),
+            SourceConfigWidgetType::Cpu(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded CPU config");
+                    w.set_config(cfg);
                 }
-            }
-            SourceConfigWidgetType::Gpu(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded GPU config");
-                        w.set_config(cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize GPU config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize CPU config: {}", e),
+            },
+            SourceConfigWidgetType::Gpu(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded GPU config");
+                    w.set_config(cfg);
                 }
-            }
-            SourceConfigWidgetType::Memory(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded Memory config");
-                        w.set_config(cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize Memory config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize GPU config: {}", e),
+            },
+            SourceConfigWidgetType::Memory(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded Memory config");
+                    w.set_config(cfg);
                 }
-            }
-            SourceConfigWidgetType::SystemTemp(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded SystemTemp config");
-                        w.set_config(cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize SystemTemp config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize Memory config: {}", e),
+            },
+            SourceConfigWidgetType::SystemTemp(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded SystemTemp config");
+                    w.set_config(cfg);
                 }
-            }
-            SourceConfigWidgetType::FanSpeed(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded FanSpeed config");
-                        w.set_config(&cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize FanSpeed config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize SystemTemp config: {}", e),
+            },
+            SourceConfigWidgetType::FanSpeed(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded FanSpeed config");
+                    w.set_config(&cfg);
                 }
-            }
-            SourceConfigWidgetType::Disk(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded Disk config");
-                        w.set_config(cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize Disk config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize FanSpeed config: {}", e),
+            },
+            SourceConfigWidgetType::Disk(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded Disk config");
+                    w.set_config(cfg);
                 }
-            }
-            SourceConfigWidgetType::Clock(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded Clock config");
-                        w.set_config(&cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize Clock config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize Disk config: {}", e),
+            },
+            SourceConfigWidgetType::Clock(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded Clock config");
+                    w.set_config(&cfg);
                 }
-            }
-            SourceConfigWidgetType::StaticText(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded StaticText config");
-                        w.set_config(&cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize StaticText config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize Clock config: {}", e),
+            },
+            SourceConfigWidgetType::StaticText(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded StaticText config");
+                    w.set_config(&cfg);
                 }
-            }
-            SourceConfigWidgetType::Test(w) => {
-                match serde_json::from_value(json_value) {
-                    Ok(cfg) => {
-                        log::info!("Successfully loaded Test config");
-                        w.set_config(&cfg);
-                    }
-                    Err(e) => log::warn!("Failed to deserialize Test config: {}", e),
+                Err(e) => log::warn!("Failed to deserialize StaticText config: {}", e),
+            },
+            SourceConfigWidgetType::Test(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded Test config");
+                    w.set_config(&cfg);
                 }
-            }
+                Err(e) => log::warn!("Failed to deserialize Test config: {}", e),
+            },
         }
     }
 }
@@ -185,7 +170,10 @@ impl CachedSources {
             source_names.push(source.display_name.clone());
         }
 
-        Self { source_ids, source_names }
+        Self {
+            source_ids,
+            source_names,
+        }
     }
 }
 
@@ -377,7 +365,10 @@ impl ComboSourceConfigWidget {
                 {
                     let mut cfg = config_clone.borrow_mut();
                     while cfg.groups.len() < new_count {
-                        cfg.groups.push(crate::sources::GroupConfig { item_count: 2, ..Default::default() });
+                        cfg.groups.push(crate::sources::GroupConfig {
+                            item_count: 2,
+                            ..Default::default()
+                        });
                     }
                     while cfg.groups.len() > new_count {
                         cfg.groups.pop();
@@ -396,27 +387,30 @@ impl ComboSourceConfigWidget {
                 let debounce_check = debounce_id.clone();
                 let rebuild_gen_for_rebuild = rebuild_generation_clone.clone();
 
-                glib::timeout_add_local_once(Duration::from_millis(SPINNER_DEBOUNCE_MS), move || {
-                    // Only rebuild if this is still the latest change
-                    if debounce_check.get() == current_id {
-                        // Increment generation to cancel any pending async operations
-                        let generation = rebuild_gen_for_rebuild.get().wrapping_add(1);
-                        rebuild_gen_for_rebuild.set(generation);
+                glib::timeout_add_local_once(
+                    Duration::from_millis(SPINNER_DEBOUNCE_MS),
+                    move || {
+                        // Only rebuild if this is still the latest change
+                        if debounce_check.get() == current_id {
+                            // Increment generation to cancel any pending async operations
+                            let generation = rebuild_gen_for_rebuild.get().wrapping_add(1);
+                            rebuild_gen_for_rebuild.set(generation);
 
-                        Self::rebuild_tabs_internal(
-                            &config_for_rebuild,
-                            &notebook_for_rebuild,
-                            &slot_widgets_for_rebuild,
-                            &on_change_for_rebuild,
-                            &cached_for_rebuild,
-                            &rebuild_gen_for_rebuild,
-                            generation,
-                        );
-                        if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
-                            cb();
+                            Self::rebuild_tabs_internal(
+                                &config_for_rebuild,
+                                &notebook_for_rebuild,
+                                &slot_widgets_for_rebuild,
+                                &on_change_for_rebuild,
+                                &cached_for_rebuild,
+                                &rebuild_gen_for_rebuild,
+                                generation,
+                            );
+                            if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
+                                cb();
+                            }
                         }
-                    }
-                });
+                    },
+                );
             });
         }
 
@@ -424,12 +418,14 @@ impl ComboSourceConfigWidget {
         {
             let config_for_interval = widget.config.clone();
             let on_change_for_interval = widget.on_change.clone();
-            widget.update_interval_spin.connect_value_changed(move |spin| {
-                config_for_interval.borrow_mut().update_interval_ms = spin.value() as u64;
-                if let Some(cb) = on_change_for_interval.borrow().as_ref() {
-                    cb();
-                }
-            });
+            widget
+                .update_interval_spin
+                .connect_value_changed(move |spin| {
+                    config_for_interval.borrow_mut().update_interval_ms = spin.value() as u64;
+                    if let Some(cb) = on_change_for_interval.borrow().as_ref() {
+                        cb();
+                    }
+                });
         }
 
         widget
@@ -445,10 +441,14 @@ impl ComboSourceConfigWidget {
         // Migrate legacy format if needed
         config.migrate_legacy();
 
-        log::info!("ComboSourceConfigWidget::set_config called with {} groups, {} slots",
-            config.groups.len(), config.slots.len());
+        log::info!(
+            "ComboSourceConfigWidget::set_config called with {} groups, {} slots",
+            config.groups.len(),
+            config.slots.len()
+        );
         for (slot_name, slot_cfg) in &config.slots {
-            log::info!("  Slot '{}': source='{}', source_config keys: {:?}",
+            log::info!(
+                "  Slot '{}': source='{}', source_config keys: {:?}",
                 slot_name,
                 slot_cfg.source_id,
                 slot_cfg.source_config.keys().collect::<Vec<_>>()
@@ -470,7 +470,8 @@ impl ComboSourceConfigWidget {
         // Update spin buttons - callbacks will trigger but slot_widgets is empty
         // so no save-back will occur.
         self.group_count_spin.set_value(group_count as f64);
-        self.update_interval_spin.set_value(update_interval_ms as f64);
+        self.update_interval_spin
+            .set_value(update_interval_ms as f64);
 
         // Final rebuild with the correct config
         self.rebuild_tabs();
@@ -501,9 +502,8 @@ impl ComboSourceConfigWidget {
                 if let Some(config_value) = source_widget.get_config_json() {
                     // Convert Value to HashMap<String, Value>
                     if let Some(obj) = config_value.as_object() {
-                        slot_config.source_config = obj.iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
+                        slot_config.source_config =
+                            obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                     }
                 }
             }
@@ -564,9 +564,8 @@ impl ComboSourceConfigWidget {
                     if let Some(config_value) = source_widget.get_config_json() {
                         // Convert Value to HashMap<String, Value>
                         if let Some(obj) = config_value.as_object() {
-                            slot_config.source_config = obj.iter()
-                                .map(|(k, v)| (k.clone(), v.clone()))
-                                .collect();
+                            slot_config.source_config =
+                                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                         }
                     }
                 }
@@ -582,7 +581,8 @@ impl ComboSourceConfigWidget {
         // Collect group info before releasing borrow
         let groups_info: Vec<(usize, u32)> = {
             let cfg = config.borrow();
-            cfg.groups.iter()
+            cfg.groups
+                .iter()
                 .enumerate()
                 .map(|(idx, g)| (idx + 1, g.item_count))
                 .collect()
@@ -613,7 +613,11 @@ impl ComboSourceConfigWidget {
         notebook.append_page(&loading_box, Some(&loading_tab_label));
 
         // Create tabs incrementally using idle callbacks to keep UI responsive
-        let groups_queue = Rc::new(RefCell::new(groups_info.into_iter().collect::<std::collections::VecDeque<_>>()));
+        let groups_queue = Rc::new(RefCell::new(
+            groups_info
+                .into_iter()
+                .collect::<std::collections::VecDeque<_>>(),
+        ));
         let config_clone = config.clone();
         let notebook_clone = notebook.clone();
         let slot_widgets_clone = slot_widgets.clone();
@@ -755,31 +759,34 @@ impl ComboSourceConfigWidget {
                 let debounce_check = debounce_id.clone();
                 let rebuild_gen_for_rebuild = rebuild_gen.clone();
 
-                glib::timeout_add_local_once(Duration::from_millis(SPINNER_DEBOUNCE_MS), move || {
-                    // Only rebuild if this is still the latest change
-                    if debounce_check.get() == current_id {
-                        // Increment generation to cancel any pending async operations
-                        let generation = rebuild_gen_for_rebuild.get().wrapping_add(1);
-                        rebuild_gen_for_rebuild.set(generation);
+                glib::timeout_add_local_once(
+                    Duration::from_millis(SPINNER_DEBOUNCE_MS),
+                    move || {
+                        // Only rebuild if this is still the latest change
+                        if debounce_check.get() == current_id {
+                            // Increment generation to cancel any pending async operations
+                            let generation = rebuild_gen_for_rebuild.get().wrapping_add(1);
+                            rebuild_gen_for_rebuild.set(generation);
 
-                        Self::rebuild_items_notebook(
-                            &notebook_for_rebuild,
-                            &slot_widgets_for_rebuild,
-                            &on_change_for_rebuild,
-                            &config_for_rebuild,
-                            group_num_copy,
-                            new_item_count,
-                            &cached_for_rebuild.source_ids,
-                            &cached_for_rebuild.source_names,
-                            &rebuild_gen_for_rebuild,
-                            generation,
-                        );
+                            Self::rebuild_items_notebook(
+                                &notebook_for_rebuild,
+                                &slot_widgets_for_rebuild,
+                                &on_change_for_rebuild,
+                                &config_for_rebuild,
+                                group_num_copy,
+                                new_item_count,
+                                &cached_for_rebuild.source_ids,
+                                &cached_for_rebuild.source_names,
+                                &rebuild_gen_for_rebuild,
+                                generation,
+                            );
 
-                        if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
-                            cb();
+                            if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
+                                cb();
+                            }
                         }
-                    }
-                });
+                    },
+                );
             });
         }
 
@@ -821,9 +828,8 @@ impl ComboSourceConfigWidget {
                     if let Some(ref source_widget) = *widgets.source_config_widget.borrow() {
                         if let Some(config_value) = source_widget.get_config_json() {
                             if let Some(obj) = config_value.as_object() {
-                                slot_config.source_config = obj.iter()
-                                    .map(|(k, v)| (k.clone(), v.clone()))
-                                    .collect();
+                                slot_config.source_config =
+                                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                             }
                         }
                     }
@@ -839,7 +845,8 @@ impl ComboSourceConfigWidget {
         // Remove this group's slot widgets
         {
             let mut sw = slot_widgets.borrow_mut();
-            let keys_to_remove: Vec<String> = sw.keys()
+            let keys_to_remove: Vec<String> = sw
+                .keys()
                 .filter(|k| k.starts_with(&format!("group{}_", group_num)))
                 .cloned()
                 .collect();
@@ -873,7 +880,9 @@ impl ComboSourceConfigWidget {
         notebook.append_page(&loading_box, Some(&loading_tab_label));
 
         // Create tabs incrementally using idle callbacks to keep UI responsive
-        let items_queue = Rc::new(RefCell::new((1..=item_count).collect::<std::collections::VecDeque<_>>()));
+        let items_queue = Rc::new(RefCell::new(
+            (1..=item_count).collect::<std::collections::VecDeque<_>>(),
+        ));
         let config_clone = config.clone();
         let notebook_clone = notebook.clone();
         let slot_widgets_clone = slot_widgets.clone();
@@ -933,12 +942,17 @@ impl ComboSourceConfigWidget {
             "gpu" => {
                 let gpu_widget = GpuSourceConfigWidget::new();
                 // Populate with detected GPUs
-                let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
+                let gpu_names: Vec<String> =
+                    crate::sources::GpuSource::get_cached_gpu_names().to_vec();
                 gpu_widget.set_available_gpus(&gpu_names);
                 Some(SourceConfigWidgetType::Gpu(gpu_widget))
             }
-            "memory" => Some(SourceConfigWidgetType::Memory(MemorySourceConfigWidget::new())),
-            "system_temp" => Some(SourceConfigWidgetType::SystemTemp(SystemTempConfigWidget::new())),
+            "memory" => Some(SourceConfigWidgetType::Memory(
+                MemorySourceConfigWidget::new(),
+            )),
+            "system_temp" => Some(SourceConfigWidgetType::SystemTemp(
+                SystemTempConfigWidget::new(),
+            )),
             "fan_speed" => Some(SourceConfigWidgetType::FanSpeed(FanSpeedConfigWidget::new())),
             "disk" => {
                 let disk_widget = DiskSourceConfigWidget::new();
@@ -948,7 +962,9 @@ impl ComboSourceConfigWidget {
                 Some(SourceConfigWidgetType::Disk(disk_widget))
             }
             "clock" => Some(SourceConfigWidgetType::Clock(ClockSourceConfigWidget::new())),
-            "static_text" => Some(SourceConfigWidgetType::StaticText(StaticTextConfigWidget::new())),
+            "static_text" => Some(SourceConfigWidgetType::StaticText(
+                StaticTextConfigWidget::new(),
+            )),
             "test" => Some(SourceConfigWidgetType::Test(TestSourceConfigWidget::new())),
             _ => None,
         }
@@ -988,14 +1004,22 @@ impl ComboSourceConfigWidget {
 
         // Get current slot config
         let cfg = config.borrow();
-        let current_source_id = cfg.slots.get(slot_name)
+        let current_source_id = cfg
+            .slots
+            .get(slot_name)
             .map(|s| s.source_id.clone())
             .unwrap_or_default();
-        let current_source_config = cfg.slots.get(slot_name)
+        let current_source_config = cfg
+            .slots
+            .get(slot_name)
             .map(|s| s.source_config.clone())
             .unwrap_or_default();
-        log::info!("create_slot_tab '{}': source_id='{}', source_config keys={:?}",
-            slot_name, current_source_id, current_source_config.keys().collect::<Vec<_>>());
+        log::info!(
+            "create_slot_tab '{}': source_id='{}', source_config keys={:?}",
+            slot_name,
+            current_source_id,
+            current_source_config.keys().collect::<Vec<_>>()
+        );
 
         let selected_idx = source_ids
             .iter()
@@ -1087,13 +1111,17 @@ impl ComboSourceConfigWidget {
 
                 // Create the actual source config widget
                 if !current_source_id_clone.is_empty() && current_source_id_clone != "none" {
-                    if let Some(source_widget) = Self::create_source_config_widget(&current_source_id_clone) {
+                    if let Some(source_widget) =
+                        Self::create_source_config_widget(&current_source_id_clone)
+                    {
                         source_widget.set_config_from_json(&current_source_config_clone);
                         let widget_gtk = source_widget.widget();
                         config_container_clone.append(&widget_gtk);
                         *source_config_widget_clone.borrow_mut() = Some(source_widget);
                     } else {
-                        let no_config_label = Label::new(Some("No additional configuration available for this source."));
+                        let no_config_label = Label::new(Some(
+                            "No additional configuration available for this source.",
+                        ));
                         no_config_label.set_halign(gtk4::Align::Start);
                         no_config_label.set_margin_start(12);
                         no_config_label.set_margin_top(8);
@@ -1102,7 +1130,9 @@ impl ComboSourceConfigWidget {
                         config_container_clone.append(&no_config_label);
                     }
                 } else {
-                    let select_source_label = Label::new(Some("Select a data source above to see configuration options."));
+                    let select_source_label = Label::new(Some(
+                        "Select a data source above to see configuration options.",
+                    ));
                     select_source_label.set_halign(gtk4::Align::Start);
                     select_source_label.set_margin_start(12);
                     select_source_label.set_margin_top(8);
@@ -1155,10 +1185,8 @@ impl ComboSourceConfigWidget {
                             if let Some(ref widget) = *source_config_widget_clone.borrow() {
                                 // Convert Value to HashMap<String, Value>
                                 if let Some(obj) = pasted_config.as_object() {
-                                    let config_map: HashMap<String, Value> = obj
-                                        .iter()
-                                        .map(|(k, v)| (k.clone(), v.clone()))
-                                        .collect();
+                                    let config_map: HashMap<String, Value> =
+                                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                                     widget.set_config_from_json(&config_map);
                                     // Trigger on_change
                                     if let Some(ref callback) = *on_change_clone.borrow() {
@@ -1167,8 +1195,11 @@ impl ComboSourceConfigWidget {
                                 }
                             }
                         } else {
-                            log::info!("Source config paste skipped: clipboard has '{}' but slot has '{}'",
-                                pasted_source_type, current_source_id);
+                            log::info!(
+                                "Source config paste skipped: clipboard has '{}' but slot has '{}'",
+                                pasted_source_type,
+                                current_source_id
+                            );
                         }
                     }
                 }
@@ -1213,7 +1244,9 @@ impl ComboSourceConfigWidget {
                             config_container_clone.append(&widget_gtk);
                             *source_config_widget_clone.borrow_mut() = Some(source_widget);
                         } else {
-                            let no_config_label = Label::new(Some("No additional configuration available for this source."));
+                            let no_config_label = Label::new(Some(
+                                "No additional configuration available for this source.",
+                            ));
                             no_config_label.set_halign(gtk4::Align::Start);
                             no_config_label.set_margin_start(12);
                             no_config_label.set_margin_top(8);
@@ -1223,7 +1256,9 @@ impl ComboSourceConfigWidget {
                             *source_config_widget_clone.borrow_mut() = None;
                         }
                     } else {
-                        let select_source_label = Label::new(Some("Select a data source above to see configuration options."));
+                        let select_source_label = Label::new(Some(
+                            "Select a data source above to see configuration options.",
+                        ));
                         select_source_label.set_halign(gtk4::Align::Start);
                         select_source_label.set_margin_start(12);
                         select_source_label.set_margin_top(8);
@@ -1315,7 +1350,9 @@ impl ComboSourceConfigWidget {
     /// Get the group configuration (group count and item counts per group)
     pub fn get_groups_info(&self) -> Vec<(usize, u32)> {
         let config = self.config.borrow();
-        config.groups.iter()
+        config
+            .groups
+            .iter()
             .enumerate()
             .map(|(idx, g)| (idx + 1, g.item_count))
             .collect()
@@ -1330,7 +1367,10 @@ impl ComboSourceConfigWidget {
 
     /// Set a callback to be called when fields are updated asynchronously.
     /// This allows displayer config widgets to update their UI when field data arrives.
-    pub fn set_on_fields_updated<F: Fn(Vec<crate::core::FieldMetadata>) + 'static>(&self, callback: F) {
+    pub fn set_on_fields_updated<F: Fn(Vec<crate::core::FieldMetadata>) + 'static>(
+        &self,
+        callback: F,
+    ) {
         *self.on_fields_updated.borrow_mut() = Some(Box::new(callback));
     }
 
@@ -1360,7 +1400,11 @@ impl ComboSourceConfigWidget {
         glib::timeout_add_local_once(Duration::from_millis(100), move || {
             // Check if this is still the latest request
             if fields_debounce_id.get() != debounce_id {
-                log::debug!("Skipping debounced fields update (id {} vs current {})", debounce_id, fields_debounce_id.get());
+                log::debug!(
+                    "Skipping debounced fields update (id {} vs current {})",
+                    debounce_id,
+                    fields_debounce_id.get()
+                );
                 return;
             }
 
@@ -1379,7 +1423,10 @@ impl ComboSourceConfigWidget {
             // Create a channel to send results back to main thread
             let (tx, rx) = std::sync::mpsc::channel::<(u32, Vec<crate::core::FieldMetadata>)>();
 
-            log::info!("=== DEBOUNCE FIRED: Spawning fields computation thread (gen {}) ===", generation);
+            log::info!(
+                "=== DEBOUNCE FIRED: Spawning fields computation thread (gen {}) ===",
+                generation
+            );
 
             // Spawn background thread for expensive ComboSource creation
             std::thread::spawn(move || {
@@ -1391,8 +1438,10 @@ impl ComboSourceConfigWidget {
                 let mut source = ComboSource::new();
 
                 // Configure the source
-                let combo_config_value = serde_json::to_value(&config_snapshot).unwrap_or(Value::Null);
-                let mut config_map: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+                let combo_config_value =
+                    serde_json::to_value(&config_snapshot).unwrap_or(Value::Null);
+                let mut config_map: std::collections::HashMap<String, Value> =
+                    std::collections::HashMap::new();
                 config_map.insert("combo_config".to_string(), combo_config_value);
 
                 let fields = if source.configure(&config_map).is_ok() {
@@ -1401,7 +1450,11 @@ impl ComboSourceConfigWidget {
                     Vec::new()
                 };
 
-                log::info!("=== BACKGROUND THREAD DONE: Fields computed in {:?} with {} fields ===", start.elapsed(), fields.len());
+                log::info!(
+                    "=== BACKGROUND THREAD DONE: Fields computed in {:?} with {} fields ===",
+                    start.elapsed(),
+                    fields.len()
+                );
 
                 // Send results back via channel
                 let _ = tx.send((generation, fields));
@@ -1414,7 +1467,11 @@ impl ComboSourceConfigWidget {
                     Ok((gen, fields)) => {
                         // Check if this update is still valid (not superseded by newer request)
                         if fields_generation_for_recv.get() != gen {
-                            log::debug!("Skipping stale fields update (gen {} vs current {})", gen, fields_generation_for_recv.get());
+                            log::debug!(
+                                "Skipping stale fields update (gen {} vs current {})",
+                                gen,
+                                fields_generation_for_recv.get()
+                            );
                             return glib::ControlFlow::Break;
                         }
 
@@ -1434,7 +1491,9 @@ impl ComboSourceConfigWidget {
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         // Channel closed (thread panicked or finished without sending)
-                        log::warn!("Fields computation thread disconnected without sending results");
+                        log::warn!(
+                            "Fields computation thread disconnected without sending results"
+                        );
                         glib::ControlFlow::Break
                     }
                 }
@@ -1470,9 +1529,12 @@ impl ComboSourceConfigWidget {
         log::debug!("ComboSourceConfigWidget::cleanup() - cancelling async operations");
         self.destroyed.set(true);
         // Increment generation and debounce counters to cancel any pending async operations
-        self.rebuild_generation.set(self.rebuild_generation.get().wrapping_add(1));
-        self.fields_generation.set(self.fields_generation.get().wrapping_add(1));
-        self.fields_debounce_id.set(self.fields_debounce_id.get().wrapping_add(1));
+        self.rebuild_generation
+            .set(self.rebuild_generation.get().wrapping_add(1));
+        self.fields_generation
+            .set(self.fields_generation.get().wrapping_add(1));
+        self.fields_debounce_id
+            .set(self.fields_debounce_id.get().wrapping_add(1));
     }
 }
 

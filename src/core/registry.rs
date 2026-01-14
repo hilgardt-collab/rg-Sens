@@ -76,12 +76,18 @@ impl Registry {
         }
         match self.source_info.write() {
             Ok(mut info) => {
-                info.insert(id.to_string(), SourceInfo {
-                    id: id.to_string(),
-                    display_name: display_name.to_string(),
-                    compatible_displayers: compatible_displayers.iter().map(|s| s.to_string()).collect(),
-                    factory,
-                });
+                info.insert(
+                    id.to_string(),
+                    SourceInfo {
+                        id: id.to_string(),
+                        display_name: display_name.to_string(),
+                        compatible_displayers: compatible_displayers
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect(),
+                        factory,
+                    },
+                );
             }
             Err(e) => {
                 log::error!("Failed to store source info '{}': lock poisoned: {}", id, e);
@@ -108,27 +114,40 @@ impl Registry {
                 displayers.insert(id.to_string(), factory);
             }
             Err(e) => {
-                log::error!("Failed to register displayer '{}': lock poisoned: {}", id, e);
+                log::error!(
+                    "Failed to register displayer '{}': lock poisoned: {}",
+                    id,
+                    e
+                );
                 return;
             }
         }
         match self.displayer_info.write() {
             Ok(mut info) => {
-                info.insert(id.to_string(), DisplayerInfo {
-                    id: id.to_string(),
-                    display_name: display_name.to_string(),
-                    factory,
-                });
+                info.insert(
+                    id.to_string(),
+                    DisplayerInfo {
+                        id: id.to_string(),
+                        display_name: display_name.to_string(),
+                        factory,
+                    },
+                );
             }
             Err(e) => {
-                log::error!("Failed to store displayer info '{}': lock poisoned: {}", id, e);
+                log::error!(
+                    "Failed to store displayer info '{}': lock poisoned: {}",
+                    id,
+                    e
+                );
             }
         }
     }
 
     /// Create a data source by ID
     pub fn create_source(&self, id: &str) -> Result<BoxedDataSource> {
-        let sources = self.sources.read()
+        let sources = self
+            .sources
+            .read()
             .map_err(|e| anyhow!("Registry lock poisoned: {}", e))?;
         let factory = *sources
             .get(id)
@@ -138,7 +157,9 @@ impl Registry {
 
     /// Create a displayer by ID
     pub fn create_displayer(&self, id: &str) -> Result<BoxedDisplayer> {
-        let displayers = self.displayers.read()
+        let displayers = self
+            .displayers
+            .read()
             .map_err(|e| anyhow!("Registry lock poisoned: {}", e))?;
         let factory = *displayers
             .get(id)
@@ -231,14 +252,16 @@ impl Registry {
 
         // If no compatible displayers specified, return all (except special ones)
         if source_info.compatible_displayers.is_empty() {
-            return self.list_displayers_with_info()
+            return self
+                .list_displayers_with_info()
                 .into_iter()
                 .filter(|d| !["clock_analog", "clock_digital", "lcars"].contains(&d.id.as_str()))
                 .collect();
         }
 
         // Return only compatible displayers, sorted alphabetically by display name
-        let mut displayers: Vec<DisplayerInfo> = source_info.compatible_displayers
+        let mut displayers: Vec<DisplayerInfo> = source_info
+            .compatible_displayers
             .iter()
             .filter_map(|id| self.get_displayer_info(id))
             .collect();
@@ -283,9 +306,7 @@ pub fn global_registry() -> &'static Registry {
 #[macro_export]
 macro_rules! register_source {
     ($id:expr, $type:ty) => {
-        $crate::core::global_registry().register_source($id, || {
-            Box::new(<$type>::default())
-        });
+        $crate::core::global_registry().register_source($id, || Box::new(<$type>::default()));
     };
 }
 
@@ -293,8 +314,6 @@ macro_rules! register_source {
 #[macro_export]
 macro_rules! register_displayer {
     ($id:expr, $type:ty) => {
-        $crate::core::global_registry().register_displayer($id, || {
-            Box::new(<$type>::default())
-        });
+        $crate::core::global_registry().register_displayer($id, || Box::new(<$type>::default()));
     };
 }

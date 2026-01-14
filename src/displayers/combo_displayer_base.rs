@@ -31,7 +31,7 @@ impl Drop for CairoGuard<'_> {
     }
 }
 
-use crate::core::{PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{register_animation, PanelTransform, ANIMATION_SNAP_THRESHOLD};
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::arc_display::render_arc;
 use crate::ui::graph_display::DataPoint;
@@ -110,8 +110,16 @@ where
     }
 
     // Calculate layouts with orientation
-    let layouts =
-        calculate_item_layouts_with_orientation(x, y, w, h, count, 4.0, &fixed_sizes, item_orientation);
+    let layouts = calculate_item_layouts_with_orientation(
+        x,
+        y,
+        w,
+        h,
+        count,
+        4.0,
+        &fixed_sizes,
+        item_orientation,
+    );
 
     // Draw each item
     for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
@@ -216,37 +224,40 @@ where
             }
             ContentDisplayType::CoreBars => {
                 let core_bars_config = &item_config.core_bars_config;
-                let core_values: Vec<f64> = if let Some(animated) = params.core_bar_values.get(&prefix_buf) {
-                    animated.iter().map(|av| av.current).collect()
-                } else {
-                    let capacity =
-                        core_bars_config.end_core.saturating_sub(core_bars_config.start_core) + 1;
-                    let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
-                    // Use KeyBuffer to avoid allocation for core_key lookups
-                    for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                        let value = combo_utils::with_key_buffer(|buf| {
-                            let core_key = buf.build_core_key(&prefix_buf, core_idx);
-                            params.values.get(core_key).and_then(|v| v.as_f64())
-                        })
-                        .unwrap_or(0.0);
-                        raw_values.push(value / 100.0);
-                    }
-
-                    if raw_values.is_empty() {
-                        for core_idx in 0..128 {
+                let core_values: Vec<f64> =
+                    if let Some(animated) = params.core_bar_values.get(&prefix_buf) {
+                        animated.iter().map(|av| av.current).collect()
+                    } else {
+                        let capacity = core_bars_config
+                            .end_core
+                            .saturating_sub(core_bars_config.start_core)
+                            + 1;
+                        let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
+                        // Use KeyBuffer to avoid allocation for core_key lookups
+                        for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
                             let value = combo_utils::with_key_buffer(|buf| {
                                 let core_key = buf.build_core_key(&prefix_buf, core_idx);
                                 params.values.get(core_key).and_then(|v| v.as_f64())
-                            });
-                            if let Some(v) = value {
-                                raw_values.push(v / 100.0);
-                            } else {
-                                break;
+                            })
+                            .unwrap_or(0.0);
+                            raw_values.push(value / 100.0);
+                        }
+
+                        if raw_values.is_empty() {
+                            for core_idx in 0..128 {
+                                let value = combo_utils::with_key_buffer(|buf| {
+                                    let core_key = buf.build_core_key(&prefix_buf, core_idx);
+                                    params.values.get(core_key).and_then(|v| v.as_f64())
+                                });
+                                if let Some(v) = value {
+                                    raw_values.push(v / 100.0);
+                                } else {
+                                    break;
+                                }
                             }
                         }
-                    }
-                    raw_values
-                };
+                        raw_values
+                    };
 
                 render_content_core_bars(
                     cr,
@@ -370,10 +381,14 @@ pub fn setup_combo_animation_timer<F, G>(
             if animation_enabled(&data) {
                 // Quick check: any animations in progress?
                 // This avoids Instant::now() and iteration when nothing is animating
-                let has_bar_animations = data.bar_values.values()
+                let has_bar_animations = data
+                    .bar_values
+                    .values()
                     .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
-                let has_core_animations = data.core_bar_values.values()
-                    .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD));
+                let has_core_animations = data.core_bar_values.values().any(|v| {
+                    v.iter()
+                        .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
+                });
 
                 if has_bar_animations || has_core_animations {
                     let now = Instant::now();
@@ -405,7 +420,8 @@ pub fn setup_combo_animation_timer<F, G>(
                                     let delta = (anim.target - anim.current) * speed * elapsed;
                                     anim.current += delta;
 
-                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD
+                                    {
                                         anim.current = anim.target;
                                     }
                                     redraw = true;
@@ -472,13 +488,17 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
             // Quick check: any bar animations in progress?
             let has_bar_animations = animation_enabled(&data) && {
                 let combo = get_combo(&mut data);
-                combo.bar_values.values()
+                combo
+                    .bar_values
+                    .values()
                     .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
             };
             let has_core_animations = animation_enabled(&data) && {
                 let combo = get_combo(&mut data);
-                combo.core_bar_values.values()
-                    .any(|v| v.iter().any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD))
+                combo.core_bar_values.values().any(|v| {
+                    v.iter()
+                        .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
+                })
             };
 
             // Only calculate elapsed time if something actually needs it
@@ -523,7 +543,8 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
                                     let delta = (anim.target - anim.current) * speed * elapsed;
                                     anim.current += delta;
 
-                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
+                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD
+                                    {
                                         anim.current = anim.target;
                                     }
                                     redraw = true;
@@ -561,11 +582,16 @@ pub fn handle_combo_update_data(
         // Also regenerate the prefix set for O(1) lookups
         data.cached_prefix_set = data.cached_prefixes.iter().cloned().collect();
         data.cached_group_counts.clear();
-        data.cached_group_counts.extend_from_slice(group_item_counts);
+        data.cached_group_counts
+            .extend_from_slice(group_item_counts);
     }
 
     // Filter values using cached prefix set (avoids HashSet creation on every call)
-    combo_utils::filter_values_with_owned_prefix_set(input, &data.cached_prefix_set, &mut data.values);
+    combo_utils::filter_values_with_owned_prefix_set(
+        input,
+        &data.cached_prefix_set,
+        &mut data.values,
+    );
 
     // Update each item using index-based iteration to avoid cloning cached_prefixes
     let prefix_count = data.cached_prefixes.len();
@@ -643,7 +669,15 @@ use serde::{de::DeserializeOwned, Serialize};
 /// This combines ThemedFrameConfig and LayoutFrameConfig with animation accessors.
 /// All combo panel frame configs should implement this trait.
 pub trait ComboFrameConfig:
-    ThemedFrameConfig + LayoutFrameConfig + Clone + Default + Serialize + DeserializeOwned + Send + Sync + 'static
+    ThemedFrameConfig
+    + LayoutFrameConfig
+    + Clone
+    + Default
+    + Serialize
+    + DeserializeOwned
+    + Send
+    + Sync
+    + 'static
 {
     /// Get animation enabled state
     fn animation_enabled(&self) -> bool;

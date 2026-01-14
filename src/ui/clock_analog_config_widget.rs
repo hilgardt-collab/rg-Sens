@@ -2,8 +2,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Frame, Grid, Label, Notebook, Orientation,
-    SpinButton, StringList,
+    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Frame, Grid, Label, Notebook,
+    Orientation, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -11,10 +11,10 @@ use std::rc::Rc;
 use crate::ui::clock_display::{AnalogClockConfig, FaceStyle, HandStyle, TickStyle};
 use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::shared_font_dialog::show_font_dialog;
-use crate::ui::BackgroundConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::BackgroundConfigWidget;
 
 /// Widget for configuring Analog Clock displayer
 pub struct ClockAnalogConfigWidget {
@@ -195,7 +195,8 @@ impl ClockAnalogConfigWidget {
         let hour_style_row = GtkBox::new(Orientation::Horizontal, 6);
         hour_style_row.append(&Label::new(Some("Type:")));
         let hour_tick_options = StringList::new(&["None", "Squares", "Lines", "Dots", "Triangles"]);
-        let hour_tick_style_dropdown = DropDown::new(Some(hour_tick_options), Option::<gtk4::Expression>::None);
+        let hour_tick_style_dropdown =
+            DropDown::new(Some(hour_tick_options), Option::<gtk4::Expression>::None);
         hour_tick_style_dropdown.set_selected(2); // Lines
         hour_tick_style_dropdown.set_hexpand(true);
         hour_style_row.append(&hour_tick_style_dropdown);
@@ -204,7 +205,9 @@ impl ClockAnalogConfigWidget {
         // Hour tick color (theme-aware)
         let hour_color_row = GtkBox::new(Orientation::Horizontal, 6);
         hour_color_row.append(&Label::new(Some("Color:")));
-        let hour_tick_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().hour_tick_color.clone()));
+        let hour_tick_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().hour_tick_color.clone(),
+        ));
         hour_tick_color_selector.set_theme_config(theme_config.borrow().clone());
         hour_color_row.append(hour_tick_color_selector.widget());
         hour_tick_box.append(&hour_color_row);
@@ -240,8 +243,10 @@ impl ClockAnalogConfigWidget {
         // Minute tick style
         let minute_style_row = GtkBox::new(Orientation::Horizontal, 6);
         minute_style_row.append(&Label::new(Some("Type:")));
-        let minute_tick_options = StringList::new(&["None", "Squares", "Lines", "Dots", "Triangles"]);
-        let minute_tick_style_dropdown = DropDown::new(Some(minute_tick_options), Option::<gtk4::Expression>::None);
+        let minute_tick_options =
+            StringList::new(&["None", "Squares", "Lines", "Dots", "Triangles"]);
+        let minute_tick_style_dropdown =
+            DropDown::new(Some(minute_tick_options), Option::<gtk4::Expression>::None);
         minute_tick_style_dropdown.set_selected(2); // Lines
         minute_tick_style_dropdown.set_hexpand(true);
         minute_style_row.append(&minute_tick_style_dropdown);
@@ -250,7 +255,9 @@ impl ClockAnalogConfigWidget {
         // Minute tick color (theme-aware)
         let minute_color_row = GtkBox::new(Orientation::Horizontal, 6);
         minute_color_row.append(&Label::new(Some("Color:")));
-        let minute_tick_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().minute_tick_color.clone()));
+        let minute_tick_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().minute_tick_color.clone(),
+        ));
         minute_tick_color_selector.set_theme_config(theme_config.borrow().clone());
         minute_color_row.append(minute_tick_color_selector.widget());
         minute_tick_box.append(&minute_color_row);
@@ -278,7 +285,8 @@ impl ClockAnalogConfigWidget {
         // Connect tick callbacks
         let config_for_hour_tick_style = config.clone();
         hour_tick_style_dropdown.connect_selected_notify(move |dropdown| {
-            config_for_hour_tick_style.borrow_mut().hour_tick_style = tick_style_from_index(dropdown.selected());
+            config_for_hour_tick_style.borrow_mut().hour_tick_style =
+                tick_style_from_index(dropdown.selected());
         });
 
         let config_for_hour_tick_color = config.clone();
@@ -288,17 +296,22 @@ impl ClockAnalogConfigWidget {
 
         let config_for_hour_tick_outer = config.clone();
         hour_tick_outer_spin.connect_value_changed(move |spin| {
-            config_for_hour_tick_outer.borrow_mut().hour_tick_outer_percent = spin.value();
+            config_for_hour_tick_outer
+                .borrow_mut()
+                .hour_tick_outer_percent = spin.value();
         });
 
         let config_for_hour_tick_inner = config.clone();
         hour_tick_inner_spin.connect_value_changed(move |spin| {
-            config_for_hour_tick_inner.borrow_mut().hour_tick_inner_percent = spin.value();
+            config_for_hour_tick_inner
+                .borrow_mut()
+                .hour_tick_inner_percent = spin.value();
         });
 
         let config_for_minute_tick_style = config.clone();
         minute_tick_style_dropdown.connect_selected_notify(move |dropdown| {
-            config_for_minute_tick_style.borrow_mut().minute_tick_style = tick_style_from_index(dropdown.selected());
+            config_for_minute_tick_style.borrow_mut().minute_tick_style =
+                tick_style_from_index(dropdown.selected());
         });
 
         let config_for_minute_tick_color = config.clone();
@@ -308,12 +321,16 @@ impl ClockAnalogConfigWidget {
 
         let config_for_minute_tick_outer = config.clone();
         minute_tick_outer_spin.connect_value_changed(move |spin| {
-            config_for_minute_tick_outer.borrow_mut().minute_tick_outer_percent = spin.value();
+            config_for_minute_tick_outer
+                .borrow_mut()
+                .minute_tick_outer_percent = spin.value();
         });
 
         let config_for_minute_tick_inner = config.clone();
         minute_tick_inner_spin.connect_value_changed(move |spin| {
-            config_for_minute_tick_inner.borrow_mut().minute_tick_inner_percent = spin.value();
+            config_for_minute_tick_inner
+                .borrow_mut()
+                .minute_tick_inner_percent = spin.value();
         });
 
         // Add Ticks tab to notebook
@@ -378,7 +395,9 @@ impl ClockAnalogConfigWidget {
         border_label.set_xalign(1.0);
         border_label.set_width_request(label_width);
         colors_grid.attach(&border_label, 0, 0, 1, 1);
-        let border_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().border_color.clone()));
+        let border_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().border_color.clone(),
+        ));
         border_color_selector.set_theme_config(theme_config.borrow().clone());
         colors_grid.attach(border_color_selector.widget(), 1, 0, 1, 1);
         let border_width_label = Label::new(Some("Width:"));
@@ -393,7 +412,9 @@ impl ClockAnalogConfigWidget {
         hour_label.set_xalign(1.0);
         hour_label.set_width_request(label_width);
         colors_grid.attach(&hour_label, 0, 1, 1, 1);
-        let hour_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().hour_hand_color.clone()));
+        let hour_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().hour_hand_color.clone(),
+        ));
         hour_color_selector.set_theme_config(theme_config.borrow().clone());
         colors_grid.attach(hour_color_selector.widget(), 1, 1, 1, 1);
         let hour_width_label = Label::new(Some("Width:"));
@@ -408,7 +429,9 @@ impl ClockAnalogConfigWidget {
         minute_label.set_xalign(1.0);
         minute_label.set_width_request(label_width);
         colors_grid.attach(&minute_label, 0, 2, 1, 1);
-        let minute_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().minute_hand_color.clone()));
+        let minute_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().minute_hand_color.clone(),
+        ));
         minute_color_selector.set_theme_config(theme_config.borrow().clone());
         colors_grid.attach(minute_color_selector.widget(), 1, 2, 1, 1);
         let minute_width_label = Label::new(Some("Width:"));
@@ -423,7 +446,9 @@ impl ClockAnalogConfigWidget {
         second_label.set_xalign(1.0);
         second_label.set_width_request(label_width);
         colors_grid.attach(&second_label, 0, 3, 1, 1);
-        let second_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().second_hand_color.clone()));
+        let second_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().second_hand_color.clone(),
+        ));
         second_color_selector.set_theme_config(theme_config.borrow().clone());
         colors_grid.attach(second_color_selector.widget(), 1, 3, 1, 1);
         let second_width_label = Label::new(Some("Width:"));
@@ -438,12 +463,21 @@ impl ClockAnalogConfigWidget {
         hub_label.set_xalign(1.0);
         hub_label.set_width_request(label_width);
         colors_grid.attach(&hub_label, 0, 4, 1, 1);
-        let center_hub_color_selector = Rc::new(ThemeColorSelector::new(config.borrow().center_hub_color.clone()));
+        let center_hub_color_selector = Rc::new(ThemeColorSelector::new(
+            config.borrow().center_hub_color.clone(),
+        ));
         center_hub_color_selector.set_theme_config(theme_config.borrow().clone());
         colors_grid.attach(center_hub_color_selector.widget(), 1, 4, 1, 1);
         let hub_size_label = Label::new(Some("Size %:"));
         colors_grid.attach(&hub_size_label, 2, 4, 1, 1);
-        let hub_size_adj = Adjustment::new(config.borrow().center_hub_size * 100.0, 1.0, 20.0, 0.5, 1.0, 0.0);
+        let hub_size_adj = Adjustment::new(
+            config.borrow().center_hub_size * 100.0,
+            1.0,
+            20.0,
+            0.5,
+            1.0,
+            0.0,
+        );
         let center_hub_size_spin = SpinButton::new(Some(&hub_size_adj), 0.5, 1);
         center_hub_size_spin.set_hexpand(true);
         colors_grid.attach(&center_hub_size_spin, 3, 4, 1, 1);
@@ -519,7 +553,11 @@ impl ClockAnalogConfigWidget {
         // Icon font
         let icon_font_row = GtkBox::new(Orientation::Horizontal, 6);
         icon_font_row.append(&Label::new(Some("Icon Font:")));
-        let icon_font_button = Button::with_label(&format!("{} {:.0}%", config.borrow().icon_font, config.borrow().icon_size));
+        let icon_font_button = Button::with_label(&format!(
+            "{} {:.0}%",
+            config.borrow().icon_font,
+            config.borrow().icon_size
+        ));
         icon_font_button.set_hexpand(true);
         icon_font_row.append(&icon_font_button);
         icon_box.append(&icon_font_row);
@@ -554,7 +592,8 @@ impl ClockAnalogConfigWidget {
         // X offset
         let offset_x_row = GtkBox::new(Orientation::Horizontal, 6);
         offset_x_row.append(&Label::new(Some("X Offset:")));
-        let offset_x_adj = Adjustment::new(config.borrow().icon_offset_x, -100.0, 100.0, 1.0, 10.0, 0.0);
+        let offset_x_adj =
+            Adjustment::new(config.borrow().icon_offset_x, -100.0, 100.0, 1.0, 10.0, 0.0);
         let icon_offset_x_spin = SpinButton::new(Some(&offset_x_adj), 1.0, 0);
         icon_offset_x_spin.set_hexpand(true);
         offset_x_row.append(&icon_offset_x_spin);
@@ -563,23 +602,27 @@ impl ClockAnalogConfigWidget {
         // Y offset
         let offset_y_row = GtkBox::new(Orientation::Horizontal, 6);
         offset_y_row.append(&Label::new(Some("Y Offset:")));
-        let offset_y_adj = Adjustment::new(config.borrow().icon_offset_y, -100.0, 100.0, 1.0, 10.0, 0.0);
+        let offset_y_adj =
+            Adjustment::new(config.borrow().icon_offset_y, -100.0, 100.0, 1.0, 10.0, 0.0);
         let icon_offset_y_spin = SpinButton::new(Some(&offset_y_adj), 1.0, 0);
         icon_offset_y_spin.set_hexpand(true);
         offset_y_row.append(&icon_offset_y_spin);
         icon_box.append(&offset_y_row);
 
         // Center indicator checkbox (deprecated but kept for backwards compatibility)
-        let center_indicator_check = CheckButton::with_label("Legacy: Center indicator (use Position instead)");
+        let center_indicator_check =
+            CheckButton::with_label("Legacy: Center indicator (use Position instead)");
         center_indicator_check.set_active(config.borrow().center_indicator);
         center_indicator_check.set_tooltip_text(Some("Deprecated: Use Position dropdown instead"));
         center_indicator_check.set_sensitive(false); // Disable since we're using position dropdown
         icon_box.append(&center_indicator_check);
 
         // Shrink for indicator checkbox
-        let shrink_for_indicator_check = CheckButton::with_label("Shrink clock when indicator visible");
+        let shrink_for_indicator_check =
+            CheckButton::with_label("Shrink clock when indicator visible");
         shrink_for_indicator_check.set_active(config.borrow().shrink_for_indicator);
-        shrink_for_indicator_check.set_tooltip_text(Some("Reduce clock size to prevent overlap with indicator"));
+        shrink_for_indicator_check
+            .set_tooltip_text(Some("Reduce clock size to prevent overlap with indicator"));
         icon_box.append(&shrink_for_indicator_check);
 
         icon_frame.set_child(Some(&icon_box));
@@ -698,7 +741,10 @@ impl ClockAnalogConfigWidget {
 
             if let Some(win) = window {
                 show_font_dialog(Some(&win), None, move |font_desc| {
-                    let family = font_desc.family().map(|f| f.to_string()).unwrap_or_else(|| "Noto Color Emoji".to_string());
+                    let family = font_desc
+                        .family()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "Noto Color Emoji".to_string());
                     config_clone.borrow_mut().icon_font = family.clone();
                     let size_pct = size_spin.value();
                     font_btn.set_label(&format!("{} {:.0}%", family, size_pct));
@@ -813,50 +859,71 @@ impl ClockAnalogConfigWidget {
 
     pub fn set_config(&self, config: AnalogClockConfig) {
         // Set background widget
-        self.background_widget.set_config(config.face_background.clone());
+        self.background_widget
+            .set_config(config.face_background.clone());
 
         // Face style in Numbers tab - map to new options (None, Minimal, Classic, Roman)
         let face_index = match config.face_style {
-            FaceStyle::Minimal => if config.show_numbers { 1 } else { 0 },
+            FaceStyle::Minimal => {
+                if config.show_numbers {
+                    1
+                } else {
+                    0
+                }
+            }
             FaceStyle::Classic => 2,
             FaceStyle::Roman => 3,
-            FaceStyle::Modern => 2, // Map old Modern to Classic
+            FaceStyle::Modern => 2,  // Map old Modern to Classic
             FaceStyle::Numbers => 2, // Map old Numbers to Classic
         };
         self.face_dropdown.set_selected(face_index);
         self.show_numbers_check.set_active(config.show_numbers);
 
         // Number font - convert fraction to percentage for display (0.12 -> 12)
-        let font_as_percentage = config.number_font.with_size(config.number_font.size() * 100.0);
+        let font_as_percentage = config
+            .number_font
+            .with_size(config.number_font.size() * 100.0);
         self.number_font_selector.set_source(font_as_percentage);
         self.number_bold_check.set_active(config.number_bold);
         self.number_italic_check.set_active(config.number_italic);
-        self.number_color_selector.set_source(config.number_color.clone());
+        self.number_color_selector
+            .set_source(config.number_color.clone());
 
         // Hour ticks
-        self.hour_tick_style_dropdown.set_selected(tick_style_to_index(config.hour_tick_style));
-        self.hour_tick_color_selector.set_source(config.hour_tick_color.clone());
-        self.hour_tick_outer_spin.set_value(config.hour_tick_outer_percent);
-        self.hour_tick_inner_spin.set_value(config.hour_tick_inner_percent);
+        self.hour_tick_style_dropdown
+            .set_selected(tick_style_to_index(config.hour_tick_style));
+        self.hour_tick_color_selector
+            .set_source(config.hour_tick_color.clone());
+        self.hour_tick_outer_spin
+            .set_value(config.hour_tick_outer_percent);
+        self.hour_tick_inner_spin
+            .set_value(config.hour_tick_inner_percent);
 
         // Minute ticks
-        self.minute_tick_style_dropdown.set_selected(tick_style_to_index(config.minute_tick_style));
-        self.minute_tick_color_selector.set_source(config.minute_tick_color.clone());
-        self.minute_tick_outer_spin.set_value(config.minute_tick_outer_percent);
-        self.minute_tick_inner_spin.set_value(config.minute_tick_inner_percent);
+        self.minute_tick_style_dropdown
+            .set_selected(tick_style_to_index(config.minute_tick_style));
+        self.minute_tick_color_selector
+            .set_source(config.minute_tick_color.clone());
+        self.minute_tick_outer_spin
+            .set_value(config.minute_tick_outer_percent);
+        self.minute_tick_inner_spin
+            .set_value(config.minute_tick_inner_percent);
 
         // Hand style
-        self.hand_dropdown.set_selected(match config.hour_hand_style {
-            HandStyle::Line => 0,
-            HandStyle::Arrow => 1,
-            HandStyle::Sword => 2,
-            HandStyle::Fancy => 3,
-        });
+        self.hand_dropdown
+            .set_selected(match config.hour_hand_style {
+                HandStyle::Line => 0,
+                HandStyle::Arrow => 1,
+                HandStyle::Sword => 2,
+                HandStyle::Fancy => 3,
+            });
 
         // Checkboxes
-        self.show_second_hand_check.set_active(config.show_second_hand);
+        self.show_second_hand_check
+            .set_active(config.show_second_hand);
         self.smooth_seconds_check.set_active(config.smooth_seconds);
-        self.show_center_hub_check.set_active(config.show_center_hub);
+        self.show_center_hub_check
+            .set_active(config.show_center_hub);
 
         // Size spinners
         self.border_width_spin.set_value(config.border_width);
@@ -865,22 +932,31 @@ impl ClockAnalogConfigWidget {
         self.second_width_spin.set_value(config.second_hand_width);
 
         // Color selectors
-        self.border_color_selector.set_source(config.border_color.clone());
-        self.hour_color_selector.set_source(config.hour_hand_color.clone());
-        self.minute_color_selector.set_source(config.minute_hand_color.clone());
-        self.second_color_selector.set_source(config.second_hand_color.clone());
-        self.center_hub_color_selector.set_source(config.center_hub_color.clone());
+        self.border_color_selector
+            .set_source(config.border_color.clone());
+        self.hour_color_selector
+            .set_source(config.hour_hand_color.clone());
+        self.minute_color_selector
+            .set_source(config.minute_hand_color.clone());
+        self.second_color_selector
+            .set_source(config.second_hand_color.clone());
+        self.center_hub_color_selector
+            .set_source(config.center_hub_color.clone());
         // Convert fraction to percentage (0.05 -> 5%)
-        self.center_hub_size_spin.set_value(config.center_hub_size * 100.0);
+        self.center_hub_size_spin
+            .set_value(config.center_hub_size * 100.0);
 
         // Icon config
         self.show_icon_check.set_active(config.show_icon);
         self.icon_text_entry.set_text(&config.icon_text);
-        self.icon_font_button.set_label(&format!("{} {:.0}%", config.icon_font, config.icon_size));
+        self.icon_font_button
+            .set_label(&format!("{} {:.0}%", config.icon_font, config.icon_size));
         self.icon_size_spin.set_value(config.icon_size);
         self.icon_bold_check.set_active(config.icon_bold);
-        self.center_indicator_check.set_active(config.center_indicator);
-        self.shrink_for_indicator_check.set_active(config.shrink_for_indicator);
+        self.center_indicator_check
+            .set_active(config.center_indicator);
+        self.shrink_for_indicator_check
+            .set_active(config.shrink_for_indicator);
 
         // Icon position
         self.icon_position_grid.set_position(config.icon_position);
@@ -897,8 +973,10 @@ impl ClockAnalogConfigWidget {
         self.background_widget.set_theme_config(theme.clone());
         self.number_font_selector.set_theme_config(theme.clone());
         self.number_color_selector.set_theme_config(theme.clone());
-        self.hour_tick_color_selector.set_theme_config(theme.clone());
-        self.minute_tick_color_selector.set_theme_config(theme.clone());
+        self.hour_tick_color_selector
+            .set_theme_config(theme.clone());
+        self.minute_tick_color_selector
+            .set_theme_config(theme.clone());
         self.border_color_selector.set_theme_config(theme.clone());
         self.hour_color_selector.set_theme_config(theme.clone());
         self.minute_color_selector.set_theme_config(theme.clone());

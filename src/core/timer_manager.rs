@@ -14,9 +14,8 @@ use std::time::Instant;
 use uuid::Uuid;
 
 /// Global timer manager instance
-static TIMER_MANAGER: Lazy<Arc<RwLock<TimerAlarmManager>>> = Lazy::new(|| {
-    Arc::new(RwLock::new(TimerAlarmManager::new()))
-});
+static TIMER_MANAGER: Lazy<Arc<RwLock<TimerAlarmManager>>> =
+    Lazy::new(|| Arc::new(RwLock::new(TimerAlarmManager::new())));
 
 /// Audio commands for the audio thread
 #[allow(dead_code)]
@@ -668,7 +667,12 @@ impl TimerAlarmManager {
             .map(|alarm| {
                 let alarm_time = (alarm.hour, alarm.minute, alarm.second);
                 let day_matches = alarm.days.is_empty() || alarm.days.contains(&day_of_week);
-                (alarm.id.clone(), alarm_time, day_matches, alarm.sound.clone())
+                (
+                    alarm.id.clone(),
+                    alarm_time,
+                    day_matches,
+                    alarm.sound.clone(),
+                )
             })
             .collect();
 
@@ -769,7 +773,11 @@ impl TimerAlarmManager {
 
     /// Get full config including global timer sound
     pub fn get_full_config(&self) -> (Vec<TimerConfig>, Vec<AlarmConfig>, AlarmSoundConfig) {
-        (self.timers.clone(), self.alarms.clone(), self.global_timer_sound.clone())
+        (
+            self.timers.clone(),
+            self.alarms.clone(),
+            self.global_timer_sound.clone(),
+        )
     }
 }
 

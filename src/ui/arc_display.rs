@@ -4,76 +4,68 @@ use gtk4::cairo;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::background::{Color, ColorStop};
-use crate::ui::theme::{
-    deserialize_color_or_source, deserialize_color_stops_vec,
-    ColorSource, ColorStopSource, ComboThemeConfig,
-};
 use crate::ui::text_overlay_config_widget::TextOverlayConfig;
+use crate::ui::theme::{
+    deserialize_color_or_source, deserialize_color_stops_vec, ColorSource, ColorStopSource,
+    ComboThemeConfig,
+};
 
 /// Arc end cap style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum ArcCapStyle {
     #[serde(rename = "butt")]
-    Butt,      // Square/flat end
+    Butt, // Square/flat end
     #[serde(rename = "round")]
     #[default]
-    Round,     // Rounded end
+    Round, // Rounded end
     #[serde(rename = "pointed")]
-    Pointed,   // Pointed/triangular end
+    Pointed, // Pointed/triangular end
 }
 
-
 /// Arc tapering style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum ArcTaperStyle {
     #[serde(rename = "none")]
     #[default]
-    None,           // No tapering, constant width
+    None, // No tapering, constant width
     #[serde(rename = "start")]
-    Start,          // Narrower at start
+    Start, // Narrower at start
     #[serde(rename = "end")]
-    End,            // Narrower at end
+    End, // Narrower at end
     #[serde(rename = "both")]
-    Both,           // Narrower at both ends (elliptical)
+    Both, // Narrower at both ends (elliptical)
 }
-
 
 /// Color transition style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum ColorTransitionStyle {
     #[serde(rename = "smooth")]
-    Smooth,    // Smooth gradient fade between colors
+    Smooth, // Smooth gradient fade between colors
     #[serde(rename = "abrupt")]
     #[default]
-    Abrupt,    // Abrupt change at threshold
+    Abrupt, // Abrupt change at threshold
 }
 
-
 /// Color application mode
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum ColorApplicationMode {
     #[serde(rename = "progressive")]
     #[default]
-    Progressive,   // Whole arc changes color based on value
+    Progressive, // Whole arc changes color based on value
     #[serde(rename = "segments")]
-    Segments,      // Individual segments have fixed colors
+    Segments, // Individual segments have fixed colors
 }
-
 
 /// Arc gauge configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ArcDisplayConfig {
     // Arc geometry
     #[serde(default = "default_start_angle")]
-    pub start_angle: f64,  // Degrees (0 = right, 90 = down, 180 = left, 270 = up)
+    pub start_angle: f64, // Degrees (0 = right, 90 = down, 180 = left, 270 = up)
     #[serde(default = "default_end_angle")]
-    pub end_angle: f64,    // Degrees
+    pub end_angle: f64, // Degrees
     #[serde(default = "default_arc_width")]
-    pub arc_width: f64,    // Percentage of radius (0.0 to 1.0)
+    pub arc_width: f64, // Percentage of radius (0.0 to 1.0)
     #[serde(default = "default_radius_percent")]
     pub radius_percent: f64, // Percentage of available space (0.0 to 1.0)
 
@@ -94,7 +86,10 @@ pub struct ArcDisplayConfig {
     pub taper_amount: f64, // 0.0 to 1.0 (how much to taper)
 
     // Colors
-    #[serde(default = "default_color_stops", deserialize_with = "deserialize_color_stops_vec")]
+    #[serde(
+        default = "default_color_stops",
+        deserialize_with = "deserialize_color_stops_vec"
+    )]
     pub color_stops: Vec<ColorStopSource>,
     #[serde(default)]
     pub color_transition: ColorTransitionStyle,
@@ -104,7 +99,10 @@ pub struct ArcDisplayConfig {
     // Background arc (unfilled portion)
     #[serde(default = "default_show_background_arc")]
     pub show_background_arc: bool,
-    #[serde(default = "default_background_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_background_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub background_color: ColorSource,
     #[serde(default = "default_false")]
     pub overlay_background: bool, // If true, draw full arc then overlay with background color
@@ -158,12 +156,12 @@ fn default_taper_amount() -> f64 {
 
 fn default_color_stops() -> Vec<ColorStopSource> {
     vec![
-        ColorStopSource::custom(0.0, Color::new(0.0, 0.8, 0.0, 1.0)),   // Green 0-60%
-        ColorStopSource::custom(0.6, Color::new(0.0, 0.8, 0.0, 1.0)),   // Green at 60%
-        ColorStopSource::custom(0.6, Color::new(1.0, 0.8, 0.0, 1.0)),   // Yellow at 60%
-        ColorStopSource::custom(0.8, Color::new(1.0, 0.8, 0.0, 1.0)),   // Yellow at 80%
-        ColorStopSource::custom(0.8, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 80%
-        ColorStopSource::custom(1.0, Color::new(1.0, 0.0, 0.0, 1.0)),   // Red at 100%
+        ColorStopSource::custom(0.0, Color::new(0.0, 0.8, 0.0, 1.0)), // Green 0-60%
+        ColorStopSource::custom(0.6, Color::new(0.0, 0.8, 0.0, 1.0)), // Green at 60%
+        ColorStopSource::custom(0.6, Color::new(1.0, 0.8, 0.0, 1.0)), // Yellow at 60%
+        ColorStopSource::custom(0.8, Color::new(1.0, 0.8, 0.0, 1.0)), // Yellow at 80%
+        ColorStopSource::custom(0.8, Color::new(1.0, 0.0, 0.0, 1.0)), // Red at 80%
+        ColorStopSource::custom(1.0, Color::new(1.0, 0.0, 0.0, 1.0)), // Red at 100%
     ]
 }
 
@@ -172,7 +170,9 @@ fn default_show_background_arc() -> bool {
 }
 
 fn default_background_color() -> ColorSource {
-    ColorSource::Custom { color: Color::new(0.2, 0.2, 0.2, 0.3) }
+    ColorSource::Custom {
+        color: Color::new(0.2, 0.2, 0.2, 0.3),
+    }
 }
 
 fn default_animation_duration() -> f64 {
@@ -226,7 +226,9 @@ pub fn render_arc(
     let value = value.clamp(0.0, 1.0);
 
     // Resolve theme colors to concrete colors
-    let resolved_stops: Vec<ColorStop> = config.color_stops.iter()
+    let resolved_stops: Vec<ColorStop> = config
+        .color_stops
+        .iter()
         .map(|s| s.resolve(theme))
         .collect();
     let resolved_bg_color = config.background_color.resolve(theme);
@@ -244,9 +246,8 @@ pub fn render_arc(
     let max_radius = (width.min(height) / 2.0) * config.radius_percent;
 
     // Check if we should use overlay mode
-    let use_overlay = config.overlay_background
-        && config.show_background_arc
-        && resolved_bg_color.a < 1.0; // Only overlay if background has transparency
+    let use_overlay =
+        config.overlay_background && config.show_background_arc && resolved_bg_color.a < 1.0; // Only overlay if background has transparency
 
     if use_overlay {
         // Draw full arc with colors first
@@ -313,10 +314,13 @@ fn render_background_arc(
     if config.segmented {
         // Draw segmented background
         let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
-        let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing) / config.segment_count as f64;
+        let segment_angle = (total_angle
+            - (config.segment_count - 1) as f64 * config.segment_spacing)
+            / config.segment_count as f64;
 
         for i in 0..config.segment_count {
-            let seg_start = start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
+            let seg_start =
+                start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
             let seg_end = seg_start + segment_angle.to_radians();
 
             if config.taper_style != ArcTaperStyle::None {
@@ -328,7 +332,8 @@ fn render_background_arc(
                     let t = (i as f64 + j as f64 / seg_steps as f64) / config.segment_count as f64;
                     let step_start = seg_start + j as f64 * seg_angle_step;
                     let step_end = step_start + seg_angle_step;
-                    let step_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+                    let step_width =
+                        calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
                     cr.set_line_width(step_width);
                     cr.new_path();
@@ -353,7 +358,8 @@ fn render_background_arc(
                 let t = i as f64 / num_segments as f64;
                 let seg_start = start_rad + (i as f64 * angle_step).to_radians();
                 let seg_end = seg_start + angle_step.to_radians();
-                let seg_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+                let seg_width =
+                    calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
                 cr.set_line_width(seg_width);
                 cr.new_path();
@@ -398,7 +404,8 @@ fn render_continuous_arc(
     });
 
     // Determine if we need to draw with segments (either tapered or segment color mode)
-    let needs_segments = config.taper_style != ArcTaperStyle::None || config.color_mode == ColorApplicationMode::Segments;
+    let needs_segments = config.taper_style != ArcTaperStyle::None
+        || config.color_mode == ColorApplicationMode::Segments;
 
     if !needs_segments {
         // Simple constant-width arc with progressive color
@@ -421,7 +428,8 @@ fn render_continuous_arc(
             let seg_start = start_rad + (i as f64 * total_angle_step).to_radians();
             let seg_end = seg_start + total_angle_step.to_radians();
 
-            let seg_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+            let seg_width =
+                calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
             // Color based on mode
             let seg_color = if config.color_mode == ColorApplicationMode::Progressive {
@@ -471,7 +479,8 @@ fn render_segmented_arc(
     let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
-    let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing) / config.segment_count as f64;
+    let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing)
+        / config.segment_count as f64;
     let width = radius * config.arc_width;
 
     let filled_segments = (value * config.segment_count as f64).ceil() as u32;
@@ -486,14 +495,16 @@ fn render_segmented_arc(
     // In Segments mode with background arc, draw all segments (filled and unfilled)
     // In Segments mode without background arc, only draw filled segments
     // In Progressive mode, only draw filled segments
-    let segments_to_draw = if config.color_mode == ColorApplicationMode::Segments && config.show_background_arc {
-        config.segment_count
-    } else {
-        filled_segments
-    };
+    let segments_to_draw =
+        if config.color_mode == ColorApplicationMode::Segments && config.show_background_arc {
+            config.segment_count
+        } else {
+            filled_segments
+        };
 
     for i in 0..segments_to_draw {
-        let seg_start = start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
+        let seg_start =
+            start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
         let seg_end = seg_start + segment_angle.to_radians();
         let seg_value = (i as f64 + 0.5) / config.segment_count as f64;
         let is_filled = i < filled_segments;
@@ -527,7 +538,8 @@ fn render_segmented_arc(
                 let t = (i as f64 + j as f64 / seg_steps as f64) / config.segment_count as f64;
                 let step_start = seg_start + j as f64 * seg_angle_step;
                 let step_end = step_start + seg_angle_step;
-                let step_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+                let step_width =
+                    calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
                 cr.set_line_width(step_width);
                 cr.new_path();
@@ -609,8 +621,12 @@ fn draw_pointed_cap(
 
     // Point extends beyond the arc
     let point_length = width * 0.5;
-    let point_x = cx + (radius - width / 2.0) * cos_a + point_length * cos_a * (if is_start { -1.0 } else { 1.0 });
-    let point_y = cy + (radius - width / 2.0) * sin_a + point_length * sin_a * (if is_start { -1.0 } else { 1.0 });
+    let point_x = cx
+        + (radius - width / 2.0) * cos_a
+        + point_length * cos_a * (if is_start { -1.0 } else { 1.0 });
+    let point_y = cy
+        + (radius - width / 2.0) * sin_a
+        + point_length * sin_a * (if is_start { -1.0 } else { 1.0 });
 
     color.apply_to_cairo(cr);
     cr.new_path();
@@ -634,7 +650,8 @@ fn render_full_segmented_arc(
     let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
-    let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing) / config.segment_count as f64;
+    let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing)
+        / config.segment_count as f64;
     let width = radius * config.arc_width;
 
     cr.save()?;
@@ -645,7 +662,8 @@ fn render_full_segmented_arc(
     });
 
     for i in 0..config.segment_count {
-        let seg_start = start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
+        let seg_start =
+            start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
         let seg_end = seg_start + segment_angle.to_radians();
         let seg_value = (i as f64 + 0.5) / config.segment_count as f64;
 
@@ -661,7 +679,8 @@ fn render_full_segmented_arc(
                 let t = (i as f64 + j as f64 / seg_steps as f64) / config.segment_count as f64;
                 let step_start = seg_start + j as f64 * seg_angle_step;
                 let step_end = step_start + seg_angle_step;
-                let step_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+                let step_width =
+                    calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
                 cr.set_line_width(step_width);
                 cr.new_path();
@@ -717,11 +736,14 @@ fn render_overlay_arc(
 
     if config.segmented {
         // Overlay on unfilled segments
-        let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing) / config.segment_count as f64;
+        let segment_angle = (total_angle
+            - (config.segment_count - 1) as f64 * config.segment_spacing)
+            / config.segment_count as f64;
         let filled_segments = (value * config.segment_count as f64).ceil() as u32;
 
         for i in filled_segments..config.segment_count {
-            let seg_start = start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
+            let seg_start =
+                start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
             let seg_end = seg_start + segment_angle.to_radians();
 
             // Apply tapering if enabled
@@ -733,7 +755,8 @@ fn render_overlay_arc(
                     let t = (i as f64 + j as f64 / seg_steps as f64) / config.segment_count as f64;
                     let step_start = seg_start + j as f64 * seg_angle_step;
                     let step_end = step_start + seg_angle_step;
-                    let step_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+                    let step_width =
+                        calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
                     cr.set_line_width(step_width);
                     cr.new_path();
@@ -762,7 +785,8 @@ fn render_overlay_arc(
                 let t = (filled_angle + i as f64 * angle_step) / total_angle;
                 let seg_start = overlay_start + (i as f64 * angle_step).to_radians();
                 let seg_end = seg_start + angle_step.to_radians();
-                let seg_width = calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
+                let seg_width =
+                    calculate_tapered_width(width, t, config.taper_style, config.taper_amount);
 
                 cr.set_line_width(seg_width);
                 cr.new_path();

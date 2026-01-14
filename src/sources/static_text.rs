@@ -185,32 +185,37 @@ impl DataSource for StaticTextSource {
         };
 
         // Set caption
-        let caption = self.config.custom_caption
-            .clone()
-            .unwrap_or_else(|| {
-                lines.first()
-                    .map(|l| l.label.clone())
-                    .unwrap_or_else(|| "Static Text".to_string())
-            });
-        self.values.insert("caption".to_string(), Value::from(caption.clone()));
+        let caption = self.config.custom_caption.clone().unwrap_or_else(|| {
+            lines
+                .first()
+                .map(|l| l.label.clone())
+                .unwrap_or_else(|| "Static Text".to_string())
+        });
+        self.values
+            .insert("caption".to_string(), Value::from(caption.clone()));
 
         // Set primary value to first line's text
-        let value_text = lines.first()
+        let value_text = lines
+            .first()
             .map(|l| l.text.clone())
             .unwrap_or_else(|| "Static Text".to_string());
-        self.values.insert("value".to_string(), Value::from(value_text.clone()));
+        self.values
+            .insert("value".to_string(), Value::from(value_text.clone()));
 
         // Unit is empty for static text
         self.values.insert("unit".to_string(), Value::from(""));
 
         // Add all configured lines as their field_id
         for line in &lines {
-            self.values.insert(line.field_id.clone(), Value::from(line.text.clone()));
+            self.values
+                .insert(line.field_id.clone(), Value::from(line.text.clone()));
         }
 
         // Set min/max limits for compatibility with displayers that expect them
-        self.values.insert("min_limit".to_string(), Value::from(0.0));
-        self.values.insert("max_limit".to_string(), Value::from(100.0));
+        self.values
+            .insert("min_limit".to_string(), Value::from(0.0));
+        self.values
+            .insert("max_limit".to_string(), Value::from(100.0));
 
         Ok(())
     }
@@ -226,7 +231,9 @@ impl DataSource for StaticTextSource {
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Look for static_text_config in the configuration
         if let Some(static_text_config_value) = config.get("static_text_config") {
-            if let Ok(static_text_config) = serde_json::from_value::<StaticTextSourceConfig>(static_text_config_value.clone()) {
+            if let Ok(static_text_config) =
+                serde_json::from_value::<StaticTextSourceConfig>(static_text_config_value.clone())
+            {
                 self.set_config(static_text_config);
             }
         }

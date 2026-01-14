@@ -320,7 +320,8 @@ pub fn get_slot_values(values: &HashMap<String, Value>, prefix: &str) -> HashMap
         let mut key_buf = buf.borrow_mut();
         let prefix_with_underscore = key_buf.build_prefix_underscore(prefix);
 
-        values.iter()
+        values
+            .iter()
             .filter(|(k, _)| k.starts_with(prefix_with_underscore))
             .map(|(k, v)| {
                 let short_key = &k[prefix_len..];
@@ -358,7 +359,9 @@ pub fn update_bar_animation(
             let mut key_buf = buf.borrow_mut();
             let key = key_buf.build_bar_key(prefix);
             // Use expect with context - this should never fail since we just checked contains_key
-            bar_values.get_mut(key).expect("bar key disappeared between contains_key check and get_mut")
+            bar_values
+                .get_mut(key)
+                .expect("bar key disappeared between contains_key check and get_mut")
         })
     };
 
@@ -446,7 +449,9 @@ pub fn update_graph_history(
             let mut key_buf = buf.borrow_mut();
             let key = key_buf.build_graph_key(prefix);
             // Use expect with context - this should never fail since we just checked contains_key
-            graph_history.get_mut(key).expect("graph key disappeared between contains_key check and get_mut")
+            graph_history
+                .get_mut(key)
+                .expect("graph key disappeared between contains_key check and get_mut")
         })
     };
 
@@ -476,9 +481,7 @@ pub fn update_core_bars(
         let mut key_buf = buf.borrow_mut();
         for core_idx in config.start_core..=config.end_core {
             let core_key = key_buf.build_core_key(prefix, core_idx);
-            let value = data.get(core_key)
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0) / 100.0;
+            let value = data.get(core_key).and_then(|v| v.as_f64()).unwrap_or(0.0) / 100.0;
             core_targets.push(value);
         }
     });
@@ -569,7 +572,10 @@ pub fn cleanup_bar_values(bar_values: &mut HashMap<String, AnimatedValue>, prefi
 /// Clean up stale core bar animation entries using retain
 /// Prefer cleanup_all_animation_state when cleaning multiple collections
 #[inline]
-pub fn cleanup_core_bar_values(core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>, prefixes: &[String]) {
+pub fn cleanup_core_bar_values(
+    core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>,
+    prefixes: &[String],
+) {
     let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
     core_bar_values.retain(|k, _| prefix_set.contains(k.as_str()));
 }
@@ -577,7 +583,10 @@ pub fn cleanup_core_bar_values(core_bar_values: &mut HashMap<String, Vec<Animate
 /// Clean up stale graph history entries using retain
 /// Prefer cleanup_all_animation_state when cleaning multiple collections
 #[inline]
-pub fn cleanup_graph_history(graph_history: &mut HashMap<String, VecDeque<DataPoint>>, prefixes: &[String]) {
+pub fn cleanup_graph_history(
+    graph_history: &mut HashMap<String, VecDeque<DataPoint>>,
+    prefixes: &[String],
+) {
     let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
     graph_history.retain(|k, _| {
         k.strip_suffix("_graph")
@@ -623,4 +632,3 @@ pub fn animate_values(
 
     needs_redraw
 }
-

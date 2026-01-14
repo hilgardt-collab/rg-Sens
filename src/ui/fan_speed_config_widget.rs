@@ -2,13 +2,13 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation,
-    SpinButton, StringList,
+    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
+    StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::sources::{FanSpeedConfig, FanSpeedSource, FanCategory};
+use crate::sources::{FanCategory, FanSpeedConfig, FanSpeedSource};
 use crate::ui::widget_builder::create_page_container;
 
 /// Widget for configuring Fan Speed source
@@ -40,7 +40,8 @@ impl FanSpeedConfigWidget {
             .map(|s| format!("[{:?}] {}", s.category, s.label))
             .collect();
 
-        let sensor_options = StringList::new(&sensor_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        let sensor_options =
+            StringList::new(&sensor_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         let sensor_combo = DropDown::new(Some(sensor_options), Option::<gtk4::Expression>::None);
         sensor_combo.set_selected(0);
         sensor_combo.set_hexpand(true);
@@ -52,11 +53,26 @@ impl FanSpeedConfigWidget {
         let info_label = Label::new(Some(&format!(
             "Found {} fan sensors ({} CPU, {} GPU, {} Chassis, {} PSU, {} Other)",
             sensors.len(),
-            sensors.iter().filter(|s| matches!(s.category, FanCategory::CPU)).count(),
-            sensors.iter().filter(|s| matches!(s.category, FanCategory::GPU)).count(),
-            sensors.iter().filter(|s| matches!(s.category, FanCategory::Chassis)).count(),
-            sensors.iter().filter(|s| matches!(s.category, FanCategory::PSU)).count(),
-            sensors.iter().filter(|s| matches!(s.category, FanCategory::Other)).count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, FanCategory::CPU))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, FanCategory::GPU))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, FanCategory::Chassis))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, FanCategory::PSU))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, FanCategory::Other))
+                .count(),
         )));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
@@ -129,11 +145,8 @@ impl FanSpeedConfigWidget {
         let config_clone = config.clone();
         caption_entry.connect_changed(move |entry| {
             let text = entry.text().to_string();
-            config_clone.borrow_mut().custom_caption = if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            };
+            config_clone.borrow_mut().custom_caption =
+                if text.is_empty() { None } else { Some(text) };
         });
 
         let config_clone = config.clone();
@@ -196,8 +209,10 @@ impl FanSpeedConfigWidget {
 
         // Update UI
         self.sensor_combo.set_selected(config.sensor_index as u32);
-        self.caption_entry.set_text(config.custom_caption.as_deref().unwrap_or(""));
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+        self.caption_entry
+            .set_text(config.custom_caption.as_deref().unwrap_or(""));
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
         self.auto_detect_check.set_active(config.auto_detect_limits);
 
         if let Some(min) = config.min_limit {
@@ -207,8 +222,10 @@ impl FanSpeedConfigWidget {
             self.max_limit_spin.set_value(max);
         }
 
-        self.min_limit_spin.set_sensitive(!config.auto_detect_limits);
-        self.max_limit_spin.set_sensitive(!config.auto_detect_limits);
+        self.min_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
+        self.max_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
     }
 }
 

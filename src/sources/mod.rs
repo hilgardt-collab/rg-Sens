@@ -3,31 +3,34 @@
 //! This module contains implementations of various system metric sources.
 //! Each source collects specific system information (CPU, memory, GPU, etc.)
 
+mod clock;
+mod combo;
 mod cpu;
+mod disk;
+mod fan_speed;
 mod gpu;
 mod memory;
-mod system_temp;
-mod fan_speed;
-mod disk;
-mod clock;
 mod shared_sensors;
-mod combo;
-mod test;
 mod static_text;
+mod system_temp;
+mod test;
 // mod network;
 
+pub use crate::audio::AlarmSoundConfig;
+pub use crate::core::{TimerDisplayConfig, TimerMode, TimerState};
+pub use clock::{AlarmConfig, ClockSource, ClockSourceConfig, DateFormat, TimeFormat, TimerConfig};
+pub use combo::{ComboSource, ComboSourceConfig, GroupConfig, SlotConfig};
 pub use cpu::{CpuSensor, CpuSource};
+pub use disk::DiskSource;
+pub use fan_speed::{FanCategory, FanInfo, FanSpeedConfig, FanSpeedSource};
 pub use gpu::GpuSource;
 pub use memory::MemorySource;
-pub use system_temp::{SystemTempSource, SensorInfo, SensorCategory, SystemTempConfig, TemperatureUnit as SystemTempUnit};
-pub use fan_speed::{FanSpeedSource, FanInfo, FanCategory, FanSpeedConfig};
-pub use disk::DiskSource;
-pub use clock::{ClockSource, ClockSourceConfig, TimeFormat, DateFormat, AlarmConfig, TimerConfig};
-pub use crate::audio::AlarmSoundConfig;
-pub use crate::core::{TimerMode, TimerState, TimerDisplayConfig};
-pub use combo::{ComboSource, ComboSourceConfig, SlotConfig, GroupConfig};
-pub use test::{TestSource, TestSourceConfig, TestMode, TEST_SOURCE_STATE};
-pub use static_text::{StaticTextSource, StaticTextSourceConfig, StaticTextLine};
+pub use static_text::{StaticTextLine, StaticTextSource, StaticTextSourceConfig};
+pub use system_temp::{
+    SensorCategory, SensorInfo, SystemTempConfig, SystemTempSource,
+    TemperatureUnit as SystemTempUnit,
+};
+pub use test::{TestMode, TestSource, TestSourceConfig, TEST_SOURCE_STATE};
 // pub use network::NetworkSource;
 
 /// Initialize shared sensor caches (call once at startup)
@@ -46,25 +49,27 @@ pub fn register_all() {
     global_registry().register_source_with_info(
         "cpu",
         "Cpu",
-        &["text", "bar", "arc", "speedometer", "graph", "indicator", "cpu_cores"],
+        &[
+            "text",
+            "bar",
+            "arc",
+            "speedometer",
+            "graph",
+            "indicator",
+            "cpu_cores",
+        ],
         || Box::new(CpuSource::new()),
     );
 
     // Register GPU source
-    global_registry().register_source_with_info(
-        "gpu",
-        "Gpu",
-        general_displayers,
-        || Box::new(GpuSource::new()),
-    );
+    global_registry().register_source_with_info("gpu", "Gpu", general_displayers, || {
+        Box::new(GpuSource::new())
+    });
 
     // Register Memory source
-    global_registry().register_source_with_info(
-        "memory",
-        "Memory",
-        general_displayers,
-        || Box::new(MemorySource::new()),
-    );
+    global_registry().register_source_with_info("memory", "Memory", general_displayers, || {
+        Box::new(MemorySource::new())
+    });
 
     // Register System Temperature source
     global_registry().register_source_with_info(
@@ -83,12 +88,9 @@ pub fn register_all() {
     );
 
     // Register Disk source
-    global_registry().register_source_with_info(
-        "disk",
-        "Disk",
-        general_displayers,
-        || Box::new(DiskSource::new()),
-    );
+    global_registry().register_source_with_info("disk", "Disk", general_displayers, || {
+        Box::new(DiskSource::new())
+    });
 
     // Register Clock source - only compatible with clock displayers
     global_registry().register_source_with_info(
@@ -102,24 +104,32 @@ pub fn register_all() {
     global_registry().register_source_with_info(
         "combination",
         "Combination",
-        &["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau", "steampunk", "css_template"],
+        &[
+            "lcars",
+            "cyberpunk",
+            "material",
+            "industrial",
+            "retro_terminal",
+            "fighter_hud",
+            "synthwave",
+            "art_deco",
+            "art_nouveau",
+            "steampunk",
+            "css_template",
+        ],
         || Box::new(ComboSource::new()),
     );
 
     // Register Test source - for debugging and demonstration
-    global_registry().register_source_with_info(
-        "test",
-        "Test",
-        general_displayers,
-        || Box::new(TestSource::new()),
-    );
+    global_registry().register_source_with_info("test", "Test", general_displayers, || {
+        Box::new(TestSource::new())
+    });
 
     // Register Static Text source - for custom text overlays
     global_registry().register_source_with_info(
         "static_text",
         "Static Text",
-        &["text"],  // Only compatible with text displayer
+        &["text"], // Only compatible with text displayer
         || Box::new(StaticTextSource::new()),
     );
-
 }

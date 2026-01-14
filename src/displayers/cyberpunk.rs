@@ -140,7 +140,9 @@ impl Displayer for CyberpunkDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("cyberpunk_config") {
-            if let Ok(display_config) = serde_json::from_value::<CyberpunkDisplayConfig>(config_value.clone()) {
+            if let Ok(display_config) =
+                serde_json::from_value::<CyberpunkDisplayConfig>(config_value.clone())
+            {
                 log::debug!(
                     "CyberpunkDisplayer::apply_config - loaded {} groups, {} content_items",
                     display_config.frame.group_count,
@@ -149,7 +151,9 @@ impl Displayer for CyberpunkDisplayer {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
-            if let Ok(frame_config) = serde_json::from_value::<CyberpunkFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) =
+                serde_json::from_value::<CyberpunkFrameConfig>(config_value.clone())
+            {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }

@@ -12,16 +12,18 @@ use std::f64::consts::PI;
 
 use std::cell::RefCell;
 
-use crate::ui::background::{BackgroundConfig, Color, render_background_with_theme};
-use crate::ui::bar_display::{BarDisplayConfig, render_bar};
-use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
 use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, ComboThemeConfig, FontOrString, FontSource, deserialize_color_or_source};
-use crate::ui::core_bars_display::{CoreBarsConfig, render_core_bars};
-use crate::ui::graph_display::{GraphDisplayConfig, DataPoint, render_graph_with_theme};
 use crate::ui::arc_display::ArcDisplayConfig;
+use crate::ui::background::{render_background_with_theme, BackgroundConfig, Color};
+use crate::ui::bar_display::{render_bar, BarDisplayConfig};
+use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+use crate::ui::core_bars_display::{render_core_bars, CoreBarsConfig};
+use crate::ui::graph_display::{render_graph_with_theme, DataPoint, GraphDisplayConfig};
+use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::speedometer_display::SpeedometerConfig;
+use crate::ui::theme::{
+    deserialize_color_or_source, ColorSource, ComboThemeConfig, FontOrString, FontSource,
+};
 
 // Thread-local buffer for render values HashMap to avoid per-frame allocations.
 // The HashMap is reused across calls, only clearing and repopulating values.
@@ -47,12 +49,30 @@ where
 
         // Add basic ContentItemData fields
         // Using static key strings where possible to avoid allocation
-        values.insert("caption".to_string(), serde_json::Value::String(data.caption.clone()));
-        values.insert("value".to_string(), serde_json::Value::String(data.value.clone()));
-        values.insert("unit".to_string(), serde_json::Value::String(data.unit.clone()));
-        values.insert("numerical_value".to_string(), serde_json::Value::from(data.numerical_value));
-        values.insert("min_value".to_string(), serde_json::Value::from(data.min_value));
-        values.insert("max_value".to_string(), serde_json::Value::from(data.max_value));
+        values.insert(
+            "caption".to_string(),
+            serde_json::Value::String(data.caption.clone()),
+        );
+        values.insert(
+            "value".to_string(),
+            serde_json::Value::String(data.value.clone()),
+        );
+        values.insert(
+            "unit".to_string(),
+            serde_json::Value::String(data.unit.clone()),
+        );
+        values.insert(
+            "numerical_value".to_string(),
+            serde_json::Value::from(data.numerical_value),
+        );
+        values.insert(
+            "min_value".to_string(),
+            serde_json::Value::from(data.min_value),
+        );
+        values.insert(
+            "max_value".to_string(),
+            serde_json::Value::from(data.max_value),
+        );
 
         // Add any additional slot values (like hour, minute, second for clock source)
         if let Some(sv) = slot_values {
@@ -121,7 +141,7 @@ pub enum HeaderShape {
 pub enum HeaderAlign {
     #[default]
     #[serde(rename = "left", alias = "near")]
-    Left,  // "Near" - next to sidebar
+    Left, // "Near" - next to sidebar
     #[serde(rename = "center")]
     Center,
     #[serde(rename = "right", alias = "far")]
@@ -139,8 +159,7 @@ pub enum HeaderWidthMode {
 }
 
 /// Header position within extension
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum HeaderPosition {
     #[serde(rename = "top")]
     Top,
@@ -150,7 +169,6 @@ pub enum HeaderPosition {
     #[default]
     None,
 }
-
 
 /// Divider cap style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -201,7 +219,7 @@ impl ContentDisplayType {
     /// - Text-only sources (like clock) → Text
     /// - Percentage/numerical sources → Bar (default)
     pub fn suggest_for_fields(fields: &[crate::core::FieldMetadata]) -> Self {
-        use crate::core::{FieldType, FieldPurpose};
+        use crate::core::{FieldPurpose, FieldType};
 
         if fields.is_empty() {
             return ContentDisplayType::Text;
@@ -244,13 +262,19 @@ impl ContentDisplayType {
 pub struct SegmentConfig {
     #[serde(default = "default_segment_height_weight")]
     pub height_weight: f64,
-    #[serde(default = "default_segment_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_segment_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub color: ColorSource,
     #[serde(default)]
     pub label: String,
     #[serde(default = "default_segment_font")]
     pub font: FontSource,
-    #[serde(default = "default_segment_label_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_segment_label_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub label_color: ColorSource,
 }
 
@@ -259,7 +283,10 @@ pub struct SegmentConfig {
 struct RawSegmentConfig {
     #[serde(default = "default_segment_height_weight")]
     height_weight: f64,
-    #[serde(default = "default_segment_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_segment_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     color: ColorSource,
     #[serde(default)]
     label: String,
@@ -269,14 +296,18 @@ struct RawSegmentConfig {
     // Legacy format: font_size as separate field
     #[serde(default)]
     font_size: Option<f64>,
-    #[serde(default = "default_segment_label_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_segment_label_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     label_color: ColorSource,
 }
 
 impl From<RawSegmentConfig> for SegmentConfig {
     fn from(raw: RawSegmentConfig) -> Self {
         let default_size = raw.font_size.unwrap_or(12.0);
-        let font = raw.font
+        let font = raw
+            .font
             .and_then(|f| f.into_font_source(default_size))
             .unwrap_or_else(default_segment_font);
 
@@ -299,7 +330,10 @@ fn default_segment_color() -> ColorSource {
 }
 
 fn default_segment_font() -> FontSource {
-    FontSource::Custom { family: "Sans".to_string(), size: 12.0 }
+    FontSource::Custom {
+        family: "Sans".to_string(),
+        size: 12.0,
+    }
 }
 
 fn default_segment_label_color() -> ColorSource {
@@ -330,9 +364,15 @@ pub struct HeaderConfig {
     pub font: FontSource,
     #[serde(default = "default_header_font_bold")]
     pub font_bold: bool,
-    #[serde(default = "default_header_text_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_text_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub text_color: ColorSource,
-    #[serde(default = "default_header_bg_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_bg_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub bg_color: ColorSource,
     #[serde(default)]
     pub shape: HeaderShape,
@@ -365,9 +405,15 @@ struct RawHeaderConfig {
     font_size: Option<f64>,
     #[serde(default = "default_header_font_bold")]
     font_bold: bool,
-    #[serde(default = "default_header_text_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_text_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     text_color: ColorSource,
-    #[serde(default = "default_header_bg_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_header_bg_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     bg_color: ColorSource,
     #[serde(default)]
     shape: HeaderShape,
@@ -386,7 +432,8 @@ struct RawHeaderConfig {
 impl From<RawHeaderConfig> for HeaderConfig {
     fn from(raw: RawHeaderConfig) -> Self {
         let default_size = raw.font_size.unwrap_or(14.0);
-        let font = raw.font
+        let font = raw
+            .font
             .and_then(|f| f.into_font_source(default_size))
             .unwrap_or_else(default_header_font);
 
@@ -408,7 +455,10 @@ impl From<RawHeaderConfig> for HeaderConfig {
 }
 
 fn default_header_font() -> FontSource {
-    FontSource::Custom { family: "Sans".to_string(), size: 14.0 }
+    FontSource::Custom {
+        family: "Sans".to_string(),
+        size: 14.0,
+    }
 }
 
 fn default_header_font_bold() -> bool {
@@ -459,7 +509,10 @@ impl Default for HeaderConfig {
 pub struct DividerConfig {
     #[serde(default = "default_divider_width")]
     pub width: f64,
-    #[serde(default = "default_divider_color", deserialize_with = "deserialize_color_or_source")]
+    #[serde(
+        default = "default_divider_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
     pub color: ColorSource,
     #[serde(default)]
     pub cap_start: DividerCapStyle,
@@ -674,8 +727,12 @@ pub struct LcarsFrameConfig {
     group_item_counts_usize: Vec<usize>,
 }
 
-fn default_animation_enabled() -> bool { true }
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_enabled() -> bool {
+    true
+}
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 fn default_lcars_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_lcars()
@@ -895,8 +952,7 @@ impl FrameRenderer for LcarsRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_lcars_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        render_lcars_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(get_content_bounds(config, width, height))
     }
 
@@ -950,12 +1006,30 @@ impl FrameRenderer for LcarsRenderer {
                 SplitOrientation::Vertical => {
                     // Vertical layout - groups side by side, dividers are vertical
                     let divider_x = x2 - divider_w / 2.0 - config.item_spacing / 2.0;
-                    let _ = render_divider(cr, divider_x, y1, divider_w, h1, &config.divider_config, SplitOrientation::Vertical, &config.theme);
+                    let _ = render_divider(
+                        cr,
+                        divider_x,
+                        y1,
+                        divider_w,
+                        h1,
+                        &config.divider_config,
+                        SplitOrientation::Vertical,
+                        &config.theme,
+                    );
                 }
                 SplitOrientation::Horizontal => {
                     // Horizontal layout - groups stacked, dividers are horizontal
                     let divider_y = y2 - divider_w / 2.0 - config.item_spacing / 2.0;
-                    let _ = render_divider(cr, x1, divider_y, w1, divider_w, &config.divider_config, SplitOrientation::Horizontal, &config.theme);
+                    let _ = render_divider(
+                        cr,
+                        x1,
+                        divider_y,
+                        w1,
+                        divider_w,
+                        &config.divider_config,
+                        SplitOrientation::Horizontal,
+                        &config.theme,
+                    );
                 }
             }
         }
@@ -966,7 +1040,8 @@ impl LcarsFrameConfig {
     /// Migrate legacy primary/secondary config to groups format
     pub fn migrate_legacy(&mut self) {
         // Only migrate if group_item_counts is empty and we have legacy counts
-        if self.group_item_counts.is_empty() && (self.primary_count > 0 || self.secondary_count > 0) {
+        if self.group_item_counts.is_empty() && (self.primary_count > 0 || self.secondary_count > 0)
+        {
             log::info!("LcarsFrameConfig: Migrating legacy primary/secondary to groups format");
 
             // Convert primary to group 1
@@ -1045,7 +1120,8 @@ impl ContentItemData {
         if self.max_value <= self.min_value {
             0.0
         } else {
-            ((self.numerical_value - self.min_value) / (self.max_value - self.min_value)).clamp(0.0, 1.0)
+            ((self.numerical_value - self.min_value) / (self.max_value - self.min_value))
+                .clamp(0.0, 1.0)
         }
     }
 }
@@ -1069,8 +1145,14 @@ pub fn render_lcars_frame(
     let top_bar_h = config.top_bar_height;
     let bottom_ext_h = config.bottom_bar_height;
 
-    let has_top_ext = matches!(config.extension_mode, ExtensionMode::Top | ExtensionMode::Both);
-    let has_bottom_ext = matches!(config.extension_mode, ExtensionMode::Bottom | ExtensionMode::Both);
+    let has_top_ext = matches!(
+        config.extension_mode,
+        ExtensionMode::Top | ExtensionMode::Both
+    );
+    let has_bottom_ext = matches!(
+        config.extension_mode,
+        ExtensionMode::Bottom | ExtensionMode::Both
+    );
 
     let r_top = top_bar_h / 2.0;
     let r_bot = bottom_ext_h / 2.0;
@@ -1095,14 +1177,28 @@ pub fn render_lcars_frame(
             .sum()
     } else {
         (0..segment_count)
-            .map(|i| config.segments.get(i).map(|s| s.height_weight).unwrap_or(1.0))
+            .map(|i| {
+                config
+                    .segments
+                    .get(i)
+                    .map(|s| s.height_weight)
+                    .unwrap_or(1.0)
+            })
             .sum()
     };
-    let total_weight = if total_weight <= 0.0 { 1.0 } else { total_weight };
+    let total_weight = if total_weight <= 0.0 {
+        1.0
+    } else {
+        total_weight
+    };
 
     // Available height for segments (between extensions)
     let segments_start_y = if has_top_ext { top_bar_h } else { 0.0 };
-    let segments_end_y = if has_bottom_ext { height - bottom_ext_h } else { height };
+    let segments_end_y = if has_bottom_ext {
+        height - bottom_ext_h
+    } else {
+        height
+    };
     let available_h = segments_end_y - segments_start_y;
 
     // Collect label info during segment drawing, then draw labels without transform
@@ -1171,7 +1267,13 @@ pub fn render_lcars_frame(
             // Down to inner corner
             cr.line_to(sidebar_w, segments_end_y - radius);
             // Inner corner curve
-            cr.arc_negative(sidebar_w + radius, segments_end_y - radius, radius, PI, 0.5 * PI);
+            cr.arc_negative(
+                sidebar_w + radius,
+                segments_end_y - radius,
+                radius,
+                PI,
+                0.5 * PI,
+            );
             // Bottom extension
             cr.line_to(width - r_bot, segments_end_y);
             if ext_style == CornerStyle::Round && r_bot > 0.0 {
@@ -1248,8 +1350,12 @@ pub fn render_lcars_frame(
     // Draw segment labels without transform (so text isn't mirrored)
     for label_info in &labels {
         let text_extents = pango_text_extents(
-            cr, &label_info.text, &label_info.font,
-            cairo::FontSlant::Normal, cairo::FontWeight::Normal, label_info.font_size
+            cr,
+            &label_info.text,
+            &label_info.font,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            label_info.font_size,
         );
 
         label_info.color.apply_to_cairo(cr);
@@ -1271,7 +1377,14 @@ pub fn render_lcars_frame(
         };
 
         cr.move_to(label_x, label_y);
-        pango_show_text(cr, &label_info.text, &label_info.font, cairo::FontSlant::Normal, cairo::FontWeight::Normal, label_info.font_size);
+        pango_show_text(
+            cr,
+            &label_info.text,
+            &label_info.font,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            label_info.font_size,
+        );
     }
 
     // Draw headers (need to handle mirroring separately for text)
@@ -1320,7 +1433,14 @@ fn render_header_bar(
     } else {
         cairo::FontWeight::Normal
     };
-    let text_extents = pango_text_extents(cr, &text, &font_family, cairo::FontSlant::Normal, font_weight, font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        &text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        font_weight,
+        font_size,
+    );
 
     // Calculate available space for width calculations
     let max_available_space = match frame_config.sidebar_position {
@@ -1386,21 +1506,46 @@ fn render_header_bar(
             cr.rectangle(bar_x, bar_y, bar_w, bar_content_h);
         }
         HeaderShape::Pill => {
-            cr.arc(bar_x + bar_radius, bar_y + bar_radius, bar_radius, 0.5 * PI, 1.5 * PI);
-            cr.arc(bar_x + bar_w - bar_radius, bar_y + bar_radius, bar_radius, 1.5 * PI, 0.5 * PI);
+            cr.arc(
+                bar_x + bar_radius,
+                bar_y + bar_radius,
+                bar_radius,
+                0.5 * PI,
+                1.5 * PI,
+            );
+            cr.arc(
+                bar_x + bar_w - bar_radius,
+                bar_y + bar_radius,
+                bar_radius,
+                1.5 * PI,
+                0.5 * PI,
+            );
             cr.close_path();
         }
     }
 
-    header_config.bg_color.resolve(&frame_config.theme).apply_to_cairo(cr);
+    header_config
+        .bg_color
+        .resolve(&frame_config.theme)
+        .apply_to_cairo(cr);
     cr.fill()?;
 
     // Draw header text
-    header_config.text_color.resolve(&frame_config.theme).apply_to_cairo(cr);
+    header_config
+        .text_color
+        .resolve(&frame_config.theme)
+        .apply_to_cairo(cr);
     let text_x = bar_x + (bar_w - text_extents.width()) / 2.0;
     let text_y = bar_y + (bar_content_h + font_size * 0.7) / 2.0;
     cr.move_to(text_x, text_y);
-    pango_show_text(cr, &text, &font_family, cairo::FontSlant::Normal, font_weight, font_size);
+    pango_show_text(
+        cr,
+        &text,
+        &font_family,
+        cairo::FontSlant::Normal,
+        font_weight,
+        font_size,
+    );
 
     cr.restore()?;
     Ok(())
@@ -1410,11 +1555,25 @@ pub fn get_content_bounds(
     width: f64,
     height: f64,
 ) -> (f64, f64, f64, f64) {
-    let has_top_ext = matches!(config.extension_mode, ExtensionMode::Top | ExtensionMode::Both);
-    let has_bottom_ext = matches!(config.extension_mode, ExtensionMode::Bottom | ExtensionMode::Both);
+    let has_top_ext = matches!(
+        config.extension_mode,
+        ExtensionMode::Top | ExtensionMode::Both
+    );
+    let has_bottom_ext = matches!(
+        config.extension_mode,
+        ExtensionMode::Bottom | ExtensionMode::Both
+    );
 
-    let top_bar_h = if has_top_ext { config.top_bar_height } else { 0.0 };
-    let bottom_ext_h = if has_bottom_ext { config.bottom_bar_height } else { 0.0 };
+    let top_bar_h = if has_top_ext {
+        config.top_bar_height
+    } else {
+        0.0
+    };
+    let bottom_ext_h = if has_bottom_ext {
+        config.bottom_bar_height
+    } else {
+        0.0
+    };
 
     // Calculate effective padding for each side (overall + individual)
     let padding_top = config.content_padding + config.content_padding_top;
@@ -1489,7 +1648,12 @@ pub fn render_divider(
                 }
             }
 
-            let end_x = x + w - if divider_config.cap_end == DividerCapStyle::Round { radius } else { 0.0 };
+            let end_x = x + w
+                - if divider_config.cap_end == DividerCapStyle::Round {
+                    radius
+                } else {
+                    0.0
+                };
             cr.line_to(end_x, y);
 
             match divider_config.cap_end {
@@ -1501,7 +1665,11 @@ pub fn render_divider(
                 }
             }
 
-            let start_x = x + if divider_config.cap_start == DividerCapStyle::Round { radius } else { 0.0 };
+            let start_x = x + if divider_config.cap_start == DividerCapStyle::Round {
+                radius
+            } else {
+                0.0
+            };
             cr.line_to(start_x, y + h);
         }
         SplitOrientation::Vertical => {
@@ -1516,7 +1684,12 @@ pub fn render_divider(
                 }
             }
 
-            let end_y = y + h - if divider_config.cap_end == DividerCapStyle::Round { radius } else { 0.0 };
+            let end_y = y + h
+                - if divider_config.cap_end == DividerCapStyle::Round {
+                    radius
+                } else {
+                    0.0
+                };
             cr.line_to(x + w, end_y);
 
             match divider_config.cap_end {
@@ -1528,7 +1701,11 @@ pub fn render_divider(
                 }
             }
 
-            let start_y = y + if divider_config.cap_start == DividerCapStyle::Round { radius } else { 0.0 };
+            let start_y = y + if divider_config.cap_start == DividerCapStyle::Round {
+                radius
+            } else {
+                0.0
+            };
             cr.line_to(x, start_y);
         }
     }
@@ -1555,7 +1732,8 @@ pub fn render_content_bar(
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     // Guard against invalid dimensions that would cause Cairo matrix errors
-    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0
+    {
         return Ok(());
     }
 
@@ -1584,7 +1762,8 @@ pub fn render_content_text(
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     // Guard against invalid dimensions that would cause Cairo matrix errors
-    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0
+    {
         return Ok(());
     }
 
@@ -1720,7 +1899,8 @@ pub fn render_content_graph(
     source_values: &HashMap<String, serde_json::Value>,
 ) -> anyhow::Result<()> {
     // Guard against invalid dimensions that would cause Cairo matrix errors
-    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0
+    {
         return Ok(());
     }
 
@@ -1732,8 +1912,12 @@ pub fn render_content_graph(
     );
     if config.text_overlay.enabled && !config.text_overlay.text_config.lines.is_empty() {
         for (i, line) in config.text_overlay.text_config.lines.iter().enumerate() {
-            log::debug!("  text_overlay[{}]: field_id='{}', found={}",
-                i, line.field_id, source_values.contains_key(&line.field_id));
+            log::debug!(
+                "  text_overlay[{}]: field_id='{}', found={}",
+                i,
+                line.field_id,
+                source_values.contains_key(&line.field_id)
+            );
         }
     }
 
@@ -1761,7 +1945,8 @@ pub fn render_content_core_bars(
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     // Guard against invalid dimensions that would cause Cairo matrix errors
-    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0
+    {
         return Ok(());
     }
 
@@ -1770,7 +1955,15 @@ pub fn render_content_core_bars(
 
     // Call the core_bars_display render function with source values for text overlay
     if let Some(values) = slot_values {
-        crate::ui::core_bars_display::render_core_bars_with_values(cr, config, theme, core_values, w, h, values)?;
+        crate::ui::core_bars_display::render_core_bars_with_values(
+            cr,
+            config,
+            theme,
+            core_values,
+            w,
+            h,
+            values,
+        )?;
     } else {
         render_core_bars(cr, config, theme, core_values, w, h)?;
     }
@@ -1791,7 +1984,8 @@ pub fn render_content_static(
     slot_values: Option<&HashMap<String, serde_json::Value>>,
 ) -> Result<(), cairo::Error> {
     // Guard against invalid dimensions that would cause Cairo matrix errors
-    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0
+    {
         return Ok(());
     }
 

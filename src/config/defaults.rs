@@ -15,9 +15,8 @@ use crate::core::PanelBorderConfig;
 use crate::ui::background::BackgroundConfig;
 
 /// Global cached defaults configuration
-static DEFAULTS_CACHE: Lazy<RwLock<DefaultsConfig>> = Lazy::new(|| {
-    RwLock::new(DefaultsConfig::load_from_disk())
-});
+static DEFAULTS_CACHE: Lazy<RwLock<DefaultsConfig>> =
+    Lazy::new(|| RwLock::new(DefaultsConfig::load_from_disk()));
 
 /// Current defaults format version
 pub const DEFAULTS_VERSION: u32 = 1;
@@ -135,7 +134,10 @@ impl DefaultsConfig {
         match Self::try_load_from_disk() {
             Ok(config) => config,
             Err(e) => {
-                warn!("Failed to load defaults.json, using built-in defaults: {}", e);
+                warn!(
+                    "Failed to load defaults.json, using built-in defaults: {}",
+                    e
+                );
                 Self::default()
             }
         }
@@ -193,7 +195,8 @@ impl DefaultsConfig {
 
     /// Set a displayer default
     pub fn set_displayer_default(&mut self, displayer_id: &str, config: serde_json::Value) {
-        self.displayer_defaults.insert(displayer_id.to_string(), config);
+        self.displayer_defaults
+            .insert(displayer_id.to_string(), config);
     }
 
     /// Get a displayer default if it exists

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation};
+use crate::core::{register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::ui::background::Color;
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 
@@ -190,12 +190,12 @@ struct DisplayData {
     timer_state: String,
     alarm_enabled: bool,
     alarm_triggered: bool,
-    next_alarm_time: Option<String>,  // Next alarm time to display (e.g., "08:30")
+    next_alarm_time: Option<String>, // Next alarm time to display (e.g., "08:30")
     next_alarm_label: Option<String>, // Optional label for next alarm
     second: u32,
     blink_state: bool,
     last_blink_time: Instant, // Track actual time for blink toggle (every 0.5s)
-    dirty: bool, // Flag to indicate data has changed and needs redraw
+    dirty: bool,              // Flag to indicate data has changed and needs redraw
     transform: PanelTransform,
 }
 
@@ -253,7 +253,8 @@ impl Displayer for ClockDigitalDisplayer {
                 let _ = render_digital_clock(cr, &data, width as f64, height as f64);
 
                 // Flash effect when alarm/timer triggers
-                let show_flash = (data.alarm_triggered || data.timer_state == "finished") && data.blink_state;
+                let show_flash =
+                    (data.alarm_triggered || data.timer_state == "finished") && data.blink_state;
                 if show_flash {
                     cr.save().ok();
                     cr.set_source_rgba(1.0, 0.3, 0.3, 0.2);
@@ -264,14 +265,20 @@ impl Displayer for ClockDigitalDisplayer {
 
                 // Bottom-right corner: show timer countdown when running/paused/finished, or icon when idle
                 if data.config.show_icon {
-                    let timer_active = data.timer_state == "running" || data.timer_state == "paused" || data.timer_state == "finished";
+                    let timer_active = data.timer_state == "running"
+                        || data.timer_state == "paused"
+                        || data.timer_state == "finished";
 
                     // Get icon config from data.config
                     let icon_font = &data.config.icon_font;
                     let icon_text = &data.config.icon_text;
                     let icon_size_px = data.config.icon_size;
                     let icon_bold = data.config.icon_bold;
-                    let font_weight = if icon_bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+                    let font_weight = if icon_bold {
+                        cairo::FontWeight::Bold
+                    } else {
+                        cairo::FontWeight::Normal
+                    };
 
                     if timer_active && !data.timer_display.is_empty() {
                         // Show countdown timer text
@@ -279,7 +286,14 @@ impl Displayer for ClockDigitalDisplayer {
 
                         let font_size = icon_size_px.min(height as f64 * 0.2);
 
-                        let te = pango_text_extents(cr, &data.timer_display, icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+                        let te = pango_text_extents(
+                            cr,
+                            &data.timer_display,
+                            icon_font,
+                            cairo::FontSlant::Normal,
+                            cairo::FontWeight::Bold,
+                            font_size,
+                        );
                         let (text_w, text_h) = (te.width().max(50.0), te.height().max(12.0));
                         let text_x = width as f64 - text_w - 6.0;
                         let text_y = height as f64 - 6.0;
@@ -308,7 +322,14 @@ impl Displayer for ClockDigitalDisplayer {
                         }
 
                         cr.move_to(text_x, text_y);
-                        pango_show_text(cr, &data.timer_display, icon_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, font_size);
+                        pango_show_text(
+                            cr,
+                            &data.timer_display,
+                            icon_font,
+                            cairo::FontSlant::Normal,
+                            cairo::FontWeight::Bold,
+                            font_size,
+                        );
                         cr.restore().ok();
                     } else {
                         // Show icon with optional next alarm time
@@ -327,8 +348,18 @@ impl Displayer for ClockDigitalDisplayer {
                             icon_text.clone()
                         };
 
-                        let te = pango_text_extents(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, icon_size);
-                        let (text_w, text_h) = (te.width().max(icon_size * 0.8), te.height().max(icon_size * 0.8));
+                        let te = pango_text_extents(
+                            cr,
+                            &display_text,
+                            icon_font,
+                            cairo::FontSlant::Normal,
+                            font_weight,
+                            icon_size,
+                        );
+                        let (text_w, text_h) = (
+                            te.width().max(icon_size * 0.8),
+                            te.height().max(icon_size * 0.8),
+                        );
                         let text_x = width as f64 - text_w - 6.0;
                         let text_y = height as f64 - 6.0;
 
@@ -358,7 +389,14 @@ impl Displayer for ClockDigitalDisplayer {
                         }
 
                         cr.move_to(text_x, text_y);
-                        pango_show_text(cr, &display_text, icon_font, cairo::FontSlant::Normal, font_weight, icon_size);
+                        pango_show_text(
+                            cr,
+                            &display_text,
+                            icon_font,
+                            cairo::FontSlant::Normal,
+                            font_weight,
+                            icon_size,
+                        );
                         cr.restore().ok();
                     }
                 }
@@ -383,8 +421,11 @@ impl Displayer for ClockDigitalDisplayer {
                     data.blink_state = !data.blink_state;
 
                     // Redraw if blink effect is visible (alarm/timer active or blinking colon)
-                    if data.alarm_triggered || data.timer_state == "finished" ||
-                       data.timer_state == "paused" || data.config.blink_colon {
+                    if data.alarm_triggered
+                        || data.timer_state == "finished"
+                        || data.timer_state == "paused"
+                        || data.config.blink_colon
+                    {
                         redraw = true;
                     }
                 }
@@ -547,7 +588,9 @@ impl Displayer for ClockDigitalDisplayer {
 
     fn get_typed_config(&self) -> Option<crate::core::DisplayerConfig> {
         if let Ok(data) = self.data.lock() {
-            Some(crate::core::DisplayerConfig::ClockDigital(data.config.clone()))
+            Some(crate::core::DisplayerConfig::ClockDigital(
+                data.config.clone(),
+            ))
         } else {
             None
         }
@@ -606,11 +649,25 @@ fn render_digital_clock(
                 config.time_color.a,
             );
 
-            let extents = pango_text_extents(cr, &time_str, &config.time_font, time_slant, font_weight, config.time_size);
+            let extents = pango_text_extents(
+                cr,
+                &time_str,
+                &config.time_font,
+                time_slant,
+                font_weight,
+                config.time_size,
+            );
             let x = (width - extents.width()) / 2.0;
             y_offset += config.time_size;
             cr.move_to(x, y_offset);
-            pango_show_text(cr, &time_str, &config.time_font, time_slant, font_weight, config.time_size);
+            pango_show_text(
+                cr,
+                &time_str,
+                &config.time_font,
+                time_slant,
+                font_weight,
+                config.time_size,
+            );
         }
         DigitalStyle::Segment | DigitalStyle::LCD => {
             // Draw 7-segment style
@@ -646,11 +703,25 @@ fn render_digital_clock(
             data.date_string.clone()
         };
 
-        let extents = pango_text_extents(cr, &date_text, &config.date_font, date_slant, date_weight, config.date_size);
+        let extents = pango_text_extents(
+            cr,
+            &date_text,
+            &config.date_font,
+            date_slant,
+            date_weight,
+            config.date_size,
+        );
         let x = (width - extents.width()) / 2.0;
         y_offset += config.date_size;
         cr.move_to(x, y_offset);
-        pango_show_text(cr, &date_text, &config.date_font, date_slant, date_weight, config.date_size);
+        pango_show_text(
+            cr,
+            &date_text,
+            &config.date_font,
+            date_slant,
+            date_weight,
+            config.date_size,
+        );
         y_offset += 5.0;
     }
 
@@ -661,7 +732,12 @@ fn render_digital_clock(
             if data.blink_state {
                 config.timer_color
             } else {
-                Color::new(config.timer_color.r, config.timer_color.g, config.timer_color.b, 0.3)
+                Color::new(
+                    config.timer_color.r,
+                    config.timer_color.g,
+                    config.timer_color.b,
+                    0.3,
+                )
             }
         } else {
             config.timer_color
@@ -671,11 +747,25 @@ fn render_digital_clock(
 
         let timer_text = format!("\u{23f1} {}", data.timer_display);
         let timer_font_size = config.date_size * 1.2;
-        let extents = pango_text_extents(cr, &timer_text, &config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, timer_font_size);
+        let extents = pango_text_extents(
+            cr,
+            &timer_text,
+            &config.time_font,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Bold,
+            timer_font_size,
+        );
         let x = (width - extents.width()) / 2.0;
         y_offset += timer_font_size;
         cr.move_to(x, y_offset);
-        pango_show_text(cr, &timer_text, &config.time_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, timer_font_size);
+        pango_show_text(
+            cr,
+            &timer_text,
+            &config.time_font,
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Bold,
+            timer_font_size,
+        );
     }
 
     // Draw alarm indicator
@@ -683,14 +773,26 @@ fn render_digital_clock(
         let alarm_color = if data.alarm_triggered && data.blink_state {
             config.alarm_color
         } else if data.alarm_triggered {
-            Color::new(config.alarm_color.r * 0.5, config.alarm_color.g * 0.5, config.alarm_color.b * 0.5, config.alarm_color.a)
+            Color::new(
+                config.alarm_color.r * 0.5,
+                config.alarm_color.g * 0.5,
+                config.alarm_color.b * 0.5,
+                config.alarm_color.a,
+            )
         } else {
             Color::new(0.5, 0.5, 0.5, 0.5)
         };
 
         cr.set_source_rgba(alarm_color.r, alarm_color.g, alarm_color.b, alarm_color.a);
         cr.move_to(width - 25.0, 20.0);
-        pango_show_text(cr, "\u{1f514}", "Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal, 14.0);
+        pango_show_text(
+            cr,
+            "\u{1f514}",
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            14.0,
+        );
     }
 
     cr.restore()?;
@@ -716,7 +818,14 @@ fn draw_segment_text(
         cairo::FontWeight::Normal
     };
 
-    let extents = pango_text_extents(cr, text, &config.time_font, time_slant, time_weight, config.time_size);
+    let extents = pango_text_extents(
+        cr,
+        text,
+        &config.time_font,
+        time_slant,
+        time_weight,
+        config.time_size,
+    );
     let x = (width - extents.width()) / 2.0;
     let y = y_offset + config.time_size;
 
@@ -729,7 +838,14 @@ fn draw_segment_text(
             0.3,
         );
         cr.move_to(x, y);
-        pango_show_text(cr, "88:88:88", &config.time_font, time_slant, time_weight, config.time_size); // Show all segments dimly
+        pango_show_text(
+            cr,
+            "88:88:88",
+            &config.time_font,
+            time_slant,
+            time_weight,
+            config.time_size,
+        ); // Show all segments dimly
     }
 
     // Draw glow using cardinal directions only (4 draws instead of 8)
@@ -742,7 +858,14 @@ fn draw_segment_text(
     );
     for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
         cr.move_to(x + dx, y + dy);
-        pango_show_text(cr, text, &config.time_font, time_slant, time_weight, config.time_size);
+        pango_show_text(
+            cr,
+            text,
+            &config.time_font,
+            time_slant,
+            time_weight,
+            config.time_size,
+        );
     }
 
     // Draw main text
@@ -753,7 +876,14 @@ fn draw_segment_text(
         config.time_color.a,
     );
     cr.move_to(x, y);
-    pango_show_text(cr, text, &config.time_font, time_slant, time_weight, config.time_size);
+    pango_show_text(
+        cr,
+        text,
+        &config.time_font,
+        time_slant,
+        time_weight,
+        config.time_size,
+    );
 
     Ok(())
 }

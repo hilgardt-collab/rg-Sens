@@ -50,7 +50,9 @@ pub fn get_cached_scaled_surface(
     alpha: f64,
 ) -> Option<cairo::ImageSurface> {
     SCALED_SURFACE_CACHE.with(|cache| {
-        cache.borrow_mut().get_or_create(path, target_width, target_height, display_mode, alpha)
+        cache
+            .borrow_mut()
+            .get_or_create(path, target_width, target_height, display_mode, alpha)
     })
 }
 
@@ -84,7 +86,13 @@ impl ScaledSurfaceCache {
     ) -> Option<cairo::ImageSurface> {
         // Key includes alpha (quantized to 1% precision to avoid cache explosion)
         let alpha_key = (alpha * 100.0) as i32;
-        let key = (path.to_string(), target_width, target_height, display_mode, alpha_key);
+        let key = (
+            path.to_string(),
+            target_width,
+            target_height,
+            display_mode,
+            alpha_key,
+        );
 
         // Check cache
         if let Some(entry) = self.cache.get_mut(&key) {
@@ -98,11 +106,8 @@ impl ScaledSurfaceCache {
         let img_height = pixbuf.height() as f64;
 
         // Create target surface
-        let surface = cairo::ImageSurface::create(
-            cairo::Format::ARgb32,
-            target_width,
-            target_height,
-        ).ok()?;
+        let surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, target_width, target_height).ok()?;
 
         let cr = cairo::Context::new(&surface).ok()?;
         let width = target_width as f64;
@@ -143,7 +148,9 @@ impl ScaledSurfaceCache {
 
         // Evict LRU if full
         if self.cache.len() >= self.max_entries {
-            if let Some(oldest_key) = self.cache.iter()
+            if let Some(oldest_key) = self
+                .cache
+                .iter()
                 .min_by_key(|(_, e)| e.last_access)
                 .map(|(k, _)| k.clone())
             {
@@ -151,10 +158,13 @@ impl ScaledSurfaceCache {
             }
         }
 
-        self.cache.insert(key, ScaledSurfaceEntry {
-            surface: surface.clone(),
-            last_access: Instant::now(),
-        });
+        self.cache.insert(
+            key,
+            ScaledSurfaceEntry {
+                surface: surface.clone(),
+                last_access: Instant::now(),
+            },
+        );
 
         Some(surface)
     }
@@ -458,7 +468,9 @@ impl TextExtentsCache {
         if self.cache.len() >= self.max_entries {
             // LRU eviction: use select_nth_unstable for O(n) median finding instead of O(n log n) sort
             let now = Instant::now();
-            let mut access_times: Vec<_> = self.cache.values()
+            let mut access_times: Vec<_> = self
+                .cache
+                .values()
                 .map(|v| now.duration_since(v.last_access))
                 .collect();
 
@@ -468,13 +480,17 @@ impl TextExtentsCache {
             let threshold = *median;
 
             // Remove entries older than median
-            self.cache.retain(|_, v| now.duration_since(v.last_access) <= threshold);
+            self.cache
+                .retain(|_, v| now.duration_since(v.last_access) <= threshold);
         }
 
-        self.cache.insert(key, CachedTextExtents {
-            extents,
-            last_access: Instant::now(),
-        });
+        self.cache.insert(
+            key,
+            CachedTextExtents {
+                extents,
+                last_access: Instant::now(),
+            },
+        );
         Some(extents)
     }
 
@@ -551,7 +567,9 @@ impl ScaledFontCache {
 
         // Evict LRU if full
         if self.cache.len() >= self.max_entries {
-            if let Some(oldest_key) = self.cache.iter()
+            if let Some(oldest_key) = self
+                .cache
+                .iter()
                 .min_by_key(|(_, (_, time))| *time)
                 .map(|(k, _)| k.clone())
             {
@@ -559,7 +577,8 @@ impl ScaledFontCache {
             }
         }
 
-        self.cache.insert(key, (scaled_font.clone(), Instant::now()));
+        self.cache
+            .insert(key, (scaled_font.clone(), Instant::now()));
         Some(scaled_font)
     }
 }
@@ -574,7 +593,10 @@ pub fn apply_cached_font(
     size: f64,
 ) {
     SCALED_FONT_CACHE.with(|cache| {
-        if let Some(scaled_font) = cache.borrow_mut().get_or_create(family, slant, weight, size) {
+        if let Some(scaled_font) = cache
+            .borrow_mut()
+            .get_or_create(family, slant, weight, size)
+        {
             cr.set_scaled_font(&scaled_font);
         } else {
             // Fallback to toy API if ScaledFont creation fails
@@ -608,7 +630,7 @@ impl GradientLUTCache {
         let key = hash_color_stops(stops);
 
         if let Some(lut) = self.cache.get(&key) {
-            return Arc::clone(lut);  // Cheap Arc clone instead of Vec clone
+            return Arc::clone(lut); // Cheap Arc clone instead of Vec clone
         }
 
         // Evict oldest if full

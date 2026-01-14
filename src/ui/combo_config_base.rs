@@ -22,13 +22,13 @@ use crate::ui::widget_builder::{
 };
 
 // Re-export for convenience - combo config widgets can import from here
-pub use crate::ui::widget_builder::{queue_redraw, notify_change, OnChangeCallback};
+use crate::ui::shared_font_dialog::show_font_dialog;
+pub use crate::ui::widget_builder::{notify_change, queue_redraw, OnChangeCallback};
 use crate::ui::{
     ColorButtonWidget, GradientEditor, LazyArcConfigWidget, LazyBarConfigWidget,
     LazyCoreBarsConfigWidget, LazyGraphConfigWidget, LazySpeedometerConfigWidget,
     LazyStaticConfigWidget, LazyTextOverlayConfigWidget,
 };
-use crate::ui::shared_font_dialog::show_font_dialog;
 
 /// Trait for combo panel frame configurations that support theming
 pub trait ThemedFrameConfig {
@@ -129,14 +129,27 @@ pub struct CommonThemeWidgets {
     pub font2_size_spin: SpinButton,
     /// Internal color state used for gradient editor synchronization.
     /// This must be updated when colors are changed programmatically (e.g., from presets).
-    current_colors: Rc<RefCell<(crate::ui::Color, crate::ui::Color, crate::ui::Color, crate::ui::Color)>>,
+    current_colors: Rc<
+        RefCell<(
+            crate::ui::Color,
+            crate::ui::Color,
+            crate::ui::Color,
+            crate::ui::Color,
+        )>,
+    >,
 }
 
 impl CommonThemeWidgets {
     /// Apply theme colors from a preset or external source.
     /// This updates all color widgets, the internal color state, and the gradient editor.
     /// Call this when changing colors programmatically (e.g., from color scheme presets).
-    pub fn apply_theme_colors(&self, color1: crate::ui::Color, color2: crate::ui::Color, color3: crate::ui::Color, color4: crate::ui::Color) {
+    pub fn apply_theme_colors(
+        &self,
+        color1: crate::ui::Color,
+        color2: crate::ui::Color,
+        color3: crate::ui::Color,
+        color4: crate::ui::Color,
+    ) {
         // Update color widgets
         self.color1_widget.set_color(color1);
         self.color2_widget.set_color(color2);
@@ -147,7 +160,8 @@ impl CommonThemeWidgets {
         *self.current_colors.borrow_mut() = (color1, color2, color3, color4);
 
         // Update gradient editor with new theme colors
-        self.gradient_editor.update_theme_colors(color1, color2, color3, color4);
+        self.gradient_editor
+            .update_theme_colors(color1, color2, color3, color4);
     }
 
     /// Apply a complete theme preset including colors, gradient, and fonts.
@@ -158,7 +172,8 @@ impl CommonThemeWidgets {
 
         // Apply gradient
         self.gradient_editor.set_theme_config(theme.clone());
-        self.gradient_editor.set_gradient_source_config(&theme.gradient);
+        self.gradient_editor
+            .set_gradient_source_config(&theme.gradient);
 
         // Apply fonts
         self.font1_btn.set_label(&theme.font1_family);
@@ -175,7 +190,6 @@ pub fn set_page_margins(page: &GtkBox) {
     page.set_margin_top(DEFAULT_MARGIN);
     page.set_margin_bottom(DEFAULT_MARGIN);
 }
-
 
 /// Invoke all theme reference refreshers
 pub fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
@@ -210,7 +224,12 @@ where
     R: Fn() + Clone + 'static,
 {
     // Store current colors for gradient editor sync
-    let current_colors = Rc::new(RefCell::new((theme.color1, theme.color2, theme.color3, theme.color4)));
+    let current_colors = Rc::new(RefCell::new((
+        theme.color1,
+        theme.color2,
+        theme.color3,
+        theme.color4,
+    )));
 
     // Theme Colors section - 2x2 grid layout
     let colors_label = Label::new(Some("Theme Colors"));
@@ -276,7 +295,14 @@ where
     // Uses update_theme_colors to preserve gradient/font settings while updating C1-C4
     fn sync_gradient_theme(
         gradient_editor: &GradientEditor,
-        colors: &Rc<RefCell<(crate::ui::Color, crate::ui::Color, crate::ui::Color, crate::ui::Color)>>,
+        colors: &Rc<
+            RefCell<(
+                crate::ui::Color,
+                crate::ui::Color,
+                crate::ui::Color,
+                crate::ui::Color,
+            )>,
+        >,
     ) {
         let (c1, c2, c3, c4) = *colors.borrow();
         gradient_editor.update_theme_colors(c1, c2, c3, c4);
@@ -371,11 +397,15 @@ where
             let on_theme_change = on_theme_change.clone();
             let on_redraw = on_redraw.clone();
             let font_btn = font1_btn_clone.clone();
-            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+            if let Some(window) = button
+                .root()
+                .and_then(|r| r.downcast::<gtk4::Window>().ok())
+            {
                 let current_font = font_btn.label().map(|s| s.to_string()).unwrap_or_default();
                 let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                    let family = font_desc.family()
+                    let family = font_desc
+                        .family()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "sans-serif".to_string());
                     font_btn.set_label(&family);
@@ -419,11 +449,15 @@ where
             let on_theme_change = on_theme_change.clone();
             let on_redraw = on_redraw.clone();
             let font_btn = font2_btn_clone.clone();
-            if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+            if let Some(window) = button
+                .root()
+                .and_then(|r| r.downcast::<gtk4::Window>().ok())
+            {
                 let current_font = font_btn.label().map(|s| s.to_string()).unwrap_or_default();
                 let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                    let family = font_desc.family()
+                    let family = font_desc
+                        .family()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "sans-serif".to_string());
                     font_btn.set_label(&family);
@@ -581,7 +615,8 @@ pub fn rebuild_item_orientation_dropdowns<C, L, F>(
         let row = GtkBox::new(Orientation::Horizontal, 8);
         row.append(&Label::new(Some(&format!("Group {}:", group_idx + 1))));
 
-        let options = StringList::new(&["Vertical (stacked)", "Horizontal (side-by-side)", "Default"]);
+        let options =
+            StringList::new(&["Vertical (stacked)", "Horizontal (side-by-side)", "Default"]);
         let dropdown = DropDown::new(Some(options), gtk4::Expression::NONE);
         dropdown.set_hexpand(true);
 
@@ -667,9 +702,7 @@ pub fn create_item_orientation_section(page: &GtkBox) -> GtkBox {
     item_orient_label.set_margin_top(12);
     page.append(&item_orient_label);
 
-    let item_orient_info = Label::new(Some(
-        "Choose how items within each group are arranged",
-    ));
+    let item_orient_info = Label::new(Some("Choose how items within each group are arranged"));
     item_orient_info.set_halign(gtk4::Align::Start);
     item_orient_info.add_css_class("dim-label");
     page.append(&item_orient_info);
@@ -738,7 +771,9 @@ pub fn rebuild_combined_group_settings<C, L, F>(
     };
 
     if group_count == 0 {
-        let placeholder = Label::new(Some("No groups configured. Add sources in the Data Source tab."));
+        let placeholder = Label::new(Some(
+            "No groups configured. Add sources in the Data Source tab.",
+        ));
         placeholder.set_halign(gtk4::Align::Start);
         placeholder.add_css_class("dim-label");
         container.append(&placeholder);
@@ -1023,7 +1058,14 @@ where
         let tooltip_for_log = tooltip.to_string();
         copy_btn.connect_clicked(move |_| {
             if let Ok(mut clipboard) = CLIPBOARD.lock() {
-                clipboard.copy_font_source(FontSource::Theme { index: font_idx, size: 14.0 }, false, false);
+                clipboard.copy_font_source(
+                    FontSource::Theme {
+                        index: font_idx,
+                        size: 14.0,
+                    },
+                    false,
+                    false,
+                );
                 log::info!("Theme {} copied to clipboard", tooltip_for_log);
             }
         });
@@ -1091,8 +1133,13 @@ where
     page.append(&enable_check);
 
     // Animation speed
-    let (speed_box, speed_spin) =
-        create_spin_row_with_value("Animation Speed:", 1.0, 20.0, 1.0, get_animation_speed(&config.borrow()));
+    let (speed_box, speed_spin) = create_spin_row_with_value(
+        "Animation Speed:",
+        1.0,
+        20.0,
+        1.0,
+        get_animation_speed(&config.borrow()),
+    );
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -1166,7 +1213,8 @@ where
 }
 
 /// Generation counter for canceling stale content tab rebuilds
-static CONTENT_REBUILD_GENERATION: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static CONTENT_REBUILD_GENERATION: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(0);
 
 /// Rebuild the content tabs based on source summaries.
 /// This function builds tabs incrementally to avoid freezing the UI.
@@ -1188,7 +1236,8 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     G: Fn(&C) -> ComboThemeConfig + Clone + 'static,
 {
     // Increment generation to cancel any pending incremental builds
-    let generation = CONTENT_REBUILD_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    let generation =
+        CONTENT_REBUILD_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
 
     // CRITICAL: Preserve the first callback (main theme reference) before clearing.
     // Content items add multiple callbacks that accumulate on every rebuild.
@@ -1259,7 +1308,10 @@ pub fn rebuild_content_tabs<C, F, S, G>(
             let item_list: Vec<(String, String)> = sorted_items
                 .iter()
                 .map(|(slot_name, summary, item_idx)| {
-                    (slot_name.clone(), format!("Item {} : {}", item_idx, summary))
+                    (
+                        slot_name.clone(),
+                        format!("Item {} : {}", item_idx, summary),
+                    )
                 })
                 .collect();
 
@@ -1293,12 +1345,15 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     drop(notebook);
 
     // Build content items incrementally using idle callbacks
-    let work_queue: Rc<RefCell<Vec<(Notebook, usize, String, String)>>> = Rc::new(RefCell::new(Vec::new()));
+    let work_queue: Rc<RefCell<Vec<(Notebook, usize, String, String)>>> =
+        Rc::new(RefCell::new(Vec::new()));
 
     // Flatten work items into a queue of individual items to create
     for (_group_num, items_notebook, _group_box, item_list) in work_items {
         for (idx, (slot_name, tab_label)) in item_list.into_iter().enumerate() {
-            work_queue.borrow_mut().push((items_notebook.clone(), idx, slot_name, tab_label));
+            work_queue
+                .borrow_mut()
+                .push((items_notebook.clone(), idx, slot_name, tab_label));
         }
     }
 
@@ -1342,7 +1397,11 @@ pub fn rebuild_content_tabs<C, F, S, G>(
             if let Some(page) = items_notebook.nth_page(Some(page_idx as u32)) {
                 let tab_label_widget = items_notebook.tab_label(&page);
                 items_notebook.remove_page(Some(page_idx as u32));
-                items_notebook.insert_page(&tab_box, tab_label_widget.as_ref(), Some(page_idx as u32));
+                items_notebook.insert_page(
+                    &tab_box,
+                    tab_label_widget.as_ref(),
+                    Some(page_idx as u32),
+                );
             }
 
             glib::ControlFlow::Continue
@@ -1400,7 +1459,15 @@ where
     };
     let (type_box, type_dropdown) = create_dropdown_row(
         "Display As:",
-        &["Bar", "Text", "Graph", "Core Bars", "Static", "Arc", "Speedometer"],
+        &[
+            "Bar",
+            "Text",
+            "Graph",
+            "Core Bars",
+            "Static",
+            "Arc",
+            "Speedometer",
+        ],
     );
     type_dropdown.set_selected(type_idx);
     inner_box.append(&type_box);
@@ -1425,7 +1492,8 @@ where
             .map(|item| item.item_height)
             .unwrap_or(60.0)
     };
-    let (height_box, height_spin) = create_spin_row_with_value("Item Height:", 20.0, 300.0, 5.0, current_height);
+    let (height_box, height_spin) =
+        create_spin_row_with_value("Item Height:", 20.0, 300.0, 5.0, current_height);
     height_spin.set_sensitive(!current_auto_height);
     inner_box.append(&height_box);
 
@@ -1577,7 +1645,9 @@ where
             let theme = get_theme_for_bar(&config_for_bar_theme.borrow());
             bar_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     bar_config_frame.set_child(Some(bar_widget_rc.widget()));
@@ -1636,7 +1706,9 @@ where
             let theme = get_theme_for_graph(&config_for_graph_theme.borrow());
             graph_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     graph_config_frame.set_child(Some(graph_widget_rc.widget()));
@@ -1680,7 +1752,10 @@ where
                 .cloned()
                 .unwrap_or_default();
             // Only update if Text mode is active (not Bar mode which has its own text widget)
-            let is_text_mode = matches!(item.display_as, ContentDisplayType::Text | ContentDisplayType::Static);
+            let is_text_mode = matches!(
+                item.display_as,
+                ContentDisplayType::Text | ContentDisplayType::Static
+            );
             if is_text_mode {
                 item.bar_config.text_overlay = text_widget_for_cb.get_config();
             }
@@ -1699,7 +1774,9 @@ where
             let theme = get_theme_for_text(&config_for_text_theme.borrow());
             text_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     text_config_frame.set_child(Some(text_widget_rc.widget()));
@@ -1757,7 +1834,9 @@ where
             let theme = get_theme_for_core_bars(&config_for_core_bars_theme.borrow());
             core_bars_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
@@ -1815,7 +1894,9 @@ where
             let theme = get_theme_for_arc(&config_for_arc_theme.borrow());
             arc_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     arc_config_frame.set_child(Some(arc_widget_rc.widget()));
@@ -1873,7 +1954,9 @@ where
             let theme = get_theme_for_speedometer(&config_for_speedometer_theme.borrow());
             speedometer_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
@@ -1931,7 +2014,9 @@ where
             let theme = get_theme_for_static(&config_for_static_theme.borrow());
             static_widget_for_theme.set_theme(theme);
         });
-        theme_ref_refreshers.borrow_mut().push(theme_refresh_callback);
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(theme_refresh_callback);
     }
 
     static_config_frame.set_child(Some(static_widget_rc.widget()));
@@ -2070,8 +2155,13 @@ where
     page.append(&orient_box);
 
     // Content padding
-    let (padding_box, content_padding_spin) =
-        create_spin_row_with_value("Content Padding:", 4.0, 32.0, 2.0, get_content_padding(&config.borrow()));
+    let (padding_box, content_padding_spin) = create_spin_row_with_value(
+        "Content Padding:",
+        4.0,
+        32.0,
+        2.0,
+        get_content_padding(&config.borrow()),
+    );
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -2083,8 +2173,13 @@ where
     page.append(&padding_box);
 
     // Item spacing
-    let (spacing_box, item_spacing_spin) =
-        create_spin_row_with_value("Item Spacing:", 0.0, 20.0, 1.0, get_item_spacing(&config.borrow()));
+    let (spacing_box, item_spacing_spin) = create_spin_row_with_value(
+        "Item Spacing:",
+        0.0,
+        20.0,
+        1.0,
+        get_item_spacing(&config.borrow()),
+    );
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -2103,8 +2198,13 @@ where
     page.append(&divider_label);
 
     // Divider padding
-    let (div_padding_box, divider_padding_spin) =
-        create_spin_row_with_value("Divider Padding:", 2.0, 20.0, 1.0, get_divider_padding(&config.borrow()));
+    let (div_padding_box, divider_padding_spin) = create_spin_row_with_value(
+        "Divider Padding:",
+        2.0,
+        20.0,
+        1.0,
+        get_divider_padding(&config.borrow()),
+    );
 
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
@@ -2268,7 +2368,10 @@ where
     let refreshers_grad = theme_ref_refreshers.clone();
     let gradient_editor_clone = theme_gradient_editor.clone();
     theme_gradient_editor.set_on_change(move || {
-        set_gradient(&mut config_grad.borrow_mut(), gradient_editor_clone.get_gradient_source_config());
+        set_gradient(
+            &mut config_grad.borrow_mut(),
+            gradient_editor_clone.get_gradient_source_config(),
+        );
         queue_redraw(&preview_grad, &on_change_grad);
         refresh_theme_refs(&refreshers_grad);
     });
@@ -2345,7 +2448,11 @@ impl ThemeTab {
     }
 
     /// Create a new theme tab with an update function
-    pub fn with_update<F: Fn() + 'static>(name: impl Into<String>, widget: GtkBox, update_fn: F) -> Self {
+    pub fn with_update<F: Fn() + 'static>(
+        name: impl Into<String>,
+        widget: GtkBox,
+        update_fn: F,
+    ) -> Self {
         Self {
             name: name.into(),
             widget,

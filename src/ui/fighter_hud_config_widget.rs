@@ -5,25 +5,24 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, SpinButton, StringList, ScrolledWindow,
+    Scale, ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ui::shared_font_dialog::show_font_dialog;
+use crate::core::FieldMetadata;
+use crate::displayers::FighterHudDisplayConfig;
+use crate::ui::background::Color;
 use crate::ui::color_button_widget::ColorButtonWidget;
+use crate::ui::combo_config_base;
 use crate::ui::fighter_hud_display::{
-    render_fighter_hud_frame, HudColorPreset, HudFrameStyle,
-    HudHeaderStyle, HudDividerStyle,
+    render_fighter_hud_frame, HudColorPreset, HudDividerStyle, HudFrameStyle, HudHeaderStyle,
 };
 use crate::ui::lcars_display::SplitOrientation;
-use crate::ui::background::Color;
-use crate::displayers::FighterHudDisplayConfig;
-use crate::core::FieldMetadata;
-use crate::ui::combo_config_base;
-use crate::ui::widget_builder::{ConfigWidgetBuilder, create_section_header};
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::theme_font_selector::ThemeFontSelector;
+use crate::ui::widget_builder::{create_section_header, ConfigWidgetBuilder};
 
 /// Holds references to Frame tab widgets
 struct FrameWidgets {
@@ -108,14 +107,17 @@ impl FighterHudConfigWidget {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(FighterHudDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> = Rc::new(RefCell::new(available_fields));
+        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
+            Rc::new(RefCell::new(available_fields));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
-        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+        let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -136,26 +138,46 @@ impl FighterHudConfigWidget {
         });
 
         // Theme reference section - placed under preview for easy access from all tabs
-        let (theme_ref_section, main_theme_refresh_cb) = combo_config_base::create_theme_reference_section(
-            &config,
-            |cfg| cfg.frame.theme.clone(),
-        );
-        theme_ref_refreshers.borrow_mut().push(main_theme_refresh_cb);
+        let (theme_ref_section, main_theme_refresh_cb) =
+            combo_config_base::create_theme_reference_section(&config, |cfg| {
+                cfg.frame.theme.clone()
+            });
+        theme_ref_refreshers
+            .borrow_mut()
+            .push(main_theme_refresh_cb);
 
         // Create notebook for tabbed interface
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
         // Tab 1: Theme (includes HUD color scheme, theme colors, and fonts)
-        let theme_page = Self::create_theme_page(&config, &on_change, &preview, &theme_widgets, &theme_ref_refreshers);
+        let theme_page = Self::create_theme_page(
+            &config,
+            &on_change,
+            &preview,
+            &theme_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
 
         // Tab 2: Frame
-        let frame_page = Self::create_frame_page(&config, &on_change, &preview, &frame_widgets, &theme_ref_refreshers);
+        let frame_page = Self::create_frame_page(
+            &config,
+            &on_change,
+            &preview,
+            &frame_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&frame_page, Some(&Label::new(Some("Frame"))));
 
         // Tab 4: Header
-        let header_page = Self::create_header_page(&config, &on_change, &preview, &header_widgets, &theme_ref_refreshers);
+        let header_page = Self::create_header_page(
+            &config,
+            &on_change,
+            &preview,
+            &header_widgets,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
 
         // Tab 5: Layout
@@ -164,7 +186,15 @@ impl FighterHudConfigWidget {
 
         // Tab 6: Content
         let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(&config, &on_change, &preview, &content_notebook, &source_summaries, &available_fields, &theme_ref_refreshers);
+        let content_page = Self::create_content_page(
+            &config,
+            &on_change,
+            &preview,
+            &content_notebook,
+            &source_summaries,
+            &available_fields,
+            &theme_ref_refreshers,
+        );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
         // Tab 7: Animation
@@ -212,28 +242,54 @@ impl FighterHudConfigWidget {
             HudFrameStyle::None => 4,
         };
         let style_dropdown = builder.dropdown_row(
-            &page, "Frame Style:", &["Corner Brackets", "Targeting Reticle", "Tactical Box", "Minimal", "None"], style_idx,
-            |cfg, idx| cfg.frame.frame_style = match idx {
-                0 => HudFrameStyle::CornerBrackets,
-                1 => HudFrameStyle::TargetingReticle,
-                2 => HudFrameStyle::TacticalBox,
-                3 => HudFrameStyle::Minimal,
-                _ => HudFrameStyle::None,
+            &page,
+            "Frame Style:",
+            &[
+                "Corner Brackets",
+                "Targeting Reticle",
+                "Tactical Box",
+                "Minimal",
+                "None",
+            ],
+            style_idx,
+            |cfg, idx| {
+                cfg.frame.frame_style = match idx {
+                    0 => HudFrameStyle::CornerBrackets,
+                    1 => HudFrameStyle::TargetingReticle,
+                    2 => HudFrameStyle::TacticalBox,
+                    3 => HudFrameStyle::Minimal,
+                    _ => HudFrameStyle::None,
+                }
             },
         );
 
         let line_width_spin = builder.spin_row(
-            &page, "Line Width:", 0.5, 5.0, 0.5, config.borrow().frame.line_width,
+            &page,
+            "Line Width:",
+            0.5,
+            5.0,
+            0.5,
+            config.borrow().frame.line_width,
             |cfg, v| cfg.frame.line_width = v,
         );
 
         let bracket_size_spin = builder.spin_row(
-            &page, "Bracket Size:", 10.0, 60.0, 2.0, config.borrow().frame.bracket_size,
+            &page,
+            "Bracket Size:",
+            10.0,
+            60.0,
+            2.0,
+            config.borrow().frame.bracket_size,
             |cfg, v| cfg.frame.bracket_size = v,
         );
 
         let bracket_thickness_spin = builder.spin_row(
-            &page, "Bracket Thickness:", 1.0, 6.0, 0.5, config.borrow().frame.bracket_thickness,
+            &page,
+            "Bracket Thickness:",
+            1.0,
+            6.0,
+            0.5,
+            config.borrow().frame.bracket_thickness,
             |cfg, v| cfg.frame.bracket_thickness = v,
         );
 
@@ -243,19 +299,27 @@ impl FighterHudConfigWidget {
         page.append(&reticle_label);
 
         let show_reticle_check = builder.check_button(
-            &page, "Show Center Reticle", config.borrow().frame.show_center_reticle,
+            &page,
+            "Show Center Reticle",
+            config.borrow().frame.show_center_reticle,
             |cfg, v| cfg.frame.show_center_reticle = v,
         );
 
         let reticle_size_spin = builder.spin_row(
-            &page, "Reticle Size:", 0.05, 0.5, 0.05, config.borrow().frame.reticle_size,
+            &page,
+            "Reticle Size:",
+            0.05,
+            0.5,
+            0.05,
+            config.borrow().frame.reticle_size,
             |cfg, v| cfg.frame.reticle_size = v,
         );
 
         // Reticle color (theme-aware)
         let reticle_color_box = GtkBox::new(Orientation::Horizontal, 6);
         reticle_color_box.append(&Label::new(Some("Reticle Color:")));
-        let reticle_color_selector = ThemeColorSelector::new(config.borrow().frame.reticle_color.clone());
+        let reticle_color_selector =
+            ThemeColorSelector::new(config.borrow().frame.reticle_color.clone());
         reticle_color_selector.set_theme_config(config.borrow().frame.theme.clone());
         reticle_color_selector.widget().set_hexpand(true);
         reticle_color_box.append(reticle_color_selector.widget());
@@ -273,7 +337,8 @@ impl FighterHudConfigWidget {
         let reticle_color_selector_for_refresh = reticle_color_selector_rc.clone();
         let config_for_reticle_refresh = config.clone();
         theme_ref_refreshers.borrow_mut().push(Rc::new(move || {
-            reticle_color_selector_for_refresh.set_theme_config(config_for_reticle_refresh.borrow().frame.theme.clone());
+            reticle_color_selector_for_refresh
+                .set_theme_config(config_for_reticle_refresh.borrow().frame.theme.clone());
         }));
 
         // Store widget refs
@@ -387,7 +452,9 @@ impl FighterHudConfigWidget {
         page.append(&font_label);
 
         // Header font selector (theme-aware)
-        let header_font_selector = Rc::new(ThemeFontSelector::new(config.borrow().frame.header_font.clone()));
+        let header_font_selector = Rc::new(ThemeFontSelector::new(
+            config.borrow().frame.header_font.clone(),
+        ));
         header_font_selector.set_theme_config(config.borrow().frame.theme.clone());
         page.append(header_font_selector.widget());
 
@@ -436,12 +503,26 @@ impl FighterHudConfigWidget {
             SplitOrientation::Horizontal => 1,
         };
         let split_orientation_dropdown = builder.dropdown_row(
-            &page, "Split Orientation:", &["Vertical", "Horizontal"], orient_idx,
-            |cfg, idx| cfg.frame.split_orientation = if idx == 0 { SplitOrientation::Vertical } else { SplitOrientation::Horizontal },
+            &page,
+            "Split Orientation:",
+            &["Vertical", "Horizontal"],
+            orient_idx,
+            |cfg, idx| {
+                cfg.frame.split_orientation = if idx == 0 {
+                    SplitOrientation::Vertical
+                } else {
+                    SplitOrientation::Horizontal
+                }
+            },
         );
 
         let content_padding_spin = builder.spin_row(
-            &page, "Content Padding:", 4.0, 32.0, 2.0, config.borrow().frame.content_padding,
+            &page,
+            "Content Padding:",
+            4.0,
+            32.0,
+            2.0,
+            config.borrow().frame.content_padding,
             |cfg, v| cfg.frame.content_padding = v,
         );
 
@@ -458,23 +539,38 @@ impl FighterHudConfigWidget {
             HudDividerStyle::None => 4,
         };
         let divider_style_dropdown = builder.dropdown_row(
-            &page, "Divider Style:", &["Tick Ladder", "Arrow Line", "Tactical Dash", "Fade", "None"], div_style_idx,
-            |cfg, idx| cfg.frame.divider_style = match idx {
-                0 => HudDividerStyle::TickLadder,
-                1 => HudDividerStyle::ArrowLine,
-                2 => HudDividerStyle::TacticalDash,
-                3 => HudDividerStyle::Fade,
-                _ => HudDividerStyle::None,
+            &page,
+            "Divider Style:",
+            &["Tick Ladder", "Arrow Line", "Tactical Dash", "Fade", "None"],
+            div_style_idx,
+            |cfg, idx| {
+                cfg.frame.divider_style = match idx {
+                    0 => HudDividerStyle::TickLadder,
+                    1 => HudDividerStyle::ArrowLine,
+                    2 => HudDividerStyle::TacticalDash,
+                    3 => HudDividerStyle::Fade,
+                    _ => HudDividerStyle::None,
+                }
             },
         );
 
         let divider_padding_spin = builder.spin_row(
-            &page, "Divider Padding:", 2.0, 20.0, 1.0, config.borrow().frame.divider_padding,
+            &page,
+            "Divider Padding:",
+            2.0,
+            20.0,
+            1.0,
+            config.borrow().frame.divider_padding,
             |cfg, v| cfg.frame.divider_padding = v,
         );
 
         let tick_spacing_spin = builder.spin_row(
-            &page, "Tick Spacing:", 4.0, 20.0, 1.0, config.borrow().frame.tick_spacing,
+            &page,
+            "Tick Spacing:",
+            4.0,
+            20.0,
+            1.0,
+            config.borrow().frame.tick_spacing,
             |cfg, v| cfg.frame.tick_spacing = v,
         );
 
@@ -538,7 +634,8 @@ impl FighterHudConfigWidget {
         // HUD color preset dropdown
         let hud_color_row = GtkBox::new(Orientation::Horizontal, 8);
         hud_color_row.append(&Label::new(Some("HUD Color:")));
-        let hud_color_list = StringList::new(&["Military Green", "Amber", "Cyan", "White", "Custom"]);
+        let hud_color_list =
+            StringList::new(&["Military Green", "Amber", "Cyan", "White", "Custom"]);
         let hud_color_dropdown = DropDown::new(Some(hud_color_list), None::<gtk4::Expression>);
         let hud_color_idx = match &config.borrow().frame.hud_color {
             HudColorPreset::MilitaryGreen => 0,
@@ -558,7 +655,12 @@ impl FighterHudConfigWidget {
         let custom_hud_color = if let HudColorPreset::Custom(c) = &config.borrow().frame.hud_color {
             *c
         } else {
-            Color { r: 0.0, g: 0.9, b: 0.3, a: 1.0 }
+            Color {
+                r: 0.0,
+                g: 0.9,
+                b: 0.3,
+                a: 1.0,
+            }
         };
         let custom_hud_color_widget = Rc::new(ColorButtonWidget::new(custom_hud_color));
         custom_hud_color_widget.widget().set_hexpand(true);
@@ -569,7 +671,9 @@ impl FighterHudConfigWidget {
         // Background color
         let bg_row = GtkBox::new(Orientation::Horizontal, 8);
         bg_row.append(&Label::new(Some("Background:")));
-        let background_widget = Rc::new(ColorButtonWidget::new(config.borrow().frame.background_color));
+        let background_widget = Rc::new(ColorButtonWidget::new(
+            config.borrow().frame.background_color,
+        ));
         background_widget.widget().set_hexpand(true);
         bg_row.append(background_widget.widget());
         hud_scheme_box.append(&bg_row);
@@ -848,7 +952,8 @@ impl FighterHudConfigWidget {
                 let btn_c = font1_btn_clone.clone();
                 let refreshers_c = refreshers_for_font1.clone();
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                    let family = font_desc.family()
+                    let family = font_desc
+                        .family()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "monospace".to_string());
                     config_c.borrow_mut().frame.theme.font1_family = family.clone();
@@ -895,7 +1000,8 @@ impl FighterHudConfigWidget {
                 let btn_c = font2_btn_clone.clone();
                 let refreshers_c = refreshers_for_font2.clone();
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                    let family = font_desc.family()
+                    let family = font_desc
+                        .family()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "monospace".to_string());
                     config_c.borrow_mut().frame.theme.font2_family = family.clone();
@@ -1047,7 +1153,15 @@ impl FighterHudConfigWidget {
         page.append(&scroll);
 
         // Build initial content tabs
-        Self::rebuild_content_tabs(config, on_change, preview, content_notebook, source_summaries, available_fields, theme_ref_refreshers);
+        Self::rebuild_content_tabs(
+            config,
+            on_change,
+            preview,
+            content_notebook,
+            source_summaries,
+            available_fields,
+            theme_ref_refreshers,
+        );
 
         page
     }
@@ -1238,8 +1352,12 @@ impl FighterHudConfigWidget {
             widgets.theme_color2_widget.set_color(theme.color2);
             widgets.theme_color3_widget.set_color(theme.color3);
             widgets.theme_color4_widget.set_color(theme.color4);
-            widgets.theme_gradient_editor.set_theme_config(theme.clone());
-            widgets.theme_gradient_editor.set_gradient_source_config(&theme.gradient);
+            widgets
+                .theme_gradient_editor
+                .set_theme_config(theme.clone());
+            widgets
+                .theme_gradient_editor
+                .set_gradient_source_config(&theme.gradient);
             widgets.font1_btn.set_label(&theme.font1_family);
             widgets.font1_size_spin.set_value(theme.font1_size);
             widgets.font2_btn.set_label(&theme.font2_family);
@@ -1281,16 +1399,32 @@ impl FighterHudConfigWidget {
         // Update Theme widgets (fonts and colors)
         if let Some(ref widgets) = *self.theme_widgets.borrow() {
             let cfg = self.config.borrow();
-            widgets.theme_color1_widget.set_color(cfg.frame.theme.color1);
-            widgets.theme_color2_widget.set_color(cfg.frame.theme.color2);
-            widgets.theme_color3_widget.set_color(cfg.frame.theme.color3);
-            widgets.theme_color4_widget.set_color(cfg.frame.theme.color4);
-            widgets.theme_gradient_editor.set_theme_config(cfg.frame.theme.clone());
-            widgets.theme_gradient_editor.set_gradient_source_config(&cfg.frame.theme.gradient);
+            widgets
+                .theme_color1_widget
+                .set_color(cfg.frame.theme.color1);
+            widgets
+                .theme_color2_widget
+                .set_color(cfg.frame.theme.color2);
+            widgets
+                .theme_color3_widget
+                .set_color(cfg.frame.theme.color3);
+            widgets
+                .theme_color4_widget
+                .set_color(cfg.frame.theme.color4);
+            widgets
+                .theme_gradient_editor
+                .set_theme_config(cfg.frame.theme.clone());
+            widgets
+                .theme_gradient_editor
+                .set_gradient_source_config(&cfg.frame.theme.gradient);
             widgets.font1_btn.set_label(&cfg.frame.theme.font1_family);
-            widgets.font1_size_spin.set_value(cfg.frame.theme.font1_size);
+            widgets
+                .font1_size_spin
+                .set_value(cfg.frame.theme.font1_size);
             widgets.font2_btn.set_label(&cfg.frame.theme.font2_family);
-            widgets.font2_size_spin.set_value(cfg.frame.theme.font2_size);
+            widgets
+                .font2_size_spin
+                .set_value(cfg.frame.theme.font2_size);
         }
 
         // Rebuild content tabs to update theme reference sections
@@ -1329,7 +1463,8 @@ impl FighterHudConfigWidget {
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         // Extract group configuration from summaries (lesson #1)
-        let mut group_item_counts: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut group_item_counts: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         for (_, _, group_num, item_idx) in &summaries {
             let current_max = group_item_counts.entry(*group_num).or_insert(0);
             if *item_idx > *current_max {
@@ -1397,7 +1532,12 @@ impl FighterHudConfigWidget {
         let config = self.config.borrow();
         crate::ui::combo_config_base::TransferableComboConfig {
             group_count: config.frame.group_count,
-            group_item_counts: config.frame.group_item_counts.iter().map(|&x| x as u32).collect(),
+            group_item_counts: config
+                .frame
+                .group_item_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             group_size_weights: config.frame.group_size_weights.clone(),
             group_item_orientations: config.frame.group_item_orientations.clone(),
             layout_orientation: config.frame.split_orientation,
@@ -1410,11 +1550,18 @@ impl FighterHudConfigWidget {
     }
 
     /// Apply transferable configuration from another combo panel.
-    pub fn apply_transferable_config(&self, transfer: &crate::ui::combo_config_base::TransferableComboConfig) {
+    pub fn apply_transferable_config(
+        &self,
+        transfer: &crate::ui::combo_config_base::TransferableComboConfig,
+    ) {
         {
             let mut config = self.config.borrow_mut();
             config.frame.group_count = transfer.group_count;
-            config.frame.group_item_counts = transfer.group_item_counts.iter().map(|&x| x as usize).collect();
+            config.frame.group_item_counts = transfer
+                .group_item_counts
+                .iter()
+                .map(|&x| x as usize)
+                .collect();
             config.frame.group_size_weights = transfer.group_size_weights.clone();
             config.frame.group_item_orientations = transfer.group_item_orientations.clone();
             config.frame.split_orientation = transfer.layout_orientation;

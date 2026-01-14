@@ -211,7 +211,10 @@ pub fn create_radio_row(options: &[&str]) -> (GtkBox, Vec<CheckButton>) {
 }
 
 /// Creates a horizontal box with radio-style check buttons with a specific one active.
-pub fn create_radio_row_with_active(options: &[&str], active_index: usize) -> (GtkBox, Vec<CheckButton>) {
+pub fn create_radio_row_with_active(
+    options: &[&str],
+    active_index: usize,
+) -> (GtkBox, Vec<CheckButton>) {
     let (row, buttons) = create_radio_row(options);
     if let Some(button) = buttons.get(active_index) {
         button.set_active(true);

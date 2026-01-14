@@ -67,59 +67,61 @@ pub(crate) fn extract_normalized_value(data: &HashMap<String, Value>) -> f64 {
     normalized.clamp(0.0, 1.0)
 }
 
-mod text;
-mod text_config;
-mod bar;
 mod arc;
-mod speedometer;
-mod graph;
-mod clock_analog;
-mod clock_digital;
-mod lcars_combo;
-mod cpu_cores;
-mod indicator;
-mod cyberpunk;
-mod material;
-mod industrial;
-mod retro_terminal;
-mod fighter_hud;
-mod synthwave;
 mod art_deco;
 mod art_nouveau;
-mod steampunk;
-#[cfg(feature = "webkit")]
-mod css_template;
-pub mod combo_utils;
+mod bar;
+mod clock_analog;
+mod clock_digital;
 pub mod combo_displayer_base;
 pub mod combo_generic;
+pub mod combo_utils;
+mod cpu_cores;
+#[cfg(feature = "webkit")]
+mod css_template;
+mod cyberpunk;
+mod fighter_hud;
+mod graph;
+mod indicator;
+mod industrial;
+mod lcars_combo;
+mod material;
+mod retro_terminal;
+mod speedometer;
+mod steampunk;
+mod synthwave;
+mod text;
+mod text_config;
 // mod level_bar;
 
+pub use arc::ArcDisplayer;
+pub use art_deco::{ArtDecoDisplayConfig, ArtDecoDisplayer};
+pub use art_nouveau::{ArtNouveauDisplayConfig, ArtNouveauDisplayer};
+pub use bar::BarDisplayer;
+pub use clock_analog::ClockAnalogDisplayer;
+pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
+pub use cpu_cores::CpuCoresDisplayer;
+#[cfg(feature = "webkit")]
+pub use css_template::CssTemplateDisplayer;
+pub use cyberpunk::{CyberpunkDisplayConfig, CyberpunkDisplayer};
+pub use fighter_hud::{FighterHudDisplayConfig, FighterHudDisplayer};
+pub use graph::GraphDisplayer;
+pub use indicator::{
+    interpolate_gradient, render_indicator, IndicatorConfig, IndicatorDisplayer, IndicatorShape,
+};
+pub use industrial::{IndustrialDisplayConfig, IndustrialDisplayer};
+pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
+pub use material::{MaterialDisplayConfig, MaterialDisplayer};
+pub use retro_terminal::{RetroTerminalDisplayConfig, RetroTerminalDisplayer};
+pub use speedometer::SpeedometerDisplayer;
+pub use steampunk::{SteampunkDisplayConfig, SteampunkDisplayer};
+pub use synthwave::{SynthwaveDisplayConfig, SynthwaveDisplayer};
 pub use text::TextDisplayer;
 pub use text_config::{
     CombineAlignment, CombineDirection, HorizontalPosition, TextBackgroundConfig,
     TextBackgroundType, TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition,
     VerticalPosition,
 };
-pub use bar::BarDisplayer;
-pub use arc::ArcDisplayer;
-pub use speedometer::SpeedometerDisplayer;
-pub use graph::GraphDisplayer;
-pub use clock_analog::ClockAnalogDisplayer;
-pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
-pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
-pub use cpu_cores::CpuCoresDisplayer;
-pub use indicator::{IndicatorDisplayer, IndicatorConfig, IndicatorShape, interpolate_gradient, render_indicator};
-pub use cyberpunk::{CyberpunkDisplayer, CyberpunkDisplayConfig};
-pub use material::{MaterialDisplayer, MaterialDisplayConfig};
-pub use industrial::{IndustrialDisplayer, IndustrialDisplayConfig};
-pub use retro_terminal::{RetroTerminalDisplayer, RetroTerminalDisplayConfig};
-pub use fighter_hud::{FighterHudDisplayer, FighterHudDisplayConfig};
-pub use synthwave::{SynthwaveDisplayer, SynthwaveDisplayConfig};
-pub use art_deco::{ArtDecoDisplayer, ArtDecoDisplayConfig};
-pub use art_nouveau::{ArtNouveauDisplayer, ArtNouveauDisplayConfig};
-pub use steampunk::{SteampunkDisplayer, SteampunkDisplayConfig};
-#[cfg(feature = "webkit")]
-pub use css_template::CssTemplateDisplayer;
 
 // Re-export FieldMetadata from core for convenience
 pub use crate::core::FieldMetadata;
@@ -134,144 +136,96 @@ pub fn register_all() {
     use crate::core::global_registry;
 
     // Register text displayer
-    global_registry().register_displayer_with_info(
-        "text",
-        "Text",
-        || Box::new(TextDisplayer::new()),
-    );
+    global_registry()
+        .register_displayer_with_info("text", "Text", || Box::new(TextDisplayer::new()));
 
     // Register bar displayer
-    global_registry().register_displayer_with_info(
-        "bar",
-        "Bar",
-        || Box::new(BarDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("bar", "Bar", || Box::new(BarDisplayer::new()));
 
     // Register arc gauge displayer
-    global_registry().register_displayer_with_info(
-        "arc",
-        "Arc Gauge",
-        || Box::new(ArcDisplayer::new()),
-    );
+    global_registry()
+        .register_displayer_with_info("arc", "Arc Gauge", || Box::new(ArcDisplayer::new()));
 
     // Register speedometer gauge displayer
-    global_registry().register_displayer_with_info(
-        "speedometer",
-        "Speedometer",
-        || Box::new(SpeedometerDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("speedometer", "Speedometer", || {
+        Box::new(SpeedometerDisplayer::new())
+    });
 
     // Register graph displayer
-    global_registry().register_displayer_with_info(
-        "graph",
-        "Graph",
-        || Box::new(GraphDisplayer::new()),
-    );
+    global_registry()
+        .register_displayer_with_info("graph", "Graph", || Box::new(GraphDisplayer::new()));
 
     // Register analog clock displayer
-    global_registry().register_displayer_with_info(
-        "clock_analog",
-        "Analog Clock",
-        || Box::new(ClockAnalogDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("clock_analog", "Analog Clock", || {
+        Box::new(ClockAnalogDisplayer::new())
+    });
 
     // Register digital clock displayer
-    global_registry().register_displayer_with_info(
-        "clock_digital",
-        "Digital Clock",
-        || Box::new(ClockDigitalDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("clock_digital", "Digital Clock", || {
+        Box::new(ClockDigitalDisplayer::new())
+    });
 
     // Register LCARS displayer (for Combination source)
-    global_registry().register_displayer_with_info(
-        "lcars",
-        "LCARS",
-        || Box::new(LcarsComboDisplayer::new()),
-    );
+    global_registry()
+        .register_displayer_with_info("lcars", "LCARS", || Box::new(LcarsComboDisplayer::new()));
 
     // Register CPU Cores displayer
-    global_registry().register_displayer_with_info(
-        "cpu_cores",
-        "CPU Cores",
-        || Box::new(CpuCoresDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("cpu_cores", "CPU Cores", || {
+        Box::new(CpuCoresDisplayer::new())
+    });
 
     // Register Indicator displayer
-    global_registry().register_displayer_with_info(
-        "indicator",
-        "Indicator",
-        || Box::new(IndicatorDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("indicator", "Indicator", || {
+        Box::new(IndicatorDisplayer::new())
+    });
 
     // Register Cyberpunk HUD displayer
-    global_registry().register_displayer_with_info(
-        "cyberpunk",
-        "Cyberpunk HUD",
-        || Box::new(CyberpunkDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("cyberpunk", "Cyberpunk HUD", || {
+        Box::new(CyberpunkDisplayer::new())
+    });
 
     // Register Material Cards displayer
-    global_registry().register_displayer_with_info(
-        "material",
-        "Material Cards",
-        || Box::new(MaterialDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("material", "Material Cards", || {
+        Box::new(MaterialDisplayer::new())
+    });
 
     // Register Industrial/Gauge Panel displayer
-    global_registry().register_displayer_with_info(
-        "industrial",
-        "Industrial Gauge",
-        || Box::new(IndustrialDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("industrial", "Industrial Gauge", || {
+        Box::new(IndustrialDisplayer::new())
+    });
 
     // Register Retro Terminal CRT displayer
-    global_registry().register_displayer_with_info(
-        "retro_terminal",
-        "Retro Terminal",
-        || Box::new(RetroTerminalDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("retro_terminal", "Retro Terminal", || {
+        Box::new(RetroTerminalDisplayer::new())
+    });
 
     // Register Fighter Jet HUD displayer
-    global_registry().register_displayer_with_info(
-        "fighter_hud",
-        "Fighter HUD",
-        || Box::new(FighterHudDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("fighter_hud", "Fighter HUD", || {
+        Box::new(FighterHudDisplayer::new())
+    });
 
     // Register Synthwave/Outrun displayer
-    global_registry().register_displayer_with_info(
-        "synthwave",
-        "Synthwave",
-        || Box::new(SynthwaveDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("synthwave", "Synthwave", || {
+        Box::new(SynthwaveDisplayer::new())
+    });
 
     // Register Art Deco displayer
-    global_registry().register_displayer_with_info(
-        "art_deco",
-        "Art Deco",
-        || Box::new(ArtDecoDisplayer::new()),
-    );
+    global_registry()
+        .register_displayer_with_info("art_deco", "Art Deco", || Box::new(ArtDecoDisplayer::new()));
 
     // Register Art Nouveau displayer
-    global_registry().register_displayer_with_info(
-        "art_nouveau",
-        "Art Nouveau",
-        || Box::new(ArtNouveauDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("art_nouveau", "Art Nouveau", || {
+        Box::new(ArtNouveauDisplayer::new())
+    });
 
     // Register Steampunk displayer
-    global_registry().register_displayer_with_info(
-        "steampunk",
-        "Steampunk",
-        || Box::new(SteampunkDisplayer::new()),
-    );
+    global_registry().register_displayer_with_info("steampunk", "Steampunk", || {
+        Box::new(SteampunkDisplayer::new())
+    });
 
     // Register CSS Template displayer (only when webkit feature is enabled)
     #[cfg(feature = "webkit")]
-    global_registry().register_displayer_with_info(
-        "css_template",
-        "CSS Template",
-        || Box::new(CssTemplateDisplayer::new()),
-    );
-
+    global_registry().register_displayer_with_info("css_template", "CSS Template", || {
+        Box::new(CssTemplateDisplayer::new())
+    });
 }

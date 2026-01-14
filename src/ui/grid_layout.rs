@@ -4,7 +4,9 @@ use crate::config::AppConfig;
 use crate::core::Panel;
 use crate::ui::pango_text::pango_show_text;
 use gtk4::gdk::ModifierType;
-use gtk4::{prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget};
+use gtk4::{
+    prelude::*, DrawingArea, Fixed, Frame, GestureClick, GestureDrag, Overlay, PopoverMenu, Widget,
+};
 use log::info;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -82,7 +84,10 @@ fn create_panel_context_menu() -> gtk4::gio::Menu {
     let section2 = gio::Menu::new();
     section2.append(Some("Copy Style"), Some("panel.copy_style"));
     section2.append(Some("Paste Style"), Some("panel.paste_style"));
-    section2.append(Some("Set as Default Style"), Some("panel.set_default_style"));
+    section2.append(
+        Some("Set as Default Style"),
+        Some("panel.set_default_style"),
+    );
     menu.append_section(None, &section2);
 
     // Section 3: Save to File
@@ -175,8 +180,12 @@ impl GridLayout {
 
         // Set the container size
         let config_borrow = config.borrow();
-        let width = config_borrow.columns as i32 * (config_borrow.cell_width + config_borrow.spacing) - config_borrow.spacing;
-        let height = config_borrow.rows as i32 * (config_borrow.cell_height + config_borrow.spacing) - config_borrow.spacing;
+        let width = config_borrow.columns as i32
+            * (config_borrow.cell_width + config_borrow.spacing)
+            - config_borrow.spacing;
+        let height = config_borrow.rows as i32
+            * (config_borrow.cell_height + config_borrow.spacing)
+            - config_borrow.spacing;
         drop(config_borrow); // Drop borrow before moving config
 
         container.set_size_request(width, height);
@@ -306,156 +315,166 @@ impl GridLayout {
         let selection_box = self.selection_box.clone();
         let viewport_size = self.viewport_size.clone();
 
-        self.drop_zone_layer.set_draw_func(move |_, cr, width, height| {
-            let config = config.borrow();
-            let sel_box = selection_box.borrow();
-            let viewport = *viewport_size.borrow();
+        self.drop_zone_layer
+            .set_draw_func(move |_, cr, width, height| {
+                let config = config.borrow();
+                let sel_box = selection_box.borrow();
+                let viewport = *viewport_size.borrow();
 
-            // Draw selection box if present
-            if let Some((x1, y1, x2, y2)) = *sel_box {
-                let rect_x = x1.min(x2);
-                let rect_y = y1.min(y2);
-                let rect_width = (x2 - x1).abs();
-                let rect_height = (y2 - y1).abs();
+                // Draw selection box if present
+                if let Some((x1, y1, x2, y2)) = *sel_box {
+                    let rect_x = x1.min(x2);
+                    let rect_y = y1.min(y2);
+                    let rect_width = (x2 - x1).abs();
+                    let rect_height = (y2 - y1).abs();
 
-                // Fill
-                cr.set_source_rgba(0.2, 0.5, 0.8, 0.2);
-                cr.rectangle(rect_x, rect_y, rect_width, rect_height);
-                cr.fill().ok();
+                    // Fill
+                    cr.set_source_rgba(0.2, 0.5, 0.8, 0.2);
+                    cr.rectangle(rect_x, rect_y, rect_width, rect_height);
+                    cr.fill().ok();
 
-                // Border
-                cr.set_source_rgba(0.2, 0.5, 0.8, 0.8);
-                cr.set_line_width(2.0);
-                cr.rectangle(rect_x, rect_y, rect_width, rect_height);
-                cr.stroke().ok();
-            }
-            drop(sel_box);
+                    // Border
+                    cr.set_source_rgba(0.2, 0.5, 0.8, 0.8);
+                    cr.set_line_width(2.0);
+                    cr.rectangle(rect_x, rect_y, rect_width, rect_height);
+                    cr.stroke().ok();
+                }
+                drop(sel_box);
 
-            // Only draw grid when actively dragging panels
-            if !*is_dragging.borrow() {
-                return;
-            }
+                // Only draw grid when actively dragging panels
+                if !*is_dragging.borrow() {
+                    return;
+                }
 
-            let occupied = occupied_cells.borrow();
-            let preview_panels = drag_preview_cells.borrow();
+                let occupied = occupied_cells.borrow();
+                let preview_panels = drag_preview_cells.borrow();
 
-            // Calculate available columns and rows based on actual widget size
-            let available_cols = (width as f64 / (config.cell_width + config.spacing) as f64).floor() as u32;
-            let available_rows = (height as f64 / (config.cell_height + config.spacing) as f64).floor() as u32;
+                // Calculate available columns and rows based on actual widget size
+                let available_cols =
+                    (width as f64 / (config.cell_width + config.spacing) as f64).floor() as u32;
+                let available_rows =
+                    (height as f64 / (config.cell_height + config.spacing) as f64).floor() as u32;
 
-            // Draw grid lines
-            cr.set_source_rgba(0.3, 0.3, 0.3, 0.3);
-            cr.set_line_width(1.0);
+                // Draw grid lines
+                cr.set_source_rgba(0.3, 0.3, 0.3, 0.3);
+                cr.set_line_width(1.0);
 
-            for col in 0..=available_cols {
-                let x = col as f64 * (config.cell_width + config.spacing) as f64;
-                cr.move_to(x, 0.0);
-                cr.line_to(x, height as f64);
-            }
+                for col in 0..=available_cols {
+                    let x = col as f64 * (config.cell_width + config.spacing) as f64;
+                    cr.move_to(x, 0.0);
+                    cr.line_to(x, height as f64);
+                }
 
-            for row in 0..=available_rows {
-                let y = row as f64 * (config.cell_height + config.spacing) as f64;
-                cr.move_to(0.0, y);
-                cr.line_to(width as f64, y);
-            }
-            cr.stroke().ok();
-
-            // Draw viewport boundary rectangles (window-sized areas)
-            // Only draw if viewport is valid (non-zero dimensions)
-            if viewport.0 > 0 && viewport.1 > 0 {
-                let vp_width = viewport.0 as f64;
-                let vp_height = viewport.1 as f64;
-
-                // Calculate how many viewports fit in the grid area
-                let vp_cols = (width as f64 / vp_width).ceil() as i32;
-                let vp_rows = (height as f64 / vp_height).ceil() as i32;
-
-                // Draw viewport boundary rectangles with dashed lines
-                cr.save().ok();
-                cr.set_source_rgba(0.9, 0.6, 0.1, 0.7); // Orange color for visibility
-                cr.set_line_width(2.0);
-                cr.set_dash(&[8.0, 4.0], 0.0);
-
-                for vp_row in 0..vp_rows {
-                    for vp_col in 0..vp_cols {
-                        let rect_x = vp_col as f64 * vp_width;
-                        let rect_y = vp_row as f64 * vp_height;
-
-                        // Only draw if within grid bounds
-                        if rect_x < width as f64 && rect_y < height as f64 {
-                            cr.rectangle(rect_x, rect_y, vp_width, vp_height);
-                        }
-                    }
+                for row in 0..=available_rows {
+                    let y = row as f64 * (config.cell_height + config.spacing) as f64;
+                    cr.move_to(0.0, y);
+                    cr.line_to(width as f64, y);
                 }
                 cr.stroke().ok();
 
-                // Add viewport labels at top-left of each viewport
-                cr.set_source_rgba(0.9, 0.6, 0.1, 0.9);
-                for vp_row in 0..vp_rows {
-                    for vp_col in 0..vp_cols {
-                        let rect_x = vp_col as f64 * vp_width + 5.0;
-                        let rect_y = vp_row as f64 * vp_height + 15.0;
+                // Draw viewport boundary rectangles (window-sized areas)
+                // Only draw if viewport is valid (non-zero dimensions)
+                if viewport.0 > 0 && viewport.1 > 0 {
+                    let vp_width = viewport.0 as f64;
+                    let vp_height = viewport.1 as f64;
 
-                        if rect_x < width as f64 && rect_y < height as f64 {
-                            let label = format!("Page {}", vp_row * vp_cols + vp_col + 1);
-                            cr.move_to(rect_x, rect_y);
-                            pango_show_text(cr, &label, "Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal, 12.0);
+                    // Calculate how many viewports fit in the grid area
+                    let vp_cols = (width as f64 / vp_width).ceil() as i32;
+                    let vp_rows = (height as f64 / vp_height).ceil() as i32;
+
+                    // Draw viewport boundary rectangles with dashed lines
+                    cr.save().ok();
+                    cr.set_source_rgba(0.9, 0.6, 0.1, 0.7); // Orange color for visibility
+                    cr.set_line_width(2.0);
+                    cr.set_dash(&[8.0, 4.0], 0.0);
+
+                    for vp_row in 0..vp_rows {
+                        for vp_col in 0..vp_cols {
+                            let rect_x = vp_col as f64 * vp_width;
+                            let rect_y = vp_row as f64 * vp_height;
+
+                            // Only draw if within grid bounds
+                            if rect_x < width as f64 && rect_y < height as f64 {
+                                cr.rectangle(rect_x, rect_y, vp_width, vp_height);
+                            }
                         }
                     }
+                    cr.stroke().ok();
+
+                    // Add viewport labels at top-left of each viewport
+                    cr.set_source_rgba(0.9, 0.6, 0.1, 0.9);
+                    for vp_row in 0..vp_rows {
+                        for vp_col in 0..vp_cols {
+                            let rect_x = vp_col as f64 * vp_width + 5.0;
+                            let rect_y = vp_row as f64 * vp_height + 15.0;
+
+                            if rect_x < width as f64 && rect_y < height as f64 {
+                                let label = format!("Page {}", vp_row * vp_cols + vp_col + 1);
+                                cr.move_to(rect_x, rect_y);
+                                pango_show_text(
+                                    cr,
+                                    &label,
+                                    "Sans",
+                                    gtk4::cairo::FontSlant::Normal,
+                                    gtk4::cairo::FontWeight::Normal,
+                                    12.0,
+                                );
+                            }
+                        }
+                    }
+                    cr.restore().ok();
                 }
-                cr.restore().ok();
-            }
 
-            // Highlight occupied cells in red
-            for (cell_x, cell_y) in occupied.iter() {
-                let x = *cell_x as f64 * (config.cell_width + config.spacing) as f64;
-                let y = *cell_y as f64 * (config.cell_height + config.spacing) as f64;
+                // Highlight occupied cells in red
+                for (cell_x, cell_y) in occupied.iter() {
+                    let x = *cell_x as f64 * (config.cell_width + config.spacing) as f64;
+                    let y = *cell_y as f64 * (config.cell_height + config.spacing) as f64;
 
-                cr.set_source_rgba(1.0, 0.0, 0.0, 0.2);
-                cr.rectangle(x, y, config.cell_width as f64, config.cell_height as f64);
-                cr.fill().ok();
-            }
+                    cr.set_source_rgba(1.0, 0.0, 0.0, 0.2);
+                    cr.rectangle(x, y, config.cell_width as f64, config.cell_height as f64);
+                    cr.fill().ok();
+                }
 
-            // Highlight drop preview for all selected panels
-            for (preview_x, preview_y, panel_width, panel_height) in preview_panels.iter() {
-                let x = *preview_x as f64 * (config.cell_width + config.spacing) as f64;
-                let y = *preview_y as f64 * (config.cell_height + config.spacing) as f64;
-                let rect_width = *panel_width as f64 * config.cell_width as f64
-                    + (*panel_width as f64 - 1.0) * config.spacing as f64;
-                let rect_height = *panel_height as f64 * config.cell_height as f64
-                    + (*panel_height as f64 - 1.0) * config.spacing as f64;
+                // Highlight drop preview for all selected panels
+                for (preview_x, preview_y, panel_width, panel_height) in preview_panels.iter() {
+                    let x = *preview_x as f64 * (config.cell_width + config.spacing) as f64;
+                    let y = *preview_y as f64 * (config.cell_height + config.spacing) as f64;
+                    let rect_width = *panel_width as f64 * config.cell_width as f64
+                        + (*panel_width as f64 - 1.0) * config.spacing as f64;
+                    let rect_height = *panel_height as f64 * config.cell_height as f64
+                        + (*panel_height as f64 - 1.0) * config.spacing as f64;
 
-                // Check if any cell in this panel would collide
-                let mut has_collision = false;
-                for dx in 0..*panel_width {
-                    for dy in 0..*panel_height {
-                        if occupied.contains(&(preview_x + dx, preview_y + dy)) {
-                            has_collision = true;
+                    // Check if any cell in this panel would collide
+                    let mut has_collision = false;
+                    for dx in 0..*panel_width {
+                        for dy in 0..*panel_height {
+                            if occupied.contains(&(preview_x + dx, preview_y + dy)) {
+                                has_collision = true;
+                                break;
+                            }
+                        }
+                        if has_collision {
                             break;
                         }
                     }
+
+                    // Green if valid, red if collision
                     if has_collision {
-                        break;
+                        cr.set_source_rgba(1.0, 0.0, 0.0, 0.4);
+                    } else {
+                        cr.set_source_rgba(0.0, 1.0, 0.0, 0.4);
                     }
+
+                    cr.rectangle(x, y, rect_width, rect_height);
+                    cr.fill().ok();
+
+                    // Border
+                    cr.set_source_rgba(1.0, 1.0, 1.0, 0.8);
+                    cr.set_line_width(2.0);
+                    cr.rectangle(x, y, rect_width, rect_height);
+                    cr.stroke().ok();
                 }
-
-                // Green if valid, red if collision
-                if has_collision {
-                    cr.set_source_rgba(1.0, 0.0, 0.0, 0.4);
-                } else {
-                    cr.set_source_rgba(0.0, 1.0, 0.0, 0.4);
-                }
-
-                cr.rectangle(x, y, rect_width, rect_height);
-                cr.fill().ok();
-
-                // Border
-                cr.set_source_rgba(1.0, 1.0, 1.0, 0.8);
-                cr.set_line_width(2.0);
-                cr.rectangle(x, y, rect_width, rect_height);
-                cr.stroke().ok();
-            }
-        });
+            });
     }
 
     /// Setup container interaction for box selection and deselection
@@ -479,8 +498,11 @@ impl GridLayout {
                         let panel_width = state.frame.width() as f64;
                         let panel_height = state.frame.height() as f64;
 
-                        if x >= panel_x && x <= panel_x + panel_width
-                            && y >= panel_y && y <= panel_y + panel_height {
+                        if x >= panel_x
+                            && x <= panel_x + panel_width
+                            && y >= panel_y
+                            && y <= panel_y + panel_height
+                        {
                             clicked_on_panel = true;
                             break;
                         }
@@ -547,8 +569,11 @@ impl GridLayout {
                         let panel_width = state.frame.width() as f64;
                         let panel_height = state.frame.height() as f64;
 
-                        if x >= panel_x && x <= panel_x + panel_width
-                            && y >= panel_y && y <= panel_y + panel_height {
+                        if x >= panel_x
+                            && x <= panel_x + panel_width
+                            && y >= panel_y
+                            && y <= panel_y + panel_height
+                        {
                             on_panel = true;
                             break;
                         }
@@ -633,8 +658,10 @@ impl GridLayout {
                                     let panel_y2 = panel_y + panel_height;
 
                                     // Check if rectangles intersect
-                                    let intersects = !(rect_x2 < panel_x || rect_x1 > panel_x2
-                                        || rect_y2 < panel_y || rect_y1 > panel_y2);
+                                    let intersects = !(rect_x2 < panel_x
+                                        || rect_x1 > panel_x2
+                                        || rect_y2 < panel_y
+                                        || rect_y1 > panel_y2);
 
                                     if intersects && !selected.contains(id) {
                                         selected.insert(id.clone());
@@ -685,8 +712,15 @@ impl GridLayout {
                 // Show confirmation dialog
                 let dialog = gtk4::AlertDialog::builder()
                     .modal(true)
-                    .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
-                    .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
+                    .message(format!(
+                        "Delete {} Panel{}?",
+                        count,
+                        if count > 1 { "s" } else { "" }
+                    ))
+                    .detail(format!(
+                        "This will permanently delete the selected panel{}.",
+                        if count > 1 { "s" } else { "" }
+                    ))
                     .buttons(vec!["Cancel", "Delete"])
                     .default_button(0)
                     .cancel_button(0)
@@ -699,22 +733,26 @@ impl GridLayout {
                 let panels_del = panels_key.clone();
                 let on_change_del = on_change_key.clone();
 
-                dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |result| {
-                    if let Ok(response) = result {
-                        if response == 1 {
-                            // Delete button clicked
-                            delete_selected_panels(
-                                &selected_ids,
-                                &selected_panels_del,
-                                &panel_states_del,
-                                &occupied_cells_del,
-                                &container_del,
-                                &panels_del,
-                                &on_change_del,
-                            );
+                dialog.choose(
+                    None::<&gtk4::Window>,
+                    None::<&gtk4::gio::Cancellable>,
+                    move |result| {
+                        if let Ok(response) = result {
+                            if response == 1 {
+                                // Delete button clicked
+                                delete_selected_panels(
+                                    &selected_ids,
+                                    &selected_panels_del,
+                                    &panel_states_del,
+                                    &occupied_cells_del,
+                                    &container_del,
+                                    &panels_del,
+                                    &on_change_del,
+                                );
+                            }
                         }
-                    }
-                });
+                    },
+                );
 
                 return gtk4::glib::Propagation::Stop;
             }
@@ -753,7 +791,10 @@ impl GridLayout {
         // Create displayer widget
         let (widget, displayer_id) = {
             let panel_guard = panel.blocking_read();
-            (panel_guard.displayer.create_widget(), panel_guard.displayer.id().to_string())
+            (
+                panel_guard.displayer.create_widget(),
+                panel_guard.displayer.id().to_string(),
+            )
         };
         widget.set_size_request(width, height);
 
@@ -791,7 +832,10 @@ impl GridLayout {
                     // Check if click is on the icon - only open dialog if clicked on icon
                     let on_icon = if let Ok(panel_guard) = panel_for_click.try_read() {
                         if let Some((ix, iy, iw, ih)) = panel_guard.displayer.get_icon_bounds() {
-                            click_x >= ix && click_x <= ix + iw && click_y >= iy && click_y <= iy + ih
+                            click_x >= ix
+                                && click_x <= ix + iw
+                                && click_y >= iy
+                                && click_y <= iy + ih
                         } else {
                             // No icon bounds means no icon shown, allow click anywhere
                             true
@@ -801,7 +845,8 @@ impl GridLayout {
                     };
 
                     if on_icon {
-                        let window = widget.root()
+                        let window = widget
+                            .root()
                             .and_then(|r| r.downcast::<gtk4::Window>().ok());
 
                         crate::ui::AlarmTimerDialog::show(window.as_ref());
@@ -829,10 +874,34 @@ impl GridLayout {
                     // Create rounded rectangle path
                     cr.new_path();
                     if radius > 0.0 {
-                        cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
-                        cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
-                        cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
-                        cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                        cr.arc(
+                            radius,
+                            radius,
+                            radius,
+                            std::f64::consts::PI,
+                            3.0 * std::f64::consts::PI / 2.0,
+                        );
+                        cr.arc(
+                            width - radius,
+                            radius,
+                            radius,
+                            3.0 * std::f64::consts::PI / 2.0,
+                            0.0,
+                        );
+                        cr.arc(
+                            width - radius,
+                            height - radius,
+                            radius,
+                            0.0,
+                            std::f64::consts::PI / 2.0,
+                        );
+                        cr.arc(
+                            radius,
+                            height - radius,
+                            radius,
+                            std::f64::consts::PI / 2.0,
+                            std::f64::consts::PI,
+                        );
                         cr.close_path();
                     } else {
                         cr.rectangle(0.0, 0.0, width, height);
@@ -844,7 +913,14 @@ impl GridLayout {
                     // Get source values for indicator backgrounds and theme for color resolution
                     let source_values = panel_guard.source.get_values();
                     let theme = app_config_bg.borrow().global_theme.clone();
-                    if let Err(e) = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme)) {
+                    if let Err(e) = crate::ui::render_background_with_source_and_theme(
+                        cr,
+                        &panel_guard.background,
+                        width,
+                        height,
+                        &source_values,
+                        Some(&theme),
+                    ) {
                         log::warn!("Failed to render background: {}", e);
                     }
                     cr.restore().ok();
@@ -852,10 +928,34 @@ impl GridLayout {
                     // Render border if enabled
                     if panel_guard.border.enabled {
                         if radius > 0.0 {
-                            cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
-                            cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::PI / 2.0, 0.0);
-                            cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::PI / 2.0);
-                            cr.arc(radius, height - radius, radius, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+                            cr.arc(
+                                radius,
+                                radius,
+                                radius,
+                                std::f64::consts::PI,
+                                3.0 * std::f64::consts::PI / 2.0,
+                            );
+                            cr.arc(
+                                width - radius,
+                                radius,
+                                radius,
+                                3.0 * std::f64::consts::PI / 2.0,
+                                0.0,
+                            );
+                            cr.arc(
+                                width - radius,
+                                height - radius,
+                                radius,
+                                0.0,
+                                std::f64::consts::PI / 2.0,
+                            );
+                            cr.arc(
+                                radius,
+                                height - radius,
+                                radius,
+                                std::f64::consts::PI / 2.0,
+                                std::f64::consts::PI,
+                            );
                             cr.close_path();
                         } else {
                             cr.rectangle(0.0, 0.0, width, height);
@@ -867,7 +967,9 @@ impl GridLayout {
                 }
                 Err(_) => {
                     // Lock contention - schedule a retry on next frame
-                    log::debug!("Skipped background render due to lock contention, scheduling retry");
+                    log::debug!(
+                        "Skipped background render due to lock contention, scheduling retry"
+                    );
                     if let Some(bg_area) = background_area_weak.upgrade() {
                         gtk4::glib::idle_add_local_once(move || {
                             bg_area.queue_draw();
@@ -891,11 +993,14 @@ impl GridLayout {
             };
             // Check if panel background is indicator type and value changed
             if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
-                if let crate::ui::BackgroundType::Indicator(ref indicator) = panel_guard.background.background {
+                if let crate::ui::BackgroundType::Indicator(ref indicator) =
+                    panel_guard.background.background
+                {
                     // Get current value from source (not config - config stores source settings, not values)
                     let source_values = panel_guard.source.get_values();
                     let current_value = if !indicator.value_field.is_empty() {
-                        source_values.get(&indicator.value_field)
+                        source_values
+                            .get(&indicator.value_field)
                             .and_then(|v| v.as_f64())
                     } else {
                         Some(indicator.static_value)
@@ -939,10 +1044,7 @@ impl GridLayout {
                 frame.add_css_class(&css_class);
 
                 let css_provider = gtk4::CssProvider::new();
-                let css = format!(
-                    ".{} {{ border-radius: {}px; }}",
-                    css_class, radius
-                );
+                let css = format!(".{} {{ border-radius: {}px; }}", css_class, radius);
                 css_provider.load_from_data(&css);
                 // Add provider to display (CSS class ensures it only affects this panel)
                 let display = frame.display();
@@ -1239,15 +1341,16 @@ impl GridLayout {
 
             // Get the displayer's typed config and convert to JSON Value
             // Use to_inner_value() to save just the config, not the enum wrapper
-            let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
-                // Use to_inner_value() for consistent serialization format
-                typed_config.to_inner_value()
-            } else {
-                // Fall back to HashMap config (filter out source-specific keys)
-                let mut config = panel_guard.config.clone();
-                filter_source_config_keys(&mut config);
-                serde_json::to_value(&config).ok()
-            };
+            let displayer_config =
+                if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
+                    // Use to_inner_value() for consistent serialization format
+                    typed_config.to_inner_value()
+                } else {
+                    // Fall back to HashMap config (filter out source-specific keys)
+                    let mut config = panel_guard.config.clone();
+                    filter_source_config_keys(&mut config);
+                    serde_json::to_value(&config).ok()
+                };
 
             drop(panel_guard);
 
@@ -1285,73 +1388,75 @@ impl GridLayout {
 
             let data = panel_data;
             // Get the parent window
-                if let Some(root) = container_for_save.root() {
-                    if let Some(window) = root.downcast_ref::<gtk4::Window>() {
-                        let window_clone = window.clone();
+            if let Some(root) = container_for_save.root() {
+                if let Some(window) = root.downcast_ref::<gtk4::Window>() {
+                    let window_clone = window.clone();
 
-                        gtk4::glib::MainContext::default().spawn_local(async move {
-                            use gtk4::FileDialog;
+                    gtk4::glib::MainContext::default().spawn_local(async move {
+                        use gtk4::FileDialog;
 
-                            // Get initial directory (config dir)
-                            let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
-                                .map(|d| d.config_dir().to_path_buf())
-                                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+                        // Get initial directory (config dir)
+                        let initial_dir = directories::ProjectDirs::from(
+                            "com",
+                            "github.hilgardt_collab",
+                            "rg-sens",
+                        )
+                        .map(|d| d.config_dir().to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
-                            // Create file filter for JSON files
-                            let json_filter = gtk4::FileFilter::new();
-                            json_filter.set_name(Some("JSON files"));
-                            json_filter.add_pattern("*.json");
+                        // Create file filter for JSON files
+                        let json_filter = gtk4::FileFilter::new();
+                        json_filter.set_name(Some("JSON files"));
+                        json_filter.add_pattern("*.json");
 
-                            let all_filter = gtk4::FileFilter::new();
-                            all_filter.set_name(Some("All files"));
-                            all_filter.add_pattern("*");
+                        let all_filter = gtk4::FileFilter::new();
+                        all_filter.set_name(Some("All files"));
+                        all_filter.add_pattern("*");
 
-                            let filters = gio::ListStore::new::<gtk4::FileFilter>();
-                            filters.append(&json_filter);
-                            filters.append(&all_filter);
+                        let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                        filters.append(&json_filter);
+                        filters.append(&all_filter);
 
-                            // Suggest a filename based on panel id
-                            let suggested_name = format!("panel_{}.json", data.id.replace("-", "_"));
+                        // Suggest a filename based on panel id
+                        let suggested_name = format!("panel_{}.json", data.id.replace("-", "_"));
 
-                            let file_dialog = FileDialog::builder()
-                                .title("Save Panel to File")
-                                .modal(true)
-                                .initial_folder(&gio::File::for_path(&initial_dir))
-                                .initial_name(&suggested_name)
-                                .filters(&filters)
-                                .default_filter(&json_filter)
-                                .build();
+                        let file_dialog = FileDialog::builder()
+                            .title("Save Panel to File")
+                            .modal(true)
+                            .initial_folder(&gio::File::for_path(&initial_dir))
+                            .initial_name(&suggested_name)
+                            .filters(&filters)
+                            .default_filter(&json_filter)
+                            .build();
 
-                            match file_dialog.save_future(Some(&window_clone)).await {
-                                Ok(file) => {
-                                    if let Some(path) = file.path() {
-                                        info!("Saving panel to {:?}", path);
+                        match file_dialog.save_future(Some(&window_clone)).await {
+                            Ok(file) => {
+                                if let Some(path) = file.path() {
+                                    info!("Saving panel to {:?}", path);
 
-                                        // Serialize panel data to JSON
-                                        match serde_json::to_string_pretty(&data) {
-                                            Ok(json) => {
-                                                match std::fs::write(&path, json) {
-                                                    Ok(()) => {
-                                                        info!("Panel saved successfully to {:?}", path);
-                                                    }
-                                                    Err(e) => {
-                                                        log::warn!("Failed to write panel file: {}", e);
-                                                    }
-                                                }
+                                    // Serialize panel data to JSON
+                                    match serde_json::to_string_pretty(&data) {
+                                        Ok(json) => match std::fs::write(&path, json) {
+                                            Ok(()) => {
+                                                info!("Panel saved successfully to {:?}", path);
                                             }
                                             Err(e) => {
-                                                log::warn!("Failed to serialize panel data: {}", e);
+                                                log::warn!("Failed to write panel file: {}", e);
                                             }
+                                        },
+                                        Err(e) => {
+                                            log::warn!("Failed to serialize panel data: {}", e);
                                         }
                                     }
                                 }
-                                Err(e) => {
-                                    info!("Save panel dialog cancelled or failed: {}", e);
-                                }
                             }
-                        });
-                    }
+                            Err(e) => {
+                                info!("Save panel dialog cancelled or failed: {}", e);
+                            }
+                        }
+                    });
                 }
+            }
         });
         action_group.add_action(&save_to_file_action);
 
@@ -1367,11 +1472,12 @@ impl GridLayout {
         delete_action.connect_activate(move |_, _| {
             // Get all selected panels, or just the clicked panel if none selected
             let selected = selected_panels_delete.borrow();
-            let panel_ids: Vec<String> = if selected.is_empty() || !selected.contains(&panel_id_clone2) {
-                vec![panel_id_clone2.clone()]
-            } else {
-                selected.iter().cloned().collect()
-            };
+            let panel_ids: Vec<String> =
+                if selected.is_empty() || !selected.contains(&panel_id_clone2) {
+                    vec![panel_id_clone2.clone()]
+                } else {
+                    selected.iter().cloned().collect()
+                };
             let count = panel_ids.len();
             drop(selected);
 
@@ -1380,8 +1486,15 @@ impl GridLayout {
             // Show confirmation dialog
             use gtk4::AlertDialog;
             let dialog = AlertDialog::builder()
-                .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
-                .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
+                .message(format!(
+                    "Delete {} Panel{}?",
+                    count,
+                    if count > 1 { "s" } else { "" }
+                ))
+                .detail(format!(
+                    "This will permanently delete the selected panel{}.",
+                    if count > 1 { "s" } else { "" }
+                ))
                 .modal(true)
                 .buttons(vec!["Cancel", "Delete"])
                 .default_button(0)
@@ -1398,20 +1511,24 @@ impl GridLayout {
             // We need a parent window for the dialog - get it from the container
             if let Some(root) = container_clone.root() {
                 if let Some(window) = root.downcast_ref::<gtk4::Window>() {
-                    dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
-                        if let Ok(1) = response {
-                            // Delete button clicked
-                            delete_selected_panels(
-                                &panel_ids,
-                                &selected_panels_for_delete,
-                                &panel_states_for_delete,
-                                &occupied_cells_for_delete,
-                                &container_for_delete,
-                                &panels_for_delete,
-                                &on_change_for_delete,
-                            );
-                        }
-                    });
+                    dialog.choose(
+                        Some(window),
+                        gtk4::gio::Cancellable::NONE,
+                        move |response| {
+                            if let Ok(1) = response {
+                                // Delete button clicked
+                                delete_selected_panels(
+                                    &panel_ids,
+                                    &selected_panels_for_delete,
+                                    &panel_states_for_delete,
+                                    &occupied_cells_for_delete,
+                                    &container_for_delete,
+                                    &panels_for_delete,
+                                    &on_change_for_delete,
+                                );
+                            }
+                        },
+                    );
                 }
             }
         });
@@ -1424,12 +1541,7 @@ impl GridLayout {
         gesture_secondary.set_button(3); // Right mouse button
 
         gesture_secondary.connect_pressed(move |gesture, _, x, y| {
-            popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                x as i32,
-                y as i32,
-                1,
-                1,
-            )));
+            popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
             popover.popup();
             gesture.set_state(gtk4::EventSequenceState::Claimed);
         });
@@ -1593,8 +1705,14 @@ impl GridLayout {
                 // Apply this offset to all selected panels using cached geometries
                 for id in selected.iter() {
                     if let Some(geom) = geometries.get(id) {
-                        log::debug!("[DRAG] Panel {} drag preview using cached geometry {}x{} at ({},{})",
-                                   id, geom.width, geom.height, geom.x, geom.y);
+                        log::debug!(
+                            "[DRAG] Panel {} drag preview using cached geometry {}x{} at ({},{})",
+                            id,
+                            geom.width,
+                            geom.height,
+                            geom.x,
+                            geom.y
+                        );
 
                         // Calculate new grid position
                         let new_grid_x = (geom.x as i32 + grid_offset_x).max(0) as u32;
@@ -3130,7 +3248,8 @@ impl GridLayout {
 
             // Calculate new pixel dimensions
             let pixel_width = geom.width as i32 * cell_width + (geom.width as i32 - 1) * spacing;
-            let pixel_height = geom.height as i32 * cell_height + (geom.height as i32 - 1) * spacing;
+            let pixel_height =
+                geom.height as i32 * cell_height + (geom.height as i32 - 1) * spacing;
             let x = (geom.x as i32 * (cell_width + spacing)) as f64;
             let y = (geom.y as i32 * (cell_height + spacing)) as f64;
 
@@ -3142,7 +3261,9 @@ impl GridLayout {
             state.widget.set_size_request(pixel_width, pixel_height);
 
             // Update background area size
-            state.background_area.set_size_request(pixel_width, pixel_height);
+            state
+                .background_area
+                .set_size_request(pixel_width, pixel_height);
         }
 
         self.drop_zone_layer.queue_draw();
@@ -3150,8 +3271,10 @@ impl GridLayout {
 
     pub fn set_config(&mut self, new_config: GridConfig) {
         *self.config.borrow_mut() = new_config;
-        let width = new_config.columns as i32 * (new_config.cell_width + new_config.spacing) - new_config.spacing;
-        let height = new_config.rows as i32 * (new_config.cell_height + new_config.spacing) - new_config.spacing;
+        let width = new_config.columns as i32 * (new_config.cell_width + new_config.spacing)
+            - new_config.spacing;
+        let height = new_config.rows as i32 * (new_config.cell_height + new_config.spacing)
+            - new_config.spacing;
         self.container.set_size_request(width, height);
         self.drop_zone_layer.set_size_request(width, height);
     }
@@ -3288,8 +3411,15 @@ fn setup_copied_panel_interaction(
         drop(selected);
 
         let dialog = AlertDialog::builder()
-            .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
-            .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
+            .message(format!(
+                "Delete {} Panel{}?",
+                count,
+                if count > 1 { "s" } else { "" }
+            ))
+            .detail(format!(
+                "This will permanently delete the selected panel{}.",
+                if count > 1 { "s" } else { "" }
+            ))
             .modal(true)
             .buttons(vec!["Cancel", "Delete"])
             .default_button(0)
@@ -3305,19 +3435,23 @@ fn setup_copied_panel_interaction(
 
         if let Some(root) = container_del.root() {
             if let Some(window) = root.downcast_ref::<gtk4::Window>() {
-                dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
-                    if let Ok(1) = response {
-                        delete_selected_panels(
-                            &panel_ids,
-                            &selected_panels_confirm,
-                            &panel_states_confirm,
-                            &occupied_cells_confirm,
-                            &container_confirm,
-                            &panels_confirm,
-                            &on_change_confirm,
-                        );
-                    }
-                });
+                dialog.choose(
+                    Some(window),
+                    gtk4::gio::Cancellable::NONE,
+                    move |response| {
+                        if let Ok(1) = response {
+                            delete_selected_panels(
+                                &panel_ids,
+                                &selected_panels_confirm,
+                                &panel_states_confirm,
+                                &occupied_cells_confirm,
+                                &container_confirm,
+                                &panels_confirm,
+                                &on_change_confirm,
+                            );
+                        }
+                    },
+                );
             }
         }
     });
@@ -3399,7 +3533,8 @@ fn setup_copied_panel_interaction(
         let displayer_id = panel_guard.displayer.id().to_string();
 
         // Use to_inner_value() to save just the config, not the enum wrapper
-        let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config() {
+        let displayer_config = if let Some(typed_config) = panel_guard.displayer.get_typed_config()
+        {
             typed_config.to_inner_value()
         } else {
             let mut config = panel_guard.config.clone();
@@ -3437,9 +3572,10 @@ fn setup_copied_panel_interaction(
                 gtk4::glib::MainContext::default().spawn_local(async move {
                     use gtk4::FileDialog;
 
-                    let initial_dir = directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
-                        .map(|d| d.config_dir().to_path_buf())
-                        .unwrap_or_else(|| std::path::PathBuf::from("/"));
+                    let initial_dir =
+                        directories::ProjectDirs::from("com", "github.hilgardt_collab", "rg-sens")
+                            .map(|d| d.config_dir().to_path_buf())
+                            .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
                     let json_filter = gtk4::FileFilter::new();
                     json_filter.set_name(Some("JSON files"));
@@ -3501,7 +3637,8 @@ fn setup_copied_panel_interaction(
     let drag_gesture = GestureDrag::new();
     drag_gesture.set_button(1);
 
-    let initial_positions: Rc<RefCell<HashMap<String, (f64, f64)>>> = Rc::new(RefCell::new(HashMap::new()));
+    let initial_positions: Rc<RefCell<HashMap<String, (f64, f64)>>> =
+        Rc::new(RefCell::new(HashMap::new()));
     let dragged_panel_id: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
 
     // drag_begin
@@ -3703,7 +3840,9 @@ fn setup_copied_panel_interaction(
                                         break;
                                     }
                                 }
-                                if group_has_collision { break; }
+                                if group_has_collision {
+                                    break;
+                                }
                             }
                         }
 
@@ -3747,7 +3886,21 @@ fn setup_copied_panel_interaction(
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        let (source_meta, displayer_id, panel_config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
+                        let (
+                            source_meta,
+                            displayer_id,
+                            panel_config,
+                            background,
+                            corner_radius,
+                            border,
+                            geometry_size,
+                            scale,
+                            translate_x,
+                            translate_y,
+                            z_index,
+                            ignore_collision,
+                            panel_data,
+                        ) = {
                             let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
@@ -3779,7 +3932,8 @@ fn setup_copied_panel_interaction(
                                     height: geometry_size.1,
                                 };
 
-                                let mut new_panel = Panel::new(new_id.clone(), geometry, new_source, new_displayer);
+                                let mut new_panel =
+                                    Panel::new(new_id.clone(), geometry, new_source, new_displayer);
                                 new_panel.background = background;
                                 new_panel.corner_radius = corner_radius;
                                 new_panel.border = border;
@@ -3817,8 +3971,10 @@ fn setup_copied_panel_interaction(
                                 let cfg = config_end.borrow();
                                 let x = grid_x as i32 * (cfg.cell_width + cfg.spacing);
                                 let y = grid_y as i32 * (cfg.cell_height + cfg.spacing);
-                                let width = geometry_size.0 as i32 * cfg.cell_width + (geometry_size.0 as i32 - 1) * cfg.spacing;
-                                let height = geometry_size.1 as i32 * cfg.cell_height + (geometry_size.1 as i32 - 1) * cfg.spacing;
+                                let width = geometry_size.0 as i32 * cfg.cell_width
+                                    + (geometry_size.0 as i32 - 1) * cfg.spacing;
+                                let height = geometry_size.1 as i32 * cfg.cell_height
+                                    + (geometry_size.1 as i32 - 1) * cfg.spacing;
                                 drop(cfg);
 
                                 let new_widget = {
@@ -3837,14 +3993,41 @@ fn setup_copied_panel_interaction(
                                     if let Ok(panel_guard) = panel_clone_bg.try_read() {
                                         let width = w as f64;
                                         let height = h as f64;
-                                        let radius = panel_guard.corner_radius.min(width / 2.0).min(height / 2.0);
+                                        let radius = panel_guard
+                                            .corner_radius
+                                            .min(width / 2.0)
+                                            .min(height / 2.0);
 
                                         cr.new_path();
                                         if radius > 0.0 {
-                                            cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
-                                            cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::FRAC_PI_2, 0.0);
-                                            cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::FRAC_PI_2);
-                                            cr.arc(radius, height - radius, radius, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+                                            cr.arc(
+                                                radius,
+                                                radius,
+                                                radius,
+                                                std::f64::consts::PI,
+                                                3.0 * std::f64::consts::FRAC_PI_2,
+                                            );
+                                            cr.arc(
+                                                width - radius,
+                                                radius,
+                                                radius,
+                                                3.0 * std::f64::consts::FRAC_PI_2,
+                                                0.0,
+                                            );
+                                            cr.arc(
+                                                width - radius,
+                                                height - radius,
+                                                radius,
+                                                0.0,
+                                                std::f64::consts::FRAC_PI_2,
+                                            );
+                                            cr.arc(
+                                                radius,
+                                                height - radius,
+                                                radius,
+                                                std::f64::consts::FRAC_PI_2,
+                                                std::f64::consts::PI,
+                                            );
                                             cr.close_path();
                                         } else {
                                             cr.rectangle(0.0, 0.0, width, height);
@@ -3854,15 +4037,46 @@ fn setup_copied_panel_interaction(
                                         cr.clip();
                                         let source_values = panel_guard.source.get_values();
                                         let theme = app_config_bg.borrow().global_theme.clone();
-                                        let _ = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme));
+                                        let _ = crate::ui::render_background_with_source_and_theme(
+                                            cr,
+                                            &panel_guard.background,
+                                            width,
+                                            height,
+                                            &source_values,
+                                            Some(&theme),
+                                        );
                                         cr.restore().ok();
 
                                         if panel_guard.border.enabled {
                                             if radius > 0.0 {
-                                                cr.arc(radius, radius, radius, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
-                                                cr.arc(width - radius, radius, radius, 3.0 * std::f64::consts::FRAC_PI_2, 0.0);
-                                                cr.arc(width - radius, height - radius, radius, 0.0, std::f64::consts::FRAC_PI_2);
-                                                cr.arc(radius, height - radius, radius, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+                                                cr.arc(
+                                                    radius,
+                                                    radius,
+                                                    radius,
+                                                    std::f64::consts::PI,
+                                                    3.0 * std::f64::consts::FRAC_PI_2,
+                                                );
+                                                cr.arc(
+                                                    width - radius,
+                                                    radius,
+                                                    radius,
+                                                    3.0 * std::f64::consts::FRAC_PI_2,
+                                                    0.0,
+                                                );
+                                                cr.arc(
+                                                    width - radius,
+                                                    height - radius,
+                                                    radius,
+                                                    0.0,
+                                                    std::f64::consts::FRAC_PI_2,
+                                                );
+                                                cr.arc(
+                                                    radius,
+                                                    height - radius,
+                                                    radius,
+                                                    std::f64::consts::FRAC_PI_2,
+                                                    std::f64::consts::PI,
+                                                );
                                                 cr.close_path();
                                             } else {
                                                 cr.rectangle(0.0, 0.0, width, height);
@@ -3872,7 +4086,9 @@ fn setup_copied_panel_interaction(
                                             cr.stroke().ok();
                                         }
                                     } else if let Some(bg_area) = background_area_weak.upgrade() {
-                                        gtk4::glib::idle_add_local_once(move || { bg_area.queue_draw(); });
+                                        gtk4::glib::idle_add_local_once(move || {
+                                            bg_area.queue_draw();
+                                        });
                                     }
                                 });
 
@@ -3915,10 +4131,21 @@ fn setup_copied_panel_interaction(
 
                                 gtk4::glib::idle_add_local_once(move || {
                                     setup_copied_panel_interaction(
-                                        &widget_i, &frame_i, panel_i, id_i,
-                                        states_i, selected_i, occupied_i, config_i,
-                                        container_i, on_change_i, drop_zone_i, panels_i,
-                                        is_dragging_i, drag_preview_i, app_config_i,
+                                        &widget_i,
+                                        &frame_i,
+                                        panel_i,
+                                        id_i,
+                                        states_i,
+                                        selected_i,
+                                        occupied_i,
+                                        config_i,
+                                        container_i,
+                                        on_change_i,
+                                        drop_zone_i,
+                                        panels_i,
+                                        is_dragging_i,
+                                        drag_preview_i,
+                                        app_config_i,
                                     );
                                 });
 
@@ -4039,9 +4266,11 @@ pub(crate) fn delete_selected_panels(
     }
 }
 
-
 impl Default for GridLayout {
     fn default() -> Self {
-        Self::new(GridConfig::default(), Rc::new(RefCell::new(crate::config::AppConfig::default())))
+        Self::new(
+            GridConfig::default(),
+            Rc::new(RefCell::new(crate::config::AppConfig::default())),
+        )
     }
 }

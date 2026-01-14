@@ -3,21 +3,19 @@
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-use crate::displayers::{TextLineConfig, TextDisplayerConfig};
-use crate::ui::{BackgroundConfig, ColorStop, CpuSourceConfig, GpuSourceConfig};
-use crate::ui::bar_display::BarDisplayConfig;
-use crate::ui::theme::FontSource;
-use crate::ui::graph_display::GraphDisplayConfig;
-use crate::ui::arc_display::ArcDisplayConfig;
-use crate::ui::speedometer_display::SpeedometerConfig;
 use crate::core::PanelBorderConfig;
+use crate::displayers::{TextDisplayerConfig, TextLineConfig};
+use crate::ui::arc_display::ArcDisplayConfig;
+use crate::ui::bar_display::BarDisplayConfig;
+use crate::ui::graph_display::GraphDisplayConfig;
+use crate::ui::speedometer_display::SpeedometerConfig;
+use crate::ui::theme::FontSource;
+use crate::ui::{BackgroundConfig, ColorStop, CpuSourceConfig, GpuSourceConfig};
 use serde_json::Value;
 use std::collections::HashMap;
 
 /// Global clipboard that persists across config dialogs
-pub static CLIPBOARD: Lazy<Mutex<Clipboard>> = Lazy::new(|| {
-    Mutex::new(Clipboard::default())
-});
+pub static CLIPBOARD: Lazy<Mutex<Clipboard>> = Lazy::new(|| Mutex::new(Clipboard::default()));
 
 /// Panel style (all visual settings except source config)
 #[derive(Debug, Clone)]

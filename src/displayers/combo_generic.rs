@@ -15,9 +15,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::displayers::combo_displayer_base::{
-    ComboDisplayData, ComboFrameConfig, ContentDrawParams, FrameRenderer,
-    LayoutFrameConfig, ThemedFrameConfig,
     draw_content_items_generic, handle_combo_update_data, setup_combo_animation_timer_ext,
+    ComboDisplayData, ComboFrameConfig, ContentDrawParams, FrameRenderer, LayoutFrameConfig,
+    ThemedFrameConfig,
 };
 
 /// Cached frame rendering data to avoid re-rendering static elements
@@ -224,7 +224,8 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
 
         if let Ok(data) = self.data.try_lock() {
             data.combo.transform.apply(cr, width, height);
-            self.renderer.render_frame(cr, &data.config, width, height)?;
+            self.renderer
+                .render_frame(cr, &data.config, width, height)?;
             data.combo.transform.restore(cr);
         }
 
@@ -371,14 +372,11 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 data.combo.transform.apply(cr, w, h);
 
                 // Check if frame cache is valid (same size and config version)
-                let cache_valid = frame_cache_clone
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|cache| {
-                        cache.width == width
-                            && cache.height == height
-                            && cache.config_version == data.config_version
-                    });
+                let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
+                    cache.width == width
+                        && cache.height == height
+                        && cache.config_version == data.config_version
+                });
 
                 // Either use cached frame or render fresh and cache
                 let (content_bounds, group_layouts) = if cache_valid {
@@ -392,15 +390,12 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                     (cache.content_bounds, cache.group_layouts.clone())
                 } else {
                     // Try to create cache surface
-                    let cache_result = cairo::ImageSurface::create(
-                        cairo::Format::ARgb32,
-                        width,
-                        height,
-                    )
-                    .ok()
-                    .and_then(|surface| {
-                        cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
-                    });
+                    let cache_result =
+                        cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                            .ok()
+                            .and_then(|surface| {
+                                cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
+                            });
 
                     if let Some((surface, cache_cr)) = cache_result {
                         // Render frame to cache surface
@@ -556,7 +551,8 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
         if let Ok(data) = self.data.try_lock() {
             data.combo.transform.apply(cr, width, height);
-            self.renderer.render_frame(cr, &data.config, width, height)?;
+            self.renderer
+                .render_frame(cr, &data.config, width, height)?;
             data.combo.transform.restore(cr);
         }
 

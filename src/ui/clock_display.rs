@@ -12,8 +12,7 @@ use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::{ColorSource, ComboThemeConfig, FontSource};
 
 /// Clock hand style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum HandStyle {
     #[serde(rename = "line")]
     #[default]
@@ -26,10 +25,8 @@ pub enum HandStyle {
     Fancy,
 }
 
-
 /// Clock face style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum FaceStyle {
     #[serde(rename = "minimal")]
     Minimal,
@@ -44,10 +41,8 @@ pub enum FaceStyle {
     Numbers,
 }
 
-
 /// Tick mark style
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum TickStyle {
     #[serde(rename = "none")]
     None,
@@ -61,8 +56,6 @@ pub enum TickStyle {
     #[serde(rename = "triangles")]
     Triangles,
 }
-
-
 
 /// Analog clock display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,9 +339,9 @@ impl Default for AnalogClockConfig {
 pub fn render_analog_clock(
     cr: &cairo::Context,
     config: &AnalogClockConfig,
-    hour: f64,      // 0-11 with fractional minutes
-    minute: f64,    // 0-59 with fractional seconds
-    second: f64,    // 0-59 with fractional milliseconds
+    hour: f64,   // 0-11 with fractional minutes
+    minute: f64, // 0-59 with fractional seconds
+    second: f64, // 0-59 with fractional milliseconds
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
@@ -451,7 +444,13 @@ fn draw_face(
     // Render background using common background system with theme
     let face_width = radius * 2.0;
     let face_height = radius * 2.0;
-    let _ = crate::ui::render_background_with_theme(cr, &config.face_background, face_width, face_height, theme);
+    let _ = crate::ui::render_background_with_theme(
+        cr,
+        &config.face_background,
+        face_width,
+        face_height,
+        theme,
+    );
 
     cr.restore()?; // Restores both clip and translation
 
@@ -491,7 +490,12 @@ fn draw_ticks(
     if config.minute_tick_style != TickStyle::None {
         let minute_color = config.minute_tick_color.resolve(theme_ref);
         cr.save()?;
-        cr.set_source_rgba(minute_color.r, minute_color.g, minute_color.b, minute_color.a);
+        cr.set_source_rgba(
+            minute_color.r,
+            minute_color.g,
+            minute_color.b,
+            minute_color.a,
+        );
 
         let outer_r = radius * (config.minute_tick_outer_percent / 100.0);
         let inner_r = radius * (config.minute_tick_inner_percent / 100.0);
@@ -503,7 +507,16 @@ fn draw_ticks(
             }
 
             let angle = (i as f64 / 60.0) * 2.0 * PI - PI / 2.0;
-            draw_single_tick(cr, config.minute_tick_style, cx, cy, angle, outer_r, inner_r, 1.0)?;
+            draw_single_tick(
+                cr,
+                config.minute_tick_style,
+                cx,
+                cy,
+                angle,
+                outer_r,
+                inner_r,
+                1.0,
+            )?;
         }
         cr.restore()?;
     }
@@ -519,7 +532,16 @@ fn draw_ticks(
 
         for i in 0..12 {
             let angle = (i as f64 / 12.0) * 2.0 * PI - PI / 2.0;
-            draw_single_tick(cr, config.hour_tick_style, cx, cy, angle, outer_r, inner_r, 3.0)?;
+            draw_single_tick(
+                cr,
+                config.hour_tick_style,
+                cx,
+                cy,
+                angle,
+                outer_r,
+                inner_r,
+                3.0,
+            )?;
         }
         cr.restore()?;
     }
@@ -633,9 +655,13 @@ fn draw_numbers(
     let number_radius = radius * 0.75;
 
     let numbers: Vec<&str> = match config.face_style {
-        FaceStyle::Roman => vec!["XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"],
+        FaceStyle::Roman => vec![
+            "XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI",
+        ],
         FaceStyle::Minimal => vec!["12", "", "", "3", "", "", "6", "", "", "9", "", ""],
-        _ => vec!["12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+        _ => vec![
+            "12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+        ],
     };
 
     for (i, num) in numbers.iter().enumerate() {
@@ -672,7 +698,12 @@ fn draw_hand(
     let default_theme = ComboThemeConfig::default();
     let theme_ref = theme.unwrap_or(&default_theme);
     let resolved_color = color.resolve(theme_ref);
-    cr.set_source_rgba(resolved_color.r, resolved_color.g, resolved_color.b, resolved_color.a);
+    cr.set_source_rgba(
+        resolved_color.r,
+        resolved_color.g,
+        resolved_color.b,
+        resolved_color.a,
+    );
     cr.set_line_cap(cairo::LineCap::Round);
     cr.set_line_join(cairo::LineJoin::Round);
 

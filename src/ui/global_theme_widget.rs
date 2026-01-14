@@ -160,7 +160,8 @@ impl GlobalThemeWidget {
             let on_change_grad = on_change.clone();
             let gradient_editor_clone = gradient_editor.clone();
             gradient_editor.set_on_change(move || {
-                config_grad.borrow_mut().gradient = gradient_editor_clone.get_gradient_source_config();
+                config_grad.borrow_mut().gradient =
+                    gradient_editor_clone.get_gradient_source_config();
                 if let Some(cb) = on_change_grad.borrow().as_ref() {
                     cb();
                 }
@@ -195,11 +196,15 @@ impl GlobalThemeWidget {
                 let config_for_cb = config_f1.clone();
                 let on_change_for_cb = on_change_f1.clone();
                 let font_btn_for_cb = font1_btn_clone.clone();
-                if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                if let Some(window) = button
+                    .root()
+                    .and_then(|r| r.downcast::<gtk4::Window>().ok())
+                {
                     let current_font = config_for_cb.borrow().font1_family.clone();
                     let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
                     show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                        let family = font_desc.family()
+                        let family = font_desc
+                            .family()
                             .map(|s| s.to_string())
                             .unwrap_or_else(|| "sans-serif".to_string());
                         config_for_cb.borrow_mut().font1_family = family.clone();
@@ -245,11 +250,15 @@ impl GlobalThemeWidget {
                 let config_for_cb = config_f2.clone();
                 let on_change_for_cb = on_change_f2.clone();
                 let font_btn_for_cb = font2_btn_clone.clone();
-                if let Some(window) = button.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+                if let Some(window) = button
+                    .root()
+                    .and_then(|r| r.downcast::<gtk4::Window>().ok())
+                {
                     let current_font = config_for_cb.borrow().font2_family.clone();
                     let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
                     show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
-                        let family = font_desc.family()
+                        let family = font_desc
+                            .family()
                             .map(|s| s.to_string())
                             .unwrap_or_else(|| "sans-serif".to_string());
                         config_for_cb.borrow_mut().font2_family = family.clone();
@@ -307,7 +316,8 @@ impl GlobalThemeWidget {
 
         // Update gradient editor with theme and config
         self.gradient_editor.set_theme_config(new_config.clone());
-        self.gradient_editor.set_gradient_source_config(&new_config.gradient);
+        self.gradient_editor
+            .set_gradient_source_config(&new_config.gradient);
 
         // Update font buttons and size spins
         self.font1_btn.set_label(&new_config.font1_family);

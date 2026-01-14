@@ -48,7 +48,10 @@ pub(crate) fn show_panel_properties_dialog(
     panels: Rc<RefCell<Vec<Arc<RwLock<Panel>>>>>,
     global_theme: ComboThemeConfig,
 ) {
-    use gtk4::{Box as GtkBox, Button, DropDown, Label, Notebook, Orientation, SpinButton, StringList, Window};
+    use gtk4::{
+        Box as GtkBox, Button, DropDown, Label, Notebook, Orientation, SpinButton, StringList,
+        Window,
+    };
 
     // Use blocking read - the update thread should release quickly
     let panel_guard = match panel.try_read() {
@@ -71,14 +74,15 @@ pub(crate) fn show_panel_properties_dialog(
 
     // Get the ScrolledWindow from parent to preserve scroll position when dialog opens
     // The window child hierarchy is: Window -> ScrolledWindow -> Overlay -> ...
-    let scrolled_window = parent_window.as_ref()
+    let scrolled_window = parent_window
+        .as_ref()
         .and_then(|w| w.child())
         .and_then(|c| c.downcast::<gtk4::ScrolledWindow>().ok());
 
     // Save current scroll position before showing dialog
-    let saved_scroll = scrolled_window.as_ref().map(|sw| {
-        (sw.hadjustment().value(), sw.vadjustment().value())
-    });
+    let saved_scroll = scrolled_window
+        .as_ref()
+        .map(|sw| (sw.hadjustment().value(), sw.vadjustment().value()));
 
     // Create dialog window
     let dialog = Window::builder()
@@ -158,7 +162,8 @@ pub(crate) fn show_panel_properties_dialog(
     panel_props_box.append(&transform_label);
 
     // Scale control
-    let (scale_box, scale_spin) = create_spin_row_with_value("Scale:", 0.1, 5.0, 0.1, panel_guard.scale);
+    let (scale_box, scale_spin) =
+        create_spin_row_with_value("Scale:", 0.1, 5.0, 0.1, panel_guard.scale);
     scale_spin.set_digits(2);
     scale_box.set_margin_start(12);
     panel_props_box.append(&scale_box);
@@ -187,7 +192,8 @@ pub(crate) fn show_panel_properties_dialog(
     panel_props_box.append(&layering_label);
 
     // Z-Index control
-    let (z_index_box, z_index_spin) = create_spin_row_with_value("Z-Index:", -100.0, 100.0, 1.0, panel_guard.z_index as f64);
+    let (z_index_box, z_index_spin) =
+        create_spin_row_with_value("Z-Index:", -100.0, 100.0, 1.0, panel_guard.z_index as f64);
     z_index_spin.set_tooltip_text(Some("Higher values bring the panel in front of others"));
     z_index_box.set_margin_start(12);
     panel_props_box.append(&z_index_box);
@@ -197,7 +203,9 @@ pub(crate) fn show_panel_properties_dialog(
     collision_box.set_margin_start(12);
     let ignore_collision_check = gtk4::CheckButton::with_label("Ignore collision (allow overlap)");
     ignore_collision_check.set_active(panel_guard.ignore_collision);
-    ignore_collision_check.set_tooltip_text(Some("When enabled, this panel can overlap with other panels"));
+    ignore_collision_check.set_tooltip_text(Some(
+        "When enabled, this panel can overlap with other panels",
+    ));
     collision_box.append(&ignore_collision_check);
     panel_props_box.append(&collision_box);
 
@@ -222,7 +230,10 @@ pub(crate) fn show_panel_properties_dialog(
     // Populate source dropdown with display names (sorted alphabetically)
     let source_infos = registry.list_sources_with_info();
     let sources: Vec<String> = source_infos.iter().map(|s| s.id.clone()).collect();
-    let source_display_names: Vec<String> = source_infos.iter().map(|s| s.display_name.clone()).collect();
+    let source_display_names: Vec<String> = source_infos
+        .iter()
+        .map(|s| s.display_name.clone())
+        .collect();
     let mut selected_source_idx = 0;
     for (idx, source_id) in sources.iter().enumerate() {
         if source_id == &old_source_id {
@@ -246,13 +257,16 @@ pub(crate) fn show_panel_properties_dialog(
     let cpu_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     cpu_placeholder.set_visible(old_source_id == "cpu");
     source_tab_box.append(&cpu_placeholder);
-    let cpu_config_widget: Rc<RefCell<Option<crate::ui::CpuSourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let cpu_config_widget: Rc<RefCell<Option<crate::ui::CpuSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "cpu" {
         let widget = crate::ui::CpuSourceConfigWidget::new();
         widget.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
         widget.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
         if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
-            if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+            if let Ok(cpu_config) =
+                serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone())
+            {
                 widget.set_config(cpu_config);
             }
         }
@@ -264,13 +278,16 @@ pub(crate) fn show_panel_properties_dialog(
     let gpu_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     gpu_placeholder.set_visible(old_source_id == "gpu");
     source_tab_box.append(&gpu_placeholder);
-    let gpu_config_widget: Rc<RefCell<Option<crate::ui::GpuSourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let gpu_config_widget: Rc<RefCell<Option<crate::ui::GpuSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "gpu" {
         let widget = crate::ui::GpuSourceConfigWidget::new();
         let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
         widget.set_available_gpus(&gpu_names);
         if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
-            if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+            if let Ok(gpu_config) =
+                serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone())
+            {
                 widget.set_config(gpu_config);
             }
         }
@@ -282,11 +299,14 @@ pub(crate) fn show_panel_properties_dialog(
     let memory_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     memory_placeholder.set_visible(old_source_id == "memory");
     source_tab_box.append(&memory_placeholder);
-    let memory_config_widget: Rc<RefCell<Option<crate::ui::MemorySourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let memory_config_widget: Rc<RefCell<Option<crate::ui::MemorySourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "memory" {
         let widget = crate::ui::MemorySourceConfigWidget::new();
         if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
-            if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
+            if let Ok(memory_config) =
+                serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone())
+            {
                 widget.set_config(memory_config);
             }
         }
@@ -298,11 +318,14 @@ pub(crate) fn show_panel_properties_dialog(
     let system_temp_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     system_temp_placeholder.set_visible(old_source_id == "system_temp");
     source_tab_box.append(&system_temp_placeholder);
-    let system_temp_config_widget: Rc<RefCell<Option<crate::ui::SystemTempConfigWidget>>> = Rc::new(RefCell::new(None));
+    let system_temp_config_widget: Rc<RefCell<Option<crate::ui::SystemTempConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "system_temp" {
         let widget = crate::ui::SystemTempConfigWidget::new();
         if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
-            if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
+            if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(
+                system_temp_config_value.clone(),
+            ) {
                 widget.set_config(system_temp_config);
             }
         }
@@ -314,11 +337,14 @@ pub(crate) fn show_panel_properties_dialog(
     let fan_speed_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     fan_speed_placeholder.set_visible(old_source_id == "fan_speed");
     source_tab_box.append(&fan_speed_placeholder);
-    let fan_speed_config_widget: Rc<RefCell<Option<crate::ui::FanSpeedConfigWidget>>> = Rc::new(RefCell::new(None));
+    let fan_speed_config_widget: Rc<RefCell<Option<crate::ui::FanSpeedConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "fan_speed" {
         let widget = crate::ui::FanSpeedConfigWidget::new();
         if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
-            if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
+            if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(
+                fan_speed_config_value.clone(),
+            ) {
                 widget.set_config(&fan_speed_config);
             }
         }
@@ -330,13 +356,16 @@ pub(crate) fn show_panel_properties_dialog(
     let disk_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     disk_placeholder.set_visible(old_source_id == "disk");
     source_tab_box.append(&disk_placeholder);
-    let disk_config_widget: Rc<RefCell<Option<crate::ui::DiskSourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let disk_config_widget: Rc<RefCell<Option<crate::ui::DiskSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "disk" {
         let widget = crate::ui::DiskSourceConfigWidget::new();
         let disks = crate::sources::DiskSource::get_available_disks();
         widget.set_available_disks(&disks);
         if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
-            if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
+            if let Ok(disk_config) =
+                serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone())
+            {
                 widget.set_config(disk_config);
             }
         }
@@ -348,11 +377,14 @@ pub(crate) fn show_panel_properties_dialog(
     let clock_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     clock_placeholder.set_visible(old_source_id == "clock");
     source_tab_box.append(&clock_placeholder);
-    let clock_config_widget: Rc<RefCell<Option<crate::ui::ClockSourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let clock_config_widget: Rc<RefCell<Option<crate::ui::ClockSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "clock" {
         let widget = crate::ui::ClockSourceConfigWidget::new();
         if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
-            if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
+            if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(
+                clock_config_value.clone(),
+            ) {
                 widget.set_config(&clock_config);
             }
         }
@@ -367,13 +399,18 @@ pub(crate) fn show_panel_properties_dialog(
     source_tab_box.append(&combo_placeholder);
 
     // Lazy init - only create the expensive widget when actually needed
-    let combo_config_widget: Rc<RefCell<Option<crate::ui::ComboSourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let combo_config_widget: Rc<RefCell<Option<crate::ui::ComboSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create widget if source is combination (lazy init)
     // Use with_config to avoid double-building tabs (new() + set_config() would build twice)
     if old_source_id == "combination" {
-        let combo_config = panel_guard.config.get("combo_config")
-            .and_then(|v| serde_json::from_value::<crate::sources::ComboSourceConfig>(v.clone()).ok())
+        let combo_config = panel_guard
+            .config
+            .get("combo_config")
+            .and_then(|v| {
+                serde_json::from_value::<crate::sources::ComboSourceConfig>(v.clone()).ok()
+            })
             .unwrap_or_default();
         let widget = crate::ui::ComboSourceConfigWidget::with_config(combo_config);
         combo_placeholder.append(widget.widget());
@@ -384,19 +421,22 @@ pub(crate) fn show_panel_properties_dialog(
     let test_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     test_placeholder.set_visible(old_source_id == "test");
     source_tab_box.append(&test_placeholder);
-    let test_config_widget: Rc<RefCell<Option<crate::ui::TestSourceConfigWidget>>> = Rc::new(RefCell::new(None));
+    let test_config_widget: Rc<RefCell<Option<crate::ui::TestSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "test" {
         let widget = crate::ui::TestSourceConfigWidget::new();
         // Priority: saved panel config > global TEST_SOURCE_STATE > defaults
         let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
             serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
                 .unwrap_or_else(|_| {
-                    crate::sources::TEST_SOURCE_STATE.lock()
+                    crate::sources::TEST_SOURCE_STATE
+                        .lock()
                         .map(|state| state.config.clone())
                         .unwrap_or_default()
                 })
         } else {
-            crate::sources::TEST_SOURCE_STATE.lock()
+            crate::sources::TEST_SOURCE_STATE
+                .lock()
                 .map(|state| state.config.clone())
                 .unwrap_or_default()
         };
@@ -409,11 +449,15 @@ pub(crate) fn show_panel_properties_dialog(
     let static_text_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     static_text_placeholder.set_visible(old_source_id == "static_text");
     source_tab_box.append(&static_text_placeholder);
-    let static_text_config_widget: Rc<RefCell<Option<crate::ui::StaticTextConfigWidget>>> = Rc::new(RefCell::new(None));
+    let static_text_config_widget: Rc<RefCell<Option<crate::ui::StaticTextConfigWidget>>> =
+        Rc::new(RefCell::new(None));
     if old_source_id == "static_text" {
         let widget = crate::ui::StaticTextConfigWidget::new();
         if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
-            if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
+            if let Ok(static_text_config) = serde_json::from_value::<
+                crate::sources::StaticTextSourceConfig,
+            >(static_text_config_value.clone())
+            {
                 widget.set_config(&static_text_config);
             }
         }
@@ -467,13 +511,21 @@ pub(crate) fn show_panel_properties_dialog(
                     "cpu" => {
                         if cpu_widget_clone.borrow().is_none() {
                             let widget = crate::ui::CpuSourceConfigWidget::new();
-                            widget.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
-                            widget.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
+                            widget.set_available_sensors(
+                                crate::sources::CpuSource::get_cached_sensors(),
+                            );
+                            widget.set_cpu_core_count(
+                                crate::sources::CpuSource::get_cached_core_count(),
+                            );
                             cpu_placeholder_clone.append(widget.widget());
                             *cpu_widget_clone.borrow_mut() = Some(widget);
                         }
                         if let Some(cpu_config_value) = panel_guard.config.get("cpu_config") {
-                            if let Ok(cpu_config) = serde_json::from_value::<crate::ui::CpuSourceConfig>(cpu_config_value.clone()) {
+                            if let Ok(cpu_config) =
+                                serde_json::from_value::<crate::ui::CpuSourceConfig>(
+                                    cpu_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *cpu_widget_clone.borrow() {
                                     widget.set_config(cpu_config);
                                 }
@@ -483,13 +535,18 @@ pub(crate) fn show_panel_properties_dialog(
                     "gpu" => {
                         if gpu_widget_clone.borrow().is_none() {
                             let widget = crate::ui::GpuSourceConfigWidget::new();
-                            let gpu_names: Vec<String> = crate::sources::GpuSource::get_cached_gpu_names().to_vec();
+                            let gpu_names: Vec<String> =
+                                crate::sources::GpuSource::get_cached_gpu_names().to_vec();
                             widget.set_available_gpus(&gpu_names);
                             gpu_placeholder_clone.append(widget.widget());
                             *gpu_widget_clone.borrow_mut() = Some(widget);
                         }
                         if let Some(gpu_config_value) = panel_guard.config.get("gpu_config") {
-                            if let Ok(gpu_config) = serde_json::from_value::<crate::ui::GpuSourceConfig>(gpu_config_value.clone()) {
+                            if let Ok(gpu_config) =
+                                serde_json::from_value::<crate::ui::GpuSourceConfig>(
+                                    gpu_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *gpu_widget_clone.borrow() {
                                     widget.set_config(gpu_config);
                                 }
@@ -503,7 +560,11 @@ pub(crate) fn show_panel_properties_dialog(
                             *memory_widget_clone.borrow_mut() = Some(widget);
                         }
                         if let Some(memory_config_value) = panel_guard.config.get("memory_config") {
-                            if let Ok(memory_config) = serde_json::from_value::<crate::ui::MemorySourceConfig>(memory_config_value.clone()) {
+                            if let Ok(memory_config) =
+                                serde_json::from_value::<crate::ui::MemorySourceConfig>(
+                                    memory_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *memory_widget_clone.borrow() {
                                     widget.set_config(memory_config);
                                 }
@@ -516,8 +577,14 @@ pub(crate) fn show_panel_properties_dialog(
                             system_temp_placeholder_clone.append(widget.widget());
                             *system_temp_widget_clone.borrow_mut() = Some(widget);
                         }
-                        if let Some(system_temp_config_value) = panel_guard.config.get("system_temp_config") {
-                            if let Ok(system_temp_config) = serde_json::from_value::<crate::sources::SystemTempConfig>(system_temp_config_value.clone()) {
+                        if let Some(system_temp_config_value) =
+                            panel_guard.config.get("system_temp_config")
+                        {
+                            if let Ok(system_temp_config) =
+                                serde_json::from_value::<crate::sources::SystemTempConfig>(
+                                    system_temp_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *system_temp_widget_clone.borrow() {
                                     widget.set_config(system_temp_config);
                                 }
@@ -530,8 +597,14 @@ pub(crate) fn show_panel_properties_dialog(
                             fan_speed_placeholder_clone.append(widget.widget());
                             *fan_speed_widget_clone.borrow_mut() = Some(widget);
                         }
-                        if let Some(fan_speed_config_value) = panel_guard.config.get("fan_speed_config") {
-                            if let Ok(fan_speed_config) = serde_json::from_value::<crate::sources::FanSpeedConfig>(fan_speed_config_value.clone()) {
+                        if let Some(fan_speed_config_value) =
+                            panel_guard.config.get("fan_speed_config")
+                        {
+                            if let Ok(fan_speed_config) =
+                                serde_json::from_value::<crate::sources::FanSpeedConfig>(
+                                    fan_speed_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *fan_speed_widget_clone.borrow() {
                                     widget.set_config(&fan_speed_config);
                                 }
@@ -547,7 +620,11 @@ pub(crate) fn show_panel_properties_dialog(
                             *disk_widget_clone.borrow_mut() = Some(widget);
                         }
                         if let Some(disk_config_value) = panel_guard.config.get("disk_config") {
-                            if let Ok(disk_config) = serde_json::from_value::<crate::ui::DiskSourceConfig>(disk_config_value.clone()) {
+                            if let Ok(disk_config) =
+                                serde_json::from_value::<crate::ui::DiskSourceConfig>(
+                                    disk_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *disk_widget_clone.borrow() {
                                     widget.set_config(disk_config);
                                 }
@@ -561,7 +638,11 @@ pub(crate) fn show_panel_properties_dialog(
                             *clock_widget_clone.borrow_mut() = Some(widget);
                         }
                         if let Some(clock_config_value) = panel_guard.config.get("clock_config") {
-                            if let Ok(clock_config) = serde_json::from_value::<crate::sources::ClockSourceConfig>(clock_config_value.clone()) {
+                            if let Ok(clock_config) =
+                                serde_json::from_value::<crate::sources::ClockSourceConfig>(
+                                    clock_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *clock_widget_clone.borrow() {
                                     widget.set_config(&clock_config);
                                 }
@@ -571,10 +652,18 @@ pub(crate) fn show_panel_properties_dialog(
                     "combination" => {
                         // Use with_config to avoid double-building tabs
                         if combo_widget_clone.borrow().is_none() {
-                            let combo_config = panel_guard.config.get("combo_config")
-                                .and_then(|v| serde_json::from_value::<crate::sources::ComboSourceConfig>(v.clone()).ok())
+                            let combo_config = panel_guard
+                                .config
+                                .get("combo_config")
+                                .and_then(|v| {
+                                    serde_json::from_value::<crate::sources::ComboSourceConfig>(
+                                        v.clone(),
+                                    )
+                                    .ok()
+                                })
                                 .unwrap_or_default();
-                            let widget = crate::ui::ComboSourceConfigWidget::with_config(combo_config);
+                            let widget =
+                                crate::ui::ComboSourceConfigWidget::with_config(combo_config);
                             combo_placeholder_clone.append(widget.widget());
                             *combo_widget_clone.borrow_mut() = Some(widget);
                         }
@@ -585,15 +674,21 @@ pub(crate) fn show_panel_properties_dialog(
                             test_placeholder_clone.append(widget.widget());
                             *test_widget_clone.borrow_mut() = Some(widget);
                         }
-                        let test_config = if let Some(test_config_value) = panel_guard.config.get("test_config") {
-                            serde_json::from_value::<crate::sources::TestSourceConfig>(test_config_value.clone())
-                                .unwrap_or_else(|_| {
-                                    crate::sources::TEST_SOURCE_STATE.lock()
-                                        .map(|state| state.config.clone())
-                                        .unwrap_or_default()
-                                })
+                        let test_config = if let Some(test_config_value) =
+                            panel_guard.config.get("test_config")
+                        {
+                            serde_json::from_value::<crate::sources::TestSourceConfig>(
+                                test_config_value.clone(),
+                            )
+                            .unwrap_or_else(|_| {
+                                crate::sources::TEST_SOURCE_STATE
+                                    .lock()
+                                    .map(|state| state.config.clone())
+                                    .unwrap_or_default()
+                            })
                         } else {
-                            crate::sources::TEST_SOURCE_STATE.lock()
+                            crate::sources::TEST_SOURCE_STATE
+                                .lock()
                                 .map(|state| state.config.clone())
                                 .unwrap_or_default()
                         };
@@ -607,8 +702,14 @@ pub(crate) fn show_panel_properties_dialog(
                             static_text_placeholder_clone.append(widget.widget());
                             *static_text_widget_clone.borrow_mut() = Some(widget);
                         }
-                        if let Some(static_text_config_value) = panel_guard.config.get("static_text_config") {
-                            if let Ok(static_text_config) = serde_json::from_value::<crate::sources::StaticTextSourceConfig>(static_text_config_value.clone()) {
+                        if let Some(static_text_config_value) =
+                            panel_guard.config.get("static_text_config")
+                        {
+                            if let Ok(static_text_config) =
+                                serde_json::from_value::<crate::sources::StaticTextSourceConfig>(
+                                    static_text_config_value.clone(),
+                                )
+                            {
                                 if let Some(ref widget) = *static_text_widget_clone.borrow() {
                                     widget.set_config(&static_text_config);
                                 }
@@ -642,10 +743,13 @@ pub(crate) fn show_panel_properties_dialog(
     // Populate displayer dropdown with compatible displayers (sorted alphabetically by display name)
     let displayer_infos = registry.get_compatible_displayers(&old_source_id);
     let displayers: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
-        displayer_infos.iter().map(|d| d.id.clone()).collect()
+        displayer_infos.iter().map(|d| d.id.clone()).collect(),
     ));
     let displayer_display_names: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(
-        displayer_infos.iter().map(|d| d.display_name.clone()).collect()
+        displayer_infos
+            .iter()
+            .map(|d| d.display_name.clone())
+            .collect(),
     ));
     let mut selected_displayer_idx = 0;
     {
@@ -677,14 +781,19 @@ pub(crate) fn show_panel_properties_dialog(
     log::info!("=== GETTING available_fields from source START ===");
     let start_fields = std::time::Instant::now();
     let available_fields = Rc::new(panel_guard.source.fields());
-    log::info!("=== GETTING available_fields DONE in {:?}, got {} fields ===", start_fields.elapsed(), available_fields.len());
+    log::info!(
+        "=== GETTING available_fields DONE in {:?}, got {} fields ===",
+        start_fields.elapsed(),
+        available_fields.len()
+    );
 
     // Create placeholder box for lazy widget creation
     let text_placeholder = GtkBox::new(Orientation::Vertical, 0);
     text_placeholder.set_visible(old_displayer_id == "text");
 
     // Use Option for lazy initialization - only create widget when needed
-    let text_config_widget: Rc<RefCell<Option<crate::ui::TextLineConfigWidget>>> = Rc::new(RefCell::new(None));
+    let text_config_widget: Rc<RefCell<Option<crate::ui::TextLineConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create text widget if this is the active displayer (lazy init)
     if old_displayer_id == "text" {
@@ -692,7 +801,9 @@ pub(crate) fn show_panel_properties_dialog(
         widget.set_theme(global_theme.clone());
 
         // Load existing text config
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Text(text_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Text(text_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             widget.set_config(text_config);
             true
         } else {
@@ -703,8 +814,9 @@ pub(crate) fn show_panel_properties_dialog(
         if !config_loaded {
             let text_config = if let Some(lines_value) = panel_guard.config.get("lines") {
                 serde_json::from_value::<crate::displayers::TextDisplayerConfig>(
-                    serde_json::json!({ "lines": lines_value })
-                ).unwrap_or_default()
+                    serde_json::json!({ "lines": lines_value }),
+                )
+                .unwrap_or_default()
             } else {
                 crate::displayers::TextDisplayerConfig::default()
             };
@@ -729,7 +841,8 @@ pub(crate) fn show_panel_properties_dialog(
     bar_placeholder.set_visible(old_displayer_id == "bar");
 
     // Use Option for lazy initialization - only create widget when needed
-    let bar_config_widget: Rc<RefCell<Option<crate::ui::BarConfigWidget>>> = Rc::new(RefCell::new(None));
+    let bar_config_widget: Rc<RefCell<Option<crate::ui::BarConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create bar widget if this is the active displayer (lazy init)
     if old_displayer_id == "bar" {
@@ -760,7 +873,8 @@ pub(crate) fn show_panel_properties_dialog(
     arc_placeholder.set_visible(old_displayer_id == "arc");
 
     // Use Option for lazy initialization
-    let arc_config_widget: Rc<RefCell<Option<crate::ui::ArcConfigWidget>>> = Rc::new(RefCell::new(None));
+    let arc_config_widget: Rc<RefCell<Option<crate::ui::ArcConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create arc widget if this is the active displayer (lazy init)
     if old_displayer_id == "arc" {
@@ -791,13 +905,16 @@ pub(crate) fn show_panel_properties_dialog(
     speedometer_placeholder.set_visible(old_displayer_id == "speedometer");
 
     // Use Option for lazy initialization
-    let speedometer_config_widget: Rc<RefCell<Option<crate::ui::SpeedometerConfigWidget>>> = Rc::new(RefCell::new(None));
+    let speedometer_config_widget: Rc<RefCell<Option<crate::ui::SpeedometerConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create speedometer widget if this is the active displayer (lazy init)
     if old_displayer_id == "speedometer" {
         let widget = crate::ui::SpeedometerConfigWidget::new((*available_fields).clone());
         widget.set_theme(global_theme.clone());
-        let speedometer_config = if let Some(speedometer_config_value) = panel_guard.config.get("speedometer_config") {
+        let speedometer_config = if let Some(speedometer_config_value) =
+            panel_guard.config.get("speedometer_config")
+        {
             serde_json::from_value::<crate::ui::SpeedometerConfig>(speedometer_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::SpeedometerConfig::default())
         } else {
@@ -822,13 +939,15 @@ pub(crate) fn show_panel_properties_dialog(
     graph_placeholder.set_visible(old_displayer_id == "graph");
 
     // Use Option for lazy initialization
-    let graph_config_widget: Rc<RefCell<Option<crate::ui::GraphConfigWidget>>> = Rc::new(RefCell::new(None));
+    let graph_config_widget: Rc<RefCell<Option<crate::ui::GraphConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create graph widget if this is the active displayer (lazy init)
     if old_displayer_id == "graph" {
         let widget = crate::ui::GraphConfigWidget::new((*available_fields).clone());
         widget.set_theme(global_theme.clone());
-        let graph_config = if let Some(graph_config_value) = panel_guard.config.get("graph_config") {
+        let graph_config = if let Some(graph_config_value) = panel_guard.config.get("graph_config")
+        {
             serde_json::from_value::<crate::ui::GraphDisplayConfig>(graph_config_value.clone())
                 .unwrap_or_else(|_| crate::ui::GraphDisplayConfig::default())
         } else {
@@ -853,17 +972,22 @@ pub(crate) fn show_panel_properties_dialog(
     clock_analog_placeholder.set_visible(old_displayer_id == "clock_analog");
 
     // Use Option for lazy initialization
-    let clock_analog_config_widget: Rc<RefCell<Option<crate::ui::ClockAnalogConfigWidget>>> = Rc::new(RefCell::new(None));
+    let clock_analog_config_widget: Rc<RefCell<Option<crate::ui::ClockAnalogConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create clock_analog widget if this is the active displayer (lazy init)
     if old_displayer_id == "clock_analog" {
         let widget = crate::ui::ClockAnalogConfigWidget::new();
         widget.set_theme(global_theme.clone());
         // Try new key first, then legacy key for backwards compatibility
-        let config_value = panel_guard.config.get("clock_analog_config")
+        let config_value = panel_guard
+            .config
+            .get("clock_analog_config")
             .or_else(|| panel_guard.config.get("analog_clock_config"));
         if let Some(config_value) = config_value {
-            if let Ok(config) = serde_json::from_value::<crate::ui::AnalogClockConfig>(config_value.clone()) {
+            if let Ok(config) =
+                serde_json::from_value::<crate::ui::AnalogClockConfig>(config_value.clone())
+            {
                 widget.set_config(config);
             }
         }
@@ -885,16 +1009,21 @@ pub(crate) fn show_panel_properties_dialog(
     clock_digital_placeholder.set_visible(old_displayer_id == "clock_digital");
 
     // Use Option for lazy initialization
-    let clock_digital_config_widget: Rc<RefCell<Option<crate::ui::ClockDigitalConfigWidget>>> = Rc::new(RefCell::new(None));
+    let clock_digital_config_widget: Rc<RefCell<Option<crate::ui::ClockDigitalConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create clock_digital widget if this is the active displayer (lazy init)
     if old_displayer_id == "clock_digital" {
         let widget = crate::ui::ClockDigitalConfigWidget::new();
         // Try new key first, then legacy key for backwards compatibility
-        let config_value = panel_guard.config.get("clock_digital_config")
+        let config_value = panel_guard
+            .config
+            .get("clock_digital_config")
             .or_else(|| panel_guard.config.get("digital_clock_config"));
         if let Some(config_value) = config_value {
-            if let Ok(config) = serde_json::from_value::<crate::displayers::DigitalClockConfig>(config_value.clone()) {
+            if let Ok(config) = serde_json::from_value::<crate::displayers::DigitalClockConfig>(
+                config_value.clone(),
+            ) {
                 widget.set_config(config);
             }
         }
@@ -916,7 +1045,8 @@ pub(crate) fn show_panel_properties_dialog(
     lcars_placeholder.set_visible(old_displayer_id == "lcars");
 
     // Use Option for lazy initialization - only create widget when needed
-    let lcars_config_widget: Rc<RefCell<Option<crate::ui::LcarsConfigWidget>>> = Rc::new(RefCell::new(None));
+    let lcars_config_widget: Rc<RefCell<Option<crate::ui::LcarsConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create LCARS widget if this is the active displayer (lazy init)
     if old_displayer_id == "lcars" {
@@ -924,7 +1054,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing LCARS config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Lcars(lcars_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             widget.set_theme(lcars_config.frame.theme.clone());
             widget.set_config(lcars_config);
             true
@@ -934,7 +1066,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("lcars_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::LcarsDisplayConfig>(
+                    config_value.clone(),
+                ) {
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
                 }
@@ -963,19 +1097,23 @@ pub(crate) fn show_panel_properties_dialog(
     cpu_cores_placeholder.set_visible(old_displayer_id == "cpu_cores");
 
     // Use Option for lazy initialization
-    let cpu_cores_config_widget: Rc<RefCell<Option<crate::ui::CoreBarsConfigWidget>>> = Rc::new(RefCell::new(None));
+    let cpu_cores_config_widget: Rc<RefCell<Option<crate::ui::CoreBarsConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create cpu_cores widget if this is the active displayer (lazy init)
     if old_displayer_id == "cpu_cores" {
         let widget = crate::ui::CoreBarsConfigWidget::new();
         widget.set_theme(global_theme.clone());
         if let Some(config_value) = panel_guard.config.get("core_bars_config") {
-            if let Ok(config) = serde_json::from_value::<crate::ui::CoreBarsConfig>(config_value.clone()) {
+            if let Ok(config) =
+                serde_json::from_value::<crate::ui::CoreBarsConfig>(config_value.clone())
+            {
                 widget.set_config(config);
             }
         }
         // Count available CPU cores from source fields
-        let core_count = available_fields.iter()
+        let core_count = available_fields
+            .iter()
             .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
             .count();
         if core_count > 0 {
@@ -1000,13 +1138,16 @@ pub(crate) fn show_panel_properties_dialog(
     indicator_placeholder.set_visible(old_displayer_id == "indicator");
 
     // Use Option for lazy initialization
-    let indicator_config_widget: Rc<RefCell<Option<crate::ui::IndicatorConfigWidget>>> = Rc::new(RefCell::new(None));
+    let indicator_config_widget: Rc<RefCell<Option<crate::ui::IndicatorConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create indicator widget if this is the active displayer (lazy init)
     if old_displayer_id == "indicator" {
         let widget = crate::ui::IndicatorConfigWidget::new((*available_fields).clone());
         if let Some(config_value) = panel_guard.config.get("indicator_config") {
-            if let Ok(config) = serde_json::from_value::<crate::displayers::IndicatorConfig>(config_value.clone()) {
+            if let Ok(config) =
+                serde_json::from_value::<crate::displayers::IndicatorConfig>(config_value.clone())
+            {
                 widget.set_config(&config);
             }
         }
@@ -1029,7 +1170,8 @@ pub(crate) fn show_panel_properties_dialog(
     cyberpunk_placeholder.set_visible(old_displayer_id == "cyberpunk");
 
     // Use Option for lazy initialization - only create widget when needed
-    let cyberpunk_config_widget: Rc<RefCell<Option<crate::ui::CyberpunkConfigWidget>>> = Rc::new(RefCell::new(None));
+    let cyberpunk_config_widget: Rc<RefCell<Option<crate::ui::CyberpunkConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Cyberpunk widget if this is the active displayer (lazy init)
     if old_displayer_id == "cyberpunk" {
@@ -1038,7 +1180,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing Cyberpunk config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Cyberpunk(cyberpunk_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Cyberpunk(cyberpunk_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Cyberpunk config from displayer.get_typed_config() ===");
             widget.set_theme(cyberpunk_config.frame.theme.clone());
             widget.set_config(&cyberpunk_config);
@@ -1049,7 +1193,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("cyberpunk_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::CyberpunkDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::CyberpunkDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Cyberpunk config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1078,7 +1225,8 @@ pub(crate) fn show_panel_properties_dialog(
     material_placeholder.set_visible(old_displayer_id == "material");
 
     // Use Option for lazy initialization - only create widget when needed
-    let material_config_widget: Rc<RefCell<Option<crate::ui::MaterialConfigWidget>>> = Rc::new(RefCell::new(None));
+    let material_config_widget: Rc<RefCell<Option<crate::ui::MaterialConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Material widget if this is the active displayer (lazy init)
     if old_displayer_id == "material" {
@@ -1087,7 +1235,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing Material config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Material(material_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Material(material_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Material config from displayer.get_typed_config() ===");
             widget.set_theme(material_config.frame.theme.clone());
             widget.set_config(&material_config);
@@ -1098,7 +1248,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("material_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::MaterialDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::MaterialDisplayConfig>(
+                    config_value.clone(),
+                ) {
                     log::info!("=== Loading Material config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1127,7 +1279,8 @@ pub(crate) fn show_panel_properties_dialog(
     industrial_placeholder.set_visible(old_displayer_id == "industrial");
 
     // Use Option for lazy initialization - only create widget when needed
-    let industrial_config_widget: Rc<RefCell<Option<crate::ui::IndustrialConfigWidget>>> = Rc::new(RefCell::new(None));
+    let industrial_config_widget: Rc<RefCell<Option<crate::ui::IndustrialConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Industrial widget if this is the active displayer (lazy init)
     if old_displayer_id == "industrial" {
@@ -1135,18 +1288,24 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::IndustrialConfigWidget::new((*available_fields).clone());
 
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Industrial(industrial_config)) = panel_guard.displayer.get_typed_config() {
-            log::info!("=== Loading Industrial config from displayer.get_typed_config() ===");
-            widget.set_theme(industrial_config.frame.theme.clone());
-            widget.set_config(&industrial_config);
-            true
-        } else {
-            false
-        };
+        let config_loaded =
+            if let Some(crate::core::DisplayerConfig::Industrial(industrial_config)) =
+                panel_guard.displayer.get_typed_config()
+            {
+                log::info!("=== Loading Industrial config from displayer.get_typed_config() ===");
+                widget.set_theme(industrial_config.frame.theme.clone());
+                widget.set_config(&industrial_config);
+                true
+            } else {
+                false
+            };
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("industrial_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::IndustrialDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::IndustrialDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Industrial config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1175,7 +1334,8 @@ pub(crate) fn show_panel_properties_dialog(
     retro_terminal_placeholder.set_visible(old_displayer_id == "retro_terminal");
 
     // Use Option for lazy initialization - only create widget when needed
-    let retro_terminal_config_widget: Rc<RefCell<Option<crate::ui::RetroTerminalConfigWidget>>> = Rc::new(RefCell::new(None));
+    let retro_terminal_config_widget: Rc<RefCell<Option<crate::ui::RetroTerminalConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Retro Terminal widget if this is the active displayer (lazy init)
     if old_displayer_id == "retro_terminal" {
@@ -1183,7 +1343,9 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::RetroTerminalConfigWidget::new((*available_fields).clone());
 
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::RetroTerminal(retro_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::RetroTerminal(retro_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Retro Terminal config from displayer.get_typed_config() ===");
             widget.set_theme(retro_config.frame.theme.clone());
             widget.set_config(&retro_config);
@@ -1194,7 +1356,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("retro_terminal_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::RetroTerminalDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::RetroTerminalDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Retro Terminal config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1223,7 +1388,8 @@ pub(crate) fn show_panel_properties_dialog(
     fighter_hud_placeholder.set_visible(old_displayer_id == "fighter_hud");
 
     // Use Option for lazy initialization - only create widget when needed
-    let fighter_hud_config_widget: Rc<RefCell<Option<crate::ui::FighterHudConfigWidget>>> = Rc::new(RefCell::new(None));
+    let fighter_hud_config_widget: Rc<RefCell<Option<crate::ui::FighterHudConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Fighter HUD widget if this is the active displayer (lazy init)
     if old_displayer_id == "fighter_hud" {
@@ -1231,7 +1397,9 @@ pub(crate) fn show_panel_properties_dialog(
         let widget = crate::ui::FighterHudConfigWidget::new((*available_fields).clone());
 
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::FighterHud(hud_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::FighterHud(hud_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Fighter HUD config from displayer.get_typed_config() ===");
             widget.set_theme(hud_config.frame.theme.clone());
             widget.set_config(hud_config);
@@ -1242,7 +1410,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("fighter_hud_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::FighterHudDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::FighterHudDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Fighter HUD config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
@@ -1271,7 +1442,8 @@ pub(crate) fn show_panel_properties_dialog(
     synthwave_placeholder.set_visible(old_displayer_id == "synthwave");
 
     // Use Option for lazy initialization - only create widget when needed
-    let synthwave_config_widget: Rc<RefCell<Option<crate::ui::SynthwaveConfigWidget>>> = Rc::new(RefCell::new(None));
+    let synthwave_config_widget: Rc<RefCell<Option<crate::ui::SynthwaveConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Synthwave widget if this is the active displayer (lazy init)
     if old_displayer_id == "synthwave" {
@@ -1280,7 +1452,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing Synthwave config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Synthwave(sw_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Synthwave(sw_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Synthwave config from displayer.get_typed_config() ===");
             widget.set_theme(sw_config.frame.theme.clone());
             widget.set_config(sw_config);
@@ -1291,7 +1465,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("synthwave_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::SynthwaveDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::SynthwaveDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Synthwave config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(config);
@@ -1319,7 +1496,8 @@ pub(crate) fn show_panel_properties_dialog(
     art_deco_placeholder.set_visible(old_displayer_id == "art_deco");
 
     // Use Option for lazy initialization - only create widget when needed
-    let art_deco_config_widget: Rc<RefCell<Option<crate::ui::ArtDecoConfigWidget>>> = Rc::new(RefCell::new(None));
+    let art_deco_config_widget: Rc<RefCell<Option<crate::ui::ArtDecoConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Art Deco widget if this is the active displayer (lazy init)
     if old_displayer_id == "art_deco" {
@@ -1328,7 +1506,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing Art Deco config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::ArtDeco(ad_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::ArtDeco(ad_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Art Deco config from displayer.get_typed_config() ===");
             widget.set_theme(ad_config.frame.theme.clone());
             widget.set_config(&ad_config);
@@ -1339,7 +1519,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("art_deco_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::ArtDecoDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<crate::displayers::ArtDecoDisplayConfig>(
+                    config_value.clone(),
+                ) {
                     log::info!("=== Loading Art Deco config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1367,7 +1549,8 @@ pub(crate) fn show_panel_properties_dialog(
     art_nouveau_placeholder.set_visible(old_displayer_id == "art_nouveau");
 
     // Use Option for lazy initialization - only create widget when needed
-    let art_nouveau_config_widget: Rc<RefCell<Option<crate::ui::ArtNouveauConfigWidget>>> = Rc::new(RefCell::new(None));
+    let art_nouveau_config_widget: Rc<RefCell<Option<crate::ui::ArtNouveauConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Art Nouveau widget if this is the active displayer (lazy init)
     if old_displayer_id == "art_nouveau" {
@@ -1376,7 +1559,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing Art Nouveau config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::ArtNouveau(an_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::ArtNouveau(an_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Art Nouveau config from displayer.get_typed_config() ===");
             widget.set_theme(an_config.frame.theme.clone());
             widget.set_config(&an_config);
@@ -1387,7 +1572,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("art_nouveau_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::ArtNouveauDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::ArtNouveauDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Art Nouveau config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1415,7 +1603,8 @@ pub(crate) fn show_panel_properties_dialog(
     steampunk_placeholder.set_visible(old_displayer_id == "steampunk");
 
     // Use Option for lazy initialization - only create widget when needed
-    let steampunk_config_widget: Rc<RefCell<Option<crate::ui::SteampunkConfigWidget>>> = Rc::new(RefCell::new(None));
+    let steampunk_config_widget: Rc<RefCell<Option<crate::ui::SteampunkConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     // Only create Steampunk widget if this is the active displayer (lazy init)
     if old_displayer_id == "steampunk" {
@@ -1424,7 +1613,9 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Load existing Steampunk config
         // IMPORTANT: Set theme BEFORE config so font selectors have correct theme when rebuilt
-        let config_loaded = if let Some(crate::core::DisplayerConfig::Steampunk(sp_config)) = panel_guard.displayer.get_typed_config() {
+        let config_loaded = if let Some(crate::core::DisplayerConfig::Steampunk(sp_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading Steampunk config from displayer.get_typed_config() ===");
             widget.set_theme(sp_config.frame.theme.clone());
             widget.set_config(&sp_config);
@@ -1435,7 +1626,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         if !config_loaded {
             if let Some(config_value) = panel_guard.config.get("steampunk_config") {
-                if let Ok(config) = serde_json::from_value::<crate::displayers::SteampunkDisplayConfig>(config_value.clone()) {
+                if let Ok(config) = serde_json::from_value::<
+                    crate::displayers::SteampunkDisplayConfig,
+                >(config_value.clone())
+                {
                     log::info!("=== Loading Steampunk config from panel config hashmap ===");
                     widget.set_theme(config.frame.theme.clone());
                     widget.set_config(&config);
@@ -1461,7 +1655,8 @@ pub(crate) fn show_panel_properties_dialog(
     let css_template_placeholder = GtkBox::new(Orientation::Vertical, 0);
     css_template_placeholder.set_visible(old_displayer_id == "css_template");
 
-    let css_template_config_widget: Rc<RefCell<Option<crate::ui::CssTemplateConfigWidget>>> = Rc::new(RefCell::new(None));
+    let css_template_config_widget: Rc<RefCell<Option<crate::ui::CssTemplateConfigWidget>>> =
+        Rc::new(RefCell::new(None));
 
     if old_displayer_id == "css_template" {
         log::info!("=== Creating CssTemplateConfigWidget (lazy init) ===");
@@ -1470,16 +1665,23 @@ pub(crate) fn show_panel_properties_dialog(
         // Set source summaries from combo widget if available
         if let Some(ref combo_widget) = *combo_config_widget.borrow() {
             let summaries = combo_widget.get_source_summaries();
-            log::info!("=== Setting {} source summaries for CssTemplateConfigWidget ===", summaries.len());
+            log::info!(
+                "=== Setting {} source summaries for CssTemplateConfigWidget ===",
+                summaries.len()
+            );
             widget.set_source_summaries(summaries);
         }
 
         // Load existing CSS Template config
-        if let Some(crate::core::DisplayerConfig::CssTemplate(css_config)) = panel_guard.displayer.get_typed_config() {
+        if let Some(crate::core::DisplayerConfig::CssTemplate(css_config)) =
+            panel_guard.displayer.get_typed_config()
+        {
             log::info!("=== Loading CSS Template config from displayer.get_typed_config() ===");
             widget.set_config(&css_config);
         } else if let Some(config_value) = panel_guard.config.get("css_template_config") {
-            if let Ok(config) = serde_json::from_value::<crate::ui::CssTemplateDisplayConfig>(config_value.clone()) {
+            if let Ok(config) =
+                serde_json::from_value::<crate::ui::CssTemplateDisplayConfig>(config_value.clone())
+            {
                 log::info!("=== Loading CSS Template config from panel config hashmap ===");
                 widget.set_config(&config);
             }
@@ -1531,21 +1733,31 @@ pub(crate) fn show_panel_properties_dialog(
 
                 widget.set_on_fields_updated(move |fields| {
                     // Get summaries from combo widget (now that fields are ready)
-                    let Some(combo_widget_rc) = combo_widget_weak_fields.upgrade() else { return };
-                    let Some(ref combo_widget) = *combo_widget_rc.borrow() else { return };
+                    let Some(combo_widget_rc) = combo_widget_weak_fields.upgrade() else {
+                        return;
+                    };
+                    let Some(ref combo_widget) = *combo_widget_rc.borrow() else {
+                        return;
+                    };
                     let summaries = combo_widget.get_source_summaries();
 
                     // Get displayer ID with read lock (non-blocking)
                     let displayer_id = match panel_for_fields.try_read() {
                         Ok(panel_guard) => panel_guard.displayer.id().to_string(),
                         Err(_) => {
-                            log::debug!("on_fields_updated: couldn't get read lock on panel, skipping");
+                            log::debug!(
+                                "on_fields_updated: couldn't get read lock on panel, skipping"
+                            );
                             return;
                         }
                     };
 
-                    log::debug!("on_fields_updated: updating '{}' with {} fields, {} summaries",
-                        displayer_id, fields.len(), summaries.len());
+                    log::debug!(
+                        "on_fields_updated: updating '{}' with {} fields, {} summaries",
+                        displayer_id,
+                        fields.len(),
+                        summaries.len()
+                    );
 
                     // Update the ACTIVE displayer's config widget
                     // NOTE: We do NOT apply config to the panel here - that only happens on Apply/Accept
@@ -1621,8 +1833,12 @@ pub(crate) fn show_panel_properties_dialog(
             // The actual displayer updates happen in on_fields_updated above.
             widget.set_on_change(move || {
                 // Trigger async field update - this will call on_fields_updated when done
-                let Some(combo_widget_rc) = combo_widget_weak.upgrade() else { return };
-                let Some(ref widget) = *combo_widget_rc.borrow() else { return };
+                let Some(combo_widget_rc) = combo_widget_weak.upgrade() else {
+                    return;
+                };
+                let Some(ref widget) = *combo_widget_rc.borrow() else {
+                    return;
+                };
                 widget.update_fields_cache_async();
             });
         }
@@ -1632,13 +1848,19 @@ pub(crate) fn show_panel_properties_dialog(
         // Use async field update to avoid blocking the UI
         if old_source_id == "combination" {
             if let Some(ref combo_widget) = *combo_config_widget.borrow() {
-                log::info!("=== Triggering async field update for combo widget '{}' at startup ===", old_displayer_id);
+                log::info!(
+                    "=== Triggering async field update for combo widget '{}' at startup ===",
+                    old_displayer_id
+                );
                 // Trigger async field update - the on_fields_updated callback set above will
                 // update the appropriate displayer widget when fields are ready
                 combo_widget.update_fields_cache_async();
             }
         } else {
-            log::info!("=== Skipping combo widget init: old_source_id='{}' (need 'combination') ===", old_source_id);
+            log::info!(
+                "=== Skipping combo widget init: old_source_id='{}' (need 'combination') ===",
+                old_source_id
+            );
         }
     }
 
@@ -1663,12 +1885,28 @@ pub(crate) fn show_panel_properties_dialog(
     }
 
     // Shared storage for transferring config between combo panel types
-    let combo_panel_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau", "steampunk"];
+    let combo_panel_ids = [
+        "lcars",
+        "cyberpunk",
+        "material",
+        "industrial",
+        "retro_terminal",
+        "fighter_hud",
+        "synthwave",
+        "art_deco",
+        "art_nouveau",
+        "steampunk",
+    ];
     let is_combo_panel = |id: &str| combo_panel_ids.contains(&id);
-    let previous_combo_displayer: Rc<RefCell<String>> = Rc::new(RefCell::new(
-        if is_combo_panel(&old_displayer_id) { old_displayer_id.clone() } else { String::new() }
-    ));
-    let pending_transfer_config: Rc<RefCell<Option<crate::ui::combo_config_base::TransferableComboConfig>>> = Rc::new(RefCell::new(None));
+    let previous_combo_displayer: Rc<RefCell<String>> =
+        Rc::new(RefCell::new(if is_combo_panel(&old_displayer_id) {
+            old_displayer_id.clone()
+        } else {
+            String::new()
+        }));
+    let pending_transfer_config: Rc<
+        RefCell<Option<crate::ui::combo_config_base::TransferableComboConfig>>,
+    > = Rc::new(RefCell::new(None));
 
     // Helper: Extract transferable config from whichever combo widget is active
     fn extract_combo_config(
@@ -1686,15 +1924,42 @@ pub(crate) fn show_panel_properties_dialog(
     ) -> Option<crate::ui::combo_config_base::TransferableComboConfig> {
         match displayer_id {
             "lcars" => lcars.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "cyberpunk" => cyberpunk.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "material" => material.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "industrial" => industrial.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "retro_terminal" => retro_terminal.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "fighter_hud" => fighter_hud.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "synthwave" => synthwave.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "art_deco" => art_deco.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "art_nouveau" => art_nouveau.borrow().as_ref().map(|w| w.get_transferable_config()),
-            "steampunk" => steampunk.borrow().as_ref().map(|w| w.get_transferable_config()),
+            "cyberpunk" => cyberpunk
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "material" => material
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "industrial" => industrial
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "retro_terminal" => retro_terminal
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "fighter_hud" => fighter_hud
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "synthwave" => synthwave
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "art_deco" => art_deco
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "art_nouveau" => art_nouveau
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
+            "steampunk" => steampunk
+                .borrow()
+                .as_ref()
+                .map(|w| w.get_transferable_config()),
             _ => None,
         }
     }
@@ -1718,7 +1983,18 @@ pub(crate) fn show_panel_properties_dialog(
             let selected_idx = combo.selected() as usize;
             if let Some(new_displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
                 let prev_id = previous_combo_clone.borrow().clone();
-                let combo_ids = ["lcars", "cyberpunk", "material", "industrial", "retro_terminal", "fighter_hud", "synthwave", "art_deco", "art_nouveau", "steampunk"];
+                let combo_ids = [
+                    "lcars",
+                    "cyberpunk",
+                    "material",
+                    "industrial",
+                    "retro_terminal",
+                    "fighter_hud",
+                    "synthwave",
+                    "art_deco",
+                    "art_nouveau",
+                    "steampunk",
+                ];
                 let new_is_combo = combo_ids.contains(&new_displayer_id.as_str());
                 let prev_is_combo = !prev_id.is_empty() && combo_ids.contains(&prev_id.as_str());
 
@@ -1726,18 +2002,33 @@ pub(crate) fn show_panel_properties_dialog(
                 if prev_is_combo && new_is_combo && prev_id != new_displayer_id {
                     let config = extract_combo_config(
                         &prev_id,
-                        &lcars_clone, &cyberpunk_clone, &material_clone, &industrial_clone,
-                        &retro_terminal_clone, &fighter_hud_clone, &synthwave_clone,
-                        &art_deco_clone, &art_nouveau_clone, &steampunk_clone,
+                        &lcars_clone,
+                        &cyberpunk_clone,
+                        &material_clone,
+                        &industrial_clone,
+                        &retro_terminal_clone,
+                        &fighter_hud_clone,
+                        &synthwave_clone,
+                        &art_deco_clone,
+                        &art_nouveau_clone,
+                        &steampunk_clone,
                     );
                     if let Some(cfg) = config {
-                        log::info!("=== Extracted transferable config from '{}' for transfer to '{}' ===", prev_id, new_displayer_id);
+                        log::info!(
+                            "=== Extracted transferable config from '{}' for transfer to '{}' ===",
+                            prev_id,
+                            new_displayer_id
+                        );
                         *pending_config_clone.borrow_mut() = Some(cfg);
                     }
                 }
 
                 // Update tracker to new combo displayer (or clear if not a combo type)
-                *previous_combo_clone.borrow_mut() = if new_is_combo { new_displayer_id } else { String::new() };
+                *previous_combo_clone.borrow_mut() = if new_is_combo {
+                    new_displayer_id
+                } else {
+                    String::new()
+                };
             }
         });
     }
@@ -1961,7 +2252,8 @@ pub(crate) fn show_panel_properties_dialog(
                             let widget = crate::ui::CoreBarsConfigWidget::new();
                             widget.set_theme(global_theme_lazy.clone());
                             // Count available CPU cores
-                            let core_count = fields.iter()
+                            let core_count = fields
+                                .iter()
                                 .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
                                 .count();
                             if core_count > 0 {
@@ -2576,8 +2868,12 @@ pub(crate) fn show_panel_properties_dialog(
 
                 // Get compatible displayers for the new source
                 let new_displayer_infos = registry.get_compatible_displayers(source_id);
-                let new_displayer_ids: Vec<String> = new_displayer_infos.iter().map(|d| d.id.clone()).collect();
-                let new_display_names: Vec<String> = new_displayer_infos.iter().map(|d| d.display_name.clone()).collect();
+                let new_displayer_ids: Vec<String> =
+                    new_displayer_infos.iter().map(|d| d.id.clone()).collect();
+                let new_display_names: Vec<String> = new_displayer_infos
+                    .iter()
+                    .map(|d| d.display_name.clone())
+                    .collect();
 
                 // Find the index of the current displayer in the new list (if it's still valid)
                 let new_selected_idx = current_displayer_id
@@ -2590,7 +2886,8 @@ pub(crate) fn show_panel_properties_dialog(
                 *displayer_display_names_clone.borrow_mut() = new_display_names.clone();
 
                 // Update dropdown model
-                let display_strs: Vec<&str> = new_display_names.iter().map(|s| s.as_str()).collect();
+                let display_strs: Vec<&str> =
+                    new_display_names.iter().map(|s| s.as_str()).collect();
                 let new_list = StringList::new(&display_strs);
                 displayer_combo_clone.set_model(Some(&new_list));
                 displayer_combo_clone.set_selected(new_selected_idx);
@@ -2725,7 +3022,8 @@ pub(crate) fn show_panel_properties_dialog(
     corner_radius_label.add_css_class("heading");
     appearance_tab_box.append(&corner_radius_label);
 
-    let (corner_radius_box, corner_radius_spin) = create_spin_row_with_value("Radius:", 0.0, 50.0, 1.0, panel_guard.corner_radius);
+    let (corner_radius_box, corner_radius_spin) =
+        create_spin_row_with_value("Radius:", 0.0, 50.0, 1.0, panel_guard.corner_radius);
     corner_radius_box.set_margin_start(12);
     appearance_tab_box.append(&corner_radius_box);
 
@@ -2740,7 +3038,8 @@ pub(crate) fn show_panel_properties_dialog(
     border_enabled_check.set_margin_start(12);
     appearance_tab_box.append(&border_enabled_check);
 
-    let (border_width_box, border_width_spin) = create_spin_row_with_value("Width:", 0.5, 10.0, 0.5, panel_guard.border.width);
+    let (border_width_box, border_width_spin) =
+        create_spin_row_with_value("Width:", 0.5, 10.0, 0.5, panel_guard.border.width);
     border_width_box.set_margin_start(12);
     appearance_tab_box.append(&border_width_box);
 
@@ -2762,7 +3061,10 @@ pub(crate) fn show_panel_properties_dialog(
             let border_color_clone2 = border_color_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = crate::ui::ColorPickerDialog::pick_color(window_opt.as_ref(), current_color).await {
+                if let Some(new_color) =
+                    crate::ui::ColorPickerDialog::pick_color(window_opt.as_ref(), current_color)
+                        .await
+                {
                     *border_color_clone2.borrow_mut() = new_color;
                 }
             });
@@ -2854,10 +3156,13 @@ pub(crate) fn show_panel_properties_dialog(
         let new_height = height_spin.value() as u32;
 
         // Get selected source and displayer by index
-        let new_source_id = sources.get(source_combo.selected() as usize)
+        let new_source_id = sources
+            .get(source_combo.selected() as usize)
             .cloned()
             .unwrap_or_else(|| old_source_id.clone());
-        let new_displayer_id = displayers.borrow().get(displayer_combo.selected() as usize)
+        let new_displayer_id = displayers
+            .borrow()
+            .get(displayer_combo.selected() as usize)
             .cloned()
             .unwrap_or_else(|| old_displayer_id.clone());
 
@@ -2868,7 +3173,8 @@ pub(crate) fn show_panel_properties_dialog(
         let current_geometry = *old_geometry.borrow();
 
         // Check if anything changed
-        let size_changed = new_width != current_geometry.width || new_height != current_geometry.height;
+        let size_changed =
+            new_width != current_geometry.width || new_height != current_geometry.height;
         let source_changed = new_source_id != old_source_id;
         let displayer_changed = new_displayer_id != old_displayer_id;
 
@@ -2893,7 +3199,11 @@ pub(crate) fn show_panel_properties_dialog(
             };
 
             // Clone all widget references we'll need
-            (state.background_area.clone(), state.frame.clone(), state.widget.clone())
+            (
+                state.background_area.clone(),
+                state.frame.clone(),
+                state.widget.clone(),
+            )
         }; // states borrow is dropped here
 
         // Handle size change (collision check)
@@ -2942,7 +3252,9 @@ pub(crate) fn show_panel_properties_dialog(
                 // Show error dialog and revert spinners
                 let error_dialog = gtk4::AlertDialog::builder()
                     .message("Cannot Resize Panel")
-                    .detail("The new size would overlap with another panel. Size has been reverted.")
+                    .detail(
+                        "The new size would overlap with another panel. Size has been reverted.",
+                    )
                     .modal(true)
                     .buttons(vec!["OK"])
                     .build();
@@ -2975,13 +3287,22 @@ pub(crate) fn show_panel_properties_dialog(
             let mut panel_guard = panel_clone.blocking_write();
             // Update size if changed
             if size_changed {
-                log::info!("[RESIZE] Panel {} geometry changing from {}x{} to {}x{}",
-                          panel_id, current_geometry.width, current_geometry.height,
-                          new_width, new_height);
+                log::info!(
+                    "[RESIZE] Panel {} geometry changing from {}x{} to {}x{}",
+                    panel_id,
+                    current_geometry.width,
+                    current_geometry.height,
+                    new_width,
+                    new_height
+                );
                 panel_guard.geometry.width = new_width;
                 panel_guard.geometry.height = new_height;
-                log::info!("[RESIZE] Panel {} geometry updated to {}x{}",
-                          panel_id, panel_guard.geometry.width, panel_guard.geometry.height);
+                log::info!(
+                    "[RESIZE] Panel {} geometry updated to {}x{}",
+                    panel_id,
+                    panel_guard.geometry.width,
+                    panel_guard.geometry.height
+                );
             }
 
             // Update background if changed
@@ -3052,29 +3373,68 @@ pub(crate) fn show_panel_properties_dialog(
 
                         // Register with shared source manager for the new source
                         // Get the actual config from the config widget for the new source type
-                        let source_config: Option<crate::core::SourceConfig> = match new_source_id.as_str() {
-                            "cpu" => cpu_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Cpu(w.get_config())),
-                            "gpu" => gpu_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Gpu(w.get_config())),
-                            "memory" => memory_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Memory(w.get_config())),
-                            "system_temp" => system_temp_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::SystemTemp(w.get_config())),
-                            "fan_speed" => fan_speed_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::FanSpeed(w.get_config())),
-                            "disk" => disk_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Disk(w.get_config())),
-                            "clock" => clock_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Clock(w.get_config())),
-                            "combination" => combo_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Combo(w.get_config())),
-                            "test" => test_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::Test(w.get_config())),
-                            "static_text" => static_text_config_widget_clone.borrow().as_ref().map(|w| crate::core::SourceConfig::StaticText(w.get_config())),
-                            _ => crate::core::SourceConfig::default_for_type(&new_source_id),
-                        };
+                        let source_config: Option<crate::core::SourceConfig> =
+                            match new_source_id.as_str() {
+                                "cpu" => cpu_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Cpu(w.get_config())),
+                                "gpu" => gpu_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Gpu(w.get_config())),
+                                "memory" => memory_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Memory(w.get_config())),
+                                "system_temp" => system_temp_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::SystemTemp(w.get_config())),
+                                "fan_speed" => fan_speed_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::FanSpeed(w.get_config())),
+                                "disk" => disk_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Disk(w.get_config())),
+                                "clock" => clock_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Clock(w.get_config())),
+                                "combination" => combo_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Combo(w.get_config())),
+                                "test" => test_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Test(w.get_config())),
+                                "static_text" => static_text_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::StaticText(w.get_config())),
+                                _ => crate::core::SourceConfig::default_for_type(&new_source_id),
+                            };
 
                         if let Some(config) = source_config {
                             if let Some(manager) = crate::core::global_shared_source_manager() {
                                 match manager.get_or_create_source(&config, &panel_id, registry) {
                                     Ok(key) => {
-                                        log::debug!("Panel {} updated to shared source {}", panel_id, key);
+                                        log::debug!(
+                                            "Panel {} updated to shared source {}",
+                                            panel_id,
+                                            key
+                                        );
                                         panel_guard.source_key = Some(key);
                                     }
                                     Err(e) => {
-                                        log::warn!("Failed to create shared source for panel {}: {}", panel_id, e);
+                                        log::warn!(
+                                            "Failed to create shared source for panel {}: {}",
+                                            panel_id,
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -3138,7 +3498,8 @@ pub(crate) fn show_panel_properties_dialog(
 
                         gesture_click.connect_pressed(move |gesture, _, _, _| {
                             let modifiers = gesture.current_event_state();
-                            let ctrl_pressed = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+                            let ctrl_pressed =
+                                modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
 
                             if let Ok(mut states) = panel_states_click.try_borrow_mut() {
                                 let mut selected = selected_panels_click.borrow_mut();
@@ -3321,7 +3682,8 @@ pub(crate) fn show_panel_properties_dialog(
                                     }; // panel_guard dropped here
 
                                     // Trigger redraw (after releasing panel lock)
-                                    if let Some(state) = panel_states_paste.borrow().get(&panel_id) {
+                                    if let Some(state) = panel_states_paste.borrow().get(&panel_id)
+                                    {
                                         state.background_area.queue_draw();
                                         state.widget.queue_draw();
                                     }
@@ -3432,11 +3794,12 @@ pub(crate) fn show_panel_properties_dialog(
                         delete_action.connect_activate(move |_, _| {
                             // Get all selected panels, or just the clicked panel if none selected
                             let selected = selected_panels_del.borrow();
-                            let panel_ids: Vec<String> = if selected.is_empty() || !selected.contains(&panel_id_del) {
-                                vec![panel_id_del.clone()]
-                            } else {
-                                selected.iter().cloned().collect()
-                            };
+                            let panel_ids: Vec<String> =
+                                if selected.is_empty() || !selected.contains(&panel_id_del) {
+                                    vec![panel_id_del.clone()]
+                                } else {
+                                    selected.iter().cloned().collect()
+                                };
                             let count = panel_ids.len();
                             drop(selected);
 
@@ -3444,8 +3807,15 @@ pub(crate) fn show_panel_properties_dialog(
 
                             // Show confirmation dialog
                             let dialog = gtk4::AlertDialog::builder()
-                                .message(format!("Delete {} Panel{}?", count, if count > 1 { "s" } else { "" }))
-                                .detail(format!("This will permanently delete the selected panel{}.", if count > 1 { "s" } else { "" }))
+                                .message(format!(
+                                    "Delete {} Panel{}?",
+                                    count,
+                                    if count > 1 { "s" } else { "" }
+                                ))
+                                .detail(format!(
+                                    "This will permanently delete the selected panel{}.",
+                                    if count > 1 { "s" } else { "" }
+                                ))
                                 .modal(true)
                                 .buttons(vec!["Cancel", "Delete"])
                                 .default_button(0)
@@ -3462,19 +3832,23 @@ pub(crate) fn show_panel_properties_dialog(
                             // Get parent window for dialog
                             if let Some(root) = container_del.root() {
                                 if let Some(window) = root.downcast_ref::<gtk4::Window>() {
-                                    dialog.choose(Some(window), gtk4::gio::Cancellable::NONE, move |response| {
-                                        if let Ok(1) = response {
-                                            delete_selected_panels(
-                                                &panel_ids,
-                                                &selected_panels_for_delete,
-                                                &panel_states_for_delete,
-                                                &occupied_cells_for_delete,
-                                                &container_for_delete,
-                                                &panels_for_delete,
-                                                &on_change_for_delete,
-                                            );
-                                        }
-                                    });
+                                    dialog.choose(
+                                        Some(window),
+                                        gtk4::gio::Cancellable::NONE,
+                                        move |response| {
+                                            if let Ok(1) = response {
+                                                delete_selected_panels(
+                                                    &panel_ids,
+                                                    &selected_panels_for_delete,
+                                                    &panel_states_for_delete,
+                                                    &occupied_cells_for_delete,
+                                                    &container_for_delete,
+                                                    &panels_for_delete,
+                                                    &on_change_for_delete,
+                                                );
+                                            }
+                                        },
+                                    );
                                 }
                             }
                         });
@@ -3489,10 +3863,7 @@ pub(crate) fn show_panel_properties_dialog(
                         let popover_clone = popover_menu.clone();
                         gesture_secondary.connect_pressed(move |gesture, _, x, y| {
                             popover_clone.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                                x as i32,
-                                y as i32,
-                                1,
-                                1,
+                                x as i32, y as i32, 1, 1,
                             )));
                             popover_clone.popup();
                             gesture.set_state(gtk4::EventSequenceState::Claimed);
@@ -3513,10 +3884,14 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *text_config_widget_clone.borrow() {
                     let text_config = widget.get_config();
                     if let Ok(text_config_json) = serde_json::to_value(&text_config) {
-                        panel_guard.config.insert("text_config".to_string(), text_config_json);
+                        panel_guard
+                            .config
+                            .insert("text_config".to_string(), text_config_json);
                         // Add global theme for theme-aware colors
                         if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
-                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                            panel_guard
+                                .config
+                                .insert("global_theme".to_string(), theme_json);
                         }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
@@ -3531,10 +3906,14 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *bar_config_widget_clone.borrow() {
                     let bar_config = widget.get_config();
                     if let Ok(bar_config_json) = serde_json::to_value(&bar_config) {
-                        panel_guard.config.insert("bar_config".to_string(), bar_config_json);
+                        panel_guard
+                            .config
+                            .insert("bar_config".to_string(), bar_config_json);
                         // Add global theme for theme-aware colors
                         if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
-                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                            panel_guard
+                                .config
+                                .insert("global_theme".to_string(), theme_json);
                         }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
@@ -3549,10 +3928,14 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *arc_config_widget_clone.borrow() {
                     let arc_config = widget.get_config();
                     if let Ok(arc_config_json) = serde_json::to_value(&arc_config) {
-                        panel_guard.config.insert("arc_config".to_string(), arc_config_json);
+                        panel_guard
+                            .config
+                            .insert("arc_config".to_string(), arc_config_json);
                         // Add global theme for theme-aware colors
                         if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
-                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                            panel_guard
+                                .config
+                                .insert("global_theme".to_string(), theme_json);
                         }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
@@ -3567,10 +3950,14 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *speedometer_config_widget_clone.borrow() {
                     let speedometer_config = widget.get_config();
                     if let Ok(speedometer_config_json) = serde_json::to_value(&speedometer_config) {
-                        panel_guard.config.insert("speedometer_config".to_string(), speedometer_config_json);
+                        panel_guard
+                            .config
+                            .insert("speedometer_config".to_string(), speedometer_config_json);
                         // Add global theme for theme-aware tick/label colors
                         if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
-                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                            panel_guard
+                                .config
+                                .insert("global_theme".to_string(), theme_json);
                         }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
@@ -3585,7 +3972,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *graph_config_widget_clone.borrow() {
                     let graph_config = widget.get_config();
                     if let Ok(graph_config_json) = serde_json::to_value(&graph_config) {
-                        panel_guard.config.insert("graph_config".to_string(), graph_config_json);
+                        panel_guard
+                            .config
+                            .insert("graph_config".to_string(), graph_config_json);
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply graph config: {}", e);
@@ -3599,10 +3988,14 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *clock_analog_config_widget_clone.borrow() {
                     let clock_config = widget.get_config();
                     if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
-                        panel_guard.config.insert("clock_analog_config".to_string(), clock_config_json);
+                        panel_guard
+                            .config
+                            .insert("clock_analog_config".to_string(), clock_config_json);
                         // Add global theme for theme-aware rendering
                         if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
-                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                            panel_guard
+                                .config
+                                .insert("global_theme".to_string(), theme_json);
                         }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
@@ -3617,7 +4010,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *clock_digital_config_widget_clone.borrow() {
                     let clock_config = widget.get_config();
                     if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
-                        panel_guard.config.insert("clock_digital_config".to_string(), clock_config_json);
+                        panel_guard
+                            .config
+                            .insert("clock_digital_config".to_string(), clock_config_json);
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply digital clock config: {}", e);
@@ -3631,7 +4026,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *lcars_config_widget_clone.borrow() {
                     let lcars_config = widget.get_config();
                     if let Ok(lcars_config_json) = serde_json::to_value(&lcars_config) {
-                        panel_guard.config.insert("lcars_config".to_string(), lcars_config_json);
+                        panel_guard
+                            .config
+                            .insert("lcars_config".to_string(), lcars_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3649,10 +4046,14 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *cpu_cores_config_widget_clone.borrow() {
                     let core_bars_config = widget.get_config();
                     if let Ok(core_bars_config_json) = serde_json::to_value(&core_bars_config) {
-                        panel_guard.config.insert("core_bars_config".to_string(), core_bars_config_json);
+                        panel_guard
+                            .config
+                            .insert("core_bars_config".to_string(), core_bars_config_json);
                         // Add global theme for theme-aware colors
                         if let Ok(theme_json) = serde_json::to_value(&global_theme_for_apply) {
-                            panel_guard.config.insert("global_theme".to_string(), theme_json);
+                            panel_guard
+                                .config
+                                .insert("global_theme".to_string(), theme_json);
                         }
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
@@ -3667,7 +4068,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *indicator_config_widget_clone.borrow() {
                     let indicator_config = widget.get_config();
                     if let Ok(indicator_config_json) = serde_json::to_value(&indicator_config) {
-                        panel_guard.config.insert("indicator_config".to_string(), indicator_config_json);
+                        panel_guard
+                            .config
+                            .insert("indicator_config".to_string(), indicator_config_json);
                         let config_clone = panel_guard.config.clone();
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply Indicator config: {}", e);
@@ -3681,7 +4084,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *cyberpunk_config_widget_clone.borrow() {
                     let cyberpunk_config = widget.get_config();
                     if let Ok(cyberpunk_config_json) = serde_json::to_value(&cyberpunk_config) {
-                        panel_guard.config.insert("cyberpunk_config".to_string(), cyberpunk_config_json);
+                        panel_guard
+                            .config
+                            .insert("cyberpunk_config".to_string(), cyberpunk_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3699,7 +4104,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *material_config_widget_clone.borrow() {
                     let material_config = widget.get_config();
                     if let Ok(material_config_json) = serde_json::to_value(&material_config) {
-                        panel_guard.config.insert("material_config".to_string(), material_config_json);
+                        panel_guard
+                            .config
+                            .insert("material_config".to_string(), material_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3717,7 +4124,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *industrial_config_widget_clone.borrow() {
                     let industrial_config = widget.get_config();
                     if let Ok(industrial_config_json) = serde_json::to_value(&industrial_config) {
-                        panel_guard.config.insert("industrial_config".to_string(), industrial_config_json);
+                        panel_guard
+                            .config
+                            .insert("industrial_config".to_string(), industrial_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3734,8 +4143,13 @@ pub(crate) fn show_panel_properties_dialog(
             if new_displayer_id == "retro_terminal" {
                 if let Some(ref widget) = *retro_terminal_config_widget_clone.borrow() {
                     let retro_terminal_config = widget.get_config();
-                    if let Ok(retro_terminal_config_json) = serde_json::to_value(&retro_terminal_config) {
-                        panel_guard.config.insert("retro_terminal_config".to_string(), retro_terminal_config_json);
+                    if let Ok(retro_terminal_config_json) =
+                        serde_json::to_value(&retro_terminal_config)
+                    {
+                        panel_guard.config.insert(
+                            "retro_terminal_config".to_string(),
+                            retro_terminal_config_json,
+                        );
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3753,7 +4167,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *fighter_hud_config_widget_clone.borrow() {
                     let fighter_hud_config = widget.get_config();
                     if let Ok(fighter_hud_config_json) = serde_json::to_value(&fighter_hud_config) {
-                        panel_guard.config.insert("fighter_hud_config".to_string(), fighter_hud_config_json);
+                        panel_guard
+                            .config
+                            .insert("fighter_hud_config".to_string(), fighter_hud_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3771,7 +4187,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *synthwave_config_widget_clone.borrow() {
                     let synthwave_config = widget.get_config();
                     if let Ok(synthwave_config_json) = serde_json::to_value(&synthwave_config) {
-                        panel_guard.config.insert("synthwave_config".to_string(), synthwave_config_json);
+                        panel_guard
+                            .config
+                            .insert("synthwave_config".to_string(), synthwave_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3789,7 +4207,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *art_deco_config_widget_clone.borrow() {
                     let art_deco_config = widget.get_config();
                     if let Ok(art_deco_config_json) = serde_json::to_value(&art_deco_config) {
-                        panel_guard.config.insert("art_deco_config".to_string(), art_deco_config_json);
+                        panel_guard
+                            .config
+                            .insert("art_deco_config".to_string(), art_deco_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3807,7 +4227,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *art_nouveau_config_widget_clone.borrow() {
                     let art_nouveau_config = widget.get_config();
                     if let Ok(art_nouveau_config_json) = serde_json::to_value(&art_nouveau_config) {
-                        panel_guard.config.insert("art_nouveau_config".to_string(), art_nouveau_config_json);
+                        panel_guard
+                            .config
+                            .insert("art_nouveau_config".to_string(), art_nouveau_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3825,7 +4247,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *steampunk_config_widget_clone.borrow() {
                     let steampunk_config = widget.get_config();
                     if let Ok(steampunk_config_json) = serde_json::to_value(&steampunk_config) {
-                        panel_guard.config.insert("steampunk_config".to_string(), steampunk_config_json);
+                        panel_guard
+                            .config
+                            .insert("steampunk_config".to_string(), steampunk_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3842,8 +4266,11 @@ pub(crate) fn show_panel_properties_dialog(
             if new_displayer_id == "css_template" {
                 if let Some(ref widget) = *css_template_config_widget_clone.borrow() {
                     let css_template_config = widget.get_config();
-                    if let Ok(css_template_config_json) = serde_json::to_value(&css_template_config) {
-                        panel_guard.config.insert("css_template_config".to_string(), css_template_config_json);
+                    if let Ok(css_template_config_json) = serde_json::to_value(&css_template_config)
+                    {
+                        panel_guard
+                            .config
+                            .insert("css_template_config".to_string(), css_template_config_json);
 
                         // Clone config before applying
                         let config_clone = panel_guard.config.clone();
@@ -3861,7 +4288,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *cpu_config_widget_clone.borrow() {
                     let cpu_config = widget.get_config();
                     if let Ok(cpu_config_json) = serde_json::to_value(&cpu_config) {
-                        panel_guard.config.insert("cpu_config".to_string(), cpu_config_json);
+                        panel_guard
+                            .config
+                            .insert("cpu_config".to_string(), cpu_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -3884,7 +4313,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *gpu_config_widget_clone.borrow() {
                     let gpu_config = widget.get_config();
                     if let Ok(gpu_config_json) = serde_json::to_value(&gpu_config) {
-                        panel_guard.config.insert("gpu_config".to_string(), gpu_config_json);
+                        panel_guard
+                            .config
+                            .insert("gpu_config".to_string(), gpu_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -3907,7 +4338,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *memory_config_widget_clone.borrow() {
                     let memory_config = widget.get_config();
                     if let Ok(memory_config_json) = serde_json::to_value(&memory_config) {
-                        panel_guard.config.insert("memory_config".to_string(), memory_config_json);
+                        panel_guard
+                            .config
+                            .insert("memory_config".to_string(), memory_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -3930,7 +4363,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *system_temp_config_widget_clone.borrow() {
                     let system_temp_config = widget.get_config();
                     if let Ok(system_temp_config_json) = serde_json::to_value(&system_temp_config) {
-                        panel_guard.config.insert("system_temp_config".to_string(), system_temp_config_json);
+                        panel_guard
+                            .config
+                            .insert("system_temp_config".to_string(), system_temp_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -3953,7 +4388,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *fan_speed_config_widget_clone.borrow() {
                     let fan_speed_config = widget.get_config();
                     if let Ok(fan_speed_config_json) = serde_json::to_value(&fan_speed_config) {
-                        panel_guard.config.insert("fan_speed_config".to_string(), fan_speed_config_json);
+                        panel_guard
+                            .config
+                            .insert("fan_speed_config".to_string(), fan_speed_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -3976,7 +4413,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *disk_config_widget_clone.borrow() {
                     let disk_config = widget.get_config();
                     if let Ok(disk_config_json) = serde_json::to_value(&disk_config) {
-                        panel_guard.config.insert("disk_config".to_string(), disk_config_json);
+                        panel_guard
+                            .config
+                            .insert("disk_config".to_string(), disk_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -3999,7 +4438,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *clock_config_widget_clone.borrow() {
                     let clock_config = widget.get_config();
                     if let Ok(clock_config_json) = serde_json::to_value(&clock_config) {
-                        panel_guard.config.insert("clock_config".to_string(), clock_config_json);
+                        panel_guard
+                            .config
+                            .insert("clock_config".to_string(), clock_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -4022,7 +4463,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *combo_config_widget_clone.borrow() {
                     let combo_config = widget.get_config();
                     if let Ok(combo_config_json) = serde_json::to_value(&combo_config) {
-                        panel_guard.config.insert("combo_config".to_string(), combo_config_json);
+                        panel_guard
+                            .config
+                            .insert("combo_config".to_string(), combo_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -4045,7 +4488,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *test_config_widget_clone.borrow() {
                     let test_config = widget.get_config();
                     if let Ok(test_config_json) = serde_json::to_value(&test_config) {
-                        panel_guard.config.insert("test_config".to_string(), test_config_json);
+                        panel_guard
+                            .config
+                            .insert("test_config".to_string(), test_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -4068,7 +4513,9 @@ pub(crate) fn show_panel_properties_dialog(
                 if let Some(ref widget) = *static_text_config_widget_clone.borrow() {
                     let static_text_config = widget.get_config();
                     if let Ok(static_text_config_json) = serde_json::to_value(&static_text_config) {
-                        panel_guard.config.insert("static_text_config".to_string(), static_text_config_json);
+                        panel_guard
+                            .config
+                            .insert("static_text_config".to_string(), static_text_config_json);
 
                         // Clone config before applying to avoid borrow checker issues
                         let config_clone = panel_guard.config.clone();
@@ -4103,8 +4550,10 @@ pub(crate) fn show_panel_properties_dialog(
                 for (panel_id, state) in states.iter() {
                     let panel_guard = state.panel.blocking_read();
                     let z_idx = panel_guard.z_index;
-                    let x = panel_guard.geometry.x as f64 * (config.cell_width + config.spacing) as f64;
-                    let y = panel_guard.geometry.y as f64 * (config.cell_height + config.spacing) as f64;
+                    let x =
+                        panel_guard.geometry.x as f64 * (config.cell_width + config.spacing) as f64;
+                    let y = panel_guard.geometry.y as f64
+                        * (config.cell_height + config.spacing) as f64;
                     panel_info.push((panel_id.clone(), z_idx, x, y));
                 }
 
@@ -4157,10 +4606,10 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Update widget and frame sizes if size changed (and displayer wasn't replaced)
         if size_changed && !displayer_changed {
-            let pixel_width = new_width as i32 * config.cell_width
-                + (new_width as i32 - 1) * config.spacing;
-            let pixel_height = new_height as i32 * config.cell_height
-                + (new_height as i32 - 1) * config.spacing;
+            let pixel_width =
+                new_width as i32 * config.cell_width + (new_width as i32 - 1) * config.spacing;
+            let pixel_height =
+                new_height as i32 * config.cell_height + (new_height as i32 - 1) * config.spacing;
 
             widget.set_size_request(pixel_width, pixel_height);
             frame.set_size_request(pixel_width, pixel_height);

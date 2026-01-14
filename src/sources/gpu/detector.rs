@@ -1,8 +1,8 @@
 //! GPU detection and backend management
 
+use super::amd::AmdBackend;
 use super::backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use super::nvidia::NvidiaBackend;
-use super::amd::AmdBackend;
 
 /// GPU detection result
 pub struct DetectedGpus {
@@ -29,7 +29,12 @@ pub fn detect_gpus() -> DetectedGpus {
     } else {
         log::warn!("Total GPUs detected: {}", gpus.len());
         for gpu_info in &info {
-            log::info!("  [{}] {} - {}", gpu_info.index, gpu_info.vendor.as_str(), gpu_info.name);
+            log::info!(
+                "  [{}] {} - {}",
+                gpu_info.index,
+                gpu_info.vendor.as_str(),
+                gpu_info.name
+            );
         }
     }
 
@@ -43,29 +48,27 @@ fn detect_nvidia_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
         use nvml_wrapper::Nvml;
 
         match Nvml::init() {
-            Ok(nvml) => {
-                match nvml.device_count() {
-                    Ok(count) => {
-                        log::info!("NVML: Found {} NVIDIA GPU(s)", count);
-                        for i in 0..count {
-                            match NvidiaBackend::new(i) {
-                                Ok(backend) => {
-                                    let gpu_info = backend.info().clone();
-                                    log::info!("  NVIDIA GPU {}: {}", i, gpu_info.name);
-                                    info.push(gpu_info);
-                                    gpus.push(GpuBackendEnum::Nvidia(Box::new(backend)));
-                                }
-                                Err(e) => {
-                                    log::warn!("  Failed to initialize NVIDIA GPU {}: {}", i, e);
-                                }
+            Ok(nvml) => match nvml.device_count() {
+                Ok(count) => {
+                    log::info!("NVML: Found {} NVIDIA GPU(s)", count);
+                    for i in 0..count {
+                        match NvidiaBackend::new(i) {
+                            Ok(backend) => {
+                                let gpu_info = backend.info().clone();
+                                log::info!("  NVIDIA GPU {}: {}", i, gpu_info.name);
+                                info.push(gpu_info);
+                                gpus.push(GpuBackendEnum::Nvidia(Box::new(backend)));
+                            }
+                            Err(e) => {
+                                log::warn!("  Failed to initialize NVIDIA GPU {}: {}", i, e);
                             }
                         }
                     }
-                    Err(e) => {
-                        log::warn!("NVML: Failed to get GPU count: {}", e);
-                    }
                 }
-            }
+                Err(e) => {
+                    log::warn!("NVML: Failed to get GPU count: {}", e);
+                }
+            },
             Err(e) => {
                 log::info!("NVML: Not available ({})", e);
             }

@@ -43,7 +43,10 @@ impl SharedSensors {
 static SHARED_COMPONENTS: Lazy<Mutex<SharedSensors>> = Lazy::new(|| {
     log::warn!("=== Initializing shared temperature sensors (one-time) ===");
     let sensors = SharedSensors::new();
-    log::info!("Shared temperature sensors initialized: {} components", sensors.components.len());
+    log::info!(
+        "Shared temperature sensors initialized: {} components",
+        sensors.components.len()
+    );
     Mutex::new(sensors)
 });
 
@@ -59,7 +62,8 @@ pub fn get_refreshed_temperatures() -> Vec<(String, f32)> {
         poisoned.into_inner()
     });
     sensors.refresh_if_needed();
-    sensors.components
+    sensors
+        .components
         .iter()
         .map(|c| (c.label().to_string(), c.temperature()))
         .collect()
@@ -73,7 +77,8 @@ pub fn get_temperature_by_label(label: &str) -> Option<f32> {
         poisoned.into_inner()
     });
     sensors.refresh_if_needed();
-    sensors.components
+    sensors
+        .components
         .iter()
         .find(|c| c.label() == label)
         .map(|c| c.temperature())

@@ -2,13 +2,13 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation,
-    SpinButton, StringList,
+    Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
+    StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::sources::{SystemTempConfig, SystemTempSource, SystemTempUnit, SensorCategory};
+use crate::sources::{SensorCategory, SystemTempConfig, SystemTempSource, SystemTempUnit};
 use crate::ui::widget_builder::create_page_container;
 
 /// Widget for configuring System Temperature source
@@ -49,7 +49,8 @@ impl SystemTempConfigWidget {
             .map(|s| format!("[{:?}] {}", s.category, s.label))
             .collect();
 
-        let sensor_options = StringList::new(&sensor_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        let sensor_options =
+            StringList::new(&sensor_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         let sensor_combo = DropDown::new(Some(sensor_options), Option::<gtk4::Expression>::None);
         sensor_combo.set_selected(0);
         sensor_combo.set_hexpand(true);
@@ -61,11 +62,26 @@ impl SystemTempConfigWidget {
         let info_label = Label::new(Some(&format!(
             "Found {} temperature sensors ({} CPU, {} GPU, {} MB, {} Storage, {} Other)",
             sensors.len(),
-            sensors.iter().filter(|s| matches!(s.category, SensorCategory::CPU)).count(),
-            sensors.iter().filter(|s| matches!(s.category, SensorCategory::GPU)).count(),
-            sensors.iter().filter(|s| matches!(s.category, SensorCategory::Motherboard)).count(),
-            sensors.iter().filter(|s| matches!(s.category, SensorCategory::Storage)).count(),
-            sensors.iter().filter(|s| matches!(s.category, SensorCategory::Other)).count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, SensorCategory::CPU))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, SensorCategory::GPU))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, SensorCategory::Motherboard))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, SensorCategory::Storage))
+                .count(),
+            sensors
+                .iter()
+                .filter(|s| matches!(s.category, SensorCategory::Other))
+                .count(),
         )));
         info_label.set_halign(gtk4::Align::Start);
         info_label.add_css_class("dim-label");
@@ -149,7 +165,9 @@ impl SystemTempConfigWidget {
             if let Some(model) = combo.model() {
                 if (selected as usize) < model.n_items() as usize {
                     // Use set_sensor_by_index to store both index and label for stability
-                    config_clone.borrow_mut().set_sensor_by_index(selected as usize);
+                    config_clone
+                        .borrow_mut()
+                        .set_sensor_by_index(selected as usize);
                 }
             }
         });
@@ -157,11 +175,8 @@ impl SystemTempConfigWidget {
         let config_clone = config.clone();
         caption_entry.connect_changed(move |entry| {
             let text = entry.text().to_string();
-            config_clone.borrow_mut().custom_caption = if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            };
+            config_clone.borrow_mut().custom_caption =
+                if text.is_empty() { None } else { Some(text) };
         });
 
         let config_clone = config.clone();
@@ -263,7 +278,8 @@ impl SystemTempConfigWidget {
             self.caption_entry.set_text("");
         }
 
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
         self.auto_detect_check.set_active(config.auto_detect_limits);
 
         if let Some(min) = config.min_limit {
@@ -274,8 +290,10 @@ impl SystemTempConfigWidget {
             self.max_limit_spin.set_value(max);
         }
 
-        self.min_limit_spin.set_sensitive(!config.auto_detect_limits);
-        self.max_limit_spin.set_sensitive(!config.auto_detect_limits);
+        self.min_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
+        self.max_limit_spin
+            .set_sensitive(!config.auto_detect_limits);
 
         // Store config
         *self.config.borrow_mut() = config;

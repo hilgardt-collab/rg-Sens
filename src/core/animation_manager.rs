@@ -188,9 +188,14 @@ impl AnimationManager {
 
                     // Switch to idle mode if no sustained activity for IDLE_TIME_THRESHOLD
                     if let Some(last_active) = manager.last_active_time.get() {
-                        if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD && !manager.in_idle_mode.get() {
+                        if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
+                            && !manager.in_idle_mode.get()
+                        {
                             manager.in_idle_mode.set(true);
-                            log::debug!("Animation manager entering idle mode (no activity for {:?})", IDLE_TIME_THRESHOLD);
+                            log::debug!(
+                                "Animation manager entering idle mode (no activity for {:?})",
+                                IDLE_TIME_THRESHOLD
+                            );
                         }
                     } else {
                         // No activity ever recorded, enter idle mode immediately
@@ -261,8 +266,12 @@ impl AnimationManager {
         let count = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if count.is_multiple_of(300) {
             // Log every ~5 seconds at 60fps
-            log::info!("Animation manager: {} entries, {} mapped, {} active",
-                entries.len(), mapped_count, active_count);
+            log::info!(
+                "Animation manager: {} entries, {} mapped, {} active",
+                entries.len(),
+                mapped_count,
+                active_count
+            );
         }
 
         any_active

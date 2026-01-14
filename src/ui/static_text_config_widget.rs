@@ -2,8 +2,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, Entry, Frame, Label, ListBox, Orientation,
-    ScrolledWindow, SpinButton,
+    Adjustment, Box as GtkBox, Button, Entry, Frame, Label, ListBox, Orientation, ScrolledWindow,
+    SpinButton,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -136,11 +136,8 @@ impl StaticTextConfigWidget {
         let config_for_caption = config.clone();
         custom_caption_entry.connect_changed(move |entry| {
             let text = entry.text().to_string();
-            config_for_caption.borrow_mut().custom_caption = if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            };
+            config_for_caption.borrow_mut().custom_caption =
+                if text.is_empty() { None } else { Some(text) };
         });
 
         // Build initial list
@@ -317,10 +314,10 @@ impl StaticTextConfigWidget {
         *self.config.borrow_mut() = config.clone();
 
         // Update UI
-        self.update_interval_spin.set_value(config.update_interval_ms as f64);
-        self.custom_caption_entry.set_text(
-            config.custom_caption.as_deref().unwrap_or("")
-        );
+        self.update_interval_spin
+            .set_value(config.update_interval_ms as f64);
+        self.custom_caption_entry
+            .set_text(config.custom_caption.as_deref().unwrap_or(""));
 
         // Rebuild list
         self.rebuild_list();

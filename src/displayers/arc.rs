@@ -7,7 +7,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
+    ANIMATION_SNAP_THRESHOLD,
+};
 use crate::ui::arc_display::{render_arc, ArcDisplayConfig};
 
 /// Arc gauge displayer
@@ -26,7 +29,7 @@ struct DisplayData {
     last_update: std::time::Instant,
     values: HashMap<String, Value>, // All source data for text overlay
     transform: PanelTransform,
-    dirty: bool, // Flag to indicate data has changed and needs redraw
+    dirty: bool,       // Flag to indicate data has changed and needs redraw
     initialized: bool, // Flag to track if animated_value has been set
 }
 
@@ -83,7 +86,15 @@ impl Displayer for ArcDisplayer {
                 } else {
                     data.value
                 };
-                let _ = render_arc(cr, &data.config, &data.config.theme, display_value, &data.values, width as f64, height as f64);
+                let _ = render_arc(
+                    cr,
+                    &data.config,
+                    &data.config.theme,
+                    display_value,
+                    &data.values,
+                    width as f64,
+                    height as f64,
+                );
                 data.transform.restore(cr);
             }
         });
@@ -109,10 +120,13 @@ impl Displayer for ArcDisplayer {
                 }
 
                 // Check if animation is active
-                if data.config.animate && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD {
+                if data.config.animate
+                    && (data.animated_value - data.target_value).abs() > ANIMATION_SNAP_THRESHOLD
+                {
                     // Calculate animation speed based on duration (prevent division by zero)
                     let animation_speed = 1.0 / data.config.animation_duration.max(0.1);
-                    let delta = (data.target_value - data.animated_value) * animation_speed * elapsed;
+                    let delta =
+                        (data.target_value - data.animated_value) * animation_speed * elapsed;
 
                     // Apply easing (ease-out)
                     data.animated_value += delta;
@@ -150,8 +164,14 @@ impl Displayer for ArcDisplayer {
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
             // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
             // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-            let field_ids: Vec<_> = display_data.config.text_overlay.text_config.lines.iter()
-                .map(|l| l.field_id.clone()).collect();
+            let field_ids: Vec<_> = display_data
+                .config
+                .text_overlay
+                .text_config
+                .lines
+                .iter()
+                .map(|l| l.field_id.clone())
+                .collect();
             display_data.values.clear();
             for field_id in field_ids {
                 if let Some(value) = data.get(&field_id) {
@@ -169,7 +189,15 @@ impl Displayer for ArcDisplayer {
     fn draw(&self, cr: &Context, width: f64, height: f64) -> Result<()> {
         if let Ok(data) = self.data.lock() {
             data.transform.apply(cr, width, height);
-            render_arc(cr, &data.config, &data.config.theme, data.value, &data.values, width, height)?;
+            render_arc(
+                cr,
+                &data.config,
+                &data.config.theme,
+                data.value,
+                &data.values,
+                width,
+                height,
+            )?;
             data.transform.restore(cr);
         }
         Ok(())
@@ -222,7 +250,9 @@ impl Displayer for ArcDisplayer {
 
         // Check for full arc_config first
         if let Some(arc_config_value) = config.get("arc_config") {
-            if let Ok(arc_config) = serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone()) {
+            if let Ok(arc_config) =
+                serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone())
+            {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = arc_config;
                 }

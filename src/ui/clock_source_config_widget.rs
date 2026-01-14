@@ -5,8 +5,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Label, Orientation,
-    SpinButton, StringList,
+    Adjustment, Box as GtkBox, Button, CheckButton, DropDown, Label, Orientation, SpinButton,
+    StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -44,7 +44,8 @@ impl ClockSourceConfigWidget {
         time_format_box.append(&Label::new(Some("Time Format:")));
 
         let time_format_options = StringList::new(&["24 Hour", "12 Hour"]);
-        let time_format_dropdown = DropDown::new(Some(time_format_options), Option::<gtk4::Expression>::None);
+        let time_format_dropdown =
+            DropDown::new(Some(time_format_options), Option::<gtk4::Expression>::None);
         time_format_dropdown.set_selected(0);
         time_format_dropdown.set_hexpand(true);
         time_format_box.append(&time_format_dropdown);
@@ -60,7 +61,8 @@ impl ClockSourceConfigWidget {
             "MM/DD/YYYY",
             "Day, Month DD, YYYY",
         ]);
-        let date_format_dropdown = DropDown::new(Some(date_format_options), Option::<gtk4::Expression>::None);
+        let date_format_dropdown =
+            DropDown::new(Some(date_format_options), Option::<gtk4::Expression>::None);
         date_format_dropdown.set_selected(0);
         date_format_dropdown.set_hexpand(true);
         date_format_box.append(&date_format_dropdown);
@@ -91,7 +93,9 @@ impl ClockSourceConfigWidget {
         widget.append(&interval_box);
 
         // Note about alarm/timer
-        let note_label = Label::new(Some("Tip: Click the bell icon on the clock panel to access alarm and timer controls."));
+        let note_label = Label::new(Some(
+            "Tip: Click the bell icon on the clock panel to access alarm and timer controls.",
+        ));
         note_label.set_halign(gtk4::Align::Start);
         note_label.set_wrap(true);
         note_label.set_margin_top(12);
@@ -176,20 +180,23 @@ impl ClockSourceConfigWidget {
         // Update UI widgets from config
         self.tz_button.set_label(&config.timezone);
 
-        self.time_format_dropdown.set_selected(match config.time_format {
-            TimeFormat::Hour24 => 0,
-            TimeFormat::Hour12 => 1,
-        });
+        self.time_format_dropdown
+            .set_selected(match config.time_format {
+                TimeFormat::Hour24 => 0,
+                TimeFormat::Hour12 => 1,
+            });
 
-        self.date_format_dropdown.set_selected(match config.date_format {
-            DateFormat::YearMonthDay => 0,
-            DateFormat::DayMonthYear => 1,
-            DateFormat::MonthDayYear => 2,
-            DateFormat::LongFormat => 3,
-        });
+        self.date_format_dropdown
+            .set_selected(match config.date_format {
+                DateFormat::YearMonthDay => 0,
+                DateFormat::DayMonthYear => 1,
+                DateFormat::MonthDayYear => 2,
+                DateFormat::LongFormat => 3,
+            });
 
         self.show_seconds_check.set_active(config.show_seconds);
-        self.interval_spin.set_value(config.update_interval_ms as f64);
+        self.interval_spin
+            .set_value(config.update_interval_ms as f64);
     }
 }
 

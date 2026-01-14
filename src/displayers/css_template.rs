@@ -292,7 +292,11 @@ impl Displayer for CssTemplateDisplayer {
                 }
 
                 // Check for config change (new template selected)
-                let config_changed = data_clone.lock().ok().map(|d| d.config_changed).unwrap_or(false);
+                let config_changed = data_clone
+                    .lock()
+                    .ok()
+                    .map(|d| d.config_changed)
+                    .unwrap_or(false);
 
                 // Check for hot-reload or config change
                 if reload_flag_reader.swap(false, Ordering::SeqCst) || config_changed {

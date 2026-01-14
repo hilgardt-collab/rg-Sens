@@ -1,15 +1,15 @@
 //! Shared text rendering utilities for displayers
 
 use cairo::Context;
+use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use serde_json::Value;
 
 use crate::displayers::{
     CombineDirection, HorizontalPosition, TextBackgroundConfig, TextBackgroundType,
     TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition, VerticalPosition,
 };
-use crate::ui::pango_text::{pango_show_text, pango_text_extents, get_font_description};
+use crate::ui::pango_text::{get_font_description, pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 
 // Thread-local buffers to avoid allocations in hot render paths
@@ -100,7 +100,15 @@ pub fn render_text_lines_with_theme(
                 }
 
                 // Render this group
-                render_line_group_inline(cr, width, height, &same_group, &config.lines, values, theme);
+                render_line_group_inline(
+                    cr,
+                    width,
+                    height,
+                    &same_group,
+                    &config.lines,
+                    values,
+                    theme,
+                );
             }
         }
     });
@@ -150,22 +158,39 @@ fn render_line_group_inline(
 
         // Render each horizontal position group
         // We iterate 3 times to avoid allocating separate vectors for left/center/right
-        for h_pos in [HorizontalPosition::Left, HorizontalPosition::Center, HorizontalPosition::Right] {
+        for h_pos in [
+            HorizontalPosition::Left,
+            HorizontalPosition::Center,
+            HorizontalPosition::Right,
+        ] {
             // Check if any parts match this position
-            let has_parts = parts.iter().any(|(idx, _)| all_lines[*idx].horizontal_position() == h_pos);
+            let has_parts = parts
+                .iter()
+                .any(|(idx, _)| all_lines[*idx].horizontal_position() == h_pos);
             if !has_parts {
                 continue;
             }
 
             // Collect matching parts into a temporary slice (reuse parts buffer structure)
-            let matching: Vec<(&TextLineConfig, String)> = parts.iter()
+            let matching: Vec<(&TextLineConfig, String)> = parts
+                .iter()
                 .filter(|(idx, _)| all_lines[*idx].horizontal_position() == h_pos)
                 .map(|(idx, text)| (&all_lines[*idx], text.clone()))
                 .collect();
 
             render_combined_parts(
-                cr, width, height, &matching, &shared_v_pos, &h_pos,
-                shared_rotation, shared_offset_x, shared_offset_y, shared_direction, shared_alignment, theme,
+                cr,
+                width,
+                height,
+                &matching,
+                &shared_v_pos,
+                &h_pos,
+                shared_rotation,
+                shared_offset_x,
+                shared_offset_y,
+                shared_direction,
+                shared_alignment,
+                theme,
             );
         }
     });
@@ -195,9 +220,18 @@ fn render_combined_parts(
     for (config, text) in parts {
         // Resolve font using theme if available
         let (font_family, font_size) = config.resolved_font(theme);
-        let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
-        let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
-        let extents = pango_text_extents(cr, text, &font_family, font_slant, font_weight, font_size);
+        let font_slant = if config.italic {
+            cairo::FontSlant::Italic
+        } else {
+            cairo::FontSlant::Normal
+        };
+        let font_weight = if config.bold {
+            cairo::FontWeight::Bold
+        } else {
+            cairo::FontWeight::Normal
+        };
+        let extents =
+            pango_text_extents(cr, text, &font_family, font_slant, font_weight, font_size);
         part_extents.push(extents);
     }
 
@@ -240,8 +274,16 @@ fn render_combined_parts(
     let rotated_w = combined_width * cos_a + combined_height * sin_a;
     let rotated_h = combined_width * sin_a + combined_height * cos_a;
 
-    let effective_w = if rotation_angle != 0.0 { rotated_w } else { combined_width };
-    let effective_h = if rotation_angle != 0.0 { rotated_h } else { combined_height };
+    let effective_w = if rotation_angle != 0.0 {
+        rotated_w
+    } else {
+        combined_width
+    };
+    let effective_h = if rotation_angle != 0.0 {
+        rotated_h
+    } else {
+        combined_height
+    };
 
     // Calculate starting position
     let base_x = match h_pos {
@@ -271,14 +313,23 @@ fn render_combined_parts(
 
     // Check if any part has a background configured - use first non-None background for group
     // For grouped text, we render a single background for the entire bounding box
-    let group_bg_config = parts.iter()
+    let group_bg_config = parts
+        .iter()
         .map(|(config, _)| &config.text_background)
         .find(|bg| !bg.background.is_none());
 
     // Render group background if any part has one configured
     if let Some(bg_config) = group_bg_config {
         // Render background for entire combined bounding box
-        render_text_background(cr, bg_config, 0.0, 0.0, combined_width, combined_height, theme);
+        render_text_background(
+            cr,
+            bg_config,
+            0.0,
+            0.0,
+            combined_width,
+            combined_height,
+            theme,
+        );
     }
 
     // Extract alignment components from TextPosition
@@ -306,7 +357,16 @@ fn render_combined_parts(
             let mut current_x = 0.0;
             for (i, ((config, text), ext)) in parts.iter().zip(&part_extents).enumerate() {
                 // All texts share the same baseline for proper horizontal alignment
-                render_text_part(cr, config, text, current_x, common_baseline, ext, theme, skip_individual_bg);
+                render_text_part(
+                    cr,
+                    config,
+                    text,
+                    current_x,
+                    common_baseline,
+                    ext,
+                    theme,
+                    skip_individual_bg,
+                );
 
                 current_x += ext.width();
                 if i < parts.len() - 1 {
@@ -328,7 +388,16 @@ fn render_combined_parts(
                 // Convert top position to baseline position
                 let baseline_y = current_top - ext.y_bearing();
 
-                render_text_part(cr, config, text, x_offset, baseline_y, ext, theme, skip_individual_bg);
+                render_text_part(
+                    cr,
+                    config,
+                    text,
+                    x_offset,
+                    baseline_y,
+                    ext,
+                    theme,
+                    skip_individual_bg,
+                );
 
                 current_top += ext.height();
                 if i < parts.len() - 1 {
@@ -364,24 +433,55 @@ fn render_text_part(
         if let Some(t) = theme {
             log::trace!(
                 "render_single_text: font_source={:?}, theme T1='{}' T2='{}', resolved='{}'",
-                source, t.font1_family, t.font2_family, font_family
+                source,
+                t.font1_family,
+                t.font2_family,
+                font_family
             );
         }
     }
 
-    let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
-    let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+    let font_slant = if config.italic {
+        cairo::FontSlant::Italic
+    } else {
+        cairo::FontSlant::Normal
+    };
+    let font_weight = if config.bold {
+        cairo::FontWeight::Bold
+    } else {
+        cairo::FontWeight::Normal
+    };
 
     // Render background if configured (skip when rendering grouped text - group renders its own background)
     if !skip_background {
-        render_text_background(cr, &config.text_background, x, y + extents.y_bearing(), extents.width(), extents.height(), theme);
+        render_text_background(
+            cr,
+            &config.text_background,
+            x,
+            y + extents.y_bearing(),
+            extents.width(),
+            extents.height(),
+            theme,
+        );
     }
 
     // Position for text
     cr.move_to(x, y);
 
     // Render text with fill
-    render_text_fill(cr, config, text, x, y, extents, &font_family, font_slant, font_weight, font_size, theme);
+    render_text_fill(
+        cr,
+        config,
+        text,
+        x,
+        y,
+        extents,
+        &font_family,
+        font_slant,
+        font_weight,
+        font_size,
+        theme,
+    );
 
     cr.restore().ok();
 }
@@ -417,7 +517,14 @@ fn render_text_background(
             };
 
             // Draw rounded rectangle
-            draw_rounded_rect(cr, x - padding, y - padding, width + padding * 2.0, height + padding * 2.0, radius);
+            draw_rounded_rect(
+                cr,
+                x - padding,
+                y - padding,
+                width + padding * 2.0,
+                height + padding * 2.0,
+                radius,
+            );
             cr.set_source_rgba(resolved.r, resolved.g, resolved.b, resolved.a);
             cr.fill().ok();
             cr.restore().ok();
@@ -445,7 +552,13 @@ fn render_text_background(
             let theme_ref = theme.unwrap_or(&default_theme);
             for stop in stops {
                 let resolved = stop.resolve(theme_ref);
-                gradient.add_color_stop_rgba(resolved.position, resolved.color.r, resolved.color.g, resolved.color.b, resolved.color.a);
+                gradient.add_color_stop_rgba(
+                    resolved.position,
+                    resolved.color.r,
+                    resolved.color.g,
+                    resolved.color.b,
+                    resolved.color.a,
+                );
             }
 
             draw_rounded_rect(cr, bg_x, bg_y, bg_w, bg_h, radius);
@@ -497,13 +610,21 @@ fn render_text_fill(
             let angle_rad = angle.to_radians();
             let cx = x + extents.width() / 2.0;
             let cy = y + extents.y_bearing() + extents.height() / 2.0;
-            let length = (extents.width() * extents.width() + extents.height() * extents.height()).sqrt() / 2.0;
+            let length = (extents.width() * extents.width() + extents.height() * extents.height())
+                .sqrt()
+                / 2.0;
             let dx = angle_rad.cos() * length;
             let dy = angle_rad.sin() * length;
 
             let gradient = cairo::LinearGradient::new(cx - dx, cy - dy, cx + dx, cy + dy);
             for stop in stops {
-                gradient.add_color_stop_rgba(stop.position, stop.color.r, stop.color.g, stop.color.b, stop.color.a);
+                gradient.add_color_stop_rgba(
+                    stop.position,
+                    stop.color.r,
+                    stop.color.g,
+                    stop.color.b,
+                    stop.color.a,
+                );
             }
 
             cr.set_source(&gradient).ok();
@@ -523,9 +644,27 @@ fn draw_rounded_rect(cr: &Context, x: f64, y: f64, width: f64, height: f64, radi
     let r = radius.min(width / 2.0).min(height / 2.0);
     cr.new_sub_path();
     cr.arc(x + width - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
-    cr.arc(x + width - r, y + height - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    cr.arc(x + r, y + height - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
-    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
+    cr.arc(
+        x + width - r,
+        y + height - r,
+        r,
+        0.0,
+        std::f64::consts::FRAC_PI_2,
+    );
+    cr.arc(
+        x + r,
+        y + height - r,
+        r,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    cr.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::FRAC_PI_2,
+    );
     cr.close_path();
 }
 
@@ -562,8 +701,16 @@ fn render_text_with_config(
     // Resolve font using theme if available
     let (font_family, font_size) = config.resolved_font(theme);
 
-    let font_slant = if config.italic { cairo::FontSlant::Italic } else { cairo::FontSlant::Normal };
-    let font_weight = if config.bold { cairo::FontWeight::Bold } else { cairo::FontWeight::Normal };
+    let font_slant = if config.italic {
+        cairo::FontSlant::Italic
+    } else {
+        cairo::FontSlant::Normal
+    };
+    let font_weight = if config.bold {
+        cairo::FontWeight::Bold
+    } else {
+        cairo::FontWeight::Normal
+    };
 
     // Get text dimensions using Pango
     let extents = pango_text_extents(cr, text, &font_family, font_slant, font_weight, font_size);
@@ -588,9 +735,17 @@ fn render_text_with_config(
     let rotated_w = text_w * cos_a + text_h * sin_a;
     let rotated_h = text_w * sin_a + text_h * cos_a;
 
-    let effective_w = if rotation_angle != 0.0 { rotated_w } else { text_w };
+    let effective_w = if rotation_angle != 0.0 {
+        rotated_w
+    } else {
+        text_w
+    };
     // Use font_height for vertical positioning to ensure consistent alignment
-    let effective_h = if rotation_angle != 0.0 { rotated_h } else { font_height };
+    let effective_h = if rotation_angle != 0.0 {
+        rotated_h
+    } else {
+        font_height
+    };
 
     // Calculate position
     let text_x = match h_pos {
@@ -617,10 +772,30 @@ fn render_text_with_config(
         let draw_y = -extents.y_bearing() - text_h / 2.0;
 
         // Render background
-        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h, theme);
+        render_text_background(
+            cr,
+            &config.text_background,
+            draw_x,
+            draw_y + extents.y_bearing(),
+            text_w,
+            text_h,
+            theme,
+        );
 
         // Render text with fill
-        render_text_fill(cr, config, text, draw_x, draw_y, &extents, &font_family, font_slant, font_weight, font_size, theme);
+        render_text_fill(
+            cr,
+            config,
+            text,
+            draw_x,
+            draw_y,
+            &extents,
+            &font_family,
+            font_slant,
+            font_weight,
+            font_size,
+            theme,
+        );
     } else {
         // Position baseline: text_y is top of font box, add ascent to get baseline
         let baseline_y = text_y + font_ascent;
@@ -628,29 +803,47 @@ fn render_text_with_config(
         let draw_y = baseline_y + offset_y;
 
         // Render background (use actual text extents for background sizing)
-        render_text_background(cr, &config.text_background, draw_x, draw_y + extents.y_bearing(), text_w, text_h, theme);
+        render_text_background(
+            cr,
+            &config.text_background,
+            draw_x,
+            draw_y + extents.y_bearing(),
+            text_w,
+            text_h,
+            theme,
+        );
 
         // Render text with fill
-        render_text_fill(cr, config, text, draw_x, draw_y, &extents, &font_family, font_slant, font_weight, font_size, theme);
+        render_text_fill(
+            cr,
+            config,
+            text,
+            draw_x,
+            draw_y,
+            &extents,
+            &font_family,
+            font_slant,
+            font_weight,
+            font_size,
+            theme,
+        );
     }
 
     cr.restore().ok();
 }
 
 fn get_field_value(field_id: &str, values: &HashMap<String, Value>) -> Option<String> {
-    let result = values.get(field_id).map(|value| {
-        match value {
-            Value::Number(n) => {
-                if let Some(f) = n.as_f64() {
-                    format!("{:.1}", f)
-                } else {
-                    n.to_string()
-                }
+    let result = values.get(field_id).map(|value| match value {
+        Value::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                format!("{:.1}", f)
+            } else {
+                n.to_string()
             }
-            Value::String(s) => s.clone(),
-            Value::Bool(b) => b.to_string(),
-            _ => format!("{}", value),
         }
+        Value::String(s) => s.clone(),
+        Value::Bool(b) => b.to_string(),
+        _ => format!("{}", value),
     });
     if result.is_none() {
         log::debug!("Text overlay field '{}' not found in values", field_id);

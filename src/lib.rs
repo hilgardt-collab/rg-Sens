@@ -14,13 +14,13 @@
 #![allow(clippy::if_same_then_else)]
 
 pub mod audio;
-pub mod core;
-pub mod sources;
-pub mod displayers;
-pub mod ui;
 pub mod config;
+pub mod core;
+pub mod displayers;
 pub mod plugin;
+pub mod sources;
+pub mod ui;
 
 // Re-export commonly used types
-pub use core::{DataSource, Displayer, Panel, PanelData};
 pub use config::{AppConfig, PanelConfig, PanelConfigV2};
+pub use core::{DataSource, Displayer, Panel, PanelData};

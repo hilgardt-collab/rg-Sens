@@ -13,15 +13,17 @@ use anyhow::Result;
 use cairo::Context;
 use serde::{Deserialize, Serialize};
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
+use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
-use crate::ui::lcars_display::{ContentItemConfig, SplitOrientation};
 
 // Re-export types we use
-pub use crate::ui::lcars_display::{ContentDisplayType as SynthwaveContentType, ContentItemConfig as SynthwaveContentItemConfig};
+pub use crate::ui::lcars_display::{
+    ContentDisplayType as SynthwaveContentType, ContentItemConfig as SynthwaveContentItemConfig,
+};
 
 /// Color scheme presets
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -48,10 +50,30 @@ impl SynthwaveColorScheme {
     /// Get primary color (usually for main elements)
     pub fn primary(&self) -> Color {
         match self {
-            SynthwaveColorScheme::Classic => Color { r: 0.58, g: 0.0, b: 0.83, a: 1.0 }, // Purple
-            SynthwaveColorScheme::Sunset => Color { r: 1.0, g: 0.4, b: 0.0, a: 1.0 }, // Orange
-            SynthwaveColorScheme::NightDrive => Color { r: 0.1, g: 0.1, b: 0.4, a: 1.0 }, // Deep blue
-            SynthwaveColorScheme::Miami => Color { r: 0.0, g: 0.9, b: 0.7, a: 1.0 }, // Teal
+            SynthwaveColorScheme::Classic => Color {
+                r: 0.58,
+                g: 0.0,
+                b: 0.83,
+                a: 1.0,
+            }, // Purple
+            SynthwaveColorScheme::Sunset => Color {
+                r: 1.0,
+                g: 0.4,
+                b: 0.0,
+                a: 1.0,
+            }, // Orange
+            SynthwaveColorScheme::NightDrive => Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.4,
+                a: 1.0,
+            }, // Deep blue
+            SynthwaveColorScheme::Miami => Color {
+                r: 0.0,
+                g: 0.9,
+                b: 0.7,
+                a: 1.0,
+            }, // Teal
             SynthwaveColorScheme::Custom { primary, .. } => *primary,
         }
     }
@@ -59,10 +81,30 @@ impl SynthwaveColorScheme {
     /// Get secondary color (for gradients)
     pub fn secondary(&self) -> Color {
         match self {
-            SynthwaveColorScheme::Classic => Color { r: 1.0, g: 0.08, b: 0.58, a: 1.0 }, // Hot pink
-            SynthwaveColorScheme::Sunset => Color { r: 1.0, g: 0.0, b: 0.5, a: 1.0 }, // Magenta
-            SynthwaveColorScheme::NightDrive => Color { r: 0.4, g: 0.0, b: 0.6, a: 1.0 }, // Purple
-            SynthwaveColorScheme::Miami => Color { r: 1.0, g: 0.4, b: 0.7, a: 1.0 }, // Pink
+            SynthwaveColorScheme::Classic => Color {
+                r: 1.0,
+                g: 0.08,
+                b: 0.58,
+                a: 1.0,
+            }, // Hot pink
+            SynthwaveColorScheme::Sunset => Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.5,
+                a: 1.0,
+            }, // Magenta
+            SynthwaveColorScheme::NightDrive => Color {
+                r: 0.4,
+                g: 0.0,
+                b: 0.6,
+                a: 1.0,
+            }, // Purple
+            SynthwaveColorScheme::Miami => Color {
+                r: 1.0,
+                g: 0.4,
+                b: 0.7,
+                a: 1.0,
+            }, // Pink
             SynthwaveColorScheme::Custom { secondary, .. } => *secondary,
         }
     }
@@ -70,10 +112,30 @@ impl SynthwaveColorScheme {
     /// Get accent color (for highlights, neon effects)
     pub fn accent(&self) -> Color {
         match self {
-            SynthwaveColorScheme::Classic => Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }, // Cyan
-            SynthwaveColorScheme::Sunset => Color { r: 0.5, g: 0.0, b: 0.5, a: 1.0 }, // Purple
-            SynthwaveColorScheme::NightDrive => Color { r: 0.0, g: 0.9, b: 1.0, a: 1.0 }, // Cyan
-            SynthwaveColorScheme::Miami => Color { r: 0.0, g: 0.5, b: 1.0, a: 1.0 }, // Blue
+            SynthwaveColorScheme::Classic => Color {
+                r: 0.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            }, // Cyan
+            SynthwaveColorScheme::Sunset => Color {
+                r: 0.5,
+                g: 0.0,
+                b: 0.5,
+                a: 1.0,
+            }, // Purple
+            SynthwaveColorScheme::NightDrive => Color {
+                r: 0.0,
+                g: 0.9,
+                b: 1.0,
+                a: 1.0,
+            }, // Cyan
+            SynthwaveColorScheme::Miami => Color {
+                r: 0.0,
+                g: 0.5,
+                b: 1.0,
+                a: 1.0,
+            }, // Blue
             SynthwaveColorScheme::Custom { accent, .. } => *accent,
         }
     }
@@ -93,24 +155,76 @@ impl SynthwaveColorScheme {
     pub fn background_gradient(&self) -> (Color, Color) {
         match self {
             SynthwaveColorScheme::Classic => (
-                Color { r: 0.05, g: 0.0, b: 0.15, a: 1.0 }, // Dark purple
-                Color { r: 0.0, g: 0.0, b: 0.05, a: 1.0 },  // Near black
+                Color {
+                    r: 0.05,
+                    g: 0.0,
+                    b: 0.15,
+                    a: 1.0,
+                }, // Dark purple
+                Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.05,
+                    a: 1.0,
+                }, // Near black
             ),
             SynthwaveColorScheme::Sunset => (
-                Color { r: 0.3, g: 0.05, b: 0.15, a: 1.0 }, // Dark red
-                Color { r: 0.05, g: 0.0, b: 0.1, a: 1.0 },  // Dark purple
+                Color {
+                    r: 0.3,
+                    g: 0.05,
+                    b: 0.15,
+                    a: 1.0,
+                }, // Dark red
+                Color {
+                    r: 0.05,
+                    g: 0.0,
+                    b: 0.1,
+                    a: 1.0,
+                }, // Dark purple
             ),
             SynthwaveColorScheme::NightDrive => (
-                Color { r: 0.0, g: 0.02, b: 0.1, a: 1.0 }, // Dark blue
-                Color { r: 0.0, g: 0.0, b: 0.02, a: 1.0 }, // Near black
+                Color {
+                    r: 0.0,
+                    g: 0.02,
+                    b: 0.1,
+                    a: 1.0,
+                }, // Dark blue
+                Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.02,
+                    a: 1.0,
+                }, // Near black
             ),
             SynthwaveColorScheme::Miami => (
-                Color { r: 0.0, g: 0.1, b: 0.15, a: 1.0 }, // Dark teal
-                Color { r: 0.05, g: 0.0, b: 0.1, a: 1.0 }, // Dark purple
+                Color {
+                    r: 0.0,
+                    g: 0.1,
+                    b: 0.15,
+                    a: 1.0,
+                }, // Dark teal
+                Color {
+                    r: 0.05,
+                    g: 0.0,
+                    b: 0.1,
+                    a: 1.0,
+                }, // Dark purple
             ),
-            SynthwaveColorScheme::Custom { primary, secondary, .. } => (
-                Color { r: primary.r * 0.2, g: primary.g * 0.2, b: primary.b * 0.2, a: 1.0 },
-                Color { r: secondary.r * 0.1, g: secondary.g * 0.1, b: secondary.b * 0.1, a: 1.0 },
+            SynthwaveColorScheme::Custom {
+                primary, secondary, ..
+            } => (
+                Color {
+                    r: primary.r * 0.2,
+                    g: primary.g * 0.2,
+                    b: primary.b * 0.2,
+                    a: 1.0,
+                },
+                Color {
+                    r: secondary.r * 0.1,
+                    g: secondary.g * 0.1,
+                    b: secondary.b * 0.1,
+                    a: 1.0,
+                },
             ),
         }
     }
@@ -185,20 +299,48 @@ pub enum SynthwaveDividerStyle {
 }
 
 // Default value functions
-fn default_grid_spacing() -> f64 { 30.0 }
-fn default_grid_line_width() -> f64 { 1.0 }
-fn default_grid_horizon() -> f64 { 0.4 }
-fn default_grid_perspective() -> f64 { 0.8 }
-fn default_neon_glow() -> f64 { 0.6 }
-fn default_content_padding() -> f64 { 16.0 }
-fn default_header_font() -> String { "sans-serif".to_string() }
-fn default_header_font_size() -> f64 { 16.0 }
-fn default_header_height() -> f64 { 32.0 }
-fn default_divider_padding() -> f64 { 8.0 }
-fn default_group_count() -> usize { 1 }
-fn default_frame_width() -> f64 { 2.0 }
-fn default_corner_radius() -> f64 { 8.0 }
-fn default_true() -> bool { true }
+fn default_grid_spacing() -> f64 {
+    30.0
+}
+fn default_grid_line_width() -> f64 {
+    1.0
+}
+fn default_grid_horizon() -> f64 {
+    0.4
+}
+fn default_grid_perspective() -> f64 {
+    0.8
+}
+fn default_neon_glow() -> f64 {
+    0.6
+}
+fn default_content_padding() -> f64 {
+    16.0
+}
+fn default_header_font() -> String {
+    "sans-serif".to_string()
+}
+fn default_header_font_size() -> f64 {
+    16.0
+}
+fn default_header_height() -> f64 {
+    32.0
+}
+fn default_divider_padding() -> f64 {
+    8.0
+}
+fn default_group_count() -> usize {
+    1
+}
+fn default_frame_width() -> f64 {
+    2.0
+}
+fn default_corner_radius() -> f64 {
+    8.0
+}
+fn default_true() -> bool {
+    true
+}
 
 /// Main configuration for the Synthwave frame
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -295,7 +437,9 @@ fn default_synthwave_theme() -> crate::ui::theme::ComboThemeConfig {
     crate::ui::theme::ComboThemeConfig::default_for_synthwave()
 }
 
-fn default_animation_speed() -> f64 { 8.0 }
+fn default_animation_speed() -> f64 {
+    8.0
+}
 
 impl Default for SynthwaveFrameConfig {
     fn default() -> Self {
@@ -441,8 +585,7 @@ impl FrameRenderer for SynthwaveRenderer {
         width: f64,
         height: f64,
     ) -> anyhow::Result<(f64, f64, f64, f64)> {
-        render_synthwave_frame(cr, config, width, height)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        render_synthwave_frame(cr, config, width, height).map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn calculate_group_layouts(
@@ -472,7 +615,13 @@ fn draw_background(cr: &Context, config: &SynthwaveFrameConfig, width: f64, heig
 
     let gradient = cairo::LinearGradient::new(0.0, 0.0, 0.0, height);
     gradient.add_color_stop_rgba(0.0, top_color.r, top_color.g, top_color.b, top_color.a);
-    gradient.add_color_stop_rgba(1.0, bottom_color.r, bottom_color.g, bottom_color.b, bottom_color.a);
+    gradient.add_color_stop_rgba(
+        1.0,
+        bottom_color.r,
+        bottom_color.g,
+        bottom_color.b,
+        bottom_color.a,
+    );
 
     cr.set_source(&gradient).ok();
     cr.rectangle(0.0, 0.0, width, height);
@@ -496,7 +645,8 @@ fn draw_sun(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f64
     cr.save().ok();
 
     // Create radial gradient for sun
-    let sun_gradient = cairo::RadialGradient::new(sun_x, sun_y, 0.0, sun_x, sun_y, sun_radius * 1.5);
+    let sun_gradient =
+        cairo::RadialGradient::new(sun_x, sun_y, 0.0, sun_x, sun_y, sun_radius * 1.5);
     sun_gradient.add_color_stop_rgba(0.0, secondary.r, secondary.g, secondary.b, 1.0);
     sun_gradient.add_color_stop_rgba(0.5, primary.r, primary.g, primary.b, 0.8);
     sun_gradient.add_color_stop_rgba(1.0, primary.r, primary.g, primary.b, 0.0);
@@ -559,7 +709,7 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
             // Horizontal grid lines with perspective (from horizon to bottom)
             // Use consistent visual spacing that works for any aspect ratio
             let min_spacing = base_spacing * 0.15; // Minimum spacing at horizon
-            let max_spacing = base_spacing * 1.5;  // Maximum spacing at bottom
+            let max_spacing = base_spacing * 1.5; // Maximum spacing at bottom
             let perspective = config.grid_perspective;
 
             let mut y = horizon_y + min_spacing;
@@ -726,7 +876,14 @@ fn draw_frame(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f
                     let width_mult = 1.0 + i as f64 * 0.8;
                     cr.set_source_rgba(neon.r, neon.g, neon.b, alpha);
                     cr.set_line_width(line_width * width_mult);
-                    draw_rounded_rect(cr, line_width, line_width, width - line_width * 2.0, height - line_width * 2.0, radius);
+                    draw_rounded_rect(
+                        cr,
+                        line_width,
+                        line_width,
+                        width - line_width * 2.0,
+                        height - line_width * 2.0,
+                        radius,
+                    );
                     cr.stroke().ok();
                 }
             }
@@ -734,13 +891,27 @@ fn draw_frame(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f
             // Main neon line
             cr.set_source_rgba(accent.r, accent.g, accent.b, 1.0);
             cr.set_line_width(line_width);
-            draw_rounded_rect(cr, line_width, line_width, width - line_width * 2.0, height - line_width * 2.0, radius);
+            draw_rounded_rect(
+                cr,
+                line_width,
+                line_width,
+                width - line_width * 2.0,
+                height - line_width * 2.0,
+                radius,
+            );
             cr.stroke().ok();
 
             // Bright center line
             cr.set_source_rgba(1.0, 1.0, 1.0, 0.8);
             cr.set_line_width(line_width * 0.3);
-            draw_rounded_rect(cr, line_width, line_width, width - line_width * 2.0, height - line_width * 2.0, radius);
+            draw_rounded_rect(
+                cr,
+                line_width,
+                line_width,
+                width - line_width * 2.0,
+                height - line_width * 2.0,
+                radius,
+            );
             cr.stroke().ok();
         }
         SynthwaveFrameStyle::Chrome => {
@@ -754,13 +925,27 @@ fn draw_frame(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f
 
             cr.set_source(&gradient).ok();
             cr.set_line_width(line_width * 2.0);
-            draw_rounded_rect(cr, line_width, line_width, width - line_width * 2.0, height - line_width * 2.0, radius);
+            draw_rounded_rect(
+                cr,
+                line_width,
+                line_width,
+                width - line_width * 2.0,
+                height - line_width * 2.0,
+                radius,
+            );
             cr.stroke().ok();
 
             // Inner highlight
             cr.set_source_rgba(1.0, 1.0, 1.0, 0.5);
             cr.set_line_width(1.0);
-            draw_rounded_rect(cr, line_width + 2.0, line_width + 2.0, width - line_width * 2.0 - 4.0, height - line_width * 2.0 - 4.0, radius - 2.0);
+            draw_rounded_rect(
+                cr,
+                line_width + 2.0,
+                line_width + 2.0,
+                width - line_width * 2.0 - 4.0,
+                height - line_width * 2.0 - 4.0,
+                radius - 2.0,
+            );
             cr.stroke().ok();
         }
         SynthwaveFrameStyle::Minimal => {
@@ -798,13 +983,27 @@ fn draw_frame(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f
             // Outer line
             cr.set_source_rgba(accent.r, accent.g, accent.b, 0.8);
             cr.set_line_width(line_width);
-            draw_rounded_rect(cr, line_width, line_width, width - line_width * 2.0, height - line_width * 2.0, radius);
+            draw_rounded_rect(
+                cr,
+                line_width,
+                line_width,
+                width - line_width * 2.0,
+                height - line_width * 2.0,
+                radius,
+            );
             cr.stroke().ok();
 
             // Inner line (different color)
             cr.set_source_rgba(secondary.r, secondary.g, secondary.b, 0.6);
             cr.set_line_width(line_width * 0.75);
-            draw_rounded_rect(cr, line_width + gap, line_width + gap, width - (line_width + gap) * 2.0, height - (line_width + gap) * 2.0, radius.max(gap) - gap);
+            draw_rounded_rect(
+                cr,
+                line_width + gap,
+                line_width + gap,
+                width - (line_width + gap) * 2.0,
+                height - (line_width + gap) * 2.0,
+                radius.max(gap) - gap,
+            );
             cr.stroke().ok();
         }
         SynthwaveFrameStyle::None => {}
@@ -819,8 +1018,20 @@ fn draw_rounded_rect(cr: &Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     cr.new_path();
     cr.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
     cr.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
-    cr.arc(x + r, y + h - r, r, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
-    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::FRAC_PI_2);
+    cr.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    cr.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::FRAC_PI_2,
+    );
     cr.close_path();
 }
 
@@ -843,7 +1054,14 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
         &config.header_text
     };
 
-    let text_extents = pango_text_extents(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+    let text_extents = pango_text_extents(
+        cr,
+        text,
+        &config.header_font,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        config.header_font_size,
+    );
     let text_width = text_extents.width();
     let text_height = text_extents.height();
 
@@ -853,7 +1071,8 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
     match config.header_style {
         SynthwaveHeaderStyle::Chrome => {
             // Chrome text effect with gradient
-            let gradient = cairo::LinearGradient::new(text_x, text_y - text_height, text_x, text_y + 2.0);
+            let gradient =
+                cairo::LinearGradient::new(text_x, text_y - text_height, text_x, text_y + 2.0);
             gradient.add_color_stop_rgba(0.0, 0.95, 0.95, 1.0, 1.0);
             gradient.add_color_stop_rgba(0.4, 0.6, 0.6, 0.7, 1.0);
             gradient.add_color_stop_rgba(0.5, 0.3, 0.3, 0.4, 1.0);
@@ -863,12 +1082,26 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
             // Shadow
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
             cr.move_to(text_x + 2.0, text_y + 2.0);
-            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
 
             // Chrome gradient text
             cr.set_source(&gradient).ok();
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
 
             // Underline with neon glow
             if config.neon_glow_intensity > 0.0 {
@@ -892,24 +1125,50 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
                     let alpha = config.neon_glow_intensity * 0.3 * (4.0 - i as f64) / 3.0;
                     cr.set_source_rgba(neon.r, neon.g, neon.b, alpha);
                     cr.move_to(text_x, text_y);
-                    pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+                    pango_show_text(
+                        cr,
+                        text,
+                        &config.header_font,
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Bold,
+                        config.header_font_size,
+                    );
                 }
             }
 
             // Main text
             cr.set_source_rgba(accent.r, accent.g, accent.b, 1.0);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
 
             // Bright center
             cr.set_source_rgba(1.0, 1.0, 1.0, 0.6);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
         }
         SynthwaveHeaderStyle::Outline => {
             // Outlined text using Pango layout path
             cr.set_source_rgba(accent.r, accent.g, accent.b, 1.0);
-            let font_desc = crate::ui::pango_text::get_font_description(&config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let font_desc = crate::ui::pango_text::get_font_description(
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
             let layout = pangocairo::functions::create_layout(cr);
             layout.set_font_description(Some(&font_desc));
             layout.set_text(text);
@@ -924,7 +1183,14 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
         SynthwaveHeaderStyle::Simple => {
             cr.set_source_rgba(secondary.r, secondary.g, secondary.b, 1.0);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
         }
         SynthwaveHeaderStyle::None => {}
     }
@@ -935,7 +1201,14 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
 }
 
 /// Draw a divider between groups
-fn draw_divider(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, length: f64, horizontal: bool) {
+fn draw_divider(
+    cr: &Context,
+    config: &SynthwaveFrameConfig,
+    x: f64,
+    y: f64,
+    length: f64,
+    horizontal: bool,
+) {
     if matches!(config.divider_style, SynthwaveDividerStyle::None) {
         return;
     }
@@ -1036,7 +1309,11 @@ fn draw_divider(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, len
 
 /// Get colors for content rendering
 pub fn get_synthwave_colors(config: &SynthwaveFrameConfig) -> (Color, Color, Color) {
-    (config.color_scheme.primary(), config.color_scheme.secondary(), config.color_scheme.accent())
+    (
+        config.color_scheme.primary(),
+        config.color_scheme.secondary(),
+        config.color_scheme.accent(),
+    )
 }
 
 /// Render animated scanline overlay effect (CRT monitor style)
@@ -1113,7 +1390,13 @@ pub fn render_synthwave_frame(
 
     // Draw header
     let frame_margin = config.frame_width + 4.0;
-    let header_height = draw_header(cr, config, frame_margin, frame_margin, width - frame_margin * 2.0);
+    let header_height = draw_header(
+        cr,
+        config,
+        frame_margin,
+        frame_margin,
+        width - frame_margin * 2.0,
+    );
 
     cr.restore()?;
 

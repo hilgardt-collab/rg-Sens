@@ -141,11 +141,15 @@ impl Displayer for FighterHudDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("fighter_hud_config") {
-            if let Ok(display_config) = serde_json::from_value::<FighterHudDisplayConfig>(config_value.clone()) {
+            if let Ok(display_config) =
+                serde_json::from_value::<FighterHudDisplayConfig>(config_value.clone())
+            {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
-            if let Ok(frame_config) = serde_json::from_value::<FighterHudFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) =
+                serde_json::from_value::<FighterHudFrameConfig>(config_value.clone())
+            {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }
@@ -158,8 +162,8 @@ impl Displayer for FighterHudDisplayer {
     }
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
-        self.inner.get_config().map(|frame| {
-            DisplayerConfig::FighterHud(FighterHudDisplayConfig::from_frame(frame))
-        })
+        self.inner
+            .get_config()
+            .map(|frame| DisplayerConfig::FighterHud(FighterHudDisplayConfig::from_frame(frame)))
     }
 }

@@ -7,7 +7,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform, register_animation, ANIMATION_SNAP_THRESHOLD};
+use crate::core::{
+    register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
+    ANIMATION_SNAP_THRESHOLD,
+};
 use crate::ui::bar_display::{render_bar, BarDisplayConfig};
 
 /// Bar displayer
@@ -24,7 +27,7 @@ struct DisplayData {
     animated_value: f64,
     values: HashMap<String, Value>, // Text overlay field values (extracted, not full clone)
     transform: PanelTransform,
-    dirty: bool, // Flag to indicate data has changed and needs redraw
+    dirty: bool,       // Flag to indicate data has changed and needs redraw
     initialized: bool, // Flag to track if animated_value has been set
     last_frame_time: std::time::Instant,
 }
@@ -82,7 +85,15 @@ impl Displayer for BarDisplayer {
                     data.value
                 };
                 data.transform.apply(cr, width as f64, height as f64);
-                let _ = render_bar(cr, &data.config, &data.config.theme, display_value, &data.values, width as f64, height as f64);
+                let _ = render_bar(
+                    cr,
+                    &data.config,
+                    &data.config.theme,
+                    display_value,
+                    &data.values,
+                    width as f64,
+                    height as f64,
+                );
                 data.transform.restore(cr);
             }
         });
@@ -93,7 +104,9 @@ impl Displayer for BarDisplayer {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
                 // Check if animation is in progress
-                if data.config.smooth_animation && (data.animated_value - data.value).abs() > ANIMATION_SNAP_THRESHOLD {
+                if data.config.smooth_animation
+                    && (data.animated_value - data.value).abs() > ANIMATION_SNAP_THRESHOLD
+                {
                     // Calculate elapsed time for smooth animation
                     let now = std::time::Instant::now();
                     let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
@@ -142,8 +155,14 @@ impl Displayer for BarDisplayer {
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
             // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
             // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-            let field_ids: Vec<_> = display_data.config.text_overlay.text_config.lines.iter()
-                .map(|l| l.field_id.clone()).collect();
+            let field_ids: Vec<_> = display_data
+                .config
+                .text_overlay
+                .text_config
+                .lines
+                .iter()
+                .map(|l| l.field_id.clone())
+                .collect();
             display_data.values.clear();
             for field_id in field_ids {
                 if let Some(value) = data.get(&field_id) {
@@ -165,7 +184,15 @@ impl Displayer for BarDisplayer {
                 data.value
             };
             data.transform.apply(cr, width, height);
-            render_bar(cr, &data.config, &data.config.theme, display_value, &data.values, width, height)?;
+            render_bar(
+                cr,
+                &data.config,
+                &data.config.theme,
+                display_value,
+                &data.values,
+                width,
+                height,
+            )?;
             data.transform.restore(cr);
         }
         Ok(())
@@ -218,7 +245,9 @@ impl Displayer for BarDisplayer {
 
         // Check for full bar_config first
         if let Some(bar_config_value) = config.get("bar_config") {
-            if let Ok(bar_config) = serde_json::from_value::<crate::ui::BarDisplayConfig>(bar_config_value.clone()) {
+            if let Ok(bar_config) =
+                serde_json::from_value::<crate::ui::BarDisplayConfig>(bar_config_value.clone())
+            {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = bar_config;
                 }

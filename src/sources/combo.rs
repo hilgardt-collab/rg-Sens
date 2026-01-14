@@ -3,7 +3,9 @@
 //! This source is designed for complex displayers (like LCARS) that need
 //! to show data from multiple sources simultaneously.
 
-use crate::core::{global_registry, DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::core::{
+    global_registry, DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata,
+};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -87,7 +89,10 @@ impl Default for ComboSourceConfig {
     fn default() -> Self {
         Self {
             mode: default_mode(),
-            groups: vec![GroupConfig { item_count: 2, ..Default::default() }], // Default: 1 group with 2 items
+            groups: vec![GroupConfig {
+                item_count: 2,
+                ..Default::default()
+            }], // Default: 1 group with 2 items
             primary_count: 0,
             secondary_count: 0,
             slots: HashMap::new(),
@@ -105,11 +110,17 @@ impl ComboSourceConfig {
 
             // Convert primary to group 1
             if self.primary_count > 0 {
-                self.groups.push(GroupConfig { item_count: self.primary_count, ..Default::default() });
+                self.groups.push(GroupConfig {
+                    item_count: self.primary_count,
+                    ..Default::default()
+                });
             }
             // Convert secondary to group 2
             if self.secondary_count > 0 {
-                self.groups.push(GroupConfig { item_count: self.secondary_count, ..Default::default() });
+                self.groups.push(GroupConfig {
+                    item_count: self.secondary_count,
+                    ..Default::default()
+                });
             }
 
             // Migrate slot names: primary1 -> group1_1, secondary1 -> group2_1
@@ -135,7 +146,10 @@ impl ComboSourceConfig {
 
         // Ensure at least one group exists
         if self.groups.is_empty() {
-            self.groups.push(GroupConfig { item_count: 2, ..Default::default() });
+            self.groups.push(GroupConfig {
+                item_count: 2,
+                ..Default::default()
+            });
         }
     }
 
@@ -217,31 +231,52 @@ impl ComboSource {
                                 let mut config_map = HashMap::new();
                                 // Convert the HashMap to a Value object
                                 let config_obj = Value::Object(
-                                    slot_config.source_config.iter()
+                                    slot_config
+                                        .source_config
+                                        .iter()
                                         .map(|(k, v)| (k.clone(), v.clone()))
-                                        .collect()
+                                        .collect(),
                                 );
-                                log::info!("ComboSource: Configuring '{}' for slot '{}' with config: {:?}",
-                                    slot_config.source_id, slot_name, config_obj);
+                                log::info!(
+                                    "ComboSource: Configuring '{}' for slot '{}' with config: {:?}",
+                                    slot_config.source_id,
+                                    slot_name,
+                                    config_obj
+                                );
                                 config_map.insert(config_key, config_obj);
                                 if let Err(e) = source.configure(&config_map) {
-                                    log::warn!("ComboSource: Failed to configure '{}' for slot '{}': {}",
-                                        slot_config.source_id, slot_name, e);
+                                    log::warn!(
+                                        "ComboSource: Failed to configure '{}' for slot '{}': {}",
+                                        slot_config.source_id,
+                                        slot_name,
+                                        e
+                                    );
                                 }
                             }
                             self.child_sources.insert(slot_name.clone(), source);
-                            log::debug!("ComboSource: Created child source '{}' for slot '{}'", slot_config.source_id, slot_name);
+                            log::debug!(
+                                "ComboSource: Created child source '{}' for slot '{}'",
+                                slot_config.source_id,
+                                slot_name
+                            );
                         }
                         Err(e) => {
-                            log::warn!("ComboSource: Failed to create source '{}' for slot '{}': {}",
-                                slot_config.source_id, slot_name, e);
+                            log::warn!(
+                                "ComboSource: Failed to create source '{}' for slot '{}': {}",
+                                slot_config.source_id,
+                                slot_name,
+                                e
+                            );
                         }
                     }
                 }
             }
         }
 
-        log::info!("ComboSource: Set up {} child sources", self.child_sources.len());
+        log::info!(
+            "ComboSource: Set up {} child sources",
+            self.child_sources.len()
+        );
     }
 
     /// Get the list of slot names based on configuration
@@ -262,14 +297,24 @@ impl ComboSource {
                 // Center source
                 names.push("center".to_string());
                 // Arc sources from first group's item count
-                let arc_count = self.config.groups.first().map(|g| g.item_count).unwrap_or(4);
+                let arc_count = self
+                    .config
+                    .groups
+                    .first()
+                    .map(|g| g.item_count)
+                    .unwrap_or(4);
                 for i in 1..=arc_count {
                     names.push(format!("arc{}", i));
                 }
             }
             "level_bar" => {
                 // Bar sources from first group's item count
-                let bar_count = self.config.groups.first().map(|g| g.item_count).unwrap_or(4);
+                let bar_count = self
+                    .config
+                    .groups
+                    .first()
+                    .map(|g| g.item_count)
+                    .unwrap_or(4);
                 for i in 1..=bar_count {
                     names.push(format!("bar{}", i));
                 }
@@ -314,7 +359,10 @@ impl ComboSource {
             if let Some(slot_config) = slot_config {
                 if !slot_config.caption_override.is_empty() {
                     let caption_key = format!("{}_caption", slot_name);
-                    self.values.insert(caption_key, Value::from(slot_config.caption_override.clone()));
+                    self.values.insert(
+                        caption_key,
+                        Value::from(slot_config.caption_override.clone()),
+                    );
                 }
             }
         }
@@ -406,7 +454,9 @@ impl DataSource for ComboSource {
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Look for combo_config in the configuration
         if let Some(combo_config_value) = config.get("combo_config") {
-            if let Ok(mut combo_config) = serde_json::from_value::<ComboSourceConfig>(combo_config_value.clone()) {
+            if let Ok(mut combo_config) =
+                serde_json::from_value::<ComboSourceConfig>(combo_config_value.clone())
+            {
                 // Migrate legacy primary/secondary config to groups format
                 combo_config.migrate_legacy();
                 self.config = combo_config;

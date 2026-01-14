@@ -49,91 +49,411 @@ fn draw_checkerboard(cr: &cairo::Context, width: i32, height: i32, checker_size:
 const PRESET_COLORS: [[Color; 8]; 8] = [
     // Row 0: Very Light variations
     [
-        Color { r: 0.8, g: 0.9, b: 1.0, a: 1.0 },   // Light Blue
-        Color { r: 0.8, g: 1.0, b: 0.9, a: 1.0 },   // Light Green
-        Color { r: 1.0, g: 1.0, b: 0.8, a: 1.0 },   // Light Yellow
-        Color { r: 1.0, g: 0.9, b: 0.8, a: 1.0 },   // Light Orange
-        Color { r: 1.0, g: 0.8, b: 0.8, a: 1.0 },   // Light Red
-        Color { r: 0.95, g: 0.8, b: 1.0, a: 1.0 },  // Light Purple
-        Color { r: 0.9, g: 0.8, b: 0.7, a: 1.0 },   // Light Brown
-        Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },   // White
+        Color {
+            r: 0.8,
+            g: 0.9,
+            b: 1.0,
+            a: 1.0,
+        }, // Light Blue
+        Color {
+            r: 0.8,
+            g: 1.0,
+            b: 0.9,
+            a: 1.0,
+        }, // Light Green
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 0.8,
+            a: 1.0,
+        }, // Light Yellow
+        Color {
+            r: 1.0,
+            g: 0.9,
+            b: 0.8,
+            a: 1.0,
+        }, // Light Orange
+        Color {
+            r: 1.0,
+            g: 0.8,
+            b: 0.8,
+            a: 1.0,
+        }, // Light Red
+        Color {
+            r: 0.95,
+            g: 0.8,
+            b: 1.0,
+            a: 1.0,
+        }, // Light Purple
+        Color {
+            r: 0.9,
+            g: 0.8,
+            b: 0.7,
+            a: 1.0,
+        }, // Light Brown
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        }, // White
     ],
     // Row 1: Light variations
     [
-        Color { r: 0.6, g: 0.8, b: 1.0, a: 1.0 },   // Blue tint
-        Color { r: 0.6, g: 1.0, b: 0.8, a: 1.0 },   // Green tint
-        Color { r: 1.0, g: 1.0, b: 0.6, a: 1.0 },   // Yellow tint
-        Color { r: 1.0, g: 0.8, b: 0.6, a: 1.0 },   // Orange tint
-        Color { r: 1.0, g: 0.6, b: 0.6, a: 1.0 },   // Red tint
-        Color { r: 0.9, g: 0.6, b: 1.0, a: 1.0 },   // Purple tint
-        Color { r: 0.8, g: 0.65, b: 0.5, a: 1.0 },  // Brown tint
-        Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },   // Light Gray
+        Color {
+            r: 0.6,
+            g: 0.8,
+            b: 1.0,
+            a: 1.0,
+        }, // Blue tint
+        Color {
+            r: 0.6,
+            g: 1.0,
+            b: 0.8,
+            a: 1.0,
+        }, // Green tint
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 0.6,
+            a: 1.0,
+        }, // Yellow tint
+        Color {
+            r: 1.0,
+            g: 0.8,
+            b: 0.6,
+            a: 1.0,
+        }, // Orange tint
+        Color {
+            r: 1.0,
+            g: 0.6,
+            b: 0.6,
+            a: 1.0,
+        }, // Red tint
+        Color {
+            r: 0.9,
+            g: 0.6,
+            b: 1.0,
+            a: 1.0,
+        }, // Purple tint
+        Color {
+            r: 0.8,
+            g: 0.65,
+            b: 0.5,
+            a: 1.0,
+        }, // Brown tint
+        Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        }, // Light Gray
     ],
     // Row 2: Medium Light variations
     [
-        Color { r: 0.4, g: 0.7, b: 1.0, a: 1.0 },   // Medium Light Blue
-        Color { r: 0.4, g: 1.0, b: 0.7, a: 1.0 },   // Medium Light Green
-        Color { r: 1.0, g: 0.95, b: 0.4, a: 1.0 },  // Medium Light Yellow
-        Color { r: 1.0, g: 0.7, b: 0.4, a: 1.0 },   // Medium Light Orange
-        Color { r: 1.0, g: 0.4, b: 0.4, a: 1.0 },   // Medium Light Red
-        Color { r: 0.8, g: 0.4, b: 1.0, a: 1.0 },   // Medium Light Purple
-        Color { r: 0.7, g: 0.55, b: 0.4, a: 1.0 },  // Medium Light Brown
-        Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 },   // Gray
+        Color {
+            r: 0.4,
+            g: 0.7,
+            b: 1.0,
+            a: 1.0,
+        }, // Medium Light Blue
+        Color {
+            r: 0.4,
+            g: 1.0,
+            b: 0.7,
+            a: 1.0,
+        }, // Medium Light Green
+        Color {
+            r: 1.0,
+            g: 0.95,
+            b: 0.4,
+            a: 1.0,
+        }, // Medium Light Yellow
+        Color {
+            r: 1.0,
+            g: 0.7,
+            b: 0.4,
+            a: 1.0,
+        }, // Medium Light Orange
+        Color {
+            r: 1.0,
+            g: 0.4,
+            b: 0.4,
+            a: 1.0,
+        }, // Medium Light Red
+        Color {
+            r: 0.8,
+            g: 0.4,
+            b: 1.0,
+            a: 1.0,
+        }, // Medium Light Purple
+        Color {
+            r: 0.7,
+            g: 0.55,
+            b: 0.4,
+            a: 1.0,
+        }, // Medium Light Brown
+        Color {
+            r: 0.8,
+            g: 0.8,
+            b: 0.8,
+            a: 1.0,
+        }, // Gray
     ],
     // Row 3: Medium variations
     [
-        Color { r: 0.2, g: 0.5, b: 1.0, a: 1.0 },   // Medium Blue
-        Color { r: 0.2, g: 0.9, b: 0.5, a: 1.0 },   // Medium Green
-        Color { r: 1.0, g: 0.9, b: 0.2, a: 1.0 },   // Medium Yellow
-        Color { r: 1.0, g: 0.6, b: 0.2, a: 1.0 },   // Medium Orange
-        Color { r: 1.0, g: 0.2, b: 0.2, a: 1.0 },   // Medium Red
-        Color { r: 0.7, g: 0.2, b: 1.0, a: 1.0 },   // Medium Purple
-        Color { r: 0.6, g: 0.45, b: 0.3, a: 1.0 },  // Medium Brown
-        Color { r: 0.6, g: 0.6, b: 0.6, a: 1.0 },   // Medium Gray
+        Color {
+            r: 0.2,
+            g: 0.5,
+            b: 1.0,
+            a: 1.0,
+        }, // Medium Blue
+        Color {
+            r: 0.2,
+            g: 0.9,
+            b: 0.5,
+            a: 1.0,
+        }, // Medium Green
+        Color {
+            r: 1.0,
+            g: 0.9,
+            b: 0.2,
+            a: 1.0,
+        }, // Medium Yellow
+        Color {
+            r: 1.0,
+            g: 0.6,
+            b: 0.2,
+            a: 1.0,
+        }, // Medium Orange
+        Color {
+            r: 1.0,
+            g: 0.2,
+            b: 0.2,
+            a: 1.0,
+        }, // Medium Red
+        Color {
+            r: 0.7,
+            g: 0.2,
+            b: 1.0,
+            a: 1.0,
+        }, // Medium Purple
+        Color {
+            r: 0.6,
+            g: 0.45,
+            b: 0.3,
+            a: 1.0,
+        }, // Medium Brown
+        Color {
+            r: 0.6,
+            g: 0.6,
+            b: 0.6,
+            a: 1.0,
+        }, // Medium Gray
     ],
     // Row 4: Standard/Saturated variations
     [
-        Color { r: 0.0, g: 0.4, b: 1.0, a: 1.0 },   // Blue
-        Color { r: 0.0, g: 0.8, b: 0.4, a: 1.0 },   // Green
-        Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 },   // Yellow
-        Color { r: 1.0, g: 0.5, b: 0.0, a: 1.0 },   // Orange
-        Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },   // Red
-        Color { r: 0.6, g: 0.0, b: 1.0, a: 1.0 },   // Purple
-        Color { r: 0.55, g: 0.35, b: 0.2, a: 1.0 }, // Brown
-        Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },   // Gray
+        Color {
+            r: 0.0,
+            g: 0.4,
+            b: 1.0,
+            a: 1.0,
+        }, // Blue
+        Color {
+            r: 0.0,
+            g: 0.8,
+            b: 0.4,
+            a: 1.0,
+        }, // Green
+        Color {
+            r: 1.0,
+            g: 0.8,
+            b: 0.0,
+            a: 1.0,
+        }, // Yellow
+        Color {
+            r: 1.0,
+            g: 0.5,
+            b: 0.0,
+            a: 1.0,
+        }, // Orange
+        Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }, // Red
+        Color {
+            r: 0.6,
+            g: 0.0,
+            b: 1.0,
+            a: 1.0,
+        }, // Purple
+        Color {
+            r: 0.55,
+            g: 0.35,
+            b: 0.2,
+            a: 1.0,
+        }, // Brown
+        Color {
+            r: 0.5,
+            g: 0.5,
+            b: 0.5,
+            a: 1.0,
+        }, // Gray
     ],
     // Row 5: Dark variations
     [
-        Color { r: 0.0, g: 0.3, b: 0.8, a: 1.0 },   // Dark Blue
-        Color { r: 0.0, g: 0.6, b: 0.3, a: 1.0 },   // Dark Green
-        Color { r: 0.8, g: 0.6, b: 0.0, a: 1.0 },   // Dark Yellow
-        Color { r: 0.8, g: 0.4, b: 0.0, a: 1.0 },   // Dark Orange
-        Color { r: 0.8, g: 0.0, b: 0.0, a: 1.0 },   // Dark Red
-        Color { r: 0.5, g: 0.0, b: 0.8, a: 1.0 },   // Dark Purple
-        Color { r: 0.4, g: 0.25, b: 0.1, a: 1.0 },  // Dark Brown
-        Color { r: 0.4, g: 0.4, b: 0.4, a: 1.0 },   // Dark Gray
+        Color {
+            r: 0.0,
+            g: 0.3,
+            b: 0.8,
+            a: 1.0,
+        }, // Dark Blue
+        Color {
+            r: 0.0,
+            g: 0.6,
+            b: 0.3,
+            a: 1.0,
+        }, // Dark Green
+        Color {
+            r: 0.8,
+            g: 0.6,
+            b: 0.0,
+            a: 1.0,
+        }, // Dark Yellow
+        Color {
+            r: 0.8,
+            g: 0.4,
+            b: 0.0,
+            a: 1.0,
+        }, // Dark Orange
+        Color {
+            r: 0.8,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }, // Dark Red
+        Color {
+            r: 0.5,
+            g: 0.0,
+            b: 0.8,
+            a: 1.0,
+        }, // Dark Purple
+        Color {
+            r: 0.4,
+            g: 0.25,
+            b: 0.1,
+            a: 1.0,
+        }, // Dark Brown
+        Color {
+            r: 0.4,
+            g: 0.4,
+            b: 0.4,
+            a: 1.0,
+        }, // Dark Gray
     ],
     // Row 6: Very Dark variations
     [
-        Color { r: 0.0, g: 0.2, b: 0.6, a: 1.0 },   // Very Dark Blue
-        Color { r: 0.0, g: 0.4, b: 0.2, a: 1.0 },   // Very Dark Green
-        Color { r: 0.6, g: 0.4, b: 0.0, a: 1.0 },   // Very Dark Yellow
-        Color { r: 0.6, g: 0.3, b: 0.0, a: 1.0 },   // Very Dark Orange
-        Color { r: 0.6, g: 0.0, b: 0.0, a: 1.0 },   // Very Dark Red
-        Color { r: 0.4, g: 0.0, b: 0.6, a: 1.0 },   // Very Dark Purple
-        Color { r: 0.3, g: 0.2, b: 0.1, a: 1.0 },   // Very Dark Brown
-        Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },// Very Dark Gray
+        Color {
+            r: 0.0,
+            g: 0.2,
+            b: 0.6,
+            a: 1.0,
+        }, // Very Dark Blue
+        Color {
+            r: 0.0,
+            g: 0.4,
+            b: 0.2,
+            a: 1.0,
+        }, // Very Dark Green
+        Color {
+            r: 0.6,
+            g: 0.4,
+            b: 0.0,
+            a: 1.0,
+        }, // Very Dark Yellow
+        Color {
+            r: 0.6,
+            g: 0.3,
+            b: 0.0,
+            a: 1.0,
+        }, // Very Dark Orange
+        Color {
+            r: 0.6,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }, // Very Dark Red
+        Color {
+            r: 0.4,
+            g: 0.0,
+            b: 0.6,
+            a: 1.0,
+        }, // Very Dark Purple
+        Color {
+            r: 0.3,
+            g: 0.2,
+            b: 0.1,
+            a: 1.0,
+        }, // Very Dark Brown
+        Color {
+            r: 0.25,
+            g: 0.25,
+            b: 0.25,
+            a: 1.0,
+        }, // Very Dark Gray
     ],
     // Row 7: Darkest variations
     [
-        Color { r: 0.0, g: 0.1, b: 0.4, a: 1.0 },   // Darkest Blue
-        Color { r: 0.0, g: 0.2, b: 0.1, a: 1.0 },   // Darkest Green
-        Color { r: 0.4, g: 0.3, b: 0.0, a: 1.0 },   // Darkest Yellow
-        Color { r: 0.4, g: 0.2, b: 0.0, a: 1.0 },   // Darkest Orange
-        Color { r: 0.4, g: 0.0, b: 0.0, a: 1.0 },   // Darkest Red
-        Color { r: 0.2, g: 0.0, b: 0.4, a: 1.0 },   // Darkest Purple
-        Color { r: 0.2, g: 0.15, b: 0.1, a: 1.0 },  // Darkest Brown
-        Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },   // Black
+        Color {
+            r: 0.0,
+            g: 0.1,
+            b: 0.4,
+            a: 1.0,
+        }, // Darkest Blue
+        Color {
+            r: 0.0,
+            g: 0.2,
+            b: 0.1,
+            a: 1.0,
+        }, // Darkest Green
+        Color {
+            r: 0.4,
+            g: 0.3,
+            b: 0.0,
+            a: 1.0,
+        }, // Darkest Yellow
+        Color {
+            r: 0.4,
+            g: 0.2,
+            b: 0.0,
+            a: 1.0,
+        }, // Darkest Orange
+        Color {
+            r: 0.4,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }, // Darkest Red
+        Color {
+            r: 0.2,
+            g: 0.0,
+            b: 0.4,
+            a: 1.0,
+        }, // Darkest Purple
+        Color {
+            r: 0.2,
+            g: 0.15,
+            b: 0.1,
+            a: 1.0,
+        }, // Darkest Brown
+        Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        }, // Black
     ],
 ];
 
@@ -192,7 +512,7 @@ impl CustomColorPicker {
 
         // === Preview Area (at top, full width) ===
         let preview_area = DrawingArea::new();
-        preview_area.set_size_request(-1, 60);  // Full width, 60px height
+        preview_area.set_size_request(-1, 60); // Full width, 60px height
         preview_area.set_hexpand(true);
         preview_area.set_margin_bottom(12);
 
@@ -212,16 +532,23 @@ impl CustomColorPicker {
         main_box.append(&preview_area);
 
         // === Create RGB sliders first (we need them for color maps) ===
-        let (_red_box, red_scale, red_spin) = Self::create_slider_with_spin("R", 0.0, 1.0, 0.01, initial_color.r);
-        let (_green_box, green_scale, green_spin) = Self::create_slider_with_spin("G", 0.0, 1.0, 0.01, initial_color.g);
-        let (_blue_box, blue_scale, blue_spin) = Self::create_slider_with_spin("B", 0.0, 1.0, 0.01, initial_color.b);
-        let (_alpha_box, alpha_scale, alpha_spin) = Self::create_slider_with_spin("A", 0.0, 1.0, 0.01, initial_color.a);
+        let (_red_box, red_scale, red_spin) =
+            Self::create_slider_with_spin("R", 0.0, 1.0, 0.01, initial_color.r);
+        let (_green_box, green_scale, green_spin) =
+            Self::create_slider_with_spin("G", 0.0, 1.0, 0.01, initial_color.g);
+        let (_blue_box, blue_scale, blue_spin) =
+            Self::create_slider_with_spin("B", 0.0, 1.0, 0.01, initial_color.b);
+        let (_alpha_box, alpha_scale, alpha_spin) =
+            Self::create_slider_with_spin("A", 0.0, 1.0, 0.01, initial_color.a);
 
         // === Create HSV sliders ===
         let (h, s, v) = rgb_to_hsv(initial_color.r, initial_color.g, initial_color.b);
-        let (_hue_box, hue_scale, hue_spin) = Self::create_slider_with_spin("H", 0.0, 360.0, 1.0, h);
-        let (_sat_box, saturation_scale, saturation_spin) = Self::create_slider_with_spin("S", 0.0, 1.0, 0.01, s);
-        let (_val_box, value_scale, value_spin) = Self::create_slider_with_spin("V", 0.0, 1.0, 0.01, v);
+        let (_hue_box, hue_scale, hue_spin) =
+            Self::create_slider_with_spin("H", 0.0, 360.0, 1.0, h);
+        let (_sat_box, saturation_scale, saturation_spin) =
+            Self::create_slider_with_spin("S", 0.0, 1.0, 0.01, s);
+        let (_val_box, value_scale, value_spin) =
+            Self::create_slider_with_spin("V", 0.0, 1.0, 0.01, v);
 
         // === Main Content: Horizontal box with presets + sliders ===
         let content_box = GtkBox::new(Orientation::Horizontal, 12);
@@ -268,7 +595,12 @@ impl CustomColorPicker {
         alpha_label.set_halign(gtk4::Align::Start);
         alpha_label.add_css_class("heading");
         sliders_box.append(&alpha_label);
-        sliders_box.append(&Self::create_horizontal_alpha_slider(&red_scale, &green_scale, &blue_scale, &alpha_scale));
+        sliders_box.append(&Self::create_horizontal_alpha_slider(
+            &red_scale,
+            &green_scale,
+            &blue_scale,
+            &alpha_scale,
+        ));
 
         // Separator
         sliders_box.append(&gtk4::Separator::new(Orientation::Horizontal));
@@ -278,9 +610,27 @@ impl CustomColorPicker {
         rgb_label.set_halign(gtk4::Align::Start);
         rgb_label.add_css_class("heading");
         sliders_box.append(&rgb_label);
-        sliders_box.append(&Self::create_horizontal_rgb_slider("R", &red_scale, &green_scale, &blue_scale, 'r'));
-        sliders_box.append(&Self::create_horizontal_rgb_slider("G", &red_scale, &green_scale, &blue_scale, 'g'));
-        sliders_box.append(&Self::create_horizontal_rgb_slider("B", &red_scale, &green_scale, &blue_scale, 'b'));
+        sliders_box.append(&Self::create_horizontal_rgb_slider(
+            "R",
+            &red_scale,
+            &green_scale,
+            &blue_scale,
+            'r',
+        ));
+        sliders_box.append(&Self::create_horizontal_rgb_slider(
+            "G",
+            &red_scale,
+            &green_scale,
+            &blue_scale,
+            'g',
+        ));
+        sliders_box.append(&Self::create_horizontal_rgb_slider(
+            "B",
+            &red_scale,
+            &green_scale,
+            &blue_scale,
+            'b',
+        ));
 
         // Separator
         sliders_box.append(&gtk4::Separator::new(Orientation::Horizontal));
@@ -291,8 +641,16 @@ impl CustomColorPicker {
         hsv_label.add_css_class("heading");
         sliders_box.append(&hsv_label);
         sliders_box.append(&Self::create_horizontal_hue_slider(&hue_scale));
-        sliders_box.append(&Self::create_horizontal_saturation_slider(&hue_scale, &saturation_scale, &value_scale));
-        sliders_box.append(&Self::create_horizontal_value_slider(&hue_scale, &saturation_scale, &value_scale));
+        sliders_box.append(&Self::create_horizontal_saturation_slider(
+            &hue_scale,
+            &saturation_scale,
+            &value_scale,
+        ));
+        sliders_box.append(&Self::create_horizontal_value_slider(
+            &hue_scale,
+            &saturation_scale,
+            &value_scale,
+        ));
 
         content_box.append(&sliders_box);
         main_box.append(&content_box);
@@ -1082,10 +1440,14 @@ impl CustomColorPicker {
         let update_clone3 = update_from_rgb.clone();
         let update_clone4 = update_from_rgb;
 
-        self.red_scale.connect_value_changed(move |_| update_clone1());
-        self.green_scale.connect_value_changed(move |_| update_clone2());
-        self.blue_scale.connect_value_changed(move |_| update_clone3());
-        self.alpha_scale.connect_value_changed(move |_| update_clone4());
+        self.red_scale
+            .connect_value_changed(move |_| update_clone1());
+        self.green_scale
+            .connect_value_changed(move |_| update_clone2());
+        self.blue_scale
+            .connect_value_changed(move |_| update_clone3());
+        self.alpha_scale
+            .connect_value_changed(move |_| update_clone4());
     }
 
     fn setup_hsv_handlers(&mut self) {
@@ -1132,9 +1494,12 @@ impl CustomColorPicker {
         let update_clone2 = update_from_hsv.clone();
         let update_clone3 = update_from_hsv;
 
-        self.hue_scale.connect_value_changed(move |_| update_clone1());
-        self.saturation_scale.connect_value_changed(move |_| update_clone2());
-        self.value_scale.connect_value_changed(move |_| update_clone3());
+        self.hue_scale
+            .connect_value_changed(move |_| update_clone1());
+        self.saturation_scale
+            .connect_value_changed(move |_| update_clone2());
+        self.value_scale
+            .connect_value_changed(move |_| update_clone3());
     }
 
     fn setup_button_handlers(
@@ -1170,7 +1535,10 @@ impl CustomColorPicker {
             let alpha_scale_clone = alpha_scale.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
-                if let Some(new_color) = crate::ui::ColorPickerDialog::pick_color_stock(Some(&dialog_parent), color).await {
+                if let Some(new_color) =
+                    crate::ui::ColorPickerDialog::pick_color_stock(Some(&dialog_parent), color)
+                        .await
+                {
                     red_scale_clone.set_value(new_color.r);
                     green_scale_clone.set_value(new_color.g);
                     blue_scale_clone.set_value(new_color.b);
@@ -1290,7 +1658,11 @@ fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 
     let v = max;
 
-    let s = if max.abs() < EPSILON { 0.0 } else { delta / max };
+    let s = if max.abs() < EPSILON {
+        0.0
+    } else {
+        delta / max
+    };
 
     let h = if delta.abs() < EPSILON {
         0.0

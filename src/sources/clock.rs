@@ -488,18 +488,22 @@ impl DataSource for ClockSource {
         self.values.clear();
 
         // Time components
-        self.values.insert("hour".to_string(), Value::from(self.hour));
-        self.values.insert("minute".to_string(), Value::from(self.minute));
-        self.values.insert("second".to_string(), Value::from(self.second));
-        self.values.insert("millisecond".to_string(), Value::from(self.millisecond));
+        self.values
+            .insert("hour".to_string(), Value::from(self.hour));
+        self.values
+            .insert("minute".to_string(), Value::from(self.minute));
+        self.values
+            .insert("second".to_string(), Value::from(self.second));
+        self.values
+            .insert("millisecond".to_string(), Value::from(self.millisecond));
 
         // Formatted strings
-        self.values.insert("time".to_string(), Value::from(self.time_string.clone()));
-        self.values.insert("date".to_string(), Value::from(self.date_string.clone()));
-        self.values.insert(
-            "day_name".to_string(),
-            Value::from(self.day_name.clone()),
-        );
+        self.values
+            .insert("time".to_string(), Value::from(self.time_string.clone()));
+        self.values
+            .insert("date".to_string(), Value::from(self.date_string.clone()));
+        self.values
+            .insert("day_name".to_string(), Value::from(self.day_name.clone()));
         self.values.insert(
             "month_name".to_string(),
             Value::from(self.month_name.clone()),
@@ -507,17 +511,22 @@ impl DataSource for ClockSource {
 
         // Date components
         self.values.insert("day".to_string(), Value::from(self.day));
-        self.values.insert("month".to_string(), Value::from(self.month));
-        self.values.insert("year".to_string(), Value::from(self.year));
-        self.values.insert("day_of_week".to_string(), Value::from(self.day_of_week));
+        self.values
+            .insert("month".to_string(), Value::from(self.month));
+        self.values
+            .insert("year".to_string(), Value::from(self.year));
+        self.values
+            .insert("day_of_week".to_string(), Value::from(self.day_of_week));
 
         // Get alarm/timer info from global manager
         if let Ok(manager) = global_timer_manager().read() {
             // Alarm state
             let any_triggered = manager.any_alarm_triggered();
-            self.values.insert("alarm_triggered".to_string(), Value::from(any_triggered));
+            self.values
+                .insert("alarm_triggered".to_string(), Value::from(any_triggered));
             let any_alarm_enabled = manager.alarms.iter().any(|a| a.enabled);
-            self.values.insert("alarm_enabled".to_string(), Value::from(any_alarm_enabled));
+            self.values
+                .insert("alarm_enabled".to_string(), Value::from(any_alarm_enabled));
 
             // Next alarm info
             if let Some(ref next_time) = manager.next_alarm_time {
@@ -540,7 +549,8 @@ impl DataSource for ClockSource {
                     "timer_display".to_string(),
                     Value::from(timer.display_string()),
                 );
-                self.values.insert("timer_progress".to_string(), Value::from(timer.progress()));
+                self.values
+                    .insert("timer_progress".to_string(), Value::from(timer.progress()));
 
                 let timer_state = match timer.state {
                     TimerState::Stopped => "stopped",
@@ -548,11 +558,15 @@ impl DataSource for ClockSource {
                     TimerState::Paused => "paused",
                     TimerState::Finished => "finished",
                 };
-                self.values.insert("timer_state".to_string(), Value::from(timer_state));
+                self.values
+                    .insert("timer_state".to_string(), Value::from(timer_state));
             } else {
-                self.values.insert("timer_display".to_string(), Value::from(""));
-                self.values.insert("timer_progress".to_string(), Value::from(0.0));
-                self.values.insert("timer_state".to_string(), Value::from("stopped"));
+                self.values
+                    .insert("timer_display".to_string(), Value::from(""));
+                self.values
+                    .insert("timer_progress".to_string(), Value::from(0.0));
+                self.values
+                    .insert("timer_state".to_string(), Value::from("stopped"));
             }
 
             // Expose all alarms and timers for UI
@@ -572,12 +586,18 @@ impl DataSource for ClockSource {
             );
         } else {
             // Fallback values if manager lock fails
-            self.values.insert("alarm_triggered".to_string(), Value::from(false));
-            self.values.insert("alarm_enabled".to_string(), Value::from(false));
-            self.values.insert("timer_display".to_string(), Value::from(""));
-            self.values.insert("timer_progress".to_string(), Value::from(0.0));
-            self.values.insert("timer_state".to_string(), Value::from("stopped"));
-            self.values.insert("needs_attention".to_string(), Value::from(false));
+            self.values
+                .insert("alarm_triggered".to_string(), Value::from(false));
+            self.values
+                .insert("alarm_enabled".to_string(), Value::from(false));
+            self.values
+                .insert("timer_display".to_string(), Value::from(""));
+            self.values
+                .insert("timer_progress".to_string(), Value::from(0.0));
+            self.values
+                .insert("timer_state".to_string(), Value::from("stopped"));
+            self.values
+                .insert("needs_attention".to_string(), Value::from(false));
         }
 
         // Normalized value for analog displays (based on 12-hour clock)
@@ -588,30 +608,30 @@ impl DataSource for ClockSource {
 
         // Hour hand position (0-1 for full rotation)
         let hour_value = (hour_12 + minute_frac) / 12.0;
-        self.values.insert("hour_value".to_string(), Value::from(hour_value));
+        self.values
+            .insert("hour_value".to_string(), Value::from(hour_value));
 
         // Minute hand position (0-1 for full rotation)
         let minute_value = (self.minute as f64 + second_frac) / 60.0;
-        self.values.insert("minute_value".to_string(), Value::from(minute_value));
+        self.values
+            .insert("minute_value".to_string(), Value::from(minute_value));
 
         // Second hand position (0-1 for full rotation, with millisecond smoothing)
         let second_value = (self.second as f64 + ms_frac) / 60.0;
-        self.values.insert("second_value".to_string(), Value::from(second_value));
+        self.values
+            .insert("second_value".to_string(), Value::from(second_value));
 
         // Day progress value (0-1 representing percentage of 24-hour period elapsed)
         // 24 hours = 86400 seconds
-        let total_seconds = self.hour as f64 * 3600.0
-            + self.minute as f64 * 60.0
-            + self.second as f64
-            + ms_frac;
+        let total_seconds =
+            self.hour as f64 * 3600.0 + self.minute as f64 * 60.0 + self.second as f64 + ms_frac;
         let day_progress = total_seconds / 86400.0;
-        self.values.insert("value".to_string(), Value::from(day_progress));
+        self.values
+            .insert("value".to_string(), Value::from(day_progress));
 
         // Caption for text displays
-        self.values.insert(
-            "caption".to_string(),
-            Value::from(self.time_string.clone()),
-        );
+        self.values
+            .insert("caption".to_string(), Value::from(self.time_string.clone()));
         self.values.insert("unit".to_string(), Value::from(""));
 
         // Timezone

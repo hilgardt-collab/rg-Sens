@@ -11,14 +11,14 @@ use cairo::Context;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
+use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::background::Color;
 use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
-use crate::displayers::combo_displayer_base::{ComboFrameConfig, FrameRenderer};
 use crate::ui::lcars_display::ContentItemConfig;
+use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::pango_text::{pango_show_text, pango_text_extents};
 use crate::ui::theme::ComboThemeConfig;
 use std::collections::HashMap;
-use crate::ui::lcars_display::SplitOrientation;
 
 /// Surface texture style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -71,11 +71,11 @@ pub enum WarningStripePosition {
 pub enum HeaderStyle {
     #[default]
     #[serde(rename = "plate")]
-    Plate,          // Metal plate with embossed text
+    Plate, // Metal plate with embossed text
     #[serde(rename = "stencil")]
-    Stencil,        // Stenciled text
+    Stencil, // Stenciled text
     #[serde(rename = "label")]
-    Label,          // Label plate (like equipment labels)
+    Label, // Label plate (like equipment labels)
     #[serde(rename = "none")]
     None,
 }
@@ -85,11 +85,11 @@ pub enum HeaderStyle {
 pub enum DividerStyle {
     #[default]
     #[serde(rename = "groove")]
-    Groove,         // Grooved metal divider
+    Groove, // Grooved metal divider
     #[serde(rename = "raised")]
-    Raised,         // Raised metal bar
+    Raised, // Raised metal bar
     #[serde(rename = "warning")]
-    Warning,        // Warning stripes
+    Warning, // Warning stripes
     #[serde(rename = "none")]
     None,
 }
@@ -99,9 +99,9 @@ pub enum DividerStyle {
 pub struct IndustrialFrameConfig {
     // Surface appearance
     pub surface_texture: SurfaceTexture,
-    pub surface_color: Color,           // Base metal/surface color
-    pub surface_color_dark: Color,      // For gradient/texture
-    pub highlight_color: Color,         // Specular highlights
+    pub surface_color: Color,      // Base metal/surface color
+    pub surface_color_dark: Color, // For gradient/texture
+    pub highlight_color: Color,    // Specular highlights
 
     // Border and frame
     pub show_border: bool,
@@ -115,16 +115,16 @@ pub struct IndustrialFrameConfig {
     pub rivet_style: RivetStyle,
     pub rivet_size: f64,
     pub rivet_color: Color,
-    pub rivet_spacing: f64,             // Spacing between rivets
+    pub rivet_spacing: f64, // Spacing between rivets
     pub show_corner_rivets: bool,
     pub show_edge_rivets: bool,
 
     // Warning stripes
     pub warning_stripe_position: WarningStripePosition,
     pub warning_stripe_width: f64,
-    pub warning_color_1: Color,         // Usually yellow
-    pub warning_color_2: Color,         // Usually black
-    pub warning_stripe_angle: f64,      // Degrees
+    pub warning_color_1: Color,    // Usually yellow
+    pub warning_color_2: Color,    // Usually black
+    pub warning_stripe_angle: f64, // Degrees
 
     // Header
     pub show_header: bool,
@@ -152,7 +152,8 @@ pub struct IndustrialFrameConfig {
     pub divider_color: Color,
 
     // Content items config
-    pub content_items: std::collections::HashMap<String, crate::ui::lcars_display::ContentItemConfig>,
+    pub content_items:
+        std::collections::HashMap<String, crate::ui::lcars_display::ContentItemConfig>,
 
     /// Theme configuration
     pub theme: crate::ui::theme::ComboThemeConfig,
@@ -183,14 +184,34 @@ impl Default for IndustrialFrameConfig {
         Self {
             // Surface - brushed steel look
             surface_texture: SurfaceTexture::BrushedMetal,
-            surface_color: Color { r: 0.55, g: 0.57, b: 0.58, a: 1.0 },      // Steel gray
-            surface_color_dark: Color { r: 0.40, g: 0.42, b: 0.43, a: 1.0 }, // Darker steel
-            highlight_color: Color { r: 0.75, g: 0.77, b: 0.78, a: 1.0 },    // Highlight
+            surface_color: Color {
+                r: 0.55,
+                g: 0.57,
+                b: 0.58,
+                a: 1.0,
+            }, // Steel gray
+            surface_color_dark: Color {
+                r: 0.40,
+                g: 0.42,
+                b: 0.43,
+                a: 1.0,
+            }, // Darker steel
+            highlight_color: Color {
+                r: 0.75,
+                g: 0.77,
+                b: 0.78,
+                a: 1.0,
+            }, // Highlight
 
             // Border
             show_border: true,
             border_width: 3.0,
-            border_color: Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
+            border_color: Color {
+                r: 0.25,
+                g: 0.25,
+                b: 0.25,
+                a: 1.0,
+            },
             corner_radius: 8.0,
             show_beveled_edge: true,
             bevel_width: 4.0,
@@ -198,7 +219,12 @@ impl Default for IndustrialFrameConfig {
             // Rivets
             rivet_style: RivetStyle::Hex,
             rivet_size: 8.0,
-            rivet_color: Color { r: 0.35, g: 0.35, b: 0.35, a: 1.0 },
+            rivet_color: Color {
+                r: 0.35,
+                g: 0.35,
+                b: 0.35,
+                a: 1.0,
+            },
             rivet_spacing: 60.0,
             show_corner_rivets: true,
             show_edge_rivets: false,
@@ -206,8 +232,18 @@ impl Default for IndustrialFrameConfig {
             // Warning stripes
             warning_stripe_position: WarningStripePosition::None,
             warning_stripe_width: 20.0,
-            warning_color_1: Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 },   // Yellow
-            warning_color_2: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },   // Black
+            warning_color_1: Color {
+                r: 1.0,
+                g: 0.8,
+                b: 0.0,
+                a: 1.0,
+            }, // Yellow
+            warning_color_2: Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.1,
+                a: 1.0,
+            }, // Black
             warning_stripe_angle: 45.0,
 
             // Header
@@ -217,7 +253,12 @@ impl Default for IndustrialFrameConfig {
             header_height: 36.0,
             header_font: "Sans Bold".to_string(),
             header_font_size: 16.0,
-            header_color: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+            header_color: Color {
+                r: 0.1,
+                g: 0.1,
+                b: 0.1,
+                a: 1.0,
+            },
 
             // Layout
             content_padding: 12.0,
@@ -231,7 +272,12 @@ impl Default for IndustrialFrameConfig {
             // Dividers
             divider_style: DividerStyle::Groove,
             divider_width: 4.0,
-            divider_color: Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
+            divider_color: Color {
+                r: 0.3,
+                g: 0.3,
+                b: 0.3,
+                a: 1.0,
+            },
 
             content_items: std::collections::HashMap::new(),
             theme: default_industrial_theme(),
@@ -315,7 +361,12 @@ impl IndustrialFrameConfig {
     /// Get text color based on background
     pub fn text_color(&self) -> Color {
         // Dark text on metal background
-        Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 }
+        Color {
+            r: 0.1,
+            g: 0.1,
+            b: 0.1,
+            a: 1.0,
+        }
     }
 }
 
@@ -354,8 +405,13 @@ pub fn render_industrial_frame(
 
     // Draw header
     let header_height = if config.show_header && !config.header_text.is_empty() {
-        draw_header(cr, config, config.content_padding, config.content_padding,
-                   width - config.content_padding * 2.0)?
+        draw_header(
+            cr,
+            config,
+            config.content_padding,
+            config.content_padding,
+            width - config.content_padding * 2.0,
+        )?
     } else {
         0.0
     };
@@ -470,7 +526,11 @@ fn draw_carbon_fiber(
         let mut cx = x;
         let mut col = 0;
         while cx < x + w {
-            let _offset = if (row + col) % 2 == 0 { 0.0 } else { cell_size / 2.0 };
+            let _offset = if (row + col) % 2 == 0 {
+                0.0
+            } else {
+                cell_size / 2.0
+            };
 
             // Draw diagonal lines for weave effect
             if (row + col) % 2 == 0 {
@@ -624,12 +684,14 @@ fn draw_border(
     cr.set_source_rgba(c.r, c.g, c.b, c.a);
     cr.set_line_width(config.border_width);
 
-    draw_rounded_rect(cr,
+    draw_rounded_rect(
+        cr,
         x + config.border_width / 2.0,
         y + config.border_width / 2.0,
         w - config.border_width,
         h - config.border_width,
-        config.corner_radius);
+        config.corner_radius,
+    );
     cr.stroke()?;
 
     cr.restore()?;
@@ -656,36 +718,37 @@ fn draw_warning_stripes(
     let c2 = &config.warning_color_2;
     let angle = config.warning_stripe_angle.to_radians();
 
-    let draw_stripe_area = |cr: &Context, sx: f64, sy: f64, sw: f64, sh: f64| -> Result<(), cairo::Error> {
-        cr.save()?;
+    let draw_stripe_area =
+        |cr: &Context, sx: f64, sy: f64, sw: f64, sh: f64| -> Result<(), cairo::Error> {
+            cr.save()?;
 
-        // Clip to stripe area
-        cr.rectangle(sx, sy, sw, sh);
-        cr.clip();
+            // Clip to stripe area
+            cr.rectangle(sx, sy, sw, sh);
+            cr.clip();
 
-        // Draw diagonal stripes
-        let stripe_width = 10.0;
-        let diagonal = (sw * sw + sh * sh).sqrt();
-        let num_stripes = (diagonal / stripe_width) as i32 + 4;
+            // Draw diagonal stripes
+            let stripe_width = 10.0;
+            let diagonal = (sw * sw + sh * sh).sqrt();
+            let num_stripes = (diagonal / stripe_width) as i32 + 4;
 
-        cr.translate(sx + sw / 2.0, sy + sh / 2.0);
-        cr.rotate(angle);
-        cr.translate(-(sw / 2.0), -(sh / 2.0));
+            cr.translate(sx + sw / 2.0, sy + sh / 2.0);
+            cr.rotate(angle);
+            cr.translate(-(sw / 2.0), -(sh / 2.0));
 
-        for i in -num_stripes..num_stripes {
-            let stripe_x = i as f64 * stripe_width * 2.0 - diagonal;
-            if i % 2 == 0 {
-                cr.set_source_rgba(c1.r, c1.g, c1.b, c1.a);
-            } else {
-                cr.set_source_rgba(c2.r, c2.g, c2.b, c2.a);
+            for i in -num_stripes..num_stripes {
+                let stripe_x = i as f64 * stripe_width * 2.0 - diagonal;
+                if i % 2 == 0 {
+                    cr.set_source_rgba(c1.r, c1.g, c1.b, c1.a);
+                } else {
+                    cr.set_source_rgba(c2.r, c2.g, c2.b, c2.a);
+                }
+                cr.rectangle(stripe_x, -diagonal, stripe_width, diagonal * 3.0);
+                cr.fill()?;
             }
-            cr.rectangle(stripe_x, -diagonal, stripe_width, diagonal * 3.0);
-            cr.fill()?;
-        }
 
-        cr.restore()?;
-        Ok(())
-    };
+            cr.restore()?;
+            Ok(())
+        };
 
     match config.warning_stripe_position {
         WarningStripePosition::Top => {
@@ -704,7 +767,13 @@ fn draw_warning_stripes(
             draw_stripe_area(cr, x, y, w, stripe_w)?;
             draw_stripe_area(cr, x, y + h - stripe_w, w, stripe_w)?;
             draw_stripe_area(cr, x, y + stripe_w, stripe_w, h - stripe_w * 2.0)?;
-            draw_stripe_area(cr, x + w - stripe_w, y + stripe_w, stripe_w, h - stripe_w * 2.0)?;
+            draw_stripe_area(
+                cr,
+                x + w - stripe_w,
+                y + stripe_w,
+                stripe_w,
+                h - stripe_w * 2.0,
+            )?;
         }
         WarningStripePosition::None => {}
     }
@@ -791,8 +860,8 @@ fn draw_rivet(
             cr.close_path();
 
             // Fill with gradient for 3D effect
-            let gradient = cairo::RadialGradient::new(cx - size / 4.0, cy - size / 4.0, 0.0,
-                                                       cx, cy, size);
+            let gradient =
+                cairo::RadialGradient::new(cx - size / 4.0, cy - size / 4.0, 0.0, cx, cy, size);
             gradient.add_color_stop_rgba(0.0, c.r + 0.3, c.g + 0.3, c.b + 0.3, c.a);
             gradient.add_color_stop_rgba(1.0, c.r - 0.1, c.g - 0.1, c.b - 0.1, c.a);
             cr.set_source(&gradient)?;
@@ -806,8 +875,8 @@ fn draw_rivet(
             // Round screw with Phillips head
             cr.arc(cx, cy, size / 2.0, 0.0, 2.0 * PI);
 
-            let gradient = cairo::RadialGradient::new(cx - size / 4.0, cy - size / 4.0, 0.0,
-                                                       cx, cy, size);
+            let gradient =
+                cairo::RadialGradient::new(cx - size / 4.0, cy - size / 4.0, 0.0, cx, cy, size);
             gradient.add_color_stop_rgba(0.0, c.r + 0.2, c.g + 0.2, c.b + 0.2, c.a);
             gradient.add_color_stop_rgba(1.0, c.r - 0.1, c.g - 0.1, c.b - 0.1, c.a);
             cr.set_source(&gradient)?;
@@ -857,7 +926,14 @@ fn draw_header(
         HeaderStyle::Plate => {
             // Metal plate with embossed look
             // Use actual text extents for accurate plate width
-            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let extents = pango_text_extents(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
             let plate_w = w.min(extents.width() + 40.0);
             let plate_x = x + (w - plate_w) / 2.0;
 
@@ -895,28 +971,63 @@ fn draw_header(
             // Shadow
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.3);
             cr.move_to(text_x + 1.0, text_y + 1.0);
-            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
 
             // Main text
             cr.set_source_rgba(c.r, c.g, c.b, c.a);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
         }
         HeaderStyle::Stencil => {
             // Stenciled text look
-            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let extents = pango_text_extents(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
             let text_x = x + (w - extents.width()) / 2.0;
             let text_y = y + (h + extents.height()) / 2.0;
 
             // Spray paint effect
             cr.set_source_rgba(0.1, 0.1, 0.1, 0.9);
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
         }
         HeaderStyle::Label => {
             // Equipment label style
             // Use actual text extents for accurate label width
-            let extents = pango_text_extents(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            let extents = pango_text_extents(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
             let label_w = extents.width() + 20.0;
             let label_x = x + (w - label_w) / 2.0;
             let label_h = h - 8.0;
@@ -939,7 +1050,14 @@ fn draw_header(
             let text_x = label_x + (label_w - extents.width()) / 2.0;
             let text_y = label_y + (label_h + extents.height()) / 2.0;
             cr.move_to(text_x, text_y);
-            pango_show_text(cr, &config.header_text, &config.header_font, cairo::FontSlant::Normal, cairo::FontWeight::Bold, config.header_font_size);
+            pango_show_text(
+                cr,
+                &config.header_text,
+                &config.header_font,
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Bold,
+                config.header_font_size,
+            );
         }
         HeaderStyle::None => {
             cr.restore()?;
@@ -948,7 +1066,7 @@ fn draw_header(
     }
 
     cr.restore()?;
-    Ok(h + 8.0)  // Header height plus spacing
+    Ok(h + 8.0) // Header height plus spacing
 }
 
 /// Calculate group layouts

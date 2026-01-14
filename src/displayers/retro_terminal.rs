@@ -140,11 +140,15 @@ impl Displayer for RetroTerminalDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("retro_terminal_config") {
-            if let Ok(display_config) = serde_json::from_value::<RetroTerminalDisplayConfig>(config_value.clone()) {
+            if let Ok(display_config) =
+                serde_json::from_value::<RetroTerminalDisplayConfig>(config_value.clone())
+            {
                 self.inner.set_config(display_config.to_frame());
                 return Ok(());
             }
-            if let Ok(frame_config) = serde_json::from_value::<RetroTerminalFrameConfig>(config_value.clone()) {
+            if let Ok(frame_config) =
+                serde_json::from_value::<RetroTerminalFrameConfig>(config_value.clone())
+            {
                 self.inner.set_config(frame_config);
                 return Ok(());
             }
