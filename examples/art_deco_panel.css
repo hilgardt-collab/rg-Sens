@@ -3,19 +3,18 @@
  * 480x1920px Vertical Panel
  *
  * Design inspired by the Art Deco movement (1920s-1930s):
- * - Bold geometric forms and symmetry
- * - Sunburst, chevron, and fan motifs
- * - Stepped/tiered architectural elements
+ * - Bold geometric forms and perfect symmetry
+ * - Sunburst, chevron, zigzag, and stepped motifs
  * - High contrast black and gold palette
- * - Jewel tone accents
+ * - Jewel tone accents (emerald, sapphire, ruby)
  *
  * Color Palette:
  * - Black:         #0d0d0d, #1a1a1a, #2d2d2d
- * - Gold:          #d4af37, #f4d03f, #c9a227, #8b6914
- * - Emerald:       #50c878, #2e8b57
- * - Sapphire:      #0f52ba, #1e3a5f
- * - Ruby:          #e63946, #9b2335
- * - Cream:         #f5f0e6, #e8e0d0
+ * - Gold:          #d4af37, #f4d03f, #c9a227
+ * - Emerald:       #50c878
+ * - Sapphire:      #0f52ba
+ * - Ruby:          #e63946
+ * - Cream:         #f5f0e6
  *
  * Typography (Art Deco Google Fonts):
  * - Poiret One:    Geometric display for time
@@ -32,38 +31,24 @@
    Base Styles & Variables
    ============================================ */
 :root {
-    /* Font families */
     --font-display: 'Poiret One', 'Century Gothic', sans-serif;
     --font-title: 'Limelight', 'Broadway', cursive;
-    --font-body: 'Josefin Sans', 'Futura', 'Century Gothic', sans-serif;
+    --font-body: 'Josefin Sans', 'Futura', sans-serif;
 
-    /* Black tones */
     --black-deep: #0d0d0d;
     --black: #1a1a1a;
     --black-light: #2d2d2d;
     --charcoal: #3d3d3d;
 
-    /* Gold tones */
     --gold-bright: #f4d03f;
     --gold: #d4af37;
     --gold-dark: #c9a227;
-    --gold-deep: #8b6914;
 
-    /* Jewel tones */
     --emerald: #50c878;
-    --emerald-dark: #2e8b57;
     --sapphire: #0f52ba;
-    --sapphire-dark: #1e3a5f;
     --ruby: #e63946;
-    --ruby-dark: #9b2335;
 
-    /* Neutral */
     --cream: #f5f0e6;
-    --cream-dark: #e8e0d0;
-
-    /* Transparency */
-    --panel-bg: rgba(13, 13, 13, 0.95);
-    --section-bg: rgba(26, 26, 26, 0.8);
 }
 
 * {
@@ -92,7 +77,6 @@ body {
     overflow: hidden;
 }
 
-/* Hidden max value elements */
 .max-value {
     display: none;
 }
@@ -107,51 +91,74 @@ body {
     height: 1920px;
     min-height: 1920px;
     max-height: 1920px;
-    background:
-        linear-gradient(180deg,
-            var(--black-deep) 0%,
-            var(--black) 20%,
-            var(--black) 80%,
-            var(--black-deep) 100%
-        );
-    padding: 30px;
+    background: linear-gradient(180deg,
+        var(--black-deep) 0%,
+        var(--black) 15%,
+        var(--black) 85%,
+        var(--black-deep) 100%
+    );
+    padding: 50px 30px 30px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 15px;
     position: relative;
     overflow: hidden;
 }
 
-/* Subtle geometric background pattern */
+/* Geometric background pattern */
 .panel::before {
     content: '';
     position: absolute;
     inset: 0;
     background:
-        repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 40px,
-            rgba(212, 175, 55, 0.02) 40px,
-            rgba(212, 175, 55, 0.02) 41px
+        repeating-linear-gradient(45deg,
+            transparent, transparent 50px,
+            rgba(212,175,55,0.02) 50px, rgba(212,175,55,0.02) 51px
         ),
-        repeating-linear-gradient(
-            -45deg,
-            transparent,
-            transparent 40px,
-            rgba(212, 175, 55, 0.02) 40px,
-            rgba(212, 175, 55, 0.02) 41px
+        repeating-linear-gradient(-45deg,
+            transparent, transparent 50px,
+            rgba(212,175,55,0.02) 50px, rgba(212,175,55,0.02) 51px
         );
     pointer-events: none;
 }
 
-/* Gold border frame */
-.panel::after {
-    content: '';
+/* ============================================
+   Corner Decorations - Symmetrical
+   ============================================ */
+.corner-deco {
     position: absolute;
-    inset: 15px;
-    border: 1px solid rgba(212, 175, 55, 0.3);
-    pointer-events: none;
+    width: 60px;
+    height: 60px;
+    color: var(--gold);
+    z-index: 10;
+}
+
+.corner-deco.top-left {
+    top: 10px;
+    left: 10px;
+}
+
+.corner-deco.top-right {
+    top: 10px;
+    right: 10px;
+    transform: scaleX(-1);
+}
+
+.corner-deco.bottom-left {
+    bottom: 10px;
+    left: 10px;
+    transform: scaleY(-1);
+}
+
+.corner-deco.bottom-right {
+    bottom: 10px;
+    right: 10px;
+    transform: scale(-1, -1);
+}
+
+.corner-deco svg {
+    width: 100%;
+    height: 100%;
 }
 
 /* ============================================
@@ -159,351 +166,351 @@ body {
    ============================================ */
 .header {
     text-align: center;
-    padding: 20px 0;
-    position: relative;
+    padding: 10px 0 20px;
 }
 
-.sunburst-decoration {
-    position: relative;
-    height: 60px;
-    margin-bottom: 15px;
+.sunburst {
+    height: 50px;
+    margin-bottom: 10px;
 }
 
 .sunburst-svg {
     width: 200px;
-    height: 100px;
+    height: 60px;
     margin: 0 auto;
     display: block;
 }
 
-.sun-ray {
+.ray {
     stroke: var(--gold);
     stroke-width: 2;
-    opacity: 0.8;
 }
 
 .sun-center {
     fill: var(--gold);
-    opacity: 0.9;
 }
 
 .time-display {
-    position: relative;
-    z-index: 1;
+    margin: 10px 0;
 }
 
 .time-value {
     font-family: var(--font-display);
-    font-size: 64px;
+    font-size: 72px;
     font-weight: 400;
     color: var(--gold-bright);
     letter-spacing: 8px;
-    text-shadow:
-        0 0 20px rgba(244, 208, 63, 0.5),
-        0 0 40px rgba(244, 208, 63, 0.3);
+    text-shadow: 0 0 30px rgba(244,208,63,0.5);
 }
 
-.header-line {
-    width: 60%;
+.header-lines {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.h-line {
+    width: 120px;
     height: 2px;
-    background: linear-gradient(90deg,
-        transparent,
-        var(--gold) 20%,
-        var(--gold) 80%,
-        transparent
-    );
-    margin: 20px auto 0;
+    background: linear-gradient(90deg, transparent, var(--gold));
+}
+
+.h-line:last-child {
+    background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+.h-diamond {
+    width: 10px;
+    height: 10px;
+    background: var(--gold);
+    transform: rotate(45deg);
 }
 
 /* ============================================
-   Decorative Dividers
+   Dividers - Symmetrical Patterns
    ============================================ */
-.chevron-divider,
-.fan-divider,
-.zigzag-divider,
-.stepped-divider {
+.divider {
     width: 100%;
-    height: auto;
-    margin: 10px 0;
+    padding: 0 30px;
 }
 
-.chevron-divider svg,
-.fan-divider svg,
-.zigzag-divider svg,
-.stepped-divider svg {
+.divider svg {
     width: 100%;
     height: auto;
     display: block;
+}
+
+.chevron-line, .zigzag-line, .fan-curve, .step-line, .pyramid-line {
+    fill: none;
+    stroke: var(--gold);
+    stroke-width: 1.5;
+}
+
+.center-diamond, .step-diamond, .footer-diamond, .center-jewel {
+    fill: var(--gold);
+}
+
+.fan-dot {
+    fill: var(--gold);
+}
+
+.zigzag-center {
+    stroke: var(--gold);
+}
+
+.footer-line {
+    stroke: var(--gold);
+    stroke-width: 1;
 }
 
 /* ============================================
    Section Styles
    ============================================ */
-.metric-section {
+.section {
     background: linear-gradient(180deg,
-        rgba(45, 45, 45, 0.4),
-        rgba(26, 26, 26, 0.6)
+        rgba(45,45,45,0.3),
+        rgba(26,26,26,0.5)
     );
-    border: 1px solid rgba(212, 175, 55, 0.2);
-    border-radius: 4px;
-    padding: 25px 20px;
+    border: 1px solid rgba(212,175,55,0.2);
+    padding: 20px;
     position: relative;
 }
 
-/* Art Deco corner accents */
-.metric-section::before,
-.metric-section::after {
-    content: '';
+/* Stepped corner decorations for sections */
+.section-corners {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.step-corner {
     position: absolute;
     width: 20px;
     height: 20px;
-    border: 2px solid var(--gold);
 }
 
-.metric-section::before {
+.step-corner::before,
+.step-corner::after {
+    content: '';
+    position: absolute;
+    background: var(--gold);
+}
+
+.step-corner.tl {
     top: -1px;
     left: -1px;
-    border-right: none;
-    border-bottom: none;
+}
+.step-corner.tl::before {
+    width: 20px;
+    height: 2px;
+    top: 0;
+    left: 0;
+}
+.step-corner.tl::after {
+    width: 2px;
+    height: 20px;
+    top: 0;
+    left: 0;
 }
 
-.metric-section::after {
+.step-corner.tr {
+    top: -1px;
+    right: -1px;
+}
+.step-corner.tr::before {
+    width: 20px;
+    height: 2px;
+    top: 0;
+    right: 0;
+}
+.step-corner.tr::after {
+    width: 2px;
+    height: 20px;
+    top: 0;
+    right: 0;
+}
+
+.step-corner.bl {
+    bottom: -1px;
+    left: -1px;
+}
+.step-corner.bl::before {
+    width: 20px;
+    height: 2px;
+    bottom: 0;
+    left: 0;
+}
+.step-corner.bl::after {
+    width: 2px;
+    height: 20px;
+    bottom: 0;
+    left: 0;
+}
+
+.step-corner.br {
     bottom: -1px;
     right: -1px;
-    border-left: none;
-    border-top: none;
+}
+.step-corner.br::before {
+    width: 20px;
+    height: 2px;
+    bottom: 0;
+    right: 0;
+}
+.step-corner.br::after {
+    width: 2px;
+    height: 20px;
+    bottom: 0;
+    right: 0;
 }
 
-/* Section Header */
+/* Section header */
 .section-header {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 25px;
-    gap: 15px;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 .section-line {
     flex: 1;
     height: 1px;
-    position: relative;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
 
-.section-line.left {
-    background: linear-gradient(90deg, transparent, var(--gold));
-}
-
-.section-line.right {
-    background: linear-gradient(90deg, var(--gold), transparent);
-}
-
-.section-line::before {
-    content: '';
-    position: absolute;
+.section-diamond {
     width: 6px;
     height: 6px;
     background: var(--gold);
-    top: 50%;
-    transform: translateY(-50%) rotate(45deg);
-}
-
-.section-line.left::before {
-    right: 0;
-}
-
-.section-line.right::before {
-    left: 0;
+    transform: rotate(45deg);
 }
 
 .section-title {
     font-family: var(--font-title);
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 400;
     color: var(--gold);
     letter-spacing: 6px;
     text-transform: uppercase;
+    padding: 0 10px;
 }
 
 /* ============================================
-   Temperature Gauges - Vertical Bar Style
+   Bar Gauges - Art Deco Style
    ============================================ */
-.temp-grid {
-    display: flex;
-    justify-content: space-between;
-    gap: 15px;
-    margin-bottom: 25px;
-}
-
-.temp-gauge {
-    flex: 1;
-}
-
-.gauge-frame {
-    background: linear-gradient(180deg,
-        rgba(45, 45, 45, 0.6),
-        rgba(26, 26, 26, 0.8)
-    );
-    border: 1px solid rgba(212, 175, 55, 0.3);
-    padding: 15px 10px;
-    text-align: center;
-}
-
-.vertical-bar-container {
-    height: 80px;
-    margin-bottom: 10px;
-    display: flex;
-    justify-content: center;
-}
-
-.vertical-bar-svg {
-    height: 100%;
-    width: 40px;
-}
-
-.vbar-fill {
-    opacity: 0.7;
-}
-
-.gauge-info {
+.temp-bars {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 15px;
+    margin-bottom: 20px;
 }
 
-.gauge-label {
+.bar-item {
+    position: relative;
+}
+
+.bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.bar-label {
     font-family: var(--font-body);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 2px;
     color: var(--gold);
-    opacity: 0.8;
 }
 
-.gauge-value {
+.bar-value-group {
+    text-align: right;
+}
+
+.bar-value {
     font-family: var(--font-body);
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 300;
     color: var(--cream);
 }
 
-.gauge-unit {
+.bar-unit {
     font-size: 14px;
     color: var(--gold);
-    opacity: 0.7;
+    opacity: 0.8;
     margin-left: 2px;
 }
 
-/* ============================================
-   GPU Temperature - Featured Display
-   ============================================ */
-.gpu-temp-featured {
-    margin-top: 20px;
+/* Decorative bar with stepped ends */
+.deco-bar {
+    display: flex;
+    align-items: center;
+    height: 16px;
 }
 
-.featured-frame {
+.bar-end {
+    width: 8px;
+    height: 16px;
     position: relative;
-    background: linear-gradient(135deg,
-        rgba(212, 175, 55, 0.1),
-        rgba(139, 105, 20, 0.05)
-    );
-    border: 2px solid var(--gold);
-    padding: 25px 30px;
-    text-align: center;
 }
 
-.frame-corner {
+.bar-end.left::before,
+.bar-end.left::after,
+.bar-end.right::before,
+.bar-end.right::after {
+    content: '';
     position: absolute;
-    width: 12px;
-    height: 12px;
     background: var(--gold);
 }
 
-.frame-corner.tl {
-    top: -2px;
-    left: -2px;
+.bar-end.left::before {
+    width: 2px;
+    height: 16px;
+    left: 0;
+}
+.bar-end.left::after {
+    width: 6px;
+    height: 2px;
+    left: 2px;
+    top: 7px;
 }
 
-.frame-corner.tr {
-    top: -2px;
-    right: -2px;
+.bar-end.right::before {
+    width: 2px;
+    height: 16px;
+    right: 0;
+}
+.bar-end.right::after {
+    width: 6px;
+    height: 2px;
+    right: 2px;
+    top: 7px;
 }
 
-.frame-corner.bl {
-    bottom: -2px;
-    left: -2px;
-}
-
-.frame-corner.br {
-    bottom: -2px;
-    right: -2px;
-}
-
-.featured-content {
-    position: relative;
-    z-index: 1;
-}
-
-.featured-label {
-    font-family: var(--font-body);
-    font-size: 14px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 4px;
-    color: var(--gold);
-    display: block;
-    margin-bottom: 10px;
-}
-
-.featured-value-container {
-    margin-bottom: 15px;
-}
-
-.featured-value {
-    font-family: var(--font-display);
-    font-size: 56px;
-    font-weight: 400;
-    color: var(--cream);
-    text-shadow: 0 0 20px rgba(244, 208, 63, 0.3);
-}
-
-.featured-unit {
-    font-family: var(--font-body);
-    font-size: 24px;
-    color: var(--gold);
-    margin-left: 5px;
-}
-
-.featured-bar {
-    max-width: 300px;
-    margin: 0 auto;
-}
-
-/* ============================================
-   Bar Tracks and Fills
-   ============================================ */
 .bar-track {
+    flex: 1;
     height: 12px;
-    background: rgba(45, 45, 45, 0.8);
-    border: 1px solid rgba(212, 175, 55, 0.3);
+    background: rgba(45,45,45,0.8);
+    border: 1px solid rgba(212,175,55,0.3);
     position: relative;
     overflow: hidden;
 }
 
-.bar-track.geometric {
-    height: 20px;
-}
-
 .bar-fill {
-    height: 100%;
-    width: var(--percent, 0%);
     position: absolute;
     left: 0;
     top: 0;
+    height: 100%;
+    width: 0%;
     transition: width 0.5s ease-out;
 }
 
-.bar-fill.temp-bar {
+.bar-fill.temp-fill {
     background: linear-gradient(90deg,
         var(--emerald) 0%,
         var(--gold) 50%,
@@ -519,18 +526,106 @@ body {
     );
 }
 
-.bar-segments {
+/* Segmented bar for memory */
+.bar-track.segmented .bar-segments {
     position: absolute;
     inset: 0;
     display: flex;
-    justify-content: space-between;
-    padding: 0 2px;
+    justify-content: space-evenly;
+    pointer-events: none;
 }
 
-.bar-segments span {
+.bar-track.segmented .bar-segments span {
     width: 1px;
     height: 100%;
-    background: rgba(13, 13, 13, 0.5);
+    background: rgba(13,13,13,0.5);
+}
+
+/* ============================================
+   GPU Featured Display
+   ============================================ */
+.gpu-featured {
+    margin-top: 10px;
+}
+
+.featured-frame {
+    position: relative;
+    background: linear-gradient(135deg,
+        rgba(212,175,55,0.08),
+        rgba(139,105,20,0.04)
+    );
+    border: 2px solid var(--gold);
+    padding: 20px 25px;
+    text-align: center;
+}
+
+/* Stepped frame corners */
+.frame-step {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+}
+
+.frame-step::before,
+.frame-step::after {
+    content: '';
+    position: absolute;
+    background: var(--gold);
+}
+
+.frame-step.tl { top: -2px; left: -2px; }
+.frame-step.tl::before { width: 15px; height: 4px; top: 0; left: 0; }
+.frame-step.tl::after { width: 4px; height: 15px; top: 0; left: 0; }
+
+.frame-step.tr { top: -2px; right: -2px; }
+.frame-step.tr::before { width: 15px; height: 4px; top: 0; right: 0; }
+.frame-step.tr::after { width: 4px; height: 15px; top: 0; right: 0; }
+
+.frame-step.bl { bottom: -2px; left: -2px; }
+.frame-step.bl::before { width: 15px; height: 4px; bottom: 0; left: 0; }
+.frame-step.bl::after { width: 4px; height: 15px; bottom: 0; left: 0; }
+
+.frame-step.br { bottom: -2px; right: -2px; }
+.frame-step.br::before { width: 15px; height: 4px; bottom: 0; right: 0; }
+.frame-step.br::after { width: 4px; height: 15px; bottom: 0; right: 0; }
+
+.featured-content {
+    position: relative;
+    z-index: 1;
+}
+
+.featured-label {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--gold);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.featured-value-row {
+    margin-bottom: 12px;
+}
+
+.featured-value {
+    font-family: var(--font-display);
+    font-size: 48px;
+    font-weight: 400;
+    color: var(--cream);
+}
+
+.featured-unit {
+    font-family: var(--font-body);
+    font-size: 20px;
+    color: var(--gold);
+    margin-left: 4px;
+}
+
+.featured-bar {
+    max-width: 280px;
+    margin: 0 auto;
 }
 
 /* ============================================
@@ -540,20 +635,11 @@ body {
     padding: 10px 0;
 }
 
-.memory-frame {
-    background: linear-gradient(180deg,
-        rgba(45, 45, 45, 0.4),
-        rgba(26, 26, 26, 0.6)
-    );
-    border: 1px solid rgba(212, 175, 55, 0.2);
-    padding: 20px;
-}
-
 .memory-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
 }
 
 .memory-label {
@@ -565,148 +651,164 @@ body {
     color: var(--gold);
 }
 
+.memory-value-group {
+    text-align: right;
+}
+
 .memory-value {
     font-family: var(--font-body);
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 300;
     color: var(--cream);
 }
 
 .memory-unit {
-    font-size: 16px;
+    font-size: 14px;
     color: var(--gold);
-    opacity: 0.7;
-    margin-left: 4px;
+    opacity: 0.8;
+    margin-left: 2px;
 }
 
-.memory-bar {
-    margin-bottom: 10px;
-}
-
-.memory-footer {
-    text-align: right;
-}
-
-.max-label {
-    font-family: var(--font-body);
+.memory-max-label {
     font-size: 12px;
     color: var(--gold);
     opacity: 0.6;
-    letter-spacing: 1px;
+    margin-left: 8px;
+}
+
+.memory-bar {
+    height: 20px;
+}
+
+.memory-bar .bar-track {
+    height: 16px;
 }
 
 /* ============================================
-   Storage Section - Fan Gauges
+   Storage Arc Gauges
    ============================================ */
 .storage-grid {
     display: flex;
     justify-content: space-around;
     gap: 20px;
+    padding: 10px 0;
 }
 
-.storage-item {
+.arc-gauge-item {
     flex: 1;
-    max-width: 200px;
-}
-
-.storage-frame {
-    background: linear-gradient(180deg,
-        rgba(45, 45, 45, 0.4),
-        rgba(26, 26, 26, 0.6)
-    );
-    border: 1px solid rgba(212, 175, 55, 0.2);
-    padding: 20px 15px;
+    max-width: 180px;
     text-align: center;
 }
 
-.storage-header {
-    margin-bottom: 15px;
-}
-
-.storage-label {
+.arc-label {
     font-family: var(--font-body);
     font-size: 13px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 2px;
     color: var(--gold);
-}
-
-.fan-gauge {
-    position: relative;
-    height: 90px;
+    display: block;
     margin-bottom: 10px;
 }
 
-.fan-svg {
+.arc-gauge {
+    position: relative;
+    height: 80px;
+}
+
+.arc-svg {
     width: 100%;
     height: 100%;
 }
 
-.fan-fill {
+.arc-track {
+    fill: none;
+    stroke: rgba(212,175,55,0.2);
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.arc-fill {
+    fill: none;
+    stroke: url(#usageGradient);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 141;
+    stroke-dashoffset: 141;
     transition: stroke-dashoffset 0.5s ease-out;
 }
 
-.fan-value-container {
+.arc-value-container {
     position: absolute;
-    bottom: 0;
+    bottom: 5px;
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
 }
 
-.fan-value {
+.arc-value {
     font-family: var(--font-body);
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 300;
     color: var(--cream);
     display: block;
 }
 
-.fan-unit {
-    font-family: var(--font-body);
+.arc-unit {
     font-size: 12px;
     color: var(--gold);
-    opacity: 0.7;
+    opacity: 0.8;
 }
 
-.storage-footer {
+.arc-max-label {
+    font-size: 11px;
+    color: var(--gold);
+    opacity: 0.6;
     margin-top: 5px;
+    display: block;
 }
 
 /* ============================================
-   Usage Section - Hexagon Gauges
+   Utilization Hexagon Gauges
    ============================================ */
 .usage-grid {
     display: flex;
     justify-content: space-around;
     gap: 30px;
+    padding: 10px 0;
 }
 
-.usage-item {
+.hex-gauge-item {
     flex: 1;
-    max-width: 180px;
-}
-
-.usage-frame {
+    max-width: 150px;
     text-align: center;
-    padding: 15px;
 }
 
-.hexagon-gauge {
+.hex-gauge {
     position: relative;
-    width: 120px;
-    height: 120px;
-    margin: 0 auto 15px;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 10px;
 }
 
-.hexagon-svg {
+.hex-svg {
     width: 100%;
     height: 100%;
     transform: rotate(-90deg);
 }
 
+.hex-track {
+    fill: none;
+    stroke: rgba(212,175,55,0.2);
+    stroke-width: 3;
+}
+
 .hex-fill {
+    fill: none;
+    stroke: url(#goldGradient);
+    stroke-width: 3;
+    stroke-dasharray: 258;
+    stroke-dashoffset: 258;
     transition: stroke-dashoffset 0.5s ease-out;
 }
 
@@ -720,20 +822,19 @@ body {
 
 .hex-value {
     font-family: var(--font-body);
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 300;
     color: var(--cream);
     display: block;
 }
 
 .hex-unit {
-    font-family: var(--font-body);
-    font-size: 14px;
+    font-size: 12px;
     color: var(--gold);
-    opacity: 0.7;
+    opacity: 0.8;
 }
 
-.usage-label {
+.hex-label {
     font-family: var(--font-body);
     font-size: 13px;
     font-weight: 500;
@@ -747,33 +848,25 @@ body {
    ============================================ */
 .footer {
     margin-top: auto;
-    padding: 20px 0 10px;
+    padding: 20px 0 0;
 }
 
-.footer-decoration svg {
+.footer-pyramid svg {
     width: 100%;
-    height: 60px;
+    height: 50px;
 }
 
 /* ============================================
    Animations
    ============================================ */
 @keyframes pulse-gold {
-    0%, 100% {
-        opacity: 0.8;
-    }
-    50% {
-        opacity: 1;
-    }
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 1; }
 }
 
 @keyframes glow {
-    0%, 100% {
-        filter: drop-shadow(0 0 5px rgba(212, 175, 55, 0.5));
-    }
-    50% {
-        filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.8));
-    }
+    0%, 100% { text-shadow: 0 0 20px rgba(244,208,63,0.4); }
+    50% { text-shadow: 0 0 40px rgba(244,208,63,0.7); }
 }
 
 .sun-center {
@@ -787,16 +880,23 @@ body {
 /* ============================================
    Hover Effects
    ============================================ */
-.gauge-frame:hover,
-.storage-frame:hover,
-.featured-frame:hover {
-    border-color: var(--gold);
-    box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+.section:hover {
+    border-color: rgba(212,175,55,0.4);
+    box-shadow: 0 0 20px rgba(212,175,55,0.1);
     transition: all 0.3s ease;
 }
 
-.hexagon-gauge:hover .hexagon-svg {
-    filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));
+.featured-frame:hover {
+    box-shadow: 0 0 25px rgba(212,175,55,0.2);
+    transition: box-shadow 0.3s ease;
+}
+
+.hex-gauge:hover .hex-svg {
+    filter: drop-shadow(0 0 8px rgba(212,175,55,0.4));
     transition: filter 0.3s ease;
 }
 
+.arc-gauge:hover .arc-svg {
+    filter: drop-shadow(0 0 8px rgba(212,175,55,0.4));
+    transition: filter 0.3s ease;
+}
