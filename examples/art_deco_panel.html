@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=480, height=1920">
+    <title>Art Deco System Monitor</title>
+    <link rel="stylesheet" href="art_deco_panel.css">
+</head>
+<body>
+    <!-- Auto-configuration for rg-Sens placeholder mapping -->
+    <script type="application/json" id="rg-placeholder-config">
+    {
+        "0": { "hint": "Time display (HH:MM:SS)", "source": "clock", "instance": 0, "field": "time" },
+
+        "1": { "hint": "CPU Temp 1 - Caption", "source": "cpu", "instance": 1, "field": "caption" },
+        "2": { "hint": "CPU Temp 1 - Value", "source": "cpu", "instance": 1, "field": "value", "format": "0" },
+        "3": { "hint": "CPU Temp 1 - Unit", "source": "cpu", "instance": 1, "field": "unit" },
+        "4": { "hint": "CPU Temp 1 - Max", "source": "cpu", "instance": 1, "field": "max" },
+
+        "5": { "hint": "CPU Temp 2 - Caption", "source": "cpu", "instance": 2, "field": "caption" },
+        "6": { "hint": "CPU Temp 2 - Value", "source": "cpu", "instance": 2, "field": "value", "format": "0" },
+        "7": { "hint": "CPU Temp 2 - Unit", "source": "cpu", "instance": 2, "field": "unit" },
+        "8": { "hint": "CPU Temp 2 - Max", "source": "cpu", "instance": 2, "field": "max" },
+
+        "9": { "hint": "CPU Temp 3 - Caption", "source": "cpu", "instance": 3, "field": "caption" },
+        "10": { "hint": "CPU Temp 3 - Value", "source": "cpu", "instance": 3, "field": "value", "format": "0" },
+        "11": { "hint": "CPU Temp 3 - Unit", "source": "cpu", "instance": 3, "field": "unit" },
+        "12": { "hint": "CPU Temp 3 - Max", "source": "cpu", "instance": 3, "field": "max" },
+
+        "13": { "hint": "GPU Temp - Caption", "source": "gpu", "instance": 0, "field": "caption" },
+        "14": { "hint": "GPU Temp - Value", "source": "gpu", "instance": 0, "field": "value", "format": "0" },
+        "15": { "hint": "GPU Temp - Unit", "source": "gpu", "instance": 0, "field": "unit" },
+        "16": { "hint": "GPU Temp - Max", "source": "gpu", "instance": 0, "field": "max" },
+
+        "17": { "hint": "Memory - Caption", "source": "memory", "instance": 0, "field": "caption" },
+        "18": { "hint": "Memory - Value", "source": "memory", "instance": 0, "field": "value", "format": "1" },
+        "19": { "hint": "Memory - Unit", "source": "memory", "instance": 0, "field": "unit" },
+        "20": { "hint": "Memory - Max", "source": "memory", "instance": 0, "field": "max" },
+
+        "21": { "hint": "Disk 1 - Caption", "source": "disk", "instance": 0, "field": "caption" },
+        "22": { "hint": "Disk 1 - Value", "source": "disk", "instance": 0, "field": "value", "format": "0" },
+        "23": { "hint": "Disk 1 - Unit", "source": "disk", "instance": 0, "field": "unit" },
+        "24": { "hint": "Disk 1 - Max", "source": "disk", "instance": 0, "field": "max" },
+
+        "25": { "hint": "Disk 2 - Caption", "source": "disk", "instance": 1, "field": "caption" },
+        "26": { "hint": "Disk 2 - Value", "source": "disk", "instance": 1, "field": "value", "format": "0" },
+        "27": { "hint": "Disk 2 - Unit", "source": "disk", "instance": 1, "field": "unit" },
+        "28": { "hint": "Disk 2 - Max", "source": "disk", "instance": 1, "field": "max" },
+
+        "29": { "hint": "CPU Usage - Caption", "source": "cpu", "instance": 4, "field": "caption" },
+        "30": { "hint": "CPU Usage - Value", "source": "cpu", "instance": 4, "field": "value", "format": "0" },
+        "31": { "hint": "CPU Usage - Unit", "source": "cpu", "instance": 4, "field": "unit" },
+        "32": { "hint": "CPU Usage - Max", "source": "cpu", "instance": 4, "field": "max" },
+
+        "33": { "hint": "GPU Usage - Caption", "source": "gpu", "instance": 1, "field": "caption" },
+        "34": { "hint": "GPU Usage - Value", "source": "gpu", "instance": 1, "field": "value", "format": "0" },
+        "35": { "hint": "GPU Usage - Unit", "source": "gpu", "instance": 1, "field": "unit" },
+        "36": { "hint": "GPU Usage - Max", "source": "gpu", "instance": 1, "field": "max" }
+    }
+    </script>
+
+    <!-- SVG Definitions for patterns and gradients -->
+    <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <!-- Gold gradient for fills -->
+            <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#d4af37;stop-opacity:1" />
+                <stop offset="50%" style="stop-color:#f4d03f;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#c9a227;stop-opacity:1" />
+            </linearGradient>
+
+            <!-- Temperature gradient (emerald to ruby) -->
+            <linearGradient id="tempGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#50c878;stop-opacity:1" />
+                <stop offset="50%" style="stop-color:#f4d03f;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#e63946;stop-opacity:1" />
+            </linearGradient>
+
+            <!-- Usage gradient (sapphire to gold) -->
+            <linearGradient id="usageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#0f52ba;stop-opacity:1" />
+                <stop offset="50%" style="stop-color:#50c878;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#d4af37;stop-opacity:1" />
+            </linearGradient>
+
+            <!-- Vertical gradient for bars -->
+            <linearGradient id="barGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#f4d03f;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#c9a227;stop-opacity:1" />
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <div class="panel">
+        <!-- Header with sunburst -->
+        <header class="header">
+            <div class="sunburst-decoration">
+                <svg viewBox="0 0 200 100" class="sunburst-svg">
+                    <defs>
+                        <clipPath id="sunburstClip">
+                            <rect x="0" y="50" width="200" height="50"/>
+                        </clipPath>
+                    </defs>
+                    <g clip-path="url(#sunburstClip)">
+                        <!-- Radiating lines -->
+                        <line x1="100" y1="100" x2="100" y2="0" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="130" y2="5" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="160" y2="15" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="185" y2="35" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="200" y2="60" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="200" y2="90" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="70" y2="5" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="40" y2="15" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="15" y2="35" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="0" y2="60" class="sun-ray"/>
+                        <line x1="100" y1="100" x2="0" y2="90" class="sun-ray"/>
+                    </g>
+                    <circle cx="100" cy="100" r="25" class="sun-center"/>
+                </svg>
+            </div>
+            <div class="time-display">
+                <span class="time-value">{{0}}</span>
+            </div>
+            <div class="header-line"></div>
+        </header>
+
+        <!-- Chevron Divider -->
+        <div class="chevron-divider">
+            <svg viewBox="0 0 480 20" preserveAspectRatio="none">
+                <polyline points="0,10 20,0 40,10 60,0 80,10 100,0 120,10 140,0 160,10 180,0 200,10 220,0 240,10 260,0 280,10 300,0 320,10 340,0 360,10 380,0 400,10 420,0 440,10 460,0 480,10" fill="none" stroke="url(#goldGradient)" stroke-width="2"/>
+            </svg>
+        </div>
+
+        <!-- Temperature Section -->
+        <section class="metric-section">
+            <div class="section-header">
+                <span class="section-line left"></span>
+                <h2 class="section-title">TEMPERATURE</h2>
+                <span class="section-line right"></span>
+            </div>
+
+            <!-- CPU Temperatures - Art Deco vertical bars -->
+            <div class="temp-grid">
+                <div class="temp-gauge">
+                    <div class="gauge-frame">
+                        <div class="vertical-bar-container">
+                            <svg viewBox="0 0 40 80" class="vertical-bar-svg">
+                                <rect x="5" y="0" width="30" height="80" fill="rgba(212,175,55,0.15)" stroke="rgba(212,175,55,0.3)" stroke-width="1"/>
+                                <rect x="5" y="0" width="30" height="80" fill="url(#tempGradient)" class="vbar-fill" id="temp1-fill"/>
+                            </svg>
+                        </div>
+                        <div class="gauge-info">
+                            <span class="gauge-label">{{1}}</span>
+                            <span class="gauge-value">{{2}}<span class="gauge-unit">{{3}}</span></span>
+                        </div>
+                        <span class="max-value">{{4}}</span>
+                    </div>
+                </div>
+
+                <div class="temp-gauge">
+                    <div class="gauge-frame">
+                        <div class="vertical-bar-container">
+                            <svg viewBox="0 0 40 80" class="vertical-bar-svg">
+                                <rect x="5" y="0" width="30" height="80" fill="rgba(212,175,55,0.15)" stroke="rgba(212,175,55,0.3)" stroke-width="1"/>
+                                <rect x="5" y="0" width="30" height="80" fill="url(#tempGradient)" class="vbar-fill" id="temp2-fill"/>
+                            </svg>
+                        </div>
+                        <div class="gauge-info">
+                            <span class="gauge-label">{{5}}</span>
+                            <span class="gauge-value">{{6}}<span class="gauge-unit">{{7}}</span></span>
+                        </div>
+                        <span class="max-value">{{8}}</span>
+                    </div>
+                </div>
+
+                <div class="temp-gauge">
+                    <div class="gauge-frame">
+                        <div class="vertical-bar-container">
+                            <svg viewBox="0 0 40 80" class="vertical-bar-svg">
+                                <rect x="5" y="0" width="30" height="80" fill="rgba(212,175,55,0.15)" stroke="rgba(212,175,55,0.3)" stroke-width="1"/>
+                                <rect x="5" y="0" width="30" height="80" fill="url(#tempGradient)" class="vbar-fill" id="temp3-fill"/>
+                            </svg>
+                        </div>
+                        <div class="gauge-info">
+                            <span class="gauge-label">{{9}}</span>
+                            <span class="gauge-value">{{10}}<span class="gauge-unit">{{11}}</span></span>
+                        </div>
+                        <span class="max-value">{{12}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPU Temperature - Featured display -->
+            <div class="gpu-temp-featured">
+                <div class="featured-frame">
+                    <div class="frame-corner tl"></div>
+                    <div class="frame-corner tr"></div>
+                    <div class="frame-corner bl"></div>
+                    <div class="frame-corner br"></div>
+                    <div class="featured-content">
+                        <span class="featured-label">{{13}}</span>
+                        <div class="featured-value-container">
+                            <span class="featured-value">{{14}}</span>
+                            <span class="featured-unit">{{15}}</span>
+                        </div>
+                        <div class="featured-bar">
+                            <div class="bar-track">
+                                <div class="bar-fill temp-bar" id="gpu-temp-fill"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="max-value">{{16}}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Fan Divider -->
+        <div class="fan-divider">
+            <svg viewBox="0 0 480 40" preserveAspectRatio="none">
+                <path d="M0,40 Q60,0 120,40 Q180,0 240,40 Q300,0 360,40 Q420,0 480,40" fill="none" stroke="url(#goldGradient)" stroke-width="1"/>
+                <circle cx="60" cy="20" r="3" fill="#d4af37"/>
+                <circle cx="180" cy="20" r="3" fill="#d4af37"/>
+                <circle cx="300" cy="20" r="3" fill="#d4af37"/>
+                <circle cx="420" cy="20" r="3" fill="#d4af37"/>
+            </svg>
+        </div>
+
+        <!-- Memory Section -->
+        <section class="metric-section">
+            <div class="section-header">
+                <span class="section-line left"></span>
+                <h2 class="section-title">MEMORY</h2>
+                <span class="section-line right"></span>
+            </div>
+
+            <div class="memory-display">
+                <div class="memory-frame">
+                    <div class="memory-header">
+                        <span class="memory-label">{{17}}</span>
+                        <span class="memory-value">{{18}}<span class="memory-unit">{{19}}</span></span>
+                    </div>
+                    <div class="memory-bar">
+                        <div class="bar-track geometric">
+                            <div class="bar-fill memory-fill" id="memory-fill"></div>
+                            <div class="bar-segments">
+                                <span></span><span></span><span></span><span></span>
+                                <span></span><span></span><span></span><span></span>
+                                <span></span><span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="memory-footer">
+                        <span class="max-label">/ {{20}} {{19}}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Zigzag Divider -->
+        <div class="zigzag-divider">
+            <svg viewBox="0 0 480 24" preserveAspectRatio="none">
+                <polyline points="0,12 15,4 30,20 45,4 60,20 75,4 90,20 105,4 120,20 135,4 150,20 165,4 180,20 195,4 210,20 225,4 240,12" fill="none" stroke="#d4af37" stroke-width="1.5"/>
+                <circle cx="240" cy="12" r="4" fill="none" stroke="#d4af37" stroke-width="1.5"/>
+                <polyline points="240,12 255,4 270,20 285,4 300,20 315,4 330,20 345,4 360,20 375,4 390,20 405,4 420,20 435,4 450,20 465,4 480,12" fill="none" stroke="#d4af37" stroke-width="1.5"/>
+            </svg>
+        </div>
+
+        <!-- Storage Section -->
+        <section class="metric-section">
+            <div class="section-header">
+                <span class="section-line left"></span>
+                <h2 class="section-title">STORAGE</h2>
+                <span class="section-line right"></span>
+            </div>
+
+            <div class="storage-grid">
+                <!-- Disk 1 -->
+                <div class="storage-item">
+                    <div class="storage-frame">
+                        <div class="storage-header">
+                            <span class="storage-label">{{21}}</span>
+                        </div>
+                        <div class="fan-gauge">
+                            <svg viewBox="0 0 120 70" class="fan-svg">
+                                <path d="M10,70 Q10,10 60,10 Q110,10 110,70" fill="none" stroke="rgba(212,175,55,0.3)" stroke-width="8" stroke-linecap="round"/>
+                                <path d="M10,70 Q10,10 60,10 Q110,10 110,70" fill="none" stroke="url(#usageGradient)" stroke-width="8" stroke-linecap="round" class="fan-fill" id="disk1-fill"/>
+                            </svg>
+                            <div class="fan-value-container">
+                                <span class="fan-value">{{22}}</span>
+                                <span class="fan-unit">{{23}}</span>
+                            </div>
+                        </div>
+                        <div class="storage-footer">
+                            <span class="max-label">/ {{24}} {{23}}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disk 2 -->
+                <div class="storage-item">
+                    <div class="storage-frame">
+                        <div class="storage-header">
+                            <span class="storage-label">{{25}}</span>
+                        </div>
+                        <div class="fan-gauge">
+                            <svg viewBox="0 0 120 70" class="fan-svg">
+                                <path d="M10,70 Q10,10 60,10 Q110,10 110,70" fill="none" stroke="rgba(212,175,55,0.3)" stroke-width="8" stroke-linecap="round"/>
+                                <path d="M10,70 Q10,10 60,10 Q110,10 110,70" fill="none" stroke="url(#usageGradient)" stroke-width="8" stroke-linecap="round" class="fan-fill" id="disk2-fill"/>
+                            </svg>
+                            <div class="fan-value-container">
+                                <span class="fan-value">{{26}}</span>
+                                <span class="fan-unit">{{27}}</span>
+                            </div>
+                        </div>
+                        <div class="storage-footer">
+                            <span class="max-label">/ {{28}} {{27}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stepped Divider -->
+        <div class="stepped-divider">
+            <svg viewBox="0 0 480 30" preserveAspectRatio="none">
+                <path d="M0,25 L80,25 L80,20 L160,20 L160,15 L240,15 L240,20 L320,20 L320,25 L400,25 L400,20 L480,20" fill="none" stroke="#d4af37" stroke-width="1.5"/>
+                <rect x="236" y="11" width="8" height="8" fill="#d4af37" transform="rotate(45, 240, 15)"/>
+            </svg>
+        </div>
+
+        <!-- Usage Section -->
+        <section class="metric-section">
+            <div class="section-header">
+                <span class="section-line left"></span>
+                <h2 class="section-title">UTILIZATION</h2>
+                <span class="section-line right"></span>
+            </div>
+
+            <div class="usage-grid">
+                <!-- CPU Usage -->
+                <div class="usage-item">
+                    <div class="usage-frame">
+                        <div class="hexagon-gauge">
+                            <svg viewBox="0 0 100 100" class="hexagon-svg">
+                                <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5"
+                                    fill="none" stroke="rgba(212,175,55,0.3)" stroke-width="3"/>
+                                <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5"
+                                    fill="none" stroke="url(#goldGradient)" stroke-width="3"
+                                    class="hex-fill" id="cpu-usage-fill"/>
+                            </svg>
+                            <div class="hex-value-container">
+                                <span class="hex-value">{{30}}</span>
+                                <span class="hex-unit">{{31}}</span>
+                            </div>
+                        </div>
+                        <span class="usage-label">{{29}}</span>
+                        <span class="max-value">{{32}}</span>
+                    </div>
+                </div>
+
+                <!-- GPU Usage -->
+                <div class="usage-item">
+                    <div class="usage-frame">
+                        <div class="hexagon-gauge">
+                            <svg viewBox="0 0 100 100" class="hexagon-svg">
+                                <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5"
+                                    fill="none" stroke="rgba(212,175,55,0.3)" stroke-width="3"/>
+                                <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5"
+                                    fill="none" stroke="url(#goldGradient)" stroke-width="3"
+                                    class="hex-fill" id="gpu-usage-fill"/>
+                            </svg>
+                            <div class="hex-value-container">
+                                <span class="hex-value">{{34}}</span>
+                                <span class="hex-unit">{{35}}</span>
+                            </div>
+                        </div>
+                        <span class="usage-label">{{33}}</span>
+                        <span class="max-value">{{36}}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-decoration">
+                <svg viewBox="0 0 480 60" preserveAspectRatio="none">
+                    <!-- Stepped pyramid -->
+                    <path d="M140,60 L140,45 L180,45 L180,30 L220,30 L220,15 L260,15 L260,30 L300,30 L300,45 L340,45 L340,60"
+                        fill="none" stroke="#d4af37" stroke-width="2"/>
+                    <!-- Side lines -->
+                    <line x1="0" y1="50" x2="130" y2="50" stroke="#d4af37" stroke-width="1"/>
+                    <line x1="350" y1="50" x2="480" y2="50" stroke="#d4af37" stroke-width="1"/>
+                    <!-- Diamond accents -->
+                    <rect x="56" y="46" width="8" height="8" fill="#d4af37" transform="rotate(45, 60, 50)"/>
+                    <rect x="416" y="46" width="8" height="8" fill="#d4af37" transform="rotate(45, 420, 50)"/>
+                </svg>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

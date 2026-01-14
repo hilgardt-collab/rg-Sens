@@ -1,0 +1,802 @@
+/*
+ * Art Deco System Monitor Panel
+ * 480x1920px Vertical Panel
+ *
+ * Design inspired by the Art Deco movement (1920s-1930s):
+ * - Bold geometric forms and symmetry
+ * - Sunburst, chevron, and fan motifs
+ * - Stepped/tiered architectural elements
+ * - High contrast black and gold palette
+ * - Jewel tone accents
+ *
+ * Color Palette:
+ * - Black:         #0d0d0d, #1a1a1a, #2d2d2d
+ * - Gold:          #d4af37, #f4d03f, #c9a227, #8b6914
+ * - Emerald:       #50c878, #2e8b57
+ * - Sapphire:      #0f52ba, #1e3a5f
+ * - Ruby:          #e63946, #9b2335
+ * - Cream:         #f5f0e6, #e8e0d0
+ *
+ * Typography (Art Deco Google Fonts):
+ * - Poiret One:    Geometric display for time
+ * - Limelight:     High contrast for titles
+ * - Josefin Sans:  Clean geometric for values
+ */
+
+/* ============================================
+   Google Fonts Import
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;500;600&family=Limelight&family=Poiret+One&display=swap');
+
+/* ============================================
+   Base Styles & Variables
+   ============================================ */
+:root {
+    /* Font families */
+    --font-display: 'Poiret One', 'Century Gothic', sans-serif;
+    --font-title: 'Limelight', 'Broadway', cursive;
+    --font-body: 'Josefin Sans', 'Futura', 'Century Gothic', sans-serif;
+
+    /* Black tones */
+    --black-deep: #0d0d0d;
+    --black: #1a1a1a;
+    --black-light: #2d2d2d;
+    --charcoal: #3d3d3d;
+
+    /* Gold tones */
+    --gold-bright: #f4d03f;
+    --gold: #d4af37;
+    --gold-dark: #c9a227;
+    --gold-deep: #8b6914;
+
+    /* Jewel tones */
+    --emerald: #50c878;
+    --emerald-dark: #2e8b57;
+    --sapphire: #0f52ba;
+    --sapphire-dark: #1e3a5f;
+    --ruby: #e63946;
+    --ruby-dark: #9b2335;
+
+    /* Neutral */
+    --cream: #f5f0e6;
+    --cream-dark: #e8e0d0;
+
+    /* Transparency */
+    --panel-bg: rgba(13, 13, 13, 0.95);
+    --section-bg: rgba(26, 26, 26, 0.8);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    background: transparent;
+    width: 480px;
+    min-width: 480px;
+    max-width: 480px;
+    height: 1920px;
+    min-height: 1920px;
+    max-height: 1920px;
+    overflow: hidden;
+    color: var(--cream);
+}
+
+.svg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+/* Hidden max value elements */
+.max-value {
+    display: none;
+}
+
+/* ============================================
+   Main Panel Container
+   ============================================ */
+.panel {
+    width: 480px;
+    min-width: 480px;
+    max-width: 480px;
+    height: 1920px;
+    min-height: 1920px;
+    max-height: 1920px;
+    background:
+        linear-gradient(180deg,
+            var(--black-deep) 0%,
+            var(--black) 20%,
+            var(--black) 80%,
+            var(--black-deep) 100%
+        );
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Subtle geometric background pattern */
+.panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 40px,
+            rgba(212, 175, 55, 0.02) 40px,
+            rgba(212, 175, 55, 0.02) 41px
+        ),
+        repeating-linear-gradient(
+            -45deg,
+            transparent,
+            transparent 40px,
+            rgba(212, 175, 55, 0.02) 40px,
+            rgba(212, 175, 55, 0.02) 41px
+        );
+    pointer-events: none;
+}
+
+/* Gold border frame */
+.panel::after {
+    content: '';
+    position: absolute;
+    inset: 15px;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    pointer-events: none;
+}
+
+/* ============================================
+   Header with Sunburst
+   ============================================ */
+.header {
+    text-align: center;
+    padding: 20px 0;
+    position: relative;
+}
+
+.sunburst-decoration {
+    position: relative;
+    height: 60px;
+    margin-bottom: 15px;
+}
+
+.sunburst-svg {
+    width: 200px;
+    height: 100px;
+    margin: 0 auto;
+    display: block;
+}
+
+.sun-ray {
+    stroke: var(--gold);
+    stroke-width: 2;
+    opacity: 0.8;
+}
+
+.sun-center {
+    fill: var(--gold);
+    opacity: 0.9;
+}
+
+.time-display {
+    position: relative;
+    z-index: 1;
+}
+
+.time-value {
+    font-family: var(--font-display);
+    font-size: 64px;
+    font-weight: 400;
+    color: var(--gold-bright);
+    letter-spacing: 8px;
+    text-shadow:
+        0 0 20px rgba(244, 208, 63, 0.5),
+        0 0 40px rgba(244, 208, 63, 0.3);
+}
+
+.header-line {
+    width: 60%;
+    height: 2px;
+    background: linear-gradient(90deg,
+        transparent,
+        var(--gold) 20%,
+        var(--gold) 80%,
+        transparent
+    );
+    margin: 20px auto 0;
+}
+
+/* ============================================
+   Decorative Dividers
+   ============================================ */
+.chevron-divider,
+.fan-divider,
+.zigzag-divider,
+.stepped-divider {
+    width: 100%;
+    height: auto;
+    margin: 10px 0;
+}
+
+.chevron-divider svg,
+.fan-divider svg,
+.zigzag-divider svg,
+.stepped-divider svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ============================================
+   Section Styles
+   ============================================ */
+.metric-section {
+    background: linear-gradient(180deg,
+        rgba(45, 45, 45, 0.4),
+        rgba(26, 26, 26, 0.6)
+    );
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 4px;
+    padding: 25px 20px;
+    position: relative;
+}
+
+/* Art Deco corner accents */
+.metric-section::before,
+.metric-section::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gold);
+}
+
+.metric-section::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.metric-section::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
+}
+
+/* Section Header */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 25px;
+    gap: 15px;
+}
+
+.section-line {
+    flex: 1;
+    height: 1px;
+    position: relative;
+}
+
+.section-line.left {
+    background: linear-gradient(90deg, transparent, var(--gold));
+}
+
+.section-line.right {
+    background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+.section-line::before {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: var(--gold);
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+}
+
+.section-line.left::before {
+    right: 0;
+}
+
+.section-line.right::before {
+    left: 0;
+}
+
+.section-title {
+    font-family: var(--font-title);
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--gold);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+}
+
+/* ============================================
+   Temperature Gauges - Vertical Bar Style
+   ============================================ */
+.temp-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.temp-gauge {
+    flex: 1;
+}
+
+.gauge-frame {
+    background: linear-gradient(180deg,
+        rgba(45, 45, 45, 0.6),
+        rgba(26, 26, 26, 0.8)
+    );
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    padding: 15px 10px;
+    text-align: center;
+}
+
+.vertical-bar-container {
+    height: 80px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+.vertical-bar-svg {
+    height: 100%;
+    width: 40px;
+}
+
+.vbar-fill {
+    opacity: 0.7;
+}
+
+.gauge-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.gauge-label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold);
+    opacity: 0.8;
+}
+
+.gauge-value {
+    font-family: var(--font-body);
+    font-size: 28px;
+    font-weight: 300;
+    color: var(--cream);
+}
+
+.gauge-unit {
+    font-size: 14px;
+    color: var(--gold);
+    opacity: 0.7;
+    margin-left: 2px;
+}
+
+/* ============================================
+   GPU Temperature - Featured Display
+   ============================================ */
+.gpu-temp-featured {
+    margin-top: 20px;
+}
+
+.featured-frame {
+    position: relative;
+    background: linear-gradient(135deg,
+        rgba(212, 175, 55, 0.1),
+        rgba(139, 105, 20, 0.05)
+    );
+    border: 2px solid var(--gold);
+    padding: 25px 30px;
+    text-align: center;
+}
+
+.frame-corner {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--gold);
+}
+
+.frame-corner.tl {
+    top: -2px;
+    left: -2px;
+}
+
+.frame-corner.tr {
+    top: -2px;
+    right: -2px;
+}
+
+.frame-corner.bl {
+    bottom: -2px;
+    left: -2px;
+}
+
+.frame-corner.br {
+    bottom: -2px;
+    right: -2px;
+}
+
+.featured-content {
+    position: relative;
+    z-index: 1;
+}
+
+.featured-label {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--gold);
+    display: block;
+    margin-bottom: 10px;
+}
+
+.featured-value-container {
+    margin-bottom: 15px;
+}
+
+.featured-value {
+    font-family: var(--font-display);
+    font-size: 56px;
+    font-weight: 400;
+    color: var(--cream);
+    text-shadow: 0 0 20px rgba(244, 208, 63, 0.3);
+}
+
+.featured-unit {
+    font-family: var(--font-body);
+    font-size: 24px;
+    color: var(--gold);
+    margin-left: 5px;
+}
+
+.featured-bar {
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+/* ============================================
+   Bar Tracks and Fills
+   ============================================ */
+.bar-track {
+    height: 12px;
+    background: rgba(45, 45, 45, 0.8);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.bar-track.geometric {
+    height: 20px;
+}
+
+.bar-fill {
+    height: 100%;
+    width: var(--percent, 0%);
+    position: absolute;
+    left: 0;
+    top: 0;
+    transition: width 0.5s ease-out;
+}
+
+.bar-fill.temp-bar {
+    background: linear-gradient(90deg,
+        var(--emerald) 0%,
+        var(--gold) 50%,
+        var(--ruby) 100%
+    );
+}
+
+.bar-fill.memory-fill {
+    background: linear-gradient(90deg,
+        var(--sapphire) 0%,
+        var(--emerald) 50%,
+        var(--gold) 100%
+    );
+}
+
+.bar-segments {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+
+.bar-segments span {
+    width: 1px;
+    height: 100%;
+    background: rgba(13, 13, 13, 0.5);
+}
+
+/* ============================================
+   Memory Display
+   ============================================ */
+.memory-display {
+    padding: 10px 0;
+}
+
+.memory-frame {
+    background: linear-gradient(180deg,
+        rgba(45, 45, 45, 0.4),
+        rgba(26, 26, 26, 0.6)
+    );
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    padding: 20px;
+}
+
+.memory-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 15px;
+}
+
+.memory-label {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--gold);
+}
+
+.memory-value {
+    font-family: var(--font-body);
+    font-size: 32px;
+    font-weight: 300;
+    color: var(--cream);
+}
+
+.memory-unit {
+    font-size: 16px;
+    color: var(--gold);
+    opacity: 0.7;
+    margin-left: 4px;
+}
+
+.memory-bar {
+    margin-bottom: 10px;
+}
+
+.memory-footer {
+    text-align: right;
+}
+
+.max-label {
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--gold);
+    opacity: 0.6;
+    letter-spacing: 1px;
+}
+
+/* ============================================
+   Storage Section - Fan Gauges
+   ============================================ */
+.storage-grid {
+    display: flex;
+    justify-content: space-around;
+    gap: 20px;
+}
+
+.storage-item {
+    flex: 1;
+    max-width: 200px;
+}
+
+.storage-frame {
+    background: linear-gradient(180deg,
+        rgba(45, 45, 45, 0.4),
+        rgba(26, 26, 26, 0.6)
+    );
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    padding: 20px 15px;
+    text-align: center;
+}
+
+.storage-header {
+    margin-bottom: 15px;
+}
+
+.storage-label {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold);
+}
+
+.fan-gauge {
+    position: relative;
+    height: 90px;
+    margin-bottom: 10px;
+}
+
+.fan-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.fan-fill {
+    transition: stroke-dashoffset 0.5s ease-out;
+}
+
+.fan-value-container {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.fan-value {
+    font-family: var(--font-body);
+    font-size: 28px;
+    font-weight: 300;
+    color: var(--cream);
+    display: block;
+}
+
+.fan-unit {
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--gold);
+    opacity: 0.7;
+}
+
+.storage-footer {
+    margin-top: 5px;
+}
+
+/* ============================================
+   Usage Section - Hexagon Gauges
+   ============================================ */
+.usage-grid {
+    display: flex;
+    justify-content: space-around;
+    gap: 30px;
+}
+
+.usage-item {
+    flex: 1;
+    max-width: 180px;
+}
+
+.usage-frame {
+    text-align: center;
+    padding: 15px;
+}
+
+.hexagon-gauge {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 15px;
+}
+
+.hexagon-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.hex-fill {
+    transition: stroke-dashoffset 0.5s ease-out;
+}
+
+.hex-value-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.hex-value {
+    font-family: var(--font-body);
+    font-size: 32px;
+    font-weight: 300;
+    color: var(--cream);
+    display: block;
+}
+
+.hex-unit {
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--gold);
+    opacity: 0.7;
+}
+
+.usage-label {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold);
+}
+
+/* ============================================
+   Footer
+   ============================================ */
+.footer {
+    margin-top: auto;
+    padding: 20px 0 10px;
+}
+
+.footer-decoration svg {
+    width: 100%;
+    height: 60px;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes pulse-gold {
+    0%, 100% {
+        opacity: 0.8;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes glow {
+    0%, 100% {
+        filter: drop-shadow(0 0 5px rgba(212, 175, 55, 0.5));
+    }
+    50% {
+        filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.8));
+    }
+}
+
+.sun-center {
+    animation: pulse-gold 3s ease-in-out infinite;
+}
+
+.time-value {
+    animation: glow 4s ease-in-out infinite;
+}
+
+/* ============================================
+   Hover Effects
+   ============================================ */
+.gauge-frame:hover,
+.storage-frame:hover,
+.featured-frame:hover {
+    border-color: var(--gold);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+    transition: all 0.3s ease;
+}
+
+.hexagon-gauge:hover .hexagon-svg {
+    filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));
+    transition: filter 0.3s ease;
+}
+
