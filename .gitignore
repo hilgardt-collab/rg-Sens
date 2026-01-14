@@ -29,6 +29,10 @@ coverage/
 # Generated files
 /doc
 
+# Logs
+*.log
+debug.log
+
 # AUR packaging
 /aur/src/
 /aur/pkg/

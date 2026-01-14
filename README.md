@@ -12,10 +12,11 @@ rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), pro
 
 - **High Performance**: Low CPU and memory usage with native Rust implementation
 - **Customizable Grid Layout**: Drag-and-drop panels with flexible sizing
-- **Rich Visualizations**: Multiple displayer types including gauges, graphs, and LCARS themes
+- **Rich Visualizations**: Multiple displayer types including gauges, graphs, and themed combo panels
 - **Multi-Monitor Support**: Fullscreen on specific monitors, borderless mode
 - **Auto-Scroll**: Automatic scrolling through large dashboards
 - **Native**: Built with GTK4 for seamless Linux desktop integration
+- **Theme Aware**: Automatically detects system light/dark mode
 
 ## Screenshots
 
@@ -32,7 +33,8 @@ rg-Sens is a Rust port of [gSens](https://github.com/hilgardt-collab/gSens), pro
 - **Disk**: Disk usage and capacity monitoring
 - **Clock**: Current time with timezone support, alarms and timers
 - **Static Text**: Display custom static text
-- **Combo**: Combine multiple sources into one panel
+- **Test Source**: Configurable test data for development and demos
+- **Combo**: Combine multiple sources into themed combo panels
 
 ### Displayers
 - **Text**: Customizable text display with templates
@@ -55,19 +57,22 @@ Multi-slot panels with unique visual styles:
 - **Synthwave**: 80s synthwave aesthetic
 - **Art Deco**: 1920s Art Deco style
 - **Art Nouveau**: Organic Art Nouveau curves
+- **Steampunk**: Victorian steampunk with brass and gears
 
-### CSS Template
+### CSS Template Displayer
 - **Custom HTML/CSS**: Create fully custom visualizations using HTML, CSS, and JavaScript
 - **Hot Reload**: Automatic reload when template files change
 - **Theme Integration**: Access theme colors via CSS custom properties
+- **WebKit Powered**: Full web rendering capabilities
 
 ### Customization
 - Panel backgrounds (solid, gradient, image, polygon)
-- Configurable colors and gradients
+- Configurable colors and gradients with theme support
 - Custom fonts and text styling
 - Border styles and corner radius
 - Per-panel update intervals
 - Grid cell size and spacing
+- Global theme presets
 
 ### User Interface
 - Drag-and-drop panel arrangement
@@ -78,6 +83,7 @@ Multi-slot panels with unique visual styles:
 - Window settings dialog (Ctrl+,)
 - Fullscreen mode (double-click to toggle)
 - Borderless window mode
+- Auto-hide header menu in fullscreen
 - Auto-scroll for large dashboards
 
 ### Keyboard Shortcuts
@@ -92,11 +98,23 @@ Multi-slot panels with unique visual styles:
 
 ## Installation
 
-### Prerequisites
+### Arch Linux (AUR)
+
+```bash
+# Using an AUR helper (recommended)
+yay -S rg-sens-git
+
+# Or manually
+git clone https://aur.archlinux.org/rg-sens-git.git
+cd rg-sens-git
+makepkg -si
+```
+
+### Prerequisites (Manual Build)
 
 - Rust 1.70+ (install via [rustup](https://rustup.rs/))
 - GTK4 development libraries
-- WebKitGTK 6.0 (for CSS Template displayer)
+- WebKitGTK 6.0 (optional, for CSS Template displayer)
 
 **Debian/Ubuntu:**
 ```bash
@@ -132,6 +150,9 @@ cargo run --release
 ```bash
 # Build without NVIDIA GPU support
 cargo build --release --no-default-features
+
+# Build without WebKit (CSS Template displayer disabled)
+cargo build --release --no-default-features --features nvidia
 
 # Run with debug logging
 RUST_LOG=debug cargo run
@@ -173,6 +194,10 @@ rg-sens -l
 ## Configuration
 
 Configuration is stored in `~/.config/rg-sens/config.json` (respects `$XDG_CONFIG_HOME`).
+
+### Example Layouts
+
+The `examples/` directory contains sample layouts for each themed combo panel style.
 
 ### Configuration Structure
 
@@ -228,6 +253,11 @@ Contributions are welcome! Areas where help is appreciated:
 - Testing on different Linux distributions
 - Documentation improvements
 - Bug reports and feature requests
+
+## Contributors
+
+- H.G. Raubenheimer
+- Claude (Anthropic)
 
 ## License
 
