@@ -251,6 +251,12 @@
 
             switch (this.type) {
                 case 'bar':
+                    // Set initial state to empty (0%)
+                    if (this.direction === 'vertical') {
+                        el.style.height = '0%';
+                    } else {
+                        el.style.width = '0%';
+                    }
                     // Ensure transition is set
                     if (!el.style.transition) {
                         const prop = this.direction === 'vertical' ? 'height' : 'width';
@@ -261,12 +267,10 @@
                 case 'arc':
                 case 'polygon':
                 case 'ring':
-                    // Set initial stroke-dasharray and dashoffset
-                    el.style.strokeDasharray = this.length;
-                    el.style.strokeDashoffset = this.length; // Start empty
-                    if (!el.style.transition) {
-                        el.style.transition = `stroke-dashoffset ${CONFIG.transitionDuration}ms ${CONFIG.easing}`;
-                    }
+                    // Set initial stroke-dasharray and dashoffset as strings for SVG compatibility
+                    el.setAttribute('stroke-dasharray', String(this.length));
+                    el.setAttribute('stroke-dashoffset', String(this.length)); // Start empty
+                    // Note: CSS transitions should be defined in the stylesheet for SVG elements
                     break;
             }
         }
@@ -275,14 +279,20 @@
          * Update the gauge with new values
          */
         update(values) {
+            // Try both string and numeric keys for compatibility
+            const valueIdStr = String(this.valueId);
+            const maxIdStr = String(this.maxId);
+
             // Get current value from values object
-            if (this.valueId && values[this.valueId] !== undefined) {
-                this.currentValue = parseNumber(values[this.valueId], this.currentValue);
+            const rawValue = values[valueIdStr] !== undefined ? values[valueIdStr] : values[this.valueId];
+            if (this.valueId && rawValue !== undefined) {
+                this.currentValue = parseNumber(rawValue, this.currentValue);
             }
 
             // Get max value from values object (if specified)
-            if (this.maxId && values[this.maxId] !== undefined) {
-                this.maxValue = parseNumber(values[this.maxId], this.maxValue);
+            const rawMax = values[maxIdStr] !== undefined ? values[maxIdStr] : values[this.maxId];
+            if (this.maxId && rawMax !== undefined) {
+                this.maxValue = parseNumber(rawMax, this.maxValue);
             }
 
             // Calculate percentage
@@ -307,8 +317,6 @@
                     this._updateText();
                     break;
             }
-
-            log('Updated gauge:', this.valueId, '=', this.currentValue, '/', this.maxValue, '(', percent.toFixed(1), '%)');
         }
 
         /**
@@ -327,7 +335,8 @@
          */
         _updateStroke(percent) {
             const offset = this.length * (1 - percent / 100);
-            this.element.style.strokeDashoffset = offset;
+            // Use setAttribute for better SVG/WebKit compatibility
+            this.element.setAttribute('stroke-dashoffset', String(offset));
         }
 
         /**
@@ -447,7 +456,7 @@
                 return;
             }
 
-            log('Updating values:', Object.keys(values).length, 'values');
+            log('Updating values:', Object.keys(values).length, 'values for', this.gauges.length, 'gauges');
 
             // Update all gauges
             this.gauges.forEach(gauge => {

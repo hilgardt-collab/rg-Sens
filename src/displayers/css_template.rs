@@ -81,6 +81,17 @@ impl CssTemplateDisplayer {
         }
     }
 
+    /// Get the base URI for loading the template (for resolving relative paths)
+    fn get_base_uri(&self) -> Option<String> {
+        let data = self.data.lock().ok()?;
+        if !data.config.html_path.as_os_str().is_empty() && data.config.html_path.exists() {
+            if let Some(parent) = data.config.html_path.parent() {
+                return Some(format!("file://{}/", parent.display()));
+            }
+        }
+        None
+    }
+
     /// Load and transform the template HTML
     fn load_template(&self) -> Option<String> {
         let data = self.data.lock().ok()?;
@@ -202,8 +213,9 @@ impl Displayer for CssTemplateDisplayer {
 
         // Load initial template
         let html = self.load_template();
+        let base_uri = self.get_base_uri();
         if let Some(html_content) = html {
-            webview.load_html(&html_content, None);
+            webview.load_html(&html_content, base_uri.as_deref());
             // Cache the HTML
             if let Ok(mut data) = self.data.lock() {
                 data.cached_html = Some(html_content);
@@ -314,6 +326,18 @@ impl Displayer for CssTemplateDisplayer {
                         if let Some(config) = config {
                             // Reload if config changed OR hot_reload is enabled and file changed
                             if should_reload || config.hot_reload {
+                                // Get base URI for relative paths
+                                let base_uri = if !config.html_path.as_os_str().is_empty()
+                                    && config.html_path.exists()
+                                {
+                                    config
+                                        .html_path
+                                        .parent()
+                                        .map(|p| format!("file://{}/", p.display()))
+                                } else {
+                                    None
+                                };
+
                                 // Manual load
                                 let html = if !config.html_path.as_os_str().is_empty()
                                     && config.html_path.exists()
@@ -333,10 +357,13 @@ impl Displayer for CssTemplateDisplayer {
 
                                 if let Some(html) = html {
                                     let transformed = transform_template(&html);
-                                    Some(prepare_html_document(
-                                        &transformed,
-                                        css.as_deref(),
-                                        config.embedded_css.as_deref(),
+                                    Some((
+                                        prepare_html_document(
+                                            &transformed,
+                                            css.as_deref(),
+                                            config.embedded_css.as_deref(),
+                                        ),
+                                        base_uri,
                                     ))
                                 } else {
                                     None
@@ -349,8 +376,8 @@ impl Displayer for CssTemplateDisplayer {
                         }
                     };
 
-                    if let Some(html) = html_content {
-                        webview.load_html(&html, None);
+                    if let Some((html, base_uri)) = html_content {
+                        webview.load_html(&html, base_uri.as_deref());
                         if let Ok(mut data) = data_clone.lock() {
                             data.cached_html = Some(html);
                         }
