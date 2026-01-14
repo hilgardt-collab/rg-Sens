@@ -355,8 +355,65 @@ impl CssTemplateConfigWidget {
         // Note: The actual click handler is connected later via connect_auto_config
         btn_row.append(&auto_config_btn);
 
-        // Add mapping button
-        let add_btn = Button::with_label("Add Mapping");
+        // Add source group button (4 fields: caption, value, unit, max)
+        let add_group_btn = Button::with_label("Add Source Group");
+        add_group_btn.set_tooltip_text(Some(
+            "Add a group of 4 mappings (caption, value, unit, max) for one source",
+        ));
+        let mappings_container_for_group = mappings_container.clone();
+        let config_for_group = config.clone();
+        let on_change_for_group = on_change.clone();
+        let source_summaries_for_group = source_summaries.clone();
+        let placeholder_hints_for_group = placeholder_hints.clone();
+        add_group_btn.connect_clicked(move |_| {
+            let cfg = config_for_group.borrow();
+            let next_idx = cfg.mappings.len() as u32;
+            drop(cfg);
+
+            // Create 4 mappings for the group
+            let fields = ["caption", "value", "unit", "max"];
+            let mut new_mappings = Vec::new();
+            for (i, field) in fields.iter().enumerate() {
+                new_mappings.push(PlaceholderMapping {
+                    index: next_idx + i as u32,
+                    slot_prefix: String::new(),
+                    field: field.to_string(),
+                    format: if *field == "value" {
+                        Some("{:.1}".to_string())
+                    } else {
+                        None
+                    },
+                });
+            }
+
+            // Add to config
+            {
+                let mut cfg = config_for_group.borrow_mut();
+                for mapping in &new_mappings {
+                    cfg.mappings.push(mapping.clone());
+                }
+            }
+
+            // Add the grouped UI
+            Self::add_source_group_row(
+                &mappings_container_for_group,
+                next_idx as usize,
+                &new_mappings,
+                config_for_group.clone(),
+                on_change_for_group.clone(),
+                source_summaries_for_group.clone(),
+                placeholder_hints_for_group.clone(),
+            );
+
+            if let Some(ref cb) = *on_change_for_group.borrow() {
+                cb();
+            }
+        });
+        btn_row.append(&add_group_btn);
+
+        // Add single mapping button
+        let add_btn = Button::with_label("Add Single");
+        add_btn.set_tooltip_text(Some("Add a single placeholder mapping"));
         let mappings_container_clone = mappings_container.clone();
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
@@ -579,6 +636,200 @@ impl CssTemplateConfigWidget {
         // Add row to outer box and outer box to container
         outer_box.append(&row);
         container.append(&outer_box);
+    }
+
+    /// Add a grouped source mapping row (4 fields: caption, value, unit, max)
+    ///
+    /// This creates a visual group with a single source dropdown that controls
+    /// all 4 field mappings, making it easier to configure common source patterns.
+    fn add_source_group_row(
+        container: &GtkBox,
+        start_idx: usize,
+        mappings: &[PlaceholderMapping],
+        config: Rc<RefCell<CssTemplateDisplayConfig>>,
+        on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
+    ) {
+        // Create a frame to visually group the 4 fields
+        let frame = gtk4::Frame::new(None);
+        frame.set_margin_bottom(8);
+        frame.add_css_class("card");
+
+        let group_box = GtkBox::new(Orientation::Vertical, 4);
+        group_box.set_margin_start(8);
+        group_box.set_margin_end(8);
+        group_box.set_margin_top(8);
+        group_box.set_margin_bottom(8);
+
+        // Header row with source dropdown and remove button
+        let header_row = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Placeholder indices label
+        let indices: Vec<String> = mappings
+            .iter()
+            .map(|m| format!("{{{{{}}}}}", m.index))
+            .collect();
+        let indices_label = Label::new(Some(&indices.join(" ")));
+        indices_label.add_css_class("dim-label");
+        indices_label.set_width_chars(20);
+        header_row.append(&indices_label);
+
+        // Source dropdown (shared for all 4 fields)
+        let summaries = source_summaries.borrow();
+        let source_list = StringList::new(&[] as &[&str]);
+        source_list.append("(none)");
+        for (prefix, label, _, _) in summaries.iter() {
+            source_list.append(&format!("{}: {}", prefix, label));
+        }
+        drop(summaries);
+
+        let source_dropdown = DropDown::new(Some(source_list), None::<gtk4::Expression>);
+        source_dropdown.set_hexpand(true);
+
+        // Find current selection (from first mapping)
+        if !mappings.is_empty() && !mappings[0].slot_prefix.is_empty() {
+            let summaries = source_summaries.borrow();
+            for (i, (prefix, _, _, _)) in summaries.iter().enumerate() {
+                if prefix == &mappings[0].slot_prefix {
+                    source_dropdown.set_selected((i + 1) as u32);
+                    break;
+                }
+            }
+        }
+
+        // Connect source dropdown to update all 4 mappings
+        let config_for_source = config.clone();
+        let on_change_for_source = on_change.clone();
+        let source_summaries_for_cb = source_summaries.clone();
+        let mapping_indices: Vec<usize> = (start_idx..start_idx + mappings.len()).collect();
+        source_dropdown.connect_selected_notify(move |dropdown| {
+            let selected = dropdown.selected();
+            let mut cfg = config_for_source.borrow_mut();
+
+            let new_prefix = if selected == 0 {
+                String::new()
+            } else {
+                let summaries = source_summaries_for_cb.borrow();
+                summaries
+                    .get((selected - 1) as usize)
+                    .map(|(prefix, _, _, _)| prefix.clone())
+                    .unwrap_or_default()
+            };
+
+            // Update all mappings in this group
+            for &idx in &mapping_indices {
+                if let Some(mapping) = cfg.mappings.get_mut(idx) {
+                    mapping.slot_prefix = new_prefix.clone();
+                }
+            }
+            drop(cfg);
+
+            if let Some(ref cb) = *on_change_for_source.borrow() {
+                cb();
+            }
+        });
+
+        header_row.append(&source_dropdown);
+
+        // Remove group button
+        let remove_btn = Button::with_label("Remove");
+        let container_for_remove = container.clone();
+        let frame_for_remove = frame.clone();
+        let config_for_remove = config.clone();
+        let on_change_for_remove = on_change.clone();
+        let num_mappings = mappings.len();
+        remove_btn.connect_clicked(move |_| {
+            container_for_remove.remove(&frame_for_remove);
+            let mut cfg = config_for_remove.borrow_mut();
+
+            // Remove all mappings in this group (in reverse order to maintain indices)
+            for i in (0..num_mappings).rev() {
+                let idx = start_idx + i;
+                if idx < cfg.mappings.len() {
+                    cfg.mappings.remove(idx);
+                }
+            }
+
+            // Re-index remaining mappings
+            for (i, m) in cfg.mappings.iter_mut().enumerate() {
+                m.index = i as u32;
+            }
+            drop(cfg);
+
+            if let Some(ref cb) = *on_change_for_remove.borrow() {
+                cb();
+            }
+        });
+        header_row.append(&remove_btn);
+
+        group_box.append(&header_row);
+
+        // Add a row for each field in the group
+        let hints = placeholder_hints.borrow();
+        for (i, mapping) in mappings.iter().enumerate() {
+            let field_row = GtkBox::new(Orientation::Horizontal, 6);
+
+            // Field label
+            let field_label = Label::new(Some(&format!(
+                "{{{{{}}}}} {}",
+                mapping.index, mapping.field
+            )));
+            field_label.set_width_chars(16);
+            field_label.set_xalign(0.0);
+            field_row.append(&field_label);
+
+            // Hint (if available)
+            if let Some(hint) = hints.get(&mapping.index) {
+                let hint_label = Label::new(None);
+                hint_label.set_markup(&format!("<i>{}</i>", glib::markup_escape_text(hint)));
+                hint_label.set_xalign(0.0);
+                hint_label.set_hexpand(true);
+                hint_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+                hint_label.add_css_class("dim-label");
+                hint_label.set_tooltip_text(Some(hint));
+                field_row.append(&hint_label);
+            } else {
+                let spacer = GtkBox::new(Orientation::Horizontal, 0);
+                spacer.set_hexpand(true);
+                field_row.append(&spacer);
+            }
+
+            // Format entry (mainly useful for value field)
+            let format_entry = Entry::new();
+            format_entry.set_placeholder_text(Some("Format"));
+            format_entry.set_width_chars(10);
+            if let Some(ref fmt) = mapping.format {
+                format_entry.set_text(fmt);
+            }
+
+            let config_for_format = config.clone();
+            let on_change_for_format = on_change.clone();
+            let mapping_idx = start_idx + i;
+            format_entry.connect_changed(move |entry| {
+                let text = entry.text();
+                let mut cfg = config_for_format.borrow_mut();
+                if let Some(mapping) = cfg.mappings.get_mut(mapping_idx) {
+                    if text.is_empty() {
+                        mapping.format = None;
+                    } else {
+                        mapping.format = Some(text.to_string());
+                    }
+                }
+                drop(cfg);
+
+                if let Some(ref cb) = *on_change_for_format.borrow() {
+                    cb();
+                }
+            });
+            field_row.append(&format_entry);
+
+            group_box.append(&field_row);
+        }
+        drop(hints);
+
+        frame.set_child(Some(&group_box));
+        container.append(&frame);
     }
 
     fn create_display_tab(
@@ -964,6 +1215,9 @@ impl CssTemplateConfigWidget {
     }
 
     /// Rebuild the mappings UI
+    ///
+    /// This detects groups of 4 consecutive mappings with the same slot_prefix
+    /// (caption, value, unit, max) and displays them as grouped source rows.
     fn rebuild_mappings(&self) {
         // Update hints from the current HTML path
         {
@@ -976,18 +1230,59 @@ impl CssTemplateConfigWidget {
             self.mappings_container.remove(&child);
         }
 
-        // Add rows for each mapping
+        // Add rows for each mapping, detecting groups
         let config = self.config.borrow();
-        for (idx, mapping) in config.mappings.iter().enumerate() {
-            Self::add_mapping_row(
-                &self.mappings_container,
-                idx,
-                mapping,
-                self.config.clone(),
-                self.on_change.clone(),
-                self.source_summaries.clone(),
-                self.placeholder_hints.clone(),
-            );
+        let mappings = &config.mappings;
+        let mut idx = 0;
+
+        while idx < mappings.len() {
+            // Check if this could be the start of a group (4 consecutive with same prefix)
+            let is_group = if idx + 3 < mappings.len() {
+                let prefix = &mappings[idx].slot_prefix;
+                let fields: Vec<&str> = mappings[idx..idx + 4]
+                    .iter()
+                    .map(|m| m.field.as_str())
+                    .collect();
+
+                // Check if all 4 have the same prefix (including empty) and are caption/value/unit/max
+                let same_prefix = mappings[idx..idx + 4]
+                    .iter()
+                    .all(|m| &m.slot_prefix == prefix);
+
+                let standard_fields = fields == ["caption", "value", "unit", "max"];
+
+                same_prefix && standard_fields
+            } else {
+                false
+            };
+
+            if is_group {
+                // Display as a group
+                let group_mappings: Vec<PlaceholderMapping> = mappings[idx..idx + 4].to_vec();
+
+                Self::add_source_group_row(
+                    &self.mappings_container,
+                    idx,
+                    &group_mappings,
+                    self.config.clone(),
+                    self.on_change.clone(),
+                    self.source_summaries.clone(),
+                    self.placeholder_hints.clone(),
+                );
+                idx += 4;
+            } else {
+                // Display as individual mapping
+                Self::add_mapping_row(
+                    &self.mappings_container,
+                    idx,
+                    &mappings[idx],
+                    self.config.clone(),
+                    self.on_change.clone(),
+                    self.source_summaries.clone(),
+                    self.placeholder_hints.clone(),
+                );
+                idx += 1;
+            }
         }
     }
 }
