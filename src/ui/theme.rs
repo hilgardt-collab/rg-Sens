@@ -100,22 +100,41 @@ pub fn detect_system_dark_mode() -> bool {
     // Method 1: Check freedesktop portal settings via GSettings
     // This works on GNOME, KDE Plasma 5.24+, and other modern desktops
     if let Some(prefer_dark) = check_portal_color_scheme() {
+        info!("Detected color scheme from freedesktop portal: {}", if prefer_dark { "dark" } else { "light" });
         return prefer_dark;
     }
 
     // Method 2: Check GNOME settings directly
     if let Some(prefer_dark) = check_gnome_color_scheme() {
+        info!("Detected color scheme from GNOME settings: {}", if prefer_dark { "dark" } else { "light" });
         return prefer_dark;
     }
 
     // Method 3: Check GTK_THEME environment variable for dark variant
     if let Ok(theme) = std::env::var("GTK_THEME") {
-        if theme.to_lowercase().contains("dark") {
+        let is_dark = theme.to_lowercase().contains("dark");
+        info!("Detected color scheme from GTK_THEME env ({}): {}", theme, if is_dark { "dark" } else { "light" });
+        if is_dark {
             return true;
         }
     }
 
+    // Method 4: Check the current GTK theme name from settings
+    if let Some(settings) = gtk4::Settings::default() {
+        if let Some(theme_name) = settings.gtk_theme_name() {
+            let theme_str = theme_name.to_lowercase();
+            if theme_str.contains("dark") {
+                info!("Detected dark mode from GTK theme name: {}", theme_name);
+                return true;
+            }
+            // If theme name explicitly says light or doesn't contain dark, assume light
+            info!("Detected light mode from GTK theme name: {}", theme_name);
+            return false;
+        }
+    }
+
     // Default to light mode if no preference detected
+    info!("No color scheme preference detected, defaulting to light mode");
     false
 }
 
@@ -129,6 +148,13 @@ fn check_portal_color_scheme() -> Option<bool> {
     if schema_source.lookup("org.freedesktop.appearance", true).is_some() {
         let settings = gtk4::gio::Settings::new("org.freedesktop.appearance");
         let color_scheme: u32 = settings.uint("color-scheme");
+        log::debug!("freedesktop.appearance color-scheme value: {} (0=none, 1=dark, 2=light)", color_scheme);
+        // 0 = no preference (don't use this method, try next)
+        // 1 = prefer dark
+        // 2 = prefer light
+        if color_scheme == 0 {
+            return None; // No preference set, try other methods
+        }
         return Some(color_scheme == 1); // 1 = prefer dark
     }
     None
@@ -144,6 +170,11 @@ fn check_gnome_color_scheme() -> Option<bool> {
     if schema_source.lookup("org.gnome.desktop.interface", true).is_some() {
         let settings = gtk4::gio::Settings::new("org.gnome.desktop.interface");
         let color_scheme: String = settings.string("color-scheme").to_string();
+        log::debug!("GNOME color-scheme value: '{}'", color_scheme);
+        // "default" means no explicit preference, try other methods
+        if color_scheme == "default" {
+            return None;
+        }
         return Some(color_scheme == "prefer-dark");
     }
     None
