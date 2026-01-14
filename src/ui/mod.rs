@@ -24,6 +24,7 @@ pub mod graph_display;
 mod grid_layout;
 mod grid_properties_dialog;
 mod memory_source_config_widget;
+mod network_source_config_widget;
 mod position_grid_widget;
 mod render_utils;
 mod shared_font_dialog;
@@ -186,6 +187,9 @@ pub use material_display::{
     MaterialRenderer, ThemeVariant,
 };
 pub use memory_source_config_widget::{MemoryField, MemorySourceConfig, MemorySourceConfigWidget};
+pub use network_source_config_widget::{
+    NetworkField, NetworkSourceConfig, NetworkSourceConfigWidget, NetworkSpeedUnit, NetworkTotalUnit,
+};
 pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
 pub use retro_terminal_display::{
     calculate_group_layouts as retro_calculate_group_layouts,

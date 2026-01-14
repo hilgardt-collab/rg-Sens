@@ -22,6 +22,7 @@ pub use crate::ui::CpuSourceConfig;
 pub use crate::ui::DiskSourceConfig;
 pub use crate::ui::GpuSourceConfig;
 pub use crate::ui::MemorySourceConfig;
+pub use crate::ui::NetworkSourceConfig;
 
 // Re-export displayer configs
 pub use crate::displayers::ArtDecoDisplayConfig;
@@ -62,6 +63,9 @@ pub enum SourceConfig {
     #[serde(rename = "disk")]
     Disk(DiskSourceConfig),
 
+    #[serde(rename = "network")]
+    Network(NetworkSourceConfig),
+
     #[serde(rename = "clock")]
     Clock(ClockSourceConfig),
 
@@ -89,6 +93,7 @@ impl SourceConfig {
             SourceConfig::Gpu(_) => "gpu",
             SourceConfig::Memory(_) => "memory",
             SourceConfig::Disk(_) => "disk",
+            SourceConfig::Network(_) => "network",
             SourceConfig::Clock(_) => "clock",
             SourceConfig::Combo(_) => "combination",
             SourceConfig::SystemTemp(_) => "system_temp",
@@ -105,6 +110,7 @@ impl SourceConfig {
             SourceConfig::Gpu(cfg) => cfg.update_interval_ms,
             SourceConfig::Memory(cfg) => cfg.update_interval_ms,
             SourceConfig::Disk(cfg) => cfg.update_interval_ms,
+            SourceConfig::Network(cfg) => cfg.update_interval_ms,
             SourceConfig::Clock(cfg) => cfg.update_interval_ms,
             SourceConfig::Combo(cfg) => cfg.update_interval_ms,
             SourceConfig::SystemTemp(cfg) => cfg.update_interval_ms,
@@ -136,6 +142,11 @@ impl SourceConfig {
             SourceConfig::Disk(cfg) => {
                 if let Ok(val) = serde_json::to_value(cfg) {
                     map.insert("disk_config".to_string(), val);
+                }
+            }
+            SourceConfig::Network(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("network_config".to_string(), val);
                 }
             }
             SourceConfig::Clock(cfg) => {
@@ -179,6 +190,7 @@ impl SourceConfig {
             "gpu" => Some(SourceConfig::Gpu(GpuSourceConfig::default())),
             "memory" => Some(SourceConfig::Memory(MemorySourceConfig::default())),
             "disk" => Some(SourceConfig::Disk(DiskSourceConfig::default())),
+            "network" => Some(SourceConfig::Network(NetworkSourceConfig::default())),
             "clock" => Some(SourceConfig::Clock(ClockSourceConfig::default())),
             "combination" => Some(SourceConfig::Combo(ComboSourceConfig::default())),
             "system_temp" => Some(SourceConfig::SystemTemp(SystemTempConfig::default())),

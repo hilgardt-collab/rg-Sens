@@ -14,7 +14,7 @@ mod shared_sensors;
 mod static_text;
 mod system_temp;
 mod test;
-// mod network;
+mod network;
 
 pub use crate::audio::AlarmSoundConfig;
 pub use crate::core::{TimerDisplayConfig, TimerMode, TimerState};
@@ -31,7 +31,7 @@ pub use system_temp::{
     TemperatureUnit as SystemTempUnit,
 };
 pub use test::{TestMode, TestSource, TestSourceConfig, TEST_SOURCE_STATE};
-// pub use network::NetworkSource;
+pub use network::NetworkSource;
 
 /// Initialize shared sensor caches (call once at startup)
 pub fn initialize_sensors() {
@@ -90,6 +90,11 @@ pub fn register_all() {
     // Register Disk source
     global_registry().register_source_with_info("disk", "Disk", general_displayers, || {
         Box::new(DiskSource::new())
+    });
+
+    // Register Network source
+    global_registry().register_source_with_info("network", "Network", general_displayers, || {
+        Box::new(NetworkSource::new())
     });
 
     // Register Clock source - only compatible with clock displayers

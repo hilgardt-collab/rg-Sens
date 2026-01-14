@@ -373,6 +373,27 @@ pub(crate) fn show_panel_properties_dialog(
         *disk_config_widget.borrow_mut() = Some(widget);
     }
 
+    // Network source configuration widget (lazy)
+    let network_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    network_placeholder.set_visible(old_source_id == "network");
+    source_tab_box.append(&network_placeholder);
+    let network_config_widget: Rc<RefCell<Option<crate::ui::NetworkSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
+    if old_source_id == "network" {
+        let widget = crate::ui::NetworkSourceConfigWidget::new();
+        let interfaces = crate::sources::NetworkSource::get_available_interfaces();
+        widget.set_available_interfaces(&interfaces);
+        if let Some(network_config_value) = panel_guard.config.get("network_config") {
+            if let Ok(network_config) =
+                serde_json::from_value::<crate::ui::NetworkSourceConfig>(network_config_value.clone())
+            {
+                widget.set_config(network_config);
+            }
+        }
+        network_placeholder.append(widget.widget());
+        *network_config_widget.borrow_mut() = Some(widget);
+    }
+
     // Clock source configuration widget (lazy)
     let clock_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     clock_placeholder.set_visible(old_source_id == "clock");
@@ -479,6 +500,8 @@ pub(crate) fn show_panel_properties_dialog(
         let fan_speed_placeholder_clone = fan_speed_placeholder.clone();
         let disk_widget_clone = disk_config_widget.clone();
         let disk_placeholder_clone = disk_placeholder.clone();
+        let network_widget_clone = network_config_widget.clone();
+        let network_placeholder_clone = network_placeholder.clone();
         let clock_widget_clone = clock_config_widget.clone();
         let clock_placeholder_clone = clock_placeholder.clone();
         let combo_widget_clone = combo_config_widget.clone();
@@ -500,6 +523,7 @@ pub(crate) fn show_panel_properties_dialog(
                 system_temp_placeholder_clone.set_visible(source_id == "system_temp");
                 fan_speed_placeholder_clone.set_visible(source_id == "fan_speed");
                 disk_placeholder_clone.set_visible(source_id == "disk");
+                network_placeholder_clone.set_visible(source_id == "network");
                 clock_placeholder_clone.set_visible(source_id == "clock");
                 combo_placeholder_clone.set_visible(source_id == "combination");
                 test_placeholder_clone.set_visible(source_id == "test");
@@ -627,6 +651,26 @@ pub(crate) fn show_panel_properties_dialog(
                             {
                                 if let Some(ref widget) = *disk_widget_clone.borrow() {
                                     widget.set_config(disk_config);
+                                }
+                            }
+                        }
+                    }
+                    "network" => {
+                        if network_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::NetworkSourceConfigWidget::new();
+                            let interfaces = crate::sources::NetworkSource::get_available_interfaces();
+                            widget.set_available_interfaces(&interfaces);
+                            network_placeholder_clone.append(widget.widget());
+                            *network_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(network_config_value) = panel_guard.config.get("network_config") {
+                            if let Ok(network_config) =
+                                serde_json::from_value::<crate::ui::NetworkSourceConfig>(
+                                    network_config_value.clone(),
+                                )
+                            {
+                                if let Some(ref widget) = *network_widget_clone.borrow() {
+                                    widget.set_config(network_config);
                                 }
                             }
                         }
@@ -2964,6 +3008,7 @@ pub(crate) fn show_panel_properties_dialog(
         displayer_config.remove("gpu_config");
         displayer_config.remove("memory_config");
         displayer_config.remove("disk_config");
+        displayer_config.remove("network_config");
         displayer_config.remove("clock_config");
         displayer_config.remove("combo_config");
         displayer_config.remove("system_temp_config");
@@ -3110,6 +3155,7 @@ pub(crate) fn show_panel_properties_dialog(
     let system_temp_config_widget_clone = system_temp_config_widget.clone();
     let fan_speed_config_widget_clone = fan_speed_config_widget.clone();
     let disk_config_widget_clone = disk_config_widget.clone();
+    let network_config_widget_clone = network_config_widget.clone();
     let clock_config_widget_clone = clock_config_widget.clone();
     let combo_config_widget_clone = combo_config_widget.clone();
     let test_config_widget_clone = test_config_widget.clone();
@@ -3399,6 +3445,10 @@ pub(crate) fn show_panel_properties_dialog(
                                     .borrow()
                                     .as_ref()
                                     .map(|w| crate::core::SourceConfig::Disk(w.get_config())),
+                                "network" => network_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Network(w.get_config())),
                                 "clock" => clock_config_widget_clone
                                     .borrow()
                                     .as_ref()
@@ -3631,6 +3681,7 @@ pub(crate) fn show_panel_properties_dialog(
                             displayer_config.remove("gpu_config");
                             displayer_config.remove("memory_config");
                             displayer_config.remove("disk_config");
+                            displayer_config.remove("network_config");
                             displayer_config.remove("clock_config");
                             displayer_config.remove("combo_config");
                             displayer_config.remove("system_temp_config");
@@ -4423,6 +4474,31 @@ pub(crate) fn show_panel_properties_dialog(
                         // Apply the configuration to the source
                         if let Err(e) = panel_guard.apply_config(config_clone) {
                             log::warn!("Failed to apply disk config to source: {}", e);
+                        }
+
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // Apply Network source configuration if network source is active
+            if new_source_id == "network" {
+                if let Some(ref widget) = *network_config_widget_clone.borrow() {
+                    let network_config = widget.get_config();
+                    if let Ok(network_config_json) = serde_json::to_value(&network_config) {
+                        panel_guard
+                            .config
+                            .insert("network_config".to_string(), network_config_json);
+
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply network config to source: {}", e);
                         }
 
                         // Update the source with new configuration

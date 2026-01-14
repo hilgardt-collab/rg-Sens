@@ -355,7 +355,7 @@ function updateGauge(percent) {
 | `gpu` | `value`, `caption`, `unit`, `max`, `percent` | GPU metrics |
 | `memory` | `value`, `caption`, `unit`, `max`, `percent` | RAM usage |
 | `disk` | `value`, `caption`, `unit`, `max`, `percent` | Disk usage |
-| `network` | `value`, `caption`, `unit` | Network stats |
+| `network` | `value`, `caption`, `unit`, `download_speed`, `upload_speed`, `total_download`, `total_upload` | Network interface stats |
 
 ## See Also
 
