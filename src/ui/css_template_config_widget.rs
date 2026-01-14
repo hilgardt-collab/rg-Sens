@@ -16,8 +16,8 @@ use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::ui::css_template_display::{
-    extract_placeholder_defaults, extract_placeholder_hints, CssTemplateDisplayConfig,
-    PlaceholderDefault, PlaceholderMapping,
+    detect_placeholders, extract_placeholder_defaults, extract_placeholder_hints,
+    CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping,
 };
 use crate::ui::widget_builder::{create_page_container, create_section_header};
 
@@ -33,6 +33,7 @@ pub struct CssTemplateConfigWidget {
     html_path_entry: Entry,
     css_path_entry: Entry,
     hot_reload_check: CheckButton,
+    scan_btn: Button,
     // Mappings widgets
     mappings_container: GtkBox,
     auto_config_btn: Button,
@@ -63,7 +64,7 @@ impl CssTemplateConfigWidget {
         notebook.set_vexpand(true);
 
         // Template Tab
-        let (template_page, html_path_entry, css_path_entry, hot_reload_check) =
+        let (template_page, html_path_entry, css_path_entry, hot_reload_check, scan_btn) =
             Self::create_template_tab(config.clone(), on_change.clone());
         notebook.append_page(&template_page, Some(&Label::new(Some("Template"))));
 
@@ -94,17 +95,20 @@ impl CssTemplateConfigWidget {
             html_path_entry,
             css_path_entry,
             hot_reload_check,
+            scan_btn,
             mappings_container,
             auto_config_btn,
             animation_check,
             animation_speed_spin,
         };
 
-        // Connect the auto-configure button handler
+        // Connect button handlers
         widget.connect_auto_config_handler();
+        widget.connect_scan_handler();
 
-        // Disable auto-configure by default until a template with defaults is loaded
+        // Disable buttons by default until a template is loaded
         widget.auto_config_btn.set_sensitive(false);
+        widget.scan_btn.set_sensitive(false);
 
         widget
     }
@@ -112,7 +116,7 @@ impl CssTemplateConfigWidget {
     fn create_template_tab(
         config: Rc<RefCell<CssTemplateDisplayConfig>>,
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    ) -> (GtkBox, Entry, Entry, CheckButton) {
+    ) -> (GtkBox, Entry, Entry, CheckButton, Button) {
         let page = create_page_container();
 
         // HTML Template section
@@ -294,10 +298,29 @@ impl CssTemplateConfigWidget {
             }
         });
 
+        // Scan Placeholders section
+        let scan_section = create_section_header("Placeholder Scanning");
+        page.append(&scan_section);
+
+        let scan_row = GtkBox::new(Orientation::Horizontal, 6);
+        let scan_btn = Button::with_label("Scan Placeholders");
+        scan_btn.set_tooltip_text(Some(
+            "Scan the HTML template for placeholders and create mappings.\n\
+             This will replace any existing mappings.",
+        ));
+        scan_btn.set_sensitive(false); // Enabled when HTML path is valid
+        scan_row.append(&scan_btn);
+
+        let scan_help = Label::new(Some("Reads template and creates mapping entries"));
+        scan_help.add_css_class("dim-label");
+        scan_row.append(&scan_help);
+        page.append(&scan_row);
+
         // Help text
         let help_label = Label::new(Some(
             "Use {{0}}, {{1}}, {{2}}, etc. as placeholders in your HTML template.\n\
-             Map these placeholders to data sources in the Mappings tab.",
+             Click \"Scan Placeholders\" to detect them, then use the Mappings tab\n\
+             to assign data sources. \"Auto-configure\" will try to match sources.",
         ));
         help_label.set_wrap(true);
         help_label.set_xalign(0.0);
@@ -305,7 +328,7 @@ impl CssTemplateConfigWidget {
         help_label.set_margin_top(12);
         page.append(&help_label);
 
-        (page, html_entry, css_entry, hot_reload_check)
+        (page, html_entry, css_entry, hot_reload_check, scan_btn)
     }
 
     fn create_mappings_tab(
@@ -927,16 +950,21 @@ impl CssTemplateConfigWidget {
                 let has_defaults = defaults.values().any(|d| !d.source.is_empty());
                 *self.placeholder_defaults.borrow_mut() = defaults;
 
+                // Enable scan button when HTML file is valid
+                self.scan_btn.set_sensitive(true);
+
                 // Enable/disable auto-configure button based on whether template has defaults
                 self.auto_config_btn.set_sensitive(has_defaults);
             } else {
                 *self.placeholder_hints.borrow_mut() = HashMap::new();
                 *self.placeholder_defaults.borrow_mut() = HashMap::new();
+                self.scan_btn.set_sensitive(false);
                 self.auto_config_btn.set_sensitive(false);
             }
         } else {
             *self.placeholder_hints.borrow_mut() = HashMap::new();
             *self.placeholder_defaults.borrow_mut() = HashMap::new();
+            self.scan_btn.set_sensitive(false);
             self.auto_config_btn.set_sensitive(false);
         }
     }
@@ -1179,6 +1207,188 @@ impl CssTemplateConfigWidget {
             if let Some(ref cb) = *self_on_change.borrow() {
                 cb();
             }
+        });
+    }
+
+    /// Connect the scan placeholders button handler
+    ///
+    /// This scans the HTML template for placeholders and creates mappings based on:
+    /// 1. The rg-placeholder-config JSON block (if present) for hints and groupings
+    /// 2. Direct detection of {{N}} patterns in the HTML
+    ///
+    /// Existing mappings are cleared and replaced with the scanned results.
+    pub fn connect_scan_handler(&self) {
+        let self_config = self.config.clone();
+        let self_on_change = self.on_change.clone();
+        let self_source_summaries = self.source_summaries.clone();
+        let self_placeholder_hints = self.placeholder_hints.clone();
+        let self_placeholder_defaults = self.placeholder_defaults.clone();
+        let self_mappings_container = self.mappings_container.clone();
+
+        self.scan_btn.connect_clicked(move |_| {
+            let config = self_config.borrow();
+            let html_path = &config.html_path;
+
+            // Read the HTML file
+            let html = match std::fs::read_to_string(html_path) {
+                Ok(content) => content,
+                Err(e) => {
+                    log::error!("Failed to read HTML template: {}", e);
+                    return;
+                }
+            };
+            drop(config);
+
+            // Detect all placeholders in the HTML
+            let placeholder_indices = detect_placeholders(&html);
+            if placeholder_indices.is_empty() {
+                log::warn!("No placeholders found in HTML template");
+                return;
+            }
+
+            // Extract defaults/hints from the config block
+            let defaults = extract_placeholder_defaults(&html);
+            let hints = extract_placeholder_hints(&html);
+
+            // Update the shared state
+            *self_placeholder_hints.borrow_mut() = hints.clone();
+            *self_placeholder_defaults.borrow_mut() = defaults.clone();
+
+            // Build new mappings based on detected placeholders
+            let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
+
+            // Process placeholders, detecting groups
+            let mut idx = 0;
+            while idx < placeholder_indices.len() {
+                let placeholder_idx = placeholder_indices[idx];
+
+                // Check if this could be the start of a group (4 consecutive with same source/instance)
+                let is_group = if idx + 3 < placeholder_indices.len() {
+                    // Check if we have defaults for all 4 and they're from the same source/instance
+                    let indices: Vec<u32> = (0..4)
+                        .map(|i| placeholder_indices[idx + i])
+                        .collect();
+
+                    // Check if all 4 have defaults with same source and instance
+                    let group_defaults: Vec<Option<&PlaceholderDefault>> = indices
+                        .iter()
+                        .map(|i| defaults.get(i))
+                        .collect();
+
+                    if group_defaults.iter().all(|d| d.is_some()) {
+                        let defs: Vec<&PlaceholderDefault> =
+                            group_defaults.into_iter().flatten().collect();
+
+                        // Check same source and instance
+                        let first_source = &defs[0].source;
+                        let first_instance = defs[0].instance;
+                        let same_source_instance = defs.iter().all(|d| {
+                            &d.source == first_source && d.instance == first_instance
+                        });
+
+                        // Check if fields are caption/value/unit/max
+                        let fields: Vec<&str> = defs.iter().map(|d| d.field.as_str()).collect();
+                        let standard_fields = fields == ["caption", "value", "unit", "max"];
+
+                        same_source_instance && standard_fields && !first_source.is_empty()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if is_group {
+                    // Create 4 mappings for the group
+                    let fields = ["caption", "value", "unit", "max"];
+                    for (i, field) in fields.iter().enumerate() {
+                        let pidx = placeholder_indices[idx + i];
+                        let default = defaults.get(&pidx);
+                        new_mappings.push(PlaceholderMapping {
+                            index: pidx,
+                            slot_prefix: String::new(), // Will be set by auto-configure
+                            field: field.to_string(),
+                            format: default.and_then(|d| d.format.clone()),
+                        });
+                    }
+                    idx += 4;
+                } else {
+                    // Create single mapping
+                    let default = defaults.get(&placeholder_idx);
+                    new_mappings.push(PlaceholderMapping {
+                        index: placeholder_idx,
+                        slot_prefix: String::new(),
+                        field: default
+                            .map(|d| d.field.clone())
+                            .unwrap_or_else(|| "value".to_string()),
+                        format: default.and_then(|d| d.format.clone()),
+                    });
+                    idx += 1;
+                }
+            }
+
+            // Apply new mappings
+            self_config.borrow_mut().mappings = new_mappings;
+
+            // Rebuild UI - clear existing rows
+            while let Some(child) = self_mappings_container.first_child() {
+                self_mappings_container.remove(&child);
+            }
+
+            // Add rows for each mapping, detecting groups
+            let config = self_config.borrow();
+            let mappings = &config.mappings;
+            let mut map_idx = 0;
+
+            while map_idx < mappings.len() {
+                // Check if this could be the start of a group
+                let is_group_ui = if map_idx + 3 < mappings.len() {
+                    let fields: Vec<&str> = mappings[map_idx..map_idx + 4]
+                        .iter()
+                        .map(|m| m.field.as_str())
+                        .collect();
+                    fields == ["caption", "value", "unit", "max"]
+                } else {
+                    false
+                };
+
+                if is_group_ui {
+                    let group_mappings: Vec<PlaceholderMapping> =
+                        mappings[map_idx..map_idx + 4].to_vec();
+                    CssTemplateConfigWidget::add_source_group_row(
+                        &self_mappings_container,
+                        map_idx,
+                        &group_mappings,
+                        self_config.clone(),
+                        self_on_change.clone(),
+                        self_source_summaries.clone(),
+                        self_placeholder_hints.clone(),
+                    );
+                    map_idx += 4;
+                } else {
+                    CssTemplateConfigWidget::add_mapping_row(
+                        &self_mappings_container,
+                        map_idx,
+                        &mappings[map_idx],
+                        self_config.clone(),
+                        self_on_change.clone(),
+                        self_source_summaries.clone(),
+                        self_placeholder_hints.clone(),
+                    );
+                    map_idx += 1;
+                }
+            }
+            drop(config);
+
+            // Trigger change callback
+            if let Some(ref cb) = *self_on_change.borrow() {
+                cb();
+            }
+
+            log::info!(
+                "Scanned template: found {} placeholders",
+                placeholder_indices.len()
+            );
         });
     }
 
