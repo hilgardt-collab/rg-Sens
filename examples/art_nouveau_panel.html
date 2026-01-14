@@ -24,45 +24,65 @@
           CPU Use:    {{29}} caption, {{30}} value, {{31}} unit, {{32}} max
           GPU Use:    {{33}} caption, {{34}} value, {{35}} unit, {{36}} max
     -->
-    <script type="application/json" id="rg-placeholder-hints">
+    <!--
+        Auto-configuration for CSS Template displayer.
+        When using the "Auto-configure" button, these defaults will be applied.
+
+        Each placeholder can specify:
+          - hint: Human-readable description shown in the config UI
+          - source: Source type ID (clock, cpu, gpu, memory, disk, network)
+          - instance: Instance index for multi-instance sources (0-based, or 1+ for specific)
+          - field: Field to use (value, caption, unit, max, percent, time, etc.)
+          - format: Optional format string (e.g., "{:.0}" for no decimals)
+    -->
+    <script type="application/json" id="rg-placeholder-config">
     {
-        "0": "Time - Use 'time' or 'caption' field from clock source (e.g., 14:30:25)",
-        "1": "CPU Temp 1 - Caption",
-        "2": "CPU Temp 1 - Value",
-        "3": "CPU Temp 1 - Unit",
-        "4": "CPU Temp 1 - Max",
-        "5": "CPU Temp 2 - Caption",
-        "6": "CPU Temp 2 - Value",
-        "7": "CPU Temp 2 - Unit",
-        "8": "CPU Temp 2 - Max",
-        "9": "CPU Temp 3 - Caption",
-        "10": "CPU Temp 3 - Value",
-        "11": "CPU Temp 3 - Unit",
-        "12": "CPU Temp 3 - Max",
-        "13": "GPU Temp - Caption",
-        "14": "GPU Temp - Value",
-        "15": "GPU Temp - Unit",
-        "16": "GPU Temp - Max",
-        "17": "Memory - Caption",
-        "18": "Memory - Value",
-        "19": "Memory - Unit",
-        "20": "Memory - Max",
-        "21": "Disk 1 - Caption",
-        "22": "Disk 1 - Value",
-        "23": "Disk 1 - Unit",
-        "24": "Disk 1 - Max",
-        "25": "Disk 2 - Caption",
-        "26": "Disk 2 - Value",
-        "27": "Disk 2 - Unit",
-        "28": "Disk 2 - Max",
-        "29": "CPU Use - Caption",
-        "30": "CPU Use - Value",
-        "31": "CPU Use - Unit",
-        "32": "CPU Use - Max",
-        "33": "GPU Use - Caption",
-        "34": "GPU Use - Value",
-        "35": "GPU Use - Unit",
-        "36": "GPU Use - Max"
+        "0": { "hint": "Time display (HH:MM:SS)", "source": "clock", "field": "time" },
+
+        "1": { "hint": "CPU Temp 1 - Caption", "source": "cpu", "instance": 1, "field": "caption" },
+        "2": { "hint": "CPU Temp 1 - Value", "source": "cpu", "instance": 1, "field": "value", "format": "{:.0}" },
+        "3": { "hint": "CPU Temp 1 - Unit", "source": "cpu", "instance": 1, "field": "unit" },
+        "4": { "hint": "CPU Temp 1 - Max", "source": "cpu", "instance": 1, "field": "max" },
+
+        "5": { "hint": "CPU Temp 2 - Caption", "source": "cpu", "instance": 2, "field": "caption" },
+        "6": { "hint": "CPU Temp 2 - Value", "source": "cpu", "instance": 2, "field": "value", "format": "{:.0}" },
+        "7": { "hint": "CPU Temp 2 - Unit", "source": "cpu", "instance": 2, "field": "unit" },
+        "8": { "hint": "CPU Temp 2 - Max", "source": "cpu", "instance": 2, "field": "max" },
+
+        "9": { "hint": "CPU Temp 3 - Caption", "source": "cpu", "instance": 3, "field": "caption" },
+        "10": { "hint": "CPU Temp 3 - Value", "source": "cpu", "instance": 3, "field": "value", "format": "{:.0}" },
+        "11": { "hint": "CPU Temp 3 - Unit", "source": "cpu", "instance": 3, "field": "unit" },
+        "12": { "hint": "CPU Temp 3 - Max", "source": "cpu", "instance": 3, "field": "max" },
+
+        "13": { "hint": "GPU Temp - Caption", "source": "gpu", "field": "caption" },
+        "14": { "hint": "GPU Temp - Value", "source": "gpu", "field": "value", "format": "{:.0}" },
+        "15": { "hint": "GPU Temp - Unit", "source": "gpu", "field": "unit" },
+        "16": { "hint": "GPU Temp - Max", "source": "gpu", "field": "max" },
+
+        "17": { "hint": "Memory - Caption", "source": "memory", "field": "caption" },
+        "18": { "hint": "Memory - Value", "source": "memory", "field": "value", "format": "{:.1}" },
+        "19": { "hint": "Memory - Unit", "source": "memory", "field": "unit" },
+        "20": { "hint": "Memory - Max", "source": "memory", "field": "max" },
+
+        "21": { "hint": "Disk 1 - Caption", "source": "disk", "instance": 1, "field": "caption" },
+        "22": { "hint": "Disk 1 - Value", "source": "disk", "instance": 1, "field": "value", "format": "{:.0}" },
+        "23": { "hint": "Disk 1 - Unit", "source": "disk", "instance": 1, "field": "unit" },
+        "24": { "hint": "Disk 1 - Max", "source": "disk", "instance": 1, "field": "max" },
+
+        "25": { "hint": "Disk 2 - Caption", "source": "disk", "instance": 2, "field": "caption" },
+        "26": { "hint": "Disk 2 - Value", "source": "disk", "instance": 2, "field": "value", "format": "{:.0}" },
+        "27": { "hint": "Disk 2 - Unit", "source": "disk", "instance": 2, "field": "unit" },
+        "28": { "hint": "Disk 2 - Max", "source": "disk", "instance": 2, "field": "max" },
+
+        "29": { "hint": "CPU Usage - Caption", "source": "cpu", "instance": 4, "field": "caption" },
+        "30": { "hint": "CPU Usage - Value", "source": "cpu", "instance": 4, "field": "value", "format": "{:.0}" },
+        "31": { "hint": "CPU Usage - Unit", "source": "cpu", "instance": 4, "field": "unit" },
+        "32": { "hint": "CPU Usage - Max", "source": "cpu", "instance": 4, "field": "max" },
+
+        "33": { "hint": "GPU Usage - Caption", "source": "gpu", "instance": 2, "field": "caption" },
+        "34": { "hint": "GPU Usage - Value", "source": "gpu", "instance": 2, "field": "value", "format": "{:.0}" },
+        "35": { "hint": "GPU Usage - Unit", "source": "gpu", "instance": 2, "field": "unit" },
+        "36": { "hint": "GPU Usage - Max", "source": "gpu", "instance": 2, "field": "max" }
     }
     </script>
     <link rel="stylesheet" href="art_nouveau_panel.css">

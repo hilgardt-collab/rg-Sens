@@ -35,6 +35,33 @@ impl Default for PlaceholderMapping {
     }
 }
 
+/// Default configuration for a placeholder (from template)
+///
+/// This defines what source type and field a placeholder expects,
+/// allowing auto-configuration when the template is loaded.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PlaceholderDefault {
+    /// Human-readable description/hint for this placeholder
+    #[serde(default)]
+    pub hint: String,
+    /// Source type ID (e.g., "cpu", "gpu", "memory", "clock", "disk")
+    #[serde(default)]
+    pub source: String,
+    /// Instance index for sources with multiple instances (e.g., CPU core 0, 1, 2)
+    #[serde(default)]
+    pub instance: u32,
+    /// Field to use from the source (e.g., "value", "caption", "unit", "time")
+    #[serde(default = "default_field")]
+    pub field: String,
+    /// Optional format string (e.g., "{:.1}%")
+    #[serde(default)]
+    pub format: Option<String>,
+}
+
+fn default_field() -> String {
+    "value".to_string()
+}
+
 /// Configuration for the CSS Template displayer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CssTemplateDisplayConfig {
@@ -139,7 +166,20 @@ pub fn extract_placeholder_hints(html: &str) -> std::collections::HashMap<u32, S
 
     let mut hints: HashMap<u32, String> = HashMap::new();
 
-    // Look for the JSON hints block
+    // First, try to extract from rg-placeholder-config (richer format)
+    let defaults = extract_placeholder_defaults(html);
+    for (idx, default) in &defaults {
+        if !default.hint.is_empty() {
+            hints.insert(*idx, default.hint.clone());
+        }
+    }
+
+    // If we found hints from config, return them
+    if !hints.is_empty() {
+        return hints;
+    }
+
+    // Fall back to legacy rg-placeholder-hints format
     let re = Regex::new(
         r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-hints["']\s*>([\s\S]*?)</script>"#
     ).expect("Invalid regex");
@@ -163,6 +203,74 @@ pub fn extract_placeholder_hints(html: &str) -> std::collections::HashMap<u32, S
     }
 
     hints
+}
+
+/// Extract placeholder default configurations from an HTML template
+///
+/// Looks for a JSON block in the format:
+/// ```html
+/// <script type="application/json" id="rg-placeholder-config">
+/// {
+///   "0": {
+///     "hint": "Current time display",
+///     "source": "clock",
+///     "field": "time"
+///   },
+///   "1": {
+///     "hint": "CPU Temperature",
+///     "source": "cpu",
+///     "instance": 0,
+///     "field": "value",
+///     "format": "{:.0}"
+///   }
+/// }
+/// </script>
+/// ```
+///
+/// Returns a HashMap of placeholder index to PlaceholderDefault.
+pub fn extract_placeholder_defaults(
+    html: &str,
+) -> std::collections::HashMap<u32, PlaceholderDefault> {
+    use std::collections::HashMap;
+
+    let mut defaults: HashMap<u32, PlaceholderDefault> = HashMap::new();
+
+    // Look for the JSON config block
+    let re = Regex::new(
+        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-config["']\s*>([\s\S]*?)</script>"#
+    ).expect("Invalid regex");
+
+    if let Some(caps) = re.captures(html) {
+        if let Some(json_match) = caps.get(1) {
+            let json_str = json_match.as_str().trim();
+            // Parse the JSON
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+                if let Some(obj) = parsed.as_object() {
+                    for (key, value) in obj {
+                        if let Ok(idx) = key.parse::<u32>() {
+                            // Try to parse as PlaceholderDefault
+                            if let Ok(default) =
+                                serde_json::from_value::<PlaceholderDefault>(value.clone())
+                            {
+                                defaults.insert(idx, default);
+                            } else if let Some(hint) = value.as_str() {
+                                // Fall back to simple string (just a hint)
+                                defaults.insert(
+                                    idx,
+                                    PlaceholderDefault {
+                                        hint: hint.to_string(),
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    defaults
 }
 
 /// Transform placeholders in HTML for JavaScript injection

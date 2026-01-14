@@ -16,7 +16,8 @@ use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::ui::css_template_display::{
-    extract_placeholder_hints, CssTemplateDisplayConfig, PlaceholderMapping,
+    extract_placeholder_defaults, extract_placeholder_hints, CssTemplateDisplayConfig,
+    PlaceholderDefault, PlaceholderMapping,
 };
 use crate::ui::widget_builder::{create_page_container, create_section_header};
 
@@ -27,12 +28,14 @@ pub struct CssTemplateConfigWidget {
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
+    placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
     // Template widgets
     html_path_entry: Entry,
     css_path_entry: Entry,
     hot_reload_check: CheckButton,
     // Mappings widgets
     mappings_container: GtkBox,
+    auto_config_btn: Button,
     // Display widgets
     animation_check: CheckButton,
     animation_speed_spin: SpinButton,
@@ -52,6 +55,8 @@ impl CssTemplateConfigWidget {
             Rc::new(RefCell::new(Vec::new()));
         let placeholder_hints: Rc<RefCell<HashMap<u32, String>>> =
             Rc::new(RefCell::new(HashMap::new()));
+        let placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>> =
+            Rc::new(RefCell::new(HashMap::new()));
 
         // Create notebook for tabs
         let notebook = Notebook::new();
@@ -63,11 +68,12 @@ impl CssTemplateConfigWidget {
         notebook.append_page(&template_page, Some(&Label::new(Some("Template"))));
 
         // Mappings Tab
-        let (mappings_page, mappings_container) = Self::create_mappings_tab(
+        let (mappings_page, mappings_container, auto_config_btn) = Self::create_mappings_tab(
             config.clone(),
             on_change.clone(),
             source_summaries.clone(),
             placeholder_hints.clone(),
+            placeholder_defaults.clone(),
         );
         notebook.append_page(&mappings_page, Some(&Label::new(Some("Mappings"))));
 
@@ -78,19 +84,29 @@ impl CssTemplateConfigWidget {
 
         container.append(&notebook);
 
-        Self {
+        let widget = Self {
             container,
             config,
             on_change,
             source_summaries,
             placeholder_hints,
+            placeholder_defaults,
             html_path_entry,
             css_path_entry,
             hot_reload_check,
             mappings_container,
+            auto_config_btn,
             animation_check,
             animation_speed_spin,
-        }
+        };
+
+        // Connect the auto-configure button handler
+        widget.connect_auto_config_handler();
+
+        // Disable auto-configure by default until a template with defaults is loaded
+        widget.auto_config_btn.set_sensitive(false);
+
+        widget
     }
 
     fn create_template_tab(
@@ -297,7 +313,8 @@ impl CssTemplateConfigWidget {
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
         source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
-    ) -> (GtkBox, GtkBox) {
+        _placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
+    ) -> (GtkBox, GtkBox, Button) {
         let page = create_page_container();
 
         // Header
@@ -306,7 +323,8 @@ impl CssTemplateConfigWidget {
 
         let help = Label::new(Some(
             "Map each placeholder ({{0}}, {{1}}, etc.) to a data source.\n\
-             Hints from the template are shown in italics.",
+             Hints from the template are shown in italics.\n\
+             Use \"Auto-configure\" to apply template defaults.",
         ));
         help.set_xalign(0.0);
         help.add_css_class("dim-label");
@@ -325,6 +343,17 @@ impl CssTemplateConfigWidget {
 
         scroll.set_child(Some(&mappings_container));
         page.append(&scroll);
+
+        // Button row
+        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
+
+        // Auto-configure button
+        let auto_config_btn = Button::with_label("Auto-configure");
+        auto_config_btn.set_tooltip_text(Some(
+            "Automatically configure mappings based on template defaults",
+        ));
+        // Note: The actual click handler is connected later via connect_auto_config
+        btn_row.append(&auto_config_btn);
 
         // Add mapping button
         let add_btn = Button::with_label("Add Mapping");
@@ -361,9 +390,11 @@ impl CssTemplateConfigWidget {
                 cb();
             }
         });
-        page.append(&add_btn);
+        btn_row.append(&add_btn);
 
-        (page, mappings_container)
+        page.append(&btn_row);
+
+        (page, mappings_container, auto_config_btn)
     }
 
     fn add_mapping_row(
@@ -632,18 +663,272 @@ impl CssTemplateConfigWidget {
         self.rebuild_mappings();
     }
 
-    /// Update placeholder hints from HTML file
+    /// Update placeholder hints and defaults from HTML file
     fn update_hints_from_html(&self, html_path: &std::path::Path) {
-        let hints = if !html_path.as_os_str().is_empty() && html_path.exists() {
+        if !html_path.as_os_str().is_empty() && html_path.exists() {
             if let Ok(html) = std::fs::read_to_string(html_path) {
-                extract_placeholder_hints(&html)
+                // Extract hints (which also tries config format first)
+                let hints = extract_placeholder_hints(&html);
+                *self.placeholder_hints.borrow_mut() = hints;
+
+                // Extract defaults for auto-configure
+                let defaults = extract_placeholder_defaults(&html);
+                let has_defaults = defaults.values().any(|d| !d.source.is_empty());
+                *self.placeholder_defaults.borrow_mut() = defaults;
+
+                // Enable/disable auto-configure button based on whether template has defaults
+                self.auto_config_btn.set_sensitive(has_defaults);
             } else {
-                HashMap::new()
+                *self.placeholder_hints.borrow_mut() = HashMap::new();
+                *self.placeholder_defaults.borrow_mut() = HashMap::new();
+                self.auto_config_btn.set_sensitive(false);
             }
         } else {
-            HashMap::new()
-        };
-        *self.placeholder_hints.borrow_mut() = hints;
+            *self.placeholder_hints.borrow_mut() = HashMap::new();
+            *self.placeholder_defaults.borrow_mut() = HashMap::new();
+            self.auto_config_btn.set_sensitive(false);
+        }
+    }
+
+    /// Apply auto-configuration based on template defaults and available sources
+    ///
+    /// This matches placeholder defaults to available source slots and creates mappings.
+    pub fn apply_auto_config(&self) {
+        let defaults = self.placeholder_defaults.borrow();
+        let summaries = self.source_summaries.borrow();
+
+        if defaults.is_empty() || summaries.is_empty() {
+            log::warn!("Cannot auto-configure: no defaults or no sources available");
+            return;
+        }
+
+        // Group source summaries by source type for easier lookup
+        // summaries format: (prefix, label, slot_index, group_index)
+        // We need to match source type from the label (e.g., "CPU Slot 1" -> "cpu")
+        let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
+
+        for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
+            // Extract source type from label (first word, lowercased)
+            let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
+            source_slots
+                .entry(source_type)
+                .or_default()
+                .push((prefix.clone(), *slot_idx));
+        }
+
+        // Track which slots we've used for each source type
+        let mut used_instances: HashMap<String, usize> = HashMap::new();
+
+        // Build new mappings
+        let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
+
+        // Sort defaults by index for predictable order
+        let mut sorted_defaults: Vec<_> = defaults.iter().collect();
+        sorted_defaults.sort_by_key(|(idx, _)| *idx);
+
+        for (idx, default) in sorted_defaults {
+            if default.source.is_empty() {
+                // No source specified, create empty mapping
+                new_mappings.push(PlaceholderMapping {
+                    index: *idx,
+                    slot_prefix: String::new(),
+                    field: default.field.clone(),
+                    format: default.format.clone(),
+                });
+                continue;
+            }
+
+            let source_type = default.source.to_lowercase();
+
+            // Find a slot for this source type
+            if let Some(slots) = source_slots.get(&source_type) {
+                // Get the instance we should use
+                let instance = default.instance as usize;
+                let used = used_instances.entry(source_type.clone()).or_insert(0);
+
+                // Try to find the slot matching the requested instance
+                // If instance is specified, use it; otherwise use the next available
+                let slot_to_use = if instance > 0 {
+                    // Specific instance requested
+                    slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
+                } else {
+                    // Use next available slot
+                    let target = *used;
+                    slots.get(target)
+                };
+
+                if let Some((prefix, _)) = slot_to_use {
+                    new_mappings.push(PlaceholderMapping {
+                        index: *idx,
+                        slot_prefix: prefix.clone(),
+                        field: default.field.clone(),
+                        format: default.format.clone(),
+                    });
+
+                    // Only increment used count if we didn't specify a specific instance
+                    if instance == 0 {
+                        *used += 1;
+                    }
+                } else {
+                    // No matching slot found, create empty mapping
+                    log::warn!(
+                        "Auto-config: No slot found for source '{}' instance {}",
+                        source_type,
+                        instance
+                    );
+                    new_mappings.push(PlaceholderMapping {
+                        index: *idx,
+                        slot_prefix: String::new(),
+                        field: default.field.clone(),
+                        format: default.format.clone(),
+                    });
+                }
+            } else {
+                // Source type not available
+                log::warn!("Auto-config: Source type '{}' not available", source_type);
+                new_mappings.push(PlaceholderMapping {
+                    index: *idx,
+                    slot_prefix: String::new(),
+                    field: default.field.clone(),
+                    format: default.format.clone(),
+                });
+            }
+        }
+
+        drop(defaults);
+        drop(summaries);
+
+        // Apply new mappings
+        self.config.borrow_mut().mappings = new_mappings;
+
+        // Rebuild UI
+        self.rebuild_mappings();
+
+        // Trigger change callback
+        if let Some(ref cb) = *self.on_change.borrow() {
+            cb();
+        }
+    }
+
+    /// Connect the auto-configure button handler
+    /// This must be called after the widget is fully constructed
+    pub fn connect_auto_config_handler(&self) {
+        let self_config = self.config.clone();
+        let self_on_change = self.on_change.clone();
+        let self_source_summaries = self.source_summaries.clone();
+        let self_placeholder_defaults = self.placeholder_defaults.clone();
+        let self_placeholder_hints = self.placeholder_hints.clone();
+        let self_mappings_container = self.mappings_container.clone();
+
+        self.auto_config_btn.connect_clicked(move |_| {
+            let defaults = self_placeholder_defaults.borrow();
+            let summaries = self_source_summaries.borrow();
+
+            if defaults.is_empty() || summaries.is_empty() {
+                log::warn!("Cannot auto-configure: no defaults or no sources available");
+                return;
+            }
+
+            // Group source summaries by source type
+            let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
+            for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
+                let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
+                source_slots
+                    .entry(source_type)
+                    .or_default()
+                    .push((prefix.clone(), *slot_idx));
+            }
+
+            let mut used_instances: HashMap<String, usize> = HashMap::new();
+            let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
+
+            let mut sorted_defaults: Vec<_> = defaults.iter().collect();
+            sorted_defaults.sort_by_key(|(idx, _)| *idx);
+
+            for (idx, default) in sorted_defaults {
+                if default.source.is_empty() {
+                    new_mappings.push(PlaceholderMapping {
+                        index: *idx,
+                        slot_prefix: String::new(),
+                        field: default.field.clone(),
+                        format: default.format.clone(),
+                    });
+                    continue;
+                }
+
+                let source_type = default.source.to_lowercase();
+
+                if let Some(slots) = source_slots.get(&source_type) {
+                    let instance = default.instance as usize;
+                    let used = used_instances.entry(source_type.clone()).or_insert(0);
+
+                    let slot_to_use = if instance > 0 {
+                        slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
+                    } else {
+                        let target = *used;
+                        slots.get(target)
+                    };
+
+                    if let Some((prefix, _)) = slot_to_use {
+                        new_mappings.push(PlaceholderMapping {
+                            index: *idx,
+                            slot_prefix: prefix.clone(),
+                            field: default.field.clone(),
+                            format: default.format.clone(),
+                        });
+                        if instance == 0 {
+                            *used += 1;
+                        }
+                    } else {
+                        new_mappings.push(PlaceholderMapping {
+                            index: *idx,
+                            slot_prefix: String::new(),
+                            field: default.field.clone(),
+                            format: default.format.clone(),
+                        });
+                    }
+                } else {
+                    new_mappings.push(PlaceholderMapping {
+                        index: *idx,
+                        slot_prefix: String::new(),
+                        field: default.field.clone(),
+                        format: default.format.clone(),
+                    });
+                }
+            }
+
+            drop(defaults);
+            drop(summaries);
+
+            // Apply new mappings
+            self_config.borrow_mut().mappings = new_mappings;
+
+            // Rebuild UI
+            // Clear existing rows
+            while let Some(child) = self_mappings_container.first_child() {
+                self_mappings_container.remove(&child);
+            }
+
+            // Add rows for each mapping
+            let config = self_config.borrow();
+            for (idx, mapping) in config.mappings.iter().enumerate() {
+                CssTemplateConfigWidget::add_mapping_row(
+                    &self_mappings_container,
+                    idx,
+                    mapping,
+                    self_config.clone(),
+                    self_on_change.clone(),
+                    self_source_summaries.clone(),
+                    self_placeholder_hints.clone(),
+                );
+            }
+            drop(config);
+
+            // Trigger change callback
+            if let Some(ref cb) = *self_on_change.borrow() {
+                cb();
+            }
+        });
     }
 
     /// Set available sources
