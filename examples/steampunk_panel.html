@@ -144,6 +144,56 @@
                 <circle cx="5" cy="5" r="4" fill="url(#brassGradient)" stroke="#5c3317" stroke-width="0.5"/>
                 <circle cx="4" cy="4" r="1.5" fill="#e8c252" opacity="0.6"/>
             </symbol>
+
+            <!-- Victorian wrought iron divider -->
+            <symbol id="victorianDivider" viewBox="0 0 440 40">
+                <!-- Left scroll -->
+                <path d="M0,20 Q20,20 30,10 Q40,0 50,10 Q55,15 60,15 L80,15"
+                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
+                <path d="M0,20 Q20,20 30,30 Q40,40 50,30 Q55,25 60,25 L80,25"
+                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
+                <!-- Left fleur -->
+                <circle cx="85" cy="20" r="6" fill="url(#copperGradient)" stroke="#5c3317" stroke-width="1"/>
+                <path d="M85,12 L85,8 M85,28 L85,32 M77,20 L73,20 M93,20 L97,20"
+                      stroke="url(#brassGradient)" stroke-width="2" stroke-linecap="round"/>
+                <!-- Center bar -->
+                <rect x="100" y="17" width="100" height="6" fill="url(#copperGradient)" rx="2"/>
+                <!-- Center medallion -->
+                <circle cx="220" cy="20" r="12" fill="url(#brassGradient)" stroke="#5c3317" stroke-width="2"/>
+                <circle cx="220" cy="20" r="7" fill="none" stroke="#5c3317" stroke-width="1"/>
+                <circle cx="220" cy="20" r="3" fill="url(#copperGradient)"/>
+                <!-- Right bar -->
+                <rect x="240" y="17" width="100" height="6" fill="url(#copperGradient)" rx="2"/>
+                <!-- Right fleur -->
+                <circle cx="355" cy="20" r="6" fill="url(#copperGradient)" stroke="#5c3317" stroke-width="1"/>
+                <path d="M355,12 L355,8 M355,28 L355,32 M347,20 L343,20 M363,20 L367,20"
+                      stroke="url(#brassGradient)" stroke-width="2" stroke-linecap="round"/>
+                <!-- Right scroll -->
+                <path d="M440,20 Q420,20 410,10 Q400,0 390,10 Q385,15 380,15 L360,15"
+                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
+                <path d="M440,20 Q420,20 410,30 Q400,40 390,30 Q385,25 380,25 L360,25"
+                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
+            </symbol>
+
+            <!-- Simple Victorian bar -->
+            <symbol id="victorianBar" viewBox="0 0 440 24">
+                <!-- Left corner ornament -->
+                <circle cx="12" cy="12" r="8" fill="none" stroke="url(#brassGradient)" stroke-width="2"/>
+                <circle cx="12" cy="12" r="4" fill="url(#copperGradient)"/>
+                <!-- Left bar section -->
+                <rect x="24" y="9" width="80" height="6" fill="url(#copperGradient)" rx="2"/>
+                <!-- Left diamond -->
+                <rect x="108" y="6" width="12" height="12" fill="url(#brassGradient)" transform="rotate(45 114 12)"/>
+                <!-- Center bar -->
+                <rect x="130" y="9" width="180" height="6" fill="url(#copperGradient)" rx="2"/>
+                <!-- Right diamond -->
+                <rect x="320" y="6" width="12" height="12" fill="url(#brassGradient)" transform="rotate(45 326 12)"/>
+                <!-- Right bar section -->
+                <rect x="336" y="9" width="80" height="6" fill="url(#copperGradient)" rx="2"/>
+                <!-- Right corner ornament -->
+                <circle cx="428" cy="12" r="8" fill="none" stroke="url(#brassGradient)" stroke-width="2"/>
+                <circle cx="428" cy="12" r="4" fill="url(#copperGradient)"/>
+            </symbol>
         </defs>
     </svg>
 
@@ -183,13 +233,9 @@
             </div>
         </header>
 
-        <!-- Pipe connector -->
-        <div class="pipe-section">
-            <div class="pipe horizontal">
-                <div class="pipe-joint left"></div>
-                <div class="pipe-body"></div>
-                <div class="pipe-joint right"></div>
-            </div>
+        <!-- Victorian divider -->
+        <div class="divider-section">
+            <svg class="victorian-divider" preserveAspectRatio="xMidYMid meet"><use href="#victorianDivider"/></svg>
         </div>
 
         <!-- CPU Temperature Section -->
@@ -257,17 +303,9 @@
             </div>
         </section>
 
-        <!-- Vertical pipe with valve -->
-        <div class="pipe-section vertical">
-            <div class="pipe vertical">
-                <div class="pipe-joint top"></div>
-                <div class="pipe-body"></div>
-                <div class="valve">
-                    <div class="valve-wheel"></div>
-                </div>
-                <div class="pipe-body"></div>
-                <div class="pipe-joint bottom"></div>
-            </div>
+        <!-- Victorian bar divider -->
+        <div class="divider-section">
+            <svg class="victorian-bar" preserveAspectRatio="xMidYMid meet"><use href="#victorianBar"/></svg>
         </div>
 
         <!-- Memory Section -->
@@ -298,7 +336,6 @@
                         </div>
                         <div class="tank-reading">
                             <span class="tank-value">{{14}}</span>
-                            <span class="tank-unit">{{15}}</span>
                             <span class="tank-separator">/</span>
                             <span class="tank-max">{{16}}</span>
                             <span class="tank-unit">{{15}}</span>
@@ -314,19 +351,9 @@
             </div>
         </section>
 
-        <!-- Pipe connector with steam -->
-        <div class="pipe-section">
-            <div class="pipe horizontal">
-                <div class="pipe-joint left"></div>
-                <div class="pipe-body"></div>
-                <div class="steam-vent">
-                    <div class="steam steam-1"></div>
-                    <div class="steam steam-2"></div>
-                    <div class="steam steam-3"></div>
-                </div>
-                <div class="pipe-body"></div>
-                <div class="pipe-joint right"></div>
-            </div>
+        <!-- Victorian divider -->
+        <div class="divider-section">
+            <svg class="victorian-divider" preserveAspectRatio="xMidYMid meet"><use href="#victorianDivider"/></svg>
         </div>
 
         <!-- Utilization Section -->
@@ -395,17 +422,9 @@
             </div>
         </section>
 
-        <!-- Pipe with T-junction -->
-        <div class="pipe-section">
-            <div class="pipe horizontal">
-                <div class="pipe-joint left"></div>
-                <div class="pipe-body"></div>
-                <div class="t-junction">
-                    <div class="junction-ring"></div>
-                </div>
-                <div class="pipe-body"></div>
-                <div class="pipe-joint right"></div>
-            </div>
+        <!-- Victorian bar divider -->
+        <div class="divider-section">
+            <svg class="victorian-bar" preserveAspectRatio="xMidYMid meet"><use href="#victorianBar"/></svg>
         </div>
 
         <!-- GPU Temperature Section -->
@@ -444,13 +463,9 @@
             </div>
         </section>
 
-        <!-- Pipe connector -->
-        <div class="pipe-section">
-            <div class="pipe horizontal">
-                <div class="pipe-joint left"></div>
-                <div class="pipe-body"></div>
-                <div class="pipe-joint right"></div>
-            </div>
+        <!-- Victorian divider -->
+        <div class="divider-section">
+            <svg class="victorian-divider" preserveAspectRatio="xMidYMid meet"><use href="#victorianDivider"/></svg>
         </div>
 
         <!-- Cooling Section - Fans -->
@@ -508,13 +523,9 @@
             </div>
         </section>
 
-        <!-- Pipe connector -->
-        <div class="pipe-section">
-            <div class="pipe horizontal">
-                <div class="pipe-joint left"></div>
-                <div class="pipe-body"></div>
-                <div class="pipe-joint right"></div>
-            </div>
+        <!-- Victorian bar divider -->
+        <div class="divider-section">
+            <svg class="victorian-bar" preserveAspectRatio="xMidYMid meet"><use href="#victorianBar"/></svg>
         </div>
 
         <!-- System Temperatures Section -->

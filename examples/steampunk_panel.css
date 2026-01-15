@@ -161,6 +161,7 @@ body {
     position: relative;
     width: 80px;
     height: 80px;
+    flex-shrink: 0;
 }
 
 .gear-assembly.right {
@@ -169,11 +170,11 @@ body {
 
 .gear {
     position: absolute;
+    aspect-ratio: 1 / 1;
 }
 
 .gear-large {
     width: 60px;
-    height: 60px;
     top: 10px;
     left: 0;
     animation: rotate 8s linear infinite;
@@ -181,7 +182,6 @@ body {
 
 .gear-medium {
     width: 35px;
-    height: 35px;
     top: 0;
     right: 5px;
     animation: rotate-reverse 5s linear infinite;
@@ -189,7 +189,6 @@ body {
 
 .gear-small {
     width: 25px;
-    height: 25px;
     bottom: 5px;
     right: 15px;
     animation: rotate 3s linear infinite;
@@ -256,177 +255,24 @@ body {
 }
 
 /* ============================================
-   Pipe Sections
+   Victorian Dividers
    ============================================ */
-.pipe-section {
+.divider-section {
     display: flex;
     justify-content: center;
-    padding: 5px 20px;
+    padding: 8px 10px;
 }
 
-.pipe-section.vertical {
-    flex-direction: column;
-    align-items: center;
-    padding: 0;
-}
-
-.pipe {
-    display: flex;
-    align-items: center;
-}
-
-.pipe.horizontal {
+.victorian-divider {
     width: 100%;
-    height: 20px;
-}
-
-.pipe.vertical {
-    flex-direction: column;
-    width: 24px;
-    height: 60px;
-}
-
-.pipe-body {
-    flex: 1;
-    background: linear-gradient(180deg,
-        var(--copper-dark) 0%,
-        var(--copper) 20%,
-        var(--copper-light) 50%,
-        var(--copper) 80%,
-        var(--copper-dark) 100%
-    );
-    height: 100%;
-}
-
-.pipe.vertical .pipe-body {
-    background: linear-gradient(90deg,
-        var(--copper-dark) 0%,
-        var(--copper) 20%,
-        var(--copper-light) 50%,
-        var(--copper) 80%,
-        var(--copper-dark) 100%
-    );
-    width: 100%;
-    height: auto;
-    flex: 1;
-}
-
-.pipe-joint {
-    width: 30px;
-    height: 28px;
-    background: linear-gradient(180deg,
-        var(--brass-dark) 0%,
-        var(--brass) 20%,
-        var(--brass-light) 50%,
-        var(--brass) 80%,
-        var(--brass-dark) 100%
-    );
-    border-radius: 4px;
-    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2);
-}
-
-.pipe.vertical .pipe-joint {
-    width: 32px;
-    height: 20px;
-    background: linear-gradient(90deg,
-        var(--brass-dark) 0%,
-        var(--brass) 20%,
-        var(--brass-light) 50%,
-        var(--brass) 80%,
-        var(--brass-dark) 100%
-    );
-}
-
-.valve {
-    width: 40px;
-    height: 30px;
-    background: var(--brass);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-}
-
-.valve-wheel {
-    width: 20px;
-    height: 20px;
-    border: 3px solid var(--copper);
-    border-radius: 50%;
-    position: relative;
-}
-
-.valve-wheel::before,
-.valve-wheel::after {
-    content: '';
-    position: absolute;
-    background: var(--copper);
-}
-
-.valve-wheel::before {
-    width: 100%;
-    height: 3px;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.valve-wheel::after {
-    width: 3px;
-    height: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.t-junction {
-    width: 40px;
     height: 40px;
-    background: var(--brass);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
 
-.junction-ring {
-    width: 24px;
+.victorian-bar {
+    width: 100%;
     height: 24px;
-    border: 4px solid var(--copper-dark);
-    border-radius: 50%;
-}
-
-/* Steam vent */
-.steam-vent {
-    width: 30px;
-    height: 40px;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.steam {
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background: rgba(255,255,255,0.6);
-    border-radius: 50%;
-    filter: blur(3px);
-    animation: steam-rise 2s ease-out infinite;
-}
-
-.steam-1 { animation-delay: 0s; left: 5px; }
-.steam-2 { animation-delay: 0.6s; left: 12px; }
-.steam-3 { animation-delay: 1.2s; left: 19px; }
-
-@keyframes steam-rise {
-    0% {
-        opacity: 0.8;
-        transform: translateY(0) scale(1);
-    }
-    100% {
-        opacity: 0;
-        transform: translateY(-30px) scale(2);
-    }
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
 
 /* ============================================
@@ -1069,13 +915,13 @@ body {
 .gear-footer-1,
 .gear-footer-3 {
     width: 30px;
-    height: 30px;
+    aspect-ratio: 1 / 1;
     animation: rotate-reverse 4s linear infinite;
 }
 
 .gear-footer-2 {
     width: 50px;
-    height: 50px;
+    aspect-ratio: 1 / 1;
     animation: rotate 6s linear infinite;
 }
 
