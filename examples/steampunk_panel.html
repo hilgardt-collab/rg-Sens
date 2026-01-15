@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=480, height=1920">
+    <title>Steampunk System Monitor</title>
+    <link rel="stylesheet" href="steampunk_panel.css">
+</head>
+<body>
+    <!-- Auto-configuration for rg-Sens placeholder mapping -->
+    <script type="application/json" id="rg-placeholder-config">
+    {
+        "0": { "hint": "Time display (HH:MM:SS)", "source": "clock", "instance": 0, "field": "time" },
+
+        "1": { "hint": "CPU Temp 1 - Caption", "source": "cpu", "instance": 1, "field": "caption" },
+        "2": { "hint": "CPU Temp 1 - Value", "source": "cpu", "instance": 1, "field": "value", "format": "0" },
+        "3": { "hint": "CPU Temp 1 - Unit", "source": "cpu", "instance": 1, "field": "unit" },
+        "4": { "hint": "CPU Temp 1 - Max", "source": "cpu", "instance": 1, "field": "max" },
+
+        "5": { "hint": "CPU Temp 2 - Caption", "source": "cpu", "instance": 2, "field": "caption" },
+        "6": { "hint": "CPU Temp 2 - Value", "source": "cpu", "instance": 2, "field": "value", "format": "0" },
+        "7": { "hint": "CPU Temp 2 - Unit", "source": "cpu", "instance": 2, "field": "unit" },
+        "8": { "hint": "CPU Temp 2 - Max", "source": "cpu", "instance": 2, "field": "max" },
+
+        "9": { "hint": "CPU Temp 3 - Caption", "source": "cpu", "instance": 3, "field": "caption" },
+        "10": { "hint": "CPU Temp 3 - Value", "source": "cpu", "instance": 3, "field": "value", "format": "0" },
+        "11": { "hint": "CPU Temp 3 - Unit", "source": "cpu", "instance": 3, "field": "unit" },
+        "12": { "hint": "CPU Temp 3 - Max", "source": "cpu", "instance": 3, "field": "max" },
+
+        "13": { "hint": "Memory - Caption", "source": "memory", "instance": 0, "field": "caption" },
+        "14": { "hint": "Memory - Value", "source": "memory", "instance": 0, "field": "value", "format": "1" },
+        "15": { "hint": "Memory - Unit", "source": "memory", "instance": 0, "field": "unit" },
+        "16": { "hint": "Memory - Max", "source": "memory", "instance": 0, "field": "max" },
+
+        "17": { "hint": "CPU Usage - Caption", "source": "cpu", "instance": 4, "field": "caption" },
+        "18": { "hint": "CPU Usage - Value", "source": "cpu", "instance": 4, "field": "value", "format": "0" },
+        "19": { "hint": "CPU Usage - Unit", "source": "cpu", "instance": 4, "field": "unit" },
+        "20": { "hint": "CPU Usage - Max", "source": "cpu", "instance": 4, "field": "max" },
+
+        "21": { "hint": "GPU Usage - Caption", "source": "gpu", "instance": 1, "field": "caption" },
+        "22": { "hint": "GPU Usage - Value", "source": "gpu", "instance": 1, "field": "value", "format": "0" },
+        "23": { "hint": "GPU Usage - Unit", "source": "gpu", "instance": 1, "field": "unit" },
+        "24": { "hint": "GPU Usage - Max", "source": "gpu", "instance": 1, "field": "max" },
+
+        "25": { "hint": "GPU Temp - Caption", "source": "gpu", "instance": 0, "field": "caption" },
+        "26": { "hint": "GPU Temp - Value", "source": "gpu", "instance": 0, "field": "value", "format": "0" },
+        "27": { "hint": "GPU Temp - Unit", "source": "gpu", "instance": 0, "field": "unit" },
+        "28": { "hint": "GPU Temp - Max", "source": "gpu", "instance": 0, "field": "max" },
+
+        "29": { "hint": "Fan 1 - Caption", "source": "cpu", "instance": 5, "field": "caption" },
+        "30": { "hint": "Fan 1 - Value", "source": "cpu", "instance": 5, "field": "value", "format": "0" },
+        "31": { "hint": "Fan 1 - Unit", "source": "cpu", "instance": 5, "field": "unit" },
+        "32": { "hint": "Fan 1 - Max", "source": "cpu", "instance": 5, "field": "max" },
+
+        "33": { "hint": "Fan 2 - Caption", "source": "cpu", "instance": 6, "field": "caption" },
+        "34": { "hint": "Fan 2 - Value", "source": "cpu", "instance": 6, "field": "value", "format": "0" },
+        "35": { "hint": "Fan 2 - Unit", "source": "cpu", "instance": 6, "field": "unit" },
+        "36": { "hint": "Fan 2 - Max", "source": "cpu", "instance": 6, "field": "max" },
+
+        "37": { "hint": "System Temp 1 - Caption", "source": "cpu", "instance": 7, "field": "caption" },
+        "38": { "hint": "System Temp 1 - Value", "source": "cpu", "instance": 7, "field": "value", "format": "0" },
+        "39": { "hint": "System Temp 1 - Unit", "source": "cpu", "instance": 7, "field": "unit" },
+        "40": { "hint": "System Temp 1 - Max", "source": "cpu", "instance": 7, "field": "max" },
+
+        "41": { "hint": "System Temp 2 - Caption", "source": "cpu", "instance": 8, "field": "caption" },
+        "42": { "hint": "System Temp 2 - Value", "source": "cpu", "instance": 8, "field": "value", "format": "0" },
+        "43": { "hint": "System Temp 2 - Unit", "source": "cpu", "instance": 8, "field": "unit" },
+        "44": { "hint": "System Temp 2 - Max", "source": "cpu", "instance": 8, "field": "max" },
+
+        "45": { "hint": "System Temp 3 - Caption", "source": "cpu", "instance": 9, "field": "caption" },
+        "46": { "hint": "System Temp 3 - Value", "source": "cpu", "instance": 9, "field": "value", "format": "0" },
+        "47": { "hint": "System Temp 3 - Unit", "source": "cpu", "instance": 9, "field": "unit" },
+        "48": { "hint": "System Temp 3 - Max", "source": "cpu", "instance": 9, "field": "max" }
+    }
+    </script>
+
+    <!-- SVG Definitions -->
+    <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <!-- Brass gradient -->
+            <linearGradient id="brassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#d4a017"/>
+                <stop offset="30%" style="stop-color:#c9a227"/>
+                <stop offset="50%" style="stop-color:#e8c252"/>
+                <stop offset="70%" style="stop-color:#c9a227"/>
+                <stop offset="100%" style="stop-color:#b8860b"/>
+            </linearGradient>
+
+            <!-- Copper gradient -->
+            <linearGradient id="copperGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#8b4513"/>
+                <stop offset="30%" style="stop-color:#cd7f32"/>
+                <stop offset="50%" style="stop-color:#e8a862"/>
+                <stop offset="70%" style="stop-color:#cd7f32"/>
+                <stop offset="100%" style="stop-color:#8b4513"/>
+            </linearGradient>
+
+            <!-- Temperature gradient (cool to hot) -->
+            <linearGradient id="tempGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#2e8b57"/>
+                <stop offset="50%" style="stop-color:#daa520"/>
+                <stop offset="100%" style="stop-color:#8b0000"/>
+            </linearGradient>
+
+            <!-- Pressure gradient -->
+            <linearGradient id="pressureGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#2e8b57"/>
+                <stop offset="60%" style="stop-color:#daa520"/>
+                <stop offset="100%" style="stop-color:#cd7f32"/>
+            </linearGradient>
+
+            <!-- Pipe gradient (horizontal) -->
+            <linearGradient id="pipeGradientH" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#8b4513"/>
+                <stop offset="20%" style="stop-color:#cd7f32"/>
+                <stop offset="50%" style="stop-color:#daa520"/>
+                <stop offset="80%" style="stop-color:#cd7f32"/>
+                <stop offset="100%" style="stop-color:#8b4513"/>
+            </linearGradient>
+
+            <!-- Pipe gradient (vertical) -->
+            <linearGradient id="pipeGradientV" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#8b4513"/>
+                <stop offset="20%" style="stop-color:#cd7f32"/>
+                <stop offset="50%" style="stop-color:#daa520"/>
+                <stop offset="80%" style="stop-color:#cd7f32"/>
+                <stop offset="100%" style="stop-color:#8b4513"/>
+            </linearGradient>
+
+            <!-- Gear symbol -->
+            <symbol id="gear" viewBox="0 0 100 100">
+                <path d="M50,10 L54,10 L56,20 L58,20 L62,12 L66,14 L64,24 L66,26 L76,22 L78,26 L70,32 L72,36 L82,36 L82,40 L72,44 L72,48 L82,52 L82,56 L72,56 L70,60 L78,66 L76,70 L66,66 L64,68 L66,78 L62,80 L58,72 L56,72 L54,82 L50,82 L48,72 L46,72 L42,80 L38,78 L40,68 L38,66 L28,70 L26,66 L34,60 L32,56 L22,56 L22,52 L32,48 L32,44 L22,40 L22,36 L32,36 L34,32 L26,26 L28,22 L38,26 L40,24 L38,14 L42,12 L46,20 L48,20 L50,10 Z M50,35 A15,15 0 1,0 50,65 A15,15 0 1,0 50,35 Z"
+                      fill="url(#brassGradient)" stroke="#8b4513" stroke-width="1"/>
+            </symbol>
+
+            <!-- Small gear -->
+            <symbol id="gearSmall" viewBox="0 0 50 50">
+                <path d="M25,5 L27,5 L28,10 L29,10 L31,6 L33,7 L32,12 L33,13 L38,11 L39,13 L35,16 L36,18 L41,18 L41,20 L36,22 L36,24 L41,26 L41,28 L36,28 L35,30 L39,33 L38,35 L33,33 L32,34 L33,39 L31,40 L29,36 L28,36 L27,41 L25,41 L24,36 L23,36 L21,40 L19,39 L20,34 L19,33 L14,35 L13,33 L17,30 L16,28 L11,28 L11,26 L16,24 L16,22 L11,20 L11,18 L16,18 L17,16 L13,13 L14,11 L19,13 L20,12 L19,7 L21,6 L23,10 L24,10 L25,5 Z M25,18 A7,7 0 1,0 25,32 A7,7 0 1,0 25,18 Z"
+                      fill="url(#copperGradient)" stroke="#5c3317" stroke-width="0.5"/>
+            </symbol>
+
+            <!-- Rivet -->
+            <symbol id="rivet" viewBox="0 0 10 10">
+                <circle cx="5" cy="5" r="4" fill="url(#brassGradient)" stroke="#5c3317" stroke-width="0.5"/>
+                <circle cx="4" cy="4" r="1.5" fill="#e8c252" opacity="0.6"/>
+            </symbol>
+        </defs>
+    </svg>
+
+    <div class="panel">
+        <!-- Decorative corner rivets -->
+        <div class="corner-rivets">
+            <svg class="rivet tl"><use href="#rivet"/></svg>
+            <svg class="rivet tr"><use href="#rivet"/></svg>
+            <svg class="rivet bl"><use href="#rivet"/></svg>
+            <svg class="rivet br"><use href="#rivet"/></svg>
+        </div>
+
+        <!-- Header with animated gears -->
+        <header class="header">
+            <div class="gear-assembly">
+                <svg class="gear gear-large gear-1"><use href="#gear"/></svg>
+                <svg class="gear gear-medium gear-2"><use href="#gearSmall"/></svg>
+                <svg class="gear gear-small gear-3"><use href="#gearSmall"/></svg>
+            </div>
+            <div class="clock-housing">
+                <div class="clock-frame">
+                    <div class="clock-inner">
+                        <span class="time-value">{{0}}</span>
+                    </div>
+                </div>
+                <div class="clock-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+            <div class="gear-assembly right">
+                <svg class="gear gear-large gear-1"><use href="#gear"/></svg>
+                <svg class="gear gear-medium gear-2"><use href="#gearSmall"/></svg>
+                <svg class="gear gear-small gear-3"><use href="#gearSmall"/></svg>
+            </div>
+        </header>
+
+        <!-- Pipe connector -->
+        <div class="pipe-section">
+            <div class="pipe horizontal">
+                <div class="pipe-joint left"></div>
+                <div class="pipe-body"></div>
+                <div class="pipe-joint right"></div>
+            </div>
+        </div>
+
+        <!-- CPU Temperature Section -->
+        <section class="section">
+            <div class="section-plate">
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+                <h2 class="section-title">PROCESSOR THERMAL</h2>
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+
+            <div class="gauge-row">
+                <!-- CPU Temp 1 - Pressure Gauge -->
+                <div class="pressure-gauge">
+                    <div class="gauge-housing">
+                        <svg viewBox="0 0 120 80" class="gauge-svg">
+                            <path d="M15,70 A50,50 0 0,1 105,70" class="gauge-track"/>
+                            <path d="M15,70 A50,50 0 0,1 105,70" class="gauge-fill" data-gauge="arc" data-value-id="2" data-max-id="4" data-length="157"/>
+                        </svg>
+                        <div class="gauge-center">
+                            <span class="gauge-value">{{2}}</span>
+                            <span class="gauge-unit">{{3}}</span>
+                        </div>
+                        <div class="gauge-label">{{1}}</div>
+                    </div>
+                    <span class="max-value">{{4}}</span>
+                </div>
+
+                <!-- CPU Temp 2 -->
+                <div class="pressure-gauge">
+                    <div class="gauge-housing">
+                        <svg viewBox="0 0 120 80" class="gauge-svg">
+                            <path d="M15,70 A50,50 0 0,1 105,70" class="gauge-track"/>
+                            <path d="M15,70 A50,50 0 0,1 105,70" class="gauge-fill" data-gauge="arc" data-value-id="6" data-max-id="8" data-length="157"/>
+                        </svg>
+                        <div class="gauge-center">
+                            <span class="gauge-value">{{6}}</span>
+                            <span class="gauge-unit">{{7}}</span>
+                        </div>
+                        <div class="gauge-label">{{5}}</div>
+                    </div>
+                    <span class="max-value">{{8}}</span>
+                </div>
+
+                <!-- CPU Temp 3 -->
+                <div class="pressure-gauge">
+                    <div class="gauge-housing">
+                        <svg viewBox="0 0 120 80" class="gauge-svg">
+                            <path d="M15,70 A50,50 0 0,1 105,70" class="gauge-track"/>
+                            <path d="M15,70 A50,50 0 0,1 105,70" class="gauge-fill" data-gauge="arc" data-value-id="10" data-max-id="12" data-length="157"/>
+                        </svg>
+                        <div class="gauge-center">
+                            <span class="gauge-value">{{10}}</span>
+                            <span class="gauge-unit">{{11}}</span>
+                        </div>
+                        <div class="gauge-label">{{9}}</div>
+                    </div>
+                    <span class="max-value">{{12}}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Vertical pipe with valve -->
+        <div class="pipe-section vertical">
+            <div class="pipe vertical">
+                <div class="pipe-joint top"></div>
+                <div class="pipe-body"></div>
+                <div class="valve">
+                    <div class="valve-wheel"></div>
+                </div>
+                <div class="pipe-body"></div>
+                <div class="pipe-joint bottom"></div>
+            </div>
+        </div>
+
+        <!-- Memory Section -->
+        <section class="section">
+            <div class="section-plate">
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+                <h2 class="section-title">MEMORY BANKS</h2>
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+
+            <div class="tank-gauge">
+                <div class="tank-housing">
+                    <div class="tank-frame">
+                        <div class="tank-label">{{13}}</div>
+                        <div class="tank-body">
+                            <div class="tank-glass">
+                                <div class="tank-fill" data-gauge="bar" data-value-id="14" data-max-id="16" data-direction="vertical"></div>
+                                <div class="tank-graduations">
+                                    <span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tank-reading">
+                            <span class="tank-value">{{14}}</span>
+                            <span class="tank-unit">{{15}}</span>
+                            <span class="tank-separator">/</span>
+                            <span class="tank-max">{{16}}</span>
+                            <span class="tank-unit">{{15}}</span>
+                        </div>
+                    </div>
+                    <div class="tank-rivets">
+                        <svg class="rivet"><use href="#rivet"/></svg>
+                        <svg class="rivet"><use href="#rivet"/></svg>
+                        <svg class="rivet"><use href="#rivet"/></svg>
+                        <svg class="rivet"><use href="#rivet"/></svg>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pipe connector with steam -->
+        <div class="pipe-section">
+            <div class="pipe horizontal">
+                <div class="pipe-joint left"></div>
+                <div class="pipe-body"></div>
+                <div class="steam-vent">
+                    <div class="steam steam-1"></div>
+                    <div class="steam steam-2"></div>
+                    <div class="steam steam-3"></div>
+                </div>
+                <div class="pipe-body"></div>
+                <div class="pipe-joint right"></div>
+            </div>
+        </div>
+
+        <!-- Utilization Section -->
+        <section class="section">
+            <div class="section-plate">
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+                <h2 class="section-title">POWER OUTPUT</h2>
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+
+            <div class="dial-row">
+                <!-- CPU Usage - Large dial -->
+                <div class="dial-gauge">
+                    <div class="dial-housing">
+                        <svg viewBox="0 0 100 100" class="dial-svg">
+                            <circle cx="50" cy="50" r="42" class="dial-track"/>
+                            <circle cx="50" cy="50" r="42" class="dial-fill" data-gauge="ring" data-value-id="18" data-max-id="20" data-circumference="264"/>
+                        </svg>
+                        <div class="dial-center">
+                            <span class="dial-value">{{18}}</span>
+                            <span class="dial-unit">{{19}}</span>
+                        </div>
+                        <div class="dial-label">{{17}}</div>
+                        <div class="dial-bolts">
+                            <span class="bolt"></span>
+                            <span class="bolt"></span>
+                            <span class="bolt"></span>
+                            <span class="bolt"></span>
+                        </div>
+                    </div>
+                    <span class="max-value">{{20}}</span>
+                </div>
+
+                <!-- Animated gear between dials -->
+                <div class="center-gear">
+                    <svg class="gear gear-connector"><use href="#gear"/></svg>
+                </div>
+
+                <!-- GPU Usage - Large dial -->
+                <div class="dial-gauge">
+                    <div class="dial-housing">
+                        <svg viewBox="0 0 100 100" class="dial-svg">
+                            <circle cx="50" cy="50" r="42" class="dial-track"/>
+                            <circle cx="50" cy="50" r="42" class="dial-fill gpu-fill" data-gauge="ring" data-value-id="22" data-max-id="24" data-circumference="264"/>
+                        </svg>
+                        <div class="dial-center">
+                            <span class="dial-value">{{22}}</span>
+                            <span class="dial-unit">{{23}}</span>
+                        </div>
+                        <div class="dial-label">{{21}}</div>
+                        <div class="dial-bolts">
+                            <span class="bolt"></span>
+                            <span class="bolt"></span>
+                            <span class="bolt"></span>
+                            <span class="bolt"></span>
+                        </div>
+                    </div>
+                    <span class="max-value">{{24}}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pipe with T-junction -->
+        <div class="pipe-section">
+            <div class="pipe horizontal">
+                <div class="pipe-joint left"></div>
+                <div class="pipe-body"></div>
+                <div class="t-junction">
+                    <div class="junction-ring"></div>
+                </div>
+                <div class="pipe-body"></div>
+                <div class="pipe-joint right"></div>
+            </div>
+        </div>
+
+        <!-- GPU Temperature Section -->
+        <section class="section compact">
+            <div class="section-plate">
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+                <h2 class="section-title">GRAPHICS ENGINE</h2>
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+
+            <div class="thermometer-gauge">
+                <div class="thermo-housing">
+                    <div class="thermo-label">{{25}}</div>
+                    <div class="thermo-bar">
+                        <div class="thermo-track">
+                            <div class="thermo-fill" data-gauge="bar" data-value-id="26" data-max-id="28"></div>
+                        </div>
+                        <div class="thermo-scale">
+                            <span>0</span>
+                            <span>50</span>
+                            <span>100</span>
+                        </div>
+                    </div>
+                    <div class="thermo-reading">
+                        <span class="thermo-value">{{26}}</span>
+                        <span class="thermo-unit">{{27}}</span>
+                    </div>
+                </div>
+                <span class="max-value">{{28}}</span>
+            </div>
+        </section>
+
+        <!-- Pipe connector -->
+        <div class="pipe-section">
+            <div class="pipe horizontal">
+                <div class="pipe-joint left"></div>
+                <div class="pipe-body"></div>
+                <div class="pipe-joint right"></div>
+            </div>
+        </div>
+
+        <!-- Cooling Section - Fans -->
+        <section class="section">
+            <div class="section-plate">
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+                <h2 class="section-title">COOLING SYSTEM</h2>
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+
+            <div class="fan-row">
+                <!-- Fan 1 -->
+                <div class="fan-gauge">
+                    <div class="fan-housing">
+                        <div class="fan-display">
+                            <svg class="fan-icon" viewBox="0 0 50 50">
+                                <circle cx="25" cy="25" r="20" fill="none" stroke="url(#brassGradient)" stroke-width="2"/>
+                                <path d="M25,5 Q35,20 25,25 Q15,20 25,5 M25,45 Q15,30 25,25 Q35,30 25,45 M5,25 Q20,15 25,25 Q20,35 5,25 M45,25 Q30,35 25,25 Q30,15 45,25" fill="url(#copperGradient)" class="fan-blade"/>
+                                <circle cx="25" cy="25" r="5" fill="url(#brassGradient)"/>
+                            </svg>
+                        </div>
+                        <div class="fan-info">
+                            <span class="fan-label">{{29}}</span>
+                            <span class="fan-value">{{30}}</span>
+                            <span class="fan-unit">{{31}}</span>
+                        </div>
+                    </div>
+                    <span class="max-value">{{32}}</span>
+                </div>
+
+                <!-- Fan 2 -->
+                <div class="fan-gauge">
+                    <div class="fan-housing">
+                        <div class="fan-display">
+                            <svg class="fan-icon" viewBox="0 0 50 50">
+                                <circle cx="25" cy="25" r="20" fill="none" stroke="url(#brassGradient)" stroke-width="2"/>
+                                <path d="M25,5 Q35,20 25,25 Q15,20 25,5 M25,45 Q15,30 25,25 Q35,30 25,45 M5,25 Q20,15 25,25 Q20,35 5,25 M45,25 Q30,35 25,25 Q30,15 45,25" fill="url(#copperGradient)" class="fan-blade"/>
+                                <circle cx="25" cy="25" r="5" fill="url(#brassGradient)"/>
+                            </svg>
+                        </div>
+                        <div class="fan-info">
+                            <span class="fan-label">{{33}}</span>
+                            <span class="fan-value">{{34}}</span>
+                            <span class="fan-unit">{{35}}</span>
+                        </div>
+                    </div>
+                    <span class="max-value">{{36}}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pipe connector -->
+        <div class="pipe-section">
+            <div class="pipe horizontal">
+                <div class="pipe-joint left"></div>
+                <div class="pipe-body"></div>
+                <div class="pipe-joint right"></div>
+            </div>
+        </div>
+
+        <!-- System Temperatures Section -->
+        <section class="section">
+            <div class="section-plate">
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+                <h2 class="section-title">THERMAL MONITORS</h2>
+                <div class="plate-rivets">
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                    <svg class="rivet"><use href="#rivet"/></svg>
+                </div>
+            </div>
+
+            <div class="temp-bars">
+                <!-- System Temp 1 -->
+                <div class="bar-gauge">
+                    <div class="bar-label">{{37}}</div>
+                    <div class="bar-housing">
+                        <div class="bar-track">
+                            <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="38" data-max-id="40"></div>
+                        </div>
+                        <div class="bar-end left"></div>
+                        <div class="bar-end right"></div>
+                    </div>
+                    <div class="bar-reading">
+                        <span class="bar-value">{{38}}</span>
+                        <span class="bar-unit">{{39}}</span>
+                    </div>
+                    <span class="max-value">{{40}}</span>
+                </div>
+
+                <!-- System Temp 2 -->
+                <div class="bar-gauge">
+                    <div class="bar-label">{{41}}</div>
+                    <div class="bar-housing">
+                        <div class="bar-track">
+                            <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="42" data-max-id="44"></div>
+                        </div>
+                        <div class="bar-end left"></div>
+                        <div class="bar-end right"></div>
+                    </div>
+                    <div class="bar-reading">
+                        <span class="bar-value">{{42}}</span>
+                        <span class="bar-unit">{{43}}</span>
+                    </div>
+                    <span class="max-value">{{44}}</span>
+                </div>
+
+                <!-- System Temp 3 -->
+                <div class="bar-gauge">
+                    <div class="bar-label">{{45}}</div>
+                    <div class="bar-housing">
+                        <div class="bar-track">
+                            <div class="bar-fill temp-fill" data-gauge="bar" data-value-id="46" data-max-id="48"></div>
+                        </div>
+                        <div class="bar-end left"></div>
+                        <div class="bar-end right"></div>
+                    </div>
+                    <div class="bar-reading">
+                        <span class="bar-value">{{46}}</span>
+                        <span class="bar-unit">{{47}}</span>
+                    </div>
+                    <span class="max-value">{{48}}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer with gears -->
+        <footer class="footer">
+            <div class="footer-gears">
+                <svg class="gear gear-footer-1"><use href="#gearSmall"/></svg>
+                <svg class="gear gear-footer-2"><use href="#gear"/></svg>
+                <svg class="gear gear-footer-3"><use href="#gearSmall"/></svg>
+            </div>
+            <div class="footer-plate">
+                <div class="plate-border"></div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- rg-sens-gauges.js handles all gauge animations via data attributes -->
+    <script src="rg-sens-gauges.js"></script>
+</body>
+</html>

@@ -1,0 +1,1147 @@
+/*
+ * Steampunk System Monitor Panel
+ * 480x1920px Vertical Panel
+ *
+ * Design inspired by Victorian-era industrial machinery:
+ * - Brass and copper metallic finishes
+ * - Exposed gears and clockwork mechanisms
+ * - Pressure gauges and analog dials
+ * - Steam pipes with riveted joints
+ * - Leather and aged metal textures
+ *
+ * Color Palette:
+ * - Brass:       #d4a017, #c9a227, #b8860b
+ * - Copper:      #cd7f32, #b87333, #8b4513
+ * - Dark Brown:  #2c1810, #3d2817, #4a3728
+ * - Aged Bronze: #665d1e, #8b7355
+ * - Cream/Ivory: #f5deb3, #daa520
+ *
+ * Typography (Google Fonts):
+ * - Cinzel:          Victorian display for titles
+ * - Spectral:        Elegant serif for labels
+ * - Share Tech Mono: Industrial monospace for values
+ */
+
+/* ============================================
+   Google Fonts Import
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Share+Tech+Mono&family=Spectral:wght@400;500;600&display=swap');
+
+/* ============================================
+   Base Styles & Variables
+   ============================================ */
+:root {
+    --font-display: 'Cinzel', 'Times New Roman', serif;
+    --font-body: 'Spectral', 'Georgia', serif;
+    --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+
+    --brass-light: #e8c252;
+    --brass: #d4a017;
+    --brass-dark: #b8860b;
+
+    --copper-light: #e8a862;
+    --copper: #cd7f32;
+    --copper-dark: #8b4513;
+
+    --brown-deep: #2c1810;
+    --brown-dark: #3d2817;
+    --brown: #4a3728;
+    --brown-light: #5c4033;
+
+    --bronze: #665d1e;
+    --aged-metal: #8b7355;
+
+    --ivory: #f5deb3;
+    --cream: #daa520;
+
+    --danger: #8b0000;
+    --warning: #daa520;
+    --safe: #2e8b57;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    background: transparent;
+    width: 480px;
+    min-width: 480px;
+    max-width: 480px;
+    height: 1920px;
+    min-height: 1920px;
+    max-height: 1920px;
+    overflow: hidden;
+    color: var(--ivory);
+}
+
+.svg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.max-value {
+    display: none;
+}
+
+/* ============================================
+   Main Panel Container
+   ============================================ */
+.panel {
+    width: 480px;
+    min-width: 480px;
+    max-width: 480px;
+    height: 1920px;
+    min-height: 1920px;
+    max-height: 1920px;
+    background: linear-gradient(180deg,
+        var(--brown-deep) 0%,
+        var(--brown-dark) 10%,
+        var(--brown-dark) 90%,
+        var(--brown-deep) 100%
+    );
+    padding: 30px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Leather texture overlay */
+.panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at 20% 30%, rgba(139,115,85,0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 70%, rgba(139,115,85,0.1) 0%, transparent 50%),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+}
+
+/* ============================================
+   Corner Rivets
+   ============================================ */
+.corner-rivets {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.corner-rivets .rivet {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+}
+
+.corner-rivets .rivet.tl { top: 15px; left: 15px; }
+.corner-rivets .rivet.tr { top: 15px; right: 15px; }
+.corner-rivets .rivet.bl { bottom: 15px; left: 15px; }
+.corner-rivets .rivet.br { bottom: 15px; right: 15px; }
+
+/* ============================================
+   Header with Gears
+   ============================================ */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 20px 0;
+    position: relative;
+}
+
+.gear-assembly {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.gear-assembly.right {
+    transform: scaleX(-1);
+}
+
+.gear {
+    position: absolute;
+}
+
+.gear-large {
+    width: 60px;
+    height: 60px;
+    top: 10px;
+    left: 0;
+    animation: rotate 8s linear infinite;
+}
+
+.gear-medium {
+    width: 35px;
+    height: 35px;
+    top: 0;
+    right: 5px;
+    animation: rotate-reverse 5s linear infinite;
+}
+
+.gear-small {
+    width: 25px;
+    height: 25px;
+    bottom: 5px;
+    right: 15px;
+    animation: rotate 3s linear infinite;
+}
+
+.clock-housing {
+    position: relative;
+}
+
+.clock-frame {
+    width: 200px;
+    height: 80px;
+    background: linear-gradient(180deg,
+        var(--brown) 0%,
+        var(--brown-dark) 50%,
+        var(--brown) 100%
+    );
+    border: 4px solid var(--brass);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        inset 0 2px 10px rgba(0,0,0,0.5),
+        0 4px 15px rgba(0,0,0,0.3);
+}
+
+.clock-inner {
+    background: linear-gradient(180deg, #1a1008, #2c1810);
+    border: 2px solid var(--copper-dark);
+    border-radius: 6px;
+    padding: 10px 20px;
+}
+
+.time-value {
+    font-family: var(--font-mono);
+    font-size: 36px;
+    color: var(--brass-light);
+    text-shadow: 0 0 20px rgba(232,194,82,0.5);
+    letter-spacing: 4px;
+}
+
+.clock-rivets {
+    position: absolute;
+    inset: -8px;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 10px;
+}
+
+.clock-rivets .rivet {
+    width: 12px;
+    height: 12px;
+}
+
+.clock-rivets .rivet:nth-child(1),
+.clock-rivets .rivet:nth-child(2) {
+    align-self: flex-start;
+}
+
+.clock-rivets .rivet:nth-child(3),
+.clock-rivets .rivet:nth-child(4) {
+    align-self: flex-end;
+}
+
+/* ============================================
+   Pipe Sections
+   ============================================ */
+.pipe-section {
+    display: flex;
+    justify-content: center;
+    padding: 5px 20px;
+}
+
+.pipe-section.vertical {
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+}
+
+.pipe {
+    display: flex;
+    align-items: center;
+}
+
+.pipe.horizontal {
+    width: 100%;
+    height: 20px;
+}
+
+.pipe.vertical {
+    flex-direction: column;
+    width: 24px;
+    height: 60px;
+}
+
+.pipe-body {
+    flex: 1;
+    background: linear-gradient(180deg,
+        var(--copper-dark) 0%,
+        var(--copper) 20%,
+        var(--copper-light) 50%,
+        var(--copper) 80%,
+        var(--copper-dark) 100%
+    );
+    height: 100%;
+}
+
+.pipe.vertical .pipe-body {
+    background: linear-gradient(90deg,
+        var(--copper-dark) 0%,
+        var(--copper) 20%,
+        var(--copper-light) 50%,
+        var(--copper) 80%,
+        var(--copper-dark) 100%
+    );
+    width: 100%;
+    height: auto;
+    flex: 1;
+}
+
+.pipe-joint {
+    width: 30px;
+    height: 28px;
+    background: linear-gradient(180deg,
+        var(--brass-dark) 0%,
+        var(--brass) 20%,
+        var(--brass-light) 50%,
+        var(--brass) 80%,
+        var(--brass-dark) 100%
+    );
+    border-radius: 4px;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2);
+}
+
+.pipe.vertical .pipe-joint {
+    width: 32px;
+    height: 20px;
+    background: linear-gradient(90deg,
+        var(--brass-dark) 0%,
+        var(--brass) 20%,
+        var(--brass-light) 50%,
+        var(--brass) 80%,
+        var(--brass-dark) 100%
+    );
+}
+
+.valve {
+    width: 40px;
+    height: 30px;
+    background: var(--brass);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.valve-wheel {
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--copper);
+    border-radius: 50%;
+    position: relative;
+}
+
+.valve-wheel::before,
+.valve-wheel::after {
+    content: '';
+    position: absolute;
+    background: var(--copper);
+}
+
+.valve-wheel::before {
+    width: 100%;
+    height: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.valve-wheel::after {
+    width: 3px;
+    height: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.t-junction {
+    width: 40px;
+    height: 40px;
+    background: var(--brass);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.junction-ring {
+    width: 24px;
+    height: 24px;
+    border: 4px solid var(--copper-dark);
+    border-radius: 50%;
+}
+
+/* Steam vent */
+.steam-vent {
+    width: 30px;
+    height: 40px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.steam {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 50%;
+    filter: blur(3px);
+    animation: steam-rise 2s ease-out infinite;
+}
+
+.steam-1 { animation-delay: 0s; left: 5px; }
+.steam-2 { animation-delay: 0.6s; left: 12px; }
+.steam-3 { animation-delay: 1.2s; left: 19px; }
+
+@keyframes steam-rise {
+    0% {
+        opacity: 0.8;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-30px) scale(2);
+    }
+}
+
+/* ============================================
+   Section Styles
+   ============================================ */
+.section {
+    background: linear-gradient(180deg,
+        rgba(74,55,40,0.6) 0%,
+        rgba(60,40,28,0.8) 50%,
+        rgba(74,55,40,0.6) 100%
+    );
+    border: 2px solid var(--copper-dark);
+    border-radius: 8px;
+    padding: 15px;
+    position: relative;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 4px 10px rgba(0,0,0,0.3);
+}
+
+.section.compact {
+    padding: 12px 15px;
+}
+
+.section-plate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.plate-rivets {
+    display: flex;
+    gap: 8px;
+}
+
+.plate-rivets .rivet {
+    width: 10px;
+    height: 10px;
+}
+
+.section-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brass-light);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* ============================================
+   Pressure Gauge (Arc)
+   ============================================ */
+.gauge-row {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+}
+
+.pressure-gauge {
+    flex: 1;
+    max-width: 140px;
+}
+
+.gauge-housing {
+    background: radial-gradient(ellipse at center,
+        var(--brown-dark) 0%,
+        var(--brown-deep) 100%
+    );
+    border: 3px solid var(--brass);
+    border-radius: 50% 50% 10px 10px;
+    padding: 10px;
+    position: relative;
+    box-shadow:
+        inset 0 -5px 15px rgba(0,0,0,0.5),
+        0 4px 10px rgba(0,0,0,0.3);
+}
+
+.gauge-svg {
+    width: 100%;
+    height: 60px;
+}
+
+.gauge-track {
+    fill: none;
+    stroke: rgba(139,115,85,0.3);
+    stroke-width: 10;
+    stroke-linecap: round;
+}
+
+.gauge-fill {
+    fill: none;
+    stroke: url(#tempGradient);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.5s ease-out;
+}
+
+.gauge-center {
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.gauge-value {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    color: var(--brass-light);
+    display: block;
+}
+
+.gauge-unit {
+    font-family: var(--font-body);
+    font-size: 10px;
+    color: var(--copper-light);
+}
+
+.gauge-label {
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: 10px;
+    color: var(--ivory);
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* ============================================
+   Tank Gauge (Memory)
+   ============================================ */
+.tank-gauge {
+    display: flex;
+    justify-content: center;
+}
+
+.tank-housing {
+    position: relative;
+    width: 280px;
+}
+
+.tank-frame {
+    background: linear-gradient(180deg,
+        var(--brown) 0%,
+        var(--brown-dark) 100%
+    );
+    border: 3px solid var(--brass);
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow:
+        inset 0 2px 10px rgba(0,0,0,0.5),
+        0 4px 10px rgba(0,0,0,0.3);
+}
+
+.tank-label {
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: var(--brass-light);
+    text-align: center;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
+
+.tank-body {
+    display: flex;
+    justify-content: center;
+}
+
+.tank-glass {
+    width: 200px;
+    height: 80px;
+    background: linear-gradient(180deg,
+        rgba(0,20,10,0.9) 0%,
+        rgba(0,30,15,0.8) 100%
+    );
+    border: 2px solid var(--copper);
+    border-radius: 5px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+}
+
+.tank-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg,
+        var(--safe) 0%,
+        rgba(46,139,87,0.7) 100%
+    );
+    transition: height 0.5s ease-out;
+    box-shadow: 0 0 20px rgba(46,139,87,0.5);
+}
+
+.tank-graduations {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+
+.tank-graduations span {
+    width: 100%;
+    height: 1px;
+    background: rgba(255,255,255,0.2);
+}
+
+.tank-reading {
+    text-align: center;
+    margin-top: 10px;
+    font-family: var(--font-mono);
+}
+
+.tank-value {
+    font-size: 24px;
+    color: var(--brass-light);
+}
+
+.tank-unit,
+.tank-separator,
+.tank-max {
+    font-size: 14px;
+    color: var(--copper-light);
+}
+
+.tank-rivets {
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: -8px;
+    right: -8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.tank-rivets .rivet {
+    width: 12px;
+    height: 12px;
+}
+
+.tank-rivets .rivet:nth-child(1) { align-self: flex-start; }
+.tank-rivets .rivet:nth-child(2) { align-self: flex-end; }
+.tank-rivets .rivet:nth-child(3) { align-self: flex-start; }
+.tank-rivets .rivet:nth-child(4) { align-self: flex-end; }
+
+/* ============================================
+   Dial Gauge (Ring)
+   ============================================ */
+.dial-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+}
+
+.dial-gauge {
+    flex: 1;
+    max-width: 160px;
+}
+
+.dial-housing {
+    background: radial-gradient(ellipse at center,
+        var(--brown) 0%,
+        var(--brown-deep) 100%
+    );
+    border: 4px solid var(--brass);
+    border-radius: 50%;
+    padding: 15px;
+    position: relative;
+    box-shadow:
+        inset 0 0 20px rgba(0,0,0,0.5),
+        0 4px 15px rgba(0,0,0,0.4);
+}
+
+.dial-svg {
+    width: 100%;
+    height: auto;
+    transform: rotate(-90deg);
+}
+
+.dial-track {
+    fill: none;
+    stroke: rgba(139,115,85,0.3);
+    stroke-width: 8;
+}
+
+.dial-fill {
+    fill: none;
+    stroke: url(#pressureGradient);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.5s ease-out;
+}
+
+.dial-fill.gpu-fill {
+    stroke: url(#copperGradient);
+}
+
+.dial-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.dial-value {
+    font-family: var(--font-mono);
+    font-size: 28px;
+    color: var(--brass-light);
+    display: block;
+}
+
+.dial-unit {
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--copper-light);
+}
+
+.dial-label {
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--ivory);
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dial-bolts {
+    position: absolute;
+    inset: 5px;
+}
+
+.bolt {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: linear-gradient(135deg, var(--brass-light), var(--brass-dark));
+    border-radius: 50%;
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3);
+}
+
+.bolt:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
+.bolt:nth-child(2) { bottom: 0; left: 50%; transform: translateX(-50%); }
+.bolt:nth-child(3) { top: 50%; left: 0; transform: translateY(-50%); }
+.bolt:nth-child(4) { top: 50%; right: 0; transform: translateY(-50%); }
+
+.center-gear {
+    width: 50px;
+    height: 50px;
+}
+
+.gear-connector {
+    width: 100%;
+    height: 100%;
+    animation: rotate 6s linear infinite;
+}
+
+/* ============================================
+   Thermometer Bar Gauge
+   ============================================ */
+.thermometer-gauge {
+    display: flex;
+    justify-content: center;
+}
+
+.thermo-housing {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.thermo-label {
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--brass-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: 100px;
+    text-align: right;
+}
+
+.thermo-bar {
+    flex: 1;
+}
+
+.thermo-track {
+    height: 20px;
+    background: linear-gradient(180deg,
+        rgba(0,0,0,0.5) 0%,
+        rgba(30,20,10,0.8) 100%
+    );
+    border: 2px solid var(--copper);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.thermo-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: linear-gradient(90deg,
+        var(--safe) 0%,
+        var(--warning) 60%,
+        var(--danger) 100%
+    );
+    border-radius: 8px;
+    transition: width 0.5s ease-out;
+    box-shadow: 0 0 10px rgba(218,165,32,0.5);
+}
+
+.thermo-scale {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 5px 0;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--copper-light);
+}
+
+.thermo-reading {
+    width: 70px;
+    text-align: left;
+}
+
+.thermo-value {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    color: var(--brass-light);
+}
+
+.thermo-unit {
+    font-size: 12px;
+    color: var(--copper-light);
+}
+
+/* ============================================
+   Fan Gauges
+   ============================================ */
+.fan-row {
+    display: flex;
+    justify-content: space-around;
+    gap: 20px;
+}
+
+.fan-gauge {
+    flex: 1;
+    max-width: 180px;
+}
+
+.fan-housing {
+    background: linear-gradient(180deg,
+        var(--brown) 0%,
+        var(--brown-dark) 100%
+    );
+    border: 2px solid var(--brass);
+    border-radius: 10px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 4px 10px rgba(0,0,0,0.3);
+}
+
+.fan-display {
+    width: 60px;
+    height: 60px;
+    background: radial-gradient(ellipse at center,
+        var(--brown-deep) 0%,
+        rgba(0,0,0,0.8) 100%
+    );
+    border: 2px solid var(--copper);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fan-icon {
+    width: 50px;
+    height: 50px;
+}
+
+.fan-blade {
+    transform-origin: center;
+    animation: rotate 2s linear infinite;
+}
+
+.fan-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.fan-label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--ivory);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.fan-value {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    color: var(--brass-light);
+}
+
+.fan-unit {
+    font-family: var(--font-body);
+    font-size: 10px;
+    color: var(--copper-light);
+}
+
+/* ============================================
+   Bar Gauges (System Temps)
+   ============================================ */
+.temp-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bar-gauge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bar-label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--ivory);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: 100px;
+    text-align: right;
+}
+
+.bar-housing {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.bar-track {
+    flex: 1;
+    height: 16px;
+    background: linear-gradient(180deg,
+        rgba(0,0,0,0.5) 0%,
+        rgba(30,20,10,0.8) 100%
+    );
+    border: 2px solid var(--copper-dark);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0 -4px;
+}
+
+.bar-fill {
+    position: absolute;
+    left: 0;
+    top: 2px;
+    bottom: 2px;
+    background: linear-gradient(90deg,
+        var(--safe) 0%,
+        var(--warning) 60%,
+        var(--danger) 100%
+    );
+    transition: width 0.5s ease-out;
+}
+
+.bar-fill.temp-fill {
+    background: linear-gradient(90deg,
+        var(--safe) 0%,
+        var(--warning) 50%,
+        var(--danger) 100%
+    );
+}
+
+.bar-end {
+    width: 12px;
+    height: 24px;
+    background: linear-gradient(90deg,
+        var(--brass-dark) 0%,
+        var(--brass) 50%,
+        var(--brass-dark) 100%
+    );
+    border-radius: 2px;
+    z-index: 1;
+}
+
+.bar-reading {
+    width: 70px;
+    text-align: left;
+}
+
+.bar-value {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    color: var(--brass-light);
+}
+
+.bar-unit {
+    font-size: 11px;
+    color: var(--copper-light);
+}
+
+/* ============================================
+   Footer
+   ============================================ */
+.footer {
+    margin-top: auto;
+    padding: 15px 0 0;
+}
+
+.footer-gears {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.gear-footer-1,
+.gear-footer-3 {
+    width: 30px;
+    height: 30px;
+    animation: rotate-reverse 4s linear infinite;
+}
+
+.gear-footer-2 {
+    width: 50px;
+    height: 50px;
+    animation: rotate 6s linear infinite;
+}
+
+.footer-plate {
+    height: 4px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        var(--brass-dark) 20%,
+        var(--brass) 50%,
+        var(--brass-dark) 80%,
+        transparent 100%
+    );
+    border-radius: 2px;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes rotate-reverse {
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
+}
+
+@keyframes pulse-brass {
+    0%, 100% {
+        text-shadow: 0 0 15px rgba(232,194,82,0.4);
+    }
+    50% {
+        text-shadow: 0 0 25px rgba(232,194,82,0.7);
+    }
+}
+
+.time-value {
+    animation: pulse-brass 3s ease-in-out infinite;
+}
+
+/* ============================================
+   Hover Effects
+   ============================================ */
+.section:hover {
+    border-color: var(--copper);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.15),
+        0 4px 15px rgba(0,0,0,0.4);
+    transition: all 0.3s ease;
+}
+
+.pressure-gauge:hover .gauge-housing,
+.dial-gauge:hover .dial-housing {
+    border-color: var(--brass-light);
+    box-shadow:
+        inset 0 0 25px rgba(0,0,0,0.5),
+        0 0 15px rgba(232,194,82,0.2);
+    transition: all 0.3s ease;
+}
+
+.fan-housing:hover {
+    border-color: var(--brass-light);
+    transition: border-color 0.3s ease;
+}
+
+.fan-housing:hover .fan-blade {
+    animation-duration: 0.5s;
+}
