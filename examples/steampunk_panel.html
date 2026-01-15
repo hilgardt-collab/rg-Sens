@@ -79,120 +79,153 @@
         <defs>
             <!-- Brass gradient -->
             <linearGradient id="brassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#d4a017"/>
-                <stop offset="30%" style="stop-color:#c9a227"/>
-                <stop offset="50%" style="stop-color:#e8c252"/>
-                <stop offset="70%" style="stop-color:#c9a227"/>
-                <stop offset="100%" style="stop-color:#b8860b"/>
+                <stop offset="0%" style="stop-color:#f0d264"/>
+                <stop offset="25%" style="stop-color:#e6c547"/>
+                <stop offset="50%" style="stop-color:#c9a227"/>
+                <stop offset="75%" style="stop-color:#e6c547"/>
+                <stop offset="100%" style="stop-color:#a08520"/>
             </linearGradient>
 
             <!-- Copper gradient -->
             <linearGradient id="copperGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#8b4513"/>
-                <stop offset="30%" style="stop-color:#cd7f32"/>
+                <stop offset="0%" style="stop-color:#8b5a2b"/>
+                <stop offset="25%" style="stop-color:#d68c45"/>
                 <stop offset="50%" style="stop-color:#e8a862"/>
-                <stop offset="70%" style="stop-color:#cd7f32"/>
-                <stop offset="100%" style="stop-color:#8b4513"/>
+                <stop offset="75%" style="stop-color:#d68c45"/>
+                <stop offset="100%" style="stop-color:#8b5a2b"/>
             </linearGradient>
 
             <!-- Temperature gradient (cool to hot) -->
             <linearGradient id="tempGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#2e8b57"/>
-                <stop offset="50%" style="stop-color:#daa520"/>
-                <stop offset="100%" style="stop-color:#8b0000"/>
+                <stop offset="0%" style="stop-color:#48bb78"/>
+                <stop offset="50%" style="stop-color:#ecc94b"/>
+                <stop offset="100%" style="stop-color:#f56565"/>
             </linearGradient>
 
             <!-- Pressure gradient -->
             <linearGradient id="pressureGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#2e8b57"/>
-                <stop offset="60%" style="stop-color:#daa520"/>
-                <stop offset="100%" style="stop-color:#cd7f32"/>
+                <stop offset="0%" style="stop-color:#48bb78"/>
+                <stop offset="60%" style="stop-color:#ecc94b"/>
+                <stop offset="100%" style="stop-color:#d68c45"/>
             </linearGradient>
 
-            <!-- Pipe gradient (horizontal) -->
-            <linearGradient id="pipeGradientH" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#8b4513"/>
-                <stop offset="20%" style="stop-color:#cd7f32"/>
-                <stop offset="50%" style="stop-color:#daa520"/>
-                <stop offset="80%" style="stop-color:#cd7f32"/>
-                <stop offset="100%" style="stop-color:#8b4513"/>
+            <!-- Steel gradient -->
+            <linearGradient id="steelGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#5a6a7a"/>
+                <stop offset="50%" style="stop-color:#3d4a5a"/>
+                <stop offset="100%" style="stop-color:#2a3444"/>
             </linearGradient>
 
-            <!-- Pipe gradient (vertical) -->
-            <linearGradient id="pipeGradientV" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#8b4513"/>
-                <stop offset="20%" style="stop-color:#cd7f32"/>
-                <stop offset="50%" style="stop-color:#daa520"/>
-                <stop offset="80%" style="stop-color:#cd7f32"/>
-                <stop offset="100%" style="stop-color:#8b4513"/>
-            </linearGradient>
-
-            <!-- Gear symbol -->
+            <!-- Large gear with 12 rounded teeth -->
             <symbol id="gear" viewBox="0 0 100 100">
-                <path d="M50,10 L54,10 L56,20 L58,20 L62,12 L66,14 L64,24 L66,26 L76,22 L78,26 L70,32 L72,36 L82,36 L82,40 L72,44 L72,48 L82,52 L82,56 L72,56 L70,60 L78,66 L76,70 L66,66 L64,68 L66,78 L62,80 L58,72 L56,72 L54,82 L50,82 L48,72 L46,72 L42,80 L38,78 L40,68 L38,66 L28,70 L26,66 L34,60 L32,56 L22,56 L22,52 L32,48 L32,44 L22,40 L22,36 L32,36 L34,32 L26,26 L28,22 L38,26 L40,24 L38,14 L42,12 L46,20 L48,20 L50,10 Z M50,35 A15,15 0 1,0 50,65 A15,15 0 1,0 50,35 Z"
-                      fill="url(#brassGradient)" stroke="#8b4513" stroke-width="1"/>
+                <circle cx="50" cy="50" r="38" fill="url(#brassGradient)" stroke="#7a6418" stroke-width="1"/>
+                <!-- 12 evenly-spaced rounded teeth -->
+                <g fill="url(#brassGradient)" stroke="#7a6418" stroke-width="0.5">
+                    <rect x="46" y="4" width="8" height="12" rx="2"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(30 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(60 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(90 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(120 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(150 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(180 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(210 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(240 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(270 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(300 50 50)"/>
+                    <rect x="46" y="4" width="8" height="12" rx="2" transform="rotate(330 50 50)"/>
+                </g>
+                <!-- Inner details -->
+                <circle cx="50" cy="50" r="28" fill="none" stroke="#a08520" stroke-width="2"/>
+                <circle cx="50" cy="50" r="12" fill="url(#steelGradient)" stroke="#7a6418" stroke-width="1"/>
+                <circle cx="50" cy="50" r="5" fill="#2a3444" stroke="#5a6a7a" stroke-width="1"/>
+                <!-- Decorative spokes -->
+                <g stroke="#a08520" stroke-width="2" fill="none">
+                    <line x1="50" y1="18" x2="50" y2="38"/>
+                    <line x1="50" y1="62" x2="50" y2="82"/>
+                    <line x1="18" y1="50" x2="38" y2="50"/>
+                    <line x1="62" y1="50" x2="82" y2="50"/>
+                </g>
             </symbol>
 
-            <!-- Small gear -->
+            <!-- Small gear with 8 teeth -->
             <symbol id="gearSmall" viewBox="0 0 50 50">
-                <path d="M25,5 L27,5 L28,10 L29,10 L31,6 L33,7 L32,12 L33,13 L38,11 L39,13 L35,16 L36,18 L41,18 L41,20 L36,22 L36,24 L41,26 L41,28 L36,28 L35,30 L39,33 L38,35 L33,33 L32,34 L33,39 L31,40 L29,36 L28,36 L27,41 L25,41 L24,36 L23,36 L21,40 L19,39 L20,34 L19,33 L14,35 L13,33 L17,30 L16,28 L11,28 L11,26 L16,24 L16,22 L11,20 L11,18 L16,18 L17,16 L13,13 L14,11 L19,13 L20,12 L19,7 L21,6 L23,10 L24,10 L25,5 Z M25,18 A7,7 0 1,0 25,32 A7,7 0 1,0 25,18 Z"
-                      fill="url(#copperGradient)" stroke="#5c3317" stroke-width="0.5"/>
+                <circle cx="25" cy="25" r="17" fill="url(#copperGradient)" stroke="#6b4423" stroke-width="0.5"/>
+                <!-- 8 evenly-spaced teeth -->
+                <g fill="url(#copperGradient)" stroke="#6b4423" stroke-width="0.3">
+                    <rect x="22" y="3" width="6" height="8" rx="1.5"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(45 25 25)"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(90 25 25)"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(135 25 25)"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(180 25 25)"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(225 25 25)"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(270 25 25)"/>
+                    <rect x="22" y="3" width="6" height="8" rx="1.5" transform="rotate(315 25 25)"/>
+                </g>
+                <!-- Inner details -->
+                <circle cx="25" cy="25" r="12" fill="none" stroke="#8b5a2b" stroke-width="1"/>
+                <circle cx="25" cy="25" r="5" fill="url(#steelGradient)" stroke="#6b4423" stroke-width="0.5"/>
+                <circle cx="25" cy="25" r="2" fill="#2a3444"/>
             </symbol>
 
             <!-- Rivet -->
             <symbol id="rivet" viewBox="0 0 10 10">
-                <circle cx="5" cy="5" r="4" fill="url(#brassGradient)" stroke="#5c3317" stroke-width="0.5"/>
-                <circle cx="4" cy="4" r="1.5" fill="#e8c252" opacity="0.6"/>
+                <circle cx="5" cy="5" r="4.5" fill="url(#brassGradient)" stroke="#7a6418" stroke-width="0.5"/>
+                <circle cx="4" cy="4" r="1.5" fill="#f0d264" opacity="0.5"/>
+                <circle cx="6" cy="6" r="1" fill="#7a6418" opacity="0.3"/>
             </symbol>
 
-            <!-- Victorian wrought iron divider -->
-            <symbol id="victorianDivider" viewBox="0 0 440 40">
-                <!-- Left scroll -->
-                <path d="M0,20 Q20,20 30,10 Q40,0 50,10 Q55,15 60,15 L80,15"
-                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
-                <path d="M0,20 Q20,20 30,30 Q40,40 50,30 Q55,25 60,25 L80,25"
-                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
-                <!-- Left fleur -->
-                <circle cx="85" cy="20" r="6" fill="url(#copperGradient)" stroke="#5c3317" stroke-width="1"/>
-                <path d="M85,12 L85,8 M85,28 L85,32 M77,20 L73,20 M93,20 L97,20"
-                      stroke="url(#brassGradient)" stroke-width="2" stroke-linecap="round"/>
-                <!-- Center bar -->
-                <rect x="100" y="17" width="100" height="6" fill="url(#copperGradient)" rx="2"/>
+            <!-- Victorian divider - elegant scrollwork -->
+            <symbol id="victorianDivider" viewBox="0 0 440 36">
+                <!-- Left scroll ornament -->
+                <path d="M10,18 Q25,8 40,18 Q55,28 70,18" fill="none" stroke="url(#brassGradient)" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="75" cy="18" r="5" fill="url(#copperGradient)" stroke="#7a6418" stroke-width="1"/>
+
+                <!-- Left bar -->
+                <rect x="85" y="15" width="95" height="6" rx="3" fill="url(#copperGradient)"/>
+
+                <!-- Left diamond -->
+                <rect x="185" y="12" width="10" height="10" rx="1" fill="url(#brassGradient)" stroke="#7a6418" stroke-width="0.5" transform="rotate(45 190 17)"/>
+
                 <!-- Center medallion -->
-                <circle cx="220" cy="20" r="12" fill="url(#brassGradient)" stroke="#5c3317" stroke-width="2"/>
-                <circle cx="220" cy="20" r="7" fill="none" stroke="#5c3317" stroke-width="1"/>
-                <circle cx="220" cy="20" r="3" fill="url(#copperGradient)"/>
+                <circle cx="220" cy="18" r="14" fill="url(#brassGradient)" stroke="#7a6418" stroke-width="1.5"/>
+                <circle cx="220" cy="18" r="9" fill="none" stroke="#a08520" stroke-width="1"/>
+                <circle cx="220" cy="18" r="4" fill="url(#steelGradient)"/>
+
+                <!-- Right diamond -->
+                <rect x="245" y="12" width="10" height="10" rx="1" fill="url(#brassGradient)" stroke="#7a6418" stroke-width="0.5" transform="rotate(45 250 17)"/>
+
                 <!-- Right bar -->
-                <rect x="240" y="17" width="100" height="6" fill="url(#copperGradient)" rx="2"/>
-                <!-- Right fleur -->
-                <circle cx="355" cy="20" r="6" fill="url(#copperGradient)" stroke="#5c3317" stroke-width="1"/>
-                <path d="M355,12 L355,8 M355,28 L355,32 M347,20 L343,20 M363,20 L367,20"
-                      stroke="url(#brassGradient)" stroke-width="2" stroke-linecap="round"/>
-                <!-- Right scroll -->
-                <path d="M440,20 Q420,20 410,10 Q400,0 390,10 Q385,15 380,15 L360,15"
-                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
-                <path d="M440,20 Q420,20 410,30 Q400,40 390,30 Q385,25 380,25 L360,25"
-                      fill="none" stroke="url(#brassGradient)" stroke-width="3" stroke-linecap="round"/>
+                <rect x="260" y="15" width="95" height="6" rx="3" fill="url(#copperGradient)"/>
+
+                <!-- Right ornament -->
+                <circle cx="365" cy="18" r="5" fill="url(#copperGradient)" stroke="#7a6418" stroke-width="1"/>
+                <path d="M430,18 Q415,8 400,18 Q385,28 370,18" fill="none" stroke="url(#brassGradient)" stroke-width="2.5" stroke-linecap="round"/>
             </symbol>
 
             <!-- Simple Victorian bar -->
-            <symbol id="victorianBar" viewBox="0 0 440 24">
-                <!-- Left corner ornament -->
-                <circle cx="12" cy="12" r="8" fill="none" stroke="url(#brassGradient)" stroke-width="2"/>
-                <circle cx="12" cy="12" r="4" fill="url(#copperGradient)"/>
-                <!-- Left bar section -->
-                <rect x="24" y="9" width="80" height="6" fill="url(#copperGradient)" rx="2"/>
-                <!-- Left diamond -->
-                <rect x="108" y="6" width="12" height="12" fill="url(#brassGradient)" transform="rotate(45 114 12)"/>
+            <symbol id="victorianBar" viewBox="0 0 440 20">
+                <!-- Left circle -->
+                <circle cx="15" cy="10" r="6" fill="none" stroke="url(#brassGradient)" stroke-width="1.5"/>
+                <circle cx="15" cy="10" r="3" fill="url(#copperGradient)"/>
+
+                <!-- Left bar -->
+                <rect x="26" y="8" width="85" height="4" rx="2" fill="url(#copperGradient)"/>
+
+                <!-- Left dot accent -->
+                <circle cx="118" cy="10" r="3" fill="url(#brassGradient)"/>
+
                 <!-- Center bar -->
-                <rect x="130" y="9" width="180" height="6" fill="url(#copperGradient)" rx="2"/>
-                <!-- Right diamond -->
-                <rect x="320" y="6" width="12" height="12" fill="url(#brassGradient)" transform="rotate(45 326 12)"/>
-                <!-- Right bar section -->
-                <rect x="336" y="9" width="80" height="6" fill="url(#copperGradient)" rx="2"/>
-                <!-- Right corner ornament -->
-                <circle cx="428" cy="12" r="8" fill="none" stroke="url(#brassGradient)" stroke-width="2"/>
-                <circle cx="428" cy="12" r="4" fill="url(#copperGradient)"/>
+                <rect x="128" y="8" width="184" height="4" rx="2" fill="url(#copperGradient)"/>
+
+                <!-- Right dot accent -->
+                <circle cx="322" cy="10" r="3" fill="url(#brassGradient)"/>
+
+                <!-- Right bar -->
+                <rect x="329" y="8" width="85" height="4" rx="2" fill="url(#copperGradient)"/>
+
+                <!-- Right circle -->
+                <circle cx="425" cy="10" r="6" fill="none" stroke="url(#brassGradient)" stroke-width="1.5"/>
+                <circle cx="425" cy="10" r="3" fill="url(#copperGradient)"/>
             </symbol>
         </defs>
     </svg>
@@ -245,7 +278,7 @@
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
                 </div>
-                <h2 class="section-title">PROCESSOR THERMAL</h2>
+                <h2 class="section-title">Processor Thermal</h2>
                 <div class="plate-rivets">
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
@@ -315,7 +348,7 @@
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
                 </div>
-                <h2 class="section-title">MEMORY BANKS</h2>
+                <h2 class="section-title">Memory Banks</h2>
                 <div class="plate-rivets">
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
@@ -363,7 +396,7 @@
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
                 </div>
-                <h2 class="section-title">POWER OUTPUT</h2>
+                <h2 class="section-title">Power Output</h2>
                 <div class="plate-rivets">
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
@@ -434,7 +467,7 @@
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
                 </div>
-                <h2 class="section-title">GRAPHICS ENGINE</h2>
+                <h2 class="section-title">Graphics Engine</h2>
                 <div class="plate-rivets">
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
@@ -475,7 +508,7 @@
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
                 </div>
-                <h2 class="section-title">COOLING SYSTEM</h2>
+                <h2 class="section-title">Cooling System</h2>
                 <div class="plate-rivets">
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
@@ -535,7 +568,7 @@
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>
                 </div>
-                <h2 class="section-title">THERMAL MONITORS</h2>
+                <h2 class="section-title">Thermal Monitors</h2>
                 <div class="plate-rivets">
                     <svg class="rivet"><use href="#rivet"/></svg>
                     <svg class="rivet"><use href="#rivet"/></svg>

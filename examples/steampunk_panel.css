@@ -1,62 +1,69 @@
 /*
- * Steampunk System Monitor Panel
+ * Steampunk System Monitor Panel - Refined Design
  * 480x1920px Vertical Panel
  *
  * Design inspired by Victorian-era industrial machinery:
- * - Brass and copper metallic finishes
- * - Exposed gears and clockwork mechanisms
- * - Pressure gauges and analog dials
- * - Steam pipes with riveted joints
- * - Leather and aged metal textures
+ * - Polished brass and aged copper finishes
+ * - Precision clockwork gears
+ * - Industrial pressure gauges and analog dials
+ * - Riveted steel and leather textures
  *
  * Color Palette:
- * - Brass:       #d4a017, #c9a227, #b8860b
- * - Copper:      #cd7f32, #b87333, #8b4513
- * - Dark Brown:  #2c1810, #3d2817, #4a3728
- * - Aged Bronze: #665d1e, #8b7355
- * - Cream/Ivory: #f5deb3, #daa520
+ * - Brass:       #e6c547, #c9a227, #a08520
+ * - Copper:      #d68c45, #b87333, #8b5a2b
+ * - Steel:       #4a5568, #2d3748, #1a202c
+ * - Patina:      #2e5945, #3d7a5a
+ * - Amber glow:  #f6ad55, #ed8936
  *
  * Typography (Google Fonts):
- * - Cinzel:          Victorian display for titles
- * - Spectral:        Elegant serif for labels
- * - Share Tech Mono: Industrial monospace for values
+ * - Cinzel Decorative: Elegant Victorian display
+ * - Playfair Display:  Refined serif for labels
+ * - Roboto Mono:       Clean monospace for values
  */
 
 /* ============================================
    Google Fonts Import
    ============================================ */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Share+Tech+Mono&family=Spectral:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Playfair+Display:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap');
 
 /* ============================================
    Base Styles & Variables
    ============================================ */
 :root {
-    --font-display: 'Cinzel', 'Times New Roman', serif;
-    --font-body: 'Spectral', 'Georgia', serif;
-    --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+    --font-display: 'Cinzel Decorative', 'Georgia', serif;
+    --font-body: 'Playfair Display', 'Times New Roman', serif;
+    --font-mono: 'Roboto Mono', 'Consolas', monospace;
 
-    --brass-light: #e8c252;
-    --brass: #d4a017;
-    --brass-dark: #b8860b;
+    /* Brass tones */
+    --brass-bright: #f0d264;
+    --brass-light: #e6c547;
+    --brass: #c9a227;
+    --brass-dark: #a08520;
+    --brass-shadow: #7a6418;
 
+    /* Copper tones */
     --copper-light: #e8a862;
-    --copper: #cd7f32;
-    --copper-dark: #8b4513;
+    --copper: #d68c45;
+    --copper-mid: #b87333;
+    --copper-dark: #8b5a2b;
 
-    --brown-deep: #2c1810;
-    --brown-dark: #3d2817;
-    --brown: #4a3728;
-    --brown-light: #5c4033;
+    /* Steel and dark tones */
+    --steel-light: #5a6a7a;
+    --steel: #3d4a5a;
+    --steel-dark: #2a3444;
+    --panel-bg: #1e2832;
+    --panel-deep: #151c24;
 
-    --bronze: #665d1e;
-    --aged-metal: #8b7355;
+    /* Patina and accent */
+    --patina: #3d7a5a;
+    --patina-dark: #2e5945;
+    --amber: #f6ad55;
+    --amber-glow: #ed8936;
 
-    --ivory: #f5deb3;
-    --cream: #daa520;
-
-    --danger: #8b0000;
-    --warning: #daa520;
-    --safe: #2e8b57;
+    /* Status colors */
+    --safe: #48bb78;
+    --warning: #ecc94b;
+    --danger: #f56565;
 }
 
 * {
@@ -75,7 +82,7 @@ body {
     min-height: 1920px;
     max-height: 1920px;
     overflow: hidden;
-    color: var(--ivory);
+    color: #f0e6d3;
 }
 
 .svg-defs {
@@ -100,28 +107,37 @@ body {
     min-height: 1920px;
     max-height: 1920px;
     background: linear-gradient(180deg,
-        var(--brown-deep) 0%,
-        var(--brown-dark) 10%,
-        var(--brown-dark) 90%,
-        var(--brown-deep) 100%
+        var(--panel-deep) 0%,
+        var(--panel-bg) 5%,
+        var(--panel-bg) 95%,
+        var(--panel-deep) 100%
     );
-    padding: 30px 20px;
+    padding: 25px 20px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     position: relative;
     overflow: hidden;
 }
 
-/* Leather texture overlay */
+/* Subtle texture overlay */
 .panel::before {
     content: '';
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(ellipse at 20% 30%, rgba(139,115,85,0.1) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 70%, rgba(139,115,85,0.1) 0%, transparent 50%),
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+        radial-gradient(ellipse at 30% 20%, rgba(201,162,39,0.03) 0%, transparent 40%),
+        radial-gradient(ellipse at 70% 80%, rgba(184,115,51,0.03) 0%, transparent 40%);
+    pointer-events: none;
+}
+
+/* Panel border accent */
+.panel::after {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border: 1px solid rgba(201,162,39,0.15);
+    border-radius: 4px;
     pointer-events: none;
 }
 
@@ -132,35 +148,37 @@ body {
     position: absolute;
     inset: 0;
     pointer-events: none;
+    z-index: 10;
 }
 
 .corner-rivets .rivet {
     position: absolute;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
 }
 
-.corner-rivets .rivet.tl { top: 15px; left: 15px; }
-.corner-rivets .rivet.tr { top: 15px; right: 15px; }
-.corner-rivets .rivet.bl { bottom: 15px; left: 15px; }
-.corner-rivets .rivet.br { bottom: 15px; right: 15px; }
+.corner-rivets .rivet.tl { top: 12px; left: 12px; }
+.corner-rivets .rivet.tr { top: 12px; right: 12px; }
+.corner-rivets .rivet.bl { bottom: 12px; left: 12px; }
+.corner-rivets .rivet.br { bottom: 12px; right: 12px; }
 
 /* ============================================
-   Header with Gears
+   Header with Gears and Clock
    ============================================ */
 .header {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 20px 0;
+    gap: 15px;
+    padding: 15px 0;
     position: relative;
 }
 
 .gear-assembly {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 85px;
+    height: 85px;
     flex-shrink: 0;
 }
 
@@ -171,27 +189,28 @@ body {
 .gear {
     position: absolute;
     aspect-ratio: 1 / 1;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
 }
 
 .gear-large {
-    width: 60px;
+    width: 65px;
     top: 10px;
     left: 0;
-    animation: rotate 8s linear infinite;
+    animation: rotate 10s linear infinite;
 }
 
 .gear-medium {
-    width: 35px;
+    width: 38px;
     top: 0;
-    right: 5px;
-    animation: rotate-reverse 5s linear infinite;
+    right: 3px;
+    animation: rotate-reverse 6.2s linear infinite;
 }
 
 .gear-small {
-    width: 25px;
-    bottom: 5px;
-    right: 15px;
-    animation: rotate 3s linear infinite;
+    width: 26px;
+    bottom: 8px;
+    right: 12px;
+    animation: rotate 3.8s linear infinite;
 }
 
 .clock-housing {
@@ -199,49 +218,58 @@ body {
 }
 
 .clock-frame {
-    width: 200px;
-    height: 80px;
+    width: 190px;
+    height: 75px;
     background: linear-gradient(180deg,
-        var(--brown) 0%,
-        var(--brown-dark) 50%,
-        var(--brown) 100%
+        var(--steel) 0%,
+        var(--steel-dark) 50%,
+        var(--steel) 100%
     );
-    border: 4px solid var(--brass);
-    border-radius: 10px;
+    border: 3px solid var(--brass);
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow:
-        inset 0 2px 10px rgba(0,0,0,0.5),
-        0 4px 15px rgba(0,0,0,0.3);
+        inset 0 2px 8px rgba(0,0,0,0.6),
+        0 4px 12px rgba(0,0,0,0.4),
+        0 0 0 1px var(--brass-shadow);
 }
 
 .clock-inner {
-    background: linear-gradient(180deg, #1a1008, #2c1810);
+    background: linear-gradient(180deg,
+        #0a0f14 0%,
+        #141c24 50%,
+        #0a0f14 100%
+    );
     border: 2px solid var(--copper-dark);
-    border-radius: 6px;
-    padding: 10px 20px;
+    border-radius: 4px;
+    padding: 8px 18px;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
 }
 
 .time-value {
     font-family: var(--font-mono);
-    font-size: 36px;
-    color: var(--brass-light);
-    text-shadow: 0 0 20px rgba(232,194,82,0.5);
-    letter-spacing: 4px;
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--amber);
+    text-shadow:
+        0 0 15px rgba(246,173,85,0.6),
+        0 0 30px rgba(246,173,85,0.3);
+    letter-spacing: 3px;
 }
 
 .clock-rivets {
     position: absolute;
-    inset: -8px;
+    inset: -6px;
     display: flex;
     justify-content: space-between;
-    padding: 0 10px;
+    padding: 0 8px;
 }
 
 .clock-rivets .rivet {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
 }
 
 .clock-rivets .rivet:nth-child(1),
@@ -260,18 +288,18 @@ body {
 .divider-section {
     display: flex;
     justify-content: center;
-    padding: 8px 10px;
+    padding: 6px 15px;
 }
 
 .victorian-divider {
     width: 100%;
-    height: 40px;
-    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+    height: 36px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
 }
 
 .victorian-bar {
     width: 100%;
-    height: 24px;
+    height: 20px;
     filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
 
@@ -280,49 +308,49 @@ body {
    ============================================ */
 .section {
     background: linear-gradient(180deg,
-        rgba(74,55,40,0.6) 0%,
-        rgba(60,40,28,0.8) 50%,
-        rgba(74,55,40,0.6) 100%
+        rgba(58,68,82,0.4) 0%,
+        rgba(42,52,68,0.6) 50%,
+        rgba(58,68,82,0.4) 100%
     );
     border: 2px solid var(--copper-dark);
-    border-radius: 8px;
-    padding: 15px;
+    border-radius: 6px;
+    padding: 14px 16px;
     position: relative;
     box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.1),
-        0 4px 10px rgba(0,0,0,0.3);
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 3px 8px rgba(0,0,0,0.4);
 }
 
 .section.compact {
-    padding: 12px 15px;
+    padding: 12px 16px;
 }
 
 .section-plate {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    margin-bottom: 15px;
+    gap: 12px;
+    margin-bottom: 14px;
 }
 
 .plate-rivets {
     display: flex;
-    gap: 8px;
+    gap: 6px;
 }
 
 .plate-rivets .rivet {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
 }
 
 .section-title {
     font-family: var(--font-display);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 400;
     color: var(--brass-light);
-    letter-spacing: 3px;
+    letter-spacing: 4px;
     text-transform: uppercase;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
 }
 
 /* ============================================
@@ -331,7 +359,7 @@ body {
 .gauge-row {
     display: flex;
     justify-content: space-around;
-    gap: 10px;
+    gap: 8px;
 }
 
 .pressure-gauge {
@@ -341,30 +369,32 @@ body {
 
 .gauge-housing {
     background: radial-gradient(ellipse at center,
-        var(--brown-dark) 0%,
-        var(--brown-deep) 100%
+        var(--steel) 0%,
+        var(--steel-dark) 100%
     );
     border: 3px solid var(--brass);
-    border-radius: 50% 50% 10px 10px;
-    padding: 10px;
+    border-radius: 50% 50% 12px 12px;
+    padding: 10px 8px;
     position: relative;
     box-shadow:
-        inset 0 -5px 15px rgba(0,0,0,0.5),
-        0 4px 10px rgba(0,0,0,0.3);
+        inset 0 -4px 12px rgba(0,0,0,0.5),
+        0 4px 10px rgba(0,0,0,0.4),
+        0 0 0 1px var(--brass-shadow);
 }
 
 .gauge-svg {
     width: 100%;
-    height: 60px;
+    height: 58px;
 }
 
 .gauge-track {
     fill: none;
-    stroke: rgba(139,115,85,0.3);
+    stroke: rgba(90,106,122,0.5);
     stroke-width: 10;
     stroke-linecap: round;
 }
 
+/* CRITICAL: gauge-fill - do NOT add stroke-dasharray or stroke-dashoffset */
 .gauge-fill {
     fill: none;
     stroke: url(#tempGradient);
@@ -375,7 +405,7 @@ body {
 
 .gauge-center {
     position: absolute;
-    bottom: 15px;
+    bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
@@ -384,8 +414,10 @@ body {
 .gauge-value {
     font-family: var(--font-mono);
     font-size: 20px;
-    color: var(--brass-light);
+    font-weight: 500;
+    color: var(--amber);
     display: block;
+    text-shadow: 0 0 8px rgba(246,173,85,0.4);
 }
 
 .gauge-unit {
@@ -398,8 +430,8 @@ body {
     text-align: center;
     font-family: var(--font-body);
     font-size: 10px;
-    color: var(--ivory);
-    margin-top: 8px;
+    color: #c9bfb0;
+    margin-top: 6px;
     text-transform: uppercase;
     letter-spacing: 1px;
 }
@@ -414,28 +446,29 @@ body {
 
 .tank-housing {
     position: relative;
-    width: 280px;
+    width: 300px;
 }
 
 .tank-frame {
     background: linear-gradient(180deg,
-        var(--brown) 0%,
-        var(--brown-dark) 100%
+        var(--steel) 0%,
+        var(--steel-dark) 100%
     );
     border: 3px solid var(--brass);
-    border-radius: 10px;
-    padding: 15px;
+    border-radius: 8px;
+    padding: 14px 18px;
     box-shadow:
-        inset 0 2px 10px rgba(0,0,0,0.5),
-        0 4px 10px rgba(0,0,0,0.3);
+        inset 0 2px 8px rgba(0,0,0,0.5),
+        0 4px 10px rgba(0,0,0,0.4),
+        0 0 0 1px var(--brass-shadow);
 }
 
 .tank-label {
     font-family: var(--font-display);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--brass-light);
     text-align: center;
-    letter-spacing: 2px;
+    letter-spacing: 3px;
     margin-bottom: 10px;
 }
 
@@ -445,19 +478,22 @@ body {
 }
 
 .tank-glass {
-    width: 200px;
-    height: 80px;
+    width: 220px;
+    height: 70px;
     background: linear-gradient(180deg,
-        rgba(0,20,10,0.9) 0%,
-        rgba(0,30,15,0.8) 100%
+        rgba(0,15,10,0.95) 0%,
+        rgba(5,25,18,0.9) 100%
     );
     border: 2px solid var(--copper);
-    border-radius: 5px;
+    border-radius: 4px;
     position: relative;
     overflow: hidden;
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+    box-shadow:
+        inset 0 0 20px rgba(0,0,0,0.6),
+        inset 0 0 40px rgba(46,89,69,0.1);
 }
 
+/* CRITICAL: tank-fill - do NOT add height */
 .tank-fill {
     position: absolute;
     bottom: 0;
@@ -465,10 +501,12 @@ body {
     right: 0;
     background: linear-gradient(180deg,
         var(--safe) 0%,
-        rgba(46,139,87,0.7) 100%
+        var(--patina) 100%
     );
     transition: height 0.5s ease-out;
-    box-shadow: 0 0 20px rgba(46,139,87,0.5);
+    box-shadow:
+        0 0 20px rgba(72,187,120,0.4),
+        inset 0 2px 10px rgba(255,255,255,0.1);
 }
 
 .tank-graduations {
@@ -477,13 +515,13 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 5px 0;
+    padding: 8px 0;
 }
 
 .tank-graduations span {
     width: 100%;
     height: 1px;
-    background: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.15);
 }
 
 .tank-reading {
@@ -493,31 +531,33 @@ body {
 }
 
 .tank-value {
-    font-size: 24px;
-    color: var(--brass-light);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--amber);
+    text-shadow: 0 0 8px rgba(246,173,85,0.4);
 }
 
 .tank-unit,
 .tank-separator,
 .tank-max {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--copper-light);
 }
 
 .tank-rivets {
     position: absolute;
-    top: 10px;
-    bottom: 10px;
-    left: -8px;
-    right: -8px;
+    top: 12px;
+    bottom: 12px;
+    left: -6px;
+    right: -6px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
 }
 
 .tank-rivets .rivet {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
 }
 
 .tank-rivets .rivet:nth-child(1) { align-self: flex-start; }
@@ -532,26 +572,27 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
 }
 
 .dial-gauge {
     flex: 1;
-    max-width: 160px;
+    max-width: 155px;
 }
 
 .dial-housing {
     background: radial-gradient(ellipse at center,
-        var(--brown) 0%,
-        var(--brown-deep) 100%
+        var(--steel) 0%,
+        var(--steel-dark) 100%
     );
     border: 4px solid var(--brass);
     border-radius: 50%;
-    padding: 15px;
+    padding: 14px;
     position: relative;
     box-shadow:
-        inset 0 0 20px rgba(0,0,0,0.5),
-        0 4px 15px rgba(0,0,0,0.4);
+        inset 0 0 20px rgba(0,0,0,0.6),
+        0 4px 12px rgba(0,0,0,0.5),
+        0 0 0 1px var(--brass-shadow);
 }
 
 .dial-svg {
@@ -562,10 +603,11 @@ body {
 
 .dial-track {
     fill: none;
-    stroke: rgba(139,115,85,0.3);
+    stroke: rgba(90,106,122,0.5);
     stroke-width: 8;
 }
 
+/* CRITICAL: dial-fill - do NOT add stroke-dasharray or stroke-dashoffset */
 .dial-fill {
     fill: none;
     stroke: url(#pressureGradient);
@@ -588,39 +630,47 @@ body {
 
 .dial-value {
     font-family: var(--font-mono);
-    font-size: 28px;
-    color: var(--brass-light);
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--amber);
     display: block;
+    text-shadow: 0 0 10px rgba(246,173,85,0.5);
 }
 
 .dial-unit {
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--copper-light);
 }
 
 .dial-label {
     text-align: center;
     font-family: var(--font-body);
-    font-size: 11px;
-    color: var(--ivory);
-    margin-top: 10px;
+    font-size: 10px;
+    color: #c9bfb0;
+    margin-top: 8px;
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .dial-bolts {
     position: absolute;
-    inset: 5px;
+    inset: 6px;
 }
 
 .bolt {
     position: absolute;
-    width: 8px;
-    height: 8px;
-    background: linear-gradient(135deg, var(--brass-light), var(--brass-dark));
+    width: 7px;
+    height: 7px;
+    background: linear-gradient(135deg,
+        var(--brass-bright) 0%,
+        var(--brass) 50%,
+        var(--brass-dark) 100%
+    );
     border-radius: 50%;
-    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3);
+    box-shadow:
+        inset 1px 1px 2px rgba(255,255,255,0.4),
+        0 1px 2px rgba(0,0,0,0.3);
 }
 
 .bolt:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
@@ -629,14 +679,15 @@ body {
 .bolt:nth-child(4) { top: 50%; right: 0; transform: translateY(-50%); }
 
 .center-gear {
-    width: 50px;
-    height: 50px;
+    width: 48px;
+    height: 48px;
 }
 
 .gear-connector {
     width: 100%;
     height: 100%;
-    animation: rotate 6s linear infinite;
+    animation: rotate 8s linear infinite;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
 }
 
 /* ============================================
@@ -649,19 +700,19 @@ body {
 
 .thermo-housing {
     width: 100%;
-    max-width: 380px;
+    max-width: 400px;
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
 }
 
 .thermo-label {
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--brass-light);
     text-transform: uppercase;
     letter-spacing: 1px;
-    width: 100px;
+    width: 95px;
     text-align: right;
 }
 
@@ -670,17 +721,19 @@ body {
 }
 
 .thermo-track {
-    height: 20px;
+    height: 18px;
     background: linear-gradient(180deg,
-        rgba(0,0,0,0.5) 0%,
-        rgba(30,20,10,0.8) 100%
+        rgba(0,0,0,0.6) 0%,
+        rgba(20,28,36,0.9) 100%
     );
     border: 2px solid var(--copper);
-    border-radius: 10px;
+    border-radius: 9px;
     overflow: hidden;
     position: relative;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
 }
 
+/* CRITICAL: thermo-fill - do NOT add width */
 .thermo-fill {
     position: absolute;
     left: 0;
@@ -691,33 +744,35 @@ body {
         var(--warning) 60%,
         var(--danger) 100%
     );
-    border-radius: 8px;
+    border-radius: 7px;
     transition: width 0.5s ease-out;
-    box-shadow: 0 0 10px rgba(218,165,32,0.5);
+    box-shadow: 0 0 8px rgba(236,201,75,0.4);
 }
 
 .thermo-scale {
     display: flex;
     justify-content: space-between;
-    padding: 2px 5px 0;
+    padding: 3px 6px 0;
     font-family: var(--font-mono);
     font-size: 8px;
-    color: var(--copper-light);
+    color: var(--steel-light);
 }
 
 .thermo-reading {
-    width: 70px;
+    width: 65px;
     text-align: left;
 }
 
 .thermo-value {
     font-family: var(--font-mono);
-    font-size: 18px;
-    color: var(--brass-light);
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--amber);
+    text-shadow: 0 0 6px rgba(246,173,85,0.4);
 }
 
 .thermo-unit {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--copper-light);
 }
 
@@ -727,78 +782,81 @@ body {
 .fan-row {
     display: flex;
     justify-content: space-around;
-    gap: 20px;
+    gap: 16px;
 }
 
 .fan-gauge {
     flex: 1;
-    max-width: 180px;
+    max-width: 185px;
 }
 
 .fan-housing {
     background: linear-gradient(180deg,
-        var(--brown) 0%,
-        var(--brown-dark) 100%
+        var(--steel) 0%,
+        var(--steel-dark) 100%
     );
     border: 2px solid var(--brass);
-    border-radius: 10px;
-    padding: 15px;
+    border-radius: 8px;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
     box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.1),
-        0 4px 10px rgba(0,0,0,0.3);
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 3px 8px rgba(0,0,0,0.4);
 }
 
 .fan-display {
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     background: radial-gradient(ellipse at center,
-        var(--brown-deep) 0%,
-        rgba(0,0,0,0.8) 100%
+        var(--panel-bg) 0%,
+        var(--panel-deep) 100%
     );
     border: 2px solid var(--copper);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.4);
 }
 
 .fan-icon {
-    width: 50px;
-    height: 50px;
+    width: 46px;
+    height: 46px;
 }
 
 .fan-blade {
     transform-origin: center;
-    animation: rotate 2s linear infinite;
+    animation: rotate 1.5s linear infinite;
 }
 
 .fan-info {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 3px;
 }
 
 .fan-label {
     font-family: var(--font-body);
-    font-size: 11px;
-    color: var(--ivory);
+    font-size: 10px;
+    color: #c9bfb0;
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .fan-value {
     font-family: var(--font-mono);
-    font-size: 22px;
-    color: var(--brass-light);
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--amber);
+    text-shadow: 0 0 6px rgba(246,173,85,0.4);
 }
 
 .fan-unit {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: 9px;
     color: var(--copper-light);
 }
 
@@ -808,7 +866,7 @@ body {
 .temp-bars {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .bar-gauge {
@@ -819,11 +877,11 @@ body {
 
 .bar-label {
     font-family: var(--font-body);
-    font-size: 11px;
-    color: var(--ivory);
+    font-size: 10px;
+    color: #c9bfb0;
     text-transform: uppercase;
     letter-spacing: 1px;
-    width: 100px;
+    width: 95px;
     text-align: right;
 }
 
@@ -836,17 +894,19 @@ body {
 
 .bar-track {
     flex: 1;
-    height: 16px;
+    height: 14px;
     background: linear-gradient(180deg,
         rgba(0,0,0,0.5) 0%,
-        rgba(30,20,10,0.8) 100%
+        rgba(20,28,36,0.8) 100%
     );
     border: 2px solid var(--copper-dark);
     border-radius: 2px;
     overflow: hidden;
-    margin: 0 -4px;
+    margin: 0 -3px;
+    position: relative;
 }
 
+/* CRITICAL: bar-fill - do NOT add width */
 .bar-fill {
     position: absolute;
     left: 0;
@@ -869,8 +929,8 @@ body {
 }
 
 .bar-end {
-    width: 12px;
-    height: 24px;
+    width: 10px;
+    height: 22px;
     background: linear-gradient(90deg,
         var(--brass-dark) 0%,
         var(--brass) 50%,
@@ -878,21 +938,24 @@ body {
     );
     border-radius: 2px;
     z-index: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .bar-reading {
-    width: 70px;
+    width: 65px;
     text-align: left;
 }
 
 .bar-value {
     font-family: var(--font-mono);
-    font-size: 16px;
-    color: var(--brass-light);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--amber);
+    text-shadow: 0 0 6px rgba(246,173,85,0.4);
 }
 
 .bar-unit {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--copper-light);
 }
 
@@ -901,40 +964,43 @@ body {
    ============================================ */
 .footer {
     margin-top: auto;
-    padding: 15px 0 0;
+    padding: 12px 0 0;
 }
 
 .footer-gears {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 5px;
-    margin-bottom: 10px;
+    gap: 4px;
+    margin-bottom: 8px;
 }
 
 .gear-footer-1,
 .gear-footer-3 {
-    width: 30px;
+    width: 28px;
     aspect-ratio: 1 / 1;
-    animation: rotate-reverse 4s linear infinite;
+    animation: rotate-reverse 5s linear infinite;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
 
 .gear-footer-2 {
-    width: 50px;
+    width: 46px;
     aspect-ratio: 1 / 1;
-    animation: rotate 6s linear infinite;
+    animation: rotate 7s linear infinite;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
 }
 
 .footer-plate {
-    height: 4px;
+    height: 3px;
     background: linear-gradient(90deg,
         transparent 0%,
-        var(--brass-dark) 20%,
+        var(--brass-dark) 15%,
         var(--brass) 50%,
-        var(--brass-dark) 80%,
+        var(--brass-dark) 85%,
         transparent 100%
     );
     border-radius: 2px;
+    box-shadow: 0 0 6px rgba(201,162,39,0.3);
 }
 
 /* ============================================
@@ -950,17 +1016,21 @@ body {
     to { transform: rotate(0deg); }
 }
 
-@keyframes pulse-brass {
+@keyframes pulse-glow {
     0%, 100% {
-        text-shadow: 0 0 15px rgba(232,194,82,0.4);
+        text-shadow:
+            0 0 15px rgba(246,173,85,0.5),
+            0 0 30px rgba(246,173,85,0.2);
     }
     50% {
-        text-shadow: 0 0 25px rgba(232,194,82,0.7);
+        text-shadow:
+            0 0 20px rgba(246,173,85,0.7),
+            0 0 40px rgba(246,173,85,0.4);
     }
 }
 
 .time-value {
-    animation: pulse-brass 3s ease-in-out infinite;
+    animation: pulse-glow 4s ease-in-out infinite;
 }
 
 /* ============================================
@@ -969,8 +1039,8 @@ body {
 .section:hover {
     border-color: var(--copper);
     box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.15),
-        0 4px 15px rgba(0,0,0,0.4);
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        0 4px 12px rgba(0,0,0,0.5);
     transition: all 0.3s ease;
 }
 
@@ -978,8 +1048,8 @@ body {
 .dial-gauge:hover .dial-housing {
     border-color: var(--brass-light);
     box-shadow:
-        inset 0 0 25px rgba(0,0,0,0.5),
-        0 0 15px rgba(232,194,82,0.2);
+        inset 0 0 25px rgba(0,0,0,0.6),
+        0 0 12px rgba(230,197,71,0.2);
     transition: all 0.3s ease;
 }
 
@@ -989,5 +1059,5 @@ body {
 }
 
 .fan-housing:hover .fan-blade {
-    animation-duration: 0.5s;
+    animation-duration: 0.4s;
 }

@@ -105,12 +105,47 @@ impl CssTemplateConfigWidget {
         // Connect button handlers
         widget.connect_auto_config_handler();
         widget.connect_scan_handler();
+        widget.connect_html_path_handler();
 
         // Disable buttons by default until a template is loaded
         widget.auto_config_btn.set_sensitive(false);
         widget.scan_btn.set_sensitive(false);
 
         widget
+    }
+
+    /// Connect handler to update button states when HTML path changes
+    fn connect_html_path_handler(&self) {
+        let scan_btn = self.scan_btn.clone();
+        let auto_config_btn = self.auto_config_btn.clone();
+        let placeholder_hints = self.placeholder_hints.clone();
+        let placeholder_defaults = self.placeholder_defaults.clone();
+
+        self.html_path_entry.connect_changed(move |entry| {
+            let path = PathBuf::from(entry.text().as_str());
+
+            if !path.as_os_str().is_empty() && path.exists() {
+                if let Ok(html) = std::fs::read_to_string(&path) {
+                    // Extract hints and defaults
+                    let hints = crate::ui::css_template_display::extract_placeholder_hints(&html);
+                    *placeholder_hints.borrow_mut() = hints;
+
+                    let defaults =
+                        crate::ui::css_template_display::extract_placeholder_defaults(&html);
+                    let has_defaults = defaults.values().any(|d| !d.source.is_empty());
+                    *placeholder_defaults.borrow_mut() = defaults;
+
+                    // Enable buttons
+                    scan_btn.set_sensitive(true);
+                    auto_config_btn.set_sensitive(has_defaults);
+                    return;
+                }
+            }
+
+            // Disable buttons if path is invalid
+            scan_btn.set_sensitive(false);
+            auto_config_btn.set_sensitive(false);
+        });
     }
 
     fn create_template_tab(
@@ -971,7 +1006,10 @@ impl CssTemplateConfigWidget {
 
     /// Apply auto-configuration based on template defaults and available sources
     ///
-    /// This matches placeholder defaults to available source slots and creates mappings.
+    /// This matches placeholder defaults to available source slots and creates/updates mappings.
+    /// Existing mappings with a configured source (non-empty slot_prefix) are preserved.
+    /// Groups (4 consecutive placeholders with same source/instance) are processed together,
+    /// and if any member has an existing configured source, it's used for all members.
     pub fn apply_auto_config(&self) {
         let defaults = self.placeholder_defaults.borrow();
         let summaries = self.source_summaries.borrow();
@@ -981,13 +1019,19 @@ impl CssTemplateConfigWidget {
             return;
         }
 
+        // Build a map of existing mappings by index for quick lookup
+        let existing_mappings: HashMap<u32, PlaceholderMapping> = self
+            .config
+            .borrow()
+            .mappings
+            .iter()
+            .map(|m| (m.index, m.clone()))
+            .collect();
+
         // Group source summaries by source type for easier lookup
-        // summaries format: (prefix, label, slot_index, group_index)
-        // We need to match source type from the label (e.g., "CPU Slot 1" -> "cpu")
         let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
 
         for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
-            // Extract source type from label (first word, lowercased)
             let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
             source_slots
                 .entry(source_type)
@@ -1005,126 +1049,101 @@ impl CssTemplateConfigWidget {
         let mut sorted_defaults: Vec<_> = defaults.iter().collect();
         sorted_defaults.sort_by_key(|(idx, _)| *idx);
 
-        for (idx, default) in sorted_defaults {
-            if default.source.is_empty() {
-                // No source specified, create empty mapping
-                new_mappings.push(PlaceholderMapping {
-                    index: *idx,
-                    slot_prefix: String::new(),
-                    field: default.field.clone(),
-                    format: default.format.clone(),
-                });
-                continue;
-            }
+        // Process defaults, detecting groups (4 consecutive with same source/instance)
+        let mut i = 0;
+        while i < sorted_defaults.len() {
+            let (idx, default) = sorted_defaults[i];
 
-            let source_type = default.source.to_lowercase();
+            // Check if this is the start of a group (4 consecutive with same source/instance)
+            let is_group = if i + 3 < sorted_defaults.len() && !default.source.is_empty() {
+                let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
+                let consecutive = group_indices.windows(2).all(|w| w[1] == w[0] + 1);
 
-            // Find a slot for this source type
-            if let Some(slots) = source_slots.get(&source_type) {
-                // Get the instance we should use
-                let instance = default.instance as usize;
-                let used = used_instances.entry(source_type.clone()).or_insert(0);
+                if consecutive {
+                    let group_defaults: Vec<&PlaceholderDefault> =
+                        (0..4).map(|j| sorted_defaults[i + j].1).collect();
 
-                // Try to find the slot matching the requested instance
-                // If instance is specified, use it; otherwise use the next available
-                let slot_to_use = if instance > 0 {
-                    // Specific instance requested
-                    slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
+                    // Check same source and instance
+                    let same_source_instance = group_defaults
+                        .iter()
+                        .all(|d| d.source == default.source && d.instance == default.instance);
+
+                    // Check fields are caption/value/unit/max
+                    let fields: Vec<&str> =
+                        group_defaults.iter().map(|d| d.field.as_str()).collect();
+                    let standard_fields = fields == ["caption", "value", "unit", "max"];
+
+                    same_source_instance && standard_fields
                 } else {
-                    // Use next available slot
-                    let target = *used;
-                    slots.get(target)
-                };
-
-                if let Some((prefix, _)) = slot_to_use {
-                    new_mappings.push(PlaceholderMapping {
-                        index: *idx,
-                        slot_prefix: prefix.clone(),
-                        field: default.field.clone(),
-                        format: default.format.clone(),
-                    });
-
-                    // Only increment used count if we didn't specify a specific instance
-                    if instance == 0 {
-                        *used += 1;
-                    }
-                } else {
-                    // No matching slot found, create empty mapping
-                    log::warn!(
-                        "Auto-config: No slot found for source '{}' instance {}",
-                        source_type,
-                        instance
-                    );
-                    new_mappings.push(PlaceholderMapping {
-                        index: *idx,
-                        slot_prefix: String::new(),
-                        field: default.field.clone(),
-                        format: default.format.clone(),
-                    });
+                    false
                 }
             } else {
-                // Source type not available
-                log::warn!("Auto-config: Source type '{}' not available", source_type);
-                new_mappings.push(PlaceholderMapping {
-                    index: *idx,
-                    slot_prefix: String::new(),
-                    field: default.field.clone(),
-                    format: default.format.clone(),
-                });
-            }
-        }
+                false
+            };
 
-        drop(defaults);
-        drop(summaries);
+            if is_group {
+                // Process as a group - check if ANY member has an existing configured source
+                let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
+                let existing_prefix = group_indices
+                    .iter()
+                    .filter_map(|idx| existing_mappings.get(idx))
+                    .find(|m| !m.slot_prefix.is_empty())
+                    .map(|m| m.slot_prefix.clone());
 
-        // Apply new mappings
-        self.config.borrow_mut().mappings = new_mappings;
+                let slot_prefix = if let Some(prefix) = existing_prefix {
+                    // Use the existing configured prefix for all group members
+                    prefix
+                } else {
+                    // Auto-configure: find a slot for this source type
+                    let source_type = default.source.to_lowercase();
+                    if let Some(slots) = source_slots.get(&source_type) {
+                        let instance = default.instance as usize;
+                        let used = used_instances.entry(source_type.clone()).or_insert(0);
 
-        // Rebuild UI
-        self.rebuild_mappings();
+                        let slot_to_use = if instance > 0 {
+                            slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
+                        } else {
+                            let target = *used;
+                            slots.get(target)
+                        };
 
-        // Trigger change callback
-        if let Some(ref cb) = *self.on_change.borrow() {
-            cb();
-        }
-    }
+                        if let Some((prefix, _)) = slot_to_use {
+                            if instance == 0 {
+                                *used += 1;
+                            }
+                            prefix.clone()
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    }
+                };
 
-    /// Connect the auto-configure button handler
-    /// This must be called after the widget is fully constructed
-    pub fn connect_auto_config_handler(&self) {
-        let self_config = self.config.clone();
-        let self_on_change = self.on_change.clone();
-        let self_source_summaries = self.source_summaries.clone();
-        let self_placeholder_defaults = self.placeholder_defaults.clone();
-        let self_placeholder_hints = self.placeholder_hints.clone();
-        let self_mappings_container = self.mappings_container.clone();
+                // Add all 4 group members with the same prefix
+                for j in 0..4 {
+                    let (group_idx, group_default) = sorted_defaults[i + j];
+                    new_mappings.push(PlaceholderMapping {
+                        index: *group_idx,
+                        slot_prefix: slot_prefix.clone(),
+                        field: group_default.field.clone(),
+                        format: group_default.format.clone(),
+                    });
+                }
+                i += 4;
+            } else {
+                // Process as individual mapping
+                // Check if there's an existing mapping with a configured source
+                if let Some(existing) = existing_mappings.get(idx) {
+                    if !existing.slot_prefix.is_empty() {
+                        // Preserve the existing mapping
+                        new_mappings.push(existing.clone());
+                        i += 1;
+                        continue;
+                    }
+                }
 
-        self.auto_config_btn.connect_clicked(move |_| {
-            let defaults = self_placeholder_defaults.borrow();
-            let summaries = self_source_summaries.borrow();
-
-            if defaults.is_empty() || summaries.is_empty() {
-                log::warn!("Cannot auto-configure: no defaults or no sources available");
-                return;
-            }
-
-            // Group source summaries by source type
-            let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
-            for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
-                let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
-                source_slots
-                    .entry(source_type)
-                    .or_default()
-                    .push((prefix.clone(), *slot_idx));
-            }
-
-            let mut used_instances: HashMap<String, usize> = HashMap::new();
-            let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
-
-            let mut sorted_defaults: Vec<_> = defaults.iter().collect();
-            sorted_defaults.sort_by_key(|(idx, _)| *idx);
-
-            for (idx, default) in sorted_defaults {
+                // No existing configured mapping, try to auto-configure
                 if default.source.is_empty() {
                     new_mappings.push(PlaceholderMapping {
                         index: *idx,
@@ -1132,6 +1151,7 @@ impl CssTemplateConfigWidget {
                         field: default.field.clone(),
                         format: default.format.clone(),
                     });
+                    i += 1;
                     continue;
                 }
 
@@ -1174,6 +1194,215 @@ impl CssTemplateConfigWidget {
                         format: default.format.clone(),
                     });
                 }
+                i += 1;
+            }
+        }
+
+        drop(defaults);
+        drop(summaries);
+
+        // Apply new mappings
+        self.config.borrow_mut().mappings = new_mappings;
+
+        // Rebuild UI
+        self.rebuild_mappings();
+
+        // Trigger change callback
+        if let Some(ref cb) = *self.on_change.borrow() {
+            cb();
+        }
+    }
+
+    /// Connect the auto-configure button handler
+    /// This must be called after the widget is fully constructed
+    pub fn connect_auto_config_handler(&self) {
+        let self_config = self.config.clone();
+        let self_on_change = self.on_change.clone();
+        let self_source_summaries = self.source_summaries.clone();
+        let self_placeholder_defaults = self.placeholder_defaults.clone();
+        let self_placeholder_hints = self.placeholder_hints.clone();
+        let self_mappings_container = self.mappings_container.clone();
+
+        self.auto_config_btn.connect_clicked(move |_| {
+            let defaults = self_placeholder_defaults.borrow();
+            let summaries = self_source_summaries.borrow();
+
+            if defaults.is_empty() || summaries.is_empty() {
+                log::warn!("Cannot auto-configure: no defaults or no sources available");
+                return;
+            }
+
+            // Build a map of existing mappings by index for quick lookup
+            let existing_mappings: HashMap<u32, PlaceholderMapping> = self_config
+                .borrow()
+                .mappings
+                .iter()
+                .map(|m| (m.index, m.clone()))
+                .collect();
+
+            // Group source summaries by source type
+            let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
+            for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
+                let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
+                source_slots
+                    .entry(source_type)
+                    .or_default()
+                    .push((prefix.clone(), *slot_idx));
+            }
+
+            let mut used_instances: HashMap<String, usize> = HashMap::new();
+            let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
+
+            // Sort defaults by index for predictable order
+            let mut sorted_defaults: Vec<_> = defaults.iter().collect();
+            sorted_defaults.sort_by_key(|(idx, _)| *idx);
+
+            // Process defaults, detecting groups (4 consecutive with same source/instance)
+            let mut i = 0;
+            while i < sorted_defaults.len() {
+                let (idx, default) = sorted_defaults[i];
+
+                // Check if this is the start of a group (4 consecutive with same source/instance)
+                let is_group = if i + 3 < sorted_defaults.len() && !default.source.is_empty() {
+                    let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
+                    let consecutive = group_indices.windows(2).all(|w| w[1] == w[0] + 1);
+
+                    if consecutive {
+                        let group_defaults: Vec<&PlaceholderDefault> =
+                            (0..4).map(|j| sorted_defaults[i + j].1).collect();
+
+                        // Check same source and instance
+                        let same_source_instance = group_defaults.iter().all(|d| {
+                            d.source == default.source && d.instance == default.instance
+                        });
+
+                        // Check fields are caption/value/unit/max
+                        let fields: Vec<&str> = group_defaults.iter().map(|d| d.field.as_str()).collect();
+                        let standard_fields = fields == ["caption", "value", "unit", "max"];
+
+                        same_source_instance && standard_fields
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if is_group {
+                    // Process as a group - check if ANY member has an existing configured source
+                    let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
+                    let existing_prefix = group_indices
+                        .iter()
+                        .filter_map(|idx| existing_mappings.get(idx))
+                        .find(|m| !m.slot_prefix.is_empty())
+                        .map(|m| m.slot_prefix.clone());
+
+                    let slot_prefix = if let Some(prefix) = existing_prefix {
+                        // Use the existing configured prefix for all group members
+                        prefix
+                    } else {
+                        // Auto-configure: find a slot for this source type
+                        let source_type = default.source.to_lowercase();
+                        if let Some(slots) = source_slots.get(&source_type) {
+                            let instance = default.instance as usize;
+                            let used = used_instances.entry(source_type.clone()).or_insert(0);
+
+                            let slot_to_use = if instance > 0 {
+                                slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
+                            } else {
+                                let target = *used;
+                                slots.get(target)
+                            };
+
+                            if let Some((prefix, _)) = slot_to_use {
+                                if instance == 0 {
+                                    *used += 1;
+                                }
+                                prefix.clone()
+                            } else {
+                                String::new()
+                            }
+                        } else {
+                            String::new()
+                        }
+                    };
+
+                    // Add all 4 group members with the same prefix
+                    for j in 0..4 {
+                        let (group_idx, group_default) = sorted_defaults[i + j];
+                        new_mappings.push(PlaceholderMapping {
+                            index: *group_idx,
+                            slot_prefix: slot_prefix.clone(),
+                            field: group_default.field.clone(),
+                            format: group_default.format.clone(),
+                        });
+                    }
+                    i += 4;
+                } else {
+                    // Process as individual mapping
+                    // Check if there's an existing mapping with a configured source
+                    if let Some(existing) = existing_mappings.get(idx) {
+                        if !existing.slot_prefix.is_empty() {
+                            // Preserve the existing mapping
+                            new_mappings.push(existing.clone());
+                            i += 1;
+                            continue;
+                        }
+                    }
+
+                    // No existing configured mapping, try to auto-configure
+                    if default.source.is_empty() {
+                        new_mappings.push(PlaceholderMapping {
+                            index: *idx,
+                            slot_prefix: String::new(),
+                            field: default.field.clone(),
+                            format: default.format.clone(),
+                        });
+                        i += 1;
+                        continue;
+                    }
+
+                    let source_type = default.source.to_lowercase();
+
+                    if let Some(slots) = source_slots.get(&source_type) {
+                        let instance = default.instance as usize;
+                        let used = used_instances.entry(source_type.clone()).or_insert(0);
+
+                        let slot_to_use = if instance > 0 {
+                            slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
+                        } else {
+                            let target = *used;
+                            slots.get(target)
+                        };
+
+                        if let Some((prefix, _)) = slot_to_use {
+                            new_mappings.push(PlaceholderMapping {
+                                index: *idx,
+                                slot_prefix: prefix.clone(),
+                                field: default.field.clone(),
+                                format: default.format.clone(),
+                            });
+                            if instance == 0 {
+                                *used += 1;
+                            }
+                        } else {
+                            new_mappings.push(PlaceholderMapping {
+                                index: *idx,
+                                slot_prefix: String::new(),
+                                field: default.field.clone(),
+                                format: default.format.clone(),
+                            });
+                        }
+                    } else {
+                        new_mappings.push(PlaceholderMapping {
+                            index: *idx,
+                            slot_prefix: String::new(),
+                            field: default.field.clone(),
+                            format: default.format.clone(),
+                        });
+                    }
+                    i += 1;
+                }
             }
 
             drop(defaults);
@@ -1182,24 +1411,60 @@ impl CssTemplateConfigWidget {
             // Apply new mappings
             self_config.borrow_mut().mappings = new_mappings;
 
-            // Rebuild UI
-            // Clear existing rows
+            // Rebuild UI - clear existing rows
             while let Some(child) = self_mappings_container.first_child() {
                 self_mappings_container.remove(&child);
             }
 
-            // Add rows for each mapping
+            // Add rows for each mapping, detecting groups
             let config = self_config.borrow();
-            for (idx, mapping) in config.mappings.iter().enumerate() {
-                CssTemplateConfigWidget::add_mapping_row(
-                    &self_mappings_container,
-                    idx,
-                    mapping,
-                    self_config.clone(),
-                    self_on_change.clone(),
-                    self_source_summaries.clone(),
-                    self_placeholder_hints.clone(),
-                );
+            let mappings = &config.mappings;
+            let mut map_idx = 0;
+
+            while map_idx < mappings.len() {
+                // Check if this could be the start of a group (4 consecutive with same prefix and standard fields)
+                let is_group_ui = if map_idx + 3 < mappings.len() {
+                    let prefix = &mappings[map_idx].slot_prefix;
+                    let fields: Vec<&str> = mappings[map_idx..map_idx + 4]
+                        .iter()
+                        .map(|m| m.field.as_str())
+                        .collect();
+
+                    // Check if all 4 have the same prefix and are caption/value/unit/max
+                    let same_prefix = mappings[map_idx..map_idx + 4]
+                        .iter()
+                        .all(|m| &m.slot_prefix == prefix);
+
+                    same_prefix && fields == ["caption", "value", "unit", "max"]
+                } else {
+                    false
+                };
+
+                if is_group_ui {
+                    let group_mappings: Vec<PlaceholderMapping> =
+                        mappings[map_idx..map_idx + 4].to_vec();
+                    CssTemplateConfigWidget::add_source_group_row(
+                        &self_mappings_container,
+                        map_idx,
+                        &group_mappings,
+                        self_config.clone(),
+                        self_on_change.clone(),
+                        self_source_summaries.clone(),
+                        self_placeholder_hints.clone(),
+                    );
+                    map_idx += 4;
+                } else {
+                    CssTemplateConfigWidget::add_mapping_row(
+                        &self_mappings_container,
+                        map_idx,
+                        &mappings[map_idx],
+                        self_config.clone(),
+                        self_on_change.clone(),
+                        self_source_summaries.clone(),
+                        self_placeholder_hints.clone(),
+                    );
+                    map_idx += 1;
+                }
             }
             drop(config);
 
