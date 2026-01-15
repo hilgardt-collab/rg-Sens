@@ -733,8 +733,7 @@ body {
     stroke: url(#usageGradient);
     stroke-width: 8;
     stroke-linecap: round;
-    stroke-dasharray: 141;
-    stroke-dashoffset: 141;
+    /* stroke-dasharray and stroke-dashoffset are set by JavaScript */
     transition: stroke-dashoffset 0.5s ease-out;
 }
 
@@ -807,8 +806,7 @@ body {
     fill: none;
     stroke: url(#goldGradient);
     stroke-width: 3;
-    stroke-dasharray: 258;
-    stroke-dashoffset: 258;
+    /* stroke-dasharray and stroke-dashoffset are set by JavaScript */
     transition: stroke-dashoffset 0.5s ease-out;
 }
 
