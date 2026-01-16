@@ -59,10 +59,20 @@ struct DisplayData {
     last_js_values: String,
     /// Counter for JavaScript update calls (for periodic GC)
     js_update_count: u32,
+    /// Cached prefix set for O(1) lookups (avoids regenerating prefixes every frame)
+    cached_prefix_set: std::collections::HashSet<String>,
+    /// Reusable key buffer for get_mapped_value lookups
+    key_buffer: String,
 }
 
 impl Default for DisplayData {
     fn default() -> Self {
+        // Pre-generate prefixes once (group1_1 through group10_10 = 100 prefixes)
+        // These are generated once and reused for the lifetime of the displayer
+        let group_item_counts: Vec<usize> = (0..10).map(|_| 10).collect();
+        let prefixes = combo_utils::generate_prefixes(&group_item_counts);
+        let cached_prefix_set = prefixes.into_iter().collect();
+
         Self {
             config: CssTemplateDisplayConfig::default(),
             values: HashMap::new(),
@@ -74,6 +84,8 @@ impl Default for DisplayData {
             config_changed: false,
             last_js_values: String::new(),
             js_update_count: 0,
+            cached_prefix_set,
+            key_buffer: String::with_capacity(64),
         }
     }
 }
@@ -438,13 +450,26 @@ impl Displayer for CssTemplateDisplayer {
                         data.dirty = false;
 
                         // Format values and build JavaScript object entries
-                        let mut entries: Vec<String> = Vec::new();
+                        // Pre-allocate with known capacity to avoid reallocations
+                        let mapping_count = data.config.mappings.len();
+                        let mut entries: Vec<String> = Vec::with_capacity(mapping_count);
 
-                        for mapping in &data.config.mappings {
-                            let value = get_mapped_value_static(&data.values, mapping);
+                        // Clone mappings to avoid borrow issues with key_buffer
+                        let mappings: Vec<_> = data.config.mappings.clone();
+                        // Use a local key buffer to avoid borrow conflicts
+                        let mut key_buffer = std::mem::take(&mut data.key_buffer);
+                        for mapping in &mappings {
+                            let value = get_mapped_value_with_buffer(
+                                &data.values,
+                                mapping,
+                                &mut key_buffer,
+                            );
+                            // Escape backslashes and quotes for JSON
                             let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
                             entries.push(format!(r#""{}": "{}""#, mapping.index, escaped));
                         }
+                        // Restore the key buffer
+                        data.key_buffer = key_buffer;
 
                         // Sort entries for consistent comparison
                         entries.sort();
@@ -459,6 +484,11 @@ impl Displayer for CssTemplateDisplayer {
                             // WebKitGTK accumulates internal state that can't be released otherwise
                             if data.js_update_count % 60 == 0 {
                                 log::debug!("CSS template: periodic WebView reload to release memory");
+
+                                // Shrink HashMap capacity to release unused memory
+                                // HashMap doesn't automatically shrink when cleared/refilled
+                                data.values.shrink_to_fit();
+
                                 // Force a full reload by reloading the cached HTML
                                 if let Some(ref html) = data.cached_html {
                                     let html_clone = html.clone();
@@ -468,6 +498,8 @@ impl Displayer for CssTemplateDisplayer {
                                     } else {
                                         None
                                     };
+                                    // Reset last_js_values so next update will refresh the DOM
+                                    data.last_js_values.clear();
                                     drop(data); // Release lock before WebView operation
                                     webview.load_html(&html_clone, base_uri.as_deref());
                                     return glib::ControlFlow::Continue;
@@ -514,19 +546,14 @@ impl Displayer for CssTemplateDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         if let Ok(mut display_data) = self.data.lock() {
-            // Convert group_item_counts to usize for generate_prefixes
-            let group_item_counts: Vec<usize> = (0..10).map(|_| 10).collect(); // Support up to 100 slots
-
-            // Generate prefixes and filter values
-            let prefixes = combo_utils::generate_prefixes(&group_item_counts);
-            combo_utils::filter_values_by_prefixes_into(data, &prefixes, &mut display_data.values);
-
-            // Also copy any direct values (not prefixed)
-            for (key, value) in data {
-                if !display_data.values.contains_key(key) {
-                    display_data.values.insert(key.clone(), value.clone());
-                }
-            }
+            // Use cached prefixes for filtering - take values temporarily to avoid borrow conflict
+            let mut values = std::mem::take(&mut display_data.values);
+            combo_utils::filter_values_with_owned_prefix_set(
+                data,
+                &display_data.cached_prefix_set,
+                &mut values,
+            );
+            display_data.values = values;
 
             // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);
@@ -634,48 +661,49 @@ impl Displayer for CssTemplateDisplayer {
     }
 }
 
-/// Static helper to get mapped value without &self
-fn get_mapped_value_static(
+/// Static helper to get mapped value using a reusable key buffer
+/// The key_buffer is used to avoid allocations when building lookup keys
+fn get_mapped_value_with_buffer(
     values: &HashMap<String, Value>,
     mapping: &PlaceholderMapping,
+    key_buffer: &mut String,
 ) -> String {
     if mapping.slot_prefix.is_empty() {
         return "--".to_string();
     }
 
-    // Build the key based on slot_prefix and field
-    let key = format!("{}_{}", mapping.slot_prefix, mapping.field);
+    // Build the key using the reusable buffer (avoids format! allocation)
+    key_buffer.clear();
+    key_buffer.push_str(&mapping.slot_prefix);
+    key_buffer.push('_');
+    key_buffer.push_str(&mapping.field);
 
-    // Try to get the value
-    if let Some(value) = values.get(&key) {
-        match value {
-            Value::Number(n) => {
-                if let Some(f) = n.as_f64() {
-                    format_value(f, mapping.format.as_deref())
-                } else {
-                    n.to_string()
-                }
+    // Try to get the value with field suffix
+    if let Some(value) = values.get(key_buffer.as_str()) {
+        return format_value_from_json(value, mapping.format.as_deref());
+    }
+
+    // Try without the field suffix
+    if let Some(value) = values.get(&mapping.slot_prefix) {
+        return format_value_from_json(value, mapping.format.as_deref());
+    }
+
+    "--".to_string()
+}
+
+/// Helper to format a JSON value with optional format string
+#[inline]
+fn format_value_from_json(value: &Value, format: Option<&str>) -> String {
+    match value {
+        Value::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                format_value(f, format)
+            } else {
+                n.to_string()
             }
-            Value::String(s) => s.clone(),
-            Value::Bool(b) => b.to_string(),
-            _ => value.to_string(),
         }
-    } else {
-        // Try without the field suffix
-        if let Some(value) = values.get(&mapping.slot_prefix) {
-            match value {
-                Value::Number(n) => {
-                    if let Some(f) = n.as_f64() {
-                        format_value(f, mapping.format.as_deref())
-                    } else {
-                        n.to_string()
-                    }
-                }
-                Value::String(s) => s.clone(),
-                _ => value.to_string(),
-            }
-        } else {
-            "--".to_string()
-        }
+        Value::String(s) => s.clone(),
+        Value::Bool(b) => b.to_string(),
+        _ => value.to_string(),
     }
 }
