@@ -48,6 +48,8 @@ struct DisplayData {
     placeholder_hints: HashMap<u32, String>,
     /// Flag to signal that config changed and WebView needs reload
     config_changed: bool,
+    /// Last JavaScript values string sent to WebView (for change detection)
+    last_js_values: String,
 }
 
 impl Default for DisplayData {
@@ -61,6 +63,7 @@ impl Default for DisplayData {
             detected_placeholders: Vec::new(),
             placeholder_hints: HashMap::new(),
             config_changed: false,
+            last_js_values: String::new(),
         }
     }
 }
@@ -412,41 +415,42 @@ impl Displayer for CssTemplateDisplayer {
                     }
                 }
 
-                // Update values via JavaScript
+                // Update values via JavaScript (only if values actually changed)
                 if let Ok(mut data) = data_clone.try_lock() {
                     if data.dirty {
                         data.dirty = false;
 
-                        // Format values and inject via JavaScript
-                        let mut js_values: HashMap<String, String> = HashMap::new();
+                        // Format values and build JavaScript object entries
+                        let mut entries: Vec<String> = Vec::new();
 
                         for mapping in &data.config.mappings {
                             let value = get_mapped_value_static(&data.values, mapping);
-                            js_values.insert(mapping.index.to_string(), value);
+                            let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+                            entries.push(format!(r#""{}": "{}""#, mapping.index, escaped));
                         }
 
-                        // Build JavaScript call
-                        let entries: Vec<String> = js_values
-                            .iter()
-                            .map(|(k, v)| {
-                                let escaped = v.replace('\\', "\\\\").replace('"', "\\\"");
-                                format!(r#""{}": "{}""#, k, escaped)
-                            })
-                            .collect();
+                        // Sort entries for consistent comparison
+                        entries.sort();
+                        let js_values_str = entries.join(", ");
 
-                        let js = format!(
-                            "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
-                            entries.join(", ")
-                        );
+                        // Only call JavaScript if values actually changed
+                        if js_values_str != data.last_js_values {
+                            data.last_js_values = js_values_str.clone();
 
-                        // Execute JavaScript
-                        webview.evaluate_javascript(
-                            &js,
-                            None,
-                            None,
-                            None::<&gio::Cancellable>,
-                            |_| {},
-                        );
+                            let js = format!(
+                                "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
+                                js_values_str
+                            );
+
+                            // Execute JavaScript
+                            webview.evaluate_javascript(
+                                &js,
+                                None,
+                                None,
+                                None::<&gio::Cancellable>,
+                                |_| {},
+                            );
+                        }
                     }
                 }
 
