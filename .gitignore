@@ -39,3 +39,8 @@ debug.log
 /aur/*.pkg.tar.*
 /aur/PKGBUILD-local
 /aur-repo-git
+
+# Flatpak packaging
+/flatpak/build-dir/
+/flatpak/.flatpak-builder/
+/flatpak/repo/

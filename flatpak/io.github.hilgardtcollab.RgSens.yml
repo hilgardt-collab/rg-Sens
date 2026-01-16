@@ -1,0 +1,50 @@
+app-id: io.github.hilgardtcollab.RgSens
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: rg-sens
+
+finish-args:
+  # Display access
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  # Audio for alarms/timers
+  - --socket=pulseaudio
+  # System monitoring access
+  - --filesystem=/sys:ro
+  - --filesystem=/proc:ro
+  # Config storage
+  - --filesystem=xdg-config/rg-sens:create
+  # GPU access for monitoring
+  - --device=dri
+  # Network for WebKitGTK (CSS templates may load external resources)
+  - --share=network
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/rg-sens/cargo
+    RUSTUP_TOOLCHAIN: stable
+
+modules:
+  - name: rg-sens
+    buildsystem: simple
+    build-options:
+      # Allow network access during build for cargo dependencies
+      build-args:
+        - --share=network
+    build-commands:
+      - cargo build --release --verbose
+      - install -Dm755 target/release/rg-sens /app/bin/rg-sens
+      - install -Dm644 flatpak/io.github.hilgardtcollab.RgSens.desktop /app/share/applications/io.github.hilgardtcollab.RgSens.desktop
+      - install -Dm644 rg-sens.png /app/share/icons/hicolor/256x256/apps/io.github.hilgardtcollab.RgSens.png
+      - install -Dm644 data/rg-sens.metainfo.xml /app/share/metainfo/io.github.hilgardtcollab.RgSens.metainfo.xml
+      # Install examples
+      - install -d /app/share/rg-sens/examples
+      - cp examples/*.html examples/*.css examples/*.js /app/share/rg-sens/examples/ 2>/dev/null || true
+    sources:
+      - type: dir
+        path: ..

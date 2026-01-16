@@ -983,39 +983,62 @@ impl GridLayout {
         // This ensures the background color updates when source values change
         // Only redraws when the indicator value actually changes to avoid wasting CPU
         // 500ms interval is sufficient since panel update cycle also triggers redraws
-        let panel_for_bg_timer = panel.clone();
-        let background_area_weak_timer = background_area.downgrade();
-        let last_indicator_value: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
-        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-            // Stop if background area is gone (panel deleted)
-            let Some(bg_area) = background_area_weak_timer.upgrade() else {
-                return gtk4::glib::ControlFlow::Break;
-            };
-            // Check if panel background is indicator type and value changed
-            if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
-                if let crate::ui::BackgroundType::Indicator(ref indicator) =
-                    panel_guard.background.background
-                {
-                    // Get current value from source (not config - config stores source settings, not values)
-                    let source_values = panel_guard.source.get_values();
-                    let current_value = if !indicator.value_field.is_empty() {
-                        source_values
-                            .get(&indicator.value_field)
-                            .and_then(|v| v.as_f64())
-                    } else {
-                        Some(indicator.static_value)
-                    };
+        // Only create timer if panel has indicator background to avoid unnecessary timers
+        let is_indicator_bg = panel
+            .blocking_read()
+            .background
+            .background
+            .is_indicator();
+        if is_indicator_bg {
+            let panel_for_bg_timer = panel.clone();
+            let background_area_weak_timer = background_area.downgrade();
+            let last_indicator_value: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
+            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
+                // Stop if background area is gone (panel deleted)
+                let Some(bg_area) = background_area_weak_timer.upgrade() else {
+                    log::debug!("Indicator background timer stopping: widget destroyed");
+                    return gtk4::glib::ControlFlow::Break;
+                };
 
-                    // Only redraw if value changed
-                    let mut last_val = last_indicator_value.borrow_mut();
-                    if *last_val != current_value {
-                        *last_val = current_value;
-                        bg_area.queue_draw();
+                // Stop if widget is orphaned (removed from widget tree but not destroyed)
+                // This prevents memory leaks when panels are replaced
+                if bg_area.root().is_none() {
+                    log::debug!("Indicator background timer stopping: widget orphaned");
+                    return gtk4::glib::ControlFlow::Break;
+                }
+
+                // Check if panel background is still indicator type and value changed
+                if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
+                    if let crate::ui::BackgroundType::Indicator(ref indicator) =
+                        panel_guard.background.background
+                    {
+                        // Get current value from source (not config - config stores source settings, not values)
+                        let source_values = panel_guard.source.get_values();
+                        let current_value = if !indicator.value_field.is_empty() {
+                            source_values
+                                .get(&indicator.value_field)
+                                .and_then(|v| v.as_f64())
+                        } else {
+                            Some(indicator.static_value)
+                        };
+
+                        // Only redraw if value changed
+                        let mut last_val = last_indicator_value.borrow_mut();
+                        if *last_val != current_value {
+                            *last_val = current_value;
+                            bg_area.queue_draw();
+                        }
+                    } else {
+                        // Background type changed from indicator to something else, stop timer
+                        log::debug!(
+                            "Indicator background timer stopping: background type changed"
+                        );
+                        return gtk4::glib::ControlFlow::Break;
                     }
                 }
-            }
-            gtk4::glib::ControlFlow::Continue
-        });
+                gtk4::glib::ControlFlow::Continue
+            });
+        }
 
         // Create overlay to stack background and widget
         let overlay = Overlay::new();

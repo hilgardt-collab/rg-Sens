@@ -178,6 +178,13 @@ pub enum BackgroundType {
     Indicator(IndicatorBackgroundConfig),
 }
 
+impl BackgroundType {
+    /// Returns true if this is an indicator background type
+    pub fn is_indicator(&self) -> bool {
+        matches!(self, BackgroundType::Indicator(_))
+    }
+}
+
 /// Configuration for indicator background (value-based color from gradient)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndicatorBackgroundConfig {
