@@ -17,10 +17,20 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
+
+/// Global shutdown flag - when set, all CSS template timers will stop
+static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
+
+/// Signal all CSS template timers to stop (call on app shutdown)
+pub fn shutdown_all() {
+    SHUTDOWN_FLAG.store(true, Ordering::SeqCst);
+    log::debug!("CSS template shutdown signal sent");
+}
 use crate::displayers::combo_utils;
 use crate::ui::css_template_display::{
     detect_placeholders, extract_placeholder_hints, format_value, prepare_html_document,
@@ -266,6 +276,17 @@ impl Displayer for CssTemplateDisplayer {
             let last_html_modified = last_html_modified.clone();
             let last_css_modified = last_css_modified.clone();
             move || {
+                // Check global shutdown flag first
+                if SHUTDOWN_FLAG.load(Ordering::SeqCst) {
+                    log::debug!("CSS template timer stopping: shutdown signal received");
+                    // Clean up WebView if possible
+                    if let Some(webview) = webview_weak.upgrade() {
+                        webview.stop_loading();
+                        webview.load_html("", None);
+                    }
+                    return glib::ControlFlow::Break;
+                }
+
                 let Some(webview) = webview_weak.upgrade() else {
                     log::debug!("CSS template timer stopping: WebView destroyed");
                     return glib::ControlFlow::Break;
@@ -289,29 +310,38 @@ impl Displayer for CssTemplateDisplayer {
                 }
 
                 // Check for config change (new template selected)
+                // Use try_lock to avoid blocking the main thread
                 let config_changed = data_clone
-                    .lock()
+                    .try_lock()
                     .ok()
                     .map(|d| d.config_changed)
                     .unwrap_or(false);
 
                 // Check for hot-reload by comparing file modification times
+                // Skip entirely if we can't get locks immediately to avoid blocking
                 let mut files_changed = false;
                 if let Ok(data) = data_clone.try_lock() {
                     if data.config.hot_reload {
-                        // Check HTML file
-                        if let Ok(metadata) = std::fs::metadata(&data.config.html_path) {
-                            if let Ok(modified) = metadata.modified() {
-                                if let Ok(mut last) = last_html_modified.try_lock() {
-                                    if *last != Some(modified) {
-                                        *last = Some(modified);
-                                        files_changed = true;
+                        // Only check files that exist and have valid paths
+                        let html_path = data.config.html_path.clone();
+                        let css_path = data.config.css_path.clone();
+                        drop(data); // Release lock before file I/O
+
+                        // Check HTML file (only if path is not empty)
+                        if !html_path.as_os_str().is_empty() {
+                            if let Ok(metadata) = std::fs::metadata(&html_path) {
+                                if let Ok(modified) = metadata.modified() {
+                                    if let Ok(mut last) = last_html_modified.try_lock() {
+                                        if *last != Some(modified) {
+                                            *last = Some(modified);
+                                            files_changed = true;
+                                        }
                                     }
                                 }
                             }
                         }
                         // Check CSS file
-                        if let Some(ref css_path) = data.config.css_path {
+                        if let Some(ref css_path) = css_path {
                             if let Ok(metadata) = std::fs::metadata(css_path) {
                                 if let Ok(modified) = metadata.modified() {
                                     if let Ok(mut last) = last_css_modified.try_lock() {
@@ -331,7 +361,8 @@ impl Displayer for CssTemplateDisplayer {
                     // Reload template
                     let html_content = {
                         let mut should_reload = config_changed;
-                        let config = data_clone.lock().ok().map(|mut d| {
+                        // Use try_lock to avoid blocking
+                        let config = data_clone.try_lock().ok().map(|mut d| {
                             if d.config_changed {
                                 d.config_changed = false;
                                 should_reload = true;
@@ -394,7 +425,8 @@ impl Displayer for CssTemplateDisplayer {
 
                     if let Some((html, base_uri)) = html_content {
                         webview.load_html(&html, base_uri.as_deref());
-                        if let Ok(mut data) = data_clone.lock() {
+                        // Use try_lock to avoid blocking
+                        if let Ok(mut data) = data_clone.try_lock() {
                             data.cached_html = Some(html);
                         }
                     }
@@ -423,16 +455,28 @@ impl Displayer for CssTemplateDisplayer {
                             data.last_js_values = js_values_str.clone();
                             data.js_update_count += 1;
 
-                            // Every 60 updates (~1 minute), add a GC hint to help WebKit release memory
-                            let gc_hint = if data.js_update_count % 60 == 0 {
-                                "; if (typeof gc === 'function') gc();"
-                            } else {
-                                ""
-                            };
+                            // Every 60 updates (~1 minute), fully reload WebView to combat memory leak
+                            // WebKitGTK accumulates internal state that can't be released otherwise
+                            if data.js_update_count % 60 == 0 {
+                                log::debug!("CSS template: periodic WebView reload to release memory");
+                                // Force a full reload by reloading the cached HTML
+                                if let Some(ref html) = data.cached_html {
+                                    let html_clone = html.clone();
+                                    let base_uri = if !data.config.html_path.as_os_str().is_empty() {
+                                        data.config.html_path.parent()
+                                            .map(|p| format!("file://{}/", p.display()))
+                                    } else {
+                                        None
+                                    };
+                                    drop(data); // Release lock before WebView operation
+                                    webview.load_html(&html_clone, base_uri.as_deref());
+                                    return glib::ControlFlow::Continue;
+                                }
+                            }
 
                             let js = format!(
-                                "if (window.updateValues) {{ window.updateValues({{{}}}); }}{}",
-                                js_values_str, gc_hint
+                                "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
+                                js_values_str
                             );
 
                             // Execute JavaScript

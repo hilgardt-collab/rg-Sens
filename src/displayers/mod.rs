@@ -102,7 +102,7 @@ pub use clock_analog::ClockAnalogDisplayer;
 pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
 pub use cpu_cores::CpuCoresDisplayer;
 #[cfg(feature = "webkit")]
-pub use css_template::CssTemplateDisplayer;
+pub use css_template::{shutdown_all as css_template_shutdown, CssTemplateDisplayer};
 pub use cyberpunk::{CyberpunkDisplayConfig, CyberpunkDisplayer};
 pub use fighter_hud::{FighterHudDisplayConfig, FighterHudDisplayer};
 pub use graph::GraphDisplayer;

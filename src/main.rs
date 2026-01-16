@@ -1050,6 +1050,10 @@ fn build_ui(app: &Application) {
         // Stop the update manager gracefully
         update_manager_for_close.stop();
 
+        // Signal CSS template displayers to stop their timers
+        #[cfg(feature = "webkit")]
+        rg_sens::displayers::css_template_shutdown();
+
         let is_dirty = config_dirty_clone4.load(Ordering::Relaxed);
 
         if is_dirty {
