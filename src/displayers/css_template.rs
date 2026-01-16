@@ -242,7 +242,14 @@ impl Displayer for CssTemplateDisplayer {
         // Stop flag to terminate the watcher thread when widget is destroyed
         let stop_flag = Arc::new(AtomicBool::new(false));
         let stop_flag_writer = stop_flag.clone();
+        let stop_flag_for_destroy = stop_flag.clone();
         let watcher_data = self.data.clone();
+
+        // Connect to WebView destroy signal to ensure stop flag is set on shutdown
+        webview.connect_destroy(move |_| {
+            stop_flag_for_destroy.store(true, Ordering::SeqCst);
+            log::debug!("CSS template WebView destroyed, stop flag set");
+        });
 
         // Spawn file watcher in a separate thread
         std::thread::spawn(move || {
@@ -290,22 +297,23 @@ impl Displayer for CssTemplateDisplayer {
             }
 
             // Keep the watcher alive until stop flag is set
-            // Check every second for faster cleanup, with a maximum lifetime of 5 minutes
-            // to prevent zombie threads if the stop flag is never set (defensive measure)
-            const MAX_LIFETIME_SECS: u64 = 300; // 5 minutes
-            let mut elapsed_secs: u64 = 0;
+            // Check every 100ms for faster cleanup on shutdown
+            // Maximum lifetime of 10 seconds as fallback if destroy signal doesn't fire
+            const CHECK_INTERVAL_MS: u64 = 100;
+            const MAX_LIFETIME_MS: u64 = 10_000; // 10 seconds
+            let mut elapsed_ms: u64 = 0;
             while !stop_flag_writer.load(Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_secs(1));
-                elapsed_secs += 1;
-                if elapsed_secs >= MAX_LIFETIME_SECS {
+                std::thread::sleep(Duration::from_millis(CHECK_INTERVAL_MS));
+                elapsed_ms += CHECK_INTERVAL_MS;
+                if elapsed_ms >= MAX_LIFETIME_MS {
                     log::warn!(
-                        "CSS template file watcher thread timed out after {} seconds (stop flag never set)",
-                        MAX_LIFETIME_SECS
+                        "CSS template file watcher thread timed out after {} ms (stop flag never set)",
+                        MAX_LIFETIME_MS
                     );
                     break;
                 }
             }
-            log::debug!("CSS template file watcher thread stopped after {} seconds", elapsed_secs);
+            log::debug!("CSS template file watcher thread stopped after {} ms", elapsed_ms);
             // Watcher is dropped here, releasing file handles
         });
 
