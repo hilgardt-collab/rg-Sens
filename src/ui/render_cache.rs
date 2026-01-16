@@ -72,7 +72,7 @@ impl ScaledSurfaceCache {
     fn new() -> Self {
         Self {
             cache: HashMap::new(),
-            max_entries: 30, // Limit memory usage
+            max_entries: 5, // Reduced from 30 - each surface can be 30+ MB!
         }
     }
 
@@ -84,12 +84,17 @@ impl ScaledSurfaceCache {
         display_mode: u8,
         alpha: f64,
     ) -> Option<cairo::ImageSurface> {
-        // Key includes alpha (quantized to 1% precision to avoid cache explosion)
-        let alpha_key = (alpha * 100.0) as i32;
+        // Round dimensions to nearest 16 pixels to reduce cache key explosion
+        // This prevents creating new 30MB+ surfaces for tiny size changes
+        let rounded_width = ((target_width + 8) / 16) * 16;
+        let rounded_height = ((target_height + 8) / 16) * 16;
+
+        // Quantize alpha to 10% precision (was 1%) to further reduce cache entries
+        let alpha_key = (alpha * 10.0) as i32;
         let key = (
             path.to_string(),
-            target_width,
-            target_height,
+            rounded_width,
+            rounded_height,
             display_mode,
             alpha_key,
         );
@@ -105,13 +110,15 @@ impl ScaledSurfaceCache {
         let img_width = pixbuf.width() as f64;
         let img_height = pixbuf.height() as f64;
 
-        // Create target surface
+        // Create target surface at rounded dimensions (matches cache key)
+        // Using rounded dimensions ensures cache consistency
         let surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, target_width, target_height).ok()?;
+            cairo::ImageSurface::create(cairo::Format::ARgb32, rounded_width, rounded_height)
+                .ok()?;
 
         let cr = cairo::Context::new(&surface).ok()?;
-        let width = target_width as f64;
-        let height = target_height as f64;
+        let width = rounded_width as f64;
+        let height = rounded_height as f64;
 
         // Render scaled image based on display mode
         match display_mode {
