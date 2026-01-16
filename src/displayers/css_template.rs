@@ -50,6 +50,8 @@ struct DisplayData {
     config_changed: bool,
     /// Last JavaScript values string sent to WebView (for change detection)
     last_js_values: String,
+    /// Counter for JavaScript update calls (for periodic GC)
+    js_update_count: u32,
 }
 
 impl Default for DisplayData {
@@ -64,6 +66,7 @@ impl Default for DisplayData {
             placeholder_hints: HashMap::new(),
             config_changed: false,
             last_js_values: String::new(),
+            js_update_count: 0,
         }
     }
 }
@@ -199,13 +202,21 @@ impl Displayer for CssTemplateDisplayer {
         // Create WebView
         let webview = WebView::new();
 
-        // Configure WebView settings using the explicit WebViewExt trait
+        // Configure WebView settings to minimize memory usage
         if let Some(settings) = WebViewExt::settings(&webview) {
             settings.set_enable_javascript(true);
             settings.set_allow_file_access_from_file_urls(true);
             settings.set_allow_universal_access_from_file_urls(true);
             settings.set_enable_developer_extras(false);
             settings.set_enable_page_cache(false);
+            // Disable features that can accumulate memory
+            settings.set_enable_html5_database(false);
+            settings.set_enable_html5_local_storage(false);
+            settings.set_enable_offline_web_application_cache(false);
+            // Disable media to reduce memory footprint
+            settings.set_enable_media(false);
+            settings.set_enable_webaudio(false);
+            settings.set_enable_webgl(false);
         }
 
         // Set transparent background
@@ -299,8 +310,9 @@ impl Displayer for CssTemplateDisplayer {
         });
 
         // Set up periodic check for reload and value updates
-        // 250ms is sufficient for hot-reload detection while reducing CPU overhead
-        glib::timeout_add_local(Duration::from_millis(250), {
+        // 1000ms reduces WebKitGTK memory overhead from frequent JavaScript evaluation
+        // Hot-reload detection is slightly slower but acceptable for development use
+        glib::timeout_add_local(Duration::from_millis(1000), {
             let data_clone = self.data.clone();
             let webview_weak = webview.downgrade();
             let reload_flag_reader = reload_flag;
@@ -436,10 +448,18 @@ impl Displayer for CssTemplateDisplayer {
                         // Only call JavaScript if values actually changed
                         if js_values_str != data.last_js_values {
                             data.last_js_values = js_values_str.clone();
+                            data.js_update_count += 1;
+
+                            // Every 60 updates (~1 minute), add a GC hint to help WebKit release memory
+                            let gc_hint = if data.js_update_count % 60 == 0 {
+                                "; if (typeof gc === 'function') gc();"
+                            } else {
+                                ""
+                            };
 
                             let js = format!(
-                                "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
-                                js_values_str
+                                "if (window.updateValues) {{ window.updateValues({{{}}}); }}{}",
+                                js_values_str, gc_hint
                             );
 
                             // Execute JavaScript
