@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
+    <!--
+        Art Nouveau System Monitor Panel - RESPONSIVE VERSION
+
+        Automatically adapts to any panel size using:
+        - Flexbox/Grid layouts that reflow
+        - Viewport-relative units (vw, vh, vmin)
+        - CSS clamp() for responsive typography
+        - Container queries for section layout
+
+        Placeholder mapping:
+          Time:       {{0}} time value
+          CPU Temp 1: {{1}} caption, {{2}} value, {{3}} unit, {{4}} max
+          CPU Temp 2: {{5}} caption, {{6}} value, {{7}} unit, {{8}} max
+          CPU Temp 3: {{9}} caption, {{10}} value, {{11}} unit, {{12}} max
+          GPU Temp:   {{13}} caption, {{14}} value, {{15}} unit, {{16}} max
+          Memory:     {{17}} caption, {{18}} value, {{19}} unit, {{20}} max
+          Disk 1:     {{21}} caption, {{22}} value, {{23}} unit, {{24}} max
+          Disk 2:     {{25}} caption, {{26}} value, {{27}} unit, {{28}} max
+          CPU Use:    {{29}} caption, {{30}} value, {{31}} unit, {{32}} max
+          GPU Use:    {{33}} caption, {{34}} value, {{35}} unit, {{36}} max
+    -->
+    <script type="application/json" id="rg-placeholder-config">
+    {
+        "0": { "hint": "Time display (HH:MM:SS)", "source": "clock", "field": "time" },
+
+        "1": { "hint": "CPU Temp 1 - Caption", "source": "cpu", "instance": 1, "field": "caption" },
+        "2": { "hint": "CPU Temp 1 - Value", "source": "cpu", "instance": 1, "field": "value", "format": "{:.0}" },
+        "3": { "hint": "CPU Temp 1 - Unit", "source": "cpu", "instance": 1, "field": "unit" },
+        "4": { "hint": "CPU Temp 1 - Max", "source": "cpu", "instance": 1, "field": "max" },
+
+        "5": { "hint": "CPU Temp 2 - Caption", "source": "cpu", "instance": 2, "field": "caption" },
+        "6": { "hint": "CPU Temp 2 - Value", "source": "cpu", "instance": 2, "field": "value", "format": "{:.0}" },
+        "7": { "hint": "CPU Temp 2 - Unit", "source": "cpu", "instance": 2, "field": "unit" },
+        "8": { "hint": "CPU Temp 2 - Max", "source": "cpu", "instance": 2, "field": "max" },
+
+        "9": { "hint": "CPU Temp 3 - Caption", "source": "cpu", "instance": 3, "field": "caption" },
+        "10": { "hint": "CPU Temp 3 - Value", "source": "cpu", "instance": 3, "field": "value", "format": "{:.0}" },
+        "11": { "hint": "CPU Temp 3 - Unit", "source": "cpu", "instance": 3, "field": "unit" },
+        "12": { "hint": "CPU Temp 3 - Max", "source": "cpu", "instance": 3, "field": "max" },
+
+        "13": { "hint": "GPU Temp - Caption", "source": "gpu", "field": "caption" },
+        "14": { "hint": "GPU Temp - Value", "source": "gpu", "field": "value", "format": "{:.0}" },
+        "15": { "hint": "GPU Temp - Unit", "source": "gpu", "field": "unit" },
+        "16": { "hint": "GPU Temp - Max", "source": "gpu", "field": "max" },
+
+        "17": { "hint": "Memory - Caption", "source": "memory", "field": "caption" },
+        "18": { "hint": "Memory - Value", "source": "memory", "field": "value", "format": "{:.1}" },
+        "19": { "hint": "Memory - Unit", "source": "memory", "field": "unit" },
+        "20": { "hint": "Memory - Max", "source": "memory", "field": "max" },
+
+        "21": { "hint": "Disk 1 - Caption", "source": "disk", "instance": 1, "field": "caption" },
+        "22": { "hint": "Disk 1 - Value", "source": "disk", "instance": 1, "field": "value", "format": "{:.0}" },
+        "23": { "hint": "Disk 1 - Unit", "source": "disk", "instance": 1, "field": "unit" },
+        "24": { "hint": "Disk 1 - Max", "source": "disk", "instance": 1, "field": "max" },
+
+        "25": { "hint": "Disk 2 - Caption", "source": "disk", "instance": 2, "field": "caption" },
+        "26": { "hint": "Disk 2 - Value", "source": "disk", "instance": 2, "field": "value", "format": "{:.0}" },
+        "27": { "hint": "Disk 2 - Unit", "source": "disk", "instance": 2, "field": "unit" },
+        "28": { "hint": "Disk 2 - Max", "source": "disk", "instance": 2, "field": "max" },
+
+        "29": { "hint": "CPU Usage - Caption", "source": "cpu", "instance": 4, "field": "caption" },
+        "30": { "hint": "CPU Usage - Value", "source": "cpu", "instance": 4, "field": "value", "format": "{:.0}" },
+        "31": { "hint": "CPU Usage - Unit", "source": "cpu", "instance": 4, "field": "unit" },
+        "32": { "hint": "CPU Usage - Max", "source": "cpu", "instance": 4, "field": "max" },
+
+        "33": { "hint": "GPU Usage - Caption", "source": "gpu", "instance": 2, "field": "caption" },
+        "34": { "hint": "GPU Usage - Value", "source": "gpu", "instance": 2, "field": "value", "format": "{:.0}" },
+        "35": { "hint": "GPU Usage - Unit", "source": "gpu", "instance": 2, "field": "unit" },
+        "36": { "hint": "GPU Usage - Max", "source": "gpu", "instance": 2, "field": "max" }
+    }
+    </script>
+    <link rel="stylesheet" href="art_nouveau_panel_responsive.css">
+</head>
+<body>
+    <!-- SVG Definitions for gradients and patterns -->
+    <svg class="svg-defs" aria-hidden="true">
+        <defs>
+            <!-- Gold gradient for accents -->
+            <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#d4a574"/>
+                <stop offset="50%" style="stop-color:#c9a227"/>
+                <stop offset="100%" style="stop-color:#8b6914"/>
+            </linearGradient>
+
+            <!-- Sage green gradient for bars -->
+            <linearGradient id="sageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#7d9b76"/>
+                <stop offset="100%" style="stop-color:#5a7a52"/>
+            </linearGradient>
+
+            <!-- Dusty rose gradient -->
+            <linearGradient id="roseGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#c9a9a6"/>
+                <stop offset="100%" style="stop-color:#a67f7b"/>
+            </linearGradient>
+
+            <!-- Temperature gradient (cool to warm) -->
+            <linearGradient id="tempGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#7d9b76"/>
+                <stop offset="50%" style="stop-color:#c9a227"/>
+                <stop offset="100%" style="stop-color:#a67f7b"/>
+            </linearGradient>
+
+            <!-- Decorative corner flourish -->
+            <symbol id="cornerFlourish" viewBox="0 0 80 80">
+                <path d="M5,75 Q5,5 75,5" fill="none" stroke="url(#goldGradient)" stroke-width="2"/>
+                <path d="M10,70 Q10,15 65,10" fill="none" stroke="url(#goldGradient)" stroke-width="1.5" opacity="0.7"/>
+                <path d="M15,65 Q15,25 55,15" fill="none" stroke="url(#goldGradient)" stroke-width="1" opacity="0.5"/>
+                <path d="M20,55 Q30,45 25,35 Q35,40 30,55 Q25,60 20,55" fill="rgba(125,155,118,0.6)"/>
+                <path d="M22,50 Q28,43 26,38" fill="none" stroke="rgba(90,122,82,0.8)" stroke-width="0.5"/>
+            </symbol>
+
+            <!-- Divider vine -->
+            <symbol id="vineDivider" viewBox="0 0 400 30" preserveAspectRatio="none">
+                <path d="M0,15 Q50,5 100,15 T200,15 T300,15 T400,15" fill="none" stroke="url(#goldGradient)" stroke-width="1.5"/>
+                <circle cx="100" cy="15" r="3" fill="url(#goldGradient)"/>
+                <circle cx="200" cy="15" r="4" fill="url(#goldGradient)"/>
+                <circle cx="300" cy="15" r="3" fill="url(#goldGradient)"/>
+                <path d="M145,12 Q155,5 150,15 Q145,17 145,12" fill="rgba(125,155,118,0.7)"/>
+                <path d="M255,18 Q265,25 260,15 Q255,13 255,18" fill="rgba(125,155,118,0.7)"/>
+            </symbol>
+        </defs>
+    </svg>
+
+    <div class="panel">
+        <!-- Decorative corner flourishes -->
+        <svg class="corner-flourish top-left"><use href="#cornerFlourish"/></svg>
+        <svg class="corner-flourish top-right"><use href="#cornerFlourish"/></svg>
+        <svg class="corner-flourish bottom-left"><use href="#cornerFlourish"/></svg>
+        <svg class="corner-flourish bottom-right"><use href="#cornerFlourish"/></svg>
+
+        <!-- Decorative border -->
+        <div class="decorative-border"></div>
+
+        <!-- Header with time -->
+        <header class="panel-header">
+            <div class="header-ornament left"></div>
+            <div class="time-display">
+                <span class="time-value">{{0}}</span>
+            </div>
+            <div class="header-ornament right"></div>
+        </header>
+
+        <!-- Main content area - uses CSS Grid for responsive layout -->
+        <main class="content-area">
+            <!-- Temperature Section -->
+            <section class="metric-section temperatures">
+                <h2 class="section-title">
+                    <span class="title-flourish left"></span>
+                    <span class="title-text">Temperatures</span>
+                    <span class="title-flourish right"></span>
+                </h2>
+
+                <div class="gauges-grid">
+                    <!-- CPU Temps -->
+                    <div class="metric-item arc-gauge-item">
+                        <div class="gauge-label">{{1}}</div>
+                        <div class="arc-gauge-container">
+                            <svg class="arc-gauge-svg" viewBox="0 0 120 70">
+                                <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
+                                <path class="arc-fill temp-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="2" data-max-id="4" data-length="157"/>
+                            </svg>
+                            <div class="gauge-value-container">
+                                <span class="gauge-value">{{2}}</span>
+                                <span class="gauge-unit">{{3}}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-item arc-gauge-item">
+                        <div class="gauge-label">{{5}}</div>
+                        <div class="arc-gauge-container">
+                            <svg class="arc-gauge-svg" viewBox="0 0 120 70">
+                                <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
+                                <path class="arc-fill temp-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="6" data-max-id="8" data-length="157"/>
+                            </svg>
+                            <div class="gauge-value-container">
+                                <span class="gauge-value">{{6}}</span>
+                                <span class="gauge-unit">{{7}}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metric-item arc-gauge-item">
+                        <div class="gauge-label">{{9}}</div>
+                        <div class="arc-gauge-container">
+                            <svg class="arc-gauge-svg" viewBox="0 0 120 70">
+                                <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
+                                <path class="arc-fill temp-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="10" data-max-id="12" data-length="157"/>
+                            </svg>
+                            <div class="gauge-value-container">
+                                <span class="gauge-value">{{10}}</span>
+                                <span class="gauge-unit">{{11}}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GPU Temperature -->
+                    <div class="metric-item arc-gauge-item gpu-temp">
+                        <div class="gauge-label">{{13}}</div>
+                        <div class="arc-gauge-container large">
+                            <svg class="arc-gauge-svg" viewBox="0 0 120 70">
+                                <path class="arc-track" d="M10,60 A50,50 0 0,1 110,60"/>
+                                <path class="arc-fill gpu-arc" d="M10,60 A50,50 0 0,1 110,60" data-gauge="arc" data-value-id="14" data-max-id="16" data-length="157"/>
+                            </svg>
+                            <div class="gauge-value-container">
+                                <span class="gauge-value">{{14}}</span>
+                                <span class="gauge-unit">{{15}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Divider -->
+            <svg class="vine-divider"><use href="#vineDivider"/></svg>
+
+            <!-- Memory & Storage Section -->
+            <section class="metric-section resources">
+                <h2 class="section-title">
+                    <span class="title-flourish left"></span>
+                    <span class="title-text">Resources</span>
+                    <span class="title-flourish right"></span>
+                </h2>
+
+                <!-- Memory Bar -->
+                <div class="metric-item bar-item">
+                    <div class="bar-header">
+                        <span class="bar-label">{{17}}</span>
+                        <span class="bar-value-display">
+                            <span class="bar-value">{{18}}</span>
+                            <span class="bar-unit">{{19}}</span>
+                        </span>
+                    </div>
+                    <div class="art-nouveau-bar">
+                        <div class="bar-track">
+                            <div class="bar-fill memory-fill" data-gauge="bar" data-value-id="18" data-max-id="20"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage circles -->
+                <div class="storage-grid">
+                    <div class="metric-item circular-item">
+                        <div class="circular-gauge">
+                            <svg class="circular-svg" viewBox="0 0 100 100">
+                                <circle class="circular-track" cx="50" cy="50" r="40"/>
+                                <circle class="circular-fill disk-fill" cx="50" cy="50" r="40" data-gauge="ring" data-value-id="22" data-max-id="24" data-circumference="251.3"/>
+                            </svg>
+                            <div class="circular-content">
+                                <span class="circular-value">{{22}}</span>
+                                <span class="circular-unit">{{23}}</span>
+                            </div>
+                        </div>
+                        <div class="circular-label">{{21}}</div>
+                    </div>
+
+                    <div class="metric-item circular-item">
+                        <div class="circular-gauge">
+                            <svg class="circular-svg" viewBox="0 0 100 100">
+                                <circle class="circular-track" cx="50" cy="50" r="40"/>
+                                <circle class="circular-fill disk-fill" cx="50" cy="50" r="40" data-gauge="ring" data-value-id="26" data-max-id="28" data-circumference="251.3"/>
+                            </svg>
+                            <div class="circular-content">
+                                <span class="circular-value">{{26}}</span>
+                                <span class="circular-unit">{{27}}</span>
+                            </div>
+                        </div>
+                        <div class="circular-label">{{25}}</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Divider -->
+            <svg class="vine-divider"><use href="#vineDivider"/></svg>
+
+            <!-- Utilization Section -->
+            <section class="metric-section utilization">
+                <h2 class="section-title">
+                    <span class="title-flourish left"></span>
+                    <span class="title-text">Utilization</span>
+                    <span class="title-flourish right"></span>
+                </h2>
+
+                <!-- CPU Usage -->
+                <div class="metric-item bar-item">
+                    <div class="bar-header">
+                        <span class="bar-label">{{29}}</span>
+                        <span class="bar-value-display">
+                            <span class="bar-value">{{30}}</span>
+                            <span class="bar-unit">{{31}}</span>
+                        </span>
+                    </div>
+                    <div class="art-nouveau-bar">
+                        <div class="bar-track">
+                            <div class="bar-fill cpu-fill" data-gauge="bar" data-value-id="30" data-max-id="32"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GPU Usage -->
+                <div class="metric-item bar-item">
+                    <div class="bar-header">
+                        <span class="bar-label">{{33}}</span>
+                        <span class="bar-value-display">
+                            <span class="bar-value">{{34}}</span>
+                            <span class="bar-unit">{{35}}</span>
+                        </span>
+                    </div>
+                    <div class="art-nouveau-bar">
+                        <div class="bar-track">
+                            <div class="bar-fill gpu-fill" data-gauge="bar" data-value-id="34" data-max-id="36"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer ornament -->
+        <footer class="footer-ornament">
+            <svg class="footer-vine" viewBox="0 0 400 40" preserveAspectRatio="none">
+                <path d="M0,20 Q100,5 200,20 T400,20" fill="none" stroke="url(#goldGradient)" stroke-width="1"/>
+                <circle cx="200" cy="20" r="5" fill="url(#goldGradient)"/>
+                <path d="M195,15 Q200,8 205,15 Q200,12 195,15" fill="rgba(125,155,118,0.8)"/>
+                <path d="M195,25 Q200,32 205,25 Q200,28 195,25" fill="rgba(125,155,118,0.8)"/>
+            </svg>
+        </footer>
+    </div>
+
+    <!-- Hidden max value elements for gauge calculations -->
+    <span class="max-value" id="v4">{{4}}</span>
+    <span class="max-value" id="v8">{{8}}</span>
+    <span class="max-value" id="v12">{{12}}</span>
+    <span class="max-value" id="v16">{{16}}</span>
+    <span class="max-value" id="v20">{{20}}</span>
+    <span class="max-value" id="v24">{{24}}</span>
+    <span class="max-value" id="v28">{{28}}</span>
+    <span class="max-value" id="v32">{{32}}</span>
+    <span class="max-value" id="v36">{{36}}</span>
+
+    <script src="rg-sens-gauges.js"></script>
+</body>
+</html>
