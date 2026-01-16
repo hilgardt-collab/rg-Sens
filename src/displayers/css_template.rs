@@ -17,11 +17,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 use crate::displayers::combo_utils;
@@ -236,86 +233,29 @@ impl Displayer for CssTemplateDisplayer {
             }
         }
 
-        // Set up file watcher for hot-reload using atomic flags
-        let reload_flag = Arc::new(AtomicBool::new(false));
-        let reload_flag_writer = reload_flag.clone();
-        // Stop flag to terminate the watcher thread when widget is destroyed
-        let stop_flag = Arc::new(AtomicBool::new(false));
-        let stop_flag_writer = stop_flag.clone();
-        let stop_flag_for_destroy = stop_flag.clone();
-        let watcher_data = self.data.clone();
+        // Track file modification times for hot-reload (checked in timer, no separate thread)
+        let last_html_modified: Arc<Mutex<Option<std::time::SystemTime>>> =
+            Arc::new(Mutex::new(None));
+        let last_css_modified: Arc<Mutex<Option<std::time::SystemTime>>> =
+            Arc::new(Mutex::new(None));
 
-        // Connect to WebView destroy signal to ensure stop flag is set on shutdown
-        webview.connect_destroy(move |_| {
-            stop_flag_for_destroy.store(true, Ordering::SeqCst);
-            log::debug!("CSS template WebView destroyed, stop flag set");
-        });
-
-        // Spawn file watcher in a separate thread
-        std::thread::spawn(move || {
-            let config = Config::default().with_poll_interval(Duration::from_millis(500));
-
-            let flag = reload_flag_writer.clone();
-            let mut watcher = match RecommendedWatcher::new(
-                move |res: Result<notify::Event, notify::Error>| {
-                    if let Ok(event) = res {
-                        if event.kind.is_modify() {
-                            flag.store(true, Ordering::SeqCst);
-                        }
+        // Initialize modification times
+        if let Ok(data) = self.data.lock() {
+            if data.config.hot_reload {
+                if let Ok(metadata) = std::fs::metadata(&data.config.html_path) {
+                    if let Ok(modified) = metadata.modified() {
+                        *last_html_modified.lock().unwrap() = Some(modified);
                     }
-                },
-                config,
-            ) {
-                Ok(w) => w,
-                Err(e) => {
-                    log::warn!("Failed to create file watcher: {}", e);
-                    return;
                 }
-            };
-
-            // Watch the template files
-            if let Ok(data) = watcher_data.lock() {
-                if data.config.hot_reload {
-                    if !data.config.html_path.as_os_str().is_empty()
-                        && data.config.html_path.exists()
-                    {
-                        if let Err(e) =
-                            watcher.watch(&data.config.html_path, RecursiveMode::NonRecursive)
-                        {
-                            log::warn!("Failed to watch HTML file: {}", e);
-                        }
-                    }
-
-                    if let Some(ref css_path) = data.config.css_path {
-                        if css_path.exists() {
-                            if let Err(e) = watcher.watch(css_path, RecursiveMode::NonRecursive) {
-                                log::warn!("Failed to watch CSS file: {}", e);
-                            }
+                if let Some(ref css_path) = data.config.css_path {
+                    if let Ok(metadata) = std::fs::metadata(css_path) {
+                        if let Ok(modified) = metadata.modified() {
+                            *last_css_modified.lock().unwrap() = Some(modified);
                         }
                     }
                 }
             }
-
-            // Keep the watcher alive until stop flag is set
-            // Check every 100ms for faster cleanup on shutdown
-            // Maximum lifetime of 10 seconds as fallback if destroy signal doesn't fire
-            const CHECK_INTERVAL_MS: u64 = 100;
-            const MAX_LIFETIME_MS: u64 = 10_000; // 10 seconds
-            let mut elapsed_ms: u64 = 0;
-            while !stop_flag_writer.load(Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(CHECK_INTERVAL_MS));
-                elapsed_ms += CHECK_INTERVAL_MS;
-                if elapsed_ms >= MAX_LIFETIME_MS {
-                    log::warn!(
-                        "CSS template file watcher thread timed out after {} ms (stop flag never set)",
-                        MAX_LIFETIME_MS
-                    );
-                    break;
-                }
-            }
-            log::debug!("CSS template file watcher thread stopped after {} ms", elapsed_ms);
-            // Watcher is dropped here, releasing file handles
-        });
+        }
 
         // Set up periodic check for reload and value updates
         // 1000ms reduces WebKitGTK memory overhead from frequent JavaScript evaluation
@@ -323,12 +263,10 @@ impl Displayer for CssTemplateDisplayer {
         glib::timeout_add_local(Duration::from_millis(1000), {
             let data_clone = self.data.clone();
             let webview_weak = webview.downgrade();
-            let reload_flag_reader = reload_flag;
-            let stop_flag_setter = stop_flag;
+            let last_html_modified = last_html_modified.clone();
+            let last_css_modified = last_css_modified.clone();
             move || {
                 let Some(webview) = webview_weak.upgrade() else {
-                    // Widget is destroyed - signal the file watcher thread to stop
-                    stop_flag_setter.store(true, Ordering::SeqCst);
                     log::debug!("CSS template timer stopping: WebView destroyed");
                     return glib::ControlFlow::Break;
                 };
@@ -336,15 +274,11 @@ impl Displayer for CssTemplateDisplayer {
                 // Check if widget is orphaned (removed from widget tree but not destroyed)
                 // This is critical for preventing memory leaks when panels are replaced -
                 // the WebView may still exist (held by Overlay) but is no longer attached
-                // to any window. Without this check, the timer and file watcher thread
-                // run indefinitely, holding Arc references and leaking memory.
+                // to any window.
                 if webview.root().is_none() {
-                    stop_flag_setter.store(true, Ordering::SeqCst);
                     log::debug!("CSS template timer stopping: WebView orphaned (no root)");
                     // Try to clean up WebView resources
-                    // stop_loading() aborts any pending navigation/JavaScript
                     webview.stop_loading();
-                    // Load a minimal empty page to release any held resources
                     webview.load_html("", None);
                     return glib::ControlFlow::Break;
                 }
@@ -361,8 +295,39 @@ impl Displayer for CssTemplateDisplayer {
                     .map(|d| d.config_changed)
                     .unwrap_or(false);
 
-                // Check for hot-reload or config change
-                if reload_flag_reader.swap(false, Ordering::SeqCst) || config_changed {
+                // Check for hot-reload by comparing file modification times
+                let mut files_changed = false;
+                if let Ok(data) = data_clone.try_lock() {
+                    if data.config.hot_reload {
+                        // Check HTML file
+                        if let Ok(metadata) = std::fs::metadata(&data.config.html_path) {
+                            if let Ok(modified) = metadata.modified() {
+                                if let Ok(mut last) = last_html_modified.try_lock() {
+                                    if *last != Some(modified) {
+                                        *last = Some(modified);
+                                        files_changed = true;
+                                    }
+                                }
+                            }
+                        }
+                        // Check CSS file
+                        if let Some(ref css_path) = data.config.css_path {
+                            if let Ok(metadata) = std::fs::metadata(css_path) {
+                                if let Ok(modified) = metadata.modified() {
+                                    if let Ok(mut last) = last_css_modified.try_lock() {
+                                        if *last != Some(modified) {
+                                            *last = Some(modified);
+                                            files_changed = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Reload if files changed or config changed
+                if files_changed || config_changed {
                     // Reload template
                     let html_content = {
                         let mut should_reload = config_changed;
