@@ -276,11 +276,22 @@ impl Displayer for CssTemplateDisplayer {
             }
 
             // Keep the watcher alive until stop flag is set
-            // Check every second instead of every 60 seconds for faster cleanup
+            // Check every second for faster cleanup, with a maximum lifetime of 5 minutes
+            // to prevent zombie threads if the stop flag is never set (defensive measure)
+            const MAX_LIFETIME_SECS: u64 = 300; // 5 minutes
+            let mut elapsed_secs: u64 = 0;
             while !stop_flag_writer.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_secs(1));
+                elapsed_secs += 1;
+                if elapsed_secs >= MAX_LIFETIME_SECS {
+                    log::warn!(
+                        "CSS template file watcher thread timed out after {} seconds (stop flag never set)",
+                        MAX_LIFETIME_SECS
+                    );
+                    break;
+                }
             }
-            log::debug!("CSS template file watcher thread stopped");
+            log::debug!("CSS template file watcher thread stopped after {} seconds", elapsed_secs);
             // Watcher is dropped here, releasing file handles
         });
 
@@ -295,8 +306,25 @@ impl Displayer for CssTemplateDisplayer {
                 let Some(webview) = webview_weak.upgrade() else {
                     // Widget is destroyed - signal the file watcher thread to stop
                     stop_flag_setter.store(true, Ordering::SeqCst);
+                    log::debug!("CSS template timer stopping: WebView destroyed");
                     return glib::ControlFlow::Break;
                 };
+
+                // Check if widget is orphaned (removed from widget tree but not destroyed)
+                // This is critical for preventing memory leaks when panels are replaced -
+                // the WebView may still exist (held by Overlay) but is no longer attached
+                // to any window. Without this check, the timer and file watcher thread
+                // run indefinitely, holding Arc references and leaking memory.
+                if webview.root().is_none() {
+                    stop_flag_setter.store(true, Ordering::SeqCst);
+                    log::debug!("CSS template timer stopping: WebView orphaned (no root)");
+                    // Try to clean up WebView resources
+                    // stop_loading() aborts any pending navigation/JavaScript
+                    webview.stop_loading();
+                    // Load a minimal empty page to release any held resources
+                    webview.load_html("", None);
+                    return glib::ControlFlow::Break;
+                }
 
                 // Skip if not visible
                 if !webview.is_mapped() {
