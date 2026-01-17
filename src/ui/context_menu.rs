@@ -901,9 +901,8 @@ where
         // Toggle decoration
         window_for_borderless.set_decorated(!new_borderless);
 
-        // On Wayland/some compositors, we need to hide/show for decoration change to apply
-        window_for_borderless.set_visible(false);
-        window_for_borderless.set_visible(true);
+        // Force the window to update its decorations
+        window_for_borderless.queue_resize();
 
         config_dirty_for_borderless.store(true, Ordering::Relaxed);
         info!("Toggled borderless: {}", new_borderless);
