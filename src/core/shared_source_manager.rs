@@ -3,6 +3,24 @@
 //! This module ensures that each unique source configuration has only ONE
 //! data source instance that polls the hardware. Multiple panels can reference
 //! the same shared source, avoiding duplicate sensor polling.
+//!
+//! # Thread Safety and Locking Order
+//!
+//! This module uses a two-level locking scheme to avoid blocking I/O operations:
+//! - `RwLock<HashMap<String, SharedSourceHandle>>` - protects the collection of sources
+//! - `Mutex<SharedSource>` - protects individual source data
+//!
+//! **CRITICAL: Locking order must always be: RwLock first, then Mutex**
+//!
+//! To avoid deadlocks, we follow this pattern:
+//! 1. Acquire RwLock (read or write)
+//! 2. Clone the Arc<Mutex<>> handle we need
+//! 3. Release the RwLock
+//! 4. Acquire the Mutex on the cloned handle
+//!
+//! This ensures we never hold both locks simultaneously, preventing deadlocks.
+//! Any code that needs to access both the collection and individual source data
+//! MUST follow this pattern.
 
 use super::panel_data::SourceConfig;
 use super::{BoxedDataSource, Registry};

@@ -648,10 +648,9 @@ impl TimerAlarmManager {
         }
 
         // Play global timer sound for newly finished timers
-        let global_sound = self.global_timer_sound.clone();
         for timer_id in finished_timer_ids {
             if !self.timer_sound_played.contains(&timer_id) {
-                Self::play_sound(&global_sound);
+                Self::play_sound(&self.global_timer_sound);
                 self.timer_sound_played.insert(timer_id);
             }
         }
@@ -660,23 +659,24 @@ impl TimerAlarmManager {
     fn check_alarms(&mut self, hour: u32, minute: u32, second: u32, day_of_week: u32) {
         let current = (hour, minute, second);
 
+        // First pass: collect indices and minimal data (no sound clone)
+        // Store: (index, alarm_id, alarm_time, day_matches)
         let alarm_checks: Vec<_> = self
             .alarms
             .iter()
-            .filter(|a| a.enabled)
-            .map(|alarm| {
+            .enumerate()
+            .filter(|(_, a)| a.enabled)
+            .map(|(idx, alarm)| {
                 let alarm_time = (alarm.hour, alarm.minute, alarm.second);
                 let day_matches = alarm.days.is_empty() || alarm.days.contains(&day_of_week);
-                (
-                    alarm.id.clone(),
-                    alarm_time,
-                    day_matches,
-                    alarm.sound.clone(),
-                )
+                (idx, alarm.id.clone(), alarm_time, day_matches)
             })
             .collect();
 
-        for (alarm_id, alarm_time, day_matches, sound_config) in alarm_checks {
+        // Collect indices of alarms that need sound played (rare case)
+        let mut play_sound_indices: Vec<usize> = Vec::new();
+
+        for (idx, alarm_id, alarm_time, day_matches) in alarm_checks {
             let last_check = self.last_alarm_check.get(&alarm_id).cloned();
 
             if day_matches && current == alarm_time {
@@ -685,9 +685,9 @@ impl TimerAlarmManager {
                     self.triggered_alarms.insert(alarm_id.clone());
                     self.last_alarm_check.insert(alarm_id.clone(), current);
 
-                    // Play alarm sound once when triggered
+                    // Mark for sound playback if not already played
                     if !self.alarm_sound_played.contains(&alarm_id) {
-                        Self::play_sound(&sound_config);
+                        play_sound_indices.push(idx);
                         self.alarm_sound_played.insert(alarm_id);
                     }
                 }
@@ -696,6 +696,13 @@ impl TimerAlarmManager {
                 self.triggered_alarms.remove(&alarm_id);
                 self.alarm_sound_played.remove(&alarm_id);
                 self.last_alarm_check.remove(&alarm_id);
+            }
+        }
+
+        // Play sounds for newly triggered alarms (only clone sound when actually needed)
+        for idx in play_sound_indices {
+            if let Some(alarm) = self.alarms.get(idx) {
+                Self::play_sound(&alarm.sound);
             }
         }
     }
