@@ -65,6 +65,10 @@ struct DisplayData {
     cached_prefix_set: std::collections::HashSet<String>,
     /// Reusable key buffer for get_mapped_value lookups
     key_buffer: String,
+    /// Reusable buffer for building JS entries (avoids allocation per tick)
+    entries_buffer: Vec<String>,
+    /// Reusable buffer for the final JS values string
+    js_values_buffer: String,
 }
 
 impl Default for DisplayData {
@@ -88,6 +92,8 @@ impl Default for DisplayData {
             js_update_count: 0,
             cached_prefix_set,
             key_buffer: String::with_capacity(64),
+            entries_buffer: Vec::with_capacity(64),
+            js_values_buffer: String::with_capacity(1024),
         }
     }
 }
@@ -452,46 +458,60 @@ impl Displayer for CssTemplateDisplayer {
                     if data.dirty {
                         data.dirty = false;
 
-                        // Format values and build JavaScript object entries
-                        // Pre-allocate with known capacity to avoid reallocations
-                        let mapping_count = data.config.mappings.len();
-                        let mut entries: Vec<String> = Vec::with_capacity(mapping_count);
+                        // Reuse buffers to avoid allocations - clear but keep capacity
+                        data.entries_buffer.clear();
+                        data.js_values_buffer.clear();
 
-                        // Clone mappings to avoid borrow issues with key_buffer
-                        let mappings: Vec<_> = data.config.mappings.clone();
-                        // Use a local key buffer to avoid borrow conflicts
+                        // Take buffers temporarily to avoid borrow issues
                         let mut key_buffer = std::mem::take(&mut data.key_buffer);
-                        for mapping in &mappings {
+                        let mut entries = std::mem::take(&mut data.entries_buffer);
+
+                        // Build JS entries using reusable buffers
+                        for mapping in &data.config.mappings {
                             let value = get_mapped_value_with_buffer(
                                 &data.values,
                                 mapping,
                                 &mut key_buffer,
                             );
-                            // Escape backslashes and quotes for JSON
+                            // Escape backslashes and quotes for JSON (reuse entry string if possible)
                             let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+                            // Reuse String from entries buffer if available, otherwise push new
                             entries.push(format!(r#""{}": "{}""#, mapping.index, escaped));
                         }
-                        // Restore the key buffer
-                        data.key_buffer = key_buffer;
 
                         // Sort entries for consistent comparison
                         entries.sort();
-                        let js_values_str = entries.join(", ");
+
+                        // Build final JS values string using reusable buffer
+                        let mut js_values_buffer = std::mem::take(&mut data.js_values_buffer);
+                        for (i, entry) in entries.iter().enumerate() {
+                            if i > 0 {
+                                js_values_buffer.push_str(", ");
+                            }
+                            js_values_buffer.push_str(entry);
+                        }
+
+                        // Restore buffers
+                        data.key_buffer = key_buffer;
+                        data.entries_buffer = entries;
 
                         // Only call JavaScript if values actually changed
-                        if js_values_str != data.last_js_values {
-                            data.last_js_values = js_values_str.clone();
+                        if js_values_buffer != data.last_js_values {
+                            // Swap buffers instead of clone to avoid allocation
+                            std::mem::swap(&mut data.last_js_values, &mut js_values_buffer);
+                            data.js_values_buffer = js_values_buffer; // Restore (now contains old value)
                             data.js_update_count += 1;
 
-                            // Every 300 updates (~5 minutes), fully reload WebView to combat memory leak
+                            // Every 60 updates (~1 minute), fully reload WebView to combat memory leak
                             // WebKitGTK accumulates internal state that can't be released otherwise
-                            // Note: More frequent reloads can cause issues with GL renderer
-                            if data.js_update_count % 300 == 0 {
+                            if data.js_update_count % 60 == 0 {
                                 log::debug!("CSS template: periodic WebView reload to release memory");
 
-                                // Shrink HashMap capacity to release unused memory
-                                // HashMap doesn't automatically shrink when cleared/refilled
+                                // Shrink all buffers to release unused memory
                                 data.values.shrink_to_fit();
+                                data.entries_buffer.shrink_to_fit();
+                                data.js_values_buffer.shrink_to_fit();
+                                data.last_js_values.shrink_to_fit();
 
                                 // Force a full reload by reloading the cached HTML
                                 if let Some(ref html) = data.cached_html {
@@ -510,10 +530,15 @@ impl Displayer for CssTemplateDisplayer {
                                 }
                             }
 
-                            let js = format!(
-                                "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
-                                js_values_str
+                            // Build JS call - avoid format! by building string directly
+                            let js_call_prefix = "if (window.updateValues) { window.updateValues({";
+                            let js_call_suffix = "}); }";
+                            let mut js = String::with_capacity(
+                                js_call_prefix.len() + data.last_js_values.len() + js_call_suffix.len()
                             );
+                            js.push_str(js_call_prefix);
+                            js.push_str(&data.last_js_values);
+                            js.push_str(js_call_suffix);
 
                             // Execute JavaScript
                             webview.evaluate_javascript(
@@ -523,6 +548,9 @@ impl Displayer for CssTemplateDisplayer {
                                 None::<&gio::Cancellable>,
                                 |_| {},
                             );
+                        } else {
+                            // Values unchanged, restore buffer
+                            data.js_values_buffer = js_values_buffer;
                         }
                     }
                 }
