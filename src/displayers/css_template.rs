@@ -42,6 +42,12 @@ use crate::ui::css_template_display::{
 use webkit6::prelude::WebViewExt;
 use webkit6::{CacheModel, WebView};
 
+/// Static callback for evaluate_javascript that ignores the result.
+/// Using a static function avoids closure allocation on each call.
+fn js_callback_ignore(_result: Result<webkit6::javascriptcore::Value, glib::Error>) {
+    // Intentionally empty - we don't need the JavaScript result
+}
+
 /// Internal display data shared between widget and displayer
 #[derive(Clone)]
 struct DisplayData {
@@ -69,6 +75,10 @@ struct DisplayData {
     entries_buffer: Vec<String>,
     /// Reusable buffer for the final JS values string
     js_values_buffer: String,
+    /// Reusable buffer for intermediate value formatting
+    value_buffer: String,
+    /// Reusable buffer for building the JS call
+    js_call_buffer: String,
 }
 
 impl Default for DisplayData {
@@ -94,6 +104,8 @@ impl Default for DisplayData {
             key_buffer: String::with_capacity(64),
             entries_buffer: Vec::with_capacity(64),
             js_values_buffer: String::with_capacity(1024),
+            value_buffer: String::with_capacity(64),
+            js_call_buffer: String::with_capacity(2048),
         }
     }
 }
@@ -348,14 +360,13 @@ impl Displayer for CssTemplateDisplayer {
                 let mut files_changed = false;
                 if let Ok(data) = data_clone.try_lock() {
                     if data.config.hot_reload {
-                        // Only check files that exist and have valid paths
-                        let html_path = data.config.html_path.clone();
-                        let css_path = data.config.css_path.clone();
-                        drop(data); // Release lock before file I/O
+                        // Use references to avoid cloning paths every tick
+                        let html_path = &data.config.html_path;
+                        let css_path = &data.config.css_path;
 
                         // Check HTML file (only if path is not empty)
                         if !html_path.as_os_str().is_empty() {
-                            if let Ok(metadata) = std::fs::metadata(&html_path) {
+                            if let Ok(metadata) = std::fs::metadata(html_path) {
                                 if let Ok(modified) = metadata.modified() {
                                     if let Ok(mut last) = last_html_modified.try_lock() {
                                         if *last != Some(modified) {
@@ -463,32 +474,55 @@ impl Displayer for CssTemplateDisplayer {
                     if data.dirty {
                         data.dirty = false;
 
-                        // Reuse buffers to avoid allocations - clear but keep capacity
-                        data.entries_buffer.clear();
-                        data.js_values_buffer.clear();
-
                         // Take buffers temporarily to avoid borrow issues
                         let mut key_buffer = std::mem::take(&mut data.key_buffer);
                         let mut entries = std::mem::take(&mut data.entries_buffer);
+                        let mut value_buffer = std::mem::take(&mut data.value_buffer);
 
-                        // Build JS entries using reusable buffers
-                        for mapping in &data.config.mappings {
-                            let value = get_mapped_value_with_buffer(
+                        // Build JS entries - reuse existing String allocations in entries buffer
+                        let mappings_len = data.config.mappings.len();
+                        for (i, mapping) in data.config.mappings.iter().enumerate() {
+                            // Get value into reusable buffer
+                            value_buffer.clear();
+                            write_mapped_value_to_buffer(
                                 &data.values,
                                 mapping,
                                 &mut key_buffer,
+                                &mut value_buffer,
                             );
-                            // Escape backslashes and quotes for JSON (reuse entry string if possible)
-                            let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
-                            // Reuse String from entries buffer if available, otherwise push new
-                            entries.push(format!(r#""{}": "{}""#, mapping.index, escaped));
+
+                            // Reuse existing String from buffer or create new one
+                            if i < entries.len() {
+                                // Reuse existing String - clear and rebuild
+                                entries[i].clear();
+                            } else {
+                                // Need new String
+                                entries.push(String::with_capacity(32));
+                            }
+                            // Build entry using write! to avoid to_string() allocation
+                            use std::fmt::Write;
+                            entries[i].push('"');
+                            let _ = write!(entries[i], "{}", mapping.index);
+                            entries[i].push_str("\": \"");
+                            // Escape inline to avoid temporary String
+                            for c in value_buffer.chars() {
+                                match c {
+                                    '\\' => entries[i].push_str("\\\\"),
+                                    '"' => entries[i].push_str("\\\""),
+                                    _ => entries[i].push(c),
+                                }
+                            }
+                            entries[i].push('"');
                         }
+                        // Truncate if we have fewer mappings now
+                        entries.truncate(mappings_len);
 
                         // Sort entries for consistent comparison
                         entries.sort();
 
                         // Build final JS values string using reusable buffer
                         let mut js_values_buffer = std::mem::take(&mut data.js_values_buffer);
+                        js_values_buffer.clear();
                         for (i, entry) in entries.iter().enumerate() {
                             if i > 0 {
                                 js_values_buffer.push_str(", ");
@@ -499,6 +533,7 @@ impl Displayer for CssTemplateDisplayer {
                         // Restore buffers
                         data.key_buffer = key_buffer;
                         data.entries_buffer = entries;
+                        data.value_buffer = value_buffer;
 
                         // Only call JavaScript if values actually changed
                         if js_values_buffer != data.last_js_values {
@@ -510,13 +545,36 @@ impl Displayer for CssTemplateDisplayer {
                             // Every 20 updates (~20 seconds), fully reload WebView to combat memory leak
                             // WebKitGTK accumulates internal state that can't be released otherwise
                             if data.js_update_count % 20 == 0 {
-                                log::debug!("CSS template: periodic WebView reload to release memory");
+                                // Debug: log buffer capacities to track memory usage
+                                let entries_total_cap: usize = data.entries_buffer.iter()
+                                    .map(|s| s.capacity())
+                                    .sum();
+                                log::info!(
+                                    "CSS template memory debug [tick {}]: \
+                                    values={}/{}, entries={}/{} (total_str_cap={}), \
+                                    js_values={}/{}, key={}/{}, value={}/{}, js_call={}/{}, \
+                                    prefix_set={}, cached_html={}",
+                                    data.js_update_count,
+                                    data.values.len(), data.values.capacity(),
+                                    data.entries_buffer.len(), data.entries_buffer.capacity(),
+                                    entries_total_cap,
+                                    data.js_values_buffer.len(), data.js_values_buffer.capacity(),
+                                    data.key_buffer.len(), data.key_buffer.capacity(),
+                                    data.value_buffer.len(), data.value_buffer.capacity(),
+                                    data.js_call_buffer.len(), data.js_call_buffer.capacity(),
+                                    data.cached_prefix_set.len(),
+                                    data.cached_html.as_ref().map(|h| h.capacity()).unwrap_or(0),
+                                );
+                                log::debug!("CSS template: periodic WebView reset to release memory");
 
                                 // Shrink all buffers to release unused memory
                                 data.values.shrink_to_fit();
                                 data.entries_buffer.shrink_to_fit();
                                 data.js_values_buffer.shrink_to_fit();
                                 data.last_js_values.shrink_to_fit();
+                                data.value_buffer.shrink_to_fit();
+                                data.key_buffer.shrink_to_fit();
+                                data.js_call_buffer.shrink_to_fit();
 
                                 // Force a full reload by reloading the cached HTML
                                 if let Some(ref html) = data.cached_html {
@@ -531,35 +589,36 @@ impl Displayer for CssTemplateDisplayer {
                                     data.last_js_values.clear();
                                     drop(data); // Release lock before WebView operation
 
-                                    // First load about:blank to clear JavaScript state completely
-                                    // This helps release JavaScriptCore internal allocations
-                                    webview.load_uri("about:blank");
+                                    // Stop any pending loads and terminate web process
+                                    // This forces WebKitGTK to release all internal allocations
+                                    webview.stop_loading();
+                                    webview.terminate_web_process();
 
-                                    // Then reload the actual content after a brief delay
-                                    let webview_reload = webview.clone();
-                                    glib::timeout_add_local_once(Duration::from_millis(50), move || {
-                                        webview_reload.load_html(&html_clone, base_uri.as_deref());
-                                    });
+                                    // Reload content directly (avoid idle_add closure allocation)
+                                    webview.load_html(&html_clone, base_uri.as_deref());
                                     return glib::ControlFlow::Continue;
                                 }
                             }
 
-                            // Build JS call - avoid format! by building string directly
-                            let js_call_prefix = "if (window.updateValues) { window.updateValues({";
-                            let js_call_suffix = "}); }";
-                            let mut js = String::with_capacity(
-                                js_call_prefix.len() + data.last_js_values.len() + js_call_suffix.len()
-                            );
-                            js.push_str(js_call_prefix);
-                            js.push_str(&data.last_js_values);
-                            js.push_str(js_call_suffix);
+                            // Build JS call using reusable buffer
+                            // Take buffer to avoid borrow issues
+                            let mut js_call_buffer = std::mem::take(&mut data.js_call_buffer);
+                            js_call_buffer.clear();
+                            js_call_buffer.push_str("if (window.updateValues) { window.updateValues({");
+                            js_call_buffer.push_str(&data.last_js_values);
+                            js_call_buffer.push_str("}); }");
 
-                            // Execute JavaScript using future-based API for better cleanup
-                            // This avoids callback accumulation that can cause memory leaks
-                            let webview_clone = webview.clone();
-                            glib::spawn_future_local(async move {
-                                let _ = webview_clone.evaluate_javascript_future(&js, None, None).await;
-                            });
+                            // Execute JavaScript using static callback to avoid closure allocation
+                            webview.evaluate_javascript(
+                                &js_call_buffer,
+                                None,
+                                None,
+                                None::<&gtk4::gio::Cancellable>,
+                                js_callback_ignore,
+                            );
+
+                            // Restore buffer
+                            data.js_call_buffer = js_call_buffer;
                         } else {
                             // Values unchanged, restore buffer
                             data.js_values_buffer = js_values_buffer;
@@ -707,15 +766,17 @@ impl Displayer for CssTemplateDisplayer {
     }
 }
 
-/// Static helper to get mapped value using a reusable key buffer
-/// The key_buffer is used to avoid allocations when building lookup keys
-fn get_mapped_value_with_buffer(
+/// Static helper to write mapped value into output buffer using reusable key buffer
+/// Both buffers are reused to avoid allocations on each tick
+fn write_mapped_value_to_buffer(
     values: &HashMap<String, Value>,
     mapping: &PlaceholderMapping,
     key_buffer: &mut String,
-) -> String {
+    output: &mut String,
+) {
     if mapping.slot_prefix.is_empty() {
-        return "--".to_string();
+        output.push_str("--");
+        return;
     }
 
     // Build the key using the reusable buffer (avoids format! allocation)
@@ -726,30 +787,38 @@ fn get_mapped_value_with_buffer(
 
     // Try to get the value with field suffix
     if let Some(value) = values.get(key_buffer.as_str()) {
-        return format_value_from_json(value, mapping.format.as_deref());
+        write_formatted_value_to_buffer(value, mapping.format.as_deref(), output);
+        return;
     }
 
     // Try without the field suffix
     if let Some(value) = values.get(&mapping.slot_prefix) {
-        return format_value_from_json(value, mapping.format.as_deref());
+        write_formatted_value_to_buffer(value, mapping.format.as_deref(), output);
+        return;
     }
 
-    "--".to_string()
+    output.push_str("--");
 }
 
-/// Helper to format a JSON value with optional format string
+/// Helper to write formatted JSON value into output buffer
 #[inline]
-fn format_value_from_json(value: &Value, format: Option<&str>) -> String {
+fn write_formatted_value_to_buffer(value: &Value, format: Option<&str>, output: &mut String) {
     match value {
         Value::Number(n) => {
             if let Some(f) = n.as_f64() {
-                format_value(f, format)
+                // Use format_value which returns a String, then push to output
+                let formatted = format_value(f, format);
+                output.push_str(&formatted);
             } else {
-                n.to_string()
+                use std::fmt::Write;
+                let _ = write!(output, "{}", n);
             }
         }
-        Value::String(s) => s.clone(),
-        Value::Bool(b) => b.to_string(),
-        _ => value.to_string(),
+        Value::String(s) => output.push_str(s),
+        Value::Bool(b) => output.push_str(if *b { "true" } else { "false" }),
+        _ => {
+            use std::fmt::Write;
+            let _ = write!(output, "{}", value);
+        }
     }
 }
