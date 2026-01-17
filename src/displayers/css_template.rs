@@ -12,7 +12,7 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{gio, glib, prelude::*, DrawingArea, Overlay, Widget};
+use gtk4::{glib, prelude::*, DrawingArea, Overlay, Widget};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
@@ -40,7 +40,7 @@ use crate::ui::css_template_display::{
 };
 
 use webkit6::prelude::WebViewExt;
-use webkit6::WebView;
+use webkit6::{CacheModel, WebView};
 
 /// Internal display data shared between widget and displayer
 #[derive(Clone)]
@@ -228,6 +228,11 @@ impl Displayer for CssTemplateDisplayer {
     fn create_widget(&self) -> Widget {
         // Create WebView
         let webview = WebView::new();
+
+        // Set cache model to DocumentViewer for minimal caching (reduces memory accumulation)
+        if let Some(context) = webview.web_context() {
+            context.set_cache_model(CacheModel::DocumentViewer);
+        }
 
         // Configure WebView settings to minimize memory usage
         if let Some(settings) = WebViewExt::settings(&webview) {
@@ -502,9 +507,9 @@ impl Displayer for CssTemplateDisplayer {
                             data.js_values_buffer = js_values_buffer; // Restore (now contains old value)
                             data.js_update_count += 1;
 
-                            // Every 60 updates (~1 minute), fully reload WebView to combat memory leak
+                            // Every 20 updates (~20 seconds), fully reload WebView to combat memory leak
                             // WebKitGTK accumulates internal state that can't be released otherwise
-                            if data.js_update_count % 60 == 0 {
+                            if data.js_update_count % 20 == 0 {
                                 log::debug!("CSS template: periodic WebView reload to release memory");
 
                                 // Shrink all buffers to release unused memory
@@ -525,7 +530,16 @@ impl Displayer for CssTemplateDisplayer {
                                     // Reset last_js_values so next update will refresh the DOM
                                     data.last_js_values.clear();
                                     drop(data); // Release lock before WebView operation
-                                    webview.load_html(&html_clone, base_uri.as_deref());
+
+                                    // First load about:blank to clear JavaScript state completely
+                                    // This helps release JavaScriptCore internal allocations
+                                    webview.load_uri("about:blank");
+
+                                    // Then reload the actual content after a brief delay
+                                    let webview_reload = webview.clone();
+                                    glib::timeout_add_local_once(Duration::from_millis(50), move || {
+                                        webview_reload.load_html(&html_clone, base_uri.as_deref());
+                                    });
                                     return glib::ControlFlow::Continue;
                                 }
                             }
@@ -540,14 +554,12 @@ impl Displayer for CssTemplateDisplayer {
                             js.push_str(&data.last_js_values);
                             js.push_str(js_call_suffix);
 
-                            // Execute JavaScript
-                            webview.evaluate_javascript(
-                                &js,
-                                None,
-                                None,
-                                None::<&gio::Cancellable>,
-                                |_| {},
-                            );
+                            // Execute JavaScript using future-based API for better cleanup
+                            // This avoids callback accumulation that can cause memory leaks
+                            let webview_clone = webview.clone();
+                            glib::spawn_future_local(async move {
+                                let _ = webview_clone.evaluate_javascript_future(&js, None, None).await;
+                            });
                         } else {
                             // Values unchanged, restore buffer
                             data.js_values_buffer = js_values_buffer;
