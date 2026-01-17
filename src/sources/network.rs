@@ -98,10 +98,7 @@ impl NetworkSource {
         CACHED_INTERFACES
             .get_or_init(|| {
                 let networks = Networks::new_with_refreshed_list();
-                let mut interfaces: Vec<String> = networks
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect();
+                let mut interfaces: Vec<String> = networks.keys().cloned().collect();
                 interfaces.sort();
                 interfaces
             })
@@ -163,7 +160,7 @@ impl NetworkSource {
             name if name.starts_with("enp") => name.to_string(),
             name if name.starts_with("wlan") => name.to_string(),
             name if name.starts_with("wlp") => name.to_string(),
-            name if name == "lo" => "Loopback".to_string(),
+            "lo" => "Loopback".to_string(),
             name => name.to_string(),
         };
 
