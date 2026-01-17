@@ -1050,9 +1050,17 @@ fn build_ui(app: &Application) {
         // Stop the update manager gracefully
         update_manager_for_close.stop();
 
-        // Signal CSS template displayers to stop their timers
+        // Signal CSS template displayers to stop their timers and terminate web processes
         #[cfg(feature = "webkit")]
-        rg_sens::displayers::css_template_shutdown();
+        {
+            rg_sens::displayers::css_template_shutdown();
+            // Process pending main loop events to give timers a chance to clean up WebViews
+            // This helps avoid "WebProcess didn't exit" errors on shutdown
+            let ctx = glib::MainContext::default();
+            for _ in 0..5 {
+                ctx.iteration(false);
+            }
+        }
 
         let is_dirty = config_dirty_clone4.load(Ordering::Relaxed);
 

@@ -27,9 +27,11 @@ use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
 static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
 
 /// Signal all CSS template timers to stop (call on app shutdown)
+/// This sets a flag that the WebView timers check on their next tick.
+/// The timers will then terminate their web processes cleanly.
 pub fn shutdown_all() {
     SHUTDOWN_FLAG.store(true, Ordering::SeqCst);
-    log::debug!("CSS template shutdown signal sent");
+    log::debug!("CSS template shutdown signal sent - WebViews will terminate on next timer tick");
 }
 use crate::displayers::combo_utils;
 use crate::ui::css_template_display::{
@@ -294,7 +296,8 @@ impl Displayer for CssTemplateDisplayer {
                     // Clean up WebView if possible
                     if let Some(webview) = webview_weak.upgrade() {
                         webview.stop_loading();
-                        webview.load_html("", None);
+                        // Forcefully terminate the web process to avoid orphaned processes
+                        webview.terminate_web_process();
                     }
                     return glib::ControlFlow::Break;
                 }
@@ -310,9 +313,9 @@ impl Displayer for CssTemplateDisplayer {
                 // to any window.
                 if webview.root().is_none() {
                     log::debug!("CSS template timer stopping: WebView orphaned (no root)");
-                    // Try to clean up WebView resources
+                    // Try to clean up WebView resources and terminate web process
                     webview.stop_loading();
-                    webview.load_html("", None);
+                    webview.terminate_web_process();
                     return glib::ControlFlow::Break;
                 }
 
@@ -480,9 +483,10 @@ impl Displayer for CssTemplateDisplayer {
                             data.last_js_values = js_values_str.clone();
                             data.js_update_count += 1;
 
-                            // Every 60 updates (~1 minute), fully reload WebView to combat memory leak
+                            // Every 300 updates (~5 minutes), fully reload WebView to combat memory leak
                             // WebKitGTK accumulates internal state that can't be released otherwise
-                            if data.js_update_count % 60 == 0 {
+                            // Note: More frequent reloads can cause issues with GL renderer
+                            if data.js_update_count % 300 == 0 {
                                 log::debug!("CSS template: periodic WebView reload to release memory");
 
                                 // Shrink HashMap capacity to release unused memory
@@ -545,7 +549,9 @@ impl Displayer for CssTemplateDisplayer {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        if let Ok(mut display_data) = self.data.lock() {
+        // Use try_lock to avoid blocking tokio worker threads
+        // If the timer callback holds the lock, we skip this update (data will be updated next cycle)
+        if let Ok(mut display_data) = self.data.try_lock() {
             // Use cached prefixes for filtering - take values temporarily to avoid borrow conflict
             let mut values = std::mem::take(&mut display_data.values);
             combo_utils::filter_values_with_owned_prefix_set(
