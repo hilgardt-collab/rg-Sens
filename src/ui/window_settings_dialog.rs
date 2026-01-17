@@ -834,9 +834,9 @@ pub fn show_window_settings_dialog<F>(
 
         if current_decorated != target_decorated {
             parent_window_clone.set_decorated(target_decorated);
-            // Force window manager to apply decoration change
-            parent_window_clone.queue_draw();
-            parent_window_clone.present();
+            // On Wayland/some compositors, we need to hide/show for decoration change to apply
+            parent_window_clone.set_visible(false);
+            parent_window_clone.set_visible(true);
         }
 
         // Apply fullscreen state to parent window
