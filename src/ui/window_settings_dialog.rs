@@ -835,12 +835,8 @@ pub fn show_window_settings_dialog<F>(
         if current_decorated != target_decorated {
             parent_window_clone.set_decorated(target_decorated);
             // On Wayland/some compositors, we need to hide/show for decoration change to apply
-            // Use a small delay between hide and show to ensure the compositor processes the change
             parent_window_clone.set_visible(false);
-            let window_show = parent_window_clone.clone();
-            gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(50), move || {
-                window_show.set_visible(true);
-            });
+            parent_window_clone.set_visible(true);
         }
 
         // Apply fullscreen state to parent window

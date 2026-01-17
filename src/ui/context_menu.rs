@@ -902,12 +902,8 @@ where
         window_for_borderless.set_decorated(!new_borderless);
 
         // On Wayland/some compositors, we need to hide/show for decoration change to apply
-        // Use a small delay between hide and show to ensure the compositor processes the change
         window_for_borderless.set_visible(false);
-        let window_show = window_for_borderless.clone();
-        gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(50), move || {
-            window_show.set_visible(true);
-        });
+        window_for_borderless.set_visible(true);
 
         config_dirty_for_borderless.store(true, Ordering::Relaxed);
         info!("Toggled borderless: {}", new_borderless);
