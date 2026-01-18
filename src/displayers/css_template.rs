@@ -249,7 +249,8 @@ impl Displayer for CssTemplateDisplayer {
         // Configure WebView settings to minimize memory usage
         if let Some(settings) = WebViewExt::settings(&webview) {
             settings.set_enable_javascript(true);
-            settings.set_enable_javascript_markup(false); // Disable inline script tags for security
+            // Note: enable_javascript_markup must remain true because the bridge script
+            // that defines window.updateValues is injected as an inline <script> block
             settings.set_allow_file_access_from_file_urls(true);
             settings.set_allow_universal_access_from_file_urls(true);
             settings.set_enable_developer_extras(false);

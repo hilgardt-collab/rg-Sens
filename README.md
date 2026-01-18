@@ -65,7 +65,7 @@ Multi-slot panels with unique visual styles:
 - **Theme Integration**: Access theme colors via CSS custom properties
 - **WebKit Powered**: Full web rendering capabilities
 
-> **Security Note**: CSS Template files are executed with JavaScript enabled via WebKit. Only load template files from sources you trust. Inline `<script>` tags are disabled for security, but external JavaScript files referenced in templates will execute.
+> **Security Note**: CSS Template files are executed with JavaScript enabled via WebKit. Only load template files from sources you trust.
 
 ### Customization
 - Panel backgrounds (solid, gradient, image, polygon)
