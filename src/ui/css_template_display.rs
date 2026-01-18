@@ -5,10 +5,29 @@
 //! - Template transformation for JavaScript injection
 //! - JavaScript bridge generation for value updates
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
+
+// Cached compiled regexes to avoid recompilation on every call
+static PLACEHOLDER_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\{\{(\d+)\}\}").expect("Invalid placeholder regex"));
+
+static PLACEHOLDER_HINTS_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-hints["']\s*>([\s\S]*?)</script>"#,
+    )
+    .expect("Invalid placeholder hints regex")
+});
+
+static PLACEHOLDER_CONFIG_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-config["']\s*>([\s\S]*?)</script>"#,
+    )
+    .expect("Invalid placeholder config regex")
+});
 
 /// Configuration for a placeholder mapping
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,10 +150,9 @@ impl Default for CssTemplateDisplayConfig {
 /// Scans the HTML for `{{0}}`, `{{1}}`, etc. patterns and returns
 /// a sorted list of unique indices found.
 pub fn detect_placeholders(html: &str) -> Vec<u32> {
-    let re = Regex::new(r"\{\{(\d+)\}\}").expect("Invalid regex");
     let mut indices: HashSet<u32> = HashSet::new();
 
-    for cap in re.captures_iter(html) {
+    for cap in PLACEHOLDER_REGEX.captures_iter(html) {
         if let Some(m) = cap.get(1) {
             if let Ok(idx) = m.as_str().parse::<u32>() {
                 indices.insert(idx);
@@ -180,11 +198,7 @@ pub fn extract_placeholder_hints(html: &str) -> std::collections::HashMap<u32, S
     }
 
     // Fall back to legacy rg-placeholder-hints format
-    let re = Regex::new(
-        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-hints["']\s*>([\s\S]*?)</script>"#
-    ).expect("Invalid regex");
-
-    if let Some(caps) = re.captures(html) {
+    if let Some(caps) = PLACEHOLDER_HINTS_REGEX.captures(html) {
         if let Some(json_match) = caps.get(1) {
             let json_str = json_match.as_str().trim();
             // Parse the JSON
@@ -236,11 +250,7 @@ pub fn extract_placeholder_defaults(
     let mut defaults: HashMap<u32, PlaceholderDefault> = HashMap::new();
 
     // Look for the JSON config block
-    let re = Regex::new(
-        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-placeholder-config["']\s*>([\s\S]*?)</script>"#
-    ).expect("Invalid regex");
-
-    if let Some(caps) = re.captures(html) {
+    if let Some(caps) = PLACEHOLDER_CONFIG_REGEX.captures(html) {
         if let Some(json_match) = caps.get(1) {
             let json_str = json_match.as_str().trim();
             // Parse the JSON
@@ -278,15 +288,15 @@ pub fn extract_placeholder_defaults(
 /// Converts `{{0}}` to `<span data-placeholder="0" class="rg-placeholder">--</span>`
 /// so that values can be updated via JavaScript without re-rendering HTML.
 pub fn transform_template(html: &str) -> String {
-    let re = Regex::new(r"\{\{(\d+)\}\}").expect("Invalid regex");
-    re.replace_all(html, |caps: &regex::Captures| {
-        let idx = &caps[1];
-        format!(
-            r#"<span data-placeholder="{}" class="rg-placeholder">--</span>"#,
-            idx
-        )
-    })
-    .to_string()
+    PLACEHOLDER_REGEX
+        .replace_all(html, |caps: &regex::Captures| {
+            let idx = &caps[1];
+            format!(
+                r#"<span data-placeholder="{}" class="rg-placeholder">--</span>"#,
+                idx
+            )
+        })
+        .to_string()
 }
 
 /// Generate the JavaScript bridge code for value updates
