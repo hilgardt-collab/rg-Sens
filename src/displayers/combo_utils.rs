@@ -475,19 +475,27 @@ pub fn update_core_bars(
 ) {
     let capacity = config.end_core.saturating_sub(config.start_core) + 1;
     let mut core_targets: Vec<f64> = Vec::with_capacity(capacity);
+    let mut any_key_found = false;
 
     // Try configured core range first - use KeyBuffer for core keys
     KEY_BUFFER.with(|buf| {
         let mut key_buf = buf.borrow_mut();
         for core_idx in config.start_core..=config.end_core {
             let core_key = key_buf.build_core_key(prefix, core_idx);
-            let value = data.get(core_key).and_then(|v| v.as_f64()).unwrap_or(0.0) / 100.0;
-            core_targets.push(value);
+            if let Some(v) = data.get(core_key) {
+                any_key_found = true;
+                let value = v.as_f64().unwrap_or(0.0) / 100.0;
+                core_targets.push(value);
+            } else {
+                // Key doesn't exist - push 0 to maintain correct indexing
+                core_targets.push(0.0);
+            }
         }
     });
 
-    // Auto-detect cores if configured range found nothing
-    if core_targets.is_empty() || core_targets.iter().all(|&v| v == 0.0) {
+    // Only auto-detect if NO keys were found in the configured range.
+    // Don't auto-detect just because values are 0 (idle cores are valid).
+    if !any_key_found {
         core_targets.clear();
         KEY_BUFFER.with(|buf| {
             let mut key_buf = buf.borrow_mut();
