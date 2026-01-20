@@ -483,6 +483,18 @@ pub fn prepare_html_document(
 /// - `{:.2}%` - 2 decimal places with % suffix
 /// - `{}` or None - raw value
 pub fn format_value(value: f64, format: Option<&str>) -> String {
+    let mut output = String::with_capacity(16);
+    write_format_value_to_buffer(value, format, &mut output);
+    output
+}
+
+/// Write a formatted value directly to a buffer without intermediate allocations
+///
+/// This is the allocation-free version of format_value for use in hot paths.
+/// Supports the same format patterns as format_value.
+pub fn write_format_value_to_buffer(value: f64, format: Option<&str>, output: &mut String) {
+    use std::fmt::Write;
+
     match format {
         Some(fmt) if fmt.contains("{:.") => {
             // Extract precision from format like "{:.1}" or "{:.2}%"
@@ -491,18 +503,34 @@ pub fn format_value(value: f64, format: Option<&str>) -> String {
                 if let Some(end) = rest.find('}') {
                     let precision_str = &rest[..end];
                     if let Ok(precision) = precision_str.parse::<usize>() {
-                        let formatted = format!("{:.prec$}", value, prec = precision);
-                        // Replace the format placeholder with the formatted value
+                        // Write prefix
                         let prefix = &fmt[..start];
+                        output.push_str(prefix);
+                        // Write formatted value directly to buffer
+                        let _ = write!(output, "{:.prec$}", value, prec = precision);
+                        // Write suffix
                         let suffix = &rest[end + 1..];
-                        return format!("{}{}{}", prefix, formatted, suffix);
+                        output.push_str(suffix);
+                        return;
                     }
                 }
             }
-            value.to_string()
+            // Fallback: write raw value
+            let _ = write!(output, "{}", value);
         }
-        Some(fmt) if fmt.contains("{}") => fmt.replace("{}", &value.to_string()),
-        Some(_) | None => value.to_string(),
+        Some(fmt) if fmt.contains("{}") => {
+            // Find {} and replace inline
+            if let Some(pos) = fmt.find("{}") {
+                output.push_str(&fmt[..pos]);
+                let _ = write!(output, "{}", value);
+                output.push_str(&fmt[pos + 2..]);
+            } else {
+                let _ = write!(output, "{}", value);
+            }
+        }
+        Some(_) | None => {
+            let _ = write!(output, "{}", value);
+        }
     }
 }
 

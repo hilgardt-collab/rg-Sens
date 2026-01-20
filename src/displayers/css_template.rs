@@ -35,17 +35,21 @@ pub fn shutdown_all() {
 }
 use crate::displayers::combo_utils;
 use crate::ui::css_template_display::{
-    detect_placeholders, extract_placeholder_hints, format_value, prepare_html_document,
-    transform_template, CssTemplateDisplayConfig, PlaceholderMapping,
+    detect_placeholders, extract_placeholder_hints, prepare_html_document, transform_template,
+    write_format_value_to_buffer, CssTemplateDisplayConfig, PlaceholderMapping,
 };
 
 use webkit6::prelude::WebViewExt;
 use webkit6::{CacheModel, WebView};
 
-/// Static callback for evaluate_javascript that ignores the result.
+/// Static callback for evaluate_javascript that explicitly drops the result.
 /// Using a static function avoids closure allocation on each call.
-fn js_callback_ignore(_result: Result<webkit6::javascriptcore::Value, glib::Error>) {
-    // Intentionally empty - we don't need the JavaScript result
+/// The explicit drop ensures the javascriptcore::Value is properly released.
+fn js_callback_ignore(result: Result<webkit6::javascriptcore::Value, glib::Error>) {
+    // Explicitly drop the result to ensure proper cleanup of the JavaScriptCore value
+    // This is important because javascriptcore::Value is a GObject wrapper that needs
+    // its reference count decremented properly
+    drop(result);
 }
 
 /// Internal display data shared between widget and displayer
@@ -306,6 +310,11 @@ impl Displayer for CssTemplateDisplayer {
             }
         }
 
+        // Create a cancellable for JavaScript calls - this allows us to cancel pending
+        // async operations before terminating the web process, preventing callback leaks
+        let js_cancellable: Arc<Mutex<gtk4::gio::Cancellable>> =
+            Arc::new(Mutex::new(gtk4::gio::Cancellable::new()));
+
         // Set up periodic check for reload and value updates
         // 1000ms reduces WebKitGTK memory overhead from frequent JavaScript evaluation
         // Hot-reload detection is slightly slower but acceptable for development use
@@ -314,6 +323,7 @@ impl Displayer for CssTemplateDisplayer {
             let webview_weak = webview.downgrade();
             let last_html_modified = last_html_modified.clone();
             let last_css_modified = last_css_modified.clone();
+            let js_cancellable = js_cancellable.clone();
             move || {
                 // Check global shutdown flag first
                 if SHUTDOWN_FLAG.load(Ordering::SeqCst) {
@@ -571,6 +581,10 @@ impl Displayer for CssTemplateDisplayer {
 
                                 // Shrink all buffers to release unused memory
                                 data.values.shrink_to_fit();
+                                // Shrink individual String entries, not just the Vec
+                                for entry in data.entries_buffer.iter_mut() {
+                                    entry.shrink_to_fit();
+                                }
                                 data.entries_buffer.shrink_to_fit();
                                 data.js_values_buffer.shrink_to_fit();
                                 data.last_js_values.shrink_to_fit();
@@ -591,10 +605,22 @@ impl Displayer for CssTemplateDisplayer {
                                     data.last_js_values.clear();
                                     drop(data); // Release lock before WebView operation
 
+                                    // Cancel any pending JavaScript calls to ensure their callbacks
+                                    // are invoked (with cancellation error) before we terminate.
+                                    // This prevents leaking boxed callback closures.
+                                    if let Ok(cancellable) = js_cancellable.lock() {
+                                        cancellable.cancel();
+                                    }
+
                                     // Stop any pending loads and terminate web process
                                     // This forces WebKitGTK to release all internal allocations
                                     webview.stop_loading();
                                     webview.terminate_web_process();
+
+                                    // Create a fresh cancellable for the next round of JS calls
+                                    if let Ok(mut cancellable) = js_cancellable.lock() {
+                                        *cancellable = gtk4::gio::Cancellable::new();
+                                    }
 
                                     // Reload content directly (avoid idle_add closure allocation)
                                     webview.load_html(&html_clone, base_uri.as_deref());
@@ -611,13 +637,16 @@ impl Displayer for CssTemplateDisplayer {
                             js_call_buffer.push_str("}); }");
 
                             // Execute JavaScript using static callback to avoid closure allocation
+                            // Use the shared cancellable so we can cancel pending calls before terminate
+                            let cancellable_guard = js_cancellable.lock().ok();
                             webview.evaluate_javascript(
                                 &js_call_buffer,
                                 None,
                                 None,
-                                None::<&gtk4::gio::Cancellable>,
+                                cancellable_guard.as_deref(),
                                 js_callback_ignore,
                             );
+                            drop(cancellable_guard);
 
                             // Restore buffer
                             data.js_call_buffer = js_call_buffer;
@@ -803,14 +832,14 @@ fn write_mapped_value_to_buffer(
 }
 
 /// Helper to write formatted JSON value into output buffer
+/// Uses write_format_value_to_buffer to avoid intermediate String allocations
 #[inline]
 fn write_formatted_value_to_buffer(value: &Value, format: Option<&str>, output: &mut String) {
     match value {
         Value::Number(n) => {
             if let Some(f) = n.as_f64() {
-                // Use format_value which returns a String, then push to output
-                let formatted = format_value(f, format);
-                output.push_str(&formatted);
+                // Write directly to buffer without intermediate allocation
+                write_format_value_to_buffer(f, format, output);
             } else {
                 use std::fmt::Write;
                 let _ = write!(output, "{}", n);
