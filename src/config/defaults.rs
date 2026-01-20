@@ -69,11 +69,11 @@ pub struct GeneralDefaults {
 }
 
 fn default_panel_width() -> u32 {
-    2
+    12
 }
 
 fn default_panel_height() -> u32 {
-    2
+    12
 }
 
 fn default_corner_radius() -> f64 {
@@ -81,15 +81,15 @@ fn default_corner_radius() -> f64 {
 }
 
 fn default_grid_cell_width() -> u32 {
-    100
+    16
 }
 
 fn default_grid_cell_height() -> u32 {
-    100
+    16
 }
 
 fn default_grid_spacing() -> u32 {
-    5
+    2
 }
 
 impl Default for GeneralDefaults {

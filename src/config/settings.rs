@@ -371,9 +371,9 @@ impl Default for GridConfig {
         Self {
             columns: 4,
             rows: 3,
-            cell_width: 300,
-            cell_height: 200,
-            spacing: 4,
+            cell_width: 16,
+            cell_height: 16,
+            spacing: 2,
         }
     }
 }
