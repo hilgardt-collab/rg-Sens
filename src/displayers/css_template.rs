@@ -35,8 +35,8 @@ pub fn shutdown_all() {
 }
 use crate::displayers::combo_utils;
 use crate::ui::css_template_display::{
-    detect_placeholders, extract_placeholder_hints, format_value, prepare_html_document,
-    transform_template, CssTemplateDisplayConfig, PlaceholderMapping,
+    detect_placeholders, extract_placeholder_hints, prepare_html_document, transform_template,
+    write_format_value_to_buffer, CssTemplateDisplayConfig, PlaceholderMapping,
 };
 
 use webkit6::prelude::WebViewExt;
@@ -571,6 +571,10 @@ impl Displayer for CssTemplateDisplayer {
 
                                 // Shrink all buffers to release unused memory
                                 data.values.shrink_to_fit();
+                                // Shrink individual String entries, not just the Vec
+                                for entry in data.entries_buffer.iter_mut() {
+                                    entry.shrink_to_fit();
+                                }
                                 data.entries_buffer.shrink_to_fit();
                                 data.js_values_buffer.shrink_to_fit();
                                 data.last_js_values.shrink_to_fit();
@@ -803,14 +807,14 @@ fn write_mapped_value_to_buffer(
 }
 
 /// Helper to write formatted JSON value into output buffer
+/// Uses write_format_value_to_buffer to avoid intermediate String allocations
 #[inline]
 fn write_formatted_value_to_buffer(value: &Value, format: Option<&str>, output: &mut String) {
     match value {
         Value::Number(n) => {
             if let Some(f) = n.as_f64() {
-                // Use format_value which returns a String, then push to output
-                let formatted = format_value(f, format);
-                output.push_str(&formatted);
+                // Write directly to buffer without intermediate allocation
+                write_format_value_to_buffer(f, format, output);
             } else {
                 use std::fmt::Write;
                 let _ = write!(output, "{}", n);
