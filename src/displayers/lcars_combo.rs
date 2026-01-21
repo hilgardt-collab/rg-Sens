@@ -418,9 +418,16 @@ impl Displayer for LcarsComboDisplayer {
 
         // Set up draw function
         let data_clone = self.data.clone();
+        // Counter for lock contention tracking
+        let lock_fail_count = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let lock_fail_count_draw = lock_fail_count.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
+                let count = lock_fail_count_draw.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count % 100 == 0 {
+                    log::warn!("LCARS draw: try_lock failed {} times", count + 1);
+                }
                 return; // Skip frame if lock contention
             };
             let w = width as f64;
@@ -770,9 +777,22 @@ impl Displayer for LcarsComboDisplayer {
 
         // Register with global animation manager for smooth animations
         let data_for_animation = self.data.clone();
+        let lock_fail_count_anim = lock_fail_count;
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
+                // Periodic diagnostics (every ~5 seconds at 60fps)
+                static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                let ticks = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if ticks % 300 == 0 {
+                    log::info!(
+                        "LCARS anim: bar_values={}, core_bar_values={}, graph_history={}, group_prefixes={}",
+                        data.bar_values.len(),
+                        data.core_bar_values.len(),
+                        data.graph_history.len(),
+                        data.group_prefixes.len()
+                    );
+                }
                 let mut redraw = data.dirty;
                 if data.dirty {
                     data.dirty = false;
@@ -838,6 +858,10 @@ impl Displayer for LcarsComboDisplayer {
 
                 redraw
             } else {
+                let count = lock_fail_count_anim.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count % 100 == 0 {
+                    log::warn!("LCARS anim: try_lock failed {} times", count + 1);
+                }
                 false
             }
         });
@@ -846,6 +870,7 @@ impl Displayer for LcarsComboDisplayer {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
+        let start = std::time::Instant::now();
         if let Ok(mut display_data) = self.data.lock() {
             let animation_enabled = display_data.config.animation_enabled;
             let timestamp = display_data.graph_start_time.elapsed().as_secs_f64();
@@ -938,6 +963,11 @@ impl Displayer for LcarsComboDisplayer {
             display_data.transform = PanelTransform::from_values(data);
 
             display_data.dirty = true;
+        }
+        // Log slow updates (>50ms is concerning)
+        let elapsed = start.elapsed();
+        if elapsed.as_millis() > 50 {
+            log::warn!("LCARS update_data took {}ms", elapsed.as_millis());
         }
     }
 
