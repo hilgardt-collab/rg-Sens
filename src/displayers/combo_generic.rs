@@ -387,6 +387,9 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                         log::debug!("Failed to set cached surface: {:?}", e);
                     }
                     cr.paint().ok();
+                    // Clear source reference to allow cached surface to be deallocated
+                    // when cache is invalidated (prevents memory leak)
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
                     (cache.content_bounds, cache.group_layouts.clone())
                 } else {
                     // Try to create cache surface
@@ -440,6 +443,9 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                             log::debug!("Failed to set cached surface: {:?}", e);
                         }
                         cr.paint().ok();
+                        // Clear source reference to allow cached surface to be deallocated
+                        // when cache is invalidated (prevents memory leak)
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
 
                         (content_bounds, group_layouts)
                     } else {

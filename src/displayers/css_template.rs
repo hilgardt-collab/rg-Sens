@@ -328,6 +328,27 @@ impl Displayer for CssTemplateDisplayer {
                 // Check global shutdown flag first
                 if SHUTDOWN_FLAG.load(Ordering::SeqCst) {
                     log::debug!("CSS template timer stopping: shutdown signal received");
+
+                    // Cancel any pending JavaScript calls
+                    if let Ok(cancellable) = js_cancellable.lock() {
+                        cancellable.cancel();
+                    }
+
+                    // Clear all buffers in DisplayData to release memory
+                    if let Ok(mut data) = data_clone.try_lock() {
+                        data.values.clear();
+                        data.values.shrink_to_fit();
+                        data.cached_html = None;
+                        data.last_js_values = String::new();
+                        data.entries_buffer = Vec::new();
+                        data.js_values_buffer = String::new();
+                        data.value_buffer = String::new();
+                        data.key_buffer = String::new();
+                        data.js_call_buffer = String::new();
+                        data.cached_prefix_set.clear();
+                        data.cached_prefix_set.shrink_to_fit();
+                    }
+
                     // Clean up WebView if possible
                     if let Some(webview) = webview_weak.upgrade() {
                         webview.stop_loading();
@@ -348,6 +369,27 @@ impl Displayer for CssTemplateDisplayer {
                 // to any window.
                 if webview.root().is_none() {
                     log::debug!("CSS template timer stopping: WebView orphaned (no root)");
+
+                    // Cancel any pending JavaScript calls first
+                    if let Ok(cancellable) = js_cancellable.lock() {
+                        cancellable.cancel();
+                    }
+
+                    // Clear all buffers in DisplayData to release memory immediately
+                    if let Ok(mut data) = data_clone.try_lock() {
+                        data.values.clear();
+                        data.values.shrink_to_fit();
+                        data.cached_html = None;
+                        data.last_js_values = String::new();
+                        data.entries_buffer = Vec::new();
+                        data.js_values_buffer = String::new();
+                        data.value_buffer = String::new();
+                        data.key_buffer = String::new();
+                        data.js_call_buffer = String::new();
+                        data.cached_prefix_set.clear();
+                        data.cached_prefix_set.shrink_to_fit();
+                    }
+
                     // Try to clean up WebView resources and terminate web process
                     webview.stop_loading();
                     webview.terminate_web_process();
@@ -554,9 +596,9 @@ impl Displayer for CssTemplateDisplayer {
                             data.js_values_buffer = js_values_buffer; // Restore (now contains old value)
                             data.js_update_count += 1;
 
-                            // Every 20 updates (~20 seconds), fully reload WebView to combat memory leak
+                            // Every 300 updates (~5 minutes), fully reload WebView to combat memory leak
                             // WebKitGTK accumulates internal state that can't be released otherwise
-                            if data.js_update_count % 20 == 0 {
+                            if data.js_update_count % 300 == 0 {
                                 // Debug: log buffer capacities to track memory usage
                                 let entries_total_cap: usize = data.entries_buffer.iter()
                                     .map(|s| s.capacity())
@@ -579,18 +621,18 @@ impl Displayer for CssTemplateDisplayer {
                                 );
                                 log::debug!("CSS template: periodic WebView reset to release memory");
 
-                                // Shrink all buffers to release unused memory
-                                data.values.shrink_to_fit();
-                                // Shrink individual String entries, not just the Vec
-                                for entry in data.entries_buffer.iter_mut() {
-                                    entry.shrink_to_fit();
-                                }
-                                data.entries_buffer.shrink_to_fit();
-                                data.js_values_buffer.shrink_to_fit();
-                                data.last_js_values.shrink_to_fit();
-                                data.value_buffer.shrink_to_fit();
-                                data.key_buffer.shrink_to_fit();
-                                data.js_call_buffer.shrink_to_fit();
+                                // Replace buffers with fresh allocations to guarantee memory release
+                                // (shrink_to_fit doesn't guarantee the allocator returns memory to OS)
+                                let values_len = data.values.len();
+                                data.values = HashMap::with_capacity(values_len);
+                                // Replace entries buffer - keep capacity hint for typical size
+                                let entries_len = data.entries_buffer.len();
+                                data.entries_buffer = Vec::with_capacity(entries_len.min(64));
+                                // Replace string buffers with reasonable initial capacities
+                                data.js_values_buffer = String::with_capacity(1024);
+                                data.value_buffer = String::with_capacity(64);
+                                data.key_buffer = String::with_capacity(64);
+                                data.js_call_buffer = String::with_capacity(2048);
 
                                 // Force a full reload by reloading the cached HTML
                                 if let Some(ref html) = data.cached_html {
