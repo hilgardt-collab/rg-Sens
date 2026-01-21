@@ -78,6 +78,10 @@ struct Cli {
     /// Layout file to load at startup
     #[arg(value_name = "LAYOUT_FILE")]
     layout_file: Option<String>,
+
+    /// Enable WebKit-based CSS Template panels (disabled by default due to memory usage)
+    #[arg(long = "webkit-enable")]
+    webkit_enable: bool,
 }
 
 /// Parse coordinate string "X,Y" into (i32, i32)
@@ -178,6 +182,9 @@ fn main() {
         return;
     }
 
+    // Extract webkit_enable before moving cli into CLI_OPTIONS
+    let webkit_enable = cli.webkit_enable;
+
     // Store CLI options for access in build_ui
     CLI_OPTIONS.set(cli).expect("CLI options already set");
 
@@ -185,8 +192,9 @@ fn main() {
     sources::initialize_sensors();
 
     // Register all built-in sources and displayers
+    // CSS Template (WebKit) is disabled by default, use --webkit-enable to enable
     sources::register_all();
-    displayers::register_all();
+    displayers::register_all(webkit_enable);
 
     // Create GTK application
     let app = Application::builder().application_id(APP_ID).build();
@@ -265,6 +273,7 @@ fn build_ui(app: &Application) {
         debug: 0,
         renderer: None,
         layout_file: None,
+        webkit_enable: false,
     });
 
     // Load CSS for selection styling

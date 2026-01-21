@@ -132,7 +132,10 @@ pub use combo_generic::{GenericComboDisplayer, GenericComboDisplayerShared};
 // pub use level_bar::LevelBarDisplayer;
 
 /// Register all built-in displayers with the global registry
-pub fn register_all() {
+///
+/// # Arguments
+/// * `webkit_enabled` - If true, register the CSS Template displayer (requires --webkit-enable flag)
+pub fn register_all(webkit_enabled: bool) {
     use crate::core::global_registry;
 
     // Register text displayer
@@ -223,9 +226,12 @@ pub fn register_all() {
         Box::new(SteampunkDisplayer::new())
     });
 
-    // Register CSS Template displayer (only when webkit feature is enabled)
+    // Register CSS Template displayer (only when webkit feature is enabled AND --webkit-enable flag is passed)
     #[cfg(feature = "webkit")]
-    global_registry().register_displayer_with_info("css_template", "CSS Template", || {
-        Box::new(CssTemplateDisplayer::new())
-    });
+    if webkit_enabled {
+        global_registry().register_displayer_with_info("css_template", "CSS Template", || {
+            Box::new(CssTemplateDisplayer::new())
+        });
+        log::info!("CSS Template displayer enabled (--webkit-enable)");
+    }
 }
