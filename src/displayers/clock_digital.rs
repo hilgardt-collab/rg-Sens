@@ -248,8 +248,11 @@ impl Displayer for ClockDigitalDisplayer {
 
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                data.transform.apply(cr, width as f64, height as f64);
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            data.transform.apply(cr, width as f64, height as f64);
                 let _ = render_digital_clock(cr, &data, width as f64, height as f64);
 
                 // Flash effect when alarm/timer triggers
@@ -401,7 +404,6 @@ impl Displayer for ClockDigitalDisplayer {
                     }
                 }
                 data.transform.restore(cr);
-            }
         });
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs

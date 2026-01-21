@@ -613,6 +613,18 @@ impl TimerAlarmManager {
 
     /// Update all timer states (call from main update loop)
     pub fn update(&mut self, hour: u32, minute: u32, second: u32, day_of_week: u32) {
+        // Periodic diagnostic logging (every ~60 seconds based on typical 1s update interval)
+        static UPDATE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let count = UPDATE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count > 0 && count % 60 == 0 {
+            log::info!(
+                "TimerManager diagnostics: {} callbacks, {} timers, {} alarms",
+                self.change_callbacks.len(),
+                self.timers.len(),
+                self.alarms.len()
+            );
+        }
+
         self.update_timers();
         self.check_alarms(hour, minute, second, day_of_week);
         self.update_next_alarm(hour, minute, day_of_week);

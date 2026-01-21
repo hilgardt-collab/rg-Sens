@@ -384,6 +384,28 @@ impl UpdateManager {
 
             let elapsed = start.elapsed();
             trace!("Update cycle took {:?}", elapsed);
+
+            // Periodic diagnostic logging (every ~60 seconds)
+            static CYCLE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let cycle = CYCLE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if cycle > 0 && cycle % 60 == 0 {
+                let panel_count = self.panels.read().await.len();
+                let shared_source_count = self.shared_sources.read().await.len();
+                log::info!(
+                    "UpdateManager diagnostics [cycle {}]: {} panels, {} shared sources, last cycle took {:?}",
+                    cycle,
+                    panel_count,
+                    shared_source_count,
+                    elapsed
+                );
+                // Warn if update cycle is taking too long
+                if elapsed > std::time::Duration::from_millis(500) {
+                    log::warn!(
+                        "Update cycle took {:?} - this may cause UI lag",
+                        elapsed
+                    );
+                }
+            }
         }
 
         info!("Update manager stopped");

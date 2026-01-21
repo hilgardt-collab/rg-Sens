@@ -79,24 +79,27 @@ impl Displayer for ArcDisplayer {
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                data.transform.apply(cr, width as f64, height as f64);
-                let display_value = if data.config.animate {
-                    data.animated_value
-                } else {
-                    data.value
-                };
-                let _ = render_arc(
-                    cr,
-                    &data.config,
-                    &data.config.theme,
-                    display_value,
-                    &data.values,
-                    width as f64,
-                    height as f64,
-                );
-                data.transform.restore(cr);
-            }
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                // Lock contention - skip this frame, will redraw on next animation tick
+                return;
+            };
+            data.transform.apply(cr, width as f64, height as f64);
+            let display_value = if data.config.animate {
+                data.animated_value
+            } else {
+                data.value
+            };
+            let _ = render_arc(
+                cr,
+                &data.config,
+                &data.config.theme,
+                display_value,
+                &data.values,
+                width as f64,
+                height as f64,
+            );
+            data.transform.restore(cr);
         });
 
         // Register with global animation manager for centralized animation timing

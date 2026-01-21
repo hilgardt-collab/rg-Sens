@@ -104,8 +104,11 @@ impl Displayer for ClockAnalogDisplayer {
 
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(mut data) = data_clone.lock() {
-                let width = width as f64;
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(mut data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            let width = width as f64;
                 let height = height as f64;
                 data.last_width = width;
                 data.last_height = height;
@@ -311,7 +314,6 @@ impl Displayer for ClockAnalogDisplayer {
                     // No icon shown, clear bounds
                     data.icon_bounds = None;
                 }
-            }
         });
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs

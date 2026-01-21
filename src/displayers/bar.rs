@@ -77,25 +77,27 @@ impl Displayer for BarDisplayer {
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                // Use animated_value if animation is enabled, otherwise use target value
-                let display_value = if data.config.smooth_animation {
-                    data.animated_value
-                } else {
-                    data.value
-                };
-                data.transform.apply(cr, width as f64, height as f64);
-                let _ = render_bar(
-                    cr,
-                    &data.config,
-                    &data.config.theme,
-                    display_value,
-                    &data.values,
-                    width as f64,
-                    height as f64,
-                );
-                data.transform.restore(cr);
-            }
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            // Use animated_value if animation is enabled, otherwise use target value
+            let display_value = if data.config.smooth_animation {
+                data.animated_value
+            } else {
+                data.value
+            };
+            data.transform.apply(cr, width as f64, height as f64);
+            let _ = render_bar(
+                cr,
+                &data.config,
+                &data.config.theme,
+                display_value,
+                &data.values,
+                width as f64,
+                height as f64,
+            );
+            data.transform.restore(cr);
         });
 
         // Register with global animation manager for centralized animation timing

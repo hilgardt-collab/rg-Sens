@@ -419,16 +419,19 @@ impl Displayer for LcarsComboDisplayer {
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                let w = width as f64;
-                let h = height as f64;
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            let w = width as f64;
+            let h = height as f64;
 
-                // Clear to transparent so panel background shows through
-                cr.set_operator(cairo::Operator::Clear);
-                cr.paint().ok();
-                cr.set_operator(cairo::Operator::Over);
+            // Clear to transparent so panel background shows through
+            cr.set_operator(cairo::Operator::Clear);
+            cr.paint().ok();
+            cr.set_operator(cairo::Operator::Over);
 
-                data.transform.apply(cr, w, h);
+            data.transform.apply(cr, w, h);
 
                 // Check if frame cache is valid
                 let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
@@ -761,9 +764,8 @@ impl Displayer for LcarsComboDisplayer {
                     );
                 }
 
-                cr.restore().ok();
-                data.transform.restore(cr);
-            }
+            cr.restore().ok();
+            data.transform.restore(cr);
         });
 
         // Register with global animation manager for smooth animations

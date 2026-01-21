@@ -364,11 +364,13 @@ impl Displayer for IndicatorDisplayer {
 
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_widget, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                data.transform.apply(cr, width as f64, height as f64);
-                Self::draw_internal(cr, width, height, &data);
-                data.transform.restore(cr);
-            }
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            data.transform.apply(cr, width as f64, height as f64);
+            Self::draw_internal(cr, width, height, &data);
+            data.transform.restore(cr);
         });
 
         // Register with global animation manager - only redraws when dirty flag is set

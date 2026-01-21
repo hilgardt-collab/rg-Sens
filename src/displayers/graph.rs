@@ -94,26 +94,28 @@ impl Displayer for GraphDisplayer {
         let data = self.data.clone();
 
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data_guard) = data.lock() {
-                data_guard.transform.apply(cr, width as f64, height as f64);
-                // Use animated points if animation is enabled, otherwise use actual data points
-                let points_to_render = if data_guard.config.animate_new_points {
-                    &data_guard.animated_points
-                } else {
-                    &data_guard.data_points
-                };
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data_guard) = data.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            data_guard.transform.apply(cr, width as f64, height as f64);
+            // Use animated points if animation is enabled, otherwise use actual data points
+            let points_to_render = if data_guard.config.animate_new_points {
+                &data_guard.animated_points
+            } else {
+                &data_guard.data_points
+            };
 
-                let _ = render_graph(
-                    cr,
-                    &data_guard.config,
-                    points_to_render,
-                    &data_guard.source_values,
-                    width as f64,
-                    height as f64,
-                    data_guard.scroll_offset,
-                );
-                data_guard.transform.restore(cr);
-            }
+            let _ = render_graph(
+                cr,
+                &data_guard.config,
+                points_to_render,
+                &data_guard.source_values,
+                width as f64,
+                height as f64,
+                data_guard.scroll_offset,
+            );
+            data_guard.transform.restore(cr);
         });
 
         // Register with global animation manager for centralized animation timing

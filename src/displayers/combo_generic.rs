@@ -169,23 +169,25 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
                 return;
             }
 
-            if let Ok(data) = data_clone.lock() {
-                let w = width as f64;
-                let h = height as f64;
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            let w = width as f64;
+            let h = height as f64;
 
-                // Clear to transparent so panel background shows through
-                cr.set_operator(cairo::Operator::Clear);
-                cr.paint().ok();
-                cr.set_operator(cairo::Operator::Over);
+            // Clear to transparent so panel background shows through
+            cr.set_operator(cairo::Operator::Clear);
+            cr.paint().ok();
+            cr.set_operator(cairo::Operator::Over);
 
-                data.combo.transform.apply(cr, w, h);
+            data.combo.transform.apply(cr, w, h);
 
-                // TODO: The actual frame rendering would go here, but we need
-                // access to the renderer. See GenericComboDisplayerWithRenderer
-                // for a solution that stores the renderer in an Arc.
+            // TODO: The actual frame rendering would go here, but we need
+            // access to the renderer. See GenericComboDisplayerWithRenderer
+            // for a solution that stores the renderer in an Arc.
 
-                data.combo.transform.restore(cr);
-            }
+            data.combo.transform.restore(cr);
         });
 
         // Set up animation timer
@@ -360,18 +362,21 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 return;
             }
 
-            if let Ok(data) = data_clone.lock() {
-                let w = width as f64;
-                let h = height as f64;
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            let w = width as f64;
+            let h = height as f64;
 
-                // Clear to transparent so panel background shows through
-                cr.set_operator(cairo::Operator::Clear);
-                cr.paint().ok();
-                cr.set_operator(cairo::Operator::Over);
+            // Clear to transparent so panel background shows through
+            cr.set_operator(cairo::Operator::Clear);
+            cr.paint().ok();
+            cr.set_operator(cairo::Operator::Over);
 
-                data.combo.transform.apply(cr, w, h);
+            data.combo.transform.apply(cr, w, h);
 
-                // Check if frame cache is valid (same size and config version)
+            // Check if frame cache is valid (same size and config version)
                 let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
                     cache.width == width
                         && cache.height == height
@@ -516,9 +521,8 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                     );
                 }
 
-                cr.restore().ok();
-                data.combo.transform.restore(cr);
-            }
+            cr.restore().ok();
+            data.combo.transform.restore(cr);
         });
 
         // Set up animation timer

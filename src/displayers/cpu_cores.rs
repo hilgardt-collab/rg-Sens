@@ -135,22 +135,24 @@ impl Displayer for CpuCoresDisplayer {
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                data.transform.apply(cr, width as f64, height as f64);
-                // Use cached render values (updated by animation timer)
-                if !data.render_cache.is_empty() {
-                    let _ = render_core_bars_with_values(
-                        cr,
-                        &data.config,
-                        &data.theme,
-                        &data.render_cache,
-                        width as f64,
-                        height as f64,
-                        &data.source_values,
-                    );
-                }
-                data.transform.restore(cr);
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            data.transform.apply(cr, width as f64, height as f64);
+            // Use cached render values (updated by animation timer)
+            if !data.render_cache.is_empty() {
+                let _ = render_core_bars_with_values(
+                    cr,
+                    &data.config,
+                    &data.theme,
+                    &data.render_cache,
+                    width as f64,
+                    height as f64,
+                    &data.source_values,
+                );
             }
+            data.transform.restore(cr);
         });
 
         // Register with global animation manager for centralized animation timing

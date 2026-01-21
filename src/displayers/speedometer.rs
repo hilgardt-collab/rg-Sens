@@ -82,31 +82,33 @@ impl Displayer for SpeedometerDisplayer {
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            if let Ok(data) = data_clone.lock() {
-                // Ensure we start with a clean, transparent state
-                // This prevents background bleed-through issues
-                cr.save().ok();
-                cr.set_operator(cairo::Operator::Over);
+            // Use try_lock to avoid blocking GTK main thread if update is in progress
+            let Ok(data) = data_clone.try_lock() else {
+                return; // Skip frame if lock contention
+            };
+            // Ensure we start with a clean, transparent state
+            // This prevents background bleed-through issues
+            cr.save().ok();
+            cr.set_operator(cairo::Operator::Over);
 
-                data.transform.apply(cr, width as f64, height as f64);
-                let display_value = if data.config.animate {
-                    data.animated_value
-                } else {
-                    data.value
-                };
-                let _ = render_speedometer_with_theme(
-                    cr,
-                    &data.config,
-                    display_value,
-                    &data.values,
-                    width as f64,
-                    height as f64,
-                    &data.theme,
-                );
-                data.transform.restore(cr);
+            data.transform.apply(cr, width as f64, height as f64);
+            let display_value = if data.config.animate {
+                data.animated_value
+            } else {
+                data.value
+            };
+            let _ = render_speedometer_with_theme(
+                cr,
+                &data.config,
+                display_value,
+                &data.values,
+                width as f64,
+                height as f64,
+                &data.theme,
+            );
+            data.transform.restore(cr);
 
-                cr.restore().ok();
-            }
+            cr.restore().ok();
         });
 
         // Register with global animation manager for centralized animation timing
