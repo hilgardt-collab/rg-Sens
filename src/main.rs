@@ -1230,6 +1230,15 @@ fn build_ui(app: &Application) {
 
     window.add_controller(key_controller);
 
+    // Add GTK main loop heartbeat for diagnosing freezes
+    // Logs every 30 seconds to confirm GTK main loop is responsive
+    glib::timeout_add_local(std::time::Duration::from_secs(30), || {
+        static HEARTBEAT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let count = HEARTBEAT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        info!("GTK heartbeat #{} - main loop responsive", count);
+        glib::ControlFlow::Continue
+    });
+
     window.present();
 }
 
