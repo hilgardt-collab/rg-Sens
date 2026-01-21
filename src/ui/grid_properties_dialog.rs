@@ -53,13 +53,25 @@ pub(crate) fn show_panel_properties_dialog(
         Window,
     };
 
-    // Use blocking read - the update thread should release quickly
-    let panel_guard = match panel.try_read() {
-        Ok(guard) => guard,
-        Err(_) => {
-            // Panel is locked, use blocking read (updates are fast so this should be quick)
-            log::info!("Panel locked, waiting for access...");
-            panel.blocking_read()
+    // Try to acquire read lock with retries (avoid blocking GTK main thread indefinitely)
+    let panel_guard = {
+        let mut guard = None;
+        for attempt in 0..100 {
+            // 100 attempts * 10ms = 1s max wait
+            if let Ok(g) = panel.try_read() {
+                guard = Some(g);
+                break;
+            }
+            if attempt < 99 {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+        match guard {
+            Some(g) => g,
+            None => {
+                log::error!("Could not acquire panel lock after 1s - dialog cannot open");
+                return; // Cannot proceed without panel access
+            }
         }
     };
 

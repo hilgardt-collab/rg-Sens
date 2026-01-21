@@ -142,12 +142,25 @@ pub fn save_config_with_app_config(
     let monitor_connector = get_window_monitor_connector(window);
 
     // Convert panels to PanelData (new unified format)
-    // Use blocking_read to ensure all panels are saved
+    // Use try_read with retries to avoid blocking the GTK main thread indefinitely
     let panel_data_list: Vec<PanelData> = panels
         .iter()
-        .map(|panel| {
-            let panel_guard = panel.blocking_read();
-            panel_guard.to_data()
+        .filter_map(|panel| {
+            // Try to acquire read lock with retries (avoid blocking GTK main thread)
+            for attempt in 0..50 {
+                // 50 attempts * 10ms = 500ms max wait per panel
+                if let Ok(panel_guard) = panel.try_read() {
+                    return Some(panel_guard.to_data());
+                }
+                // Brief sleep between retries - process GTK events to keep UI responsive
+                if attempt < 49 {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+            log::warn!(
+                "Could not acquire read lock for panel during save - skipping (update in progress)"
+            );
+            None
         })
         .collect();
 
