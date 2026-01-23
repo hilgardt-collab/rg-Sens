@@ -77,8 +77,15 @@ pub mod combo_displayer_base;
 pub mod combo_generic;
 pub mod combo_utils;
 mod cpu_cores;
-#[cfg(feature = "webkit")]
+// CSS Template backend modules
+#[cfg(any(feature = "webkit", feature = "servo"))]
+mod css_template_backend;
+#[cfg(any(feature = "webkit", feature = "servo"))]
 mod css_template;
+#[cfg(feature = "webkit")]
+pub mod webkit_backend;
+#[cfg(feature = "servo")]
+pub mod servo_backend;
 mod cyberpunk;
 mod fighter_hud;
 mod graph;
@@ -101,8 +108,12 @@ pub use bar::BarDisplayer;
 pub use clock_analog::ClockAnalogDisplayer;
 pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
 pub use cpu_cores::CpuCoresDisplayer;
+#[cfg(any(feature = "webkit", feature = "servo"))]
+pub use css_template::CssTemplateDisplayer;
 #[cfg(feature = "webkit")]
-pub use css_template::{shutdown_all as css_template_shutdown, CssTemplateDisplayer};
+pub use css_template::shutdown_all as css_template_shutdown;
+#[cfg(all(feature = "servo", not(feature = "webkit")))]
+pub use servo_backend::shutdown_all as css_template_shutdown;
 pub use cyberpunk::{CyberpunkDisplayConfig, CyberpunkDisplayer};
 pub use fighter_hud::{FighterHudDisplayConfig, FighterHudDisplayer};
 pub use graph::GraphDisplayer;
@@ -134,8 +145,11 @@ pub use combo_generic::{GenericComboDisplayer, GenericComboDisplayerShared};
 /// Register all built-in displayers with the global registry
 ///
 /// # Arguments
-/// * `webkit_enabled` - If true, register the CSS Template displayer (requires --webkit-enable flag)
-pub fn register_all(webkit_enabled: bool) {
+/// * `webkit_enabled` - If true, register the CSS Template displayer with WebKit backend (requires --webkit-enable flag)
+/// * `servo_enabled` - If true, register the CSS Template displayer with Servo backend (requires --servo-enable flag)
+///
+/// Note: webkit_enabled and servo_enabled are mutually exclusive (enforced by CLI argument parsing)
+pub fn register_all(webkit_enabled: bool, servo_enabled: bool) {
     use crate::core::global_registry;
 
     // Register text displayer
@@ -226,12 +240,28 @@ pub fn register_all(webkit_enabled: bool) {
         Box::new(SteampunkDisplayer::new())
     });
 
-    // Register CSS Template displayer (only when webkit feature is enabled AND --webkit-enable flag is passed)
+    // Register CSS Template displayer based on enabled backend
+    // WebKit backend (--webkit-enable)
     #[cfg(feature = "webkit")]
     if webkit_enabled {
         global_registry().register_displayer_with_info("css_template", "CSS Template", || {
-            Box::new(CssTemplateDisplayer::new())
+            Box::new(CssTemplateDisplayer::with_webkit_backend())
         });
-        log::info!("CSS Template displayer enabled (--webkit-enable)");
+        log::info!("CSS Template displayer enabled with WebKit backend (--webkit-enable)");
     }
+
+    // Servo backend (--servo-enable)
+    #[cfg(feature = "servo")]
+    if servo_enabled {
+        global_registry().register_displayer_with_info("css_template", "CSS Template", || {
+            Box::new(CssTemplateDisplayer::with_servo_backend())
+        });
+        log::info!("CSS Template displayer enabled with Servo backend (--servo-enable)");
+    }
+
+    // Suppress unused variable warnings when features are not enabled
+    #[cfg(not(feature = "webkit"))]
+    let _ = webkit_enabled;
+    #[cfg(not(feature = "servo"))]
+    let _ = servo_enabled;
 }

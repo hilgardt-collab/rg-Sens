@@ -1,8 +1,12 @@
-//! CSS Template Combo Displayer - Renders HTML/CSS templates with WebKitGTK WebView
+//! CSS Template Combo Displayer - Renders HTML/CSS templates with pluggable backends
 //!
 //! This displayer allows users to create custom visualizations using HTML and CSS,
 //! with mustache-style enumerated placeholders (`{{0}}`, `{{1}}`, etc.) that are
 //! mapped to data sources via the configuration dialog.
+//!
+//! Backends:
+//! - WebKit (default): Full HTML/CSS/JavaScript support via WebKitGTK
+//! - Servo (experimental): Rust-native rendering via Servo's embedding API
 //!
 //! Features:
 //! - Full CSS3 support (flexbox, grid, animations, transitions)
@@ -12,208 +16,81 @@
 
 use anyhow::Result;
 use cairo::Context;
-use gtk4::{glib, prelude::*, DrawingArea, Overlay, Widget};
+use gtk4::Widget;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, PanelTransform};
-
-/// Global shutdown flag - when set, all CSS template timers will stop
-static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
-
-/// Signal all CSS template timers to stop (call on app shutdown)
-/// This sets a flag that the WebView timers check on their next tick.
-/// The timers will then terminate their web processes cleanly.
-pub fn shutdown_all() {
-    SHUTDOWN_FLAG.store(true, Ordering::SeqCst);
-    log::debug!("CSS template shutdown signal sent - WebViews will terminate on next timer tick");
-}
 use crate::displayers::combo_utils;
+
+// Re-export shutdown function from the active backend
+#[cfg(feature = "webkit")]
+pub use crate::displayers::webkit_backend::shutdown_all;
+
+// Backend abstraction
+use crate::displayers::css_template_backend::{BackendType, DisplayData, TemplateBackend};
+
+#[cfg(feature = "webkit")]
+use crate::displayers::webkit_backend::WebKitBackend;
+
+#[cfg(feature = "servo")]
+use crate::displayers::servo_backend::ServoBackend;
+
 use crate::ui::css_template_display::{
-    detect_placeholders, extract_placeholder_hints, prepare_html_document, transform_template,
-    write_format_value_to_buffer, CssTemplateDisplayConfig, PlaceholderMapping,
+    detect_placeholders, extract_placeholder_hints, CssTemplateDisplayConfig,
 };
-
-use webkit6::prelude::WebViewExt;
-use webkit6::{CacheModel, WebView};
-
-/// Static callback for evaluate_javascript that explicitly drops the result.
-/// Using a static function avoids closure allocation on each call.
-/// The explicit drop ensures the javascriptcore::Value is properly released.
-fn js_callback_ignore(result: Result<webkit6::javascriptcore::Value, glib::Error>) {
-    // Explicitly drop the result to ensure proper cleanup of the JavaScriptCore value
-    // This is important because javascriptcore::Value is a GObject wrapper that needs
-    // its reference count decremented properly
-    drop(result);
-}
-
-/// Internal display data shared between widget and displayer
-#[derive(Clone)]
-struct DisplayData {
-    config: CssTemplateDisplayConfig,
-    values: HashMap<String, Value>,
-    transform: PanelTransform,
-    dirty: bool,
-    /// Cached HTML content (transformed and ready to load)
-    cached_html: Option<String>,
-    /// Currently detected placeholders
-    detected_placeholders: Vec<u32>,
-    /// Placeholder hints extracted from template (index -> description)
-    placeholder_hints: HashMap<u32, String>,
-    /// Flag to signal that config changed and WebView needs reload
-    config_changed: bool,
-    /// Last JavaScript values string sent to WebView (for change detection)
-    last_js_values: String,
-    /// Counter for JavaScript update calls (for periodic GC)
-    js_update_count: u32,
-    /// Cached prefix set for O(1) lookups (avoids regenerating prefixes every frame)
-    cached_prefix_set: std::collections::HashSet<String>,
-    /// Reusable key buffer for get_mapped_value lookups
-    key_buffer: String,
-    /// Reusable buffer for building JS entries (avoids allocation per tick)
-    entries_buffer: Vec<String>,
-    /// Reusable buffer for the final JS values string
-    js_values_buffer: String,
-    /// Reusable buffer for intermediate value formatting
-    value_buffer: String,
-    /// Reusable buffer for building the JS call
-    js_call_buffer: String,
-}
-
-impl Default for DisplayData {
-    fn default() -> Self {
-        // Pre-generate prefixes once (group1_1 through group10_10 = 100 prefixes)
-        // These are generated once and reused for the lifetime of the displayer
-        let group_item_counts: Vec<usize> = (0..10).map(|_| 10).collect();
-        let prefixes = combo_utils::generate_prefixes(&group_item_counts);
-        let cached_prefix_set = prefixes.into_iter().collect();
-
-        Self {
-            config: CssTemplateDisplayConfig::default(),
-            values: HashMap::new(),
-            transform: PanelTransform::default(),
-            dirty: true,
-            cached_html: None,
-            detected_placeholders: Vec::new(),
-            placeholder_hints: HashMap::new(),
-            config_changed: false,
-            last_js_values: String::new(),
-            js_update_count: 0,
-            cached_prefix_set,
-            key_buffer: String::with_capacity(64),
-            entries_buffer: Vec::with_capacity(64),
-            js_values_buffer: String::with_capacity(1024),
-            value_buffer: String::with_capacity(64),
-            js_call_buffer: String::with_capacity(2048),
-        }
-    }
-}
 
 /// CSS Template Combo Displayer
 pub struct CssTemplateDisplayer {
     id: String,
     name: String,
     data: Arc<Mutex<DisplayData>>,
+    backend_type: BackendType,
 }
 
 impl CssTemplateDisplayer {
-    pub fn new() -> Self {
+    /// Create a new CSS Template displayer with WebKit backend
+    #[cfg(feature = "webkit")]
+    pub fn with_webkit_backend() -> Self {
         Self {
             id: "css_template".to_string(),
             name: "CSS Template".to_string(),
             data: Arc::new(Mutex::new(DisplayData::default())),
+            backend_type: BackendType::WebKit,
         }
     }
 
-    /// Get the base URI for loading the template (for resolving relative paths)
-    fn get_base_uri(&self) -> Option<String> {
-        let data = self.data.lock().ok()?;
-        if !data.config.html_path.as_os_str().is_empty() && data.config.html_path.exists() {
-            if let Some(parent) = data.config.html_path.parent() {
-                return Some(format!("file://{}/", parent.display()));
-            }
+    /// Create a new CSS Template displayer with Servo backend
+    #[cfg(feature = "servo")]
+    pub fn with_servo_backend() -> Self {
+        Self {
+            id: "css_template".to_string(),
+            name: "CSS Template".to_string(),
+            data: Arc::new(Mutex::new(DisplayData::default())),
+            backend_type: BackendType::Servo,
         }
-        None
     }
 
-    /// Load and transform the template HTML
-    fn load_template(&self) -> Option<String> {
-        let data = self.data.lock().ok()?;
-        let config = &data.config;
-
-        // Get HTML content (from file or embedded)
-        let html_content = if !config.html_path.as_os_str().is_empty() && config.html_path.exists()
+    /// Create a new CSS Template displayer with the default backend
+    /// (WebKit if available, otherwise Servo)
+    pub fn new() -> Self {
+        #[cfg(feature = "webkit")]
         {
-            fs::read_to_string(&config.html_path).ok()?
-        } else if let Some(ref embedded) = config.embedded_html {
-            embedded.clone()
-        } else {
-            // Default template
-            r#"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background: transparent;
-            font-family: sans-serif;
-            color: var(--rg-theme-color1, #fff);
+            Self::with_webkit_backend()
         }
-        .container {
-            text-align: center;
-            padding: 20px;
+        #[cfg(all(feature = "servo", not(feature = "webkit")))]
+        {
+            Self::with_servo_backend()
         }
-        .value {
-            font-size: 48px;
-            font-weight: bold;
+        #[cfg(not(any(feature = "webkit", feature = "servo")))]
+        {
+            compile_error!(
+                "CSS Template displayer requires either 'webkit' or 'servo' feature to be enabled"
+            );
         }
-        .label {
-            font-size: 14px;
-            opacity: 0.7;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="value">{{0}}</div>
-        <div class="label">No template loaded</div>
-    </div>
-</body>
-</html>
-"#
-            .to_string()
-        };
-
-        // Get CSS content (from file or embedded)
-        let css_content = if let Some(ref css_path) = config.css_path {
-            if css_path.exists() {
-                fs::read_to_string(css_path).ok()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        // Transform placeholders
-        let transformed = transform_template(&html_content);
-
-        // Prepare complete document
-        Some(prepare_html_document(
-            &transformed,
-            css_content.as_deref(),
-            config.embedded_css.as_deref(),
-        ))
     }
 
     /// Get placeholder hints extracted from the current template
@@ -242,503 +119,23 @@ impl Displayer for CssTemplateDisplayer {
     }
 
     fn create_widget(&self) -> Widget {
-        // Create WebView
-        let webview = WebView::new();
-
-        // Set cache model to DocumentViewer for minimal caching (reduces memory accumulation)
-        if let Some(context) = webview.web_context() {
-            context.set_cache_model(CacheModel::DocumentViewer);
-        }
-
-        // Configure WebView settings to minimize memory usage
-        if let Some(settings) = WebViewExt::settings(&webview) {
-            settings.set_enable_javascript(true);
-            // Note: enable_javascript_markup must remain true because the bridge script
-            // that defines window.updateValues is injected as an inline <script> block
-            settings.set_allow_file_access_from_file_urls(true);
-            settings.set_allow_universal_access_from_file_urls(true);
-            settings.set_enable_developer_extras(false);
-            settings.set_enable_page_cache(false);
-            // Disable features that can accumulate memory
-            settings.set_enable_html5_database(false);
-            settings.set_enable_html5_local_storage(false);
-            settings.set_enable_offline_web_application_cache(false);
-            // Disable media to reduce memory footprint
-            settings.set_enable_media(false);
-            settings.set_enable_webaudio(false);
-            settings.set_enable_webgl(false);
-        }
-
-        // Set transparent background
-        webview.set_background_color(&gdk4::RGBA::new(0.0, 0.0, 0.0, 0.0));
-
-        // Disable WebView's own context menu (let parent handle right-click)
-        webview.connect_context_menu(|_, _, _| true);
-
-        // Load initial template
-        let html = self.load_template();
-        let base_uri = self.get_base_uri();
-        if let Some(html_content) = html {
-            webview.load_html(&html_content, base_uri.as_deref());
-            // Cache the HTML
-            if let Ok(mut data) = self.data.lock() {
-                data.cached_html = Some(html_content);
+        match self.backend_type {
+            #[cfg(feature = "webkit")]
+            BackendType::WebKit => {
+                let backend = WebKitBackend::new();
+                backend.create_widget(self.data.clone())
+            }
+            #[cfg(feature = "servo")]
+            BackendType::Servo => {
+                let backend = ServoBackend::new();
+                backend.create_widget(self.data.clone())
             }
         }
-
-        // Track file modification times for hot-reload (checked in timer, no separate thread)
-        let last_html_modified: Arc<Mutex<Option<std::time::SystemTime>>> =
-            Arc::new(Mutex::new(None));
-        let last_css_modified: Arc<Mutex<Option<std::time::SystemTime>>> =
-            Arc::new(Mutex::new(None));
-
-        // Initialize modification times
-        if let Ok(data) = self.data.lock() {
-            if data.config.hot_reload {
-                if let Ok(metadata) = std::fs::metadata(&data.config.html_path) {
-                    if let Ok(modified) = metadata.modified() {
-                        *last_html_modified.lock().unwrap() = Some(modified);
-                    }
-                }
-                if let Some(ref css_path) = data.config.css_path {
-                    if let Ok(metadata) = std::fs::metadata(css_path) {
-                        if let Ok(modified) = metadata.modified() {
-                            *last_css_modified.lock().unwrap() = Some(modified);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Create a cancellable for JavaScript calls - this allows us to cancel pending
-        // async operations before terminating the web process, preventing callback leaks
-        let js_cancellable: Arc<Mutex<gtk4::gio::Cancellable>> =
-            Arc::new(Mutex::new(gtk4::gio::Cancellable::new()));
-
-        // Set up periodic check for reload and value updates
-        // 1000ms reduces WebKitGTK memory overhead from frequent JavaScript evaluation
-        // Hot-reload detection is slightly slower but acceptable for development use
-        glib::timeout_add_local(Duration::from_millis(1000), {
-            let data_clone = self.data.clone();
-            let webview_weak = webview.downgrade();
-            let last_html_modified = last_html_modified.clone();
-            let last_css_modified = last_css_modified.clone();
-            let js_cancellable = js_cancellable.clone();
-            move || {
-                // Check global shutdown flag first
-                if SHUTDOWN_FLAG.load(Ordering::SeqCst) {
-                    log::debug!("CSS template timer stopping: shutdown signal received");
-
-                    // Cancel any pending JavaScript calls
-                    if let Ok(cancellable) = js_cancellable.lock() {
-                        cancellable.cancel();
-                    }
-
-                    // Clear all buffers in DisplayData to release memory
-                    if let Ok(mut data) = data_clone.try_lock() {
-                        data.values.clear();
-                        data.values.shrink_to_fit();
-                        data.cached_html = None;
-                        data.last_js_values = String::new();
-                        data.entries_buffer = Vec::new();
-                        data.js_values_buffer = String::new();
-                        data.value_buffer = String::new();
-                        data.key_buffer = String::new();
-                        data.js_call_buffer = String::new();
-                        data.cached_prefix_set.clear();
-                        data.cached_prefix_set.shrink_to_fit();
-                    }
-
-                    // Clean up WebView if possible
-                    if let Some(webview) = webview_weak.upgrade() {
-                        webview.stop_loading();
-                        // Forcefully terminate the web process to avoid orphaned processes
-                        webview.terminate_web_process();
-                    }
-                    return glib::ControlFlow::Break;
-                }
-
-                let Some(webview) = webview_weak.upgrade() else {
-                    log::debug!("CSS template timer stopping: WebView destroyed");
-                    return glib::ControlFlow::Break;
-                };
-
-                // Check if widget is orphaned (removed from widget tree but not destroyed)
-                // This is critical for preventing memory leaks when panels are replaced -
-                // the WebView may still exist (held by Overlay) but is no longer attached
-                // to any window.
-                if webview.root().is_none() {
-                    log::debug!("CSS template timer stopping: WebView orphaned (no root)");
-
-                    // Cancel any pending JavaScript calls first
-                    if let Ok(cancellable) = js_cancellable.lock() {
-                        cancellable.cancel();
-                    }
-
-                    // Clear all buffers in DisplayData to release memory immediately
-                    if let Ok(mut data) = data_clone.try_lock() {
-                        data.values.clear();
-                        data.values.shrink_to_fit();
-                        data.cached_html = None;
-                        data.last_js_values = String::new();
-                        data.entries_buffer = Vec::new();
-                        data.js_values_buffer = String::new();
-                        data.value_buffer = String::new();
-                        data.key_buffer = String::new();
-                        data.js_call_buffer = String::new();
-                        data.cached_prefix_set.clear();
-                        data.cached_prefix_set.shrink_to_fit();
-                    }
-
-                    // Try to clean up WebView resources and terminate web process
-                    webview.stop_loading();
-                    webview.terminate_web_process();
-                    return glib::ControlFlow::Break;
-                }
-
-                // Skip if not visible
-                if !webview.is_mapped() {
-                    return glib::ControlFlow::Continue;
-                }
-
-                // Check for config change (new template selected)
-                // Use try_lock to avoid blocking the main thread
-                let config_changed = data_clone
-                    .try_lock()
-                    .ok()
-                    .map(|d| d.config_changed)
-                    .unwrap_or(false);
-
-                // Check for hot-reload by comparing file modification times
-                // Skip entirely if we can't get locks immediately to avoid blocking
-                let mut files_changed = false;
-                if let Ok(data) = data_clone.try_lock() {
-                    if data.config.hot_reload {
-                        // Use references to avoid cloning paths every tick
-                        let html_path = &data.config.html_path;
-                        let css_path = &data.config.css_path;
-
-                        // Check HTML file (only if path is not empty)
-                        if !html_path.as_os_str().is_empty() {
-                            if let Ok(metadata) = std::fs::metadata(html_path) {
-                                if let Ok(modified) = metadata.modified() {
-                                    if let Ok(mut last) = last_html_modified.try_lock() {
-                                        if *last != Some(modified) {
-                                            *last = Some(modified);
-                                            files_changed = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // Check CSS file
-                        if let Some(ref css_path) = css_path {
-                            if let Ok(metadata) = std::fs::metadata(css_path) {
-                                if let Ok(modified) = metadata.modified() {
-                                    if let Ok(mut last) = last_css_modified.try_lock() {
-                                        if *last != Some(modified) {
-                                            *last = Some(modified);
-                                            files_changed = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Reload if files changed or config changed
-                if files_changed || config_changed {
-                    // Reload template
-                    let html_content = {
-                        let mut should_reload = config_changed;
-                        // Use try_lock to avoid blocking
-                        let config = data_clone.try_lock().ok().map(|mut d| {
-                            if d.config_changed {
-                                d.config_changed = false;
-                                should_reload = true;
-                            }
-                            d.config.clone()
-                        });
-
-                        if let Some(config) = config {
-                            // Reload if config changed OR hot_reload is enabled and file changed
-                            if should_reload || config.hot_reload {
-                                // Get base URI for relative paths
-                                let base_uri = if !config.html_path.as_os_str().is_empty()
-                                    && config.html_path.exists()
-                                {
-                                    config
-                                        .html_path
-                                        .parent()
-                                        .map(|p| format!("file://{}/", p.display()))
-                                } else {
-                                    None
-                                };
-
-                                // Manual load
-                                let html = if !config.html_path.as_os_str().is_empty()
-                                    && config.html_path.exists()
-                                {
-                                    fs::read_to_string(&config.html_path).ok()
-                                } else {
-                                    config.embedded_html.clone()
-                                };
-
-                                let css = config.css_path.as_ref().and_then(|p| {
-                                    if p.exists() {
-                                        fs::read_to_string(p).ok()
-                                    } else {
-                                        None
-                                    }
-                                });
-
-                                if let Some(html) = html {
-                                    let transformed = transform_template(&html);
-                                    Some((
-                                        prepare_html_document(
-                                            &transformed,
-                                            css.as_deref(),
-                                            config.embedded_css.as_deref(),
-                                        ),
-                                        base_uri,
-                                    ))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    };
-
-                    if let Some((html, base_uri)) = html_content {
-                        webview.load_html(&html, base_uri.as_deref());
-                        // Use try_lock to avoid blocking
-                        if let Ok(mut data) = data_clone.try_lock() {
-                            data.cached_html = Some(html);
-                        }
-                    }
-                }
-
-                // Update values via JavaScript (only if values actually changed)
-                if let Ok(mut data) = data_clone.try_lock() {
-                    if data.dirty {
-                        data.dirty = false;
-
-                        // Take buffers temporarily to avoid borrow issues
-                        let mut key_buffer = std::mem::take(&mut data.key_buffer);
-                        let mut entries = std::mem::take(&mut data.entries_buffer);
-                        let mut value_buffer = std::mem::take(&mut data.value_buffer);
-
-                        // Build JS entries - reuse existing String allocations in entries buffer
-                        let mappings_len = data.config.mappings.len();
-                        for (i, mapping) in data.config.mappings.iter().enumerate() {
-                            // Get value into reusable buffer
-                            value_buffer.clear();
-                            write_mapped_value_to_buffer(
-                                &data.values,
-                                mapping,
-                                &mut key_buffer,
-                                &mut value_buffer,
-                            );
-
-                            // Reuse existing String from buffer or create new one
-                            if i < entries.len() {
-                                // Reuse existing String - clear and rebuild
-                                entries[i].clear();
-                            } else {
-                                // Need new String
-                                entries.push(String::with_capacity(32));
-                            }
-                            // Build entry using write! to avoid to_string() allocation
-                            use std::fmt::Write;
-                            entries[i].push('"');
-                            let _ = write!(entries[i], "{}", mapping.index);
-                            entries[i].push_str("\": \"");
-                            // Escape inline to avoid temporary String
-                            for c in value_buffer.chars() {
-                                match c {
-                                    '\\' => entries[i].push_str("\\\\"),
-                                    '"' => entries[i].push_str("\\\""),
-                                    _ => entries[i].push(c),
-                                }
-                            }
-                            entries[i].push('"');
-                        }
-                        // Truncate if we have fewer mappings now
-                        entries.truncate(mappings_len);
-
-                        // Sort entries for consistent comparison
-                        entries.sort();
-
-                        // Build final JS values string using reusable buffer
-                        let mut js_values_buffer = std::mem::take(&mut data.js_values_buffer);
-                        js_values_buffer.clear();
-                        for (i, entry) in entries.iter().enumerate() {
-                            if i > 0 {
-                                js_values_buffer.push_str(", ");
-                            }
-                            js_values_buffer.push_str(entry);
-                        }
-
-                        // Restore buffers
-                        data.key_buffer = key_buffer;
-                        data.entries_buffer = entries;
-                        data.value_buffer = value_buffer;
-
-                        // Only call JavaScript if values actually changed
-                        if js_values_buffer != data.last_js_values {
-                            // Swap buffers instead of clone to avoid allocation
-                            std::mem::swap(&mut data.last_js_values, &mut js_values_buffer);
-                            data.js_values_buffer = js_values_buffer; // Restore (now contains old value)
-                            data.js_update_count += 1;
-
-                            // Every 300 updates (~5 minutes), fully reload WebView to combat memory leak
-                            // WebKitGTK accumulates internal state that can't be released otherwise
-                            if data.js_update_count % 300 == 0 {
-                                // Debug: log buffer capacities to track memory usage
-                                let entries_total_cap: usize = data.entries_buffer.iter()
-                                    .map(|s| s.capacity())
-                                    .sum();
-                                log::info!(
-                                    "CSS template memory debug [tick {}]: \
-                                    values={}/{}, entries={}/{} (total_str_cap={}), \
-                                    js_values={}/{}, key={}/{}, value={}/{}, js_call={}/{}, \
-                                    prefix_set={}, cached_html={}",
-                                    data.js_update_count,
-                                    data.values.len(), data.values.capacity(),
-                                    data.entries_buffer.len(), data.entries_buffer.capacity(),
-                                    entries_total_cap,
-                                    data.js_values_buffer.len(), data.js_values_buffer.capacity(),
-                                    data.key_buffer.len(), data.key_buffer.capacity(),
-                                    data.value_buffer.len(), data.value_buffer.capacity(),
-                                    data.js_call_buffer.len(), data.js_call_buffer.capacity(),
-                                    data.cached_prefix_set.len(),
-                                    data.cached_html.as_ref().map(|h| h.capacity()).unwrap_or(0),
-                                );
-                                log::debug!("CSS template: periodic WebView reset to release memory");
-
-                                // Replace buffers with fresh allocations to guarantee memory release
-                                // (shrink_to_fit doesn't guarantee the allocator returns memory to OS)
-                                let values_len = data.values.len();
-                                data.values = HashMap::with_capacity(values_len);
-                                // Replace entries buffer - keep capacity hint for typical size
-                                let entries_len = data.entries_buffer.len();
-                                data.entries_buffer = Vec::with_capacity(entries_len.min(64));
-                                // Replace string buffers with reasonable initial capacities
-                                data.js_values_buffer = String::with_capacity(1024);
-                                data.value_buffer = String::with_capacity(64);
-                                data.key_buffer = String::with_capacity(64);
-                                data.js_call_buffer = String::with_capacity(2048);
-
-                                // Force a full reload by reloading the cached HTML
-                                if let Some(ref html) = data.cached_html {
-                                    let html_clone = html.clone();
-                                    let base_uri = if !data.config.html_path.as_os_str().is_empty() {
-                                        data.config.html_path.parent()
-                                            .map(|p| format!("file://{}/", p.display()))
-                                    } else {
-                                        None
-                                    };
-                                    // Reset last_js_values so next update will refresh the DOM
-                                    data.last_js_values.clear();
-                                    drop(data); // Release lock before WebView operation
-
-                                    // Cancel any pending JavaScript calls to ensure their callbacks
-                                    // are invoked (with cancellation error) before we terminate.
-                                    // This prevents leaking boxed callback closures.
-                                    if let Ok(cancellable) = js_cancellable.lock() {
-                                        cancellable.cancel();
-                                    }
-
-                                    // Try to trigger JavaScript GC before terminating
-                                    // This helps release JS-side allocations before process death
-                                    webview.evaluate_javascript(
-                                        "if(typeof gc==='function')gc();window.updateValues=null;",
-                                        None,
-                                        None,
-                                        None::<&gtk4::gio::Cancellable>,
-                                        js_callback_ignore,
-                                    );
-
-                                    // Stop any pending loads and terminate web process
-                                    // This forces WebKitGTK to release all internal allocations
-                                    webview.stop_loading();
-                                    webview.terminate_web_process();
-
-                                    // Create a fresh cancellable for the next round of JS calls
-                                    if let Ok(mut cancellable) = js_cancellable.lock() {
-                                        *cancellable = gtk4::gio::Cancellable::new();
-                                    }
-
-                                    // Small delay before reload to let WebKit fully clean up
-                                    // Using timeout instead of immediate reload
-                                    let webview_for_reload = webview.clone();
-                                    glib::timeout_add_local_once(Duration::from_millis(50), move || {
-                                        webview_for_reload.load_html(&html_clone, base_uri.as_deref());
-                                    });
-                                    return glib::ControlFlow::Continue;
-                                }
-                            }
-
-                            // Build JS call using reusable buffer
-                            // Take buffer to avoid borrow issues
-                            let mut js_call_buffer = std::mem::take(&mut data.js_call_buffer);
-                            js_call_buffer.clear();
-                            js_call_buffer.push_str("if (window.updateValues) { window.updateValues({");
-                            js_call_buffer.push_str(&data.last_js_values);
-                            js_call_buffer.push_str("}); }");
-
-                            // Execute JavaScript using static callback to avoid closure allocation
-                            // Use the shared cancellable so we can cancel pending calls before terminate
-                            let cancellable_guard = js_cancellable.lock().ok();
-                            webview.evaluate_javascript(
-                                &js_call_buffer,
-                                None,
-                                None,
-                                cancellable_guard.as_deref(),
-                                js_callback_ignore,
-                            );
-                            drop(cancellable_guard);
-
-                            // Restore buffer
-                            data.js_call_buffer = js_call_buffer;
-                        } else {
-                            // Values unchanged, restore buffer
-                            data.js_values_buffer = js_values_buffer;
-                        }
-                    }
-                }
-
-                glib::ControlFlow::Continue
-            }
-        });
-
-        // Wrap WebView in an Overlay with a transparent event-catching layer on top.
-        // This allows drag and right-click events to propagate to the parent Frame
-        // while still displaying the WebView content underneath.
-        let overlay = Overlay::new();
-        overlay.set_child(Some(&webview));
-
-        // Create transparent event layer that sits on top of WebView
-        let event_layer = DrawingArea::new();
-        event_layer.set_hexpand(true);
-        event_layer.set_vexpand(true);
-        // Make it transparent (don't draw anything)
-        event_layer.set_draw_func(|_, _, _, _| {});
-        overlay.add_overlay(&event_layer);
-
-        overlay.upcast()
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         // Use try_lock to avoid blocking tokio worker threads
-        // If the timer callback holds the lock, we skip this update (data will be updated next cycle)
         if let Ok(mut display_data) = self.data.try_lock() {
-            // DEBUG: Test 2 - only filter_values (no transform)
             let mut values = std::mem::take(&mut display_data.values);
             combo_utils::filter_values_with_owned_prefix_set(
                 data,
@@ -746,15 +143,13 @@ impl Displayer for CssTemplateDisplayer {
                 &mut values,
             );
             display_data.values = values;
-
-            // Extract transform from values
             display_data.transform = PanelTransform::from_values(data);
             display_data.dirty = true;
         }
     }
 
     fn draw(&self, _cr: &Context, _width: f64, _height: f64) -> Result<()> {
-        // WebView handles its own drawing
+        // Backend handles its own drawing
         Ok(())
     }
 
@@ -794,7 +189,6 @@ impl Displayer for CssTemplateDisplayer {
             {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = css_config;
-                    // Invalidate cached HTML and signal reload needed
                     display_data.cached_html = None;
                     display_data.config_changed = true;
 
@@ -849,63 +243,6 @@ impl Displayer for CssTemplateDisplayer {
             ))
         } else {
             None
-        }
-    }
-}
-
-/// Static helper to write mapped value into output buffer using reusable key buffer
-/// Both buffers are reused to avoid allocations on each tick
-fn write_mapped_value_to_buffer(
-    values: &HashMap<String, Value>,
-    mapping: &PlaceholderMapping,
-    key_buffer: &mut String,
-    output: &mut String,
-) {
-    if mapping.slot_prefix.is_empty() {
-        output.push_str("--");
-        return;
-    }
-
-    // Build the key using the reusable buffer (avoids format! allocation)
-    key_buffer.clear();
-    key_buffer.push_str(&mapping.slot_prefix);
-    key_buffer.push('_');
-    key_buffer.push_str(&mapping.field);
-
-    // Try to get the value with field suffix
-    if let Some(value) = values.get(key_buffer.as_str()) {
-        write_formatted_value_to_buffer(value, mapping.format.as_deref(), output);
-        return;
-    }
-
-    // Try without the field suffix
-    if let Some(value) = values.get(&mapping.slot_prefix) {
-        write_formatted_value_to_buffer(value, mapping.format.as_deref(), output);
-        return;
-    }
-
-    output.push_str("--");
-}
-
-/// Helper to write formatted JSON value into output buffer
-/// Uses write_format_value_to_buffer to avoid intermediate String allocations
-#[inline]
-fn write_formatted_value_to_buffer(value: &Value, format: Option<&str>, output: &mut String) {
-    match value {
-        Value::Number(n) => {
-            if let Some(f) = n.as_f64() {
-                // Write directly to buffer without intermediate allocation
-                write_format_value_to_buffer(f, format, output);
-            } else {
-                use std::fmt::Write;
-                let _ = write!(output, "{}", n);
-            }
-        }
-        Value::String(s) => output.push_str(s),
-        Value::Bool(b) => output.push_str(if *b { "true" } else { "false" }),
-        _ => {
-            use std::fmt::Write;
-            let _ = write!(output, "{}", value);
         }
     }
 }

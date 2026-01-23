@@ -63,7 +63,8 @@ criterion = "0.5"
 [features]
 default = ["nvidia", "webkit"]
 nvidia = ["nvml-wrapper"]  # NVIDIA GPU support
-webkit = ["webkit6", "notify"]  # CSS Template panel with WebView support
+webkit = ["webkit6", "notify"]  # CSS Template panel with WebKit WebView support
+servo = []  # CSS Template panel with Servo rendering (requires nightly Rust)
 
 [profile.release]
 opt-level = 3

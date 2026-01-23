@@ -80,8 +80,12 @@ struct Cli {
     layout_file: Option<String>,
 
     /// Enable WebKit-based CSS Template panels (disabled by default due to memory usage)
-    #[arg(long = "webkit-enable")]
+    #[arg(long = "webkit-enable", conflicts_with = "servo_enable")]
     webkit_enable: bool,
+
+    /// Enable Servo-based CSS Template panels (experimental, requires servo feature)
+    #[arg(long = "servo-enable", conflicts_with = "webkit_enable")]
+    servo_enable: bool,
 }
 
 /// Parse coordinate string "X,Y" into (i32, i32)
@@ -182,8 +186,9 @@ fn main() {
         return;
     }
 
-    // Extract webkit_enable before moving cli into CLI_OPTIONS
+    // Extract webkit_enable and servo_enable before moving cli into CLI_OPTIONS
     let webkit_enable = cli.webkit_enable;
+    let servo_enable = cli.servo_enable;
 
     // Store CLI options for access in build_ui
     CLI_OPTIONS.set(cli).expect("CLI options already set");
@@ -192,9 +197,9 @@ fn main() {
     sources::initialize_sensors();
 
     // Register all built-in sources and displayers
-    // CSS Template (WebKit) is disabled by default, use --webkit-enable to enable
+    // CSS Template requires --webkit-enable or --servo-enable (mutually exclusive)
     sources::register_all();
-    displayers::register_all(webkit_enable);
+    displayers::register_all(webkit_enable, servo_enable);
 
     // Create GTK application
     let app = Application::builder().application_id(APP_ID).build();
@@ -274,6 +279,7 @@ fn build_ui(app: &Application) {
         renderer: None,
         layout_file: None,
         webkit_enable: false,
+        servo_enable: false,
     });
 
     // Load CSS for selection styling
@@ -1060,13 +1066,22 @@ fn build_ui(app: &Application) {
         update_manager_for_close.stop();
 
         // Signal CSS template displayers to stop their timers and terminate web processes
-        #[cfg(feature = "webkit")]
+        // IMPORTANT: shutdown_all() now directly terminates all backend instances instead of just
+        // setting a flag for timers to notice (which caused hangs because timers run at 1000ms
+        // and may not fire before app exits)
+        #[cfg(any(feature = "webkit", feature = "servo"))]
         {
             rg_sens::displayers::css_template_shutdown();
-            // Process pending main loop events to give timers a chance to clean up WebViews
-            // This helps avoid "WebProcess didn't exit" errors on shutdown
+            // Process pending main loop events to let GTK handle backend termination
+            // We do multiple iterations to ensure all cleanup events are processed
             let ctx = glib::MainContext::default();
-            for _ in 0..5 {
+            for _ in 0..20 {
+                ctx.iteration(false);
+            }
+            // Small delay to let backend processes fully terminate
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            // Process any remaining events
+            for _ in 0..10 {
                 ctx.iteration(false);
             }
         }
@@ -1232,10 +1247,26 @@ fn build_ui(app: &Application) {
 
     // Add GTK main loop heartbeat for diagnosing freezes
     // Logs every 30 seconds to confirm GTK main loop is responsive
+    // Also checks if the tokio update thread has stalled
     glib::timeout_add_local(std::time::Duration::from_secs(30), || {
         static HEARTBEAT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let count = HEARTBEAT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        info!("GTK heartbeat #{} - main loop responsive", count);
+
+        // Check if update thread has stalled (no update for >60 seconds)
+        if let Some(stall_duration) = rg_sens::core::check_update_stall(60) {
+            error!(
+                "UPDATE THREAD STALLED! No update cycle completed for {:?}. \
+                 This is likely the cause of UI freeze. Check for blocking I/O or deadlocks.",
+                stall_duration
+            );
+        }
+
+        // Also log animation manager status for correlation
+        let anim_count = rg_sens::core::animation_entry_count();
+        info!(
+            "GTK heartbeat #{} - main loop responsive, {} animation entries",
+            count, anim_count
+        );
         glib::ControlFlow::Continue
     });
 
