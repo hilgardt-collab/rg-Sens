@@ -341,6 +341,30 @@ function updateGauge(percent) {
 - Ensure "Hot reload" is enabled in the Template tab
 - Some changes may require panel restart
 
+## Known Limitations
+
+### Memory Usage
+
+CSS Template panels use WebKitGTK to render HTML content. **Complex JavaScript in templates can cause gradual memory accumulation** due to WebKitGTK's internal handling of JavaScript execution.
+
+**To minimize memory usage:**
+- Keep JavaScript simple and avoid storing persistent DOM references
+- Use the provided `rg-sens-gauges.js` library (v2.0+) which is optimized for low memory usage
+- Avoid using `document.createTreeWalker` or storing element references in arrays/maps
+- Prefer querying the DOM fresh on each update rather than caching references
+- Use `{ once: true }` option for event listeners when possible
+
+**If you notice increasing memory usage:**
+- The application periodically resets WebViews every 5 minutes to release accumulated memory
+- Consider simplifying your template's JavaScript
+- Templates without JavaScript have minimal memory overhead
+
+### WebView Limitations
+
+- CSS Template panels spawn a separate WebKitWebProcess for rendering
+- Very complex templates may impact system performance
+- Some advanced web features are disabled for security (local storage, databases, WebGL)
+
 ## File Locations
 
 - **User templates**: Store in `~/.config/rg-sens/templates/`

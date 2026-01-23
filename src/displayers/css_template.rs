@@ -654,6 +654,16 @@ impl Displayer for CssTemplateDisplayer {
                                         cancellable.cancel();
                                     }
 
+                                    // Try to trigger JavaScript GC before terminating
+                                    // This helps release JS-side allocations before process death
+                                    webview.evaluate_javascript(
+                                        "if(typeof gc==='function')gc();window.updateValues=null;",
+                                        None,
+                                        None,
+                                        None::<&gtk4::gio::Cancellable>,
+                                        js_callback_ignore,
+                                    );
+
                                     // Stop any pending loads and terminate web process
                                     // This forces WebKitGTK to release all internal allocations
                                     webview.stop_loading();
@@ -664,8 +674,12 @@ impl Displayer for CssTemplateDisplayer {
                                         *cancellable = gtk4::gio::Cancellable::new();
                                     }
 
-                                    // Reload content directly (avoid idle_add closure allocation)
-                                    webview.load_html(&html_clone, base_uri.as_deref());
+                                    // Small delay before reload to let WebKit fully clean up
+                                    // Using timeout instead of immediate reload
+                                    let webview_for_reload = webview.clone();
+                                    glib::timeout_add_local_once(Duration::from_millis(50), move || {
+                                        webview_for_reload.load_html(&html_clone, base_uri.as_deref());
+                                    });
                                     return glib::ControlFlow::Continue;
                                 }
                             }
@@ -724,7 +738,7 @@ impl Displayer for CssTemplateDisplayer {
         // Use try_lock to avoid blocking tokio worker threads
         // If the timer callback holds the lock, we skip this update (data will be updated next cycle)
         if let Ok(mut display_data) = self.data.try_lock() {
-            // Use cached prefixes for filtering - take values temporarily to avoid borrow conflict
+            // DEBUG: Test 2 - only filter_values (no transform)
             let mut values = std::mem::take(&mut display_data.values);
             combo_utils::filter_values_with_owned_prefix_set(
                 data,
