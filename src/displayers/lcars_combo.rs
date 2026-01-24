@@ -433,14 +433,9 @@ impl Displayer for LcarsComboDisplayer {
             let w = width as f64;
             let h = height as f64;
 
-            // Clear to transparent so panel background shows through
-            cr.set_operator(cairo::Operator::Clear);
-            cr.paint().ok();
-            cr.set_operator(cairo::Operator::Over);
-
             data.transform.apply(cr, w, h);
 
-                // Check if frame cache is valid
+            // Check if frame cache is valid
                 let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
                     cache.width == width
                         && cache.height == height

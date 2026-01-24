@@ -23,12 +23,6 @@ use tokio::time::Instant;
 /// Value is milliseconds since UNIX epoch.
 static LAST_UPDATE_TIMESTAMP: AtomicU64 = AtomicU64::new(0);
 
-/// Get the timestamp of the last successful update cycle (milliseconds since UNIX epoch).
-/// Returns 0 if no update has completed yet.
-pub fn last_update_timestamp() -> u64 {
-    LAST_UPDATE_TIMESTAMP.load(Ordering::Relaxed)
-}
-
 /// Check if the update thread appears to be stalled.
 /// Returns Some(duration) if stalled for longer than threshold, None otherwise.
 pub fn check_update_stall(threshold_secs: u64) -> Option<Duration> {
