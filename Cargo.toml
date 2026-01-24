@@ -29,6 +29,10 @@ regex = "1"  # Used for template placeholder detection
 # WebKit is optional - only loaded when CSS Template panels are used
 webkit6 = { version = "0.4", optional = true }
 notify = { version = "7", optional = true }  # File watching for hot-reload
+# Servo backend: Currently disabled due to dependency conflicts in libservo
+# Once Servo's embedding API stabilizes, add:
+# libservo = { git = "https://github.com/servo/servo", rev = "REVISION", optional = true }
+# See: https://github.com/servo/servo and https://github.com/atbrakhi/servo-embedding
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -64,7 +68,7 @@ criterion = "0.5"
 default = ["nvidia", "webkit"]
 nvidia = ["nvml-wrapper"]  # NVIDIA GPU support
 webkit = ["webkit6", "notify"]  # CSS Template panel with WebKit WebView support
-servo = []  # CSS Template panel with Servo rendering (requires nightly Rust)
+servo = []  # CSS Template panel with Servo rendering (skeleton - libservo disabled due to dependency conflicts)
 
 [profile.release]
 opt-level = 3
