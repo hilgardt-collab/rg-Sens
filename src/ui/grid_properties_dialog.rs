@@ -4694,14 +4694,22 @@ pub(crate) fn show_panel_properties_dialog(
 
         // Update widget and frame sizes if size changed (and displayer wasn't replaced)
         if size_changed && !displayer_changed {
+            let cfg = config_for_apply.borrow();
             let pixel_width =
-                new_width as i32 * config.cell_width + (new_width as i32 - 1) * config.spacing;
+                new_width as i32 * cfg.cell_width + (new_width as i32 - 1) * cfg.spacing;
             let pixel_height =
-                new_height as i32 * config.cell_height + (new_height as i32 - 1) * config.spacing;
+                new_height as i32 * cfg.cell_height + (new_height as i32 - 1) * cfg.spacing;
+
+            drop(cfg);
 
             widget.set_size_request(pixel_width, pixel_height);
             frame.set_size_request(pixel_width, pixel_height);
             background_area.set_size_request(pixel_width, pixel_height);
+
+            // Force layout recalculation
+            widget.queue_resize();
+            frame.queue_resize();
+            background_area.queue_resize();
         }
 
         // Trigger redraw of drop zone layer
