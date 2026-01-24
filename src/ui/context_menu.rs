@@ -542,6 +542,13 @@ pub fn show_context_menu<F>(
         window_for_quit.close();
     });
 
+    // Clean up popover when closed to prevent resource leak
+    // Each right-click creates a new popover, so we must unparent it when done
+    let popover_cleanup = popover.clone();
+    popover.connect_closed(move |_| {
+        popover_cleanup.unparent();
+    });
+
     popover.popup();
 }
 
