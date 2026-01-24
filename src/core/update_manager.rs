@@ -11,11 +11,46 @@ use super::Panel;
 use anyhow::Result;
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
+
+/// Global watchdog timestamp - updated by tokio thread on each successful update cycle.
+/// GTK thread can check this to detect if the update thread has stalled.
+/// Value is milliseconds since UNIX epoch.
+static LAST_UPDATE_TIMESTAMP: AtomicU64 = AtomicU64::new(0);
+
+/// Get the timestamp of the last successful update cycle (milliseconds since UNIX epoch).
+/// Returns 0 if no update has completed yet.
+pub fn last_update_timestamp() -> u64 {
+    LAST_UPDATE_TIMESTAMP.load(Ordering::Relaxed)
+}
+
+/// Check if the update thread appears to be stalled.
+/// Returns Some(duration) if stalled for longer than threshold, None otherwise.
+pub fn check_update_stall(threshold_secs: u64) -> Option<Duration> {
+    let last = LAST_UPDATE_TIMESTAMP.load(Ordering::Relaxed);
+    if last == 0 {
+        return None; // No update yet, can't determine stall
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    let elapsed_ms = now.saturating_sub(last);
+    let threshold_ms = threshold_secs * 1000;
+
+    if elapsed_ms > threshold_ms {
+        Some(Duration::from_millis(elapsed_ms))
+    } else {
+        None
+    }
+}
 
 /// Minimum interval between config hash checks (1 second)
 /// Config changes are rare (user must open dialog, change settings, click save)
@@ -34,6 +69,10 @@ const CIRCUIT_BREAKER_BASE_RETRY: Duration = Duration::from_secs(10);
 
 /// Circuit breaker: maximum retry interval (caps exponential backoff)
 const CIRCUIT_BREAKER_MAX_RETRY: Duration = Duration::from_secs(300); // 5 minutes
+
+/// Timeout for individual panel update tasks
+/// If a panel update takes longer than this, it's likely hung on I/O
+const PANEL_UPDATE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Tracks update timing for a panel
 struct PanelUpdateState {
@@ -385,6 +424,13 @@ impl UpdateManager {
             let elapsed = start.elapsed();
             trace!("Update cycle took {:?}", elapsed);
 
+            // Update watchdog timestamp to indicate update thread is alive
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            LAST_UPDATE_TIMESTAMP.store(now_ms, Ordering::Relaxed);
+
             // Periodic diagnostic logging (every ~60 seconds)
             static CYCLE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let cycle = CYCLE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -614,10 +660,22 @@ impl UpdateManager {
 
         drop(panels);
 
-        // Wait for all panel updates to complete
+        // Wait for all panel updates to complete with timeout
+        // This prevents a hung source from blocking all updates indefinitely
         for (panel_id, task) in tasks {
-            if let Err(e) = task.await {
-                error!("Panel update task failed for {}: {}", panel_id, e);
+            match tokio::time::timeout(PANEL_UPDATE_TIMEOUT, task).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    error!("Panel update task failed for {}: {}", panel_id, e);
+                }
+                Err(_) => {
+                    error!(
+                        "Panel update task TIMED OUT for {} after {:?}. \
+                         This panel's source may be blocked on I/O (GPU driver, hardware, etc.). \
+                         Consider checking system logs for driver issues.",
+                        panel_id, PANEL_UPDATE_TIMEOUT
+                    );
+                }
             }
         }
 

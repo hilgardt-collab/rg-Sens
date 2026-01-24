@@ -12,7 +12,7 @@ mod shared_source_manager;
 mod timer_manager;
 mod update_manager;
 
-pub use animation_manager::{init_global_animation_manager, register_animation};
+pub use animation_manager::{animation_entry_count, init_global_animation_manager, register_animation};
 pub use constants::{
     ANIMATION_FRAME_INTERVAL, ANIMATION_FRAME_MS, ANIMATION_SNAP_THRESHOLD, STATIC_POLL_INTERVAL,
 };
@@ -30,4 +30,6 @@ pub use timer_manager::{
     global_timer_manager, play_preview_sound, stop_all_sounds, AlarmConfig, TimerAlarmManager,
     TimerConfig, TimerDisplayConfig, TimerMode, TimerState,
 };
-pub use update_manager::{global_update_manager, init_global_update_manager, UpdateManager};
+pub use update_manager::{
+    check_update_stall, global_update_manager, init_global_update_manager, UpdateManager,
+};
