@@ -33,18 +33,35 @@ pub enum TestMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestSourceConfig {
     /// Current mode
+    #[serde(default)]
     pub mode: TestMode,
     /// Manual value (used in Manual mode)
+    #[serde(default = "default_manual_value")]
     pub manual_value: f64,
     /// Minimum value
+    #[serde(default)]
     pub min_value: f64,
     /// Maximum value
+    #[serde(default = "default_max_value")]
     pub max_value: f64,
     /// Wave period in seconds (for oscillation modes)
+    #[serde(default = "default_period")]
     pub period: f64,
     /// Update interval in milliseconds
     #[serde(default = "default_update_interval")]
     pub update_interval_ms: u64,
+}
+
+fn default_manual_value() -> f64 {
+    50.0
+}
+
+fn default_max_value() -> f64 {
+    100.0
+}
+
+fn default_period() -> f64 {
+    5.0
 }
 
 fn default_update_interval() -> u64 {
@@ -285,6 +302,14 @@ impl DataSource for TestSource {
 
     fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {
         if let Ok(state) = TEST_SOURCE_STATE.lock() {
+            log::debug!(
+                "TestSource::get_typed_config: mode={:?}, manual_value={}, min={}, max={}, period={}",
+                state.config.mode,
+                state.config.manual_value,
+                state.config.min_value,
+                state.config.max_value,
+                state.config.period
+            );
             Some(crate::core::SourceConfig::Test(state.config.clone()))
         } else {
             None
@@ -294,16 +319,33 @@ impl DataSource for TestSource {
     fn configure(&mut self, config: &HashMap<String, Value>) -> anyhow::Result<()> {
         // Apply the full test config from saved settings
         // This is called when loading panels from disk at startup
+        log::debug!(
+            "TestSource::configure called with keys: {:?}",
+            config.keys().collect::<Vec<_>>()
+        );
         if let Some(test_config_value) = config.get("test_config") {
+            log::debug!("TestSource::configure found test_config: {:?}", test_config_value);
             if let Ok(test_config) =
                 serde_json::from_value::<TestSourceConfig>(test_config_value.clone())
             {
+                log::info!(
+                    "TestSource::configure applying saved config: mode={:?}, manual_value={}, min={}, max={}, period={}",
+                    test_config.mode,
+                    test_config.manual_value,
+                    test_config.min_value,
+                    test_config.max_value,
+                    test_config.period
+                );
                 if let Ok(mut state) = TEST_SOURCE_STATE.lock() {
                     state.config = test_config;
                     // Reset start time when loading config so oscillations start fresh
                     state.start_time = Instant::now();
                 }
+            } else {
+                log::warn!("TestSource::configure failed to deserialize test_config");
             }
+        } else {
+            log::debug!("TestSource::configure: no test_config key found in HashMap");
         }
 
         // Check for individual update_interval key
