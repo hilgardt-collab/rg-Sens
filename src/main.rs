@@ -166,13 +166,23 @@ fn main() {
 
     // Set graphics renderer before GTK initialization
     // GSK_RENDERER must be set before any GTK calls
+    // Priority: CLI option > saved config > environment variable > GTK default
     if let Some(renderer) = &cli.renderer {
         let renderer_str = renderer.to_string();
         std::env::set_var("GSK_RENDERER", &renderer_str);
         warn!("Using {} renderer (set via --renderer)", renderer_str);
     } else if std::env::var("GSK_RENDERER").is_err() {
-        // Log the default renderer being used
-        info!("Using default GTK renderer (use --renderer to change)");
+        // Try to load saved renderer from config (before GTK init)
+        if let Ok(config) = AppConfig::load() {
+            if let Some(ref saved_renderer) = config.window.renderer {
+                std::env::set_var("GSK_RENDERER", saved_renderer);
+                warn!("Using {} renderer (set via saved config)", saved_renderer);
+            } else {
+                info!("Using default GTK renderer (use --renderer or settings to change)");
+            }
+        } else {
+            info!("Using default GTK renderer (use --renderer or settings to change)");
+        }
     } else {
         info!(
             "Using GSK_RENDERER={} from environment",

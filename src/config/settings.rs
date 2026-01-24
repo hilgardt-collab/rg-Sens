@@ -322,6 +322,10 @@ pub struct WindowConfig {
     /// Scroll whole pages only (align to viewport boundaries, ignore panel positions)
     #[serde(default)]
     pub auto_scroll_whole_pages: bool,
+    /// Default graphics renderer (gl, ngl, vulkan, cairo)
+    /// This is loaded at startup before GTK initialization
+    #[serde(default)]
+    pub renderer: Option<String>,
 }
 
 fn default_auto_scroll_delay() -> u64 {
@@ -352,6 +356,7 @@ impl Default for WindowConfig {
             viewport_width: 0,
             viewport_height: 0,
             auto_scroll_whole_pages: false,
+            renderer: None,
         }
     }
 }

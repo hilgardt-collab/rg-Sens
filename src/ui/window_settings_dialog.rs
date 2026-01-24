@@ -357,6 +357,49 @@ pub fn show_window_settings_dialog<F>(
     window_mode_tab_box.set_margin_top(12);
     window_mode_tab_box.set_margin_bottom(12);
 
+    // === Renderer Section ===
+    let renderer_label = Label::new(Some("Graphics Renderer"));
+    renderer_label.add_css_class("heading");
+    renderer_label.set_halign(gtk4::Align::Start);
+    window_mode_tab_box.append(&renderer_label);
+
+    let renderer_box = GtkBox::new(Orientation::Horizontal, 6);
+    renderer_box.set_margin_start(12);
+    renderer_box.append(&Label::new(Some("Renderer:")));
+
+    // Renderer options: Default (None), GL, NGL, Vulkan, Cairo
+    let renderer_options = ["Default (auto)", "GL (recommended)", "NGL (GTK 4.14+)", "Vulkan", "Cairo (software)"];
+    let renderer_string_refs: Vec<&str> = renderer_options.iter().copied().collect();
+    let renderer_list = StringList::new(&renderer_string_refs);
+    let renderer_dropdown = DropDown::new(Some(renderer_list), Option::<gtk4::Expression>::None);
+    renderer_dropdown.set_hexpand(true);
+
+    // Set selected renderer from config
+    let current_renderer = app_config.borrow().window.renderer.clone();
+    let renderer_idx = match current_renderer.as_deref() {
+        None => 0,           // Default
+        Some("gl") => 1,     // GL
+        Some("ngl") => 2,    // NGL
+        Some("vulkan") => 3, // Vulkan
+        Some("cairo") => 4,  // Cairo
+        _ => 0,              // Unknown -> Default
+    };
+    renderer_dropdown.set_selected(renderer_idx);
+    renderer_box.append(&renderer_dropdown);
+    window_mode_tab_box.append(&renderer_box);
+
+    // Renderer help text with restart notice
+    let renderer_help = Label::new(Some(
+        "GL is recommended for stability. Vulkan may have driver issues. Cairo is slowest but most compatible.\n\
+         Note: Renderer changes require application restart to take effect.",
+    ));
+    renderer_help.set_halign(gtk4::Align::Start);
+    renderer_help.set_margin_start(12);
+    renderer_help.set_margin_top(4);
+    renderer_help.add_css_class("dim-label");
+    renderer_help.set_wrap(true);
+    window_mode_tab_box.append(&renderer_help);
+
     // Fullscreen section
     let fullscreen_label = Label::new(Some("Fullscreen"));
     fullscreen_label.add_css_class("heading");
@@ -733,6 +776,7 @@ pub fn show_window_settings_dialog<F>(
     let viewport_width_spin_clone = viewport_width_spin.clone();
     let viewport_height_spin_clone = viewport_height_spin.clone();
     let parent_window_clone = parent_window.clone();
+    let renderer_dropdown_clone = renderer_dropdown.clone();
     let on_auto_scroll_change_clone = on_auto_scroll_change.clone();
     // Clones for defaults
     let defaults_config_clone = defaults_config.clone();
@@ -801,6 +845,17 @@ pub fn show_window_settings_dialog<F>(
         cfg.window.viewport_height = viewport_height_spin_clone.value() as i32;
         // Save global theme
         cfg.global_theme = global_theme_widget_clone.get_config();
+
+        // Save renderer setting (requires restart to take effect)
+        let renderer_selection = renderer_dropdown_clone.selected();
+        cfg.window.renderer = match renderer_selection {
+            0 => None,                          // Default (auto)
+            1 => Some("gl".to_string()),        // GL
+            2 => Some("ngl".to_string()),       // NGL
+            3 => Some("vulkan".to_string()),    // Vulkan
+            4 => Some("cairo".to_string()),     // Cairo
+            _ => None,
+        };
 
         // Calculate effective viewport size (use window size if set to 0)
         let vp_width = if cfg.window.viewport_width > 0 {
