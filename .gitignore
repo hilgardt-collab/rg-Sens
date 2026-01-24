@@ -37,13 +37,8 @@ coverage/
 debug.log
 
 # AUR packaging
-/aur/src/
-/aur/pkg/
-/aur/*.pkg.tar.*
-/aur/PKGBUILD-local
-/aur-repo-git
+/aur/
+/aur-repo-git/
 
 # Flatpak packaging
-/flatpak/build-dir/
-/flatpak/.flatpak-builder/
-/flatpak/repo/
+/flatpak/
