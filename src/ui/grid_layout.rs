@@ -306,6 +306,31 @@ impl GridLayout {
         false
     }
 
+    /// Check if a pixel coordinate (relative to the grid container) is on any panel.
+    /// Used to determine if a right-click should show the panel menu or the window menu.
+    pub fn is_point_on_panel(&self, x: f64, y: f64) -> bool {
+        let config = self.config.borrow();
+        let states = self.panel_states.borrow();
+
+        for state in states.values() {
+            if let Ok(panel_guard) = state.panel.try_read() {
+                let geom = &panel_guard.geometry;
+                let panel_x = geom.x as f64 * (config.cell_width + config.spacing) as f64;
+                let panel_y = geom.y as f64 * (config.cell_height + config.spacing) as f64;
+                let panel_w = geom.width as f64 * config.cell_width as f64
+                    + (geom.width as f64 - 1.0) * config.spacing as f64;
+                let panel_h = geom.height as f64 * config.cell_height as f64
+                    + (geom.height as f64 - 1.0) * config.spacing as f64;
+
+                if x >= panel_x && x < panel_x + panel_w && y >= panel_y && y < panel_y + panel_h {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     /// Setup drop zone visualization
     fn setup_drop_zone_drawing(&self) {
         let config = self.config.clone();
