@@ -991,10 +991,19 @@ impl GridLayout {
                     }
                 }
                 Err(_) => {
-                    // Lock contention - schedule a retry on next frame
+                    // Lock contention - draw a fallback solid background and schedule a retry
+                    // This ensures the panel is never completely invisible
                     log::debug!(
-                        "Skipped background render due to lock contention, scheduling retry"
+                        "Lock contention during background render, drawing fallback and scheduling retry"
                     );
+                    let width = w as f64;
+                    let height = h as f64;
+                    cr.save().ok();
+                    cr.set_source_rgba(0.1, 0.1, 0.1, 0.8); // Dark fallback background
+                    cr.rectangle(0.0, 0.0, width, height);
+                    cr.fill().ok();
+                    cr.restore().ok();
+
                     if let Some(bg_area) = background_area_weak.upgrade() {
                         gtk4::glib::idle_add_local_once(move || {
                             bg_area.queue_draw();
