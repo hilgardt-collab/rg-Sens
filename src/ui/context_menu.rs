@@ -544,9 +544,13 @@ pub fn show_context_menu<F>(
 
     // Clean up popover when closed to prevent resource leak
     // Each right-click creates a new popover, so we must unparent it when done
+    // Use idle_add to defer unparent() and avoid GTK re-entrancy issues
     let popover_cleanup = popover.clone();
     popover.connect_closed(move |_| {
-        popover_cleanup.unparent();
+        let popover_to_cleanup = popover_cleanup.clone();
+        gtk4::glib::idle_add_local_once(move || {
+            popover_to_cleanup.unparent();
+        });
     });
 
     popover.popup();
