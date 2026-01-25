@@ -3480,9 +3480,25 @@ pub(crate) fn show_panel_properties_dialog(
                                 _ => crate::core::SourceConfig::default_for_type(&new_source_id),
                             };
 
-                        if let Some(config) = source_config {
+                        if let Some(ref config) = source_config {
+                            // Configure the local source with the typed config
+                            // This ensures get_typed_config() returns the correct value
+                            if let Err(e) = panel_guard.source.configure_typed(config) {
+                                log::warn!(
+                                    "Failed to configure local source for panel {}: {}",
+                                    panel_id,
+                                    e
+                                );
+                            }
+
+                            // Update the panel.config HashMap with the new source config
+                            let config_map = config.to_hashmap();
+                            for (key, value) in config_map {
+                                panel_guard.config.insert(key, value);
+                            }
+
                             if let Some(manager) = crate::core::global_shared_source_manager() {
-                                match manager.get_or_create_source(&config, &panel_id, registry) {
+                                match manager.get_or_create_source(config, &panel_id, registry) {
                                     Ok(key) => {
                                         log::debug!(
                                             "Panel {} updated to shared source {}",
