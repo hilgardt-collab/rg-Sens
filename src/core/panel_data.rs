@@ -214,6 +214,7 @@ impl SourceConfig {
             "gpu" => "gpu_config",
             "memory" => "memory_config",
             "disk" => "disk_config",
+            "network" => "network_config",
             "clock" => "clock_config",
             "combination" => "combo_config",
             "system_temp" => "system_temp_config",
@@ -236,6 +237,9 @@ impl SourceConfig {
             "disk" => serde_json::from_value::<DiskSourceConfig>(value.clone())
                 .ok()
                 .map(SourceConfig::Disk),
+            "network" => serde_json::from_value::<NetworkSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Network),
             "clock" => serde_json::from_value::<ClockSourceConfig>(value.clone())
                 .ok()
                 .map(SourceConfig::Clock),

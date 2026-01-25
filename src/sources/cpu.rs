@@ -1,6 +1,6 @@
 //! CPU data source implementation
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
 use crate::ui::{CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -609,5 +609,9 @@ impl DataSource for CpuSource {
             }
         }
         Ok(())
+    }
+
+    fn get_typed_config(&self) -> Option<SourceConfig> {
+        Some(SourceConfig::Cpu(self.config.clone()))
     }
 }

@@ -530,6 +530,12 @@ impl Panel {
                 SourceConfig::Disk,
                 SourceConfig::default_for_type("disk")
             ),
+            "network" => extract_config!(
+                self.config,
+                "network_config",
+                SourceConfig::Network,
+                SourceConfig::default_for_type("network")
+            ),
             "clock" => extract_config!(
                 self.config,
                 "clock_config",
@@ -632,6 +638,66 @@ impl Panel {
                 "indicator_config",
                 DisplayerConfig::Indicator,
                 DisplayerConfig::default_for_type("indicator")
+            ),
+            "cyberpunk" => extract_config!(
+                self.config,
+                "cyberpunk_config",
+                DisplayerConfig::Cyberpunk,
+                DisplayerConfig::default_for_type("cyberpunk")
+            ),
+            "material" => extract_config!(
+                self.config,
+                "material_config",
+                DisplayerConfig::Material,
+                DisplayerConfig::default_for_type("material")
+            ),
+            "industrial" => extract_config!(
+                self.config,
+                "industrial_config",
+                DisplayerConfig::Industrial,
+                DisplayerConfig::default_for_type("industrial")
+            ),
+            "retro_terminal" => extract_config!(
+                self.config,
+                "retro_terminal_config",
+                DisplayerConfig::RetroTerminal,
+                DisplayerConfig::default_for_type("retro_terminal")
+            ),
+            "fighter_hud" => extract_config!(
+                self.config,
+                "fighter_hud_config",
+                DisplayerConfig::FighterHud,
+                DisplayerConfig::default_for_type("fighter_hud")
+            ),
+            "synthwave" => extract_config!(
+                self.config,
+                "synthwave_config",
+                DisplayerConfig::Synthwave,
+                DisplayerConfig::default_for_type("synthwave")
+            ),
+            "art_deco" => extract_config!(
+                self.config,
+                "art_deco_config",
+                DisplayerConfig::ArtDeco,
+                DisplayerConfig::default_for_type("art_deco")
+            ),
+            "art_nouveau" => extract_config!(
+                self.config,
+                "art_nouveau_config",
+                DisplayerConfig::ArtNouveau,
+                DisplayerConfig::default_for_type("art_nouveau")
+            ),
+            "steampunk" => extract_config!(
+                self.config,
+                "steampunk_config",
+                DisplayerConfig::Steampunk,
+                DisplayerConfig::default_for_type("steampunk")
+            ),
+            "css_template" => extract_config!(
+                self.config,
+                "css_template_config",
+                DisplayerConfig::CssTemplate,
+                DisplayerConfig::default_for_type("css_template")
             ),
             _ => DisplayerConfig::default(),
         }

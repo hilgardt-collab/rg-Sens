@@ -1,6 +1,6 @@
 //! Network interface data source implementation
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
 use crate::ui::{NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -424,5 +424,9 @@ impl DataSource for NetworkSource {
             }
         }
         Ok(())
+    }
+
+    fn get_typed_config(&self) -> Option<SourceConfig> {
+        Some(SourceConfig::Network(self.config.clone()))
     }
 }

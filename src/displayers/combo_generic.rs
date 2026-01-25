@@ -359,7 +359,19 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                return; // Skip frame if lock contention
+                // Lock contention - try to use cached frame to avoid flicker
+                if let Some(cache) = frame_cache_clone.borrow().as_ref() {
+                    if cache.width == width && cache.height == height {
+                        if cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok() {
+                            cr.paint().ok();
+                            return;
+                        }
+                    }
+                }
+                // No valid cache available - draw a solid background to avoid blank frame
+                cr.set_source_rgba(0.1, 0.1, 0.1, 1.0);
+                cr.paint().ok();
+                return;
             };
             let w = width as f64;
             let h = height as f64;

@@ -4,8 +4,8 @@
 //! Uses the global timer/alarm manager for timer and alarm state.
 
 use crate::core::{
-    global_timer_manager, DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata,
-    TimerState,
+    global_timer_manager, DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig,
+    SourceMetadata, TimerState,
 };
 use anyhow::Result;
 use chrono::{Datelike, Local, Timelike, Utc};
@@ -701,5 +701,9 @@ impl DataSource for ClockSource {
         }
 
         Ok(())
+    }
+
+    fn get_typed_config(&self) -> Option<SourceConfig> {
+        Some(SourceConfig::Clock(self.config.clone()))
     }
 }

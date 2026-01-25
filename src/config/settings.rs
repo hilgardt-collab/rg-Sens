@@ -543,6 +543,14 @@ impl PanelConfig {
                 }
                 SourceConfig::default_for_type("disk").unwrap_or_default()
             }
+            "network" => {
+                if let Some(val) = self.settings.get("network_config") {
+                    if let Some(cfg) = try_migrate(val, "network", &self.id) {
+                        return SourceConfig::Network(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("network").unwrap_or_default()
+            }
             "clock" => {
                 if let Some(val) = self.settings.get("clock_config") {
                     if let Some(cfg) = try_migrate(val, "clock", &self.id) {
@@ -702,6 +710,86 @@ impl PanelConfig {
                     }
                 }
                 DisplayerConfig::default_for_type("indicator").unwrap_or_default()
+            }
+            "cyberpunk" => {
+                if let Some(val) = self.settings.get("cyberpunk_config") {
+                    if let Some(cfg) = try_migrate(val, "cyberpunk", &self.id) {
+                        return DisplayerConfig::Cyberpunk(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("cyberpunk").unwrap_or_default()
+            }
+            "material" => {
+                if let Some(val) = self.settings.get("material_config") {
+                    if let Some(cfg) = try_migrate(val, "material", &self.id) {
+                        return DisplayerConfig::Material(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("material").unwrap_or_default()
+            }
+            "industrial" => {
+                if let Some(val) = self.settings.get("industrial_config") {
+                    if let Some(cfg) = try_migrate(val, "industrial", &self.id) {
+                        return DisplayerConfig::Industrial(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("industrial").unwrap_or_default()
+            }
+            "retro_terminal" => {
+                if let Some(val) = self.settings.get("retro_terminal_config") {
+                    if let Some(cfg) = try_migrate(val, "retro_terminal", &self.id) {
+                        return DisplayerConfig::RetroTerminal(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("retro_terminal").unwrap_or_default()
+            }
+            "fighter_hud" => {
+                if let Some(val) = self.settings.get("fighter_hud_config") {
+                    if let Some(cfg) = try_migrate(val, "fighter_hud", &self.id) {
+                        return DisplayerConfig::FighterHud(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("fighter_hud").unwrap_or_default()
+            }
+            "synthwave" => {
+                if let Some(val) = self.settings.get("synthwave_config") {
+                    if let Some(cfg) = try_migrate(val, "synthwave", &self.id) {
+                        return DisplayerConfig::Synthwave(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("synthwave").unwrap_or_default()
+            }
+            "art_deco" => {
+                if let Some(val) = self.settings.get("art_deco_config") {
+                    if let Some(cfg) = try_migrate(val, "art_deco", &self.id) {
+                        return DisplayerConfig::ArtDeco(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("art_deco").unwrap_or_default()
+            }
+            "art_nouveau" => {
+                if let Some(val) = self.settings.get("art_nouveau_config") {
+                    if let Some(cfg) = try_migrate(val, "art_nouveau", &self.id) {
+                        return DisplayerConfig::ArtNouveau(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("art_nouveau").unwrap_or_default()
+            }
+            "steampunk" => {
+                if let Some(val) = self.settings.get("steampunk_config") {
+                    if let Some(cfg) = try_migrate(val, "steampunk", &self.id) {
+                        return DisplayerConfig::Steampunk(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("steampunk").unwrap_or_default()
+            }
+            "css_template" => {
+                if let Some(val) = self.settings.get("css_template_config") {
+                    if let Some(cfg) = try_migrate(val, "css_template", &self.id) {
+                        return DisplayerConfig::CssTemplate(cfg);
+                    }
+                }
+                DisplayerConfig::default_for_type("css_template").unwrap_or_default()
             }
             _ => {
                 warn!(

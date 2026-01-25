@@ -1,7 +1,7 @@
 //! Memory (RAM) data source implementation
 
 use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB};
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
 use crate::ui::{MemoryField, MemorySourceConfig, MemoryUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -340,5 +340,9 @@ impl DataSource for MemorySource {
             }
         }
         Ok(())
+    }
+
+    fn get_typed_config(&self) -> Option<SourceConfig> {
+        Some(SourceConfig::Memory(self.config.clone()))
     }
 }
