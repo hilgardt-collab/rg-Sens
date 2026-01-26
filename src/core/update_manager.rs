@@ -68,6 +68,11 @@ const CIRCUIT_BREAKER_MAX_RETRY: Duration = Duration::from_secs(300); // 5 minut
 /// If a panel update takes longer than this, it's likely hung on I/O
 const PANEL_UPDATE_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Timeout for individual shared source updates
+/// If a source update (hardware polling) takes longer than this, it's likely hung
+/// This should be shorter than PANEL_UPDATE_TIMEOUT since it's just the I/O portion
+const SOURCE_UPDATE_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Tracks update timing for a panel
 struct PanelUpdateState {
     panel: Arc<RwLock<Panel>>,
@@ -719,6 +724,7 @@ impl UpdateManager {
 
         // Phase 2: Perform I/O WITHOUT holding the lock
         // This prevents blocking readers during hardware polling
+        // Use spawn_blocking + timeout to prevent hung hardware from stalling updates
         let mut update_results: Vec<(String, Result<(), String>, Option<Duration>, bool)> =
             Vec::with_capacity(sources_to_update.len());
 
@@ -727,16 +733,29 @@ impl UpdateManager {
                 trace!("Retrying source {} (circuit breaker half-open)", key);
             }
 
-            let result = manager.update_source(&key);
+            // Clone manager Arc for the blocking task
+            let manager_clone = Arc::clone(manager);
+            let key_clone = key.clone();
+
+            // Run hardware I/O in a blocking task with timeout protection
+            // This prevents a hung GPU driver or sensor from stalling all updates
+            let update_result = tokio::time::timeout(
+                SOURCE_UPDATE_TIMEOUT,
+                tokio::task::spawn_blocking(move || manager_clone.update_source(&key_clone)),
+            )
+            .await;
+
             let new_interval = manager.get_interval(&key);
 
-            match &result {
-                Ok(_) => {
+            match update_result {
+                Ok(Ok(Ok(_))) => {
+                    // Successfully updated
                     trace!("Updated shared source {}", key);
                     updated.insert(key.clone());
                     update_results.push((key, Ok(()), new_interval, is_half_open));
                 }
-                Err(e) => {
+                Ok(Ok(Err(e))) => {
+                    // Update returned an error
                     let err_str = e.to_string();
                     if err_str.contains("Source not found") {
                         debug!(
@@ -744,11 +763,30 @@ impl UpdateManager {
                             key
                         );
                     } else if !is_half_open {
-                        // Only log errors for non-retry attempts to reduce log spam
                         error!("Error updating shared source {}: {}", key, e);
                     } else {
                         debug!("Retry failed for shared source {}: {}", key, e);
                     }
+                    update_results.push((key, Err(err_str), None, is_half_open));
+                }
+                Ok(Err(join_err)) => {
+                    // spawn_blocking task panicked
+                    let err_str = format!("Source update task panicked: {}", join_err);
+                    error!("Shared source {} update panicked: {}", key, join_err);
+                    update_results.push((key, Err(err_str), None, is_half_open));
+                }
+                Err(_timeout) => {
+                    // Hardware I/O timed out - this is a critical issue
+                    let err_str = format!(
+                        "Source update TIMED OUT after {:?}. Hardware may be unresponsive.",
+                        SOURCE_UPDATE_TIMEOUT
+                    );
+                    error!(
+                        "Shared source {} update TIMED OUT after {:?}. \
+                         This usually indicates a hung GPU driver, unresponsive sensor, or hardware issue. \
+                         Consider checking system logs (dmesg, journalctl) for driver errors.",
+                        key, SOURCE_UPDATE_TIMEOUT
+                    );
                     update_results.push((key, Err(err_str), None, is_half_open));
                 }
             }
