@@ -11,21 +11,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Helper macro to extract and deserialize config from HashMap, reducing boilerplate.
-/// Returns the deserialized config variant or a default if not found/invalid.
-macro_rules! extract_config {
-    ($config:expr, $key:expr, $variant:path, $default_type:expr) => {{
-        let result = $config
-            .get($key)
-            .and_then(|val| serde_json::from_value(val.clone()).ok())
-            .map(|cfg| $variant(cfg));
-        match result {
-            Some(cfg) => cfg,
-            None => $default_type.unwrap_or_default(),
-        }
-    }};
-}
-
 /// Keys to sync from source values to panel.config for UI access
 /// Used by alarm/timer displayers to persist state
 const SYNC_KEYS: &[&str] = &[
@@ -232,6 +217,37 @@ impl Panel {
         Ok(panel)
     }
 
+    /// Release the current shared source reference if one exists
+    fn release_shared_source(&mut self) {
+        if let Some(ref old_key) = self.source_key {
+            if let Some(manager) = global_shared_source_manager() {
+                manager.release_source(old_key, &self.id);
+                log::debug!("Panel {} released shared source {}", self.id, old_key);
+            }
+        }
+        self.source_key = None;
+    }
+
+    /// Register with the shared source manager using the given config
+    fn register_shared_source(&mut self, config: &SourceConfig, registry: &Registry) {
+        if let Some(manager) = global_shared_source_manager() {
+            match manager.get_or_create_source(config, &self.id, registry) {
+                Ok(key) => {
+                    log::debug!("Panel {} now using shared source {}", self.id, key);
+                    self.source_key = Some(key);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to create shared source for panel {}: {}",
+                        self.id,
+                        e
+                    );
+                    self.source_key = None;
+                }
+            }
+        }
+    }
+
     /// Update the data source and refresh the displayer
     ///
     /// If a shared source is being used (source_key is set), this fetches
@@ -370,38 +386,16 @@ impl Panel {
 
             let new_key = SharedSourceManager::generate_source_key(&typed_config);
 
-            if let Some(manager) = global_shared_source_manager() {
-                // Check if the source key has changed (config is now different)
-                let key_changed = self
-                    .source_key
-                    .as_ref()
-                    .map(|k| k != &new_key)
-                    .unwrap_or(true);
+            // Check if the source key has changed (config is now different)
+            let key_changed = self
+                .source_key
+                .as_ref()
+                .map(|k| k != &new_key)
+                .unwrap_or(true);
 
-                if key_changed {
-                    // Release the old source reference if we had one
-                    if let Some(ref old_key) = self.source_key {
-                        manager.release_source(old_key, &self.id);
-                        log::debug!("Panel {} released old source {}", self.id, old_key);
-                    }
-
-                    // Get or create a new source with the new configuration
-                    let registry = global_registry();
-                    match manager.get_or_create_source(&typed_config, &self.id, registry) {
-                        Ok(key) => {
-                            log::debug!("Panel {} now using source {}", self.id, key);
-                            self.source_key = Some(key);
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "Failed to create shared source for panel {}: {}",
-                                self.id,
-                                e
-                            );
-                            self.source_key = None;
-                        }
-                    }
-                }
+            if key_changed {
+                self.release_shared_source();
+                self.register_shared_source(&typed_config, global_registry());
             }
         }
 
@@ -425,41 +419,20 @@ impl Panel {
             self.displayer.apply_config_typed(&data.displayer_config)?;
 
             // Handle shared source re-registration when config changes
+            // Clone source_config to avoid borrow conflicts with self
             use super::shared_source_manager::SharedSourceManager;
 
-            let new_key = SharedSourceManager::generate_source_key(&data.source_config);
+            let source_config = data.source_config.clone();
+            let new_key = SharedSourceManager::generate_source_key(&source_config);
+            let key_changed = self
+                .source_key
+                .as_ref()
+                .map(|k| k != &new_key)
+                .unwrap_or(true);
 
-            if let Some(manager) = global_shared_source_manager() {
-                let key_changed = self
-                    .source_key
-                    .as_ref()
-                    .map(|k| k != &new_key)
-                    .unwrap_or(true);
-
-                if key_changed {
-                    // Release the old source reference if we had one
-                    if let Some(ref old_key) = self.source_key {
-                        manager.release_source(old_key, &self.id);
-                        log::debug!("Panel {} released old source {}", self.id, old_key);
-                    }
-
-                    // Get or create a new source with the new configuration
-                    let registry = global_registry();
-                    match manager.get_or_create_source(&data.source_config, &self.id, registry) {
-                        Ok(key) => {
-                            log::debug!("Panel {} now using source {}", self.id, key);
-                            self.source_key = Some(key);
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "Failed to create shared source for panel {}: {}",
-                                self.id,
-                                e
-                            );
-                            self.source_key = None;
-                        }
-                    }
-                }
+            if key_changed {
+                self.release_shared_source();
+                self.register_shared_source(&source_config, global_registry());
             }
         }
         Ok(())
@@ -505,202 +478,14 @@ impl Panel {
 
     /// Extract source config from the legacy config HashMap
     fn extract_source_config(&self, source_type: &str) -> SourceConfig {
-        match source_type {
-            "cpu" => extract_config!(
-                self.config,
-                "cpu_config",
-                SourceConfig::Cpu,
-                SourceConfig::default_for_type("cpu")
-            ),
-            "gpu" => extract_config!(
-                self.config,
-                "gpu_config",
-                SourceConfig::Gpu,
-                SourceConfig::default_for_type("gpu")
-            ),
-            "memory" => extract_config!(
-                self.config,
-                "memory_config",
-                SourceConfig::Memory,
-                SourceConfig::default_for_type("memory")
-            ),
-            "disk" => extract_config!(
-                self.config,
-                "disk_config",
-                SourceConfig::Disk,
-                SourceConfig::default_for_type("disk")
-            ),
-            "network" => extract_config!(
-                self.config,
-                "network_config",
-                SourceConfig::Network,
-                SourceConfig::default_for_type("network")
-            ),
-            "clock" => extract_config!(
-                self.config,
-                "clock_config",
-                SourceConfig::Clock,
-                SourceConfig::default_for_type("clock")
-            ),
-            "combination" => extract_config!(
-                self.config,
-                "combo_config",
-                SourceConfig::Combo,
-                SourceConfig::default_for_type("combination")
-            ),
-            "system_temp" => extract_config!(
-                self.config,
-                "system_temp_config",
-                SourceConfig::SystemTemp,
-                SourceConfig::default_for_type("system_temp")
-            ),
-            "fan_speed" => extract_config!(
-                self.config,
-                "fan_speed_config",
-                SourceConfig::FanSpeed,
-                SourceConfig::default_for_type("fan_speed")
-            ),
-            "test" => extract_config!(
-                self.config,
-                "test_config",
-                SourceConfig::Test,
-                SourceConfig::default_for_type("test")
-            ),
-            "static_text" => extract_config!(
-                self.config,
-                "static_text_config",
-                SourceConfig::StaticText,
-                SourceConfig::default_for_type("static_text")
-            ),
-            _ => SourceConfig::default(),
-        }
+        SourceConfig::extract_from_hashmap(&self.config, source_type)
+            .unwrap_or_else(|| SourceConfig::default_for_type(source_type).unwrap_or_default())
     }
 
     /// Extract displayer config from the legacy config HashMap
     fn extract_displayer_config(&self, displayer_type: &str) -> DisplayerConfig {
-        match displayer_type {
-            "text" => extract_config!(
-                self.config,
-                "text_config",
-                DisplayerConfig::Text,
-                DisplayerConfig::default_for_type("text")
-            ),
-            "bar" => extract_config!(
-                self.config,
-                "bar_config",
-                DisplayerConfig::Bar,
-                DisplayerConfig::default_for_type("bar")
-            ),
-            "arc" => extract_config!(
-                self.config,
-                "arc_config",
-                DisplayerConfig::Arc,
-                DisplayerConfig::default_for_type("arc")
-            ),
-            "speedometer" => extract_config!(
-                self.config,
-                "speedometer_config",
-                DisplayerConfig::Speedometer,
-                DisplayerConfig::default_for_type("speedometer")
-            ),
-            "graph" => extract_config!(
-                self.config,
-                "graph_config",
-                DisplayerConfig::Graph,
-                DisplayerConfig::default_for_type("graph")
-            ),
-            "clock_analog" => extract_config!(
-                self.config,
-                "clock_analog_config",
-                DisplayerConfig::ClockAnalog,
-                DisplayerConfig::default_for_type("clock_analog")
-            ),
-            "clock_digital" => extract_config!(
-                self.config,
-                "clock_digital_config",
-                DisplayerConfig::ClockDigital,
-                DisplayerConfig::default_for_type("clock_digital")
-            ),
-            "lcars" => extract_config!(
-                self.config,
-                "lcars_config",
-                DisplayerConfig::Lcars,
-                DisplayerConfig::default_for_type("lcars")
-            ),
-            "cpu_cores" => extract_config!(
-                self.config,
-                "core_bars_config",
-                DisplayerConfig::CpuCores,
-                DisplayerConfig::default_for_type("cpu_cores")
-            ),
-            "indicator" => extract_config!(
-                self.config,
-                "indicator_config",
-                DisplayerConfig::Indicator,
-                DisplayerConfig::default_for_type("indicator")
-            ),
-            "cyberpunk" => extract_config!(
-                self.config,
-                "cyberpunk_config",
-                DisplayerConfig::Cyberpunk,
-                DisplayerConfig::default_for_type("cyberpunk")
-            ),
-            "material" => extract_config!(
-                self.config,
-                "material_config",
-                DisplayerConfig::Material,
-                DisplayerConfig::default_for_type("material")
-            ),
-            "industrial" => extract_config!(
-                self.config,
-                "industrial_config",
-                DisplayerConfig::Industrial,
-                DisplayerConfig::default_for_type("industrial")
-            ),
-            "retro_terminal" => extract_config!(
-                self.config,
-                "retro_terminal_config",
-                DisplayerConfig::RetroTerminal,
-                DisplayerConfig::default_for_type("retro_terminal")
-            ),
-            "fighter_hud" => extract_config!(
-                self.config,
-                "fighter_hud_config",
-                DisplayerConfig::FighterHud,
-                DisplayerConfig::default_for_type("fighter_hud")
-            ),
-            "synthwave" => extract_config!(
-                self.config,
-                "synthwave_config",
-                DisplayerConfig::Synthwave,
-                DisplayerConfig::default_for_type("synthwave")
-            ),
-            "art_deco" => extract_config!(
-                self.config,
-                "art_deco_config",
-                DisplayerConfig::ArtDeco,
-                DisplayerConfig::default_for_type("art_deco")
-            ),
-            "art_nouveau" => extract_config!(
-                self.config,
-                "art_nouveau_config",
-                DisplayerConfig::ArtNouveau,
-                DisplayerConfig::default_for_type("art_nouveau")
-            ),
-            "steampunk" => extract_config!(
-                self.config,
-                "steampunk_config",
-                DisplayerConfig::Steampunk,
-                DisplayerConfig::default_for_type("steampunk")
-            ),
-            "css_template" => extract_config!(
-                self.config,
-                "css_template_config",
-                DisplayerConfig::CssTemplate,
-                DisplayerConfig::default_for_type("css_template")
-            ),
-            _ => DisplayerConfig::default(),
-        }
+        DisplayerConfig::extract_from_hashmap(&self.config, displayer_type)
+            .unwrap_or_else(|| DisplayerConfig::default_for_type(displayer_type).unwrap_or_default())
     }
 
     /// Update the panel from new PanelData
@@ -728,44 +513,25 @@ impl Panel {
         );
         let new_source_key = SharedSourceManager::generate_source_key(&new_data.source_config);
 
-        let old_displayer_type = self
+        // Get old displayer type as owned String to avoid borrow issues
+        let old_displayer_type: String = self
             .data
             .as_ref()
-            .map(|d| d.displayer_config.displayer_type())
-            .unwrap_or_else(|| self.displayer.id());
+            .map(|d| d.displayer_config.displayer_type().to_string())
+            .unwrap_or_else(|| self.displayer.id().to_string());
 
         let new_source_type = new_data.source_config.source_type();
         let new_displayer_type = new_data.displayer_config.displayer_type();
 
         // Handle shared source changes
         if old_source_key != new_source_key {
-            // Release old shared source
-            if let Some(ref old_key) = self.source_key {
-                if let Some(manager) = global_shared_source_manager() {
-                    manager.release_source(old_key, &self.id);
-                }
-            }
+            self.release_shared_source();
 
             // Create new source instance (for metadata/fields)
             self.source = registry.create_source(new_source_type)?;
 
             // Register with shared source manager
-            if let Some(manager) = global_shared_source_manager() {
-                match manager.get_or_create_source(&new_data.source_config, &self.id, registry) {
-                    Ok(key) => {
-                        log::debug!("Panel {} updated to shared source {}", self.id, key);
-                        self.source_key = Some(key);
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to create shared source for panel {}: {}",
-                            self.id,
-                            e
-                        );
-                        self.source_key = None;
-                    }
-                }
-            }
+            self.register_shared_source(&new_data.source_config, registry);
         } else if let Some(ref key) = self.source_key {
             // Source key unchanged but config might have - update the shared source config
             if let Some(manager) = global_shared_source_manager() {
@@ -774,7 +540,7 @@ impl Panel {
         }
 
         // Recreate displayer if type changed
-        if old_displayer_type != new_displayer_type {
+        if old_displayer_type.as_str() != new_displayer_type {
             self.displayer = registry.create_displayer(new_displayer_type)?;
         }
 

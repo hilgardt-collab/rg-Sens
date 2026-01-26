@@ -234,7 +234,9 @@ impl DataSource for DiskSource {
 
     fn update(&mut self) -> Result<()> {
         // Use shared Disks instance to reduce memory usage
-        let mut disks = SHARED_DISKS.lock().unwrap();
+        let mut disks = SHARED_DISKS
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Disks mutex poisoned: {}", e))?;
         disks.refresh();
 
         // Find the disk matching our configured path and cache all values

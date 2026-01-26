@@ -155,7 +155,9 @@ impl DataSource for MemorySource {
 
     fn update(&mut self) -> Result<()> {
         // Use shared System instance to reduce memory usage
-        let mut system = SHARED_MEMORY_SYSTEM.lock().unwrap();
+        let mut system = SHARED_MEMORY_SYSTEM
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Memory system mutex poisoned: {}", e))?;
 
         // Refresh memory information
         system.refresh_memory();

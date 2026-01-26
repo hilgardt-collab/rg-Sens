@@ -242,7 +242,9 @@ impl DataSource for NetworkSource {
 
     fn update(&mut self) -> Result<()> {
         // Use shared Networks instance to reduce memory usage
-        let mut networks = SHARED_NETWORKS.lock().unwrap();
+        let mut networks = SHARED_NETWORKS
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Networks mutex poisoned: {}", e))?;
         networks.refresh();
 
         // Find the network interface matching our configured interface

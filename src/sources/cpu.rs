@@ -394,7 +394,9 @@ impl DataSource for CpuSource {
 
     fn update(&mut self) -> Result<()> {
         // Use shared System instance to reduce memory usage
-        let mut system = SHARED_CPU_SYSTEM.lock().unwrap();
+        let mut system = SHARED_CPU_SYSTEM
+            .lock()
+            .map_err(|e| anyhow::anyhow!("CPU system mutex poisoned: {}", e))?;
 
         // Refresh CPU information
         system.refresh_cpu_all();

@@ -470,6 +470,43 @@ impl DisplayerConfig {
         map
     }
 
+    /// Extract displayer config from a HashMap based on displayer type
+    ///
+    /// This looks for the appropriate config key based on displayer type
+    /// (e.g., "text_config" for text displayer) and deserializes it.
+    pub fn extract_from_hashmap(
+        config: &HashMap<String, serde_json::Value>,
+        displayer_type: &str,
+    ) -> Option<Self> {
+        let config_key = match displayer_type {
+            "text" => "text_config",
+            "bar" => "bar_config",
+            "arc" => "arc_config",
+            "speedometer" => "speedometer_config",
+            "graph" => "graph_config",
+            "clock_analog" => "clock_analog_config",
+            "clock_digital" => "clock_digital_config",
+            "lcars" => "lcars_config",
+            "cpu_cores" => "core_bars_config",
+            "indicator" => "indicator_config",
+            "cyberpunk" => "cyberpunk_config",
+            "material" => "material_config",
+            "industrial" => "industrial_config",
+            "retro_terminal" => "retro_terminal_config",
+            "fighter_hud" => "fighter_hud_config",
+            "synthwave" => "synthwave_config",
+            "art_deco" => "art_deco_config",
+            "art_nouveau" => "art_nouveau_config",
+            "steampunk" => "steampunk_config",
+            "css_template" => "css_template_config",
+            _ => return None,
+        };
+
+        config
+            .get(config_key)
+            .and_then(|value| Self::from_value_for_type(displayer_type, value.clone()))
+    }
+
     /// Create a default DisplayerConfig for a given displayer type ID
     pub fn default_for_type(displayer_type: &str) -> Option<Self> {
         match displayer_type {
