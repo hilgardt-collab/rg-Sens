@@ -10,7 +10,7 @@ use gtk4::gdk_pixbuf::Pixbuf;
 use gtk4::prelude::GdkCairoContextExt;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::ui::background::{Color, ColorStop};
@@ -399,122 +399,8 @@ fn interpolate_color_at(stops: &[ColorStop], t: f64) -> Color {
     }
 }
 
-/// Cached text extents entry with access tracking
-struct CachedTextExtents {
-    extents: cairo::TextExtents,
-    last_access: Instant,
-}
-
-/// Cache for text extent measurements with LRU eviction
-pub struct TextExtentsCache {
-    /// Cached extents keyed by (font_family, font_size_x10, text)
-    cache: HashMap<(String, i32, String), CachedTextExtents>,
-    max_entries: usize,
-}
-
-impl TextExtentsCache {
-    pub fn new() -> Self {
-        Self {
-            cache: HashMap::new(),
-            max_entries: 500,
-        }
-    }
-
-    /// Get cached text extents or compute and cache them
-    pub fn get_or_compute(
-        &mut self,
-        cr: &cairo::Context,
-        font_family: &str,
-        font_size: f64,
-        bold: bool,
-        italic: bool,
-        text: &str,
-    ) -> Option<cairo::TextExtents> {
-        // Create cache key (multiply size by 10 to capture one decimal place)
-        let size_key = (font_size * 10.0) as i32;
-        let style_suffix = match (bold, italic) {
-            (true, true) => "_BI",
-            (true, false) => "_B",
-            (false, true) => "_I",
-            (false, false) => "",
-        };
-        let key = (
-            format!("{}{}", font_family, style_suffix),
-            size_key,
-            text.to_string(),
-        );
-
-        // Return cached value if available, updating access time
-        if let Some(entry) = self.cache.get_mut(&key) {
-            entry.last_access = Instant::now();
-            return Some(entry.extents);
-        }
-
-        // Compute extents
-        cr.save().ok()?;
-
-        let font_slant = if italic {
-            cairo::FontSlant::Italic
-        } else {
-            cairo::FontSlant::Normal
-        };
-        let font_weight = if bold {
-            cairo::FontWeight::Bold
-        } else {
-            cairo::FontWeight::Normal
-        };
-
-        cr.select_font_face(font_family, font_slant, font_weight);
-        cr.set_font_size(font_size);
-
-        let extents = cr.text_extents(text).ok()?;
-
-        cr.restore().ok()?;
-
-        // Cache the result (evict LRU entries if needed)
-        if self.cache.len() >= self.max_entries {
-            // LRU eviction: use select_nth_unstable for O(n) median finding instead of O(n log n) sort
-            let now = Instant::now();
-            let mut access_times: Vec<_> = self
-                .cache
-                .values()
-                .map(|v| now.duration_since(v.last_access))
-                .collect();
-
-            // Find median age threshold using partial selection (O(n) instead of O(n log n))
-            let median_idx = access_times.len() / 2;
-            let (_, median, _) = access_times.select_nth_unstable(median_idx);
-            let threshold = *median;
-
-            // Remove entries older than median
-            self.cache
-                .retain(|_, v| now.duration_since(v.last_access) <= threshold);
-        }
-
-        self.cache.insert(
-            key,
-            CachedTextExtents {
-                extents,
-                last_access: Instant::now(),
-            },
-        );
-        Some(extents)
-    }
-
-    pub fn clear(&mut self) {
-        self.cache.clear();
-    }
-}
-
-impl Default for TextExtentsCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Global text extents cache
-pub static TEXT_EXTENTS_CACHE: once_cell::sync::Lazy<Mutex<TextExtentsCache>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(TextExtentsCache::new()));
+// NOTE: TextExtentsCache was removed because it used Cairo's toy font API
+// which causes memory leaks. Use pango_text_extents() from pango_text.rs instead.
 
 // Thread-local scaled font cache to prevent Cairo font memory leaks
 thread_local! {
@@ -711,4 +597,43 @@ pub fn get_abrupt_color(stops: &[ColorStop], t: f64) -> Color {
         }
     }
     result.color
+}
+
+/// Clear all render caches to free memory
+/// Call this periodically or when memory pressure is detected
+pub fn clear_all_render_caches() {
+    // Clear image cache
+    IMAGE_CACHE.with(|cache| {
+        cache.borrow_mut().pixbufs.clear();
+    });
+
+    // Clear scaled surface cache
+    SCALED_SURFACE_CACHE.with(|cache| {
+        cache.borrow_mut().cache.clear();
+    });
+
+    // Clear scaled font cache
+    SCALED_FONT_CACHE.with(|cache| {
+        cache.borrow_mut().cache.clear();
+    });
+
+    // Clear gradient LUT cache
+    GRADIENT_LUT_CACHE.with(|cache| {
+        cache.borrow_mut().cache.clear();
+    });
+
+    log::info!("All render caches cleared");
+}
+
+/// Get cache statistics for monitoring
+pub fn get_cache_stats() -> String {
+    let image_count = IMAGE_CACHE.with(|c| c.borrow().pixbufs.len());
+    let surface_count = SCALED_SURFACE_CACHE.with(|c| c.borrow().cache.len());
+    let font_count = SCALED_FONT_CACHE.with(|c| c.borrow().cache.len());
+    let gradient_count = GRADIENT_LUT_CACHE.with(|c| c.borrow().cache.len());
+
+    format!(
+        "images={}, surfaces={}, fonts={}, gradients={}",
+        image_count, surface_count, font_count, gradient_count
+    )
 }

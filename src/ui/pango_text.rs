@@ -9,10 +9,11 @@
 //! - `pango_show_text()` replaces `cr.show_text()`
 
 use cairo::Context;
-use pango::{FontDescription, Style as PangoStyle, Weight as PangoWeight};
+use pango::{FontDescription, Layout, Style as PangoStyle, Weight as PangoWeight};
 use pangocairo::functions::{create_layout, show_layout};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::time::Instant;
 
 /// Text extents returned by pango_text_extents
 #[derive(Debug, Clone, Copy, Default)]
@@ -126,9 +127,63 @@ impl FontDescriptionCache {
     }
 }
 
+/// Cache for reusing Pango Layout objects
+/// Layouts are relatively expensive to create, so we reuse a small pool
+#[allow(dead_code)]
+struct LayoutCache {
+    /// Cached layout (we only keep one since Context changes each frame)
+    layout: Option<Layout>,
+    /// Last clear time
+    last_clear: Instant,
+    /// Clear interval (5 minutes)
+    clear_interval_secs: u64,
+}
+
+#[allow(dead_code)]
+impl LayoutCache {
+    fn new() -> Self {
+        Self {
+            layout: None,
+            last_clear: Instant::now(),
+            clear_interval_secs: 300, // 5 minutes
+        }
+    }
+
+    /// Get or create a layout for the given context
+    /// Note: We can't actually cache layouts across contexts, but this
+    /// provides a hook for periodic cleanup
+    fn get_layout(&mut self, cr: &Context) -> Layout {
+        // Periodic cleanup to prevent memory growth
+        if self.last_clear.elapsed().as_secs() > self.clear_interval_secs {
+            self.clear();
+            self.last_clear = Instant::now();
+        }
+        create_layout(cr)
+    }
+
+    fn clear(&mut self) {
+        self.layout = None;
+        log::debug!("LayoutCache cleared");
+    }
+}
+
 // Thread-local caches for Pango objects
 thread_local! {
     static FONT_DESC_CACHE: RefCell<FontDescriptionCache> = RefCell::new(FontDescriptionCache::new());
+    static LAYOUT_CACHE: RefCell<LayoutCache> = RefCell::new(LayoutCache::new());
+}
+
+/// Clear all Pango-related caches
+/// Call this periodically or when memory pressure is detected
+pub fn clear_pango_caches() {
+    FONT_DESC_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.cache.clear();
+    });
+    LAYOUT_CACHE.with(|cache| {
+        cache.borrow_mut().clear();
+    });
+    log::info!("Pango caches cleared");
 }
 
 /// Convert Cairo font weight to Pango weight

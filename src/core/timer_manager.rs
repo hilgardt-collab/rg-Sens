@@ -13,6 +13,23 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use uuid::Uuid;
 
+/// Trigger cache maintenance to prevent memory leaks
+/// This must be called from the GTK main thread since it accesses thread-local caches
+fn trigger_cache_maintenance() {
+    // Schedule cache clearing on the GTK main context since caches are thread-local
+    gtk4::glib::idle_add_local_once(|| {
+        // Clear render caches
+        crate::ui::render_cache::clear_all_render_caches();
+
+        // Clear Pango caches
+        crate::ui::pango_text::clear_pango_caches();
+
+        // Log cache stats for diagnosis
+        let stats = crate::ui::render_cache::get_cache_stats();
+        log::info!("Render cache stats after clearing: {}", stats);
+    });
+}
+
 /// Global timer manager instance
 static TIMER_MANAGER: Lazy<Arc<RwLock<TimerAlarmManager>>> =
     Lazy::new(|| Arc::new(RwLock::new(TimerAlarmManager::new())));
@@ -622,6 +639,13 @@ impl TimerAlarmManager {
                 self.timers.len(),
                 self.alarms.len()
             );
+        }
+
+        // Periodic cache clearing to prevent memory leaks (every ~5 minutes)
+        // This helps prevent gradual memory growth from internal caches in Pango, Cairo, etc.
+        if count > 0 && count.is_multiple_of(300) {
+            log::info!("Performing periodic cache maintenance");
+            trigger_cache_maintenance();
         }
 
         self.update_timers();
