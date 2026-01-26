@@ -9,7 +9,7 @@ use super::panel_data::SourceConfig;
 use super::shared_source_manager::global_shared_source_manager;
 use super::Panel;
 use anyhow::Result;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -68,10 +68,13 @@ const CIRCUIT_BREAKER_MAX_RETRY: Duration = Duration::from_secs(300); // 5 minut
 /// If a panel update takes longer than this, it's likely hung on I/O
 const PANEL_UPDATE_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Timeout for individual shared source updates
-/// If a source update (hardware polling) takes longer than this, it's likely hung
-/// This should be shorter than PANEL_UPDATE_TIMEOUT since it's just the I/O portion
-const SOURCE_UPDATE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Warning threshold for slow source updates
+/// If a source update takes longer than this, log a warning
+const SOURCE_UPDATE_WARN_THRESHOLD: Duration = Duration::from_secs(1);
+
+/// Critical threshold for very slow source updates
+/// If a source update takes longer than this, log an error
+const SOURCE_UPDATE_CRITICAL_THRESHOLD: Duration = Duration::from_secs(5);
 
 /// Tracks update timing for a panel
 struct PanelUpdateState {
@@ -724,7 +727,7 @@ impl UpdateManager {
 
         // Phase 2: Perform I/O WITHOUT holding the lock
         // This prevents blocking readers during hardware polling
-        // Use spawn_blocking + timeout to prevent hung hardware from stalling updates
+        // Updates run inline with timing measurement to detect slow sources
         let mut update_results: Vec<(String, Result<(), String>, Option<Duration>, bool)> =
             Vec::with_capacity(sources_to_update.len());
 
@@ -733,29 +736,34 @@ impl UpdateManager {
                 trace!("Retrying source {} (circuit breaker half-open)", key);
             }
 
-            // Clone manager Arc for the blocking task
-            let manager_clone = Arc::clone(manager);
-            let key_clone = key.clone();
+            // Measure update time to detect slow/hung sources
+            let update_start = Instant::now();
+            let result = manager.update_source(&key);
+            let update_duration = update_start.elapsed();
 
-            // Run hardware I/O in a blocking task with timeout protection
-            // This prevents a hung GPU driver or sensor from stalling all updates
-            let update_result = tokio::time::timeout(
-                SOURCE_UPDATE_TIMEOUT,
-                tokio::task::spawn_blocking(move || manager_clone.update_source(&key_clone)),
-            )
-            .await;
+            // Log warnings for slow updates (helps diagnose performance issues)
+            if update_duration >= SOURCE_UPDATE_CRITICAL_THRESHOLD {
+                error!(
+                    "Shared source {} update took {:?} (critical threshold: {:?}). \
+                     This may indicate a hung GPU driver, unresponsive sensor, or hardware issue.",
+                    key, update_duration, SOURCE_UPDATE_CRITICAL_THRESHOLD
+                );
+            } else if update_duration >= SOURCE_UPDATE_WARN_THRESHOLD {
+                warn!(
+                    "Shared source {} update took {:?} (warning threshold: {:?})",
+                    key, update_duration, SOURCE_UPDATE_WARN_THRESHOLD
+                );
+            }
 
             let new_interval = manager.get_interval(&key);
 
-            match update_result {
-                Ok(Ok(Ok(_))) => {
-                    // Successfully updated
+            match &result {
+                Ok(_) => {
                     trace!("Updated shared source {}", key);
                     updated.insert(key.clone());
                     update_results.push((key, Ok(()), new_interval, is_half_open));
                 }
-                Ok(Ok(Err(e))) => {
-                    // Update returned an error
+                Err(e) => {
                     let err_str = e.to_string();
                     if err_str.contains("Source not found") {
                         debug!(
@@ -763,30 +771,11 @@ impl UpdateManager {
                             key
                         );
                     } else if !is_half_open {
+                        // Only log errors for non-retry attempts to reduce log spam
                         error!("Error updating shared source {}: {}", key, e);
                     } else {
                         debug!("Retry failed for shared source {}: {}", key, e);
                     }
-                    update_results.push((key, Err(err_str), None, is_half_open));
-                }
-                Ok(Err(join_err)) => {
-                    // spawn_blocking task panicked
-                    let err_str = format!("Source update task panicked: {}", join_err);
-                    error!("Shared source {} update panicked: {}", key, join_err);
-                    update_results.push((key, Err(err_str), None, is_half_open));
-                }
-                Err(_timeout) => {
-                    // Hardware I/O timed out - this is a critical issue
-                    let err_str = format!(
-                        "Source update TIMED OUT after {:?}. Hardware may be unresponsive.",
-                        SOURCE_UPDATE_TIMEOUT
-                    );
-                    error!(
-                        "Shared source {} update TIMED OUT after {:?}. \
-                         This usually indicates a hung GPU driver, unresponsive sensor, or hardware issue. \
-                         Consider checking system logs (dmesg, journalctl) for driver errors.",
-                        key, SOURCE_UPDATE_TIMEOUT
-                    );
                     update_results.push((key, Err(err_str), None, is_half_open));
                 }
             }
