@@ -14,10 +14,11 @@ use std::time::Instant;
 use uuid::Uuid;
 
 /// Trigger cache maintenance to prevent memory leaks
-/// This must be called from the GTK main thread since it accesses thread-local caches
+/// Uses glib::idle_add_once which is thread-safe and schedules on the GTK main thread
 fn trigger_cache_maintenance() {
     // Schedule cache clearing on the GTK main context since caches are thread-local
-    gtk4::glib::idle_add_local_once(|| {
+    // Use idle_add_once (not idle_add_local_once) so this can be called from any thread
+    gtk4::glib::idle_add_once(|| {
         // Clear render caches
         crate::ui::render_cache::clear_all_render_caches();
 
