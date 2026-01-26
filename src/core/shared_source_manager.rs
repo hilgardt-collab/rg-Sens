@@ -351,57 +351,97 @@ impl SharedSourceManager {
     }
 
     /// Get cached values for a source (without updating) - cheap Arc clone
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn get_values(&self, key: &str) -> Option<Arc<HashMap<String, serde_json::Value>>> {
-        let sources = self.sources.read().ok()?;
-        let handle = sources.get(key)?;
+        // Phase 1: Clone handle while holding read lock
+        let handle = {
+            let sources = self.sources.read().ok()?;
+            sources.get(key).cloned()
+        };
+        // RwLock released here - now safe to acquire Mutex
+
+        // Phase 2: Access data with only Mutex held
+        let handle = handle?;
         let shared = handle.lock().ok()?;
         Some(Arc::clone(&shared.cached_values))
     }
 
     /// Get the minimum update interval for a source
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn get_interval(&self, key: &str) -> Option<Duration> {
-        let sources = self.sources.read().ok()?;
-        let handle = sources.get(key)?;
+        // Phase 1: Clone handle while holding read lock
+        let handle = {
+            let sources = self.sources.read().ok()?;
+            sources.get(key).cloned()
+        };
+        // RwLock released here - now safe to acquire Mutex
+
+        // Phase 2: Access data with only Mutex held
+        let handle = handle?;
         let shared = handle.lock().ok()?;
         Some(shared.min_interval)
     }
 
     /// Get all source keys and their intervals for the update loop
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn get_all_sources(&self) -> Vec<(String, Duration)> {
-        self.sources
-            .read()
-            .map(|sources| {
-                sources
-                    .iter()
-                    .filter_map(|(key, handle)| {
-                        handle
-                            .lock()
-                            .ok()
-                            .map(|shared| (key.clone(), shared.min_interval))
-                    })
-                    .collect()
+        // Phase 1: Clone all handles while holding read lock
+        let handles: Vec<(String, SharedSourceHandle)> = {
+            let sources = match self.sources.read() {
+                Ok(s) => s,
+                Err(_) => return Vec::new(),
+            };
+            sources
+                .iter()
+                .map(|(key, handle)| (key.clone(), handle.clone()))
+                .collect()
+        };
+        // RwLock released here - now safe to acquire Mutexes
+
+        // Phase 2: Access data with only Mutexes held (one at a time)
+        handles
+            .into_iter()
+            .filter_map(|(key, handle)| {
+                handle
+                    .lock()
+                    .ok()
+                    .map(|shared| (key, shared.min_interval))
             })
-            .unwrap_or_default()
+            .collect()
     }
 
     /// Update the interval for a source (e.g., when a panel's config changes)
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn update_interval(&self, key: &str, panel_id: &str, new_interval: Duration) {
-        if let Ok(sources) = self.sources.read() {
-            if let Some(handle) = sources.get(key) {
-                if let Ok(mut shared) = handle.lock() {
-                    // Update this panel's interval and recalculate minimum
-                    let old_min = shared.min_interval;
-                    shared
-                        .panel_intervals
-                        .insert(panel_id.to_string(), new_interval);
-                    shared.recalculate_min_interval();
+        // Phase 1: Clone handle while holding read lock
+        let handle = {
+            let sources = match self.sources.read() {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            sources.get(key).cloned()
+        };
+        // RwLock released here - now safe to acquire Mutex
 
-                    if shared.min_interval != old_min {
-                        info!(
-                            "Panel {} updated interval for source {} from {:?} to {:?}",
-                            panel_id, key, old_min, shared.min_interval
-                        );
-                    }
+        // Phase 2: Update data with only Mutex held
+        if let Some(handle) = handle {
+            if let Ok(mut shared) = handle.lock() {
+                // Update this panel's interval and recalculate minimum
+                let old_min = shared.min_interval;
+                shared
+                    .panel_intervals
+                    .insert(panel_id.to_string(), new_interval);
+                shared.recalculate_min_interval();
+
+                if shared.min_interval != old_min {
+                    info!(
+                        "Panel {} updated interval for source {} from {:?} to {:?}",
+                        panel_id, key, old_min, shared.min_interval
+                    );
                 }
             }
         }
@@ -431,33 +471,65 @@ impl SharedSourceManager {
     }
 
     /// Get source metadata for UI purposes
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn get_source_metadata(&self, key: &str) -> Option<super::SourceMetadata> {
-        let sources = self.sources.read().ok()?;
-        let handle = sources.get(key)?;
+        // Phase 1: Clone handle while holding read lock
+        let handle = {
+            let sources = self.sources.read().ok()?;
+            sources.get(key).cloned()
+        };
+        // RwLock released here - now safe to acquire Mutex
+
+        // Phase 2: Access data with only Mutex held
+        let handle = handle?;
         let shared = handle.lock().ok()?;
         Some(shared.source.metadata().clone())
     }
 
     /// Get the field list for a source
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn get_source_fields(&self, key: &str) -> Option<Vec<super::FieldMetadata>> {
-        let sources = self.sources.read().ok()?;
-        let handle = sources.get(key)?;
+        // Phase 1: Clone handle while holding read lock
+        let handle = {
+            let sources = self.sources.read().ok()?;
+            sources.get(key).cloned()
+        };
+        // RwLock released here - now safe to acquire Mutex
+
+        // Phase 2: Access data with only Mutex held
+        let handle = handle?;
         let shared = handle.lock().ok()?;
         Some(shared.source.fields())
     }
 
     /// Debug: print all sources and their ref counts
+    ///
+    /// Follows the documented locking order: release RwLock before acquiring Mutex
     pub fn debug_print_sources(&self) {
-        if let Ok(sources) = self.sources.read() {
+        // Phase 1: Clone all handles while holding read lock
+        let handles: Vec<(String, SharedSourceHandle)> = {
+            let sources = match self.sources.read() {
+                Ok(s) => s,
+                Err(_) => return,
+            };
             info!("=== Shared Sources ({} total) ===", sources.len());
-            for (key, handle) in sources.iter() {
-                if let Ok(shared) = handle.lock() {
-                    let panel_ids: Vec<_> = shared.panel_intervals.keys().collect();
-                    info!(
-                        "  {} : ref_count={}, interval={:?}, panels={:?}",
-                        key, shared.ref_count, shared.min_interval, panel_ids
-                    );
-                }
+            sources
+                .iter()
+                .map(|(key, handle)| (key.clone(), handle.clone()))
+                .collect()
+        };
+        // RwLock released here - now safe to acquire Mutexes
+
+        // Phase 2: Print data with only Mutexes held (one at a time)
+        for (key, handle) in handles {
+            if let Ok(shared) = handle.lock() {
+                let panel_ids: Vec<_> = shared.panel_intervals.keys().collect();
+                info!(
+                    "  {} : ref_count={}, interval={:?}, panels={:?}",
+                    key, shared.ref_count, shared.min_interval, panel_ids
+                );
             }
         }
     }
