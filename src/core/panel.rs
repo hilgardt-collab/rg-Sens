@@ -267,10 +267,23 @@ impl Panel {
                         // Borrow from Arc - no clone needed
                         Cow::Borrowed(arc.as_ref())
                     } else {
-                        log::warn!(
-                            "Shared source {} not found, falling back to direct poll",
-                            key
-                        );
+                        // Log at debug level after first occurrence to avoid log spam
+                        // This typically happens during startup or after source reconfiguration
+                        static WARNED_SOURCES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+                            std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+
+                        let should_warn = WARNED_SOURCES
+                            .lock()
+                            .map(|mut set| set.insert(key.to_string()))
+                            .unwrap_or(true);
+
+                        if should_warn {
+                            log::warn!(
+                                "Shared source {} not found for panel {}, falling back to direct poll. \
+                                 This may indicate a startup race or stale source reference.",
+                                key, self.id
+                            );
+                        }
                         self.source.update().ok();
                         Cow::Owned(self.source.get_values())
                     }
