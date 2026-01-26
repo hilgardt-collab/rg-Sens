@@ -109,7 +109,6 @@ pub fn play_preview_sound(sound_config: &AlarmSoundConfig) {
 
 /// Shutdown the audio thread gracefully
 /// Call this during application exit for clean shutdown
-#[allow(dead_code)]
 pub fn shutdown_audio_thread() {
     if let Ok(mut guard) = AUDIO_THREAD.lock() {
         // Send shutdown command
@@ -616,7 +615,7 @@ impl TimerAlarmManager {
         // Periodic diagnostic logging (every ~60 seconds based on typical 1s update interval)
         static UPDATE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let count = UPDATE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count > 0 && count % 60 == 0 {
+        if count > 0 && count.is_multiple_of(60) {
             log::info!(
                 "TimerManager diagnostics: {} callbacks, {} timers, {} alarms",
                 self.change_callbacks.len(),

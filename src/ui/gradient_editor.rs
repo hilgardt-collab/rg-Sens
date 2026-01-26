@@ -241,8 +241,11 @@ impl GradientEditor {
                     }
                 }
 
-                if 1.0 - positions.last().unwrap() > max_gap {
-                    (1.0 + positions.last().unwrap()) / 2.0
+                // positions is non-empty here (we're in the else branch)
+                // Use unwrap_or for extra safety
+                let last_pos = positions.last().copied().unwrap_or(0.5);
+                if 1.0 - last_pos > max_gap {
+                    (1.0 + last_pos) / 2.0
                 } else {
                     max_gap_pos
                 }

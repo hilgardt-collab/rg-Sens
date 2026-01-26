@@ -27,8 +27,8 @@ pub use shared_source_manager::{
     SharedSourceManager,
 };
 pub use timer_manager::{
-    global_timer_manager, play_preview_sound, stop_all_sounds, AlarmConfig, TimerAlarmManager,
-    TimerConfig, TimerDisplayConfig, TimerMode, TimerState,
+    global_timer_manager, play_preview_sound, shutdown_audio_thread, stop_all_sounds, AlarmConfig,
+    TimerAlarmManager, TimerConfig, TimerDisplayConfig, TimerMode, TimerState,
 };
 pub use update_manager::{
     check_update_stall, global_update_manager, init_global_update_manager, UpdateManager,

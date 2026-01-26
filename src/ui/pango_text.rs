@@ -47,7 +47,7 @@ struct FontDescriptionCache {
     max_entries: usize,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 struct FontKey {
     family: String,
     weight: i32,
@@ -410,15 +410,17 @@ mod tests {
 
     #[test]
     fn test_font_key_hash() {
+        // Use the same weight conversion as get_or_create() since PangoWeight doesn't impl Into<i32>
+        let weight_i32 = 400; // PangoWeight::Normal = 400
         let key1 = FontKey {
             family: "Sans".to_string(),
-            weight: PangoWeight::Normal.into(),
+            weight: weight_i32,
             style: 0,
             size_pango: 12 * pango::SCALE,
         };
         let key2 = FontKey {
             family: "Sans".to_string(),
-            weight: PangoWeight::Normal.into(),
+            weight: weight_i32,
             style: 0,
             size_pango: 12 * pango::SCALE,
         };

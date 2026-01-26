@@ -369,7 +369,7 @@ pub fn show_window_settings_dialog<F>(
 
     // Renderer options: Default (None), GL, NGL, Vulkan, Cairo
     let renderer_options = ["Default (auto)", "GL (recommended)", "NGL (GTK 4.14+)", "Vulkan", "Cairo (software)"];
-    let renderer_string_refs: Vec<&str> = renderer_options.iter().copied().collect();
+    let renderer_string_refs: Vec<&str> = renderer_options.to_vec();
     let renderer_list = StringList::new(&renderer_string_refs);
     let renderer_dropdown = DropDown::new(Some(renderer_list), Option::<gtk4::Expression>::None);
     renderer_dropdown.set_hexpand(true);

@@ -425,16 +425,17 @@ impl Displayer for LcarsComboDisplayer {
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
                 let count = lock_fail_count_draw.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count % 100 == 0 {
+                if count.is_multiple_of(100) {
                     log::warn!("LCARS draw: try_lock failed {} times", count + 1);
                 }
                 // Lock contention - try to use cached frame to avoid flicker
                 if let Some(cache) = frame_cache_clone.borrow().as_ref() {
-                    if cache.width == width && cache.height == height {
-                        if cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok() {
-                            cr.paint().ok();
-                            return;
-                        }
+                    if cache.width == width
+                        && cache.height == height
+                        && cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok()
+                    {
+                        cr.paint().ok();
+                        return;
                     }
                 }
                 // No valid cache available - draw a solid background to avoid blank frame
@@ -791,7 +792,7 @@ impl Displayer for LcarsComboDisplayer {
                 // Periodic diagnostics (every ~5 seconds at 60fps)
                 static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
                 let ticks = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if ticks % 300 == 0 {
+                if ticks.is_multiple_of(300) {
                     log::info!(
                         "LCARS anim: bar_values={}, core_bar_values={}, graph_history={}, group_prefixes={}",
                         data.bar_values.len(),
@@ -866,7 +867,7 @@ impl Displayer for LcarsComboDisplayer {
                 redraw
             } else {
                 let count = lock_fail_count_anim.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count % 100 == 0 {
+                if count.is_multiple_of(100) {
                     log::warn!("LCARS anim: try_lock failed {} times", count + 1);
                 }
                 false

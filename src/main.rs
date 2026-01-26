@@ -183,11 +183,8 @@ fn main() {
         } else {
             info!("Using default GTK renderer (use --renderer or settings to change)");
         }
-    } else {
-        info!(
-            "Using GSK_RENDERER={} from environment",
-            std::env::var("GSK_RENDERER").unwrap()
-        );
+    } else if let Ok(renderer) = std::env::var("GSK_RENDERER") {
+        info!("Using GSK_RENDERER={} from environment", renderer);
     }
 
     // Handle --list option (list monitors and exit)
@@ -1103,6 +1100,8 @@ fn build_ui(app: &Application) {
             config_helpers::show_save_dialog(window, &grid_layout_for_close, &app_config_for_close);
             glib::Propagation::Stop // Prevent immediate close
         } else {
+            // Shutdown audio thread gracefully before exit
+            rg_sens::core::shutdown_audio_thread();
             glib::Propagation::Proceed // Close without saving
         }
     });

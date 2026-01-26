@@ -339,31 +339,14 @@ pub fn update_bar_animation(
     target_percent: f64,
     animation_enabled: bool,
 ) {
-    // Build key using thread-local buffer, then convert to owned String only if needed
+    // Build the key string - we need an owned String for HashMap operations
     let bar_key = KEY_BUFFER.with(|buf| {
         let mut key_buf = buf.borrow_mut();
-        let key = key_buf.build_bar_key(prefix);
-        // Only allocate if key doesn't exist
-        if bar_values.contains_key(key) {
-            None
-        } else {
-            Some(key.to_string())
-        }
+        key_buf.build_bar_key(prefix).to_string()
     });
 
-    let anim = if let Some(new_key) = bar_key {
-        bar_values.entry(new_key).or_default()
-    } else {
-        // Key exists - look it up again (cheap compared to allocation)
-        KEY_BUFFER.with(|buf| {
-            let mut key_buf = buf.borrow_mut();
-            let key = key_buf.build_bar_key(prefix);
-            // Use expect with context - this should never fail since we just checked contains_key
-            bar_values
-                .get_mut(key)
-                .expect("bar key disappeared between contains_key check and get_mut")
-        })
-    };
+    // Use entry API to avoid TOCTOU issues
+    let anim = bar_values.entry(bar_key).or_default();
 
     // Only update target if the change is visually significant (> 0.5%)
     // This prevents constant 60fps animation from tiny sensor fluctuations
@@ -387,25 +370,14 @@ pub fn update_bar_animation_with_change_detection(
     target_percent: f64,
     animation_enabled: bool,
 ) -> bool {
+    // Build the key string - we need an owned String for HashMap operations
     let bar_key = KEY_BUFFER.with(|buf| {
         let mut key_buf = buf.borrow_mut();
-        let key = key_buf.build_bar_key(prefix);
-        if bar_values.contains_key(key) {
-            None
-        } else {
-            Some(key.to_string())
-        }
+        key_buf.build_bar_key(prefix).to_string()
     });
 
-    let anim = if let Some(new_key) = bar_key {
-        bar_values.entry(new_key).or_default()
-    } else {
-        KEY_BUFFER.with(|buf| {
-            let mut key_buf = buf.borrow_mut();
-            let key = key_buf.build_bar_key(prefix);
-            bar_values.get_mut(key).expect("bar key disappeared")
-        })
-    };
+    // Use entry API to avoid TOCTOU issues
+    let anim = bar_values.entry(bar_key).or_default();
 
     const TARGET_CHANGE_THRESHOLD: f64 = 0.005;
     let target_changed = (anim.target - target_percent).abs() > TARGET_CHANGE_THRESHOLD;
@@ -431,29 +403,14 @@ pub fn update_graph_history(
     timestamp: f64,
     max_points: usize,
 ) {
-    // Build key using thread-local buffer
+    // Build the key string - we need an owned String for HashMap operations
     let graph_key = KEY_BUFFER.with(|buf| {
         let mut key_buf = buf.borrow_mut();
-        let key = key_buf.build_graph_key(prefix);
-        if graph_history.contains_key(key) {
-            None
-        } else {
-            Some(key.to_string())
-        }
+        key_buf.build_graph_key(prefix).to_string()
     });
 
-    let history = if let Some(new_key) = graph_key {
-        graph_history.entry(new_key).or_default()
-    } else {
-        KEY_BUFFER.with(|buf| {
-            let mut key_buf = buf.borrow_mut();
-            let key = key_buf.build_graph_key(prefix);
-            // Use expect with context - this should never fail since we just checked contains_key
-            graph_history
-                .get_mut(key)
-                .expect("graph key disappeared between contains_key check and get_mut")
-        })
-    };
+    // Use entry API to avoid TOCTOU issues
+    let history = graph_history.entry(graph_key).or_default();
 
     history.push_back(DataPoint {
         value: numerical_value,

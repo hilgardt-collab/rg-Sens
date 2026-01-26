@@ -32,7 +32,7 @@ static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
 // operations happen on the main thread anyway.
 thread_local! {
     static ACTIVE_WEBVIEWS: std::cell::RefCell<Vec<glib::WeakRef<WebView>>> =
-        std::cell::RefCell::new(Vec::new());
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Register a WebView for tracking (called when created)

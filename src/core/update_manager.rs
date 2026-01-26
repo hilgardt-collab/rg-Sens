@@ -428,7 +428,7 @@ impl UpdateManager {
             // Periodic diagnostic logging (every ~60 seconds)
             static CYCLE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let cycle = CYCLE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if cycle > 0 && cycle % 60 == 0 {
+            if cycle > 0 && cycle.is_multiple_of(60) {
                 let panel_count = self.panels.read().await.len();
                 let shared_source_count = self.shared_sources.read().await.len();
                 log::info!(

@@ -361,11 +361,12 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
             let Ok(data) = data_clone.try_lock() else {
                 // Lock contention - try to use cached frame to avoid flicker
                 if let Some(cache) = frame_cache_clone.borrow().as_ref() {
-                    if cache.width == width && cache.height == height {
-                        if cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok() {
-                            cr.paint().ok();
-                            return;
-                        }
+                    if cache.width == width
+                        && cache.height == height
+                        && cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok()
+                    {
+                        cr.paint().ok();
+                        return;
                     }
                 }
                 // No valid cache available - draw a solid background to avoid blank frame
