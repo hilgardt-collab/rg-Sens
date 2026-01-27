@@ -33,6 +33,9 @@ use crate::ui::lcars_display::{
 };
 use crate::ui::speedometer_display::render_speedometer_with_theme;
 
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
+
 /// Full LCARS display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcarsDisplayConfig {
@@ -45,14 +48,6 @@ pub struct LcarsDisplayConfig {
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
-}
-
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0 // Speed of lerp
 }
 
 impl Default for LcarsDisplayConfig {

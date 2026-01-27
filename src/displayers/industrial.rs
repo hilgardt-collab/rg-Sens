@@ -14,8 +14,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
-use crate::displayers::combo_generic::GenericComboDisplayerShared;
 use crate::ui::industrial_display::{IndustrialFrameConfig, IndustrialRenderer};
+
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
 
 /// Industrial display configuration (wrapper for backward compatibility)
 ///
@@ -30,20 +32,12 @@ pub struct IndustrialDisplayConfig {
     pub animation_speed: f64,
 }
 
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0
-}
-
 impl Default for IndustrialDisplayConfig {
     fn default() -> Self {
         Self {
             frame: IndustrialFrameConfig::default(),
-            animation_enabled: true,
-            animation_speed: 8.0,
+            animation_enabled: default_animation_enabled(),
+            animation_speed: default_animation_speed(),
         }
     }
 }
@@ -67,24 +61,8 @@ impl IndustrialDisplayConfig {
     }
 }
 
-/// Industrial/Gauge Panel displayer
-pub struct IndustrialDisplayer {
-    inner: GenericComboDisplayerShared<IndustrialRenderer>,
-}
-
-impl IndustrialDisplayer {
-    pub fn new() -> Self {
-        Self {
-            inner: GenericComboDisplayerShared::new(IndustrialRenderer),
-        }
-    }
-}
-
-impl Default for IndustrialDisplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Use macro to generate displayer struct and basic implementations
+crate::theme_displayer_base!(IndustrialDisplayer, IndustrialRenderer, IndustrialRenderer);
 
 impl Displayer for IndustrialDisplayer {
     fn id(&self) -> &str {

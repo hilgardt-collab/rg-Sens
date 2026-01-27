@@ -16,8 +16,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
-use crate::displayers::combo_generic::GenericComboDisplayerShared;
 use crate::ui::steampunk_display::{SteampunkFrameConfig, SteampunkRenderer};
+
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
 
 /// Full Steampunk display configuration (wrapper for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,14 +30,6 @@ pub struct SteampunkDisplayConfig {
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
-}
-
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0
 }
 
 impl Default for SteampunkDisplayConfig {
@@ -65,24 +59,8 @@ impl SteampunkDisplayConfig {
     }
 }
 
-/// Steampunk Displayer
-pub struct SteampunkDisplayer {
-    inner: GenericComboDisplayerShared<SteampunkRenderer>,
-}
-
-impl SteampunkDisplayer {
-    pub fn new() -> Self {
-        Self {
-            inner: GenericComboDisplayerShared::new(SteampunkRenderer),
-        }
-    }
-}
-
-impl Default for SteampunkDisplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Use macro to generate displayer struct and basic implementations
+crate::theme_displayer_base!(SteampunkDisplayer, SteampunkRenderer, SteampunkRenderer);
 
 impl Displayer for SteampunkDisplayer {
     fn id(&self) -> &str {

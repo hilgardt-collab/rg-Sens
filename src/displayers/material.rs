@@ -15,8 +15,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
-use crate::displayers::combo_generic::GenericComboDisplayerShared;
 use crate::ui::material_display::{MaterialFrameConfig, MaterialRenderer};
+
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
 
 /// Full Material display configuration (wrapper for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,14 +29,6 @@ pub struct MaterialDisplayConfig {
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
-}
-
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0
 }
 
 impl Default for MaterialDisplayConfig {
@@ -64,24 +58,8 @@ impl MaterialDisplayConfig {
     }
 }
 
-/// Material Design Cards Displayer
-pub struct MaterialDisplayer {
-    inner: GenericComboDisplayerShared<MaterialRenderer>,
-}
-
-impl MaterialDisplayer {
-    pub fn new() -> Self {
-        Self {
-            inner: GenericComboDisplayerShared::new(MaterialRenderer),
-        }
-    }
-}
-
-impl Default for MaterialDisplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Use macro to generate displayer struct and basic implementations
+crate::theme_displayer_base!(MaterialDisplayer, MaterialRenderer, MaterialRenderer);
 
 impl Displayer for MaterialDisplayer {
     fn id(&self) -> &str {

@@ -14,8 +14,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
-use crate::displayers::combo_generic::GenericComboDisplayerShared;
 use crate::ui::retro_terminal_display::{RetroTerminalFrameConfig, RetroTerminalRenderer};
+
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
 
 /// Full Retro Terminal display configuration (wrapper for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,14 +28,6 @@ pub struct RetroTerminalDisplayConfig {
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
-}
-
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0
 }
 
 impl Default for RetroTerminalDisplayConfig {
@@ -63,24 +57,8 @@ impl RetroTerminalDisplayConfig {
     }
 }
 
-/// Retro Terminal (CRT) Displayer
-pub struct RetroTerminalDisplayer {
-    inner: GenericComboDisplayerShared<RetroTerminalRenderer>,
-}
-
-impl RetroTerminalDisplayer {
-    pub fn new() -> Self {
-        Self {
-            inner: GenericComboDisplayerShared::new(RetroTerminalRenderer),
-        }
-    }
-}
-
-impl Default for RetroTerminalDisplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Use macro to generate displayer struct and basic implementations
+crate::theme_displayer_base!(RetroTerminalDisplayer, RetroTerminalRenderer, RetroTerminalRenderer);
 
 impl Displayer for RetroTerminalDisplayer {
     fn id(&self) -> &str {
