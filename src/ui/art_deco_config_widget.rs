@@ -798,12 +798,17 @@ impl ArtDecoConfigWidget {
             CornerStyle::Ziggurat => 1,
             CornerStyle::Diamond => 2,
             CornerStyle::Bracket => 3,
-            CornerStyle::None => 4,
+            CornerStyle::Hexagon => 4,
+            CornerStyle::Octagon => 5,
+            CornerStyle::Circle => 6,
+            CornerStyle::DoubleBracket => 7,
+            CornerStyle::GeometricStack => 8,
+            CornerStyle::None => 9,
         };
         let corner_style_dropdown = builder.dropdown_row(
             &page,
             "Style:",
-            &["Fan", "Ziggurat", "Diamond", "Bracket", "None"],
+            &["Fan", "Ziggurat", "Diamond", "Bracket", "Hexagon", "Octagon", "Circle", "Double Bracket", "Geometric Stack", "None"],
             corner_idx,
             |cfg, idx| {
                 cfg.frame.corner_style = match idx {
@@ -811,6 +816,11 @@ impl ArtDecoConfigWidget {
                     1 => CornerStyle::Ziggurat,
                     2 => CornerStyle::Diamond,
                     3 => CornerStyle::Bracket,
+                    4 => CornerStyle::Hexagon,
+                    5 => CornerStyle::Octagon,
+                    6 => CornerStyle::Circle,
+                    7 => CornerStyle::DoubleBracket,
+                    8 => CornerStyle::GeometricStack,
                     _ => CornerStyle::None,
                 }
             },
@@ -1345,7 +1355,12 @@ impl ArtDecoConfigWidget {
                     CornerStyle::Ziggurat => 1,
                     CornerStyle::Diamond => 2,
                     CornerStyle::Bracket => 3,
-                    CornerStyle::None => 4,
+                    CornerStyle::Hexagon => 4,
+                    CornerStyle::Octagon => 5,
+                    CornerStyle::Circle => 6,
+                    CornerStyle::DoubleBracket => 7,
+                    CornerStyle::GeometricStack => 8,
+                    CornerStyle::None => 9,
                 });
             widgets.corner_size_spin.set_value(config.frame.corner_size);
             widgets
