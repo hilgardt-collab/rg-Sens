@@ -1157,12 +1157,20 @@ impl ArtDecoConfigWidget {
             DividerStyle::DoubleLine => 1,
             DividerStyle::Line => 2,
             DividerStyle::Stepped => 3,
-            DividerStyle::None => 4,
+            DividerStyle::DiamondCluster => 4,
+            DividerStyle::Crescent => 5,
+            DividerStyle::ArrowDiamond => 6,
+            DividerStyle::CircleChain => 7,
+            DividerStyle::CrossedLines => 8,
+            DividerStyle::FleurDeLis => 9,
+            DividerStyle::Heartbeat => 10,
+            DividerStyle::DiamondGrid => 11,
+            DividerStyle::None => 12,
         };
         let divider_style_dropdown = builder.dropdown_row(
             &page,
             "Style:",
-            &["Chevron", "Double Line", "Line", "Stepped", "None"],
+            &["Chevron", "Double Line", "Line", "Stepped", "Diamond Cluster", "Crescent", "Arrow Diamond", "Circle Chain", "Crossed Lines", "Fleur de Lis", "Heartbeat", "Diamond Grid", "None"],
             div_style_idx,
             |cfg, idx| {
                 cfg.frame.divider_style = match idx {
@@ -1170,6 +1178,14 @@ impl ArtDecoConfigWidget {
                     1 => DividerStyle::DoubleLine,
                     2 => DividerStyle::Line,
                     3 => DividerStyle::Stepped,
+                    4 => DividerStyle::DiamondCluster,
+                    5 => DividerStyle::Crescent,
+                    6 => DividerStyle::ArrowDiamond,
+                    7 => DividerStyle::CircleChain,
+                    8 => DividerStyle::CrossedLines,
+                    9 => DividerStyle::FleurDeLis,
+                    10 => DividerStyle::Heartbeat,
+                    11 => DividerStyle::DiamondGrid,
                     _ => DividerStyle::None,
                 }
             },
@@ -1423,7 +1439,15 @@ impl ArtDecoConfigWidget {
                     DividerStyle::DoubleLine => 1,
                     DividerStyle::Line => 2,
                     DividerStyle::Stepped => 3,
-                    DividerStyle::None => 4,
+                    DividerStyle::DiamondCluster => 4,
+                    DividerStyle::Crescent => 5,
+                    DividerStyle::ArrowDiamond => 6,
+                    DividerStyle::CircleChain => 7,
+                    DividerStyle::CrossedLines => 8,
+                    DividerStyle::FleurDeLis => 9,
+                    DividerStyle::Heartbeat => 10,
+                    DividerStyle::DiamondGrid => 11,
+                    DividerStyle::None => 12,
                 });
             widgets
                 .divider_width_spin

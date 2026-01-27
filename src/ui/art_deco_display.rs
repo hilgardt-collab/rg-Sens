@@ -117,6 +117,22 @@ pub enum DividerStyle {
     Line,
     /// Stepped zigzag pattern
     Stepped,
+    /// Stacked/overlapping diamond cluster
+    DiamondCluster,
+    /// Crescent moon with dots
+    Crescent,
+    /// Arrows pointing to central diamond
+    ArrowDiamond,
+    /// Three circles connected by lines
+    CircleChain,
+    /// Crossed/woven lines pattern
+    CrossedLines,
+    /// Fleur-de-lis / leaf ornament
+    FleurDeLis,
+    /// Zigzag heartbeat pattern with diamond accents
+    Heartbeat,
+    /// Interlocked diamond grid pattern
+    DiamondGrid,
     /// No divider
     None,
 }
@@ -486,17 +502,14 @@ fn draw_sunburst_corner(
     cr.restore().ok();
 }
 
-/// Draw a stepped/ziggurat corner decoration
-fn draw_ziggurat_corner(
+/// Draw an Art Deco stepped/ziggurat corner decoration with stair-step pattern
+fn draw_art_deco_ziggurat_corner(
     cr: &Context,
-    x: f64,
-    y: f64,
+    corner_x: f64,
+    corner_y: f64,
     size: f64,
-    steps: usize,
-    top_left: bool,
-    top_right: bool,
-    bottom_left: bool,
-    bottom_right: bool,
+    flip_h: bool,
+    flip_v: bool,
     color: &Color,
     line_width: f64,
 ) {
@@ -504,51 +517,44 @@ fn draw_ziggurat_corner(
     cr.set_source_rgba(color.r, color.g, color.b, color.a);
     cr.set_line_width(line_width);
 
-    let step_size = size / steps as f64;
+    let h_dir = if flip_h { -1.0 } else { 1.0 };
+    let v_dir = if flip_v { -1.0 } else { 1.0 };
 
-    // Top-left corner
-    if top_left {
-        for i in 0..steps {
-            let offset = i as f64 * step_size;
-            cr.move_to(x + offset, y + size - offset);
-            cr.line_to(x + offset, y + offset);
-            cr.line_to(x + size - offset, y + offset);
-        }
-        cr.stroke().ok();
+    let steps = 4;
+    let step_size = size / (steps as f64 + 1.0);
+
+    // Draw stair-step pattern
+    // Start from outer corner, step inward diagonally
+    cr.move_to(corner_x, corner_y + v_dir * size);
+
+    for i in 0..steps {
+        let step_x = corner_x + h_dir * (i as f64 * step_size);
+        let step_y = corner_y + v_dir * ((steps - i) as f64 * step_size);
+        let next_step_x = corner_x + h_dir * ((i + 1) as f64 * step_size);
+
+        cr.line_to(step_x, step_y);
+        cr.line_to(next_step_x, step_y);
     }
 
-    // Top-right corner
-    if top_right {
-        for i in 0..steps {
-            let offset = i as f64 * step_size;
-            cr.move_to(x + size - offset, y + size - offset);
-            cr.line_to(x + size - offset, y + offset);
-            cr.line_to(x + offset, y + offset);
-        }
-        cr.stroke().ok();
+    // Final segment to end
+    cr.line_to(corner_x + h_dir * size, corner_y);
+    cr.stroke().ok();
+
+    // Draw a second inner stair pattern for more detail
+    let inner_offset = step_size * 0.5;
+    cr.move_to(corner_x + h_dir * inner_offset, corner_y + v_dir * (size - inner_offset));
+
+    for i in 0..(steps - 1) {
+        let step_x = corner_x + h_dir * (inner_offset + i as f64 * step_size);
+        let step_y = corner_y + v_dir * ((steps - 1 - i) as f64 * step_size);
+        let next_step_x = corner_x + h_dir * (inner_offset + (i + 1) as f64 * step_size);
+
+        cr.line_to(step_x, step_y);
+        cr.line_to(next_step_x, step_y);
     }
 
-    // Bottom-left corner (need to adjust coordinates)
-    if bottom_left {
-        for i in 0..steps {
-            let offset = i as f64 * step_size;
-            cr.move_to(x + offset, y + offset);
-            cr.line_to(x + offset, y + size - offset);
-            cr.line_to(x + size - offset, y + size - offset);
-        }
-        cr.stroke().ok();
-    }
-
-    // Bottom-right corner
-    if bottom_right {
-        for i in 0..steps {
-            let offset = i as f64 * step_size;
-            cr.move_to(x + size - offset, y + offset);
-            cr.line_to(x + size - offset, y + size - offset);
-            cr.line_to(x + offset, y + size - offset);
-        }
-        cr.stroke().ok();
-    }
+    cr.line_to(corner_x + h_dir * (size - inner_offset), corner_y + v_dir * inner_offset);
+    cr.stroke().ok();
 
     cr.restore().ok();
 }
@@ -572,203 +578,12 @@ fn draw_diamond(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color, filled
     cr.restore().ok();
 }
 
-/// Draw a hexagon medallion with extending lines (Art Deco style)
-fn draw_hexagon_corner(
+/// Draw Art Deco L-bracket corner with hexagon medallion
+/// This draws an L-shaped bracket with multiple parallel lines and a hexagon at the corner
+fn draw_art_deco_hexagon_corner(
     cr: &Context,
-    cx: f64,
-    cy: f64,
-    size: f64,
-    angle_offset: f64,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let hex_size = size * 0.35;
-    let line_len = size * 0.65;
-
-    // Draw hexagon
-    cr.new_path();
-    for i in 0..6 {
-        let angle = angle_offset + i as f64 * std::f64::consts::PI / 3.0;
-        let px = cx + hex_size * angle.cos();
-        let py = cy + hex_size * angle.sin();
-        if i == 0 {
-            cr.move_to(px, py);
-        } else {
-            cr.line_to(px, py);
-        }
-    }
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw inner hexagon
-    let inner_size = hex_size * 0.6;
-    cr.new_path();
-    for i in 0..6 {
-        let angle = angle_offset + i as f64 * std::f64::consts::PI / 3.0;
-        let px = cx + inner_size * angle.cos();
-        let py = cy + inner_size * angle.sin();
-        if i == 0 {
-            cr.move_to(px, py);
-        } else {
-            cr.line_to(px, py);
-        }
-    }
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw extending lines (horizontal and vertical from corner)
-    let line_angle1 = angle_offset + std::f64::consts::PI / 4.0;
-    let line_angle2 = angle_offset - std::f64::consts::PI / 4.0;
-
-    // Line 1
-    cr.move_to(
-        cx + hex_size * line_angle1.cos(),
-        cy + hex_size * line_angle1.sin(),
-    );
-    cr.line_to(
-        cx + (hex_size + line_len) * line_angle1.cos(),
-        cy + (hex_size + line_len) * line_angle1.sin(),
-    );
-    cr.stroke().ok();
-
-    // Line 2
-    cr.move_to(
-        cx + hex_size * line_angle2.cos(),
-        cy + hex_size * line_angle2.sin(),
-    );
-    cr.line_to(
-        cx + (hex_size + line_len) * line_angle2.cos(),
-        cy + (hex_size + line_len) * line_angle2.sin(),
-    );
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw an octagon medallion with extending lines (Art Deco style)
-fn draw_octagon_corner(
-    cr: &Context,
-    cx: f64,
-    cy: f64,
-    size: f64,
-    angle_offset: f64,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let oct_size = size * 0.35;
-    let line_len = size * 0.65;
-
-    // Draw octagon
-    cr.new_path();
-    for i in 0..8 {
-        let angle = angle_offset + i as f64 * std::f64::consts::PI / 4.0;
-        let px = cx + oct_size * angle.cos();
-        let py = cy + oct_size * angle.sin();
-        if i == 0 {
-            cr.move_to(px, py);
-        } else {
-            cr.line_to(px, py);
-        }
-    }
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw extending lines
-    let line_angle1 = angle_offset + std::f64::consts::PI / 4.0;
-    let line_angle2 = angle_offset - std::f64::consts::PI / 4.0;
-
-    cr.move_to(
-        cx + oct_size * line_angle1.cos(),
-        cy + oct_size * line_angle1.sin(),
-    );
-    cr.line_to(
-        cx + (oct_size + line_len) * line_angle1.cos(),
-        cy + (oct_size + line_len) * line_angle1.sin(),
-    );
-    cr.stroke().ok();
-
-    cr.move_to(
-        cx + oct_size * line_angle2.cos(),
-        cy + oct_size * line_angle2.sin(),
-    );
-    cr.line_to(
-        cx + (oct_size + line_len) * line_angle2.cos(),
-        cy + (oct_size + line_len) * line_angle2.sin(),
-    );
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw a circle medallion with extending lines (Art Deco style)
-fn draw_circle_corner(
-    cr: &Context,
-    cx: f64,
-    cy: f64,
-    size: f64,
-    angle_offset: f64,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let circle_radius = size * 0.25;
-    let line_len = size * 0.7;
-
-    // Draw outer circle
-    cr.arc(cx, cy, circle_radius, 0.0, std::f64::consts::TAU);
-    cr.stroke().ok();
-
-    // Draw inner circle
-    cr.arc(cx, cy, circle_radius * 0.5, 0.0, std::f64::consts::TAU);
-    cr.stroke().ok();
-
-    // Draw center dot
-    cr.arc(cx, cy, line_width, 0.0, std::f64::consts::TAU);
-    cr.fill().ok();
-
-    // Draw extending lines
-    let line_angle1 = angle_offset + std::f64::consts::PI / 4.0;
-    let line_angle2 = angle_offset - std::f64::consts::PI / 4.0;
-
-    cr.move_to(
-        cx + circle_radius * line_angle1.cos(),
-        cy + circle_radius * line_angle1.sin(),
-    );
-    cr.line_to(
-        cx + (circle_radius + line_len) * line_angle1.cos(),
-        cy + (circle_radius + line_len) * line_angle1.sin(),
-    );
-    cr.stroke().ok();
-
-    cr.move_to(
-        cx + circle_radius * line_angle2.cos(),
-        cy + circle_radius * line_angle2.sin(),
-    );
-    cr.line_to(
-        cx + (circle_radius + line_len) * line_angle2.cos(),
-        cy + (circle_radius + line_len) * line_angle2.sin(),
-    );
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw a double-line L bracket corner (Art Deco style)
-fn draw_double_bracket_corner(
-    cr: &Context,
-    x: f64,
-    y: f64,
+    corner_x: f64,
+    corner_y: f64,
     size: f64,
     flip_h: bool,
     flip_v: bool,
@@ -779,42 +594,72 @@ fn draw_double_bracket_corner(
     cr.set_source_rgba(color.r, color.g, color.b, color.a);
     cr.set_line_width(line_width);
 
-    let spacing = size * 0.15;
-    let inner_offset = size * 0.3;
-
-    // Determine direction multipliers
     let h_dir = if flip_h { -1.0 } else { 1.0 };
     let v_dir = if flip_v { -1.0 } else { 1.0 };
 
-    // Outer L
-    cr.move_to(x + h_dir * size, y);
-    cr.line_to(x, y);
-    cr.line_to(x, y + v_dir * size);
+    let hex_size = size * 0.22;
+    let hex_cx = corner_x + h_dir * size * 0.35;
+    let hex_cy = corner_y + v_dir * size * 0.35;
+    let line_spacing = size * 0.08;
+
+    // Draw outer hexagon (flat-topped)
+    cr.new_path();
+    for i in 0..6 {
+        let angle = std::f64::consts::PI / 6.0 + i as f64 * std::f64::consts::PI / 3.0;
+        let px = hex_cx + hex_size * angle.cos();
+        let py = hex_cy + hex_size * angle.sin();
+        if i == 0 {
+            cr.move_to(px, py);
+        } else {
+            cr.line_to(px, py);
+        }
+    }
+    cr.close_path();
     cr.stroke().ok();
 
-    // Inner L (offset)
-    cr.move_to(x + h_dir * (size - inner_offset), y + v_dir * spacing);
-    cr.line_to(x + h_dir * spacing, y + v_dir * spacing);
-    cr.line_to(x + h_dir * spacing, y + v_dir * (size - inner_offset));
+    // Draw inner hexagon
+    let inner_hex = hex_size * 0.55;
+    cr.new_path();
+    for i in 0..6 {
+        let angle = std::f64::consts::PI / 6.0 + i as f64 * std::f64::consts::PI / 3.0;
+        let px = hex_cx + inner_hex * angle.cos();
+        let py = hex_cy + inner_hex * angle.sin();
+        if i == 0 {
+            cr.move_to(px, py);
+        } else {
+            cr.line_to(px, py);
+        }
+    }
+    cr.close_path();
     cr.stroke().ok();
 
-    // Small step detail
-    let step = size * 0.1;
-    cr.move_to(x + h_dir * inner_offset, y + v_dir * inner_offset);
-    cr.line_to(x + h_dir * (inner_offset + step), y + v_dir * inner_offset);
-    cr.line_to(x + h_dir * (inner_offset + step), y + v_dir * (inner_offset + step));
+    // Draw horizontal lines extending from corner
+    for i in 0..3 {
+        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
+        cr.move_to(corner_x, y_offset);
+        cr.line_to(corner_x + h_dir * size, y_offset);
+    }
+    cr.stroke().ok();
+
+    // Draw vertical lines extending from corner
+    for i in 0..3 {
+        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
+        cr.move_to(x_offset, corner_y);
+        cr.line_to(x_offset, corner_y + v_dir * size);
+    }
     cr.stroke().ok();
 
     cr.restore().ok();
 }
 
-/// Draw geometric stack corner (stacked shapes - Art Deco style)
-fn draw_geometric_stack_corner(
+/// Draw Art Deco L-bracket corner with octagon medallion
+fn draw_art_deco_octagon_corner(
     cr: &Context,
-    cx: f64,
-    cy: f64,
+    corner_x: f64,
+    corner_y: f64,
     size: f64,
-    angle_offset: f64,
+    flip_h: bool,
+    flip_v: bool,
     color: &Color,
     line_width: f64,
 ) {
@@ -822,47 +667,267 @@ fn draw_geometric_stack_corner(
     cr.set_source_rgba(color.r, color.g, color.b, color.a);
     cr.set_line_width(line_width);
 
-    let diamond_size = size * 0.2;
-    let line_len = size * 0.6;
+    let h_dir = if flip_h { -1.0 } else { 1.0 };
+    let v_dir = if flip_v { -1.0 } else { 1.0 };
 
-    // Draw small diamond at corner
-    cr.move_to(cx, cy - diamond_size);
-    cr.line_to(cx + diamond_size, cy);
-    cr.line_to(cx, cy + diamond_size);
-    cr.line_to(cx - diamond_size, cy);
+    let oct_size = size * 0.22;
+    let oct_cx = corner_x + h_dir * size * 0.35;
+    let oct_cy = corner_y + v_dir * size * 0.35;
+    let line_spacing = size * 0.08;
+
+    // Draw octagon
+    cr.new_path();
+    for i in 0..8 {
+        let angle = std::f64::consts::PI / 8.0 + i as f64 * std::f64::consts::PI / 4.0;
+        let px = oct_cx + oct_size * angle.cos();
+        let py = oct_cy + oct_size * angle.sin();
+        if i == 0 {
+            cr.move_to(px, py);
+        } else {
+            cr.line_to(px, py);
+        }
+    }
     cr.close_path();
     cr.stroke().ok();
 
-    // Draw small circle inside diamond
-    cr.arc(cx, cy, diamond_size * 0.4, 0.0, std::f64::consts::TAU);
+    // Draw horizontal lines extending from corner
+    for i in 0..3 {
+        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
+        cr.move_to(corner_x, y_offset);
+        cr.line_to(corner_x + h_dir * size, y_offset);
+    }
     cr.stroke().ok();
 
-    // Draw extending lines with small circles
-    let line_angle1 = angle_offset + std::f64::consts::PI / 4.0;
-    let line_angle2 = angle_offset - std::f64::consts::PI / 4.0;
-
-    // Line 1 with end circle
-    let end_x1 = cx + line_len * line_angle1.cos();
-    let end_y1 = cy + line_len * line_angle1.sin();
-    cr.move_to(
-        cx + diamond_size * line_angle1.cos(),
-        cy + diamond_size * line_angle1.sin(),
-    );
-    cr.line_to(end_x1, end_y1);
-    cr.stroke().ok();
-    cr.arc(end_x1, end_y1, diamond_size * 0.25, 0.0, std::f64::consts::TAU);
+    // Draw vertical lines extending from corner
+    for i in 0..3 {
+        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
+        cr.move_to(x_offset, corner_y);
+        cr.line_to(x_offset, corner_y + v_dir * size);
+    }
     cr.stroke().ok();
 
-    // Line 2 with end circle
-    let end_x2 = cx + line_len * line_angle2.cos();
-    let end_y2 = cy + line_len * line_angle2.sin();
-    cr.move_to(
-        cx + diamond_size * line_angle2.cos(),
-        cy + diamond_size * line_angle2.sin(),
-    );
-    cr.line_to(end_x2, end_y2);
+    cr.restore().ok();
+}
+
+/// Draw Art Deco L-bracket corner with concentric circles
+fn draw_art_deco_circle_corner(
+    cr: &Context,
+    corner_x: f64,
+    corner_y: f64,
+    size: f64,
+    flip_h: bool,
+    flip_v: bool,
+    color: &Color,
+    line_width: f64,
+) {
+    cr.save().ok();
+    cr.set_source_rgba(color.r, color.g, color.b, color.a);
+    cr.set_line_width(line_width);
+
+    let h_dir = if flip_h { -1.0 } else { 1.0 };
+    let v_dir = if flip_v { -1.0 } else { 1.0 };
+
+    let circle_radius = size * 0.18;
+    let circle_cx = corner_x + h_dir * size * 0.35;
+    let circle_cy = corner_y + v_dir * size * 0.35;
+    let line_spacing = size * 0.08;
+
+    // Draw concentric circles
+    cr.arc(circle_cx, circle_cy, circle_radius, 0.0, std::f64::consts::TAU);
     cr.stroke().ok();
-    cr.arc(end_x2, end_y2, diamond_size * 0.25, 0.0, std::f64::consts::TAU);
+    cr.arc(circle_cx, circle_cy, circle_radius * 0.6, 0.0, std::f64::consts::TAU);
+    cr.stroke().ok();
+    // Center dot
+    cr.arc(circle_cx, circle_cy, line_width * 1.5, 0.0, std::f64::consts::TAU);
+    cr.fill().ok();
+
+    // Draw horizontal lines extending from corner
+    for i in 0..3 {
+        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
+        cr.move_to(corner_x, y_offset);
+        cr.line_to(corner_x + h_dir * size, y_offset);
+    }
+    cr.stroke().ok();
+
+    // Draw vertical lines extending from corner
+    for i in 0..3 {
+        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
+        cr.move_to(x_offset, corner_y);
+        cr.line_to(x_offset, corner_y + v_dir * size);
+    }
+    cr.stroke().ok();
+
+    cr.restore().ok();
+}
+
+/// Draw Art Deco L-bracket corner with stacked diamonds
+fn draw_art_deco_diamond_corner(
+    cr: &Context,
+    corner_x: f64,
+    corner_y: f64,
+    size: f64,
+    flip_h: bool,
+    flip_v: bool,
+    color: &Color,
+    line_width: f64,
+) {
+    cr.save().ok();
+    cr.set_source_rgba(color.r, color.g, color.b, color.a);
+    cr.set_line_width(line_width);
+
+    let h_dir = if flip_h { -1.0 } else { 1.0 };
+    let v_dir = if flip_v { -1.0 } else { 1.0 };
+
+    let diamond_size = size * 0.15;
+    let diamond_cx = corner_x + h_dir * size * 0.35;
+    let diamond_cy = corner_y + v_dir * size * 0.35;
+    let line_spacing = size * 0.08;
+
+    // Draw stacked diamonds (large outer, smaller inner)
+    // Outer diamond
+    cr.move_to(diamond_cx, diamond_cy - diamond_size);
+    cr.line_to(diamond_cx + diamond_size, diamond_cy);
+    cr.line_to(diamond_cx, diamond_cy + diamond_size);
+    cr.line_to(diamond_cx - diamond_size, diamond_cy);
+    cr.close_path();
+    cr.stroke().ok();
+
+    // Inner diamond
+    let inner_size = diamond_size * 0.5;
+    cr.move_to(diamond_cx, diamond_cy - inner_size);
+    cr.line_to(diamond_cx + inner_size, diamond_cy);
+    cr.line_to(diamond_cx, diamond_cy + inner_size);
+    cr.line_to(diamond_cx - inner_size, diamond_cy);
+    cr.close_path();
+    cr.stroke().ok();
+
+    // Small diamonds at the tips
+    let tip_size = diamond_size * 0.3;
+    let tip_dist = diamond_size + tip_size + 2.0;
+
+    // Diamond above/below
+    cr.move_to(diamond_cx, diamond_cy - tip_dist);
+    cr.line_to(diamond_cx + tip_size, diamond_cy - tip_dist + tip_size);
+    cr.line_to(diamond_cx, diamond_cy - tip_dist + tip_size * 2.0);
+    cr.line_to(diamond_cx - tip_size, diamond_cy - tip_dist + tip_size);
+    cr.close_path();
+    cr.fill().ok();
+
+    cr.move_to(diamond_cx, diamond_cy + tip_dist);
+    cr.line_to(diamond_cx + tip_size, diamond_cy + tip_dist - tip_size);
+    cr.line_to(diamond_cx, diamond_cy + tip_dist - tip_size * 2.0);
+    cr.line_to(diamond_cx - tip_size, diamond_cy + tip_dist - tip_size);
+    cr.close_path();
+    cr.fill().ok();
+
+    // Draw horizontal lines extending from corner
+    for i in 0..3 {
+        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
+        cr.move_to(corner_x, y_offset);
+        cr.line_to(corner_x + h_dir * size, y_offset);
+    }
+    cr.stroke().ok();
+
+    // Draw vertical lines extending from corner
+    for i in 0..3 {
+        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
+        cr.move_to(x_offset, corner_y);
+        cr.line_to(x_offset, corner_y + v_dir * size);
+    }
+    cr.stroke().ok();
+
+    cr.restore().ok();
+}
+
+/// Draw Art Deco double-line L bracket corner
+fn draw_art_deco_double_bracket(
+    cr: &Context,
+    corner_x: f64,
+    corner_y: f64,
+    size: f64,
+    flip_h: bool,
+    flip_v: bool,
+    color: &Color,
+    line_width: f64,
+) {
+    cr.save().ok();
+    cr.set_source_rgba(color.r, color.g, color.b, color.a);
+    cr.set_line_width(line_width);
+
+    let h_dir = if flip_h { -1.0 } else { 1.0 };
+    let v_dir = if flip_v { -1.0 } else { 1.0 };
+
+    let line_spacing = size * 0.12;
+
+    // Draw outer L bracket
+    cr.move_to(corner_x + h_dir * size, corner_y);
+    cr.line_to(corner_x, corner_y);
+    cr.line_to(corner_x, corner_y + v_dir * size);
+    cr.stroke().ok();
+
+    // Draw inner L bracket (offset)
+    cr.move_to(corner_x + h_dir * (size - line_spacing * 2.0), corner_y + v_dir * line_spacing);
+    cr.line_to(corner_x + h_dir * line_spacing, corner_y + v_dir * line_spacing);
+    cr.line_to(corner_x + h_dir * line_spacing, corner_y + v_dir * (size - line_spacing * 2.0));
+    cr.stroke().ok();
+
+    cr.restore().ok();
+}
+
+/// Draw Art Deco geometric stack corner (nested squares with lines)
+fn draw_art_deco_geometric_stack(
+    cr: &Context,
+    corner_x: f64,
+    corner_y: f64,
+    size: f64,
+    flip_h: bool,
+    flip_v: bool,
+    color: &Color,
+    line_width: f64,
+) {
+    cr.save().ok();
+    cr.set_source_rgba(color.r, color.g, color.b, color.a);
+    cr.set_line_width(line_width);
+
+    let h_dir = if flip_h { -1.0 } else { 1.0 };
+    let v_dir = if flip_v { -1.0 } else { 1.0 };
+
+    let sq_size = size * 0.18;
+    let sq_cx = corner_x + h_dir * size * 0.35;
+    let sq_cy = corner_y + v_dir * size * 0.35;
+    let line_spacing = size * 0.08;
+
+    // Draw outer square (rotated 45 degrees - diamond orientation)
+    cr.move_to(sq_cx, sq_cy - sq_size);
+    cr.line_to(sq_cx + sq_size, sq_cy);
+    cr.line_to(sq_cx, sq_cy + sq_size);
+    cr.line_to(sq_cx - sq_size, sq_cy);
+    cr.close_path();
+    cr.stroke().ok();
+
+    // Draw inner square
+    let inner_sq = sq_size * 0.55;
+    cr.move_to(sq_cx, sq_cy - inner_sq);
+    cr.line_to(sq_cx + inner_sq, sq_cy);
+    cr.line_to(sq_cx, sq_cy + inner_sq);
+    cr.line_to(sq_cx - inner_sq, sq_cy);
+    cr.close_path();
+    cr.stroke().ok();
+
+    // Draw horizontal lines extending from corner
+    for i in 0..3 {
+        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
+        cr.move_to(corner_x, y_offset);
+        cr.line_to(corner_x + h_dir * size, y_offset);
+    }
+    cr.stroke().ok();
+
+    // Draw vertical lines extending from corner
+    for i in 0..3 {
+        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
+        cr.move_to(x_offset, corner_y);
+        cr.line_to(x_offset, corner_y + v_dir * size);
+    }
     cr.stroke().ok();
 
     cr.restore().ok();
@@ -1080,95 +1145,24 @@ fn draw_corner_decorations(
             );
         }
         CornerStyle::Ziggurat => {
-            // Draw stepped corners
-            draw_ziggurat_corner(
-                cr,
-                x,
-                y,
-                size,
-                4,
-                true,
-                false,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            draw_ziggurat_corner(
-                cr,
-                x + w - size,
-                y,
-                size,
-                4,
-                false,
-                true,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            draw_ziggurat_corner(
-                cr,
-                x + w - size,
-                y + h - size,
-                size,
-                4,
-                false,
-                false,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            draw_ziggurat_corner(
-                cr,
-                x,
-                y + h - size,
-                size,
-                4,
-                false,
-                false,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
+            // Top-left: stair steps going right and down
+            draw_art_deco_ziggurat_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            // Top-right: stair steps going left and down
+            draw_art_deco_ziggurat_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            // Bottom-right: stair steps going left and up
+            draw_art_deco_ziggurat_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            // Bottom-left: stair steps going right and up
+            draw_art_deco_ziggurat_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::Diamond => {
-            let diamond_size = size / 3.0;
-            // Corner diamonds
-            draw_diamond(
-                cr,
-                x + size / 2.0,
-                y + size / 2.0,
-                diamond_size,
-                &accent_color,
-                true,
-            );
-            draw_diamond(
-                cr,
-                x + w - size / 2.0,
-                y + size / 2.0,
-                diamond_size,
-                &accent_color,
-                true,
-            );
-            draw_diamond(
-                cr,
-                x + w - size / 2.0,
-                y + h - size / 2.0,
-                diamond_size,
-                &accent_color,
-                true,
-            );
-            draw_diamond(
-                cr,
-                x + size / 2.0,
-                y + h - size / 2.0,
-                diamond_size,
-                &accent_color,
-                true,
-            );
+            // Top-left
+            draw_art_deco_diamond_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            // Top-right
+            draw_art_deco_diamond_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            // Bottom-right
+            draw_art_deco_diamond_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            // Bottom-left
+            draw_art_deco_diamond_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::Bracket => {
             cr.save().ok();
@@ -1180,245 +1174,108 @@ fn draw_corner_decorations(
             );
             cr.set_line_width(config.accent_width);
 
-            // Top-left
-            cr.move_to(x, y + size);
-            cr.line_to(x, y);
-            cr.line_to(x + size, y);
+            let line_spacing = size * 0.12;
+            let num_lines = 4;
+
+            // Top-left - multiple parallel L-brackets
+            for i in 0..num_lines {
+                let offset = i as f64 * line_spacing;
+                let arm_len = size - offset * 1.5;
+                if arm_len > 0.0 {
+                    cr.move_to(x + offset, y + arm_len);
+                    cr.line_to(x + offset, y + offset);
+                    cr.line_to(x + arm_len, y + offset);
+                }
+            }
             cr.stroke().ok();
 
             // Top-right
-            cr.move_to(x + w - size, y);
-            cr.line_to(x + w, y);
-            cr.line_to(x + w, y + size);
+            for i in 0..num_lines {
+                let offset = i as f64 * line_spacing;
+                let arm_len = size - offset * 1.5;
+                if arm_len > 0.0 {
+                    cr.move_to(x + w - arm_len, y + offset);
+                    cr.line_to(x + w - offset, y + offset);
+                    cr.line_to(x + w - offset, y + arm_len);
+                }
+            }
             cr.stroke().ok();
 
             // Bottom-right
-            cr.move_to(x + w, y + h - size);
-            cr.line_to(x + w, y + h);
-            cr.line_to(x + w - size, y + h);
+            for i in 0..num_lines {
+                let offset = i as f64 * line_spacing;
+                let arm_len = size - offset * 1.5;
+                if arm_len > 0.0 {
+                    cr.move_to(x + w - offset, y + h - arm_len);
+                    cr.line_to(x + w - offset, y + h - offset);
+                    cr.line_to(x + w - arm_len, y + h - offset);
+                }
+            }
             cr.stroke().ok();
 
             // Bottom-left
-            cr.move_to(x + size, y + h);
-            cr.line_to(x, y + h);
-            cr.line_to(x, y + h - size);
+            for i in 0..num_lines {
+                let offset = i as f64 * line_spacing;
+                let arm_len = size - offset * 1.5;
+                if arm_len > 0.0 {
+                    cr.move_to(x + arm_len, y + h - offset);
+                    cr.line_to(x + offset, y + h - offset);
+                    cr.line_to(x + offset, y + h - arm_len);
+                }
+            }
             cr.stroke().ok();
 
             cr.restore().ok();
         }
         CornerStyle::Hexagon => {
-            // Top-left (pointing into corner)
-            draw_hexagon_corner(
-                cr,
-                x + size * 0.4,
-                y + size * 0.4,
-                size,
-                std::f64::consts::FRAC_PI_4 * 5.0, // 225 degrees
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_hexagon_corner(
-                cr,
-                x + w - size * 0.4,
-                y + size * 0.4,
-                size,
-                -std::f64::consts::FRAC_PI_4, // -45 degrees
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_hexagon_corner(
-                cr,
-                x + w - size * 0.4,
-                y + h - size * 0.4,
-                size,
-                std::f64::consts::FRAC_PI_4, // 45 degrees
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_hexagon_corner(
-                cr,
-                x + size * 0.4,
-                y + h - size * 0.4,
-                size,
-                std::f64::consts::FRAC_PI_4 * 3.0, // 135 degrees
-                &accent_color,
-                config.accent_width,
-            );
+            // Top-left: lines go right and down
+            draw_art_deco_hexagon_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            // Top-right: lines go left and down
+            draw_art_deco_hexagon_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            // Bottom-right: lines go left and up
+            draw_art_deco_hexagon_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            // Bottom-left: lines go right and up
+            draw_art_deco_hexagon_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::Octagon => {
             // Top-left
-            draw_octagon_corner(
-                cr,
-                x + size * 0.4,
-                y + size * 0.4,
-                size,
-                std::f64::consts::FRAC_PI_4 * 5.0,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_octagon_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
             // Top-right
-            draw_octagon_corner(
-                cr,
-                x + w - size * 0.4,
-                y + size * 0.4,
-                size,
-                -std::f64::consts::FRAC_PI_4,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_octagon_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
             // Bottom-right
-            draw_octagon_corner(
-                cr,
-                x + w - size * 0.4,
-                y + h - size * 0.4,
-                size,
-                std::f64::consts::FRAC_PI_4,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_octagon_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
             // Bottom-left
-            draw_octagon_corner(
-                cr,
-                x + size * 0.4,
-                y + h - size * 0.4,
-                size,
-                std::f64::consts::FRAC_PI_4 * 3.0,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_octagon_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::Circle => {
             // Top-left
-            draw_circle_corner(
-                cr,
-                x + size * 0.35,
-                y + size * 0.35,
-                size,
-                std::f64::consts::FRAC_PI_4 * 5.0,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_circle_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
             // Top-right
-            draw_circle_corner(
-                cr,
-                x + w - size * 0.35,
-                y + size * 0.35,
-                size,
-                -std::f64::consts::FRAC_PI_4,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_circle_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
             // Bottom-right
-            draw_circle_corner(
-                cr,
-                x + w - size * 0.35,
-                y + h - size * 0.35,
-                size,
-                std::f64::consts::FRAC_PI_4,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_circle_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
             // Bottom-left
-            draw_circle_corner(
-                cr,
-                x + size * 0.35,
-                y + h - size * 0.35,
-                size,
-                std::f64::consts::FRAC_PI_4 * 3.0,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_circle_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::DoubleBracket => {
             // Top-left
-            draw_double_bracket_corner(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_double_bracket(cr, x, y, size, false, false, &accent_color, config.accent_width);
             // Top-right
-            draw_double_bracket_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_double_bracket(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
             // Bottom-right
-            draw_double_bracket_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_double_bracket(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
             // Bottom-left
-            draw_double_bracket_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_double_bracket(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::GeometricStack => {
             // Top-left
-            draw_geometric_stack_corner(
-                cr,
-                x + size * 0.35,
-                y + size * 0.35,
-                size,
-                std::f64::consts::FRAC_PI_4 * 5.0,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_geometric_stack(cr, x, y, size, false, false, &accent_color, config.accent_width);
             // Top-right
-            draw_geometric_stack_corner(
-                cr,
-                x + w - size * 0.35,
-                y + size * 0.35,
-                size,
-                -std::f64::consts::FRAC_PI_4,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_geometric_stack(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
             // Bottom-right
-            draw_geometric_stack_corner(
-                cr,
-                x + w - size * 0.35,
-                y + h - size * 0.35,
-                size,
-                std::f64::consts::FRAC_PI_4,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_geometric_stack(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
             // Bottom-left
-            draw_geometric_stack_corner(
-                cr,
-                x + size * 0.35,
-                y + h - size * 0.35,
-                size,
-                std::f64::consts::FRAC_PI_4 * 3.0,
-                &accent_color,
-                config.accent_width,
-            );
+            draw_art_deco_geometric_stack(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
         }
         CornerStyle::None => {}
     }
@@ -1764,6 +1621,294 @@ fn draw_divider(
                     cr.move_to(x + offset, sy);
                     cr.line_to(x + offset, sy + step_size);
                 }
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::DiamondCluster => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let size = 8.0;
+
+            // Draw stacked diamonds (3 overlapping)
+            draw_diamond(cr, cx, cy, size, &divider_color, false);
+            draw_diamond(cr, cx - size * 0.7, cy, size * 0.6, &divider_color, false);
+            draw_diamond(cr, cx + size * 0.7, cy, size * 0.6, &divider_color, false);
+
+            // Extending lines
+            if horizontal {
+                cr.move_to(x, y);
+                cr.line_to(cx - size * 1.5, y);
+                cr.move_to(cx + size * 1.5, y);
+                cr.line_to(x + length, y);
+            } else {
+                cr.move_to(x, y);
+                cr.line_to(x, cy - size * 1.5);
+                cr.move_to(x, cy + size * 1.5);
+                cr.line_to(x, y + length);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::Crescent => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let radius = 6.0;
+
+            // Draw crescent moon
+            cr.arc(cx, cy, radius, 0.2, std::f64::consts::PI - 0.2);
+            cr.stroke().ok();
+
+            // Inner arc to create crescent effect
+            cr.arc(cx, cy - 2.0, radius * 0.7, 0.3, std::f64::consts::PI - 0.3);
+            cr.stroke().ok();
+
+            // Dots on sides
+            let dot_dist = radius + 8.0;
+            cr.arc(cx - dot_dist, cy, 2.0, 0.0, std::f64::consts::TAU);
+            cr.fill().ok();
+            cr.arc(cx + dot_dist, cy, 2.0, 0.0, std::f64::consts::TAU);
+            cr.fill().ok();
+
+            // Extending lines
+            if horizontal {
+                cr.move_to(x, y);
+                cr.line_to(cx - dot_dist - 6.0, y);
+                cr.move_to(cx + dot_dist + 6.0, y);
+                cr.line_to(x + length, y);
+            } else {
+                cr.move_to(x, y);
+                cr.line_to(x, cy - dot_dist - 6.0);
+                cr.move_to(x, cy + dot_dist + 6.0);
+                cr.line_to(x, y + length);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::ArrowDiamond => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let size = 6.0;
+
+            // Center diamond
+            draw_diamond(cr, cx, cy, size, &divider_color, false);
+
+            if horizontal {
+                // Left arrow
+                cr.move_to(x, y);
+                cr.line_to(cx - size - 10.0, y);
+                cr.line_to(cx - size - 5.0, y - 4.0);
+                cr.move_to(cx - size - 10.0, y);
+                cr.line_to(cx - size - 5.0, y + 4.0);
+
+                // Right arrow
+                cr.move_to(x + length, y);
+                cr.line_to(cx + size + 10.0, y);
+                cr.line_to(cx + size + 5.0, y - 4.0);
+                cr.move_to(cx + size + 10.0, y);
+                cr.line_to(cx + size + 5.0, y + 4.0);
+            } else {
+                // Top arrow
+                cr.move_to(x, y);
+                cr.line_to(x, cy - size - 10.0);
+                cr.line_to(x - 4.0, cy - size - 5.0);
+                cr.move_to(x, cy - size - 10.0);
+                cr.line_to(x + 4.0, cy - size - 5.0);
+
+                // Bottom arrow
+                cr.move_to(x, y + length);
+                cr.line_to(x, cy + size + 10.0);
+                cr.line_to(x - 4.0, cy + size + 5.0);
+                cr.move_to(x, cy + size + 10.0);
+                cr.line_to(x + 4.0, cy + size + 5.0);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::CircleChain => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let radius = 4.0;
+            let spacing = 12.0;
+
+            // Three circles
+            cr.arc(cx - spacing, cy, radius, 0.0, std::f64::consts::TAU);
+            cr.stroke().ok();
+            cr.arc(cx, cy, radius, 0.0, std::f64::consts::TAU);
+            cr.stroke().ok();
+            cr.arc(cx + spacing, cy, radius, 0.0, std::f64::consts::TAU);
+            cr.stroke().ok();
+
+            // Center dots
+            cr.arc(cx - spacing, cy, 1.5, 0.0, std::f64::consts::TAU);
+            cr.fill().ok();
+            cr.arc(cx, cy, 1.5, 0.0, std::f64::consts::TAU);
+            cr.fill().ok();
+            cr.arc(cx + spacing, cy, 1.5, 0.0, std::f64::consts::TAU);
+            cr.fill().ok();
+
+            // Extending lines
+            if horizontal {
+                cr.move_to(x, y);
+                cr.line_to(cx - spacing - radius - 4.0, y);
+                cr.move_to(cx + spacing + radius + 4.0, y);
+                cr.line_to(x + length, y);
+            } else {
+                cr.move_to(x, y);
+                cr.line_to(x, cy - spacing - radius - 4.0);
+                cr.move_to(x, cy + spacing + radius + 4.0);
+                cr.line_to(x, y + length);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::CrossedLines => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let cross_len = 20.0;
+            let gap = 3.0;
+
+            if horizontal {
+                // Crossed pattern in center
+                cr.move_to(cx - cross_len, y - gap);
+                cr.line_to(cx + cross_len, y + gap);
+                cr.move_to(cx - cross_len, y + gap);
+                cr.line_to(cx + cross_len, y - gap);
+                cr.stroke().ok();
+
+                // Extending lines (double)
+                cr.move_to(x, y - gap);
+                cr.line_to(cx - cross_len - 4.0, y - gap);
+                cr.move_to(x, y + gap);
+                cr.line_to(cx - cross_len - 4.0, y + gap);
+                cr.move_to(cx + cross_len + 4.0, y - gap);
+                cr.line_to(x + length, y - gap);
+                cr.move_to(cx + cross_len + 4.0, y + gap);
+                cr.line_to(x + length, y + gap);
+            } else {
+                cr.move_to(x - gap, cy - cross_len);
+                cr.line_to(x + gap, cy + cross_len);
+                cr.move_to(x + gap, cy - cross_len);
+                cr.line_to(x - gap, cy + cross_len);
+                cr.stroke().ok();
+
+                cr.move_to(x - gap, y);
+                cr.line_to(x - gap, cy - cross_len - 4.0);
+                cr.move_to(x + gap, y);
+                cr.line_to(x + gap, cy - cross_len - 4.0);
+                cr.move_to(x - gap, cy + cross_len + 4.0);
+                cr.line_to(x - gap, y + length);
+                cr.move_to(x + gap, cy + cross_len + 4.0);
+                cr.line_to(x + gap, y + length);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::FleurDeLis => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let size = 8.0;
+
+            // Fleur-de-lis shape (simplified leaf/teardrop)
+            cr.move_to(cx, cy - size);
+            cr.curve_to(cx + size * 0.6, cy - size * 0.3, cx + size * 0.4, cy + size * 0.5, cx, cy + size);
+            cr.curve_to(cx - size * 0.4, cy + size * 0.5, cx - size * 0.6, cy - size * 0.3, cx, cy - size);
+            cr.stroke().ok();
+
+            // Small curls on sides
+            cr.arc(cx - size * 0.8, cy, 3.0, -0.5, std::f64::consts::PI + 0.5);
+            cr.stroke().ok();
+            cr.arc(cx + size * 0.8, cy, 3.0, -std::f64::consts::PI - 0.5, 0.5);
+            cr.stroke().ok();
+
+            // Extending lines
+            if horizontal {
+                cr.move_to(x, y);
+                cr.line_to(cx - size - 8.0, y);
+                cr.move_to(cx + size + 8.0, y);
+                cr.line_to(x + length, y);
+            } else {
+                cr.move_to(x, y);
+                cr.line_to(x, cy - size - 8.0);
+                cr.move_to(x, cy + size + 8.0);
+                cr.line_to(x, y + length);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::Heartbeat => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let peak = 10.0;
+            let width = 30.0;
+
+            if horizontal {
+                // Zigzag heartbeat pattern
+                cr.move_to(cx - width, y);
+                cr.line_to(cx - width * 0.6, y);
+                cr.line_to(cx - width * 0.3, y - peak);
+                cr.line_to(cx, y + peak * 0.5);
+                cr.line_to(cx + width * 0.3, y - peak);
+                cr.line_to(cx + width * 0.6, y);
+                cr.line_to(cx + width, y);
+                cr.stroke().ok();
+
+                // Small diamonds at ends
+                draw_diamond(cr, cx - width - 6.0, y, 4.0, &divider_color, true);
+                draw_diamond(cr, cx + width + 6.0, y, 4.0, &divider_color, true);
+
+                // Extending lines
+                cr.move_to(x, y);
+                cr.line_to(cx - width - 12.0, y);
+                cr.move_to(cx + width + 12.0, y);
+                cr.line_to(x + length, y);
+            } else {
+                cr.move_to(x, cy - width);
+                cr.line_to(x, cy - width * 0.6);
+                cr.line_to(x - peak, cy - width * 0.3);
+                cr.line_to(x + peak * 0.5, cy);
+                cr.line_to(x - peak, cy + width * 0.3);
+                cr.line_to(x, cy + width * 0.6);
+                cr.line_to(x, cy + width);
+                cr.stroke().ok();
+
+                draw_diamond(cr, x, cy - width - 6.0, 4.0, &divider_color, true);
+                draw_diamond(cr, x, cy + width + 6.0, 4.0, &divider_color, true);
+
+                cr.move_to(x, y);
+                cr.line_to(x, cy - width - 12.0);
+                cr.move_to(x, cy + width + 12.0);
+                cr.line_to(x, y + length);
+            }
+            cr.stroke().ok();
+        }
+        DividerStyle::DiamondGrid => {
+            let cx = if horizontal { x + length / 2.0 } else { x };
+            let cy = if horizontal { y } else { y + length / 2.0 };
+            let size = 10.0;
+
+            // Large central diamond
+            draw_diamond(cr, cx, cy, size, &divider_color, false);
+            // Inner diamond
+            draw_diamond(cr, cx, cy, size * 0.5, &divider_color, false);
+
+            // Corner diamonds
+            draw_diamond(cr, cx - size, cy, size * 0.4, &divider_color, true);
+            draw_diamond(cr, cx + size, cy, size * 0.4, &divider_color, true);
+            draw_diamond(cr, cx, cy - size, size * 0.4, &divider_color, true);
+            draw_diamond(cr, cx, cy + size, size * 0.4, &divider_color, true);
+
+            // Circles at outer positions
+            let circle_dist = size + 8.0;
+            cr.arc(cx - circle_dist, cy, 2.5, 0.0, std::f64::consts::TAU);
+            cr.stroke().ok();
+            cr.arc(cx + circle_dist, cy, 2.5, 0.0, std::f64::consts::TAU);
+            cr.stroke().ok();
+
+            // Extending lines
+            if horizontal {
+                cr.move_to(x, y);
+                cr.line_to(cx - circle_dist - 6.0, y);
+                cr.move_to(cx + circle_dist + 6.0, y);
+                cr.line_to(x + length, y);
+            } else {
+                cr.move_to(x, y);
+                cr.line_to(x, cy - circle_dist - 6.0);
+                cr.move_to(x, cy + circle_dist + 6.0);
+                cr.line_to(x, y + length);
             }
             cr.stroke().ok();
         }
