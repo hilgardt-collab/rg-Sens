@@ -124,6 +124,13 @@ pub struct PolygonConfig {
     pub num_sides: u32, // Number of sides (3=triangle, 4=square, 5=pentagon, 6=hexagon, etc.)
     pub rotation_angle: f64, // Rotation angle in degrees
     pub colors: Vec<ColorSource>, // Colors that alternate for tiles (theme-aware)
+    /// Background color drawn behind polygons (fills gaps)
+    #[serde(default = "default_polygon_background")]
+    pub background_color: ColorSource,
+}
+
+fn default_polygon_background() -> ColorSource {
+    ColorSource::custom(Color::new(0.1, 0.1, 0.12, 1.0))
 }
 
 impl Default for PolygonConfig {
@@ -136,6 +143,7 @@ impl Default for PolygonConfig {
                 ColorSource::custom(Color::new(0.2, 0.2, 0.25, 1.0)),
                 ColorSource::custom(Color::new(0.15, 0.15, 0.2, 1.0)),
             ],
+            background_color: default_polygon_background(),
         }
     }
 }
@@ -546,6 +554,12 @@ fn render_polygon_background(
     let default_theme = ComboThemeConfig::default();
     let theme = theme.unwrap_or(&default_theme);
     let resolved_colors: Vec<Color> = config.colors.iter().map(|cs| cs.resolve(theme)).collect();
+
+    // Fill background color first (fills gaps between polygons)
+    let bg_color = config.background_color.resolve(theme);
+    bg_color.apply_to_cairo(cr);
+    cr.rectangle(0.0, 0.0, width, height);
+    cr.fill()?;
 
     let size = config.tile_size as f64;
     let sides = config.num_sides.max(3); // Minimum 3 sides

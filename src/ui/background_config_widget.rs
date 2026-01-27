@@ -2,8 +2,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, DrawingArea, DropDown, Entry, Label, Orientation, Scale, SpinButton,
-    Stack, StringList,
+    Box as GtkBox, Button, DropDown, Entry, Label, Orientation, Scale, SizeGroup,
+    SizeGroupMode, SpinButton, Stack, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,7 +22,6 @@ use crate::ui::GradientEditor;
 pub struct BackgroundConfigWidget {
     container: GtkBox,
     config: Rc<RefCell<BackgroundConfig>>,
-    preview: DrawingArea,
     config_stack: Stack,
     type_dropdown: DropDown,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
@@ -46,6 +45,7 @@ pub struct BackgroundConfigWidget {
     // Polygon color selectors (theme-aware)
     polygon_color1_selector: Rc<ThemeColorSelector>,
     polygon_color2_selector: Rc<ThemeColorSelector>,
+    polygon_bg_color_selector: Rc<ThemeColorSelector>,
     // Function to update the preview (using Picture instead of DrawingArea to avoid GL issues)
     update_preview: Rc<dyn Fn()>,
 }
@@ -80,11 +80,9 @@ impl BackgroundConfigWidget {
         container.append(&type_box);
 
         // Preview using Picture + MemoryTexture (no DrawingArea)
-        let preview = DrawingArea::new(); // Keep for struct but don't use
-
         let preview_picture = gtk4::Picture::new();
-        preview_picture.set_content_fit(gtk4::ContentFit::Fill);
-        preview_picture.set_size_request(200, 150);
+        preview_picture.set_content_fit(gtk4::ContentFit::Contain);
+        preview_picture.set_size_request(200, 200);
         preview_picture.set_hexpand(true);
 
         let preview_picture_rc = Rc::new(preview_picture.clone());
@@ -96,28 +94,27 @@ impl BackgroundConfigWidget {
             Rc::new(move || {
                 use crate::ui::background::render_background_with_theme;
 
-                let width = 200i32;
-                let height = 150i32;
+                let size = 200i32;
 
-                let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, size, size)
                     .expect("Failed to create surface");
                 {
                     let cr = cairo::Context::new(&surface).expect("Failed to create context");
-                    render_checkerboard(&cr, width as f64, height as f64);
+                    render_checkerboard(&cr, size as f64, size as f64);
                     let cfg = config.borrow();
                     let theme = theme_config.borrow();
-                    let _ = render_background_with_theme(&cr, &cfg, width as f64, height as f64, Some(&theme));
+                    let _ = render_background_with_theme(&cr, &cfg, size as f64, size as f64, Some(&theme));
                 }
                 surface.flush();
 
                 let data = surface.data().expect("Failed to get surface data");
                 let bytes = gtk4::glib::Bytes::from(&data[..]);
                 let texture = gtk4::gdk::MemoryTexture::new(
-                    width,
-                    height,
+                    size,
+                    size,
                     gtk4::gdk::MemoryFormat::B8g8r8a8Premultiplied,
                     &bytes,
-                    (width * 4) as usize,
+                    (size * 4) as usize,
                 );
                 picture.set_paintable(Some(&texture));
             })
@@ -168,11 +165,11 @@ impl BackgroundConfigWidget {
         let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
         let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
         let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let polygon_bg_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
 
         Self {
             container,
             config,
-            preview,
             config_stack,
             type_dropdown,
             on_change,
@@ -192,6 +189,7 @@ impl BackgroundConfigWidget {
             theme_config,
             polygon_color1_selector,
             polygon_color2_selector,
+            polygon_bg_color_selector,
             update_preview,
         }
     }
@@ -213,7 +211,6 @@ impl BackgroundConfigWidget {
         let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
 
         // Dummy widgets for struct fields
-        let preview = DrawingArea::new();
         let config_stack = Stack::new();
         let type_options = StringList::new(&["Solid Color"]);
         let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
@@ -233,12 +230,12 @@ impl BackgroundConfigWidget {
         let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
         let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
         let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let polygon_bg_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::new(0.1, 0.1, 0.12, 1.0))));
         let update_preview: Rc<dyn Fn()> = Rc::new(|| {});
 
         Self {
             container,
             config,
-            preview,
             config_stack,
             type_dropdown,
             on_change,
@@ -258,6 +255,7 @@ impl BackgroundConfigWidget {
             theme_config,
             polygon_color1_selector,
             polygon_color2_selector,
+            polygon_bg_color_selector,
             update_preview,
         }
     }
@@ -293,62 +291,62 @@ impl BackgroundConfigWidget {
         container.append(&type_box);
 
         // Preview using Picture + Cairo ImageSurface (avoids GL renderer issues with DrawingArea)
-        let preview = DrawingArea::new(); // Keep for compatibility but don't add to container
-        preview.set_content_height(150);
-        preview.set_content_width(200);
-
-        // Use a Picture widget instead of DrawingArea to avoid GL renderer issues
         let preview_picture = gtk4::Picture::new();
-        preview_picture.set_content_fit(gtk4::ContentFit::Fill);
-        preview_picture.set_size_request(200, 150);
+        preview_picture.set_content_fit(gtk4::ContentFit::Contain);
+        preview_picture.set_size_request(200, 200);
         preview_picture.set_hexpand(true);
 
-        // Store picture for updates using weak reference to avoid cycles
-        let preview_picture_rc = Rc::new(preview_picture.clone());
-        let preview_picture_weak = Rc::downgrade(&preview_picture_rc);
-
         // Function to update the preview picture
-        // Uses weak references to allow proper cleanup when dialog closes
-        let update_preview = {
+        let update_preview: Rc<dyn Fn()> = {
             let config = config.clone();
             let theme_config = theme_config.clone();
-            let picture_weak = preview_picture_weak.clone();
+            let picture = preview_picture.clone();
             Rc::new(move || {
-                // Only update if picture still exists
-                let Some(picture) = picture_weak.upgrade() else {
-                    return;
-                };
-
                 use crate::ui::background::render_background_with_theme;
 
-                let width = 200i32;
-                let height = 150i32;
+                let size = 200i32;
 
                 // Create Cairo ImageSurface
-                let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                    .expect("Failed to create surface");
+                let mut surface = match cairo::ImageSurface::create(cairo::Format::ARgb32, size, size) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("Failed to create surface: {}", e);
+                        return;
+                    }
+                };
                 {
-                    let cr = cairo::Context::new(&surface).expect("Failed to create context");
+                    let cr = match cairo::Context::new(&surface) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log::error!("Failed to create context: {}", e);
+                            return;
+                        }
+                    };
 
                     // Render checkerboard pattern
-                    render_checkerboard(&cr, width as f64, height as f64);
+                    render_checkerboard(&cr, size as f64, size as f64);
 
                     // Render background
                     let cfg = config.borrow();
                     let theme = theme_config.borrow();
-                    let _ = render_background_with_theme(&cr, &cfg, width as f64, height as f64, Some(&theme));
+                    let _ = render_background_with_theme(&cr, &cfg, size as f64, size as f64, Some(&theme));
                 }
-                surface.flush();
 
                 // Convert to GdkTexture using MemoryTexture
-                let data = surface.data().expect("Failed to get surface data");
+                let data = match surface.data() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        log::error!("Failed to get surface data: {}", e);
+                        return;
+                    }
+                };
                 let bytes = gtk4::glib::Bytes::from(&data[..]);
                 let texture = gtk4::gdk::MemoryTexture::new(
-                    width,
-                    height,
+                    size,
+                    size,
                     gtk4::gdk::MemoryFormat::B8g8r8a8Premultiplied,
                     &bytes,
-                    (width * 4) as usize,
+                    (size * 4) as usize,
                 );
 
                 picture.set_paintable(Some(&texture));
@@ -366,26 +364,26 @@ impl BackgroundConfigWidget {
 
         // Solid color configuration
         let (solid_page, solid_color_selector) =
-            Self::create_solid_config(&config, &preview, &on_change, &theme_config);
+            Self::create_solid_config(&config, &update_preview, &on_change, &theme_config);
         config_stack.add_named(&solid_page, Some("solid"));
 
         // Linear gradient configuration
         let (linear_page, linear_gradient_editor) =
-            Self::create_linear_gradient_config(&config, &preview, &on_change);
+            Self::create_linear_gradient_config(&config, &update_preview, &on_change);
         config_stack.add_named(&linear_page, Some("linear_gradient"));
 
         // Radial gradient configuration
         let (radial_page, radial_gradient_editor) =
-            Self::create_radial_gradient_config(&config, &preview, &on_change);
+            Self::create_radial_gradient_config(&config, &update_preview, &on_change);
         config_stack.add_named(&radial_page, Some("radial_gradient"));
 
         // Image configuration
-        let image_page = Self::create_image_config(&config, &preview, &on_change);
+        let image_page = Self::create_image_config(&config, &update_preview, &on_change);
         config_stack.add_named(&image_page, Some("image"));
 
         // Polygon configuration
-        let (polygon_page, polygon_color1_selector, polygon_color2_selector) =
-            Self::create_polygon_config(&config, &preview, &on_change, &theme_config);
+        let (polygon_page, polygon_color1_selector, polygon_color2_selector, polygon_bg_color_selector) =
+            Self::create_polygon_config(&config, &update_preview, &on_change, &theme_config);
         config_stack.add_named(&polygon_page, Some("polygons"));
 
         // Initialize source fields storage and syncing flag
@@ -405,7 +403,7 @@ impl BackgroundConfigWidget {
             indicator_field_dropdown_handler_id,
         ) = Self::create_indicator_config(
             &config,
-            &preview,
+            &update_preview,
             &on_change,
             &syncing_indicator_dropdown,
         );
@@ -416,7 +414,7 @@ impl BackgroundConfigWidget {
         // Connect type selector
         let config_clone = config.clone();
         let stack_clone = config_stack.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         // Clone indicator widgets for syncing when switching to Indicator type
         let indicator_field_dropdown_clone = indicator_field_dropdown.clone();
@@ -426,6 +424,7 @@ impl BackgroundConfigWidget {
 
         let type_dropdown_handler_id = type_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
+            log::info!("Background type dropdown changed to: {}", selected);
             let page_name = match selected {
                 0 => "solid",
                 1 => "linear_gradient",
@@ -512,7 +511,7 @@ impl BackgroundConfigWidget {
                 }
             }
 
-            preview_clone.queue_draw();
+            update_preview_clone();
         });
 
         // Note: indicator_field_dropdown_handler_id is captured in the handler closure
@@ -522,7 +521,6 @@ impl BackgroundConfigWidget {
         Self {
             container,
             config,
-            preview,
             config_stack,
             type_dropdown,
             on_change,
@@ -542,13 +540,14 @@ impl BackgroundConfigWidget {
             theme_config,
             polygon_color1_selector,
             polygon_color2_selector,
+            polygon_bg_color_selector,
             update_preview,
         }
     }
 
     fn create_solid_config(
         config: &Rc<RefCell<BackgroundConfig>>,
-        preview: &DrawingArea,
+        update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         theme_config: &Rc<RefCell<ComboThemeConfig>>,
     ) -> (GtkBox, Rc<ThemeColorSelector>) {
@@ -570,13 +569,13 @@ impl BackgroundConfigWidget {
         page.append(&color_box);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         color_selector.set_on_change(move |new_color_source| {
             config_clone.borrow_mut().background = BackgroundType::Solid {
                 color: new_color_source,
             };
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
@@ -587,7 +586,7 @@ impl BackgroundConfigWidget {
 
     fn create_linear_gradient_config(
         config: &Rc<RefCell<BackgroundConfig>>,
-        preview: &DrawingArea,
+        update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     ) -> (GtkBox, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -621,7 +620,7 @@ impl BackgroundConfigWidget {
         });
 
         let config_for_paste = config.clone();
-        let preview_for_paste = preview.clone();
+        let update_preview_for_paste = update_preview.clone();
         let on_change_for_paste = on_change.clone();
         let gradient_editor_for_paste = gradient_editor_ref.clone();
         paste_gradient_btn.connect_clicked(move |_| {
@@ -637,7 +636,7 @@ impl BackgroundConfigWidget {
                         // Update the gradient editor widget to reflect pasted stops
                         gradient_editor_for_paste.set_stops(stops);
 
-                        preview_for_paste.queue_draw();
+                        update_preview_for_paste();
 
                         if let Some(callback) = on_change_for_paste.borrow().as_ref() {
                             callback();
@@ -657,7 +656,7 @@ impl BackgroundConfigWidget {
 
         // Set up change handler
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         let gradient_editor_clone = gradient_editor_ref.clone();
 
@@ -666,7 +665,7 @@ impl BackgroundConfigWidget {
             let mut cfg = config_clone.borrow_mut();
             cfg.background = BackgroundType::LinearGradient(grad_config);
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
 
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -679,7 +678,7 @@ impl BackgroundConfigWidget {
 
     fn create_radial_gradient_config(
         config: &Rc<RefCell<BackgroundConfig>>,
-        preview: &DrawingArea,
+        update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     ) -> (GtkBox, Rc<GradientEditor>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -713,7 +712,7 @@ impl BackgroundConfigWidget {
         });
 
         let config_for_paste = config.clone();
-        let preview_for_paste = preview.clone();
+        let update_preview_for_paste = update_preview.clone();
         let on_change_for_paste = on_change.clone();
         let gradient_editor_for_paste = gradient_editor_ref.clone();
         paste_gradient_btn.connect_clicked(move |_| {
@@ -729,7 +728,7 @@ impl BackgroundConfigWidget {
                         // Update the gradient editor widget to reflect pasted stops
                         gradient_editor_for_paste.set_stops(stops);
 
-                        preview_for_paste.queue_draw();
+                        update_preview_for_paste();
 
                         if let Some(callback) = on_change_for_paste.borrow().as_ref() {
                             callback();
@@ -756,7 +755,7 @@ impl BackgroundConfigWidget {
         radius_scale.set_value(0.7);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
 
         radius_scale.connect_value_changed(move |scale| {
@@ -764,7 +763,7 @@ impl BackgroundConfigWidget {
             if let BackgroundType::RadialGradient(ref mut grad) = cfg.background {
                 grad.radius = scale.value();
                 drop(cfg);
-                preview_clone.queue_draw();
+                update_preview_clone();
 
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
@@ -777,7 +776,7 @@ impl BackgroundConfigWidget {
 
         // Set up change handler
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone2 = update_preview.clone();
         let on_change_clone = on_change.clone();
         let gradient_editor_clone = gradient_editor_ref.clone();
 
@@ -788,7 +787,7 @@ impl BackgroundConfigWidget {
                 grad.stops = stops;
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone2();
 
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -801,7 +800,7 @@ impl BackgroundConfigWidget {
 
     fn create_image_config(
         config: &Rc<RefCell<BackgroundConfig>>,
-        preview: &DrawingArea,
+        update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 12);
@@ -834,13 +833,13 @@ impl BackgroundConfigWidget {
         alpha_box.append(&alpha_scale);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let path_entry_clone = path_entry.clone();
         let on_change_clone = on_change.clone();
 
         browse_button.connect_clicked(move |btn| {
             let config_clone2 = config_clone.clone();
-            let preview_clone2 = preview_clone.clone();
+            let update_preview_clone2 = update_preview_clone.clone();
             let path_entry_clone2 = path_entry_clone.clone();
             let on_change_clone2 = on_change_clone.clone();
 
@@ -879,7 +878,7 @@ impl BackgroundConfigWidget {
                         if let BackgroundType::Image { ref mut path, .. } = cfg.background {
                             *path = path_str;
                             drop(cfg);
-                            preview_clone2.queue_draw();
+                            update_preview_clone2();
 
                             if let Some(callback) = on_change_clone2.borrow().as_ref() {
                                 callback();
@@ -892,7 +891,7 @@ impl BackgroundConfigWidget {
 
         // Display mode change handler
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
 
         mode_dropdown.connect_selected_notify(move |dropdown| {
@@ -913,7 +912,7 @@ impl BackgroundConfigWidget {
             {
                 *dm = display_mode;
                 drop(cfg);
-                preview_clone.queue_draw();
+                update_preview_clone();
 
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
@@ -923,7 +922,7 @@ impl BackgroundConfigWidget {
 
         // Alpha slider handler
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
 
         alpha_scale.connect_value_changed(move |scale| {
@@ -931,7 +930,7 @@ impl BackgroundConfigWidget {
             if let BackgroundType::Image { ref mut alpha, .. } = cfg.background {
                 *alpha = scale.value();
                 drop(cfg);
-                preview_clone.queue_draw();
+                update_preview_clone();
 
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
@@ -948,10 +947,10 @@ impl BackgroundConfigWidget {
 
     fn create_polygon_config(
         config: &Rc<RefCell<BackgroundConfig>>,
-        preview: &DrawingArea,
+        update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         theme_config: &Rc<RefCell<ComboThemeConfig>>,
-    ) -> (GtkBox, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>) {
+    ) -> (GtkBox, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Tile size
@@ -963,7 +962,7 @@ impl BackgroundConfigWidget {
         size_spin.set_hexpand(true);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
 
         size_spin.connect_value_changed(move |spin| {
@@ -971,7 +970,7 @@ impl BackgroundConfigWidget {
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 poly.tile_size = spin.value() as u32;
                 drop(cfg);
-                preview_clone.queue_draw();
+                update_preview_clone();
 
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
@@ -991,7 +990,7 @@ impl BackgroundConfigWidget {
         sides_spin.set_hexpand(true);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
 
         sides_spin.connect_value_changed(move |spin| {
@@ -999,7 +998,7 @@ impl BackgroundConfigWidget {
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 poly.num_sides = spin.value() as u32;
                 drop(cfg);
-                preview_clone.queue_draw();
+                update_preview_clone();
 
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
@@ -1010,7 +1009,7 @@ impl BackgroundConfigWidget {
         sides_box.append(&sides_spin);
         page.append(&sides_box);
 
-        // Rotation angle
+        // Rotation angle with slider and spinner
         let angle_box = GtkBox::new(Orientation::Horizontal, 6);
         angle_box.append(&Label::new(Some("Rotation:")));
 
@@ -1018,17 +1017,57 @@ impl BackgroundConfigWidget {
         angle_scale.set_value(0.0);
         angle_scale.set_hexpand(true);
 
-        let config_clone = config.clone();
-        let preview_clone = preview.clone();
-        let on_change_clone = on_change.clone();
+        let angle_spin = SpinButton::with_range(-360.0, 360.0, 1.0);
+        angle_spin.set_value(0.0);
+        angle_spin.set_width_chars(6);
 
+        // Flag to prevent recursive updates between scale and spin
+        let syncing = Rc::new(RefCell::new(false));
+
+        // Sync scale -> spin
+        let angle_spin_clone = angle_spin.clone();
+        let config_clone = config.clone();
+        let update_preview_clone = update_preview.clone();
+        let on_change_clone = on_change.clone();
+        let syncing_clone = syncing.clone();
         angle_scale.connect_value_changed(move |scale| {
+            if *syncing_clone.borrow() {
+                return;
+            }
+            *syncing_clone.borrow_mut() = true;
+            angle_spin_clone.set_value(scale.value());
+            *syncing_clone.borrow_mut() = false;
+
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 poly.rotation_angle = scale.value();
                 drop(cfg);
-                preview_clone.queue_draw();
+                update_preview_clone();
+                if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    callback();
+                }
+            }
+        });
 
+        // Sync spin -> scale
+        let angle_scale_clone = angle_scale.clone();
+        let config_clone = config.clone();
+        let update_preview_clone = update_preview.clone();
+        let on_change_clone = on_change.clone();
+        let syncing_clone = syncing.clone();
+        angle_spin.connect_value_changed(move |spin| {
+            if *syncing_clone.borrow() {
+                return;
+            }
+            *syncing_clone.borrow_mut() = true;
+            angle_scale_clone.set_value(spin.value());
+            *syncing_clone.borrow_mut() = false;
+
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                poly.rotation_angle = spin.value();
+                drop(cfg);
+                update_preview_clone();
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
                 }
@@ -1036,11 +1075,18 @@ impl BackgroundConfigWidget {
         });
 
         angle_box.append(&angle_scale);
+        angle_box.append(&angle_spin);
         page.append(&angle_box);
+
+        // Create SizeGroup to align color labels
+        let label_size_group = SizeGroup::new(SizeGroupMode::Horizontal);
 
         // Color 1 - using ThemeColorSelector (theme-aware)
         let color1_box = GtkBox::new(Orientation::Horizontal, 6);
-        color1_box.append(&Label::new(Some("Color 1:")));
+        let color1_label = Label::new(Some("Color 1:"));
+        color1_label.set_xalign(0.0);
+        label_size_group.add_widget(&color1_label);
+        color1_box.append(&color1_label);
 
         let color1_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
             poly.colors.first().cloned().unwrap_or_default()
@@ -1053,7 +1099,7 @@ impl BackgroundConfigWidget {
         page.append(&color1_box);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         color1_selector.set_on_change(move |new_source| {
             let mut cfg = config_clone.borrow_mut();
@@ -1065,7 +1111,7 @@ impl BackgroundConfigWidget {
                 }
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
@@ -1073,7 +1119,10 @@ impl BackgroundConfigWidget {
 
         // Color 2 - using ThemeColorSelector (theme-aware)
         let color2_box = GtkBox::new(Orientation::Horizontal, 6);
-        color2_box.append(&Label::new(Some("Color 2:")));
+        let color2_label = Label::new(Some("Color 2:"));
+        color2_label.set_xalign(0.0);
+        label_size_group.add_widget(&color2_label);
+        color2_box.append(&color2_label);
 
         let color2_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
             poly.colors.get(1).cloned().unwrap_or_default()
@@ -1086,7 +1135,7 @@ impl BackgroundConfigWidget {
         page.append(&color2_box);
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         color2_selector.set_on_change(move |new_source| {
             let mut cfg = config_clone.borrow_mut();
@@ -1098,20 +1147,52 @@ impl BackgroundConfigWidget {
                 }
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
         });
 
-        (page, color1_selector, color2_selector)
+        // Background Color (fills gaps between polygons)
+        let bg_color_box = GtkBox::new(Orientation::Horizontal, 6);
+        let bg_color_label = Label::new(Some("Background:"));
+        bg_color_label.set_xalign(0.0);
+        label_size_group.add_widget(&bg_color_label);
+        bg_color_box.append(&bg_color_label);
+
+        let bg_color_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
+            poly.background_color.clone()
+        } else {
+            ColorSource::custom(Color::new(0.1, 0.1, 0.12, 1.0))
+        };
+        let bg_color_selector = Rc::new(ThemeColorSelector::new(bg_color_source));
+        bg_color_selector.set_theme_config(theme_config.borrow().clone());
+        bg_color_box.append(bg_color_selector.widget());
+        page.append(&bg_color_box);
+
+        let config_clone = config.clone();
+        let update_preview_clone = update_preview.clone();
+        let on_change_clone = on_change.clone();
+        bg_color_selector.set_on_change(move |new_source| {
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Polygons(ref mut poly) = cfg.background {
+                poly.background_color = new_source;
+            }
+            drop(cfg);
+            update_preview_clone();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        (page, color1_selector, color2_selector, bg_color_selector)
     }
 
     /// Create indicator configuration page
     /// Returns (page, gradient_editor, field_dropdown, field_list, field_entry, dropdown_box, entry_box, dropdown_handler_id)
     fn create_indicator_config(
         config: &Rc<RefCell<BackgroundConfig>>,
-        preview: &DrawingArea,
+        update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         syncing_flag: &Rc<RefCell<bool>>,
     ) -> (
@@ -1240,7 +1321,7 @@ impl BackgroundConfigWidget {
         let gradient_editor_paste = gradient_editor.clone();
         let config_paste = config.clone();
         let on_change_paste = on_change.clone();
-        let preview_paste = preview.clone();
+        let update_preview_paste = update_preview.clone();
         paste_gradient_btn.connect_clicked(move |_| {
             use crate::ui::CLIPBOARD;
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -1251,7 +1332,7 @@ impl BackgroundConfigWidget {
                         ind.gradient_stops = stops.clone();
                     }
                     drop(cfg);
-                    preview_paste.queue_draw();
+                    update_preview_paste();
                     if let Some(callback) = on_change_paste.borrow().as_ref() {
                         callback();
                     }
@@ -1261,7 +1342,7 @@ impl BackgroundConfigWidget {
 
         // Connect handlers
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         shape_dropdown.connect_selected_notify(move |dropdown| {
             let shape = match dropdown.selected() {
@@ -1278,14 +1359,14 @@ impl BackgroundConfigWidget {
                 ind.shape = shape;
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
         });
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         size_scale.connect_value_changed(move |scale| {
             let mut cfg = config_clone.borrow_mut();
@@ -1293,14 +1374,14 @@ impl BackgroundConfigWidget {
                 ind.shape_size = scale.value();
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
         });
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         rotation_spin.connect_value_changed(move |spin| {
             let mut cfg = config_clone.borrow_mut();
@@ -1308,7 +1389,7 @@ impl BackgroundConfigWidget {
                 ind.rotation_angle = spin.value();
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
@@ -1363,7 +1444,7 @@ impl BackgroundConfigWidget {
         });
 
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         value_scale.connect_value_changed(move |scale| {
             let mut cfg = config_clone.borrow_mut();
@@ -1371,7 +1452,7 @@ impl BackgroundConfigWidget {
                 ind.static_value = scale.value();
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
@@ -1379,7 +1460,7 @@ impl BackgroundConfigWidget {
 
         // Connect gradient change handler to update config
         let config_clone = config.clone();
-        let preview_clone = preview.clone();
+        let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         let gradient_editor_clone = gradient_editor.clone();
         gradient_editor.set_on_change(move || {
@@ -1389,7 +1470,7 @@ impl BackgroundConfigWidget {
                 ind.gradient_stops = stops;
             }
             drop(cfg);
-            preview_clone.queue_draw();
+            update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
             }
@@ -1442,6 +1523,7 @@ impl BackgroundConfigWidget {
             if let Some(color2) = poly.colors.get(1) {
                 self.polygon_color2_selector.set_source(color2.clone());
             }
+            self.polygon_bg_color_selector.set_source(poly.background_color.clone());
         }
         if let BackgroundType::Indicator(ref ind) = new_config.background {
             self.indicator_gradient_editor
@@ -1595,7 +1677,8 @@ impl BackgroundConfigWidget {
 
         // Update polygon color selectors
         self.polygon_color1_selector.set_theme_config(theme.clone());
-        self.polygon_color2_selector.set_theme_config(theme);
+        self.polygon_color2_selector.set_theme_config(theme.clone());
+        self.polygon_bg_color_selector.set_theme_config(theme);
 
         // Redraw preview to reflect theme colors
         (self.update_preview)();

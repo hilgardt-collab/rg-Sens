@@ -9,7 +9,7 @@
 
 use gtk4::glib;
 use gtk4::prelude::*;
-use gtk4::{ApplicationWindow, Window};
+use gtk4::ApplicationWindow;
 use log::info;
 use std::cell::RefCell;
 use std::rc::Rc;
