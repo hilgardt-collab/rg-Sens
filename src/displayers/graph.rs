@@ -32,6 +32,8 @@ struct GraphData {
     last_frame_time: std::time::Instant, // For smooth animation timing
     scroll_offset: f64, // 0.0 to 1.0, represents progress toward next point position
     dirty: bool,        // Flag to indicate data has changed and needs redraw
+    /// Cached field IDs from config (rebuilt only when config changes)
+    cached_field_ids: Vec<String>,
 }
 
 impl GraphDisplayer {
@@ -55,12 +57,21 @@ impl GraphDisplayer {
                 last_frame_time: std::time::Instant::now(),
                 scroll_offset: 0.0,
                 dirty: true,
+                cached_field_ids: Vec::new(),
             })),
         }
     }
 
     pub fn set_config(&self, config: GraphDisplayConfig) {
         if let Ok(mut data) = self.data.lock() {
+            // OPTIMIZATION: Rebuild cached field_ids when config changes
+            data.cached_field_ids = config
+                .text_overlay
+                .text_config
+                .lines
+                .iter()
+                .map(|l| l.field_id.clone())
+                .collect();
             data.config = config;
         }
     }
@@ -269,28 +280,19 @@ impl Displayer for GraphDisplayer {
             }
 
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
-            if data.config.text_overlay.enabled
-                && !data.config.text_overlay.text_config.lines.is_empty()
-            {
-                // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-                let field_ids: Vec<_> = data
-                    .config
-                    .text_overlay
-                    .text_config
-                    .lines
-                    .iter()
-                    .map(|l| l.field_id.clone())
-                    .collect();
+            // OPTIMIZATION: Use cached field_ids with mem::take to avoid Vec clone
+            let field_ids = std::mem::take(&mut data.cached_field_ids);
+            if data.config.text_overlay.enabled && !field_ids.is_empty() {
                 data.source_values.clear();
-                for field_id in field_ids {
-                    if let Some(value) = values.get(&field_id) {
-                        data.source_values.insert(field_id, value.clone());
+                for field_id in &field_ids {
+                    if let Some(value) = values.get(field_id) {
+                        data.source_values.insert(field_id.clone(), value.clone());
                     }
                 }
             } else {
                 data.source_values.clear();
             }
+            data.cached_field_ids = field_ids;
 
             // Extract transform from values
             data.transform = PanelTransform::from_values(values);
@@ -357,7 +359,17 @@ impl Displayer for GraphDisplayer {
             if let Ok(graph_config) =
                 serde_json::from_value::<GraphDisplayConfig>(graph_config_value.clone())
             {
-                self.set_config(graph_config);
+                if let Ok(mut data) = self.data.lock() {
+                    // OPTIMIZATION: Rebuild cached field_ids when config changes
+                    data.cached_field_ids = graph_config
+                        .text_overlay
+                        .text_config
+                        .lines
+                        .iter()
+                        .map(|l| l.field_id.clone())
+                        .collect();
+                    data.config = graph_config;
+                }
             }
         }
         Ok(())

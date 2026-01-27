@@ -33,6 +33,8 @@ struct DisplayData {
     transform: PanelTransform,
     /// Flag to indicate data has changed and needs redraw
     dirty: bool,
+    /// Cached field IDs from config (rebuilt only when config changes)
+    cached_field_ids: Vec<String>,
 }
 
 impl TextDisplayer {
@@ -43,6 +45,7 @@ impl TextDisplayer {
             theme: ComboThemeConfig::default(),
             transform: PanelTransform::default(),
             dirty: true,
+            cached_field_ids: Vec::new(),
         }));
 
         Self {
@@ -131,20 +134,15 @@ impl Displayer for TextDisplayer {
         if let Ok(mut display_data) = self.data.lock() {
             display_data.transform = PanelTransform::from_values(data);
             // Extract only needed values for text lines (avoids cloning entire HashMap)
-            // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
-            // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-            let field_ids: Vec<_> = display_data
-                .config
-                .lines
-                .iter()
-                .map(|l| l.field_id.clone())
-                .collect();
+            // OPTIMIZATION: Use cached field_ids with mem::take to avoid Vec clone
+            let field_ids = std::mem::take(&mut display_data.cached_field_ids);
             display_data.values.clear();
-            for field_id in field_ids {
-                if let Some(value) = data.get(&field_id) {
-                    display_data.values.insert(field_id, value.clone());
+            for field_id in &field_ids {
+                if let Some(value) = data.get(field_id) {
+                    display_data.values.insert(field_id.clone(), value.clone());
                 }
             }
+            display_data.cached_field_ids = field_ids;
             display_data.dirty = true;
         }
     }
@@ -193,6 +191,12 @@ impl Displayer for TextDisplayer {
                 serde_json::from_value::<TextDisplayerConfig>(text_config_value.clone())
             {
                 if let Ok(mut data) = self.data.lock() {
+                    // OPTIMIZATION: Rebuild cached field_ids when config changes
+                    data.cached_field_ids = text_config
+                        .lines
+                        .iter()
+                        .map(|l| l.field_id.clone())
+                        .collect();
                     data.config = text_config;
                 }
                 return Ok(());
@@ -205,6 +209,12 @@ impl Displayer for TextDisplayer {
                 serde_json::json!({ "lines": lines_value }),
             ) {
                 if let Ok(mut data) = self.data.lock() {
+                    // OPTIMIZATION: Rebuild cached field_ids when config changes
+                    data.cached_field_ids = text_config
+                        .lines
+                        .iter()
+                        .map(|l| l.field_id.clone())
+                        .collect();
                     data.config = text_config;
                 }
             }

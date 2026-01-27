@@ -30,6 +30,8 @@ struct DisplayData {
     dirty: bool,       // Flag to indicate data has changed and needs redraw
     initialized: bool, // Flag to track if animated_value has been set
     last_frame_time: std::time::Instant,
+    /// Cached field IDs from config (rebuilt only when config changes)
+    cached_field_ids: Vec<String>,
 }
 
 impl BarDisplayer {
@@ -43,6 +45,7 @@ impl BarDisplayer {
             dirty: true,
             initialized: false,
             last_frame_time: std::time::Instant::now(),
+            cached_field_ids: Vec::new(),
         }));
 
         Self {
@@ -155,22 +158,15 @@ impl Displayer for BarDisplayer {
 
             display_data.value = normalized;
             // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            // OPTIMIZATION: Reuse existing HashMap instead of allocating new one
-            // Clone line field_ids to satisfy borrow checker (small vec, cheap clone)
-            let field_ids: Vec<_> = display_data
-                .config
-                .text_overlay
-                .text_config
-                .lines
-                .iter()
-                .map(|l| l.field_id.clone())
-                .collect();
+            // OPTIMIZATION: Use cached field_ids with mem::take to avoid Vec clone
+            let field_ids = std::mem::take(&mut display_data.cached_field_ids);
             display_data.values.clear();
-            for field_id in field_ids {
-                if let Some(value) = data.get(&field_id) {
-                    display_data.values.insert(field_id, value.clone());
+            for field_id in &field_ids {
+                if let Some(value) = data.get(field_id) {
+                    display_data.values.insert(field_id.clone(), value.clone());
                 }
             }
+            display_data.cached_field_ids = field_ids;
             // Extract transform
             display_data.transform = PanelTransform::from_values(data);
             // Mark as dirty to trigger redraw
@@ -251,6 +247,14 @@ impl Displayer for BarDisplayer {
                 serde_json::from_value::<crate::ui::BarDisplayConfig>(bar_config_value.clone())
             {
                 if let Ok(mut display_data) = self.data.lock() {
+                    // OPTIMIZATION: Rebuild cached field_ids when config changes
+                    display_data.cached_field_ids = bar_config
+                        .text_overlay
+                        .text_config
+                        .lines
+                        .iter()
+                        .map(|l| l.field_id.clone())
+                        .collect();
                     display_data.config = bar_config;
                 }
                 return Ok(());

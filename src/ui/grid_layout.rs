@@ -427,18 +427,22 @@ impl GridLayout {
                     cr.stroke().ok();
 
                     // Add viewport labels at top-left of each viewport
+                    // OPTIMIZATION: Reuse string buffer to avoid allocations in render loop
                     cr.set_source_rgba(0.9, 0.6, 0.1, 0.9);
+                    let mut label_buf = String::with_capacity(16);
                     for vp_row in 0..vp_rows {
                         for vp_col in 0..vp_cols {
                             let rect_x = vp_col as f64 * vp_width + 5.0;
                             let rect_y = vp_row as f64 * vp_height + 15.0;
 
                             if rect_x < width as f64 && rect_y < height as f64 {
-                                let label = format!("Page {}", vp_row * vp_cols + vp_col + 1);
+                                label_buf.clear();
+                                use std::fmt::Write;
+                                let _ = write!(label_buf, "Page {}", vp_row * vp_cols + vp_col + 1);
                                 cr.move_to(rect_x, rect_y);
                                 pango_show_text(
                                     cr,
-                                    &label,
+                                    &label_buf,
                                     "Sans",
                                     gtk4::cairo::FontSlant::Normal,
                                     gtk4::cairo::FontWeight::Normal,
