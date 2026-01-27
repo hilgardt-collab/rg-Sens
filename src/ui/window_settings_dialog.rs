@@ -777,6 +777,7 @@ pub fn show_window_settings_dialog<F>(
     let viewport_height_spin_clone = viewport_height_spin.clone();
     let parent_window_clone = parent_window.clone();
     let renderer_dropdown_clone = renderer_dropdown.clone();
+    let original_renderer = app_config.borrow().window.renderer.clone();
     let on_auto_scroll_change_clone = on_auto_scroll_change.clone();
     // Clones for defaults
     let defaults_config_clone = defaults_config.clone();
@@ -848,7 +849,7 @@ pub fn show_window_settings_dialog<F>(
 
         // Save renderer setting (requires restart to take effect)
         let renderer_selection = renderer_dropdown_clone.selected();
-        cfg.window.renderer = match renderer_selection {
+        let new_renderer = match renderer_selection {
             0 => None,                          // Default (auto)
             1 => Some("gl".to_string()),        // GL
             2 => Some("ngl".to_string()),       // NGL
@@ -856,6 +857,10 @@ pub fn show_window_settings_dialog<F>(
             4 => Some("cairo".to_string()),     // Cairo
             _ => None,
         };
+
+        // Check if renderer changed and warn user
+        let renderer_changed = new_renderer != original_renderer;
+        cfg.window.renderer = new_renderer;
 
         // Calculate effective viewport size (use window size if set to 0)
         let vp_width = if cfg.window.viewport_width > 0 {
@@ -945,6 +950,21 @@ pub fn show_window_settings_dialog<F>(
 
         // Restart auto-scroll timer with new settings
         on_auto_scroll_change_clone();
+
+        // Show warning if renderer changed
+        if renderer_changed {
+            let alert = gtk4::AlertDialog::builder()
+                .modal(true)
+                .message("Restart Required")
+                .detail(
+                    "The graphics renderer has been changed. \
+                     Please restart the application for the change to take effect.\n\n\
+                     The application may become unresponsive if you continue without restarting.",
+                )
+                .buttons(["OK"])
+                .build();
+            alert.show(Some(&parent_window_clone));
+        }
 
         info!("Window settings applied");
     });
