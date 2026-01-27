@@ -15,8 +15,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
-use crate::displayers::combo_generic::GenericComboDisplayerShared;
 use crate::ui::art_deco_display::{ArtDecoFrameConfig, ArtDecoRenderer};
+
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
 
 /// Full Art Deco display configuration (wrapper for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,14 +29,6 @@ pub struct ArtDecoDisplayConfig {
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
-}
-
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0
 }
 
 impl Default for ArtDecoDisplayConfig {
@@ -66,24 +60,8 @@ impl ArtDecoDisplayConfig {
     }
 }
 
-/// Art Deco Displayer
-pub struct ArtDecoDisplayer {
-    inner: GenericComboDisplayerShared<ArtDecoRenderer>,
-}
-
-impl ArtDecoDisplayer {
-    pub fn new() -> Self {
-        Self {
-            inner: GenericComboDisplayerShared::new(ArtDecoRenderer),
-        }
-    }
-}
-
-impl Default for ArtDecoDisplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Use macro to generate displayer struct and basic implementations
+crate::theme_displayer_base!(ArtDecoDisplayer, ArtDecoRenderer, ArtDecoRenderer);
 
 impl Displayer for ArtDecoDisplayer {
     fn id(&self) -> &str {

@@ -167,8 +167,7 @@ impl Displayer for ArcDisplayer {
                 display_data.initialized = true;
             }
 
-            // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            // OPTIMIZATION: Use cached field_ids with mem::take to avoid Vec clone
+            // Extract only needed values for text overlay (mem::take avoids borrow conflicts)
             let field_ids = std::mem::take(&mut display_data.cached_field_ids);
             display_data.values.clear();
             for field_id in &field_ids {
@@ -239,13 +238,12 @@ impl Displayer for ArcDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Check for global_theme update (always apply, regardless of other config)
-        if let Some(theme_value) = config.get("global_theme") {
-            if let Ok(theme) = serde_json::from_value(theme_value.clone()) {
-                if let Ok(mut display_data) = self.data.lock() {
-                    display_data.config.theme = theme;
-                }
+        let data_clone = self.data.clone();
+        super::apply_global_theme(config, |theme| {
+            if let Ok(mut display_data) = data_clone.lock() {
+                display_data.config.theme = theme;
             }
-        }
+        });
 
         // Check for full arc_config first
         if let Some(arc_config_value) = config.get("arc_config") {
@@ -253,14 +251,8 @@ impl Displayer for ArcDisplayer {
                 serde_json::from_value::<crate::ui::ArcDisplayConfig>(arc_config_value.clone())
             {
                 if let Ok(mut display_data) = self.data.lock() {
-                    // OPTIMIZATION: Rebuild cached field_ids when config changes
-                    display_data.cached_field_ids = arc_config
-                        .text_overlay
-                        .text_config
-                        .lines
-                        .iter()
-                        .map(|l| l.field_id.clone())
-                        .collect();
+                    display_data.cached_field_ids =
+                        super::rebuild_cached_field_ids(&arc_config.text_overlay.text_config.lines);
                     display_data.config = arc_config;
                 }
                 return Ok(());

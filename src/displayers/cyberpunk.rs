@@ -14,8 +14,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
-use crate::displayers::combo_generic::GenericComboDisplayerShared;
 use crate::ui::cyberpunk_display::{CyberpunkFrameConfig, CyberpunkRenderer};
+
+// Use shared animation defaults from parent module
+use super::{default_animation_enabled, default_animation_speed};
 
 /// Full Cyberpunk display configuration (wrapper for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,14 +28,6 @@ pub struct CyberpunkDisplayConfig {
     pub animation_enabled: bool,
     #[serde(default = "default_animation_speed")]
     pub animation_speed: f64,
-}
-
-fn default_animation_enabled() -> bool {
-    true
-}
-
-fn default_animation_speed() -> f64 {
-    8.0
 }
 
 impl Default for CyberpunkDisplayConfig {
@@ -63,24 +57,8 @@ impl CyberpunkDisplayConfig {
     }
 }
 
-/// Cyberpunk/Neon HUD Displayer
-pub struct CyberpunkDisplayer {
-    inner: GenericComboDisplayerShared<CyberpunkRenderer>,
-}
-
-impl CyberpunkDisplayer {
-    pub fn new() -> Self {
-        Self {
-            inner: GenericComboDisplayerShared::new(CyberpunkRenderer),
-        }
-    }
-}
-
-impl Default for CyberpunkDisplayer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Use macro to generate displayer struct and basic implementations
+crate::theme_displayer_base!(CyberpunkDisplayer, CyberpunkRenderer, CyberpunkRenderer);
 
 impl Displayer for CyberpunkDisplayer {
     fn id(&self) -> &str {

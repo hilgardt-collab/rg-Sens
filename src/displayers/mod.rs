@@ -67,6 +67,146 @@ pub(crate) fn extract_normalized_value(data: &HashMap<String, Value>) -> f64 {
     normalized.clamp(0.0, 1.0)
 }
 
+/// Apply global theme from config if present.
+///
+/// This is a common pattern across displayers that support theming.
+/// Returns true if a theme was applied.
+///
+/// # Arguments
+/// * `config` - The config HashMap to check for "global_theme" key
+/// * `apply_fn` - Closure that receives the parsed theme and applies it
+pub(crate) fn apply_global_theme<T, F>(config: &HashMap<String, Value>, apply_fn: F) -> bool
+where
+    T: serde::de::DeserializeOwned,
+    F: FnOnce(T),
+{
+    if let Some(theme_value) = config.get("global_theme") {
+        if let Ok(theme) = serde_json::from_value::<T>(theme_value.clone()) {
+            apply_fn(theme);
+            return true;
+        }
+    }
+    false
+}
+
+/// Rebuild cached field IDs from text overlay config lines.
+///
+/// Call this when config changes to update the cached field IDs vector.
+pub(crate) fn rebuild_cached_field_ids(lines: &[crate::displayers::text_config::TextLineConfig]) -> Vec<String> {
+    lines.iter().map(|l| l.field_id.clone()).collect()
+}
+
+// ============================================================================
+// Theme Displayer Helpers
+// ============================================================================
+
+/// Default animation enabled value for theme displayers
+pub fn default_animation_enabled() -> bool {
+    true
+}
+
+/// Default animation speed for theme displayers
+pub fn default_animation_speed() -> f64 {
+    8.0
+}
+
+/// Macro to generate a theme display config wrapper.
+///
+/// This generates the boilerplate DisplayConfig struct that wraps a FrameConfig,
+/// along with Default, from_frame(), and to_frame() implementations.
+///
+/// # Usage
+/// ```ignore
+/// theme_display_config!(
+///     ArtDecoDisplayConfig,      // Config struct name
+///     ArtDecoFrameConfig         // Frame config type from ui module
+/// );
+/// ```
+#[macro_export]
+macro_rules! theme_display_config {
+    ($config_name:ident, $frame_config:ty) => {
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        pub struct $config_name {
+            #[serde(default)]
+            pub frame: $frame_config,
+            #[serde(default = "crate::displayers::default_animation_enabled")]
+            pub animation_enabled: bool,
+            #[serde(default = "crate::displayers::default_animation_speed")]
+            pub animation_speed: f64,
+        }
+
+        impl Default for $config_name {
+            fn default() -> Self {
+                Self {
+                    frame: <$frame_config>::default(),
+                    animation_enabled: crate::displayers::default_animation_enabled(),
+                    animation_speed: crate::displayers::default_animation_speed(),
+                }
+            }
+        }
+
+        impl $config_name {
+            /// Create config from frame config, syncing animation fields
+            pub fn from_frame(frame: $frame_config) -> Self {
+                Self {
+                    animation_enabled: frame.animation_enabled,
+                    animation_speed: frame.animation_speed,
+                    frame,
+                }
+            }
+
+            /// Convert to frame config, syncing animation fields from wrapper
+            pub fn to_frame(&self) -> $frame_config {
+                let mut frame = self.frame.clone();
+                frame.animation_enabled = self.animation_enabled;
+                frame.animation_speed = self.animation_speed;
+                frame
+            }
+        }
+    };
+}
+
+/// Macro to generate theme displayer struct and basic Displayer trait delegation.
+///
+/// This generates the displayer struct wrapping GenericComboDisplayerShared,
+/// along with new(), Default implementations.
+///
+/// The config_schema() and apply_config() methods must be implemented manually
+/// since they vary between themes.
+///
+/// # Usage
+/// ```ignore
+/// theme_displayer_base!(
+///     ArtDecoDisplayer,          // Displayer struct name
+///     ArtDecoRenderer,           // Renderer type from ui module
+///     ArtDecoRenderer            // Renderer constructor expression
+/// );
+/// ```
+#[macro_export]
+macro_rules! theme_displayer_base {
+    ($displayer_name:ident, $renderer_type:ty, $renderer_expr:expr) => {
+        pub struct $displayer_name {
+            inner: crate::displayers::combo_generic::GenericComboDisplayerShared<$renderer_type>,
+        }
+
+        impl $displayer_name {
+            pub fn new() -> Self {
+                Self {
+                    inner: crate::displayers::combo_generic::GenericComboDisplayerShared::new(
+                        $renderer_expr,
+                    ),
+                }
+            }
+        }
+
+        impl Default for $displayer_name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+    };
+}
+
 mod arc;
 mod art_deco;
 mod art_nouveau;

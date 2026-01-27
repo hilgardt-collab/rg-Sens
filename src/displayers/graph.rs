@@ -279,8 +279,7 @@ impl Displayer for GraphDisplayer {
                 }
             }
 
-            // Extract only needed values for text overlay (avoids cloning entire HashMap)
-            // OPTIMIZATION: Use cached field_ids with mem::take to avoid Vec clone
+            // Extract only needed values for text overlay (mem::take avoids borrow conflicts)
             let field_ids = std::mem::take(&mut data.cached_field_ids);
             if data.config.text_overlay.enabled && !field_ids.is_empty() {
                 data.source_values.clear();
