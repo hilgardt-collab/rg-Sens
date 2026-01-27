@@ -475,7 +475,21 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
     CA: Fn(&mut D, f64) -> bool + 'static,
 {
     register_animation(drawing_area.downgrade(), move || {
-        if let Ok(mut data) = data.try_lock() {
+        let lock_result = data.try_lock();
+        if lock_result.is_err() {
+            // Track lock failures to diagnose drawing issues
+            static TICK_LOCK_FAIL_COUNT: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
+            let count = TICK_LOCK_FAIL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count < 5 || count.is_multiple_of(100) {
+                log::warn!(
+                    "Animation tick: try_lock failed ({} total failures)",
+                    count + 1
+                );
+            }
+            return false;
+        }
+        if let Ok(mut data) = lock_result {
             let combo = get_combo(&mut data);
             let mut redraw = combo.dirty;
             if combo.dirty {

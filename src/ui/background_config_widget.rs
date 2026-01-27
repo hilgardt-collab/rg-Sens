@@ -46,10 +46,224 @@ pub struct BackgroundConfigWidget {
     // Polygon color selectors (theme-aware)
     polygon_color1_selector: Rc<ThemeColorSelector>,
     polygon_color2_selector: Rc<ThemeColorSelector>,
+    // Function to update the preview (using Picture instead of DrawingArea to avoid GL issues)
+    update_preview: Rc<dyn Fn()>,
 }
 
 impl BackgroundConfigWidget {
     pub fn new() -> Self {
+        // Delegate to full implementation
+        Self::new_full()
+    }
+
+    // Test version with limited functionality (only solid color)
+    #[allow(dead_code)]
+    fn new_test_solid_only() -> Self {
+        let container = GtkBox::new(Orientation::Vertical, 12);
+        container.set_margin_start(12);
+        container.set_margin_end(12);
+        container.set_margin_top(12);
+        container.set_margin_bottom(12);
+
+        let config = Rc::new(RefCell::new(BackgroundConfig::default()));
+        let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
+
+        // Type selector (limited to Solid Color only for testing)
+        let type_box = GtkBox::new(Orientation::Horizontal, 6);
+        type_box.append(&Label::new(Some("Background Type:")));
+
+        let type_options = StringList::new(&["Solid Color"]);
+        let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
+        type_dropdown.set_selected(0);
+        type_box.append(&type_dropdown);
+        container.append(&type_box);
+
+        // Preview using Picture + MemoryTexture (no DrawingArea)
+        let preview = DrawingArea::new(); // Keep for struct but don't use
+
+        let preview_picture = gtk4::Picture::new();
+        preview_picture.set_content_fit(gtk4::ContentFit::Fill);
+        preview_picture.set_size_request(200, 150);
+        preview_picture.set_hexpand(true);
+
+        let preview_picture_rc = Rc::new(preview_picture.clone());
+
+        let update_preview = {
+            let config = config.clone();
+            let theme_config = theme_config.clone();
+            let picture = preview_picture_rc.clone();
+            Rc::new(move || {
+                use crate::ui::background::render_background_with_theme;
+
+                let width = 200i32;
+                let height = 150i32;
+
+                let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                    .expect("Failed to create surface");
+                {
+                    let cr = cairo::Context::new(&surface).expect("Failed to create context");
+                    render_checkerboard(&cr, width as f64, height as f64);
+                    let cfg = config.borrow();
+                    let theme = theme_config.borrow();
+                    let _ = render_background_with_theme(&cr, &cfg, width as f64, height as f64, Some(&theme));
+                }
+                surface.flush();
+
+                let data = surface.data().expect("Failed to get surface data");
+                let bytes = gtk4::glib::Bytes::from(&data[..]);
+                let texture = gtk4::gdk::MemoryTexture::new(
+                    width,
+                    height,
+                    gtk4::gdk::MemoryFormat::B8g8r8a8Premultiplied,
+                    &bytes,
+                    (width * 4) as usize,
+                );
+                picture.set_paintable(Some(&texture));
+            })
+        };
+
+        update_preview();
+        container.append(&preview_picture);
+
+        // Solid color configuration
+        let color_box = GtkBox::new(Orientation::Horizontal, 6);
+        color_box.append(&Label::new(Some("Color:")));
+
+        let initial_color_source = ColorSource::custom(Color::new(0.15, 0.15, 0.15, 1.0));
+        let solid_color_selector = Rc::new(ThemeColorSelector::new(initial_color_source));
+        solid_color_selector.set_theme_config(theme_config.borrow().clone());
+        color_box.append(solid_color_selector.widget());
+        container.append(&color_box);
+
+        // Connect color selector change
+        let config_clone = config.clone();
+        let update_preview_clone = update_preview.clone();
+        let on_change_clone = on_change.clone();
+        solid_color_selector.set_on_change(move |new_color_source| {
+            let mut cfg = config_clone.borrow_mut();
+            cfg.background = BackgroundType::Solid { color: new_color_source };
+            drop(cfg);
+            update_preview_clone();
+            if let Some(callback) = on_change_clone.borrow().as_ref() {
+                callback();
+            }
+        });
+
+        let type_dropdown_handler_id = type_dropdown.connect_selected_notify(|_| {});
+
+        // Dummy GradientEditors (not added to UI)
+        let linear_gradient_editor = Rc::new(GradientEditor::new());
+        let radial_gradient_editor = Rc::new(GradientEditor::new_without_angle());
+        let indicator_gradient_editor = Rc::new(GradientEditor::new_linear_no_angle());
+
+        let config_stack = Stack::new();
+        let source_fields = Rc::new(RefCell::new(Vec::new()));
+        let is_combo_source = Rc::new(RefCell::new(false));
+        let indicator_field_list = StringList::new(&["value"]);
+        let indicator_field_dropdown = DropDown::new(Some(indicator_field_list.clone()), Option::<gtk4::Expression>::None);
+        let indicator_field_entry = Entry::new();
+        let indicator_field_dropdown_box = GtkBox::new(Orientation::Horizontal, 6);
+        let indicator_field_entry_box = GtkBox::new(Orientation::Horizontal, 6);
+        let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
+        let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+
+        Self {
+            container,
+            config,
+            preview,
+            config_stack,
+            type_dropdown,
+            on_change,
+            type_dropdown_handler_id,
+            solid_color_selector,
+            linear_gradient_editor,
+            radial_gradient_editor,
+            indicator_gradient_editor,
+            source_fields,
+            is_combo_source,
+            indicator_field_dropdown,
+            indicator_field_list,
+            indicator_field_entry,
+            indicator_field_dropdown_box,
+            indicator_field_entry_box,
+            syncing_indicator_dropdown,
+            theme_config,
+            polygon_color1_selector,
+            polygon_color2_selector,
+            update_preview,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn new_minimal() -> Self {
+        // MINIMAL VERSION FOR DEBUGGING - just a label, no DrawingAreas
+        let container = GtkBox::new(Orientation::Vertical, 12);
+        container.set_margin_start(12);
+        container.set_margin_end(12);
+        container.set_margin_top(12);
+        container.set_margin_bottom(12);
+
+        let debug_label = Label::new(Some("Background config widget (minimal debug version)"));
+        container.append(&debug_label);
+
+        let config = Rc::new(RefCell::new(BackgroundConfig::default()));
+        let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
+
+        // Dummy widgets for struct fields
+        let preview = DrawingArea::new();
+        let config_stack = Stack::new();
+        let type_options = StringList::new(&["Solid Color"]);
+        let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
+        let type_dropdown_handler_id = type_dropdown.connect_selected_notify(|_| {});
+
+        let solid_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let linear_gradient_editor = Rc::new(GradientEditor::new());
+        let radial_gradient_editor = Rc::new(GradientEditor::new_without_angle());
+        let indicator_gradient_editor = Rc::new(GradientEditor::new_linear_no_angle());
+        let source_fields = Rc::new(RefCell::new(Vec::new()));
+        let is_combo_source = Rc::new(RefCell::new(false));
+        let indicator_field_list = StringList::new(&["value"]);
+        let indicator_field_dropdown = DropDown::new(Some(indicator_field_list.clone()), Option::<gtk4::Expression>::None);
+        let indicator_field_entry = Entry::new();
+        let indicator_field_dropdown_box = GtkBox::new(Orientation::Horizontal, 6);
+        let indicator_field_entry_box = GtkBox::new(Orientation::Horizontal, 6);
+        let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
+        let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let update_preview: Rc<dyn Fn()> = Rc::new(|| {});
+
+        Self {
+            container,
+            config,
+            preview,
+            config_stack,
+            type_dropdown,
+            on_change,
+            type_dropdown_handler_id,
+            solid_color_selector,
+            linear_gradient_editor,
+            radial_gradient_editor,
+            indicator_gradient_editor,
+            source_fields,
+            is_combo_source,
+            indicator_field_dropdown,
+            indicator_field_list,
+            indicator_field_entry,
+            indicator_field_dropdown_box,
+            indicator_field_entry_box,
+            syncing_indicator_dropdown,
+            theme_config,
+            polygon_color1_selector,
+            polygon_color2_selector,
+            update_preview,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn new_full() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         container.set_margin_start(12);
         container.set_margin_end(12);
@@ -78,29 +292,73 @@ impl BackgroundConfigWidget {
         type_box.append(&type_dropdown);
         container.append(&type_box);
 
-        // Preview
-        let preview = DrawingArea::new();
+        // Preview using Picture + Cairo ImageSurface (avoids GL renderer issues with DrawingArea)
+        let preview = DrawingArea::new(); // Keep for compatibility but don't add to container
         preview.set_content_height(150);
-        preview.set_content_width(200); // Min width 200px
-        preview.set_hexpand(true);
-        preview.set_halign(gtk4::Align::Fill);
-        preview.set_vexpand(false);
+        preview.set_content_width(200);
 
-        let config_clone = config.clone();
-        let theme_for_preview = theme_config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            use crate::ui::background::render_background_with_theme;
+        // Use a Picture widget instead of DrawingArea to avoid GL renderer issues
+        let preview_picture = gtk4::Picture::new();
+        preview_picture.set_content_fit(gtk4::ContentFit::Fill);
+        preview_picture.set_size_request(200, 150);
+        preview_picture.set_hexpand(true);
 
-            // Render checkerboard pattern to show transparency
-            render_checkerboard(cr, width as f64, height as f64);
+        // Store picture for updates using weak reference to avoid cycles
+        let preview_picture_rc = Rc::new(preview_picture.clone());
+        let preview_picture_weak = Rc::downgrade(&preview_picture_rc);
 
-            let cfg = config_clone.borrow();
-            let theme = theme_for_preview.borrow();
-            let _ =
-                render_background_with_theme(cr, &cfg, width as f64, height as f64, Some(&theme));
-        });
+        // Function to update the preview picture
+        // Uses weak references to allow proper cleanup when dialog closes
+        let update_preview = {
+            let config = config.clone();
+            let theme_config = theme_config.clone();
+            let picture_weak = preview_picture_weak.clone();
+            Rc::new(move || {
+                // Only update if picture still exists
+                let Some(picture) = picture_weak.upgrade() else {
+                    return;
+                };
 
-        container.append(&preview);
+                use crate::ui::background::render_background_with_theme;
+
+                let width = 200i32;
+                let height = 150i32;
+
+                // Create Cairo ImageSurface
+                let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                    .expect("Failed to create surface");
+                {
+                    let cr = cairo::Context::new(&surface).expect("Failed to create context");
+
+                    // Render checkerboard pattern
+                    render_checkerboard(&cr, width as f64, height as f64);
+
+                    // Render background
+                    let cfg = config.borrow();
+                    let theme = theme_config.borrow();
+                    let _ = render_background_with_theme(&cr, &cfg, width as f64, height as f64, Some(&theme));
+                }
+                surface.flush();
+
+                // Convert to GdkTexture using MemoryTexture
+                let data = surface.data().expect("Failed to get surface data");
+                let bytes = gtk4::glib::Bytes::from(&data[..]);
+                let texture = gtk4::gdk::MemoryTexture::new(
+                    width,
+                    height,
+                    gtk4::gdk::MemoryFormat::B8g8r8a8Premultiplied,
+                    &bytes,
+                    (width * 4) as usize,
+                );
+
+                picture.set_paintable(Some(&texture));
+            })
+        };
+
+        // Initial render
+        update_preview();
+
+        container.append(&preview_picture);
 
         // Configuration stack (different UI for each type)
         let config_stack = Stack::new();
@@ -284,6 +542,7 @@ impl BackgroundConfigWidget {
             theme_config,
             polygon_color1_selector,
             polygon_color2_selector,
+            update_preview,
         }
     }
 
@@ -1216,7 +1475,7 @@ impl BackgroundConfigWidget {
         };
         self.config_stack.set_visible_child_name(page_name);
 
-        self.preview.queue_draw();
+        (self.update_preview)();
     }
 
     /// Get the current configuration
@@ -1339,7 +1598,7 @@ impl BackgroundConfigWidget {
         self.polygon_color2_selector.set_theme_config(theme);
 
         // Redraw preview to reflect theme colors
-        self.preview.queue_draw();
+        (self.update_preview)();
     }
 }
 

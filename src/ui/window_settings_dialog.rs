@@ -7,8 +7,9 @@
 //! - Fullscreen and borderless mode
 //! - Auto-scroll settings
 
+use gtk4::glib;
 use gtk4::prelude::*;
-use gtk4::ApplicationWindow;
+use gtk4::{ApplicationWindow, Window};
 use log::info;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,6 +30,9 @@ pub fn show_window_settings_dialog<F>(
 ) where
     F: Fn() + 'static,
 {
+    // Simply create a new dialog each time - no singleton tracking
+    // This avoids issues with the reference not being cleared properly
+    log::info!("Opening window settings dialog...");
     use crate::config::DefaultsConfig;
     use crate::ui::BackgroundConfigWidget;
     use gtk4::{
@@ -36,6 +40,8 @@ pub fn show_window_settings_dialog<F>(
         StringList, Window,
     };
 
+    // Set transient_for to establish parent-child relationship for proper focus handling
+    // Note: destroy_with_parent can cause issues, so we handle cleanup manually
     let dialog = Window::builder()
         .title("Window Settings")
         .transient_for(parent_window)
@@ -43,6 +49,14 @@ pub fn show_window_settings_dialog<F>(
         .default_width(550)
         .default_height(650)
         .build();
+
+    // Clean up child widgets when dialog closes to help with GTK cleanup
+    let dialog_for_close_request = dialog.clone();
+    dialog.connect_close_request(move |_| {
+        dialog_for_close_request.set_child(Option::<&gtk4::Widget>::None);
+        log::info!("Settings dialog closed");
+        glib::Propagation::Proceed
+    });
 
     let vbox = GtkBox::new(Orientation::Vertical, 12);
     vbox.set_margin_start(12);
@@ -329,7 +343,7 @@ pub fn show_window_settings_dialog<F>(
     defaults_scroll.set_child(Some(&defaults_tab_box));
     notebook.append_page(&defaults_scroll, Some(&Label::new(Some("Defaults"))));
 
-    // === Tab 2: Background ===
+    // === Tab 2: Background === RE-ENABLED FOR TESTING
     let bg_tab_box = GtkBox::new(Orientation::Vertical, 12);
     bg_tab_box.set_margin_start(12);
     bg_tab_box.set_margin_end(12);
@@ -340,7 +354,6 @@ pub fn show_window_settings_dialog<F>(
     background_widget.set_theme_config(app_config.borrow().global_theme.clone());
     background_widget.set_config(app_config.borrow().window.background.clone());
     bg_tab_box.append(background_widget.widget());
-
     let background_widget = Rc::new(background_widget);
 
     notebook.append_page(&bg_tab_box, Some(&Label::new(Some("Background"))));
@@ -738,6 +751,18 @@ pub fn show_window_settings_dialog<F>(
     global_theme_widget.set_config(app_config.borrow().global_theme.clone());
     theme_scroll.set_child(Some(global_theme_widget.widget()));
 
+    // When global theme changes, update all widgets that use theme colors
+    {
+        let global_theme_widget_for_change = global_theme_widget.clone();
+        let background_widget_for_theme = background_widget.clone();
+        let default_bg_widget_for_theme = default_bg_widget.clone();
+        global_theme_widget.set_on_change(move || {
+            let new_theme = global_theme_widget_for_change.get_config();
+            background_widget_for_theme.set_theme_config(new_theme.clone());
+            default_bg_widget_for_theme.set_theme_config(new_theme);
+        });
+    }
+
     notebook.append_page(&theme_scroll, Some(&Label::new(Some("Global Theme"))));
 
     vbox.append(&notebook);
@@ -754,6 +779,7 @@ pub fn show_window_settings_dialog<F>(
 
     let dialog_clone = dialog.clone();
     cancel_button.connect_clicked(move |_| {
+        log::info!("Settings dialog cancel button clicked");
         dialog_clone.close();
     });
 
@@ -787,7 +813,7 @@ pub fn show_window_settings_dialog<F>(
     // Clone for global theme
     let global_theme_widget_clone = global_theme_widget.clone();
 
-    let apply_changes = Rc::new(move || {
+    let apply_changes: Rc<dyn Fn()> = Rc::new(move || {
         let new_background = background_widget_clone.get_config();
         let new_cell_width = cell_width_spin.value() as i32;
         let new_cell_height = cell_height_spin.value() as i32;
@@ -979,6 +1005,7 @@ pub fn show_window_settings_dialog<F>(
     let apply_changes_clone2 = apply_changes.clone();
     let dialog_clone2 = dialog.clone();
     accept_button.connect_clicked(move |_| {
+        log::info!("Settings dialog accept button clicked");
         apply_changes_clone2();
         dialog_clone2.close();
     });
@@ -990,5 +1017,7 @@ pub fn show_window_settings_dialog<F>(
     vbox.append(&button_box);
 
     dialog.set_child(Some(&vbox));
+    log::debug!("Window settings dialog created, presenting...");
     dialog.present();
+    log::debug!("Window settings dialog presented");
 }

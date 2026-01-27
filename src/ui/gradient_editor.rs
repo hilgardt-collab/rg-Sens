@@ -2,13 +2,13 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, DrawingArea, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton,
+    Box as GtkBox, Button, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
-use crate::ui::render_utils::render_checkerboard;
+
 use crate::ui::theme::{ColorStopSource, ComboThemeConfig, LinearGradientSourceConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 
@@ -19,7 +19,6 @@ pub struct GradientEditor {
     angle: Rc<RefCell<f64>>,
     theme_config: Rc<RefCell<Option<ComboThemeConfig>>>,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    preview: DrawingArea,
     stops_listbox: ListBox,
     angle_scale: Option<Scale>,
     angle_spin: Option<SpinButton>,
@@ -56,56 +55,8 @@ impl GradientEditor {
         let on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let is_updating: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
 
-        // Preview area (created early so angle handlers can reference it)
-        let preview = DrawingArea::new();
-        preview.set_content_height(100); // Keep gradient preview shorter
-        preview.set_content_width(200); // Min width 200px
-        preview.set_hexpand(true);
-        preview.set_halign(gtk4::Align::Fill); // Fill available width
-        preview.set_vexpand(false);
-
-        let stops_clone = stops.clone();
-        let angle_clone = angle.clone();
-        let theme_config_clone = theme_config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            use crate::ui::background::render_background;
-            use crate::ui::background::{
-                BackgroundConfig, BackgroundType, LinearGradientConfig, RadialGradientConfig,
-            };
-
-            // Render checkerboard pattern to show transparency
-            render_checkerboard(cr, width as f64, height as f64);
-
-            let stops_source = stops_clone.borrow();
-            let angle = *angle_clone.borrow();
-
-            // Resolve ColorStopSource to ColorStop using theme
-            let default_theme = ComboThemeConfig::default();
-            let theme = theme_config_clone.borrow();
-            let theme_ref = theme.as_ref().unwrap_or(&default_theme);
-            let resolved_stops: Vec<ColorStop> =
-                stops_source.iter().map(|s| s.resolve(theme_ref)).collect();
-
-            let config = if use_linear_preview {
-                BackgroundConfig {
-                    background: BackgroundType::LinearGradient(LinearGradientConfig {
-                        angle,
-                        stops: resolved_stops,
-                    }),
-                }
-            } else {
-                BackgroundConfig {
-                    background: BackgroundType::RadialGradient(RadialGradientConfig {
-                        center_x: 0.5,
-                        center_y: 0.5,
-                        radius: 0.7,
-                        stops: resolved_stops,
-                    }),
-                }
-            };
-
-            let _ = render_background(cr, &config, width as f64, height as f64);
-        });
+        // Preview removed - BackgroundConfigWidget shows the preview instead
+        let _ = use_linear_preview; // suppress unused warning
 
         // Angle control (only if show_angle is true)
         let (angle_scale, angle_spin) = if show_angle {
@@ -124,7 +75,6 @@ impl GradientEditor {
             let angle_clone = angle.clone();
             let angle_spin_clone = angle_spin.clone();
             let on_change_clone = on_change.clone();
-            let preview_clone = preview.clone();
             let is_updating_clone = is_updating.clone();
             angle_scale.connect_value_changed(move |scale| {
                 // Skip if we're already updating (prevents infinite loop)
@@ -139,7 +89,7 @@ impl GradientEditor {
                 *is_updating_clone.borrow_mut() = false;
 
                 *angle_clone.borrow_mut() = value;
-                preview_clone.queue_draw();
+                
                 if let Some(callback) = on_change_clone.borrow().as_ref() {
                     callback();
                 }
@@ -148,7 +98,6 @@ impl GradientEditor {
             let angle_scale_clone = angle_scale.clone();
             let angle_clone2 = angle.clone();
             let on_change_clone2 = on_change.clone();
-            let preview_clone2 = preview.clone();
             let is_updating_clone2 = is_updating.clone();
             angle_spin.connect_value_changed(move |spin| {
                 // Skip if we're already updating (prevents infinite loop)
@@ -163,7 +112,7 @@ impl GradientEditor {
                 *is_updating_clone2.borrow_mut() = false;
 
                 *angle_clone2.borrow_mut() = value;
-                preview_clone2.queue_draw();
+                
                 if let Some(callback) = on_change_clone2.borrow().as_ref() {
                     callback();
                 }
@@ -177,8 +126,6 @@ impl GradientEditor {
         } else {
             (None, None)
         };
-
-        container.append(&preview);
 
         // Color stops header with Add button
         let header_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -208,7 +155,6 @@ impl GradientEditor {
         // Add stop button handler
         let stops_clone = stops.clone();
         let stops_listbox_clone = stops_listbox.clone();
-        let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         let is_updating_clone = is_updating.clone();
 
@@ -265,13 +211,12 @@ impl GradientEditor {
             Self::rebuild_stops_list(
                 &stops_listbox_clone,
                 &stops_clone,
-                &preview_clone,
                 &on_change_clone,
                 &theme_config_for_add,
                 &is_updating_clone,
             );
 
-            preview_clone.queue_draw();
+            
 
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -284,7 +229,6 @@ impl GradientEditor {
             angle,
             theme_config,
             on_change,
-            preview,
             stops_listbox,
             angle_scale,
             angle_spin,
@@ -296,7 +240,7 @@ impl GradientEditor {
     fn rebuild_stops_list(
         listbox: &ListBox,
         stops: &Rc<RefCell<Vec<ColorStopSource>>>,
-        preview: &DrawingArea,
+        
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         theme_config: &Rc<RefCell<Option<ComboThemeConfig>>>,
         is_updating: &Rc<RefCell<bool>>,
@@ -316,7 +260,6 @@ impl GradientEditor {
                 stop_count,
                 stops,
                 listbox,
-                preview,
                 on_change,
                 theme_config,
                 is_updating,
@@ -332,7 +275,7 @@ impl GradientEditor {
         stop_count: usize,
         stops: &Rc<RefCell<Vec<ColorStopSource>>>,
         listbox: &ListBox,
-        preview: &DrawingArea,
+        
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         theme_config: &Rc<RefCell<Option<ComboThemeConfig>>>,
         is_updating: &Rc<RefCell<bool>>,
@@ -370,7 +313,6 @@ impl GradientEditor {
 
         // Set up color change handler
         let stops_clone = stops.clone();
-        let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         let is_updating_clone = is_updating.clone();
         color_selector.set_on_change(move |new_color_source| {
@@ -388,7 +330,7 @@ impl GradientEditor {
 
             // No need to rebuild the stops list - just update the data and redraw
             // The ThemeColorSelector already displays the new color
-            preview_clone.queue_draw();
+            
 
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -402,7 +344,6 @@ impl GradientEditor {
 
             let stops_clone = stops.clone();
             let listbox_clone = listbox.clone();
-            let preview_clone = preview.clone();
             let on_change_clone = on_change.clone();
             let theme_config_clone = theme_config.clone();
             let is_updating_clone = is_updating.clone();
@@ -421,13 +362,12 @@ impl GradientEditor {
                     Self::rebuild_stops_list(
                         &listbox_clone,
                         &stops_clone,
-                        &preview_clone,
                         &on_change_clone,
                         &theme_config_clone,
                         &is_updating_clone,
                     );
 
-                    preview_clone.queue_draw();
+                    
 
                     if let Some(callback) = on_change_clone.borrow().as_ref() {
                         callback();
@@ -443,7 +383,6 @@ impl GradientEditor {
         // Position change handler
         let stops_clone = stops.clone();
         let listbox_clone = listbox.clone();
-        let preview_clone = preview.clone();
         let on_change_clone = on_change.clone();
         let theme_config_clone = theme_config.clone();
         let is_updating_clone = is_updating.clone();
@@ -505,7 +444,6 @@ impl GradientEditor {
             if needs_rebuild {
                 let listbox_clone2 = listbox_clone.clone();
                 let stops_clone2 = stops_clone.clone();
-                let preview_clone2 = preview_clone.clone();
                 let on_change_clone2 = on_change_clone.clone();
                 let theme_config_clone2 = theme_config_clone.clone();
                 let is_updating_clone2 = is_updating_clone.clone();
@@ -513,7 +451,6 @@ impl GradientEditor {
                     Self::rebuild_stops_list(
                         &listbox_clone2,
                         &stops_clone2,
-                        &preview_clone2,
                         &on_change_clone2,
                         &theme_config_clone2,
                         &is_updating_clone2,
@@ -521,7 +458,7 @@ impl GradientEditor {
                 });
             }
 
-            preview_clone.queue_draw();
+            
 
             if let Some(callback) = on_change_clone.borrow().as_ref() {
                 callback();
@@ -550,7 +487,7 @@ impl GradientEditor {
 
         // Always update the theme config for preview rendering
         *self.theme_config.borrow_mut() = Some(config);
-        self.preview.queue_draw();
+        
 
         // Only rebuild stops list if theme colors actually changed
         if theme_changed {
@@ -561,7 +498,6 @@ impl GradientEditor {
             Self::rebuild_stops_list(
                 &self.stops_listbox,
                 &self.stops,
-                &self.preview,
                 &self.on_change,
                 &self.theme_config,
                 &self.is_updating,
@@ -582,12 +518,11 @@ impl GradientEditor {
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,
-            &self.preview,
             &self.on_change,
             &self.theme_config,
             &self.is_updating,
         );
-        self.preview.queue_draw();
+        
 
         // Clear guard
         *self.is_updating.borrow_mut() = false;
@@ -617,12 +552,11 @@ impl GradientEditor {
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,
-            &self.preview,
             &self.on_change,
             &self.theme_config,
             &self.is_updating,
         );
-        self.preview.queue_draw();
+        
 
         // Clear guard
         *self.is_updating.borrow_mut() = false;
@@ -654,12 +588,11 @@ impl GradientEditor {
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,
-            &self.preview,
             &self.on_change,
             &self.theme_config,
             &self.is_updating,
         );
-        self.preview.queue_draw();
+        
 
         // Clear guard
         *self.is_updating.borrow_mut() = false;
@@ -681,12 +614,11 @@ impl GradientEditor {
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,
-            &self.preview,
             &self.on_change,
             &self.theme_config,
             &self.is_updating,
         );
-        self.preview.queue_draw();
+        
 
         // Clear guard
         *self.is_updating.borrow_mut() = false;
@@ -738,7 +670,7 @@ impl GradientEditor {
 
     /// Update preview
     pub fn update_preview(&self) {
-        self.preview.queue_draw();
+        
     }
 
     /// Update only the theme colors without replacing the entire theme config.
@@ -771,14 +703,13 @@ impl GradientEditor {
 
         // Store updated theme
         *self.theme_config.borrow_mut() = Some(theme);
-        self.preview.queue_draw();
+        
 
         // Rebuild stops list to update ThemeColorSelectors with new theme
         *self.is_updating.borrow_mut() = true;
         Self::rebuild_stops_list(
             &self.stops_listbox,
             &self.stops,
-            &self.preview,
             &self.on_change,
             &self.theme_config,
             &self.is_updating,

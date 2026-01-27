@@ -359,7 +359,13 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                // Lock contention - try to use cached frame to avoid flicker
+                // Lock contention - use cached frame (which has stale values!)
+                static DRAW_LOCK_FAIL: std::sync::atomic::AtomicU64 =
+                    std::sync::atomic::AtomicU64::new(0);
+                let count = DRAW_LOCK_FAIL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count < 10 || count.is_multiple_of(100) {
+                    log::warn!("Draw: try_lock failed ({} total), using cached frame", count + 1);
+                }
                 if let Some(cache) = frame_cache_clone.borrow().as_ref() {
                     if cache.width == width
                         && cache.height == height
@@ -534,6 +540,14 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
             cr.restore().ok();
             data.combo.transform.restore(cr);
+
+            // Track successful draws for debugging
+            static DRAW_SUCCESS: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
+            let count = DRAW_SUCCESS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count.is_multiple_of(300) {
+                log::debug!("Draw success count: {}", count + 1);
+            }
         });
 
         // Set up animation timer

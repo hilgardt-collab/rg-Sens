@@ -997,9 +997,21 @@ impl GridLayout {
                 Err(_) => {
                     // Lock contention - draw a fallback solid background and schedule a retry
                     // This ensures the panel is never completely invisible
-                    log::debug!(
-                        "Lock contention during background render, drawing fallback and scheduling retry"
-                    );
+                    static LOCK_FAIL_COUNT: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    let fail_count =
+                        LOCK_FAIL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if fail_count < 10 {
+                        log::warn!(
+                            "Lock contention during background render (occurrence #{}), drawing fallback",
+                            fail_count + 1
+                        );
+                    } else if fail_count.is_multiple_of(100) {
+                        log::warn!(
+                            "Persistent lock contention during background render ({} total)",
+                            fail_count + 1
+                        );
+                    }
                     let width = w as f64;
                     let height = h as f64;
                     cr.save().ok();

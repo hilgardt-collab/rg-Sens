@@ -273,6 +273,17 @@ impl AnimationManager {
                 active_count
             );
         }
+        // More frequent trace logging for debugging drawing issues
+        if count.is_multiple_of(60) {
+            // Log every ~1 second at 60fps
+            log::trace!(
+                "Animation tick {}: {} entries, {} mapped, {} active",
+                count,
+                entries.len(),
+                mapped_count,
+                active_count
+            );
+        }
 
         any_active
     }
