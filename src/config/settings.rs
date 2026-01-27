@@ -72,11 +72,11 @@ impl AppConfig {
         let raw: serde_json::Value = serde_json::from_str(content)?;
         let version = raw.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
-        if version >= 2 {
+        let mut config = if version >= 2 {
             // V2 format - use AppConfigLoad which has the correct "panels" field
             // Use from_value to avoid parsing the JSON string twice
             let loaded: AppConfigLoad = serde_json::from_value(raw)?;
-            Ok(AppConfig {
+            AppConfig {
                 version: loaded.version,
                 window: loaded.window,
                 grid: loaded.grid,
@@ -86,14 +86,19 @@ impl AppConfig {
                 alarms: loaded.alarms,
                 global_timer_sound: loaded.global_timer_sound,
                 global_theme: loaded.global_theme,
-            })
+            }
         } else {
             // V1 format - load and migrate
             info!("Migrating config from v1 to v2 format");
             // Use from_value to avoid parsing the JSON string twice
             let v1_config: AppConfigV1 = serde_json::from_value(raw)?;
-            Ok(v1_config.migrate_to_v2())
-        }
+            v1_config.migrate_to_v2()
+        };
+
+        // Sanitize loaded config to fix any invalid values
+        config.sanitize();
+
+        Ok(config)
     }
 
     /// Save configuration to disk (always saves in v2 format)
@@ -196,6 +201,17 @@ impl AppConfig {
     /// Update global timer sound from global manager
     pub fn set_global_timer_sound(&mut self, sound: AlarmSoundConfig) {
         self.global_timer_sound = sound;
+    }
+
+    /// Sanitize configuration to ensure all values are valid
+    /// This corrects any invalid values loaded from disk (e.g., corrupted config)
+    pub fn sanitize(&mut self) {
+        let window_corrected = self.window.sanitize();
+        let grid_corrected = self.grid.sanitize();
+
+        if window_corrected || grid_corrected {
+            log::info!("Configuration sanitized: corrected invalid values");
+        }
     }
 }
 
@@ -361,6 +377,62 @@ impl Default for WindowConfig {
     }
 }
 
+impl WindowConfig {
+    /// Sanitize window configuration to ensure valid values
+    /// Returns true if any values were corrected
+    pub fn sanitize(&mut self) -> bool {
+        let mut corrected = false;
+
+        // Window dimensions must be positive (minimum 100x100 for usability)
+        if self.width < 100 {
+            log::warn!(
+                "Invalid window width {} corrected to 800",
+                self.width
+            );
+            self.width = 800;
+            corrected = true;
+        }
+        if self.height < 100 {
+            log::warn!(
+                "Invalid window height {} corrected to 600",
+                self.height
+            );
+            self.height = 600;
+            corrected = true;
+        }
+
+        // Corner radius must be non-negative
+        if self.panel_corner_radius < 0.0 {
+            log::warn!(
+                "Invalid corner radius {} corrected to 8.0",
+                self.panel_corner_radius
+            );
+            self.panel_corner_radius = 8.0;
+            corrected = true;
+        }
+
+        // Viewport dimensions must be non-negative (0 means use window size)
+        if self.viewport_width < 0 {
+            log::warn!(
+                "Invalid viewport width {} corrected to 0",
+                self.viewport_width
+            );
+            self.viewport_width = 0;
+            corrected = true;
+        }
+        if self.viewport_height < 0 {
+            log::warn!(
+                "Invalid viewport height {} corrected to 0",
+                self.viewport_height
+            );
+            self.viewport_height = 0;
+            corrected = true;
+        }
+
+        corrected
+    }
+}
+
 /// Grid configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GridConfig {
@@ -380,6 +452,56 @@ impl Default for GridConfig {
             cell_height: 16,
             spacing: 2,
         }
+    }
+}
+
+impl GridConfig {
+    /// Sanitize grid configuration to ensure valid values
+    /// Returns true if any values were corrected
+    pub fn sanitize(&mut self) -> bool {
+        let mut corrected = false;
+
+        // Grid must have at least 1 column and row
+        if self.columns == 0 {
+            log::warn!("Invalid grid columns 0 corrected to 4");
+            self.columns = 4;
+            corrected = true;
+        }
+        if self.rows == 0 {
+            log::warn!("Invalid grid rows 0 corrected to 3");
+            self.rows = 3;
+            corrected = true;
+        }
+
+        // Cell dimensions must be positive (minimum 1 pixel)
+        if self.cell_width < 1 {
+            log::warn!(
+                "Invalid cell width {} corrected to 16",
+                self.cell_width
+            );
+            self.cell_width = 16;
+            corrected = true;
+        }
+        if self.cell_height < 1 {
+            log::warn!(
+                "Invalid cell height {} corrected to 16",
+                self.cell_height
+            );
+            self.cell_height = 16;
+            corrected = true;
+        }
+
+        // Spacing must be non-negative
+        if self.spacing < 0 {
+            log::warn!(
+                "Invalid spacing {} corrected to 2",
+                self.spacing
+            );
+            self.spacing = 2;
+            corrected = true;
+        }
+
+        corrected
     }
 }
 

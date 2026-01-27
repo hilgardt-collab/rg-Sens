@@ -253,8 +253,17 @@ impl SharedSourceManager {
     /// # Performance Note
     /// Uses read lock for the common case (decrementing ref count) and only
     /// acquires write lock when the source needs to be removed.
+    ///
+    /// # Locking Safety
+    /// This function carefully avoids deadlock by following a strict locking order:
+    /// 1. Never hold RwLock while acquiring Mutex (clone Arc handle first, then release RwLock)
+    /// 2. Never hold Mutex while acquiring write RwLock
+    /// 3. Re-check conditions after acquiring each lock (another thread may have changed state)
+    ///
+    /// IMPORTANT: Do not modify the locking order without careful analysis of all call sites.
     pub fn release_source(&self, key: &str, panel_id: &str) {
-        // Phase 1: Clone handle while holding read lock to avoid nested RwLock -> Mutex deadlock
+        // SAFETY: Clone handle while holding read lock, then release RwLock before acquiring Mutex
+        // This prevents RwLock -> Mutex -> RwLock deadlock
         let handle = {
             let sources = match self.sources.read() {
                 Ok(s) => s,

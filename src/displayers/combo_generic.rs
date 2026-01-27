@@ -380,25 +380,34 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
             data.combo.transform.apply(cr, w, h);
 
             // Check if frame cache is valid (same size and config version)
-                let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
-                    cache.width == width
+            // Use pattern matching to safely access cache and avoid race conditions
+            let cached_result = {
+                let cache_ref = frame_cache_clone.borrow();
+                if let Some(cache) = cache_ref.as_ref() {
+                    if cache.width == width
                         && cache.height == height
                         && cache.config_version == data.config_version
-                });
+                    {
+                        // Cache is valid - extract data while holding borrow
+                        if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
+                            log::debug!("Failed to set cached surface: {:?}", e);
+                        }
+                        cr.paint().ok();
+                        // Clear source reference to allow cached surface to be deallocated
+                        // when cache is invalidated (prevents memory leak)
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+                        Some((cache.content_bounds, cache.group_layouts.clone()))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
 
                 // Either use cached frame or render fresh and cache
-                let (content_bounds, group_layouts) = if cache_valid {
-                    // Use cached frame - just paint the surface
-                    let cache_ref = frame_cache_clone.borrow();
-                    let cache = cache_ref.as_ref().unwrap();
-                    if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
-                        log::debug!("Failed to set cached surface: {:?}", e);
-                    }
-                    cr.paint().ok();
-                    // Clear source reference to allow cached surface to be deallocated
-                    // when cache is invalidated (prevents memory leak)
-                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                    (cache.content_bounds, cache.group_layouts.clone())
+                let (content_bounds, group_layouts) = if let Some(result) = cached_result {
+                    result
                 } else {
                     // Try to create cache surface
                     let cache_result =
@@ -431,10 +440,20 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                             renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
                         renderer_clone.draw_group_dividers(&cache_cr, &data.config, &group_layouts);
 
-                        // Flush and store cache
+                        // Flush cache surface
                         drop(cache_cr);
                         surface.flush();
 
+                        // Paint cached surface to main context BEFORE moving into cache
+                        if let Err(e) = cr.set_source_surface(&surface, 0.0, 0.0) {
+                            log::debug!("Failed to set cached surface: {:?}", e);
+                        }
+                        cr.paint().ok();
+                        // Clear source reference to allow cached surface to be deallocated
+                        // when cache is invalidated (prevents memory leak)
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+
+                        // Store surface in cache for future frames
                         *frame_cache_clone.borrow_mut() = Some(FrameCache {
                             surface,
                             width,
@@ -443,17 +462,6 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                             content_bounds,
                             group_layouts: group_layouts.clone(),
                         });
-
-                        // Paint cached surface
-                        let cache_ref = frame_cache_clone.borrow();
-                        let cache = cache_ref.as_ref().unwrap();
-                        if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
-                            log::debug!("Failed to set cached surface: {:?}", e);
-                        }
-                        cr.paint().ok();
-                        // Clear source reference to allow cached surface to be deallocated
-                        // when cache is invalidated (prevents memory leak)
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
 
                         (content_bounds, group_layouts)
                     } else {

@@ -281,9 +281,8 @@ impl TemplateBackend for WebKitBackend {
                     return glib::ControlFlow::Break;
                 }
 
-                // Check if widget is orphaned
-                {
-                    let webview = state.webview.as_ref().unwrap();
+                // Check if widget is orphaned - use pattern matching for safety
+                if let Some(webview) = state.webview.as_ref() {
                     if webview.root().is_none() {
                         log::debug!("WebKit backend timer stopping: WebView orphaned");
                         state.js_cancellable.cancel();
@@ -299,6 +298,10 @@ impl TemplateBackend for WebKitBackend {
                     if !webview.is_mapped() {
                         return glib::ControlFlow::Continue;
                     }
+                } else {
+                    // webview was None despite earlier check - shouldn't happen but handle gracefully
+                    log::debug!("WebKit backend timer stopping: WebView disappeared");
+                    return glib::ControlFlow::Break;
                 }
 
                 // Check for config change
