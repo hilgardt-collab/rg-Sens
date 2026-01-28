@@ -4,10 +4,12 @@ use gtk4::prelude::*;
 use gtk4::Application;
 use log::{error, info, warn};
 use rg_sens::config::AppConfig;
-use rg_sens::core::{PanelData, PanelGeometry, UpdateManager};
+use rg_sens::core::{DisplayerConfig, PanelData, PanelGeometry, SourceConfig, UpdateManager};
+use rg_sens::sources::ClockSourceConfig;
 use rg_sens::ui::{
     auto_scroll, config_helpers, context_menu, new_panel_dialog, theme, window_settings_dialog,
-    GridConfig as UiGridConfig, GridLayout,
+    AnalogClockConfig, ArcDisplayConfig, CpuField, CpuSourceConfig, GridConfig as UiGridConfig,
+    GridLayout, GpuField, GpuSourceConfig, SpeedometerConfig,
 };
 use rg_sens::{displayers, sources};
 use std::cell::RefCell;
@@ -414,41 +416,53 @@ fn build_ui(app: &Application) {
     if panel_data_list.is_empty() {
         info!("No panels in config, creating default panels");
 
-        // Create default panels using PanelData
+        // Create default panels: CPU arc gauge, analog clock, GPU speedometer
         let default_panels = vec![
-            PanelData::with_types(
-                "panel-1".to_string(),
-                PanelGeometry {
+            // CPU usage with arc displayer (12x12 on the left)
+            PanelData {
+                id: "panel-cpu".to_string(),
+                geometry: PanelGeometry {
                     x: 0,
                     y: 0,
-                    width: 1,
-                    height: 1,
+                    width: 12,
+                    height: 12,
                 },
-                "cpu",
-                "text",
-            ),
-            PanelData::with_types(
-                "panel-2".to_string(),
-                PanelGeometry {
-                    x: 1,
+                source_config: SourceConfig::Cpu(CpuSourceConfig {
+                    field: CpuField::Usage,
+                    ..CpuSourceConfig::default()
+                }),
+                displayer_config: DisplayerConfig::Arc(ArcDisplayConfig::default()),
+                appearance: Default::default(),
+            },
+            // Analog clock (12x12 in the center)
+            PanelData {
+                id: "panel-clock".to_string(),
+                geometry: PanelGeometry {
+                    x: 12,
                     y: 0,
-                    width: 1,
-                    height: 1,
+                    width: 12,
+                    height: 12,
                 },
-                "cpu",
-                "text",
-            ),
-            PanelData::with_types(
-                "panel-3".to_string(),
-                PanelGeometry {
-                    x: 0,
-                    y: 1,
-                    width: 2,
-                    height: 1,
+                source_config: SourceConfig::Clock(ClockSourceConfig::default()),
+                displayer_config: DisplayerConfig::ClockAnalog(AnalogClockConfig::default()),
+                appearance: Default::default(),
+            },
+            // GPU utilization with speedometer displayer (12x12 on the right)
+            PanelData {
+                id: "panel-gpu".to_string(),
+                geometry: PanelGeometry {
+                    x: 24,
+                    y: 0,
+                    width: 12,
+                    height: 12,
                 },
-                "cpu",
-                "text",
-            ),
+                source_config: SourceConfig::Gpu(GpuSourceConfig {
+                    field: GpuField::Utilization,
+                    ..GpuSourceConfig::default()
+                }),
+                displayer_config: DisplayerConfig::Speedometer(SpeedometerConfig::default()),
+                appearance: Default::default(),
+            },
         ];
 
         for panel_data in default_panels {
