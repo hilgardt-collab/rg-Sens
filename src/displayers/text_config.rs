@@ -517,50 +517,20 @@ impl Default for TextDisplayerConfig {
     fn default() -> Self {
         Self {
             lines: vec![
-                // Default configuration: show "Caption Value Unit" (e.g., "CPU 45.2 %")
-                // Uses generic field names that work with any configured data source
+                // Value and Unit grouped at center, font size 20, white
                 TextLineConfig {
-                    field_id: "caption".to_string(),
+                    field_id: "value".to_string(),
                     font_family: "Sans".to_string(),
-                    font_size: 14.0,
+                    font_size: 20.0,
                     font_source: Some(FontSource::Custom {
                         family: "Sans".to_string(),
-                        size: 14.0,
+                        size: 20.0,
                     }),
                     bold: false,
                     italic: false,
                     fill: TextFillType::Solid {
                         color: ColorSource::Custom {
                             color: Color::new(1.0, 1.0, 1.0, 1.0),
-                        },
-                    },
-                    legacy_color: None,
-                    text_background: TextBackgroundConfig::default(),
-                    position: TextPosition::CenterLeft,
-                    legacy_vertical_position: None,
-                    legacy_horizontal_position: None,
-                    rotation_angle: 0.0,
-                    is_combined: true,
-                    group_id: Some("main".to_string()),
-                    combine_direction: CombineDirection::Horizontal,
-                    combine_alignment: TextPosition::Center,
-                    legacy_combine_alignment: None,
-                    offset_x: 0.0,
-                    offset_y: 0.0,
-                },
-                TextLineConfig {
-                    field_id: "value".to_string(),
-                    font_family: "Sans".to_string(),
-                    font_size: 14.0,
-                    font_source: Some(FontSource::Custom {
-                        family: "Sans".to_string(),
-                        size: 14.0,
-                    }),
-                    bold: false,
-                    italic: false,
-                    fill: TextFillType::Solid {
-                        color: ColorSource::Custom {
-                            color: Color::new(0.5, 1.0, 0.5, 1.0), // Light green
                         },
                     },
                     legacy_color: None,
@@ -580,10 +550,10 @@ impl Default for TextDisplayerConfig {
                 TextLineConfig {
                     field_id: "unit".to_string(),
                     font_family: "Sans".to_string(),
-                    font_size: 14.0,
+                    font_size: 20.0,
                     font_source: Some(FontSource::Custom {
                         family: "Sans".to_string(),
-                        size: 14.0,
+                        size: 20.0,
                     }),
                     bold: false,
                     italic: false,
@@ -594,12 +564,42 @@ impl Default for TextDisplayerConfig {
                     },
                     legacy_color: None,
                     text_background: TextBackgroundConfig::default(),
-                    position: TextPosition::CenterRight,
+                    position: TextPosition::Center,
                     legacy_vertical_position: None,
                     legacy_horizontal_position: None,
                     rotation_angle: 0.0,
                     is_combined: true,
                     group_id: Some("main".to_string()),
+                    combine_direction: CombineDirection::Horizontal,
+                    combine_alignment: TextPosition::Center,
+                    legacy_combine_alignment: None,
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                },
+                // Caption at bottom, ungrouped, font size 12, white
+                TextLineConfig {
+                    field_id: "caption".to_string(),
+                    font_family: "Sans".to_string(),
+                    font_size: 12.0,
+                    font_source: Some(FontSource::Custom {
+                        family: "Sans".to_string(),
+                        size: 12.0,
+                    }),
+                    bold: false,
+                    italic: false,
+                    fill: TextFillType::Solid {
+                        color: ColorSource::Custom {
+                            color: Color::new(1.0, 1.0, 1.0, 1.0),
+                        },
+                    },
+                    legacy_color: None,
+                    text_background: TextBackgroundConfig::default(),
+                    position: TextPosition::BottomCenter,
+                    legacy_vertical_position: None,
+                    legacy_horizontal_position: None,
+                    rotation_angle: 0.0,
+                    is_combined: false,
+                    group_id: None,
                     combine_direction: CombineDirection::Horizontal,
                     combine_alignment: TextPosition::Center,
                     legacy_combine_alignment: None,
