@@ -528,6 +528,8 @@ fn render_image_background(
         // Fast path: just paint the pre-scaled, pre-alpha'd surface
         cr.set_source_surface(&scaled_surface, 0.0, 0.0)?;
         cr.paint()?;
+        // Clear source reference to prevent GL texture memory leak
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
     } else {
         // Fallback to solid color if image can't be loaded
         cr.set_source_rgb(0.2, 0.2, 0.2);

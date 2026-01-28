@@ -430,6 +430,8 @@ impl Displayer for LcarsComboDisplayer {
                         && cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok()
                     {
                         cr.paint().ok();
+                        // Clear source reference to prevent GL texture memory leak
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
                         return;
                     }
                 }

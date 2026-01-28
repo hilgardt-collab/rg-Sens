@@ -258,6 +258,8 @@ impl TemplateBackend for ServoBackend {
                         cr.scale(scale, scale);
                         let _ = cr.set_source_surface(&surface, 0.0, 0.0);
                         let _ = cr.paint();
+                        // Clear source reference to prevent GL texture memory leak
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
                         cr.restore().ok();
                     }
                     Err(e) => {
