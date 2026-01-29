@@ -1152,11 +1152,9 @@ fn build_ui(app: &Application) {
     let config_dirty_for_settings = config_dirty.clone();
     let start_auto_scroll_for_settings = start_auto_scroll.clone();
 
-    // Add right-click gesture for context menu
-    // Use Capture phase so the window gets the event before child widgets
+    // Add right-click gesture for context menu on empty grid background
     let gesture_click = gtk4::GestureClick::new();
     gesture_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
-    gesture_click.set_propagation_phase(gtk4::PropagationPhase::Capture);
 
     // Clone variables for context menu
     let window_for_menu = window.clone();
@@ -1176,8 +1174,6 @@ fn build_ui(app: &Application) {
         let grid_x = x + scroll_x;
         let grid_y = y + scroll_y;
         if grid_layout_for_menu.borrow().is_point_on_panel(grid_x, grid_y) {
-            // Deny this gesture so the event propagates to the panel's gesture
-            gesture.set_state(gtk4::EventSequenceState::Denied);
             return;
         }
 
