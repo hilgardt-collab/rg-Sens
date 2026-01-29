@@ -1173,10 +1173,11 @@ fn build_ui(app: &Application) {
         let scroll_y = scrolled_window_for_menu.vadjustment().value();
 
         // Check if click is on a panel - if so, let the panel's context menu handle it
-        // This is a fallback in case gesture propagation doesn't work correctly
         let grid_x = x + scroll_x;
         let grid_y = y + scroll_y;
         if grid_layout_for_menu.borrow().is_point_on_panel(grid_x, grid_y) {
+            // Deny this gesture so the event propagates to the panel's gesture
+            gesture.set_state(gtk4::EventSequenceState::Denied);
             return;
         }
 
