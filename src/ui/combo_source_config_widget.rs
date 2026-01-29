@@ -226,6 +226,10 @@ struct SlotWidgets {
     source_ids: Vec<String>,
     config_container: GtkBox,
     source_config_widget: Rc<RefCell<Option<SourceConfigWidgetType>>>,
+    /// ScrolledWindow for this slot tab (needed for disconnecting map handler)
+    tab_scrolled: ScrolledWindow,
+    /// Signal handler ID for the lazy initialization connect_map callback
+    map_handler_id: Option<glib::SignalHandlerId>,
 }
 
 impl ComboSourceConfigWidget {
@@ -1107,7 +1111,8 @@ impl ComboSourceConfigWidget {
         config_container.append(&placeholder_label);
 
         // Set up lazy initialization when tab becomes visible
-        {
+        // Store the handler ID so we can disconnect it during cleanup to prevent memory leaks
+        let map_handler_id = {
             let config_container_clone = config_container.clone();
             let source_config_widget_clone = source_config_widget.clone();
             let widget_initialized_clone = widget_initialized.clone();
@@ -1157,8 +1162,8 @@ impl ComboSourceConfigWidget {
                     select_source_label.add_css_class("dim-label");
                     config_container_clone.append(&select_source_label);
                 }
-            });
-        }
+            })
+        };
 
         // Copy source config handler
         {
@@ -1307,7 +1312,7 @@ impl ComboSourceConfigWidget {
             });
         }
 
-        // Store widgets for later access
+        // Store widgets for later access (including tab_scrolled and map_handler_id for cleanup)
         slot_widgets.borrow_mut().insert(
             slot_name.to_string(),
             SlotWidgets {
@@ -1316,6 +1321,8 @@ impl ComboSourceConfigWidget {
                 source_ids: source_ids.to_vec(),
                 config_container,
                 source_config_widget,
+                tab_scrolled: tab_scrolled.clone(),
+                map_handler_id: Some(map_handler_id),
             },
         );
 
@@ -1391,15 +1398,18 @@ impl ComboSourceConfigWidget {
         *self.on_fields_updated.borrow_mut() = Some(Box::new(callback));
     }
 
-    /// Update the cached fields asynchronously (non-blocking).
-    /// Creates a ComboSource in a background thread and updates the cache when done.
-    /// Calls the `on_fields_updated` callback when the cache is updated.
+    /// Update the cached fields using the registry's field cache (lightweight).
+    ///
+    /// Instead of creating a full ComboSource with all child sources (which is expensive
+    /// and uses 50-150MB), this method constructs the field list directly from the
+    /// registry's cached field metadata. Each source type's fields are cached on first
+    /// access, so subsequent calls are nearly instant.
     ///
     /// This method is debounced - rapid calls are coalesced into a single update.
-    /// This prevents spawning many threads when multiple dropdowns change at once
+    /// This prevents excessive UI updates when multiple dropdowns change at once
     /// (e.g., during initialization or when pasting configurations).
     pub fn update_fields_cache_async(&self) {
-        log::info!("=== update_fields_cache_async CALLED ===");
+        log::info!("=== update_fields_cache_async CALLED (using cached fields) ===");
         // Debounce: increment counter and schedule delayed execution
         // If called again before delay, the counter changes and previous call is cancelled
         let debounce_id = self.fields_debounce_id.get().wrapping_add(1);
@@ -1412,7 +1422,7 @@ impl ComboSourceConfigWidget {
         let on_fields_updated = self.on_fields_updated.clone();
         let destroyed = self.destroyed.clone();
 
-        // Wait for debounce period before spawning thread
+        // Wait for debounce period before computing fields
         // This coalesces rapid calls (e.g., setting up 20 slots) into one
         glib::timeout_add_local_once(Duration::from_millis(100), move || {
             // Check if this is still the latest request
@@ -1436,114 +1446,117 @@ impl ComboSourceConfigWidget {
             fields_generation.set(generation);
 
             let config_snapshot = config.borrow().clone();
+            let start = std::time::Instant::now();
 
-            // Create a channel to send results back to main thread
-            let (tx, rx) = std::sync::mpsc::channel::<(u32, Vec<crate::core::FieldMetadata>)>();
+            // Compute fields using cached field metadata from the registry
+            // This is MUCH cheaper than creating full source instances
+            let fields = Self::compute_fields_from_cache(&config_snapshot);
 
             log::info!(
-                "=== DEBOUNCE FIRED: Spawning fields computation thread (gen {}) ===",
-                generation
+                "=== Fields computed from cache in {:?} with {} fields ===",
+                start.elapsed(),
+                fields.len()
             );
 
-            // Spawn background thread for expensive ComboSource creation
-            std::thread::spawn(move || {
-                use crate::core::DataSource;
-                use crate::sources::ComboSource;
-                use serde_json::Value;
-
-                let start = std::time::Instant::now();
-                let mut source = ComboSource::new();
-
-                // Configure the source
-                let combo_config_value =
-                    serde_json::to_value(&config_snapshot).unwrap_or(Value::Null);
-                let mut config_map: std::collections::HashMap<String, Value> =
-                    std::collections::HashMap::new();
-                config_map.insert("combo_config".to_string(), combo_config_value);
-
-                let fields = if source.configure(&config_map).is_ok() {
-                    source.fields()
-                } else {
-                    Vec::new()
-                };
-
-                log::info!(
-                    "=== BACKGROUND THREAD DONE: Fields computed in {:?} with {} fields ===",
-                    start.elapsed(),
-                    fields.len()
+            // Check if this update is still valid (not superseded by newer request)
+            if fields_generation.get() != generation {
+                log::debug!(
+                    "Skipping stale fields update (gen {} vs current {})",
+                    generation,
+                    fields_generation.get()
                 );
+                return;
+            }
 
-                // Send results back via channel
-                let _ = tx.send((generation, fields));
-            });
+            // Update the cache
+            *cached_fields.borrow_mut() = fields.clone();
 
-            // Set up receiver on main thread to process results
-            let fields_generation_for_recv = fields_generation.clone();
-            glib::timeout_add_local(Duration::from_millis(50), move || {
-                match rx.try_recv() {
-                    Ok((gen, fields)) => {
-                        // Check if this update is still valid (not superseded by newer request)
-                        if fields_generation_for_recv.get() != gen {
-                            log::debug!(
-                                "Skipping stale fields update (gen {} vs current {})",
-                                gen,
-                                fields_generation_for_recv.get()
-                            );
-                            return glib::ControlFlow::Break;
-                        }
-
-                        // Update the cache
-                        *cached_fields.borrow_mut() = fields.clone();
-
-                        // Notify listeners
-                        if let Some(ref callback) = *on_fields_updated.borrow() {
-                            callback(fields);
-                        }
-
-                        glib::ControlFlow::Break
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        // Results not ready yet, check again in 50ms
-                        glib::ControlFlow::Continue
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        // Channel closed (thread panicked or finished without sending)
-                        log::warn!(
-                            "Fields computation thread disconnected without sending results"
-                        );
-                        glib::ControlFlow::Break
-                    }
-                }
-            });
+            // Notify listeners
+            if let Some(ref callback) = *on_fields_updated.borrow() {
+                callback(fields);
+            }
         });
     }
 
-    /// Compute available fields synchronously (expensive - only use for Apply/Accept)
-    /// This is the original implementation that creates all child sources.
-    pub fn compute_fields_sync(&self) -> Vec<crate::core::FieldMetadata> {
-        use crate::core::DataSource;
-        use crate::sources::ComboSource;
-        use serde_json::Value;
+    /// Compute combo source fields using the registry's cached field metadata.
+    ///
+    /// This is MUCH cheaper than creating a full ComboSource with all child sources,
+    /// which would require creating sysinfo::System objects (50-100MB each).
+    /// Instead, we use the registry's field cache which only creates each source
+    /// type once and caches its field metadata.
+    fn compute_fields_from_cache(config: &crate::sources::ComboSourceConfig) -> Vec<crate::core::FieldMetadata> {
+        use crate::core::global_registry;
 
-        let config = self.config.borrow().clone();
-        let mut source = ComboSource::new();
+        let mut fields = Vec::new();
+        let registry = global_registry();
 
-        // Configure the source
-        let combo_config_value = serde_json::to_value(&config).unwrap_or(Value::Null);
-        let mut config_map: HashMap<String, Value> = HashMap::new();
-        config_map.insert("combo_config".to_string(), combo_config_value);
-        if source.configure(&config_map).is_ok() {
-            source.fields()
-        } else {
-            Vec::new()
+        // Get slot names based on mode (matching ComboSource::get_slot_names())
+        let slot_names: Vec<String> = match config.mode.as_str() {
+            "lcars" => {
+                let mut names = Vec::new();
+                for (group_idx, group) in config.groups.iter().enumerate() {
+                    let group_num = group_idx + 1;
+                    for item_idx in 1..=group.item_count {
+                        names.push(format!("group{}_{}", group_num, item_idx));
+                    }
+                }
+                names
+            }
+            "arc" => {
+                let mut names = vec!["center".to_string()];
+                let arc_count = config.groups.first().map(|g| g.item_count).unwrap_or(4);
+                for i in 1..=arc_count {
+                    names.push(format!("arc{}", i));
+                }
+                names
+            }
+            "level_bar" => {
+                let count = config.groups.first().map(|g| g.item_count).unwrap_or(4);
+                (1..=count).map(|i| format!("bar{}", i)).collect()
+            }
+            _ => {
+                // Default: groups with items
+                let mut names = Vec::new();
+                for (group_idx, group) in config.groups.iter().enumerate() {
+                    let group_num = group_idx + 1;
+                    for item_idx in 1..=group.item_count {
+                        names.push(format!("group{}_{}", group_num, item_idx));
+                    }
+                }
+                names
+            }
+        };
+
+        // For each slot, get cached fields from the registry
+        for slot_name in slot_names {
+            if let Some(slot_config) = config.slots.get(&slot_name) {
+                if !slot_config.source_id.is_empty() && slot_config.source_id != "none" {
+                    let slot_fields = registry.get_source_fields_for_combo_slot(
+                        &slot_name,
+                        &slot_config.source_id,
+                    );
+                    fields.extend(slot_fields);
+                }
+            }
         }
+
+        fields
+    }
+
+    /// Compute available fields synchronously using cached field metadata.
+    ///
+    /// This is now cheap because it uses the registry's field cache instead of
+    /// creating full source instances.
+    pub fn compute_fields_sync(&self) -> Vec<crate::core::FieldMetadata> {
+        let config = self.config.borrow().clone();
+        Self::compute_fields_from_cache(&config)
     }
 
     /// Explicitly cancel all async operations and mark this widget as destroyed.
     /// Call this before dropping the widget to ensure async callbacks exit cleanly.
     /// This is important for preventing memory leaks when the parent dialog closes.
     pub fn cleanup(&self) {
-        log::debug!("ComboSourceConfigWidget::cleanup() - cancelling async operations");
+        log::debug!("ComboSourceConfigWidget::cleanup() - cancelling async operations and disconnecting signal handlers");
         self.destroyed.set(true);
         // Increment generation and debounce counters to cancel any pending async operations
         self.rebuild_generation
@@ -1552,6 +1565,19 @@ impl ComboSourceConfigWidget {
             .set(self.fields_generation.get().wrapping_add(1));
         self.fields_debounce_id
             .set(self.fields_debounce_id.get().wrapping_add(1));
+
+        // Disconnect all map signal handlers to break reference cycles
+        // This is critical for preventing memory leaks - the connect_map closures
+        // capture Rc references that would otherwise keep the widget alive indefinitely
+        for (slot_name, slot) in self.slot_widgets.borrow_mut().iter_mut() {
+            if let Some(handler_id) = slot.map_handler_id.take() {
+                log::debug!(
+                    "ComboSourceConfigWidget::cleanup() - disconnecting map handler for slot '{}'",
+                    slot_name
+                );
+                slot.tab_scrolled.disconnect(handler_id);
+            }
+        }
     }
 }
 

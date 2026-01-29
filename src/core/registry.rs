@@ -37,6 +37,9 @@ pub struct Registry {
     displayers: RwLock<HashMap<String, DisplayerFactory>>,
     source_info: RwLock<HashMap<String, SourceInfo>>,
     displayer_info: RwLock<HashMap<String, DisplayerInfo>>,
+    /// Cache for source field metadata to avoid creating full source instances
+    /// just to read static field definitions. Key is source ID, value is field list.
+    source_fields_cache: RwLock<HashMap<String, Vec<super::FieldMetadata>>>,
 }
 
 impl Registry {
@@ -47,6 +50,7 @@ impl Registry {
             displayers: RwLock::new(HashMap::new()),
             source_info: RwLock::new(HashMap::new()),
             displayer_info: RwLock::new(HashMap::new()),
+            source_fields_cache: RwLock::new(HashMap::new()),
         }
     }
 
@@ -209,6 +213,82 @@ impl Registry {
                 None
             }
         }
+    }
+
+    /// Get cached field metadata for a source type.
+    ///
+    /// This avoids creating expensive source instances just to read static field metadata.
+    /// Fields are cached on first access per source type.
+    ///
+    /// Note: This should NOT be used for "combination" source since its fields depend
+    /// on the configured slots. Use `get_source_fields_for_combo_slot` for that.
+    pub fn get_source_fields_cached(&self, source_id: &str) -> Vec<super::FieldMetadata> {
+        // Skip caching for combination source - its fields are dynamic
+        if source_id == "combination" {
+            log::warn!("get_source_fields_cached called for 'combination' - use get_source_fields_for_combo_slot instead");
+            return Vec::new();
+        }
+
+        // Check cache first
+        if let Ok(cache) = self.source_fields_cache.read() {
+            if let Some(fields) = cache.get(source_id) {
+                return fields.clone();
+            }
+        }
+
+        // Not in cache - create a source instance to get fields, then cache them
+        log::info!(
+            "Caching field metadata for source '{}' (one-time cost)",
+            source_id
+        );
+
+        let fields = match self.create_source(source_id) {
+            Ok(source) => {
+                let fields = source.fields();
+                // Cache the fields for future use
+                if let Ok(mut cache) = self.source_fields_cache.write() {
+                    cache.insert(source_id.to_string(), fields.clone());
+                }
+                fields
+                // source is dropped here, freeing memory
+            }
+            Err(e) => {
+                log::error!("Failed to get fields for source '{}': {}", source_id, e);
+                Vec::new()
+            }
+        };
+
+        fields
+    }
+
+    /// Get field metadata for a combo slot by constructing prefixed fields from cached source fields.
+    ///
+    /// This is much cheaper than creating a full ComboSource with all its child sources,
+    /// because it uses cached field metadata for each individual source type.
+    pub fn get_source_fields_for_combo_slot(
+        &self,
+        slot_name: &str,
+        source_id: &str,
+    ) -> Vec<super::FieldMetadata> {
+        if source_id.is_empty() || source_id == "none" {
+            return Vec::new();
+        }
+
+        let base_fields = self.get_source_fields_cached(source_id);
+
+        // Prefix field IDs and names with slot name (matching ComboSource::fields() behavior)
+        base_fields
+            .into_iter()
+            .map(|field| {
+                super::FieldMetadata::new(
+                    format!("{}_{}", slot_name, field.id),
+                    format!("{} {}", slot_name, field.name),
+                    &field.description,
+                    field.field_type,
+                    field.purpose,
+                )
+            })
+            .collect()
     }
 
     /// List all sources with their info, sorted by display name

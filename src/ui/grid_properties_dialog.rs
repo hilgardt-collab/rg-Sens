@@ -4782,6 +4782,12 @@ pub(crate) fn show_panel_properties_dialog(
     let art_deco_widget_for_cleanup = art_deco_config_widget.clone();
     let art_nouveau_widget_for_cleanup = art_nouveau_config_widget.clone();
     let steampunk_widget_for_cleanup = steampunk_config_widget.clone();
+    // Additional displayer config widgets that need cleanup
+    let text_widget_for_cleanup = text_config_widget.clone();
+    let bar_widget_for_cleanup = bar_config_widget.clone();
+    let arc_widget_for_cleanup = arc_config_widget.clone();
+    let speedometer_widget_for_cleanup = speedometer_config_widget.clone();
+    let graph_widget_for_cleanup = graph_config_widget.clone();
     dialog.connect_close_request(move |_| {
         // Use try_borrow_mut to avoid panic if already borrowed (e.g., from close_panel_properties_dialog)
         PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
@@ -4837,6 +4843,14 @@ pub(crate) fn show_panel_properties_dialog(
             widget.cleanup();
         }
         *steampunk_widget_for_cleanup.borrow_mut() = None;
+
+        // Clear additional displayer config widgets that don't have explicit cleanup methods
+        // but may hold on_change callbacks with Rc references
+        *text_widget_for_cleanup.borrow_mut() = None;
+        *bar_widget_for_cleanup.borrow_mut() = None;
+        *arc_widget_for_cleanup.borrow_mut() = None;
+        *speedometer_widget_for_cleanup.borrow_mut() = None;
+        *graph_widget_for_cleanup.borrow_mut() = None;
 
         gtk4::glib::Propagation::Proceed
     });
