@@ -3315,8 +3315,16 @@ impl GridLayout {
         self.drop_zone_layer.set_size_request(width, height);
 
         // Update all panel sizes and positions
+        // Use try_read to avoid deadlock with update manager
         for (_panel_id, state) in self.panel_states.borrow_mut().iter_mut() {
-            let panel_guard = state.panel.blocking_read();
+            let panel_guard = match state.panel.try_read() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    // Panel is locked by update manager, skip - it will update on next redraw
+                    log::debug!("Skipping panel resize, lock held by update manager");
+                    continue;
+                }
+            };
             let geom = &panel_guard.geometry;
 
             // Calculate new pixel dimensions
