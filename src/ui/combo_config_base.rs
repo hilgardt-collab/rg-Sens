@@ -198,6 +198,20 @@ pub fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
     }
 }
 
+/// Cleanup common combo config widget fields to break reference cycles.
+/// Call this when a combo config dialog is closed to prevent memory leaks.
+///
+/// This clears:
+/// - The on_change callback (which may hold references to parent scope)
+/// - The theme_ref_refreshers (which hold closures with Rc references)
+pub fn cleanup_common_fields(
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+) {
+    *on_change.borrow_mut() = None;
+    theme_ref_refreshers.borrow_mut().clear();
+}
+
 /// Creates the common theme widgets (colors, gradient, fonts) and appends them to the page.
 ///
 /// This function creates and connects:

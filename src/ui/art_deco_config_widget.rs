@@ -1627,4 +1627,16 @@ impl ArtDecoConfigWidget {
             |cfg| cfg.frame.theme.clone(),
         );
     }
+
+    /// Cleanup method to break reference cycles and allow garbage collection.
+    pub fn cleanup(&self) {
+        log::debug!("ArtDecoConfigWidget::cleanup() - breaking reference cycles");
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
+        *self.theme_widgets.borrow_mut() = None;
+        *self.frame_widgets.borrow_mut() = None;
+        *self.background_widgets.borrow_mut() = None;
+        *self.header_widgets.borrow_mut() = None;
+        *self.layout_widgets.borrow_mut() = None;
+        *self.animation_widgets.borrow_mut() = None;
+    }
 }

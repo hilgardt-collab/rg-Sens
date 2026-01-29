@@ -4794,16 +4794,46 @@ pub(crate) fn show_panel_properties_dialog(
         }
         *combo_widget_for_cleanup.borrow_mut() = None;
 
-        // Clear all combo displayer config widgets to release their memory
+        // Clean up and clear all combo displayer config widgets to release their memory
+        if let Some(ref widget) = *lcars_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *lcars_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *cyberpunk_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *cyberpunk_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *material_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *material_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *industrial_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *industrial_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *retro_terminal_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *retro_terminal_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *fighter_hud_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *fighter_hud_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *synthwave_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *synthwave_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *art_deco_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *art_deco_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *art_nouveau_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *art_nouveau_widget_for_cleanup.borrow_mut() = None;
+        if let Some(ref widget) = *steampunk_widget_for_cleanup.borrow() {
+            widget.cleanup();
+        }
         *steampunk_widget_for_cleanup.borrow_mut() = None;
 
         gtk4::glib::Propagation::Proceed

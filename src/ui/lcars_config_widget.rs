@@ -2387,6 +2387,22 @@ impl LcarsConfigWidget {
         // Queue preview redraw
         self.preview.queue_draw();
     }
+
+    /// Cleanup method to break reference cycles and allow garbage collection.
+    /// Call this before dropping the widget to ensure memory is released.
+    pub fn cleanup(&self) {
+        log::debug!("LcarsConfigWidget::cleanup() - breaking reference cycles");
+        // Clear common fields (on_change, theme_ref_refreshers)
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
+        // Clear widget-specific optional widget holders
+        *self.frame_widgets.borrow_mut() = None;
+        *self.headers_widgets.borrow_mut() = None;
+        *self.segments_widgets.borrow_mut() = None;
+        *self.content_widgets.borrow_mut() = None;
+        *self.split_widgets.borrow_mut() = None;
+        *self.animation_widgets.borrow_mut() = None;
+        *self.theme_widgets.borrow_mut() = None;
+    }
 }
 
 impl Drop for LcarsConfigWidget {
