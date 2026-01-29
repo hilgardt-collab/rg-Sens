@@ -568,12 +568,28 @@ impl UpdateManager {
                     // Acquire permit to limit concurrent updates (automatically released on drop)
                     let _permit = semaphore.acquire().await;
 
-                    let mut panel_guard = panel.write().await;
+                    // Use timeout to prevent deadlock with GTK main thread's blocking_read/write
+                    // If the lock can't be acquired within 5 seconds, skip this update
+                    let write_result = tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        panel.write(),
+                    )
+                    .await;
 
-                    // If using shared source and it was updated, panel.update() will use cached values
-                    // If not using shared source, panel.update() will poll directly
-                    if let Err(e) = panel_guard.update() {
-                        error!("Error updating panel {}: {}", panel_id_for_task, e);
+                    match write_result {
+                        Ok(mut panel_guard) => {
+                            // If using shared source and it was updated, panel.update() will use cached values
+                            // If not using shared source, panel.update() will poll directly
+                            if let Err(e) = panel_guard.update() {
+                                error!("Error updating panel {}: {}", panel_id_for_task, e);
+                            }
+                        }
+                        Err(_) => {
+                            log::warn!(
+                                "Panel {} update skipped - lock timeout (GTK may be holding it)",
+                                panel_id_for_task
+                            );
+                        }
                     }
                 });
                 tasks.push((panel_id_arc_for_tasks, task));
