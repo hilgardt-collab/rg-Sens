@@ -9,13 +9,16 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
-use sysinfo::System;
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 /// Shared sysinfo::System instance for all MemorySource instances.
 /// This reduces memory usage when multiple memory sources exist.
+/// Uses minimal RefreshKind to only load memory data (saves ~30-70MB vs System::new()).
 static SHARED_MEMORY_SYSTEM: Lazy<Mutex<System>> = Lazy::new(|| {
-    log::info!("Creating shared Memory sysinfo::System instance");
-    Mutex::new(System::new())
+    log::info!("Creating shared Memory sysinfo::System instance (memory-only refresh)");
+    Mutex::new(System::new_with_specifics(
+        RefreshKind::new().with_memory(MemoryRefreshKind::everything()),
+    ))
 });
 
 /// Memory data source

@@ -1174,6 +1174,8 @@ fn build_ui(app: &Application) {
         let grid_x = x + scroll_x;
         let grid_y = y + scroll_y;
         if grid_layout_for_menu.borrow().is_point_on_panel(grid_x, grid_y) {
+            // Deny this gesture so the event propagates to the panel's gesture
+            gesture.set_state(gtk4::EventSequenceState::Denied);
             return;
         }
 

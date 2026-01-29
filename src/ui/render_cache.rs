@@ -198,7 +198,7 @@ impl ImageCache {
     fn new() -> Self {
         Self {
             pixbufs: HashMap::new(),
-            max_entries: 50,
+            max_entries: 10, // Reduced from 50 - each image can be several MB
             expiry_duration: Duration::from_secs(300), // 5 minutes
         }
     }
