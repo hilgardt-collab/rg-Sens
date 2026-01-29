@@ -45,6 +45,7 @@ pub mod auto_scroll;
 pub mod clock_display;
 mod color_button_widget;
 pub mod combo_config_base;
+pub mod config;
 pub mod config_helpers;
 pub mod context_menu;
 mod core_bars_config_widget;

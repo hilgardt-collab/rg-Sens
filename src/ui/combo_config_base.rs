@@ -1643,7 +1643,7 @@ where
     bar_config_frame.set_margin_top(12);
 
     // Use LazyBarConfigWidget to defer expensive widget creation until user clicks
-    let bar_widget = LazyBarConfigWidget::new(slot_fields.clone());
+    let bar_widget = LazyBarConfigWidget::new(slot_fields.clone(), "Bar");
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -1714,7 +1714,7 @@ where
     graph_config_frame.set_margin_top(12);
 
     // Use LazyGraphConfigWidget to defer expensive widget creation until user clicks
-    let graph_widget = LazyGraphConfigWidget::new(slot_fields.clone());
+    let graph_widget = LazyGraphConfigWidget::new(slot_fields.clone(), "Graph");
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -1785,7 +1785,7 @@ where
     text_config_frame.set_margin_top(12);
 
     // Use LazyTextOverlayConfigWidget to defer expensive widget creation until user clicks
-    let text_widget = LazyTextOverlayConfigWidget::new(slot_fields.clone());
+    let text_widget = LazyTextOverlayConfigWidget::new(slot_fields.clone(), "Text Overlay");
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -1862,7 +1862,7 @@ where
     let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
     core_bars_config_frame.set_margin_top(12);
 
-    let core_bars_widget = LazyCoreBarsConfigWidget::new();
+    let core_bars_widget = LazyCoreBarsConfigWidget::new(slot_fields.clone(), "Core Bars");
     let current_core_bars_config = {
         let cfg = config.borrow();
         get_content_items(&cfg)
@@ -1932,7 +1932,7 @@ where
     let arc_config_frame = gtk4::Frame::new(Some("Arc Configuration"));
     arc_config_frame.set_margin_top(12);
 
-    let arc_widget = LazyArcConfigWidget::new(slot_fields.clone());
+    let arc_widget = LazyArcConfigWidget::new(slot_fields.clone(), "Arc");
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -2002,7 +2002,7 @@ where
     let speedometer_config_frame = gtk4::Frame::new(Some("Speedometer Configuration"));
     speedometer_config_frame.set_margin_top(12);
 
-    let speedometer_widget = LazySpeedometerConfigWidget::new(slot_fields.clone());
+    let speedometer_widget = LazySpeedometerConfigWidget::new(slot_fields.clone(), "Speedometer");
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();
@@ -2015,7 +2015,7 @@ where
             .map(|item| item.speedometer_config.clone())
             .unwrap_or_default()
     };
-    speedometer_widget.set_config(&current_speedometer_config);
+    speedometer_widget.set_config(current_speedometer_config);
 
     // Connect speedometer widget on_change
     let speedometer_widget_rc = Rc::new(speedometer_widget);
@@ -2027,7 +2027,7 @@ where
         let get_content_items_clone = get_content_items.clone();
         let set_content_item_clone = set_content_item.clone();
         let speedometer_widget_for_cb = speedometer_widget_rc.clone();
-        speedometer_widget_rc.set_on_change(Box::new(move || {
+        speedometer_widget_rc.set_on_change(move || {
             let speedometer_config = speedometer_widget_for_cb.get_config();
             let mut cfg = config_clone.borrow_mut();
             let mut item = get_content_items_clone(&cfg)
@@ -2038,7 +2038,7 @@ where
             set_content_item_clone(&mut cfg, &slot_name_clone, item);
             drop(cfg);
             queue_redraw(&preview_clone, &on_change_clone);
-        }));
+        });
     }
 
     // Register theme refresh callback for speedometer widget
@@ -2072,7 +2072,7 @@ where
     let static_config_frame = gtk4::Frame::new(Some("Static Display Configuration"));
     static_config_frame.set_margin_top(12);
 
-    let static_widget = LazyStaticConfigWidget::new(slot_fields.clone());
+    let static_widget = LazyStaticConfigWidget::new(slot_fields.clone(), "Static");
     // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
     {
         let cfg = config.borrow();

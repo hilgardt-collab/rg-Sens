@@ -6,6 +6,7 @@ use crate::displayers::{
     TextLineConfig,
 };
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::gradient_editor::GradientEditor;
 use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig, FontSource};
@@ -1485,224 +1486,44 @@ impl TextLineConfigWidget {
             callback();
         }
     }
-}
 
-// =============================================================================
-// LazyTextLineConfigWidget - Delays creation of TextLineConfigWidget until needed
-// =============================================================================
-
-/// A lazy-loading wrapper for TextLineConfigWidget that defers expensive widget creation
-/// until the user actually clicks to expand/configure the text lines.
-///
-/// This significantly improves dialog open time for combo panels with many slots,
-/// as TextLineConfigWidget creation is deferred until needed.
-pub struct LazyTextLineConfigWidget {
-    /// Container that holds either the placeholder or the actual widget
-    container: GtkBox,
-    /// The actual widget, created lazily on first expand
-    inner_widget: Rc<RefCell<Option<TextLineConfigWidget>>>,
-    /// Deferred config to apply when widget is created
-    deferred_config: Rc<RefCell<TextDisplayerConfig>>,
-    /// Deferred theme to apply when widget is created
-    deferred_theme: Rc<RefCell<ComboThemeConfig>>,
-    /// Available fields for the widget
-    available_fields: Vec<FieldMetadata>,
-    /// Callback to invoke on config changes
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    /// Signal handler ID for map callback, stored to disconnect during cleanup
-    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
-}
-
-impl LazyTextLineConfigWidget {
-    /// Create a new lazy text line config widget
-    ///
-    /// The actual TextLineConfigWidget is NOT created here - it's created automatically
-    /// when the widget becomes visible (mapped), or when explicitly initialized.
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        let container = GtkBox::new(Orientation::Vertical, 0);
-        let inner_widget: Rc<RefCell<Option<TextLineConfigWidget>>> = Rc::new(RefCell::new(None));
-        let deferred_config = Rc::new(RefCell::new(TextDisplayerConfig::default()));
-        let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-
-        // Create placeholder with loading indicator
-        let placeholder = GtkBox::new(Orientation::Vertical, 8);
-        placeholder.set_margin_top(12);
-        placeholder.set_margin_bottom(12);
-        placeholder.set_margin_start(12);
-        placeholder.set_margin_end(12);
-
-        let info_label = Label::new(Some("Loading text configuration..."));
-        info_label.add_css_class("dim-label");
-        placeholder.append(&info_label);
-        container.append(&placeholder);
-
-        // Create a shared initialization closure
-        let init_widget = {
-            let container_clone = container.clone();
-            let inner_widget_clone = inner_widget.clone();
-            let deferred_config_clone = deferred_config.clone();
-            let deferred_theme_clone = deferred_theme.clone();
-            let available_fields_clone = available_fields.clone();
-            let on_change_clone = on_change.clone();
-
-            Rc::new(move || {
-                // Only create if not already created
-                if inner_widget_clone.borrow().is_none() {
-                    log::info!(
-                        "LazyTextLineConfigWidget: Creating actual TextLineConfigWidget on map"
-                    );
-
-                    // Create the actual widget
-                    let widget = TextLineConfigWidget::new(available_fields_clone.clone());
-
-                    // Apply deferred theme first (before config, as config may trigger UI updates)
-                    widget.set_theme(deferred_theme_clone.borrow().clone());
-
-                    // Apply deferred config
-                    widget.set_config(deferred_config_clone.borrow().clone());
-
-                    // Connect on_change callback
-                    let on_change_inner = on_change_clone.clone();
-                    widget.set_on_change(move || {
-                        if let Some(ref callback) = *on_change_inner.borrow() {
-                            callback();
-                        }
-                    });
-
-                    // Remove placeholder and add actual widget
-                    while let Some(child) = container_clone.first_child() {
-                        container_clone.remove(&child);
-                    }
-                    container_clone.append(widget.widget());
-
-                    // Store the widget
-                    *inner_widget_clone.borrow_mut() = Some(widget);
-                }
-            })
-        };
-
-        // Auto-initialize when the widget becomes visible (mapped)
-        // Store the handler ID so we can disconnect during cleanup to break the cycle
-        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
-            Rc::new(RefCell::new(None));
-        {
-            let init_widget_clone = init_widget.clone();
-            let handler_id = container.connect_map(move |_| {
-                init_widget_clone();
-            });
-            *map_handler_id.borrow_mut() = Some(handler_id);
-        }
-
-        Self {
-            container,
-            inner_widget,
-            deferred_config,
-            deferred_theme,
-            available_fields,
-            on_change,
-            map_handler_id,
-        }
-    }
-
-    /// Get the widget container
-    pub fn widget(&self) -> &Widget {
-        self.container.upcast_ref()
-    }
-
-    /// Set the text configuration
-    ///
-    /// If the inner widget hasn't been created yet, this stores the config
-    /// to be applied when it is created. Otherwise, it's applied immediately.
-    pub fn set_config(&self, config: TextDisplayerConfig) {
-        *self.deferred_config.borrow_mut() = config.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_config(config);
-        }
-    }
-
-    /// Get the current text configuration
-    ///
-    /// Returns the deferred config if the inner widget hasn't been created yet.
-    pub fn get_config(&self) -> TextDisplayerConfig {
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.get_config()
-        } else {
-            self.deferred_config.borrow().clone()
-        }
-    }
-
-    /// Set the theme for the text widget
-    pub fn set_theme(&self, theme: ComboThemeConfig) {
-        *self.deferred_theme.borrow_mut() = theme.clone();
-        // Note: TextDisplayerConfig doesn't have a theme field - theme is stored separately
-        // in deferred_theme and applied to individual lines when widget is created
-
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_theme(theme);
-        } else {
-            // Even if inner widget doesn't exist, trigger on_change so stored config is updated
-            if let Some(ref callback) = *self.on_change.borrow() {
-                callback();
-            }
-        }
-    }
-
-    /// Set the on_change callback
-    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
-        // If widget already exists, connect it
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            let on_change_inner = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref cb) = *on_change_inner.borrow() {
-                    cb();
-                }
-            });
-        }
-    }
-
-    /// Check if the actual widget has been created
-    pub fn is_initialized(&self) -> bool {
-        self.inner_widget.borrow().is_some()
-    }
-
-    /// Force initialization of the inner widget (for cases where it must exist)
-    pub fn ensure_initialized(&self) {
-        if self.inner_widget.borrow().is_none() {
-            log::info!("LazyTextLineConfigWidget: Force-initializing TextLineConfigWidget");
-
-            let widget = TextLineConfigWidget::new(self.available_fields.clone());
-            widget.set_theme(self.deferred_theme.borrow().clone());
-            widget.set_config(self.deferred_config.borrow().clone());
-
-            // Connect on_change
-            let on_change_inner = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref callback) = *on_change_inner.borrow() {
-                    callback();
-                }
-            });
-
-            // Remove placeholder and add actual widget
-            while let Some(child) = self.container.first_child() {
-                self.container.remove(&child);
-            }
-            self.container.append(widget.widget());
-
-            *self.inner_widget.borrow_mut() = Some(widget);
-        }
-    }
-
-    /// Cleanup method to break reference cycles and allow garbage collection.
-    /// This clears the on_change callback which may hold Rc references to this widget.
+    /// Cleanup method to break reference cycles
     pub fn cleanup(&self) {
-        log::debug!("LazyTextLineConfigWidget::cleanup() - breaking reference cycles");
-        // Disconnect the map signal handler to break the cycle
-        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
-            self.container.disconnect(handler_id);
-        }
         *self.on_change.borrow_mut() = None;
-        *self.inner_widget.borrow_mut() = None;
     }
 }
+
+impl ConfigWidget for TextLineConfigWidget {
+    type Config = TextDisplayerConfig;
+
+    fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        TextLineConfigWidget::new(available_fields)
+    }
+
+    fn widget(&self) -> &GtkBox {
+        &self.widget
+    }
+
+    fn set_config(&self, config: Self::Config) {
+        TextLineConfigWidget::set_config(self, config)
+    }
+
+    fn get_config(&self) -> Self::Config {
+        TextLineConfigWidget::get_config(self)
+    }
+
+    fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        TextLineConfigWidget::set_on_change(self, callback)
+    }
+
+    fn set_theme(&self, theme: ComboThemeConfig) {
+        TextLineConfigWidget::set_theme(self, theme)
+    }
+
+    fn cleanup(&self) {
+        TextLineConfigWidget::cleanup(self)
+    }
+}
+
+/// Lazy-loading wrapper for TextLineConfigWidget.
+pub type LazyTextLineConfigWidget = LazyConfigWidget<TextLineConfigWidget>;

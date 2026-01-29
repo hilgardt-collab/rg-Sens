@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::ui::background::Color;
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::bar_display::{
     BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle,
 };
@@ -1540,6 +1541,11 @@ impl CoreBarsConfigWidget {
 
         fields
     }
+
+    /// Cleanup method to break reference cycles
+    pub fn cleanup(&self) {
+        *self.on_change.borrow_mut() = None;
+    }
 }
 
 impl Default for CoreBarsConfigWidget {
@@ -1548,193 +1554,38 @@ impl Default for CoreBarsConfigWidget {
     }
 }
 
-/// Lazy wrapper for CoreBarsConfigWidget to defer expensive widget creation
-///
-/// The actual CoreBarsConfigWidget (with preview, notebook pages, etc.) is only created
-/// when the widget becomes visible (mapped), saving significant memory when many
-/// content items are created but only one display type is active.
-pub struct LazyCoreBarsConfigWidget {
-    /// Container that holds either the placeholder or the actual widget
-    container: GtkBox,
-    /// The actual widget, created lazily on first map
-    inner_widget: Rc<RefCell<Option<CoreBarsConfigWidget>>>,
-    /// Deferred config to apply when widget is created
-    deferred_config: Rc<RefCell<CoreBarsConfig>>,
-    /// Deferred theme to apply when widget is created
-    deferred_theme: Rc<RefCell<ComboThemeConfig>>,
-    /// Deferred max_cores to apply when widget is created
-    deferred_max_cores: Rc<RefCell<Option<usize>>>,
-    /// Callback to invoke on config changes
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    /// Signal handler ID for map callback, stored to disconnect during cleanup
-    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
-}
+impl ConfigWidget for CoreBarsConfigWidget {
+    type Config = CoreBarsConfig;
 
-impl LazyCoreBarsConfigWidget {
-    /// Create a new lazy core bars config widget
-    ///
-    /// The actual CoreBarsConfigWidget is NOT created here - it's created automatically
-    /// when the widget becomes visible (mapped).
-    pub fn new() -> Self {
-        let container = GtkBox::new(Orientation::Vertical, 0);
-        let inner_widget: Rc<RefCell<Option<CoreBarsConfigWidget>>> = Rc::new(RefCell::new(None));
-        let deferred_config = Rc::new(RefCell::new(CoreBarsConfig::default()));
-        let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
-        let deferred_max_cores = Rc::new(RefCell::new(None));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-
-        // Create placeholder with loading indicator
-        let placeholder = GtkBox::new(Orientation::Vertical, 8);
-        placeholder.set_margin_top(12);
-        placeholder.set_margin_bottom(12);
-        placeholder.set_margin_start(12);
-        placeholder.set_margin_end(12);
-
-        let info_label = Label::new(Some("Loading core bars configuration..."));
-        info_label.add_css_class("dim-label");
-        placeholder.append(&info_label);
-        container.append(&placeholder);
-
-        // Create a shared initialization closure
-        let init_widget = {
-            let container_clone = container.clone();
-            let inner_widget_clone = inner_widget.clone();
-            let deferred_config_clone = deferred_config.clone();
-            let deferred_theme_clone = deferred_theme.clone();
-            let deferred_max_cores_clone = deferred_max_cores.clone();
-            let on_change_clone = on_change.clone();
-
-            Rc::new(move || {
-                // Only create if not already created
-                if inner_widget_clone.borrow().is_none() {
-                    log::info!(
-                        "LazyCoreBarsConfigWidget: Creating actual CoreBarsConfigWidget on map"
-                    );
-
-                    // Create the actual widget
-                    let widget = CoreBarsConfigWidget::new();
-
-                    // Apply deferred theme first (before config, as config may trigger UI updates)
-                    widget.set_theme(deferred_theme_clone.borrow().clone());
-
-                    // Apply deferred config
-                    widget.set_config(deferred_config_clone.borrow().clone());
-
-                    // Apply deferred max_cores if set
-                    if let Some(max_cores) = *deferred_max_cores_clone.borrow() {
-                        widget.set_max_cores(max_cores);
-                    }
-
-                    // Connect on_change callback
-                    let on_change_inner = on_change_clone.clone();
-                    widget.set_on_change(move || {
-                        if let Some(ref callback) = *on_change_inner.borrow() {
-                            callback();
-                        }
-                    });
-
-                    // Remove placeholder and add actual widget
-                    while let Some(child) = container_clone.first_child() {
-                        container_clone.remove(&child);
-                    }
-                    container_clone.append(widget.widget());
-
-                    // Store the widget
-                    *inner_widget_clone.borrow_mut() = Some(widget);
-                }
-            })
-        };
-
-        // Auto-initialize when the widget becomes visible (mapped)
-        // Store the handler ID so we can disconnect during cleanup to break the cycle
-        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
-            Rc::new(RefCell::new(None));
-        {
-            let init_widget_clone = init_widget.clone();
-            let handler_id = container.connect_map(move |_| {
-                init_widget_clone();
-            });
-            *map_handler_id.borrow_mut() = Some(handler_id);
-        }
-
-        Self {
-            container,
-            inner_widget,
-            deferred_config,
-            deferred_theme,
-            deferred_max_cores,
-            on_change,
-            map_handler_id,
-        }
+    fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        CoreBarsConfigWidget::with_fields(&available_fields)
     }
 
-    /// Get the widget container
-    pub fn widget(&self) -> &GtkBox {
+    fn widget(&self) -> &gtk4::Box {
         &self.container
     }
 
-    /// Set the core bars configuration
-    pub fn set_config(&self, config: CoreBarsConfig) {
-        *self.deferred_config.borrow_mut() = config.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_config(config);
-        }
+    fn set_config(&self, config: Self::Config) {
+        CoreBarsConfigWidget::set_config(self, config)
     }
 
-    /// Get the current core bars configuration
-    pub fn get_config(&self) -> CoreBarsConfig {
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.get_config()
-        } else {
-            self.deferred_config.borrow().clone()
-        }
+    fn get_config(&self) -> Self::Config {
+        CoreBarsConfigWidget::get_config(self)
     }
 
-    /// Set the theme for the core bars widget
-    pub fn set_theme(&self, theme: ComboThemeConfig) {
-        *self.deferred_theme.borrow_mut() = theme.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_theme(theme);
-        }
+    fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        CoreBarsConfigWidget::set_on_change(self, callback)
     }
 
-    /// Set the maximum number of CPU cores
-    pub fn set_max_cores(&self, max_cores: usize) {
-        *self.deferred_max_cores.borrow_mut() = Some(max_cores);
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_max_cores(max_cores);
-        }
+    fn set_theme(&self, theme: ComboThemeConfig) {
+        CoreBarsConfigWidget::set_theme(self, theme)
     }
 
-    /// Set the on_change callback
-    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
-        // If widget already exists, connect it
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            let on_change_inner = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref cb) = *on_change_inner.borrow() {
-                    cb();
-                }
-            });
-        }
-    }
-
-    /// Cleanup method to break reference cycles and allow garbage collection.
-    /// This clears the on_change callback which may hold Rc references to this widget.
-    pub fn cleanup(&self) {
-        log::debug!("LazyCoreBarsConfigWidget::cleanup() - breaking reference cycles");
-        // Disconnect the map signal handler to break the cycle
-        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
-            self.container.disconnect(handler_id);
-        }
-        *self.on_change.borrow_mut() = None;
-        *self.inner_widget.borrow_mut() = None;
+    fn cleanup(&self) {
+        CoreBarsConfigWidget::cleanup(self)
     }
 }
 
-impl Default for LazyCoreBarsConfigWidget {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// Lazy-loading wrapper for CoreBarsConfigWidget.
+pub type LazyCoreBarsConfigWidget = LazyConfigWidget<CoreBarsConfigWidget>;
+

@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::displayers::TextDisplayerConfig;
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 
@@ -146,6 +147,11 @@ impl TextOverlayConfigWidget {
     pub fn get_theme(&self) -> ComboThemeConfig {
         self.theme.borrow().clone()
     }
+
+    /// Cleanup method to break reference cycles
+    pub fn cleanup(&self) {
+        *self.on_change.borrow_mut() = None;
+    }
 }
 
 impl Default for TextOverlayConfigWidget {
@@ -154,163 +160,41 @@ impl Default for TextOverlayConfigWidget {
     }
 }
 
-// =============================================================================
-// LazyTextOverlayConfigWidget - Delays creation of TextOverlayConfigWidget until needed
-// =============================================================================
+impl ConfigWidget for TextOverlayConfigWidget {
+    type Config = TextOverlayConfig;
 
-/// A lazy-loading wrapper for TextOverlayConfigWidget that defers expensive widget creation
-/// until the user actually clicks to expand/configure the text overlay.
-///
-/// This significantly improves dialog open time for combo panels with many slots,
-/// as TextOverlayConfigWidget creation is deferred until needed.
-pub struct LazyTextOverlayConfigWidget {
-    /// Container that holds either the placeholder or the actual widget
-    container: GtkBox,
-    /// The actual widget, created lazily on first expand
-    inner_widget: Rc<RefCell<Option<TextOverlayConfigWidget>>>,
-    /// Deferred config to apply when widget is created
-    deferred_config: Rc<RefCell<TextOverlayConfig>>,
-    /// Deferred theme to apply when widget is created
-    deferred_theme: Rc<RefCell<ComboThemeConfig>>,
-    /// Available fields for the widget
-    available_fields: Vec<FieldMetadata>,
-    /// Callback to invoke on config changes
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    /// Signal handler ID for map callback, stored to disconnect during cleanup
-    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
-}
-
-impl LazyTextOverlayConfigWidget {
-    /// Create a new lazy text overlay config widget
-    ///
-    /// The actual TextOverlayConfigWidget is NOT created here - it's created automatically
-    /// when the widget becomes visible (mapped), or when explicitly initialized.
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        let container = GtkBox::new(Orientation::Vertical, 0);
-        let inner_widget: Rc<RefCell<Option<TextOverlayConfigWidget>>> =
-            Rc::new(RefCell::new(None));
-        let deferred_config = Rc::new(RefCell::new(TextOverlayConfig::default()));
-        let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-
-        // Set up lazy initialization when widget becomes visible
-        // Store the handler ID so we can disconnect during cleanup to break the cycle
-        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
-            Rc::new(RefCell::new(None));
-        let inner_widget_clone = inner_widget.clone();
-        let container_clone = container.clone();
-        let deferred_config_clone = deferred_config.clone();
-        let deferred_theme_clone = deferred_theme.clone();
-        let on_change_clone = on_change.clone();
-        let fields_clone = available_fields.clone();
-
-        let handler_id = container.connect_map(move |_| {
-            let mut inner = inner_widget_clone.borrow_mut();
-            if inner.is_none() {
-                // Create the actual widget now
-                let widget = TextOverlayConfigWidget::new(fields_clone.clone());
-                widget.set_theme(deferred_theme_clone.borrow().clone());
-                widget.set_config(deferred_config_clone.borrow().clone());
-
-                // Connect on_change callback
-                let on_change_inner = on_change_clone.clone();
-                widget.set_on_change(move || {
-                    if let Some(ref callback) = *on_change_inner.borrow() {
-                        callback();
-                    }
-                });
-
-                container_clone.append(widget.widget());
-                *inner = Some(widget);
-            }
-        });
-        *map_handler_id.borrow_mut() = Some(handler_id);
-
-        Self {
-            container,
-            inner_widget,
-            deferred_config,
-            deferred_theme,
-            available_fields,
-            on_change,
-            map_handler_id,
-        }
+    fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        TextOverlayConfigWidget::new(available_fields)
     }
 
-    /// Get the GTK widget
-    pub fn widget(&self) -> &GtkBox {
+    fn widget(&self) -> &GtkBox {
         &self.container
     }
 
-    /// Set the configuration (deferred if widget not yet created)
-    pub fn set_config(&self, config: TextOverlayConfig) {
-        *self.deferred_config.borrow_mut() = config.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_config(config);
-        }
+    fn set_config(&self, config: Self::Config) {
+        TextOverlayConfigWidget::set_config(self, config);
     }
 
-    /// Get the current configuration
-    pub fn get_config(&self) -> TextOverlayConfig {
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.get_config()
-        } else {
-            self.deferred_config.borrow().clone()
-        }
+    fn get_config(&self) -> Self::Config {
+        TextOverlayConfigWidget::get_config(self)
     }
 
-    /// Set the on_change callback
-    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
-        // If widget already exists, reconnect it
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            let on_change_clone = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref cb) = *on_change_clone.borrow() {
-                    cb();
-                }
-            });
-        }
+    fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        TextOverlayConfigWidget::set_on_change(self, callback);
     }
 
-    /// Set the theme (deferred if widget not yet created)
-    pub fn set_theme(&self, theme: ComboThemeConfig) {
-        *self.deferred_theme.borrow_mut() = theme.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_theme(theme);
-        }
+    fn set_theme(&self, theme: ComboThemeConfig) {
+        TextOverlayConfigWidget::set_theme(self, theme);
     }
 
-    /// Force initialization of the inner widget (useful for testing or pre-loading)
-    #[allow(dead_code)]
-    pub fn ensure_initialized(&self) {
-        let mut inner = self.inner_widget.borrow_mut();
-        if inner.is_none() {
-            let widget = TextOverlayConfigWidget::new(self.available_fields.clone());
-            widget.set_theme(self.deferred_theme.borrow().clone());
-            widget.set_config(self.deferred_config.borrow().clone());
-
-            let on_change_clone = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref callback) = *on_change_clone.borrow() {
-                    callback();
-                }
-            });
-
-            self.container.append(widget.widget());
-            *inner = Some(widget);
-        }
-    }
-
-    /// Cleanup method to break reference cycles and allow garbage collection.
-    /// This clears the on_change callback which may hold Rc references to this widget.
-    pub fn cleanup(&self) {
-        log::debug!("LazyTextOverlayConfigWidget::cleanup() - breaking reference cycles");
-        // Disconnect the map signal handler to break the cycle
-        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
-            self.container.disconnect(handler_id);
-        }
-        *self.on_change.borrow_mut() = None;
-        *self.inner_widget.borrow_mut() = None;
+    fn cleanup(&self) {
+        TextOverlayConfigWidget::cleanup(self);
     }
 }
+
+// =============================================================================
+// LazyTextOverlayConfigWidget - Type alias using generic LazyConfigWidget
+// =============================================================================
+
+/// Lazy-loading wrapper for TextOverlayConfigWidget.
+pub type LazyTextOverlayConfigWidget = LazyConfigWidget<TextOverlayConfigWidget>;

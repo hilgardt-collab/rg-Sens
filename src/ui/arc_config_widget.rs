@@ -23,6 +23,7 @@ use crate::ui::widget_builder::{
     create_dropdown_row, create_labeled_row, create_page_container, create_spin_row_with_value,
     SpinChangeHandler,
 };
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::GradientEditor;
 
 /// Arc gauge configuration widget
@@ -788,6 +789,11 @@ impl ArcConfigWidget {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
+    /// Cleanup method to break reference cycles
+    pub fn cleanup(&self) {
+        *self.on_change.borrow_mut() = None;
+    }
+
     /// Update the theme configuration and refresh the preview
     pub fn set_theme(&self, new_theme: ComboThemeConfig) {
         *self.theme.borrow_mut() = new_theme.clone();
@@ -811,172 +817,43 @@ impl Default for ArcConfigWidget {
     }
 }
 
-/// Lazy wrapper for ArcConfigWidget to defer expensive widget creation
-///
-/// The actual ArcConfigWidget (with preview, notebook pages, etc.) is only created
-/// when the widget becomes visible (mapped), saving significant memory when many
-/// content items are created but only one display type is active.
-pub struct LazyArcConfigWidget {
-    /// Container that holds either the placeholder or the actual widget
-    container: GtkBox,
-    /// The actual widget, created lazily on first map
-    inner_widget: Rc<RefCell<Option<ArcConfigWidget>>>,
-    /// Deferred config to apply when widget is created
-    deferred_config: Rc<RefCell<ArcDisplayConfig>>,
-    /// Deferred theme to apply when widget is created
-    deferred_theme: Rc<RefCell<ComboThemeConfig>>,
-    /// Available fields for the widget (used in init closure)
-    #[allow(dead_code)]
-    available_fields: Vec<FieldMetadata>,
-    /// Callback to invoke on config changes
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    /// Signal handler ID for map callback, stored to disconnect during cleanup
-    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
-}
+// =============================================================================
+// ConfigWidget trait implementation
+// =============================================================================
 
-impl LazyArcConfigWidget {
-    /// Create a new lazy arc config widget
-    ///
-    /// The actual ArcConfigWidget is NOT created here - it's created automatically
-    /// when the widget becomes visible (mapped).
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        let container = GtkBox::new(Orientation::Vertical, 0);
-        let inner_widget: Rc<RefCell<Option<ArcConfigWidget>>> = Rc::new(RefCell::new(None));
-        let deferred_config = Rc::new(RefCell::new(ArcDisplayConfig::default()));
-        let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+impl ConfigWidget for ArcConfigWidget {
+    type Config = ArcDisplayConfig;
 
-        // Create placeholder with loading indicator
-        let placeholder = GtkBox::new(Orientation::Vertical, 8);
-        placeholder.set_margin_top(12);
-        placeholder.set_margin_bottom(12);
-        placeholder.set_margin_start(12);
-        placeholder.set_margin_end(12);
-
-        let info_label = Label::new(Some("Loading arc configuration..."));
-        info_label.add_css_class("dim-label");
-        placeholder.append(&info_label);
-        container.append(&placeholder);
-
-        // Create a shared initialization closure
-        let init_widget = {
-            let container_clone = container.clone();
-            let inner_widget_clone = inner_widget.clone();
-            let deferred_config_clone = deferred_config.clone();
-            let deferred_theme_clone = deferred_theme.clone();
-            let available_fields_clone = available_fields.clone();
-            let on_change_clone = on_change.clone();
-
-            Rc::new(move || {
-                // Only create if not already created
-                if inner_widget_clone.borrow().is_none() {
-                    log::info!("LazyArcConfigWidget: Creating actual ArcConfigWidget on map");
-
-                    // Create the actual widget
-                    let widget = ArcConfigWidget::new(available_fields_clone.clone());
-
-                    // Apply deferred theme first (before config, as config may trigger UI updates)
-                    widget.set_theme(deferred_theme_clone.borrow().clone());
-
-                    // Apply deferred config
-                    widget.set_config(deferred_config_clone.borrow().clone());
-
-                    // Connect on_change callback
-                    let on_change_inner = on_change_clone.clone();
-                    widget.set_on_change(move || {
-                        if let Some(ref callback) = *on_change_inner.borrow() {
-                            callback();
-                        }
-                    });
-
-                    // Remove placeholder and add actual widget
-                    while let Some(child) = container_clone.first_child() {
-                        container_clone.remove(&child);
-                    }
-                    container_clone.append(widget.widget());
-
-                    // Store the widget
-                    *inner_widget_clone.borrow_mut() = Some(widget);
-                }
-            })
-        };
-
-        // Auto-initialize when the widget becomes visible (mapped)
-        // Store the handler ID so we can disconnect during cleanup to break the cycle
-        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
-            Rc::new(RefCell::new(None));
-        {
-            let init_widget_clone = init_widget.clone();
-            let handler_id = container.connect_map(move |_| {
-                init_widget_clone();
-            });
-            *map_handler_id.borrow_mut() = Some(handler_id);
-        }
-
-        Self {
-            container,
-            inner_widget,
-            deferred_config,
-            deferred_theme,
-            available_fields,
-            on_change,
-            map_handler_id,
-        }
+    fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        ArcConfigWidget::new(available_fields)
     }
 
-    /// Get the widget container
-    pub fn widget(&self) -> &GtkBox {
+    fn widget(&self) -> &GtkBox {
         &self.container
     }
 
-    /// Set the arc configuration
-    pub fn set_config(&self, config: ArcDisplayConfig) {
-        *self.deferred_config.borrow_mut() = config.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_config(config);
-        }
+    fn set_config(&self, config: Self::Config) {
+        ArcConfigWidget::set_config(self, config)
     }
 
-    /// Get the current arc configuration
-    pub fn get_config(&self) -> ArcDisplayConfig {
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.get_config()
-        } else {
-            self.deferred_config.borrow().clone()
-        }
+    fn get_config(&self) -> Self::Config {
+        ArcConfigWidget::get_config(self)
     }
 
-    /// Set the theme for the arc widget
-    pub fn set_theme(&self, theme: ComboThemeConfig) {
-        *self.deferred_theme.borrow_mut() = theme.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_theme(theme);
-        }
+    fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        ArcConfigWidget::set_on_change(self, callback)
     }
 
-    /// Set the on_change callback
-    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
-        // If widget already exists, connect it
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            let on_change_inner = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref cb) = *on_change_inner.borrow() {
-                    cb();
-                }
-            });
-        }
+    fn set_theme(&self, theme: ComboThemeConfig) {
+        ArcConfigWidget::set_theme(self, theme)
     }
 
-    /// Cleanup method to break reference cycles and allow garbage collection.
-    /// This clears the on_change callback which may hold Rc references to this widget.
-    pub fn cleanup(&self) {
-        log::debug!("LazyArcConfigWidget::cleanup() - breaking reference cycles");
-        // Disconnect the map signal handler to break the cycle
-        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
-            self.container.disconnect(handler_id);
-        }
-        *self.on_change.borrow_mut() = None;
-        *self.inner_widget.borrow_mut() = None;
+    fn cleanup(&self) {
+        ArcConfigWidget::cleanup(self)
     }
 }
+
+/// Lazy-loading wrapper for ArcConfigWidget.
+///
+/// Defers widget creation until the container is visible (mapped).
+pub type LazyArcConfigWidget = LazyConfigWidget<ArcConfigWidget>;

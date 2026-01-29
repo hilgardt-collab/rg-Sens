@@ -20,8 +20,9 @@ use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::widget_builder::{
     create_dropdown_row, create_page_container, create_percent_spin_row_with_value,
-    create_spin_row_with_value, DEFAULT_MARGIN,
+    create_spin_row_with_value,
 };
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::GradientEditor;
 
 /// Bar configuration widget
@@ -1390,6 +1391,11 @@ impl BarConfigWidget {
     pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
+
+    /// Cleanup method to break reference cycles
+    pub fn cleanup(&self) {
+        *self.on_change.borrow_mut() = None;
+    }
 }
 
 impl Default for BarConfigWidget {
@@ -1399,220 +1405,43 @@ impl Default for BarConfigWidget {
 }
 
 // =============================================================================
-// LazyBarConfigWidget - Delays creation of BarConfigWidget until needed
+// ConfigWidget trait implementation
 // =============================================================================
 
-/// A lazy-loading wrapper for BarConfigWidget that defers expensive widget creation
-/// until the user actually clicks to expand/configure the bar.
-///
-/// This significantly improves dialog open time for combo panels with many slots,
-/// as BarConfigWidget creation (which includes TextLineConfigWidget) is deferred until needed.
-pub struct LazyBarConfigWidget {
-    /// Container that holds either the placeholder or the actual widget
-    container: GtkBox,
-    /// The actual widget, created lazily on first expand
-    inner_widget: Rc<RefCell<Option<BarConfigWidget>>>,
-    /// Deferred config to apply when widget is created
-    deferred_config: Rc<RefCell<BarDisplayConfig>>,
-    /// Deferred theme to apply when widget is created
-    deferred_theme: Rc<RefCell<ComboThemeConfig>>,
-    /// Available fields for the widget
-    available_fields: Vec<FieldMetadata>,
-    /// Callback to invoke on config changes
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    /// Signal handler ID for map callback, stored to disconnect during cleanup
-    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
-}
+impl ConfigWidget for BarConfigWidget {
+    type Config = BarDisplayConfig;
 
-impl LazyBarConfigWidget {
-    /// Create a new lazy bar config widget
-    ///
-    /// The actual BarConfigWidget is NOT created here - it's created automatically
-    /// when the widget becomes visible (mapped), or when explicitly initialized.
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        let container = GtkBox::new(Orientation::Vertical, 0);
-        let inner_widget: Rc<RefCell<Option<BarConfigWidget>>> = Rc::new(RefCell::new(None));
-        let deferred_config = Rc::new(RefCell::new(BarDisplayConfig::default()));
-        let deferred_theme = Rc::new(RefCell::new(ComboThemeConfig::default()));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-
-        // Create placeholder with loading indicator
-        let placeholder = GtkBox::new(Orientation::Vertical, 8);
-        placeholder.set_margin_top(DEFAULT_MARGIN);
-        placeholder.set_margin_bottom(DEFAULT_MARGIN);
-        placeholder.set_margin_start(DEFAULT_MARGIN);
-        placeholder.set_margin_end(DEFAULT_MARGIN);
-
-        let info_label = Label::new(Some("Loading bar configuration..."));
-        info_label.add_css_class("dim-label");
-        placeholder.append(&info_label);
-        container.append(&placeholder);
-
-        // Create a shared initialization closure
-        let init_widget = {
-            let container_clone = container.clone();
-            let inner_widget_clone = inner_widget.clone();
-            let deferred_config_clone = deferred_config.clone();
-            let deferred_theme_clone = deferred_theme.clone();
-            let available_fields_clone = available_fields.clone();
-            let on_change_clone = on_change.clone();
-
-            Rc::new(move || {
-                // Only create if not already created
-                if inner_widget_clone.borrow().is_none() {
-                    log::info!("LazyBarConfigWidget: Creating actual BarConfigWidget on map");
-
-                    // Create the actual widget
-                    let widget = BarConfigWidget::new(available_fields_clone.clone());
-
-                    // Apply deferred theme first (before config, as config may trigger UI updates)
-                    widget.set_theme(deferred_theme_clone.borrow().clone());
-
-                    // Apply deferred config
-                    widget.set_config(deferred_config_clone.borrow().clone());
-
-                    // Connect on_change callback
-                    let on_change_inner = on_change_clone.clone();
-                    widget.set_on_change(move || {
-                        if let Some(ref callback) = *on_change_inner.borrow() {
-                            callback();
-                        }
-                    });
-
-                    // Remove placeholder and add actual widget
-                    while let Some(child) = container_clone.first_child() {
-                        container_clone.remove(&child);
-                    }
-                    container_clone.append(widget.widget());
-
-                    // Store the widget
-                    *inner_widget_clone.borrow_mut() = Some(widget);
-                }
-            })
-        };
-
-        // Auto-initialize when the widget becomes visible (mapped)
-        // Store the handler ID so we can disconnect during cleanup to break the cycle
-        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
-            Rc::new(RefCell::new(None));
-        {
-            let init_widget_clone = init_widget.clone();
-            let handler_id = container.connect_map(move |_| {
-                init_widget_clone();
-            });
-            *map_handler_id.borrow_mut() = Some(handler_id);
-        }
-
-        Self {
-            container,
-            inner_widget,
-            deferred_config,
-            deferred_theme,
-            available_fields,
-            on_change,
-            map_handler_id,
-        }
+    fn new(available_fields: Vec<FieldMetadata>) -> Self {
+        BarConfigWidget::new(available_fields)
     }
 
-    /// Get the widget container
-    pub fn widget(&self) -> &GtkBox {
+    fn widget(&self) -> &GtkBox {
         &self.container
     }
 
-    /// Set the bar configuration
-    ///
-    /// If the inner widget hasn't been created yet, this stores the config
-    /// to be applied when it is created. Otherwise, it's applied immediately.
-    pub fn set_config(&self, config: BarDisplayConfig) {
-        *self.deferred_config.borrow_mut() = config.clone();
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_config(config);
-        }
+    fn set_config(&self, config: Self::Config) {
+        BarConfigWidget::set_config(self, config)
     }
 
-    /// Get the current bar configuration
-    ///
-    /// Returns the deferred config if the inner widget hasn't been created yet.
-    pub fn get_config(&self) -> BarDisplayConfig {
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.get_config()
-        } else {
-            self.deferred_config.borrow().clone()
-        }
+    fn get_config(&self) -> Self::Config {
+        BarConfigWidget::get_config(self)
     }
 
-    /// Set the theme for the bar widget
-    pub fn set_theme(&self, theme: ComboThemeConfig) {
-        *self.deferred_theme.borrow_mut() = theme.clone();
-        // Also update the theme in deferred_config so get_config() returns the updated theme
-        self.deferred_config.borrow_mut().theme = theme.clone();
-
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            widget.set_theme(theme);
-        } else {
-            // Even if inner widget doesn't exist, trigger on_change so stored config is updated
-            if let Some(ref callback) = *self.on_change.borrow() {
-                callback();
-            }
-        }
+    fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
+        BarConfigWidget::set_on_change(self, callback)
     }
 
-    /// Set the on_change callback
-    pub fn set_on_change<F: Fn() + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
-        // If widget already exists, connect it
-        if let Some(ref widget) = *self.inner_widget.borrow() {
-            let on_change_inner = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref cb) = *on_change_inner.borrow() {
-                    cb();
-                }
-            });
-        }
+    fn set_theme(&self, theme: ComboThemeConfig) {
+        BarConfigWidget::set_theme(self, theme)
     }
 
-    /// Check if the actual widget has been created
-    pub fn is_initialized(&self) -> bool {
-        self.inner_widget.borrow().is_some()
-    }
-
-    /// Force initialization of the inner widget (for cases where it must exist)
-    pub fn ensure_initialized(&self) {
-        if self.inner_widget.borrow().is_none() {
-            log::info!("LazyBarConfigWidget: Force-initializing BarConfigWidget");
-
-            let widget = BarConfigWidget::new(self.available_fields.clone());
-            widget.set_theme(self.deferred_theme.borrow().clone());
-            widget.set_config(self.deferred_config.borrow().clone());
-
-            // Connect on_change
-            let on_change_inner = self.on_change.clone();
-            widget.set_on_change(move || {
-                if let Some(ref callback) = *on_change_inner.borrow() {
-                    callback();
-                }
-            });
-
-            // Remove placeholder and add actual widget
-            while let Some(child) = self.container.first_child() {
-                self.container.remove(&child);
-            }
-            self.container.append(widget.widget());
-
-            *self.inner_widget.borrow_mut() = Some(widget);
-        }
-    }
-
-    /// Cleanup method to break reference cycles and allow garbage collection.
-    /// This clears the on_change callback which may hold Rc references to this widget,
-    /// and disconnects the map signal handler to break the container->closure->container cycle.
-    pub fn cleanup(&self) {
-        log::debug!("LazyBarConfigWidget::cleanup() - breaking reference cycles");
-        // Disconnect the map signal handler to break the cycle
-        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
-            self.container.disconnect(handler_id);
-        }
-        *self.on_change.borrow_mut() = None;
-        *self.inner_widget.borrow_mut() = None;
+    fn cleanup(&self) {
+        BarConfigWidget::cleanup(self)
     }
 }
+
+/// Lazy-loading wrapper for BarConfigWidget.
+///
+/// Defers widget creation until the container is visible (mapped).
+/// This replaces the previous 200+ line manual implementation.
+pub type LazyBarConfigWidget = LazyConfigWidget<BarConfigWidget>;
