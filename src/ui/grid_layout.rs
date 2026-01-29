@@ -4299,6 +4299,9 @@ pub(crate) fn delete_selected_panels(
     log::info!("Deleting {} panels", panel_ids.len());
 
     for panel_id in panel_ids {
+        // Close and remove any cached properties dialog for this panel
+        crate::ui::grid_properties_dialog::remove_cached_dialog(panel_id);
+
         // Remove from update manager
         if let Some(update_manager) = crate::core::global_update_manager() {
             update_manager.queue_remove_panel(panel_id.clone());

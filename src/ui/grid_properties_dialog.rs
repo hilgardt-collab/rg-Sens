@@ -18,15 +18,38 @@ use super::grid_layout::{delete_selected_panels, GridConfig, PanelState};
 use super::widget_builder::create_spin_row_with_value;
 
 thread_local! {
-    /// Singleton reference to the panel properties dialog
-    pub(crate) static PANEL_PROPERTIES_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
+    /// Cache of panel properties dialogs, keyed by panel ID
+    /// This allows dialogs to be reused when reopening the same panel
+    static CACHED_PANEL_DIALOGS: RefCell<HashMap<String, WeakRef<Window>>> =
+        RefCell::new(HashMap::new());
 }
 
-/// Close the panel properties dialog if it's open
+/// Close all cached panel properties dialogs
 pub fn close_panel_properties_dialog() {
-    // Extract the dialog BEFORE closing to avoid borrow conflict with connect_close_request
-    let dialog_to_close = PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
-        dialog_ref.borrow_mut().take().and_then(|weak| weak.upgrade())
+    // Extract all dialogs BEFORE closing to avoid borrow conflict with connect_close_request
+    let dialogs_to_close: Vec<Window> = CACHED_PANEL_DIALOGS.with(|dialogs| {
+        dialogs
+            .borrow()
+            .values()
+            .filter_map(|weak| weak.upgrade())
+            .collect()
+    });
+    for dialog in dialogs_to_close {
+        dialog.close();
+    }
+    // Clear the cache after closing
+    CACHED_PANEL_DIALOGS.with(|dialogs| {
+        dialogs.borrow_mut().clear();
+    });
+}
+
+/// Remove and close a cached dialog for a specific panel (e.g., when panel is deleted)
+pub(crate) fn remove_cached_dialog(panel_id: &str) {
+    let dialog_to_close = CACHED_PANEL_DIALOGS.with(|dialogs| {
+        dialogs
+            .borrow_mut()
+            .remove(panel_id)
+            .and_then(|weak| weak.upgrade())
     });
     if let Some(dialog) = dialog_to_close {
         dialog.close();
@@ -52,6 +75,31 @@ pub(crate) fn show_panel_properties_dialog(
         Window,
     };
 
+    // Get panel ID early using try_read to check for cached dialog
+    let panel_id = {
+        if let Ok(g) = panel.try_read() {
+            g.id.clone()
+        } else {
+            // Fallback: try with blocking read for ID only
+            panel.blocking_read().id.clone()
+        }
+    };
+
+    // Check if we have a cached dialog for this panel
+    let cached_dialog = CACHED_PANEL_DIALOGS.with(|dialogs| {
+        dialogs
+            .borrow()
+            .get(&panel_id)
+            .and_then(|weak| weak.upgrade())
+    });
+
+    if let Some(dialog) = cached_dialog {
+        // Dialog already exists - just present it and return
+        dialog.present();
+        return;
+    }
+
+    // No cached dialog - create new one
     // Try to acquire read lock with retries (avoid blocking GTK main thread indefinitely)
     let panel_guard = {
         let mut guard = None;
@@ -74,7 +122,6 @@ pub(crate) fn show_panel_properties_dialog(
         }
     };
 
-    let panel_id = panel_guard.id.clone();
     let old_geometry = Rc::new(RefCell::new(panel_guard.geometry));
     let old_source_id = panel_guard.source.metadata().id.clone();
     let old_displayer_id = panel_guard.displayer.id().to_string();
@@ -108,19 +155,11 @@ pub(crate) fn show_panel_properties_dialog(
         dialog.set_transient_for(Some(parent));
     }
 
-    // Close any existing panel properties dialog (singleton pattern)
-    // Note: We must extract the existing dialog BEFORE closing it, because
-    // close() triggers connect_close_request which also borrows PANEL_PROPERTIES_DIALOG
-    let existing_dialog = PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
-        let dialog_opt = dialog_ref.borrow();
-        dialog_opt.as_ref().and_then(|weak| weak.upgrade())
-    });
-    if let Some(existing) = existing_dialog {
-        existing.close();
-    }
-    // Now store the new dialog reference
-    PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
-        *dialog_ref.borrow_mut() = Some(dialog.downgrade());
+    // Store in per-panel cache
+    CACHED_PANEL_DIALOGS.with(|dialogs| {
+        dialogs
+            .borrow_mut()
+            .insert(panel_id.clone(), dialog.downgrade());
     });
 
     // Main container
@@ -3201,6 +3240,7 @@ pub(crate) fn show_panel_properties_dialog(
     let border_color_clone = border_color.clone();
     let panel_states_for_apply = panel_states.clone();
     let panel_id_for_apply = panel_id.clone();
+    let panel_id_for_cleanup = panel_id.clone();
     let selected_panels_for_apply = selected_panels.clone();
     let config_for_apply = Rc::new(RefCell::new(config));
     let occupied_cells_for_apply = occupied_cells.clone();
@@ -4767,10 +4807,11 @@ pub(crate) fn show_panel_properties_dialog(
 
     dialog.set_child(Some(&vbox));
 
-    // Clear singleton reference and config widgets when window closes
+    // Clear per-panel cache reference and config widgets when window closes
     // This is critical to break reference cycles and prevent memory leaks.
     // The combo_config_widget has async callbacks that hold Rc references,
     // so we must explicitly clear it to allow cleanup.
+    // NOTE: panel_id_for_cleanup is cloned earlier (before apply_changes closure captures panel_id)
     let combo_widget_for_cleanup = combo_config_widget.clone();
     let lcars_widget_for_cleanup = lcars_config_widget.clone();
     let cyberpunk_widget_for_cleanup = cyberpunk_config_widget.clone();
@@ -4789,10 +4830,10 @@ pub(crate) fn show_panel_properties_dialog(
     let speedometer_widget_for_cleanup = speedometer_config_widget.clone();
     let graph_widget_for_cleanup = graph_config_widget.clone();
     dialog.connect_close_request(move |_| {
-        // Use try_borrow_mut to avoid panic if already borrowed (e.g., from close_panel_properties_dialog)
-        PANEL_PROPERTIES_DIALOG.with(|dialog_ref| {
-            if let Ok(mut dialog_opt) = dialog_ref.try_borrow_mut() {
-                *dialog_opt = None;
+        // Remove from per-panel cache using try_borrow_mut to avoid panic if already borrowed
+        CACHED_PANEL_DIALOGS.with(|dialogs| {
+            if let Ok(mut map) = dialogs.try_borrow_mut() {
+                map.remove(&panel_id_for_cleanup);
             }
         });
         // Clean up and clear the combo config widget to break Rc reference cycles.
