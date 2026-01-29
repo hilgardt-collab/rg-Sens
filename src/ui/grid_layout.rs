@@ -560,8 +560,11 @@ impl GridLayout {
         let panel_states_right = self.panel_states.clone();
 
         right_click_gesture.connect_pressed(move |gesture, _, x, y| {
-            // Find which panel (if any) is at this position
+            // Find all panels at this position and pick the topmost one (highest z_index)
             let states = panel_states_right.borrow();
+
+            // Collect all panels that contain the click point, along with their z_index
+            let mut candidates: Vec<(&PanelState, i32, f64, f64, f64, f64)> = Vec::new();
 
             for (_panel_id, state) in states.iter() {
                 if let Some(parent) = state.frame.parent() {
@@ -575,26 +578,34 @@ impl GridLayout {
                             && y >= panel_y
                             && y <= panel_y + panel_height
                         {
-                            // Show context menu for this panel
-                            if let Some(ref popover) = state.context_popover {
-                                let local_x = x - panel_x;
-                                let local_y = y - panel_y;
-
-                                // Clamp to panel bounds to ensure popover appears within panel
-                                let clamped_x = local_x.max(10.0).min(panel_width - 10.0);
-                                let clamped_y = local_y.max(10.0).min(panel_height - 10.0);
-                                popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                                    clamped_x as i32,
-                                    clamped_y as i32,
-                                    1,
-                                    1,
-                                )));
-                                popover.popup();
-                                gesture.set_state(gtk4::EventSequenceState::Claimed);
-                                return;
-                            }
+                            // Get z_index from the panel
+                            let z_index = state.panel.blocking_read().z_index;
+                            candidates.push((state, z_index, panel_x, panel_y, panel_width, panel_height));
                         }
                     }
+                }
+            }
+
+            // Sort by z_index descending (highest z_index = topmost panel)
+            candidates.sort_by(|a, b| b.1.cmp(&a.1));
+
+            // Show context menu for the topmost panel
+            if let Some((state, _, panel_x, panel_y, panel_width, panel_height)) = candidates.first() {
+                if let Some(ref popover) = state.context_popover {
+                    let local_x = x - panel_x;
+                    let local_y = y - panel_y;
+
+                    // Clamp to panel bounds to ensure popover appears within panel
+                    let clamped_x = local_x.max(10.0).min(*panel_width - 10.0);
+                    let clamped_y = local_y.max(10.0).min(*panel_height - 10.0);
+                    popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
+                        clamped_x as i32,
+                        clamped_y as i32,
+                        1,
+                        1,
+                    )));
+                    popover.popup();
+                    gesture.set_state(gtk4::EventSequenceState::Claimed);
                 }
             }
         });
