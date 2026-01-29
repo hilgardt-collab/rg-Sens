@@ -382,6 +382,8 @@ glib::timeout_add_local(std::time::Duration::from_millis(16), {
 8. **GPU detection:** GPU backends are initialized once at startup via `once_cell::Lazy` - changes to GPU hardware require app restart
 9. **Multi-GPU systems:** GPU sources use an index to select which GPU to monitor (defaults to 0)
 10. **AMD GPU support:** Uses sysfs files (`/sys/class/drm/card*/device/*`) - may require permissions on some systems
+11. **Signal handler memory leaks:** GTK signal handlers (like `connect_map`) that capture container clones create reference cycles. Store the `SignalHandlerId` and call `container.disconnect(handler_id)` during cleanup to break the cycle
+12. **RefCell + GTK signals:** Never call `dialog.close()` or similar GTK methods while holding a `borrow_mut()` on a RefCell - the resulting signal handlers may try to borrow the same RefCell, causing a panic. Extract the value first, release the borrow, then call the GTK method
 
 ## GPU Support
 
