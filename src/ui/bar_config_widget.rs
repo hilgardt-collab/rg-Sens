@@ -128,6 +128,7 @@ impl BarConfigWidget {
         preview.set_hexpand(true);
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(true);
+        preview.set_visible(false); // No preview - live panel is the preview
 
         let config_clone = config.clone();
         let theme_clone = theme.clone();

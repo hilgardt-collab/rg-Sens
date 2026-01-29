@@ -233,7 +233,7 @@ impl CoreBarsConfigWidget {
         });
 
         container.append(&notebook);
-        container.append(&preview);
+        preview.set_visible(false); container.append(&preview);
 
         Self {
             container,

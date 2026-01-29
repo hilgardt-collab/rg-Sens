@@ -54,14 +54,18 @@ pub fn show_save_dialog(
                             panels,
                         );
                     });
-                    // Shutdown audio thread gracefully before exit
+                    // Clean up to allow clean exit
+                    grid_layout_clone.borrow().cleanup();
+                    crate::core::shutdown_animation_manager();
                     crate::core::shutdown_audio_thread();
                     window_clone.destroy(); // Use destroy to bypass close handler
                 }
                 Ok(0) => {
                     // Don't Save button (index 0)
                     info!("User chose not to save configuration");
-                    // Shutdown audio thread gracefully before exit
+                    // Clean up to allow clean exit
+                    grid_layout_clone.borrow().cleanup();
+                    crate::core::shutdown_animation_manager();
                     crate::core::shutdown_audio_thread();
                     window_clone.destroy(); // Use destroy to bypass close handler
                 }

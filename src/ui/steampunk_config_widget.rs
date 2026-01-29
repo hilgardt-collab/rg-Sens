@@ -310,7 +310,7 @@ impl SteampunkConfigWidget {
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
         // Assemble container
-        container.append(&preview);
+        preview.set_visible(false); container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
 

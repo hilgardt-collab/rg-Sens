@@ -89,6 +89,14 @@ pub fn animation_entry_count() -> usize {
     with_animation_manager(|manager| manager.entry_count())
 }
 
+/// Shutdown the animation manager by clearing all entries.
+/// This breaks reference cycles and allows clean app exit.
+pub fn shutdown_animation_manager() {
+    with_animation_manager(|manager| {
+        manager.shutdown();
+    });
+}
+
 /// Entry in the animation registry.
 struct AnimationEntry {
     /// Weak reference to the widget - allows detecting when widget is destroyed.
@@ -291,5 +299,17 @@ impl AnimationManager {
     /// Get the number of currently registered animations.
     fn entry_count(&self) -> usize {
         self.entries.borrow().len()
+    }
+
+    /// Shutdown the animation manager by clearing all entries.
+    /// This stops the timer (since empty entries means no rescheduling)
+    /// and breaks any reference cycles held by tick_fn closures.
+    fn shutdown(&self) {
+        log::info!(
+            "Animation manager shutdown: clearing {} entries",
+            self.entries.borrow().len()
+        );
+        self.entries.borrow_mut().clear();
+        // The timer will stop on next tick since entries is empty
     }
 }

@@ -1114,6 +1114,12 @@ fn build_ui(app: &Application) {
             config_helpers::show_save_dialog(window, &grid_layout_for_close, &app_config_for_close);
             glib::Propagation::Stop // Prevent immediate close
         } else {
+            // Clean up grid layout to release references and allow clean exit
+            grid_layout_for_close.borrow().cleanup();
+
+            // Shutdown animation manager to break reference cycles
+            rg_sens::core::shutdown_animation_manager();
+
             // Shutdown audio thread gracefully before exit
             rg_sens::core::shutdown_audio_thread();
             glib::Propagation::Proceed // Close without saving

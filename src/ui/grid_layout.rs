@@ -134,6 +134,7 @@ pub(crate) struct PanelState {
     pub(crate) panel: Arc<RwLock<Panel>>,
     pub(crate) selected: bool,
     pub(crate) background_area: DrawingArea,
+    pub(crate) context_popover: Option<gtk4::PopoverMenu>,
 }
 
 /// Callback type for borderless window move/resize
@@ -553,6 +554,53 @@ impl GridLayout {
 
         self.container.add_controller(click_gesture);
 
+        // Global right-click handler - dispatches to panel context menus based on position
+        let right_click_gesture = GestureClick::new();
+        right_click_gesture.set_button(3); // Right mouse button
+        let panel_states_right = self.panel_states.clone();
+
+        right_click_gesture.connect_pressed(move |gesture, _, x, y| {
+            // Find which panel (if any) is at this position
+            let states = panel_states_right.borrow();
+
+            for (_panel_id, state) in states.iter() {
+                if let Some(parent) = state.frame.parent() {
+                    if let Ok(fixed) = parent.downcast::<Fixed>() {
+                        let (panel_x, panel_y) = fixed.child_position(&state.frame);
+                        let panel_width = state.frame.width() as f64;
+                        let panel_height = state.frame.height() as f64;
+
+                        if x >= panel_x
+                            && x <= panel_x + panel_width
+                            && y >= panel_y
+                            && y <= panel_y + panel_height
+                        {
+                            // Show context menu for this panel
+                            if let Some(ref popover) = state.context_popover {
+                                let local_x = x - panel_x;
+                                let local_y = y - panel_y;
+
+                                // Clamp to panel bounds to ensure popover appears within panel
+                                let clamped_x = local_x.max(10.0).min(panel_width - 10.0);
+                                let clamped_y = local_y.max(10.0).min(panel_height - 10.0);
+                                popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
+                                    clamped_x as i32,
+                                    clamped_y as i32,
+                                    1,
+                                    1,
+                                )));
+                                popover.popup();
+                                gesture.set_state(gtk4::EventSequenceState::Claimed);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.container.add_controller(right_click_gesture);
+
         // Drag from empty space for box selection
         let drag_gesture = GestureDrag::new();
         drag_gesture.set_button(1);
@@ -830,6 +878,7 @@ impl GridLayout {
         // For clock displayers, add click handler for alarm/timer management
         if displayer_id == "clock_analog" || displayer_id == "clock_digital" {
             let gesture = gtk4::GestureClick::new();
+            gesture.set_button(1); // Left click only - don't interfere with right-click context menu
             let panel_for_click = panel.clone();
             gesture.connect_released(move |gesture, _, click_x, click_y| {
                 if let Some(widget) = gesture.widget() {
@@ -1129,8 +1178,8 @@ impl GridLayout {
             }
         }
 
-        // Setup drag-and-drop and selection
-        self.setup_panel_interaction(&frame, &widget, panel.clone());
+        // Setup drag-and-drop and selection - returns context popover for global handler
+        let context_popover = self.setup_panel_interaction(&frame, &widget, panel.clone());
 
         // Add to container
         self.container.put(&frame, x as f64, y as f64);
@@ -1147,7 +1196,7 @@ impl GridLayout {
             }
         }
 
-        // Store panel state
+        // Store panel state with context popover for global right-click handler
         self.panel_states.borrow_mut().insert(
             panel_id.clone(),
             PanelState {
@@ -1156,6 +1205,7 @@ impl GridLayout {
                 panel: panel.clone(),
                 selected: false,
                 background_area: background_area.clone(),
+                context_popover: Some(context_popover),
             },
         );
 
@@ -1198,12 +1248,13 @@ impl GridLayout {
         }
     }
 
-    /// Setup panel interaction (selection and drag)
-    fn setup_panel_interaction(&self, frame: &Frame, widget: &Widget, panel: Arc<RwLock<Panel>>) {
+    /// Setup panel interaction (selection and drag) - returns context popover
+    fn setup_panel_interaction(&self, frame: &Frame, _widget: &Widget, panel: Arc<RwLock<Panel>>) -> PopoverMenu {
         let panel_id = panel.blocking_read().id.clone();
 
         // Click for selection (Ctrl+Click for multi-select)
         let gesture_click = gtk4::GestureClick::new();
+        gesture_click.set_button(1); // Left button only
         let panel_states = self.panel_states.clone();
         let selected_panels = self.selected_panels.clone();
         let panel_id_clone = panel_id.clone();
@@ -1256,20 +1307,22 @@ impl GridLayout {
             }
         });
 
-        widget.add_controller(gesture_click);
+        frame.add_controller(gesture_click);
 
-        // Right-click context menu
+        // Setup context menu and get popover for global handler
         let panel_clone = panel.clone();
         let panel_id_clone2 = panel_id.clone();
-
-        self.setup_context_menu(widget, panel_clone, panel_id_clone2);
+        let frame_widget: Widget = frame.clone().upcast();
+        let popover = self.setup_context_menu(&frame_widget, panel_clone, panel_id_clone2);
 
         // Drag gesture
         self.setup_drag_gesture(frame, panel);
+
+        popover
     }
 
-    /// Setup context menu for panel
-    fn setup_context_menu(&self, widget: &Widget, panel: Arc<RwLock<Panel>>, panel_id: String) {
+    /// Setup context menu for panel - returns PopoverMenu for global handler
+    fn setup_context_menu(&self, widget: &Widget, panel: Arc<RwLock<Panel>>, panel_id: String) -> PopoverMenu {
         use gtk4::gio;
 
         let menu = create_panel_context_menu();
@@ -1290,7 +1343,6 @@ impl GridLayout {
 
         // Properties action
         let panel_clone = panel.clone();
-        let panel_id_clone = panel_id.clone();
         let config = self.config.clone();
         let panel_states = self.panel_states.clone();
         let occupied_cells = self.occupied_cells.clone();
@@ -1303,7 +1355,6 @@ impl GridLayout {
         let selected_panels_props = self.selected_panels.clone();
         let panels_props = self.panels.clone();
         properties_action.connect_activate(move |_, _| {
-            info!("Opening properties dialog for panel: {}", panel_id_clone);
             let registry = crate::core::global_registry();
             show_panel_properties_dialog(
                 &panel_clone,
@@ -1609,17 +1660,8 @@ impl GridLayout {
 
         widget.insert_action_group("panel", Some(&action_group));
 
-        // Right-click gesture
-        let gesture_secondary = GestureClick::new();
-        gesture_secondary.set_button(3); // Right mouse button
-
-        gesture_secondary.connect_pressed(move |gesture, _, x, y| {
-            popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-            popover.popup();
-            gesture.set_state(gtk4::EventSequenceState::Claimed);
-        });
-
-        widget.add_controller(gesture_secondary);
+        // Return popover for global right-click handler (no per-panel gesture)
+        popover
     }
 
     /// Setup drag gesture for a panel
@@ -2144,7 +2186,7 @@ impl GridLayout {
                                 frame.set_child(Some(&overlay));
                                 frame.set_size_request(width, height);
 
-                                // Store panel state first (needed for interaction setup)
+                                // Store panel state first (context_popover added later)
                                 panel_states_end.borrow_mut().insert(
                                     new_id.clone(),
                                     PanelState {
@@ -2153,6 +2195,7 @@ impl GridLayout {
                                         panel: new_panel.clone(),
                                         selected: false,
                                         background_area: background_area.clone(),
+                                        context_popover: None,
                                     },
                                 );
 
@@ -2161,7 +2204,7 @@ impl GridLayout {
 
                                 // Setup context menu
                                 let panel_for_menu = new_panel.clone();
-                                let widget_for_menu = widget.clone();
+                                let frame_for_menu: Widget = frame.clone().upcast();
                                 let panel_id_for_menu = new_id.clone();
                                 let config_for_menu = config_for_end.clone();
                                 let panel_states_for_menu = panel_states_end.clone();
@@ -2268,7 +2311,7 @@ impl GridLayout {
                                 });
                                 action_group.add_action(&delete_action);
 
-                                widget_for_menu.insert_action_group("panel", Some(&action_group));
+                                frame_for_menu.insert_action_group("panel", Some(&action_group));
 
                                 // Setup left-click selection gesture
                                 use gtk4::GestureClick;
@@ -2326,7 +2369,7 @@ impl GridLayout {
                                     }
                                 });
 
-                                widget_for_menu.add_controller(gesture_click);
+                                frame_for_menu.add_controller(gesture_click);
 
                                 // Add Copy Style action
                                 let copy_style_action = gio::SimpleAction::new("copy_style", None);
@@ -2490,10 +2533,7 @@ impl GridLayout {
                                 });
                                 action_group.add_action(&save_to_file_action);
 
-                                // Setup right-click context menu
-                                let gesture_secondary = GestureClick::new();
-                                gesture_secondary.set_button(3);
-
+                                // Setup context menu popover (no per-panel gesture - global handler shows it)
                                 use gtk4::{PopoverMenu, gio::Menu};
                                 let menu = Menu::new();
 
@@ -2519,28 +2559,21 @@ impl GridLayout {
                                 menu.append_section(None, &section4);
 
                                 let popover = PopoverMenu::from_model(Some(&menu));
-                                popover.set_parent(&widget_for_menu);
+                                popover.set_parent(&frame_for_menu);
                                 popover.set_has_arrow(false);
 
                                 // Ensure popover is unparented when widget is destroyed
                                 let popover_weak = popover.downgrade();
-                                widget_for_menu.connect_destroy(move |_| {
+                                frame_for_menu.connect_destroy(move |_| {
                                     if let Some(p) = popover_weak.upgrade() {
                                         p.unparent();
                                     }
                                 });
 
-                                gesture_secondary.connect_pressed(move |_gesture, _, x, y| {
-                                    popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                                        x as i32,
-                                        y as i32,
-                                        1,
-                                        1,
-                                    )));
-                                    popover.popup();
-                                });
-
-                                widget_for_menu.add_controller(gesture_secondary);
+                                // Store popover in panel state for global right-click handler
+                                if let Some(state) = panel_states_end.borrow_mut().get_mut(&new_id) {
+                                    state.context_popover = Some(popover);
+                                }
 
                                 // Setup drag gesture for copied panel
                                 use gtk4::GestureDrag;
@@ -2965,7 +2998,7 @@ impl GridLayout {
                                                             frame.set_child(Some(&overlay));
                                                             frame.set_size_request(width, height);
 
-                                                            // Store panel state
+                                                            // Store panel state (context_popover added by deferred setup)
                                                             panel_states_drag_end.borrow_mut().insert(
                                                                 new_id.clone(),
                                                                 PanelState {
@@ -2974,6 +3007,7 @@ impl GridLayout {
                                                                     panel: new_panel.clone(),
                                                                     selected: false,
                                                                     background_area: background_area.clone(),
+                                                                    context_popover: None,
                                                                 },
                                                             );
 
@@ -3363,6 +3397,34 @@ impl GridLayout {
     pub fn config(&self) -> GridConfig {
         *self.config.borrow()
     }
+
+    /// Clean up all panels and their event controllers to allow clean exit.
+    /// This should be called before the window is destroyed.
+    pub fn cleanup(&self) {
+        log::info!("GridLayout cleanup: removing all panel controllers");
+
+        // Clean up all panel widgets
+        let states = self.panel_states.borrow();
+        for (panel_id, state) in states.iter() {
+            log::debug!("Cleaning up panel: {}", panel_id);
+            cleanup_widget_controllers(&state.widget);
+            cleanup_widget_controllers(&state.frame);
+            cleanup_widget_controllers(&state.background_area);
+        }
+        drop(states);
+
+        // Clean up the container's controllers
+        cleanup_widget_controllers(&self.container);
+        cleanup_widget_controllers(&self.overlay);
+
+        // Clear all panel states to drop references
+        self.panel_states.borrow_mut().clear();
+        self.panels.borrow_mut().clear();
+        self.selected_panels.borrow_mut().clear();
+        self.occupied_cells.borrow_mut().clear();
+
+        log::info!("GridLayout cleanup complete");
+    }
 }
 
 /// Helper function to setup interaction for a copied panel
@@ -3689,15 +3751,12 @@ fn setup_copied_panel_interaction(
     });
     action_group.add_action(&save_to_file_action);
 
-    widget.insert_action_group("panel", Some(&action_group));
+    frame.insert_action_group("panel", Some(&action_group));
 
-    // Setup right-click context menu
-    let gesture_secondary = GestureClick::new();
-    gesture_secondary.set_button(3);
-
+    // Setup context menu popover (no per-panel gesture - global handler shows it)
     let menu = create_panel_context_menu();
     let popover = PopoverMenu::from_model(Some(&menu));
-    popover.set_parent(widget);
+    popover.set_parent(frame);
     popover.set_has_arrow(false);
 
     // Ensure popover is unparented when widget is destroyed
@@ -3708,11 +3767,10 @@ fn setup_copied_panel_interaction(
         }
     });
 
-    gesture_secondary.connect_pressed(move |_gesture, _, x, y| {
-        popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-        popover.popup();
-    });
-    widget.add_controller(gesture_secondary);
+    // Store popover in panel state for global right-click handler
+    if let Some(state) = panel_states.borrow_mut().get_mut(&panel_id) {
+        state.context_popover = Some(popover);
+    }
 
     // Setup drag gesture
     let drag_gesture = GestureDrag::new();
@@ -4190,6 +4248,7 @@ fn setup_copied_panel_interaction(
                                         panel: new_panel.clone(),
                                         selected: false,
                                         background_area: new_background_area.clone(),
+                                        context_popover: None,
                                     },
                                 );
 

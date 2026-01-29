@@ -217,7 +217,7 @@ impl RetroTerminalConfigWidget {
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
-        container.append(&preview);
+        preview.set_visible(false); container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
 

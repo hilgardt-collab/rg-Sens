@@ -179,7 +179,7 @@ impl ArcConfigWidget {
             Some(&Label::new(Some("Text"))),
         );
 
-        container.append(&preview);
+        preview.set_visible(false); container.append(&preview);
 
         // Copy/Paste buttons for the entire arc config
         let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);
