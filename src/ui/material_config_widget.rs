@@ -16,7 +16,7 @@ use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::combo_config_base;
 use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::material_display::{
-    render_material_frame, CardElevation, DividerStyle, HeaderAlignment, HeaderStyle, ThemeVariant,
+    CardElevation, DividerStyle, HeaderAlignment, HeaderStyle, ThemeVariant,
 };
 use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::{ColorSource, ComboThemeConfig};
@@ -132,16 +132,6 @@ impl MaterialConfigWidget {
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
 
-        let config_clone = config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            if width < 10 || height < 10 {
-                return;
-            }
-
-            let cfg = config_clone.borrow();
-            let _ = render_material_frame(cr, &cfg.frame, width as f64, height as f64);
-        });
-
         // Theme reference section - placed under preview for easy access from all tabs
         let (theme_ref_section, main_theme_refresh_cb) =
             combo_config_base::create_theme_reference_section(&config, |cfg| {
@@ -233,7 +223,7 @@ impl MaterialConfigWidget {
     fn create_theme_page(
         config: &Rc<RefCell<MaterialDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -338,42 +328,38 @@ impl MaterialConfigWidget {
         // Connect callbacks for each color
         let config_c1 = config.clone();
         let on_change_c1 = on_change.clone();
-        let preview_c1 = preview.clone();
         let refreshers_c1 = theme_ref_refreshers.clone();
         color1_widget.set_on_change(move |new_color| {
             config_c1.borrow_mut().frame.theme.color1 = new_color;
             combo_config_base::refresh_theme_refs(&refreshers_c1);
-            combo_config_base::queue_redraw(&preview_c1, &on_change_c1);
+            combo_config_base::notify_change(&on_change_c1);
         });
 
         let config_c2 = config.clone();
         let on_change_c2 = on_change.clone();
-        let preview_c2 = preview.clone();
         let refreshers_c2 = theme_ref_refreshers.clone();
         color2_widget.set_on_change(move |new_color| {
             config_c2.borrow_mut().frame.theme.color2 = new_color;
             combo_config_base::refresh_theme_refs(&refreshers_c2);
-            combo_config_base::queue_redraw(&preview_c2, &on_change_c2);
+            combo_config_base::notify_change(&on_change_c2);
         });
 
         let config_c3 = config.clone();
         let on_change_c3 = on_change.clone();
-        let preview_c3 = preview.clone();
         let refreshers_c3 = theme_ref_refreshers.clone();
         color3_widget.set_on_change(move |new_color| {
             config_c3.borrow_mut().frame.theme.color3 = new_color;
             combo_config_base::refresh_theme_refs(&refreshers_c3);
-            combo_config_base::queue_redraw(&preview_c3, &on_change_c3);
+            combo_config_base::notify_change(&on_change_c3);
         });
 
         let config_c4 = config.clone();
         let on_change_c4 = on_change.clone();
-        let preview_c4 = preview.clone();
         let refreshers_c4 = theme_ref_refreshers.clone();
         color4_widget.set_on_change(move |new_color| {
             config_c4.borrow_mut().frame.theme.color4 = new_color;
             combo_config_base::refresh_theme_refs(&refreshers_c4);
-            combo_config_base::queue_redraw(&preview_c4, &on_change_c4);
+            combo_config_base::notify_change(&on_change_c4);
         });
 
         color_widgets.push(color1_widget);
@@ -398,14 +384,13 @@ impl MaterialConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         let gradient_editor_for_cb = gradient_editor.clone();
         gradient_editor.set_on_change(move || {
             let gradient_config = gradient_editor_for_cb.get_gradient_source_config();
             config_clone.borrow_mut().frame.theme.gradient = gradient_config;
             combo_config_base::refresh_theme_refs(&refreshers_clone);
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Register theme refresh callback for gradient editor
@@ -435,7 +420,6 @@ impl MaterialConfigWidget {
         font1_btn.set_hexpand(true);
         let config_for_font1 = config.clone();
         let on_change_for_font1 = on_change.clone();
-        let preview_for_font1 = preview.clone();
         let refreshers_for_font1 = theme_ref_refreshers.clone();
         let font1_btn_clone = font1_btn.clone();
         font1_btn.connect_clicked(move |btn| {
@@ -444,7 +428,6 @@ impl MaterialConfigWidget {
                 let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
                 let config_c = config_for_font1.clone();
                 let on_change_c = on_change_for_font1.clone();
-                let preview_c = preview_for_font1.clone();
                 let btn_c = font1_btn_clone.clone();
                 let refreshers_c = refreshers_for_font1.clone();
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
@@ -455,7 +438,7 @@ impl MaterialConfigWidget {
                     config_c.borrow_mut().frame.theme.font1_family = family.clone();
                     btn_c.set_label(&family);
                     combo_config_base::refresh_theme_refs(&refreshers_c);
-                    combo_config_base::queue_redraw(&preview_c, &on_change_c);
+                    combo_config_base::notify_change(&on_change_c);
                 });
             }
         });
@@ -466,12 +449,11 @@ impl MaterialConfigWidget {
         font1_size_spin.set_value(config.borrow().frame.theme.font1_size);
         let config_for_font1_size = config.clone();
         let on_change_for_font1_size = on_change.clone();
-        let preview_for_font1_size = preview.clone();
         let refreshers_for_font1_size = theme_ref_refreshers.clone();
         font1_size_spin.connect_value_changed(move |spin| {
             config_for_font1_size.borrow_mut().frame.theme.font1_size = spin.value();
             combo_config_base::refresh_theme_refs(&refreshers_for_font1_size);
-            combo_config_base::queue_redraw(&preview_for_font1_size, &on_change_for_font1_size);
+            combo_config_base::notify_change(&on_change_for_font1_size);
         });
         font1_row.append(&font1_size_spin);
         fonts_box.append(&font1_row);
@@ -483,7 +465,6 @@ impl MaterialConfigWidget {
         font2_btn.set_hexpand(true);
         let config_for_font2 = config.clone();
         let on_change_for_font2 = on_change.clone();
-        let preview_for_font2 = preview.clone();
         let refreshers_for_font2 = theme_ref_refreshers.clone();
         let font2_btn_clone = font2_btn.clone();
         font2_btn.connect_clicked(move |btn| {
@@ -492,7 +473,6 @@ impl MaterialConfigWidget {
                 let font_desc = gtk4::pango::FontDescription::from_string(&current_font);
                 let config_c = config_for_font2.clone();
                 let on_change_c = on_change_for_font2.clone();
-                let preview_c = preview_for_font2.clone();
                 let btn_c = font2_btn_clone.clone();
                 let refreshers_c = refreshers_for_font2.clone();
                 show_font_dialog(Some(&window), Some(&font_desc), move |font_desc| {
@@ -503,7 +483,7 @@ impl MaterialConfigWidget {
                     config_c.borrow_mut().frame.theme.font2_family = family.clone();
                     btn_c.set_label(&family);
                     combo_config_base::refresh_theme_refs(&refreshers_c);
-                    combo_config_base::queue_redraw(&preview_c, &on_change_c);
+                    combo_config_base::notify_change(&on_change_c);
                 });
             }
         });
@@ -514,12 +494,11 @@ impl MaterialConfigWidget {
         font2_size_spin.set_value(config.borrow().frame.theme.font2_size);
         let config_for_font2_size = config.clone();
         let on_change_for_font2_size = on_change.clone();
-        let preview_for_font2_size = preview.clone();
         let refreshers_for_font2_size = theme_ref_refreshers.clone();
         font2_size_spin.connect_value_changed(move |spin| {
             config_for_font2_size.borrow_mut().frame.theme.font2_size = spin.value();
             combo_config_base::refresh_theme_refs(&refreshers_for_font2_size);
-            combo_config_base::queue_redraw(&preview_for_font2_size, &on_change_for_font2_size);
+            combo_config_base::notify_change(&on_change_for_font2_size);
         });
         font2_row.append(&font2_size_spin);
         fonts_box.append(&font2_row);
@@ -552,7 +531,6 @@ impl MaterialConfigWidget {
 
         let config_for_preset = config.clone();
         let on_change_for_preset = on_change.clone();
-        let preview_for_preset = preview.clone();
         let refreshers_for_preset = theme_ref_refreshers.clone();
         let color_widgets_clone = color_widgets.clone();
         let gradient_editor_for_preset = gradient_editor.clone();
@@ -587,7 +565,7 @@ impl MaterialConfigWidget {
             font2_btn_for_preset.set_label(&theme.font2_family);
             font2_size_spin_for_preset.set_value(theme.font2_size);
             combo_config_base::refresh_theme_refs(&refreshers_for_preset);
-            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::notify_change(&on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -612,10 +590,9 @@ impl MaterialConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         surface_light_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.surface_color_light = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         surface_box.append(&surface_light_row);
 
@@ -629,10 +606,9 @@ impl MaterialConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         surface_dark_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.surface_color_dark = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         surface_box.append(&surface_dark_row);
 
@@ -657,10 +633,9 @@ impl MaterialConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bg_light_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.background_color_light = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bg_box.append(&bg_light_row);
 
@@ -674,10 +649,9 @@ impl MaterialConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bg_dark_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.background_color_dark = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bg_box.append(&bg_dark_row);
 
@@ -687,7 +661,6 @@ impl MaterialConfigWidget {
         // Connect theme variant dropdown - sets theme defaults when changed
         let config_for_variant = config.clone();
         let on_change_for_variant = on_change.clone();
-        let preview_for_variant = preview.clone();
         let refreshers_for_variant = theme_ref_refreshers.clone();
         let color_widgets_for_variant = color_widgets.clone();
         let gradient_editor_for_variant = gradient_editor.clone();
@@ -746,7 +719,7 @@ impl MaterialConfigWidget {
             font2_size_spin_for_variant.set_value(theme.font2_size);
             // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_for_variant);
-            combo_config_base::queue_redraw(&preview_for_variant, &on_change_for_variant);
+            combo_config_base::notify_change(&on_change_for_variant);
         });
 
         scroll.set_child(Some(&inner_box));
@@ -1579,8 +1552,6 @@ impl MaterialConfigWidget {
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-
-        self.preview.queue_draw();
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
@@ -1692,7 +1663,6 @@ impl MaterialConfigWidget {
             config.animation_enabled = transfer.animation_enabled;
             config.animation_speed = transfer.animation_speed;
         }
-        self.preview.queue_draw();
     }
 
     /// Cleanup method to break reference cycles and allow garbage collection.

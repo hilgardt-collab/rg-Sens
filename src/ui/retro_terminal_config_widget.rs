@@ -17,8 +17,7 @@ use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::combo_config_base;
 use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::retro_terminal_display::{
-    render_retro_terminal_frame, BezelStyle, PhosphorColor, TerminalDividerStyle,
-    TerminalHeaderStyle,
+    BezelStyle, PhosphorColor, TerminalDividerStyle, TerminalHeaderStyle,
 };
 use crate::ui::theme::ColorSource;
 use crate::ui::theme_font_selector::ThemeFontSelector;
@@ -135,16 +134,6 @@ impl RetroTerminalConfigWidget {
         preview.set_hexpand(true);
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
-
-        let config_clone = config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            if width < 10 || height < 10 {
-                return;
-            }
-
-            let cfg = config_clone.borrow();
-            let _ = render_retro_terminal_frame(cr, &cfg.frame, width as f64, height as f64);
-        });
 
         // Theme reference section - placed under preview for easy access from all tabs
         let (theme_ref_section, main_theme_refresh_cb) =
@@ -333,7 +322,7 @@ impl RetroTerminalConfigWidget {
     fn create_bezel_page(
         config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         bezel_widgets_out: &Rc<RefCell<Option<BezelWidgets>>>,
         _theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -357,7 +346,6 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         style_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
@@ -369,7 +357,7 @@ impl RetroTerminalConfigWidget {
                 2 => BezelStyle::Industrial,
                 _ => BezelStyle::None,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&style_box);
 
@@ -381,10 +369,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.bezel_color = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&color_box);
 
@@ -398,10 +385,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bezel_width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&width_box);
 
@@ -418,10 +404,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         show_led_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_power_led = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&show_led_check);
 
@@ -435,10 +420,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         led_color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.power_led_color = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&led_color_box);
 
@@ -457,7 +441,7 @@ impl RetroTerminalConfigWidget {
     fn create_header_page(
         config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         header_widgets_out: &Rc<RefCell<Option<HeaderWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -470,10 +454,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         show_header_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.show_header = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&show_header_check);
 
@@ -487,10 +470,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.header_text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&text_box);
 
@@ -511,7 +493,6 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_style_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
@@ -523,7 +504,7 @@ impl RetroTerminalConfigWidget {
                 2 => TerminalHeaderStyle::Prompt,
                 _ => TerminalHeaderStyle::None,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&style_box);
 
@@ -537,10 +518,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.header_height = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&height_box);
 
@@ -560,10 +540,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |font_source| {
             config_clone.borrow_mut().frame.header_font = font_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Register theme refresh callback for the font selector
@@ -613,7 +592,6 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         split_orientation_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
@@ -623,7 +601,7 @@ impl RetroTerminalConfigWidget {
                 0 => SplitOrientation::Horizontal,
                 _ => SplitOrientation::Vertical,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&orientation_box);
 
@@ -637,10 +615,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         content_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.content_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&padding_box);
 
@@ -677,7 +654,6 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         divider_style_dropdown.connect_selected_notify(move |dropdown| {
             let selected = dropdown.selected();
             if selected == gtk4::INVALID_LIST_POSITION {
@@ -691,7 +667,7 @@ impl RetroTerminalConfigWidget {
                 4 => TerminalDividerStyle::Ascii,
                 _ => TerminalDividerStyle::None,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&div_style_box);
 
@@ -705,10 +681,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         divider_padding_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_padding = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&div_padding_box);
 
@@ -870,7 +845,7 @@ impl RetroTerminalConfigWidget {
     fn create_theme_page(
         config: &Rc<RefCell<RetroTerminalDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
         colors_widgets_out: &Rc<RefCell<Option<ColorsWidgets>>>,
@@ -946,10 +921,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         background_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.background_color = color;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Text brightness
@@ -963,10 +937,9 @@ impl RetroTerminalConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         brightness_scale.connect_value_changed(move |scale| {
             config_clone.borrow_mut().frame.text_brightness = scale.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         terminal_colors_box.append(&brightness_box);
 
@@ -985,7 +958,6 @@ impl RetroTerminalConfigWidget {
         // Create common theme widgets using the shared helper
         let config_for_change = config.clone();
         let on_change_for_redraw = on_change.clone();
-        let preview_for_redraw = preview.clone();
         let refreshers_for_redraw = theme_ref_refreshers.clone();
 
         let common = combo_config_base::create_common_theme_widgets(
@@ -995,7 +967,7 @@ impl RetroTerminalConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::notify_change(&on_change_for_redraw);
                 combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
@@ -1003,7 +975,6 @@ impl RetroTerminalConfigWidget {
         // Connect phosphor dropdown - now uses common theme widgets
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let custom_box_clone = custom_phosphor_box.clone();
         let custom_widget_clone = custom_phosphor_widget.clone();
         let common_for_phosphor = common.clone();
@@ -1046,13 +1017,12 @@ impl RetroTerminalConfigWidget {
             // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&theme_ref_refreshers_clone);
 
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Connect custom color widget
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let common_for_custom = common.clone();
         let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
         custom_phosphor_widget.set_on_change(move |color| {
@@ -1082,7 +1052,7 @@ impl RetroTerminalConfigWidget {
             // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&theme_ref_refreshers_clone);
 
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Color Scheme presets section
@@ -1110,7 +1080,6 @@ impl RetroTerminalConfigWidget {
 
         let config_for_preset = config.clone();
         let on_change_for_preset = on_change.clone();
-        let preview_for_preset = preview.clone();
         let refreshers_for_preset = theme_ref_refreshers.clone();
         let common_for_preset = common.clone();
         preset_dropdown.connect_selected_notify(move |dropdown| {
@@ -1130,7 +1099,7 @@ impl RetroTerminalConfigWidget {
             common_for_preset.apply_theme_preset(&theme);
             // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_for_preset);
-            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::notify_change(&on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -1606,8 +1575,6 @@ impl RetroTerminalConfigWidget {
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-
-        self.preview.queue_draw();
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
@@ -1722,7 +1689,6 @@ impl RetroTerminalConfigWidget {
             // item_spacing not configurable in Retro Terminal
             // animation settings use different model in Retro Terminal
         }
-        self.preview.queue_draw();
     }
 
     /// Cleanup method to break reference cycles and allow garbage collection.

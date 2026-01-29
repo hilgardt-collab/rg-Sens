@@ -13,9 +13,7 @@ use std::rc::Rc;
 use crate::core::FieldMetadata;
 use crate::displayers::CyberpunkDisplayConfig;
 use crate::ui::combo_config_base;
-use crate::ui::cyberpunk_display::{
-    render_cyberpunk_frame, CornerStyle, DividerStyle, HeaderStyle,
-};
+use crate::ui::cyberpunk_display::{CornerStyle, DividerStyle, HeaderStyle};
 use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::theme::ColorSource;
 use crate::ui::theme_color_selector::ThemeColorSelector;
@@ -141,21 +139,6 @@ impl CyberpunkConfigWidget {
         preview.set_hexpand(true);
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
-
-        let config_clone = config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            // Skip if dimensions too small
-            if width < 10 || height < 10 {
-                return;
-            }
-
-            // Dark background for preview
-            cr.set_source_rgb(0.05, 0.05, 0.1);
-            cr.paint().ok();
-
-            let cfg = config_clone.borrow();
-            let _ = render_cyberpunk_frame(cr, &cfg.frame, width as f64, height as f64);
-        });
 
         // Theme reference section - placed under preview for easy access from all tabs
         let (theme_ref_section, main_theme_refresh_cb) =
@@ -711,7 +694,7 @@ impl CyberpunkConfigWidget {
     fn create_theme_page(
         config: &Rc<RefCell<CyberpunkDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -734,7 +717,6 @@ impl CyberpunkConfigWidget {
         // Create common theme widgets using the shared helper
         let config_for_change = config.clone();
         let on_change_for_redraw = on_change.clone();
-        let preview_for_redraw = preview.clone();
         let refreshers_for_redraw = theme_ref_refreshers.clone();
 
         let common = combo_config_base::create_common_theme_widgets(
@@ -744,7 +726,7 @@ impl CyberpunkConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::notify_change(&on_change_for_redraw);
                 combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
@@ -774,7 +756,6 @@ impl CyberpunkConfigWidget {
 
         let config_for_preset = config.clone();
         let on_change_for_preset = on_change.clone();
-        let preview_for_preset = preview.clone();
         let refreshers_for_preset = theme_ref_refreshers.clone();
         let common_for_preset = common.clone();
         preset_dropdown.connect_selected_notify(move |dropdown| {
@@ -794,7 +775,7 @@ impl CyberpunkConfigWidget {
             common_for_preset.apply_theme_preset(&theme);
             // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_for_preset);
-            combo_config_base::queue_redraw(&preview_for_preset, &on_change_for_preset);
+            combo_config_base::notify_change(&on_change_for_preset);
         });
         preset_row.append(&preset_dropdown);
         preset_box.append(&preset_row);
@@ -1515,8 +1496,6 @@ impl CyberpunkConfigWidget {
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-
-        self.preview.queue_draw();
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
@@ -1645,7 +1624,6 @@ impl CyberpunkConfigWidget {
             config.animation_enabled = transfer.animation_enabled;
             config.animation_speed = transfer.animation_speed;
         }
-        self.preview.queue_draw();
     }
 
     /// Cleanup method to break reference cycles and allow garbage collection.

@@ -15,8 +15,8 @@ use crate::displayers::SynthwaveDisplayConfig;
 use crate::ui::combo_config_base;
 use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::synthwave_display::{
-    render_synthwave_frame, GridStyle, SynthwaveColorScheme, SynthwaveDividerStyle,
-    SynthwaveFrameStyle, SynthwaveHeaderStyle,
+    GridStyle, SynthwaveColorScheme, SynthwaveDividerStyle, SynthwaveFrameStyle,
+    SynthwaveHeaderStyle,
 };
 use crate::ui::theme::FontSource;
 use crate::ui::widget_builder::{create_section_header, ConfigWidgetBuilder};
@@ -125,16 +125,6 @@ impl SynthwaveConfigWidget {
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
 
-        let config_clone = config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            if width < 10 || height < 10 {
-                return;
-            }
-
-            let cfg = config_clone.borrow();
-            let _ = render_synthwave_frame(cr, &cfg.frame, width as f64, height as f64);
-        });
-
         // Theme reference section - placed under preview for easy access from all tabs
         let (theme_ref_section, main_theme_refresh_cb) =
             combo_config_base::create_theme_reference_section(&config, |cfg| {
@@ -223,7 +213,7 @@ impl SynthwaveConfigWidget {
     fn create_theme_page(
         config: &Rc<RefCell<SynthwaveDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -253,7 +243,6 @@ impl SynthwaveConfigWidget {
 
         // Create clones for callbacks
         let config_for_change = config.clone();
-        let preview_for_redraw = preview.clone();
         let on_change_for_redraw = on_change.clone();
         let refreshers_for_redraw = theme_ref_refreshers.clone();
 
@@ -265,7 +254,7 @@ impl SynthwaveConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::notify_change(&on_change_for_redraw);
                 combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
@@ -273,7 +262,6 @@ impl SynthwaveConfigWidget {
         // Connect color scheme dropdown - auto-populate theme colors when preset selected
         let config_scheme = config.clone();
         let on_change_scheme = on_change.clone();
-        let preview_scheme = preview.clone();
         let refreshers_scheme = theme_ref_refreshers.clone();
         let common_for_scheme = common.clone();
         color_scheme_dropdown.connect_selected_notify(move |dropdown| {
@@ -300,7 +288,7 @@ impl SynthwaveConfigWidget {
                         secondary,
                         accent,
                     };
-                    combo_config_base::queue_redraw(&preview_scheme, &on_change_scheme);
+                    combo_config_base::notify_change(&on_change_scheme);
                     combo_config_base::refresh_theme_refs(&refreshers_scheme);
                     return;
                 }
@@ -327,7 +315,7 @@ impl SynthwaveConfigWidget {
 
             // Refresh all theme-linked widgets (theme reference section, etc.)
             combo_config_base::refresh_theme_refs(&refreshers_scheme);
-            combo_config_base::queue_redraw(&preview_scheme, &on_change_scheme);
+            combo_config_base::notify_change(&on_change_scheme);
         });
 
         // Effects section (Neon glow - Synthwave-specific)
@@ -347,10 +335,9 @@ impl SynthwaveConfigWidget {
 
         let config_glow = config.clone();
         let on_change_glow = on_change.clone();
-        let preview_glow = preview.clone();
         glow_scale.connect_value_changed(move |scale| {
             config_glow.borrow_mut().frame.neon_glow_intensity = scale.value();
-            combo_config_base::queue_redraw(&preview_glow, &on_change_glow);
+            combo_config_base::notify_change(&on_change_glow);
         });
         page.append(&glow_box);
 
@@ -623,7 +610,6 @@ impl SynthwaveConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |source| {
             let (family, size) = match &source {
                 FontSource::Theme { index, size } => {
@@ -638,7 +624,7 @@ impl SynthwaveConfigWidget {
                 cfg.frame.header_font = family;
                 cfg.frame.header_font_size = size;
             }
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Store widget refs

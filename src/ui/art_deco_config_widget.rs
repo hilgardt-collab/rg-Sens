@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::core::FieldMetadata;
 use crate::displayers::ArtDecoDisplayConfig;
 use crate::ui::art_deco_display::{
-    render_art_deco_frame, BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, HeaderStyle,
+    BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, HeaderStyle,
 };
 use crate::ui::background::Color;
 use crate::ui::color_button_widget::ColorButtonWidget;
@@ -238,16 +238,6 @@ impl ArtDecoConfigWidget {
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
 
-        let config_clone = config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            if width < 10 || height < 10 {
-                return;
-            }
-
-            let cfg = config_clone.borrow();
-            let _ = render_art_deco_frame(cr, &cfg.frame, width as f64, height as f64);
-        });
-
         // Theme reference section
         let (theme_ref_section, main_theme_refresh_cb) =
             combo_config_base::create_theme_reference_section(&config, |cfg| {
@@ -375,13 +365,12 @@ impl ArtDecoConfigWidget {
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
         self.config.borrow_mut().frame.theme = theme;
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-        self.preview.queue_draw();
     }
 
     fn create_theme_page(
         config: &Rc<RefCell<ArtDecoDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -467,56 +456,51 @@ impl ArtDecoConfigWidget {
         // Connect callbacks for each color (switch to Custom when manually changing)
         let config_c1 = config.clone();
         let on_change_c1 = on_change.clone();
-        let preview_c1 = preview.clone();
         let refreshers_c1 = theme_ref_refreshers.clone();
         let preset_dropdown_c1 = preset_dropdown.clone();
         theme_color1_widget.set_on_change(move |color| {
             config_c1.borrow_mut().frame.theme.color1 = color;
             preset_dropdown_c1.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
             combo_config_base::refresh_theme_refs(&refreshers_c1);
-            combo_config_base::queue_redraw(&preview_c1, &on_change_c1);
+            combo_config_base::notify_change(&on_change_c1);
         });
 
         let config_c2 = config.clone();
         let on_change_c2 = on_change.clone();
-        let preview_c2 = preview.clone();
         let refreshers_c2 = theme_ref_refreshers.clone();
         let preset_dropdown_c2 = preset_dropdown.clone();
         theme_color2_widget.set_on_change(move |color| {
             config_c2.borrow_mut().frame.theme.color2 = color;
             preset_dropdown_c2.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
             combo_config_base::refresh_theme_refs(&refreshers_c2);
-            combo_config_base::queue_redraw(&preview_c2, &on_change_c2);
+            combo_config_base::notify_change(&on_change_c2);
         });
 
         let config_c3 = config.clone();
         let on_change_c3 = on_change.clone();
-        let preview_c3 = preview.clone();
         let refreshers_c3 = theme_ref_refreshers.clone();
         let preset_dropdown_c3 = preset_dropdown.clone();
         theme_color3_widget.set_on_change(move |color| {
             config_c3.borrow_mut().frame.theme.color3 = color;
             preset_dropdown_c3.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
             combo_config_base::refresh_theme_refs(&refreshers_c3);
-            combo_config_base::queue_redraw(&preview_c3, &on_change_c3);
+            combo_config_base::notify_change(&on_change_c3);
         });
 
         let config_c4 = config.clone();
         let on_change_c4 = on_change.clone();
-        let preview_c4 = preview.clone();
         let refreshers_c4 = theme_ref_refreshers.clone();
         let preset_dropdown_c4 = preset_dropdown.clone();
         theme_color4_widget.set_on_change(move |color| {
             config_c4.borrow_mut().frame.theme.color4 = color;
             preset_dropdown_c4.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
             combo_config_base::refresh_theme_refs(&refreshers_c4);
-            combo_config_base::queue_redraw(&preview_c4, &on_change_c4);
+            combo_config_base::notify_change(&on_change_c4);
         });
 
         // Preset dropdown change handler - updates all colors
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         let color1_widget_clone = theme_color1_widget.clone();
         let color2_widget_clone = theme_color2_widget.clone();
@@ -556,7 +540,7 @@ impl ArtDecoConfigWidget {
                 }
                 // Refresh all theme-linked widgets (theme reference section, etc.)
                 combo_config_base::refresh_theme_refs(&refreshers_clone);
-                combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+                combo_config_base::notify_change(&on_change_clone);
             }
         });
 
@@ -577,7 +561,6 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         let gradient_editor_clone = theme_gradient_editor.clone();
         let preset_dropdown_clone = preset_dropdown.clone();
@@ -587,7 +570,7 @@ impl ArtDecoConfigWidget {
             // Switch to Custom when manually changing gradient
             preset_dropdown_clone.set_selected(ART_DECO_PRESETS.len() as u32 - 1);
             combo_config_base::refresh_theme_refs(&refreshers_clone);
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Register theme refresh callback for gradient editor
@@ -619,7 +602,6 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         let font1_btn_clone = font1_btn.clone();
         font1_btn.connect_clicked(move |btn| {
@@ -628,7 +610,6 @@ impl ArtDecoConfigWidget {
             };
             let config_for_cb = config_clone.clone();
             let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
             let refreshers_for_cb = refreshers_clone.clone();
             let font_btn_for_cb = font1_btn_clone.clone();
             let current_font = config_clone.borrow().frame.theme.font1_family.clone();
@@ -641,18 +622,17 @@ impl ArtDecoConfigWidget {
                 config_for_cb.borrow_mut().frame.theme.font1_family = family.clone();
                 font_btn_for_cb.set_label(&family);
                 combo_config_base::refresh_theme_refs(&refreshers_for_cb);
-                combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                combo_config_base::notify_change(&on_change_for_cb);
             });
         });
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         font1_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.theme.font1_size = spin.value();
             combo_config_base::refresh_theme_refs(&refreshers_clone);
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         // Font 2
@@ -669,7 +649,6 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         let font2_btn_clone = font2_btn.clone();
         font2_btn.connect_clicked(move |btn| {
@@ -678,7 +657,6 @@ impl ArtDecoConfigWidget {
             };
             let config_for_cb = config_clone.clone();
             let on_change_for_cb = on_change_clone.clone();
-            let preview_for_cb = preview_clone.clone();
             let refreshers_for_cb = refreshers_clone.clone();
             let font_btn_for_cb = font2_btn_clone.clone();
             let current_font = config_clone.borrow().frame.theme.font2_family.clone();
@@ -691,18 +669,17 @@ impl ArtDecoConfigWidget {
                 config_for_cb.borrow_mut().frame.theme.font2_family = family.clone();
                 font_btn_for_cb.set_label(&family);
                 combo_config_base::refresh_theme_refs(&refreshers_for_cb);
-                combo_config_base::queue_redraw(&preview_for_cb, &on_change_for_cb);
+                combo_config_base::notify_change(&on_change_for_cb);
             });
         });
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let refreshers_clone = theme_ref_refreshers.clone();
         font2_size_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.theme.font2_size = spin.value();
             combo_config_base::refresh_theme_refs(&refreshers_clone);
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         scroll.set_child(Some(&inner_box));
@@ -781,10 +758,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         border_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.border_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = border_color_widget.clone();
@@ -861,10 +837,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         accent_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.accent_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = accent_color_widget.clone();
@@ -909,10 +884,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bg_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.background_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = bg_color_widget.clone();
@@ -985,10 +959,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         pattern_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.pattern_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = pattern_color_widget.clone();
@@ -1066,10 +1039,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_font_selector.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.header_font = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = header_font_selector.clone();
@@ -1090,10 +1062,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         header_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.header_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = header_color_widget.clone();
@@ -1226,10 +1197,9 @@ impl ArtDecoConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         divider_color_widget.set_on_change(move |new_source| {
             config_clone.borrow_mut().frame.divider_color = new_source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let widget_for_refresh = divider_color_widget.clone();
@@ -1489,8 +1459,6 @@ impl ArtDecoConfigWidget {
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-
-        self.preview.queue_draw();
     }
 
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
@@ -1606,7 +1574,6 @@ impl ArtDecoConfigWidget {
             config.animation_enabled = transfer.animation_enabled;
             config.animation_speed = transfer.animation_speed;
         }
-        self.preview.queue_draw();
     }
 
     fn rebuild_content_tabs(

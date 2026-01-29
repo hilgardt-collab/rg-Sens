@@ -17,8 +17,8 @@ use crate::ui::clipboard::CLIPBOARD;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::combo_config_base;
 use crate::ui::lcars_display::{
-    render_content_background, render_lcars_frame, CornerStyle, DividerCapStyle, ExtensionMode,
-    HeaderAlign, HeaderPosition, HeaderShape, SegmentConfig, SidebarPosition, SplitOrientation,
+    CornerStyle, DividerCapStyle, ExtensionMode, HeaderAlign, HeaderPosition, HeaderShape,
+    SegmentConfig, SidebarPosition, SplitOrientation,
 };
 use crate::ui::theme::{ColorSource, FontSource};
 use crate::ui::theme_color_selector::ThemeColorSelector;
@@ -187,17 +187,6 @@ impl LcarsConfigWidget {
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
 
-        let config_clone = config.clone();
-        preview.set_draw_func(move |_, cr, width, height| {
-            // Dark background for preview
-            cr.set_source_rgb(0.1, 0.1, 0.1);
-            cr.paint().ok();
-
-            let cfg = config_clone.borrow();
-            let _ = render_lcars_frame(cr, &cfg.frame, width as f64, height as f64);
-            let _ = render_content_background(cr, &cfg.frame, width as f64, height as f64);
-        });
-
         // Theme reference section - placed under preview for easy access from all tabs
         let (theme_ref_section, main_theme_refresh_cb) =
             combo_config_base::create_theme_reference_section(&config, |cfg| {
@@ -326,7 +315,7 @@ impl LcarsConfigWidget {
     fn create_theme_page(
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         theme_widgets_out: &Rc<RefCell<Option<ThemeWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -336,7 +325,6 @@ impl LcarsConfigWidget {
         // Create common theme widgets using the shared helper
         let config_for_change = config.clone();
         let on_change_for_redraw = on_change.clone();
-        let preview_for_redraw = preview.clone();
         let refreshers_for_redraw = theme_ref_refreshers.clone();
 
         let common = combo_config_base::create_common_theme_widgets(
@@ -346,7 +334,7 @@ impl LcarsConfigWidget {
                 mutator(&mut config_for_change.borrow_mut().frame.theme);
             },
             move || {
-                combo_config_base::queue_redraw(&preview_for_redraw, &on_change_for_redraw);
+                combo_config_base::notify_change(&on_change_for_redraw);
                 combo_config_base::refresh_theme_refs(&refreshers_for_redraw);
             },
         );
@@ -483,13 +471,9 @@ impl LcarsConfigWidget {
         content_color_box.append(content_color_widget.widget());
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         content_color_widget.set_on_change(move |color| {
             config_clone.borrow_mut().frame.content_bg_color = color;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&content_color_box);
 
@@ -569,7 +553,7 @@ impl LcarsConfigWidget {
     fn create_headers_page(
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         headers_widgets_out: &Rc<RefCell<Option<HeadersWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     ) -> GtkBox {
@@ -601,14 +585,13 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_show_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.top_header.position = if check.is_active() {
                 HeaderPosition::Top
             } else {
                 HeaderPosition::None
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         top_page.append(&top_show_check);
 
@@ -627,10 +610,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.top_header.text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let top_text_entry_clone = top_text_entry.clone();
@@ -666,13 +648,12 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_shape_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.top_header.shape = match dropdown.selected() {
                 0 => HeaderShape::Pill,
                 _ => HeaderShape::Square,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         top_page.append(&top_shape_box);
 
@@ -686,10 +667,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.top_header.height_percent = spin.value() / 100.0;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         top_size_box.append(&Label::new(Some("Width %:")));
@@ -700,10 +680,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.top_header.width_percent = spin.value() / 100.0;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         top_page.append(&top_size_box);
 
@@ -718,13 +697,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_bg_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.top_header.bg_color = color_source;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         top_colors_box.append(&Label::new(Some("Text:")));
@@ -736,13 +711,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_text_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.top_header.text_color = color_source;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
         top_page.append(&top_colors_box);
 
@@ -762,10 +733,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_bold_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.top_header.font_bold = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let top_copy_font_btn = Button::with_label("Copy");
@@ -787,24 +757,22 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let top_font_selector_clone = top_font_selector.clone();
         top_paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
                     config_clone.borrow_mut().frame.top_header.font = source.clone();
                     top_font_selector_clone.set_source(source);
-                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::notify_change(&on_change_clone);
                 }
             }
         });
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_font_selector.set_on_change(move |source| {
             config_clone.borrow_mut().frame.top_header.font = source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         top_page.append(&top_font_box);
 
@@ -824,14 +792,13 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         top_align_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.top_header.align = match dropdown.selected() {
                 0 => HeaderAlign::Left,
                 1 => HeaderAlign::Center,
                 _ => HeaderAlign::Right,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         top_page.append(&top_align_box);
 
@@ -853,14 +820,13 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_show_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.bottom_header.position = if check.is_active() {
                 HeaderPosition::Bottom
             } else {
                 HeaderPosition::None
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bottom_page.append(&bottom_show_check);
 
@@ -879,10 +845,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_text_entry.connect_changed(move |entry| {
             config_clone.borrow_mut().frame.bottom_header.text = entry.text().to_string();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let bottom_text_entry_clone = bottom_text_entry.clone();
@@ -919,13 +884,12 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_shape_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.bottom_header.shape = match dropdown.selected() {
                 0 => HeaderShape::Pill,
                 _ => HeaderShape::Square,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bottom_page.append(&bottom_shape_box);
 
@@ -939,10 +903,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_height_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bottom_header.height_percent = spin.value() / 100.0;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         bottom_size_box.append(&Label::new(Some("Width %:")));
@@ -953,10 +916,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_width_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.bottom_header.width_percent = spin.value() / 100.0;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bottom_page.append(&bottom_size_box);
 
@@ -971,13 +933,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_bg_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.bottom_header.bg_color = color_source;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         bottom_colors_box.append(&Label::new(Some("Text:")));
@@ -989,13 +947,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_text_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.bottom_header.text_color = color_source;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
         bottom_page.append(&bottom_colors_box);
 
@@ -1015,10 +969,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_bold_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.bottom_header.font_bold = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         let bottom_copy_font_btn = Button::with_label("Copy");
@@ -1040,24 +993,22 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let bottom_font_selector_clone = bottom_font_selector.clone();
         bottom_paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
                 if let Some((source, _bold, _italic)) = clipboard.paste_font_source() {
                     config_clone.borrow_mut().frame.bottom_header.font = source.clone();
                     bottom_font_selector_clone.set_source(source);
-                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::notify_change(&on_change_clone);
                 }
             }
         });
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_font_selector.set_on_change(move |source| {
             config_clone.borrow_mut().frame.bottom_header.font = source;
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bottom_page.append(&bottom_font_box);
 
@@ -1078,14 +1029,13 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         bottom_align_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.bottom_header.align = match dropdown.selected() {
                 0 => HeaderAlign::Left,
                 1 => HeaderAlign::Center,
                 _ => HeaderAlign::Right,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         bottom_page.append(&bottom_align_box);
 
@@ -1158,7 +1108,7 @@ impl LcarsConfigWidget {
     fn create_segments_page(
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
+        _preview: &DrawingArea,
         segments_widgets_out: &Rc<RefCell<Option<SegmentsWidgets>>>,
         split_widgets: &Rc<RefCell<Option<SplitWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
@@ -1208,7 +1158,6 @@ impl LcarsConfigWidget {
             initial_count,
             config,
             on_change,
-            preview,
             &segment_widgets,
         );
 
@@ -1216,7 +1165,6 @@ impl LcarsConfigWidget {
         let segments_notebook_clone = segments_notebook.clone();
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let split_widgets_clone = split_widgets.clone();
         let segment_widgets_clone = segment_widgets.clone();
         count_spin.connect_value_changed(move |spin| {
@@ -1239,11 +1187,10 @@ impl LcarsConfigWidget {
                 count,
                 &config_clone,
                 &on_change_clone,
-                &preview_clone,
                 &segment_widgets_clone,
             );
 
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
 
             // Update sync checkbox sensitivity
             if let Some(ref widgets) = *split_widgets_clone.borrow() {
@@ -1269,7 +1216,6 @@ impl LcarsConfigWidget {
         count: usize,
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
         segment_widgets: &Rc<
             RefCell<
                 Vec<(
@@ -1291,7 +1237,7 @@ impl LcarsConfigWidget {
         // Create tabs for each segment
         for seg_idx in 0..count {
             let (tab_content, widgets) =
-                Self::create_segment_tab_content(seg_idx, config, on_change, preview);
+                Self::create_segment_tab_content(seg_idx, config, on_change);
             let tab_label = Label::new(Some(&format!("Seg {}", seg_idx + 1)));
             notebook.append_page(&tab_content, Some(&tab_label));
             segment_widgets.borrow_mut().push(widgets);
@@ -1316,7 +1262,6 @@ impl LcarsConfigWidget {
         seg_idx: usize,
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
     ) -> (
         GtkBox,
         (
@@ -1345,7 +1290,6 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         label_entry.connect_changed(move |entry| {
             let mut cfg = config_clone.borrow_mut();
             while cfg.frame.segments.len() <= seg_idx {
@@ -1353,7 +1297,7 @@ impl LcarsConfigWidget {
             }
             cfg.frame.segments[seg_idx].label = entry.text().to_string();
             drop(cfg);
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         seg_box.append(&label_box);
 
@@ -1373,7 +1317,6 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         color_widget.set_on_change(move |color_source| {
             let mut cfg = config_clone.borrow_mut();
             while cfg.frame.segments.len() <= seg_idx {
@@ -1381,10 +1324,7 @@ impl LcarsConfigWidget {
             }
             cfg.frame.segments[seg_idx].color = color_source;
             drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         colors_box.append(&Label::new(Some("Label Color:")));
@@ -1401,7 +1341,6 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         label_color_widget.set_on_change(move |color_source| {
             let mut cfg = config_clone.borrow_mut();
             while cfg.frame.segments.len() <= seg_idx {
@@ -1409,10 +1348,7 @@ impl LcarsConfigWidget {
             }
             cfg.frame.segments[seg_idx].label_color = color_source;
             drop(cfg);
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
         seg_box.append(&colors_box);
 
@@ -1430,7 +1366,6 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         weight_spin.connect_value_changed(move |spin| {
             let mut cfg = config_clone.borrow_mut();
             while cfg.frame.segments.len() <= seg_idx {
@@ -1438,7 +1373,7 @@ impl LcarsConfigWidget {
             }
             cfg.frame.segments[seg_idx].height_weight = spin.value();
             drop(cfg);
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         seg_box.append(&weight_box);
 
@@ -1479,7 +1414,6 @@ impl LcarsConfigWidget {
         // Paste font handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let font_selector_clone = font_selector.clone();
         paste_font_btn.connect_clicked(move |_| {
             if let Ok(clipboard) = CLIPBOARD.lock() {
@@ -1492,7 +1426,7 @@ impl LcarsConfigWidget {
                         cfg.frame.segments[seg_idx].font = source.clone();
                     }
                     font_selector_clone.set_source(source);
-                    combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+                    combo_config_base::notify_change(&on_change_clone);
                 }
             }
         });
@@ -1500,7 +1434,6 @@ impl LcarsConfigWidget {
         // Font selector change handler
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         font_selector.set_on_change(move |source| {
             {
                 let mut cfg = config_clone.borrow_mut();
@@ -1509,7 +1442,7 @@ impl LcarsConfigWidget {
                 }
                 cfg.frame.segments[seg_idx].font = source;
             }
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         seg_box.append(&font_box);
 
@@ -1549,10 +1482,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         spacing_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.item_spacing = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -1659,7 +1591,6 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         let split_widgets_clone = split_widgets_out.clone();
         orient_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.layout_orientation = match dropdown.selected() {
@@ -1670,7 +1601,7 @@ impl LcarsConfigWidget {
             if let Some(ref widgets) = *split_widgets_clone.borrow() {
                 Self::update_sync_checkbox_sensitivity(&widgets.sync_segments_check, &config_clone);
             }
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&orient_box);
 
@@ -1691,10 +1622,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         divider_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_config.width = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&divider_box);
 
@@ -1709,13 +1639,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         div_color_widget.set_on_change(move |color_source| {
             config_clone.borrow_mut().frame.divider_config.color = color_source;
-            preview_clone.queue_draw();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&div_color_box);
 
@@ -1734,13 +1660,12 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         start_cap_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.divider_config.cap_start = match dropdown.selected() {
                 0 => DividerCapStyle::Square,
                 _ => DividerCapStyle::Round,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&start_cap_box);
 
@@ -1758,13 +1683,12 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         end_cap_dropdown.connect_selected_notify(move |dropdown| {
             config_clone.borrow_mut().frame.divider_config.cap_end = match dropdown.selected() {
                 0 => DividerCapStyle::Square,
                 _ => DividerCapStyle::Round,
             };
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&end_cap_box);
 
@@ -1778,14 +1702,13 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         spacing_before_spin.connect_value_changed(move |spin| {
             config_clone
                 .borrow_mut()
                 .frame
                 .divider_config
                 .spacing_before = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
 
         spacing_box.append(&Label::new(Some("After:")));
@@ -1796,10 +1719,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         spacing_after_spin.connect_value_changed(move |spin| {
             config_clone.borrow_mut().frame.divider_config.spacing_after = spin.value();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&spacing_box);
 
@@ -1827,10 +1749,9 @@ impl LcarsConfigWidget {
 
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
         sync_segments_check.connect_toggled(move |check| {
             config_clone.borrow_mut().frame.sync_segments_to_groups = check.is_active();
-            combo_config_base::queue_redraw(&preview_clone, &on_change_clone);
+            combo_config_base::notify_change(&on_change_clone);
         });
         page.append(&sync_segments_check);
 
@@ -2106,7 +2027,6 @@ impl LcarsConfigWidget {
                 count,
                 &self.config,
                 &self.on_change,
-                &self.preview,
                 &widgets.segment_widgets,
             );
         }
@@ -2202,8 +2122,6 @@ impl LcarsConfigWidget {
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-
-        self.preview.queue_draw();
     }
 
     pub fn get_config(&self) -> LcarsDisplayConfig {
@@ -2274,8 +2192,6 @@ impl LcarsConfigWidget {
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
         }
-        // Redraw the main preview to reflect theme color changes
-        self.preview.queue_draw();
     }
 
     /// Update the source summaries and rebuild the content notebook tabs
@@ -2339,9 +2255,6 @@ impl LcarsConfigWidget {
             Self::update_sync_checkbox_sensitivity(&widgets.sync_segments_check, &self.config);
         }
 
-        // Queue preview redraw
-        self.preview.queue_draw();
-
         // Notify that config has changed so displayer gets updated
         if let Some(cb) = self.on_change.borrow().as_ref() {
             cb();
@@ -2394,8 +2307,6 @@ impl LcarsConfigWidget {
             config.animation_enabled = transfer.animation_enabled;
             config.animation_speed = transfer.animation_speed;
         }
-        // Queue preview redraw
-        self.preview.queue_draw();
     }
 
     /// Cleanup method to break reference cycles and allow garbage collection.
