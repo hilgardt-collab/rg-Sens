@@ -1153,8 +1153,10 @@ fn build_ui(app: &Application) {
     let start_auto_scroll_for_settings = start_auto_scroll.clone();
 
     // Add right-click gesture for context menu
+    // Use Capture phase so the window gets the event before child widgets
     let gesture_click = gtk4::GestureClick::new();
     gesture_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
+    gesture_click.set_propagation_phase(gtk4::PropagationPhase::Capture);
 
     // Clone variables for context menu
     let window_for_menu = window.clone();
@@ -1193,7 +1195,7 @@ fn build_ui(app: &Application) {
         gesture.set_state(gtk4::EventSequenceState::Claimed);
     });
 
-    window.add_controller(gesture_click);
+    scrolled_window.add_controller(gesture_click);
 
     // Clone for closure
     let grid_layout_for_key = grid_layout_for_settings.clone();
