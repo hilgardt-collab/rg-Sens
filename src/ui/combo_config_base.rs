@@ -204,12 +204,31 @@ pub fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
 /// This clears:
 /// - The on_change callback (which may hold references to parent scope)
 /// - The theme_ref_refreshers (which hold closures with Rc references)
+/// Type alias for cleanup callbacks that break reference cycles
+pub type CleanupCallback = Box<dyn Fn()>;
+
 pub fn cleanup_common_fields(
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
 ) {
     *on_change.borrow_mut() = None;
     theme_ref_refreshers.borrow_mut().clear();
+}
+
+/// Cleanup common fields including content cleanup callbacks.
+/// This version also cleans up Lazy*ConfigWidget reference cycles.
+pub fn cleanup_common_fields_with_content(
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    content_cleanup_callbacks: &Rc<RefCell<Vec<CleanupCallback>>>,
+) {
+    *on_change.borrow_mut() = None;
+    theme_ref_refreshers.borrow_mut().clear();
+    // Call all cleanup callbacks to break Lazy widget reference cycles
+    for cleanup in content_cleanup_callbacks.borrow().iter() {
+        cleanup();
+    }
+    content_cleanup_callbacks.borrow_mut().clear();
 }
 
 /// Creates the common theme widgets (colors, gradient, fonts) and appends them to the page.
@@ -1180,6 +1199,7 @@ pub fn create_content_page<C, F, S, G>(
     set_content_item: S,
     theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     get_theme: G,
+    content_cleanup_callbacks: &Rc<RefCell<Vec<CleanupCallback>>>,
 ) -> GtkBox
 where
     C: 'static,
@@ -1221,6 +1241,7 @@ where
         set_content_item,
         theme_ref_refreshers,
         get_theme,
+        content_cleanup_callbacks,
     );
 
     page
@@ -1243,6 +1264,7 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     set_content_item: S,
     theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     get_theme: G,
+    content_cleanup_callbacks: &Rc<RefCell<Vec<CleanupCallback>>>,
 ) where
     C: 'static,
     F: Fn(&C) -> &HashMap<String, ContentItemConfig> + Clone + 'static,
@@ -1265,6 +1287,13 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     if let Some(cb) = preserved_callback {
         theme_ref_refreshers.borrow_mut().push(cb);
     }
+
+    // Clear existing content cleanup callbacks when rebuilding
+    // Call each cleanup before clearing to break existing reference cycles
+    for cleanup in content_cleanup_callbacks.borrow().iter() {
+        cleanup();
+    }
+    content_cleanup_callbacks.borrow_mut().clear();
 
     let notebook = content_notebook.borrow();
 
@@ -1382,6 +1411,7 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     let preview_clone = preview.clone();
     let available_fields_clone = available_fields.clone();
     let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
+    let content_cleanup_callbacks_clone = content_cleanup_callbacks.clone();
 
     glib::idle_add_local(move || {
         // Check if this build has been superseded
@@ -1404,6 +1434,7 @@ pub fn rebuild_content_tabs<C, F, S, G>(
                 set_content_item.clone(),
                 &theme_ref_refreshers_clone,
                 get_theme.clone(),
+                &content_cleanup_callbacks_clone,
             );
 
             // Replace the placeholder with the actual content
@@ -1437,6 +1468,7 @@ pub fn create_content_item_config<C, F, S, G>(
     set_content_item: S,
     theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     get_theme: G,
+    content_cleanup_callbacks: &Rc<RefCell<Vec<CleanupCallback>>>,
 ) -> GtkBox
 where
     C: 'static,
@@ -1664,6 +1696,16 @@ where
             .push(theme_refresh_callback);
     }
 
+    // Register cleanup callback to break bar widget reference cycles
+    {
+        let bar_widget_for_cleanup = bar_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                bar_widget_for_cleanup.cleanup();
+            }));
+    }
+
     bar_config_frame.set_child(Some(bar_widget_rc.widget()));
     inner_box.append(&bar_config_frame);
 
@@ -1723,6 +1765,16 @@ where
         theme_ref_refreshers
             .borrow_mut()
             .push(theme_refresh_callback);
+    }
+
+    // Register cleanup callback to break graph widget reference cycles
+    {
+        let graph_widget_for_cleanup = graph_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                graph_widget_for_cleanup.cleanup();
+            }));
     }
 
     graph_config_frame.set_child(Some(graph_widget_rc.widget()));
@@ -1793,6 +1845,16 @@ where
             .push(theme_refresh_callback);
     }
 
+    // Register cleanup callback to break text widget reference cycles
+    {
+        let text_widget_for_cleanup = text_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                text_widget_for_cleanup.cleanup();
+            }));
+    }
+
     text_config_frame.set_child(Some(text_widget_rc.widget()));
     inner_box.append(&text_config_frame);
 
@@ -1851,6 +1913,16 @@ where
         theme_ref_refreshers
             .borrow_mut()
             .push(theme_refresh_callback);
+    }
+
+    // Register cleanup callback to break core bars widget reference cycles
+    {
+        let core_bars_widget_for_cleanup = core_bars_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                core_bars_widget_for_cleanup.cleanup();
+            }));
     }
 
     core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
@@ -1913,6 +1985,16 @@ where
             .push(theme_refresh_callback);
     }
 
+    // Register cleanup callback to break arc widget reference cycles
+    {
+        let arc_widget_for_cleanup = arc_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                arc_widget_for_cleanup.cleanup();
+            }));
+    }
+
     arc_config_frame.set_child(Some(arc_widget_rc.widget()));
     inner_box.append(&arc_config_frame);
 
@@ -1973,6 +2055,16 @@ where
             .push(theme_refresh_callback);
     }
 
+    // Register cleanup callback to break speedometer widget reference cycles
+    {
+        let speedometer_widget_for_cleanup = speedometer_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                speedometer_widget_for_cleanup.cleanup();
+            }));
+    }
+
     speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
     inner_box.append(&speedometer_config_frame);
 
@@ -2031,6 +2123,16 @@ where
         theme_ref_refreshers
             .borrow_mut()
             .push(theme_refresh_callback);
+    }
+
+    // Register cleanup callback to break static widget reference cycles
+    {
+        let static_widget_for_cleanup = static_widget_rc.clone();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                static_widget_for_cleanup.cleanup();
+            }));
     }
 
     static_config_frame.set_child(Some(static_widget_rc.widget()));

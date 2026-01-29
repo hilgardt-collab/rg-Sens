@@ -176,6 +176,8 @@ pub struct LazyTextOverlayConfigWidget {
     available_fields: Vec<FieldMetadata>,
     /// Callback to invoke on config changes
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    /// Signal handler ID for map callback, stored to disconnect during cleanup
+    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
 }
 
 impl LazyTextOverlayConfigWidget {
@@ -192,6 +194,9 @@ impl LazyTextOverlayConfigWidget {
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
 
         // Set up lazy initialization when widget becomes visible
+        // Store the handler ID so we can disconnect during cleanup to break the cycle
+        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
+            Rc::new(RefCell::new(None));
         let inner_widget_clone = inner_widget.clone();
         let container_clone = container.clone();
         let deferred_config_clone = deferred_config.clone();
@@ -199,7 +204,7 @@ impl LazyTextOverlayConfigWidget {
         let on_change_clone = on_change.clone();
         let fields_clone = available_fields.clone();
 
-        container.connect_map(move |_| {
+        let handler_id = container.connect_map(move |_| {
             let mut inner = inner_widget_clone.borrow_mut();
             if inner.is_none() {
                 // Create the actual widget now
@@ -219,6 +224,7 @@ impl LazyTextOverlayConfigWidget {
                 *inner = Some(widget);
             }
         });
+        *map_handler_id.borrow_mut() = Some(handler_id);
 
         Self {
             container,
@@ -227,6 +233,7 @@ impl LazyTextOverlayConfigWidget {
             deferred_theme,
             available_fields,
             on_change,
+            map_handler_id,
         }
     }
 
@@ -293,5 +300,17 @@ impl LazyTextOverlayConfigWidget {
             self.container.append(widget.widget());
             *inner = Some(widget);
         }
+    }
+
+    /// Cleanup method to break reference cycles and allow garbage collection.
+    /// This clears the on_change callback which may hold Rc references to this widget.
+    pub fn cleanup(&self) {
+        log::debug!("LazyTextOverlayConfigWidget::cleanup() - breaking reference cycles");
+        // Disconnect the map signal handler to break the cycle
+        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
+            self.container.disconnect(handler_id);
+        }
+        *self.on_change.borrow_mut() = None;
+        *self.inner_widget.borrow_mut() = None;
     }
 }

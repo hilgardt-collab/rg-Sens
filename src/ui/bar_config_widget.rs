@@ -1419,6 +1419,8 @@ pub struct LazyBarConfigWidget {
     available_fields: Vec<FieldMetadata>,
     /// Callback to invoke on config changes
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    /// Signal handler ID for map callback, stored to disconnect during cleanup
+    map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>>,
 }
 
 impl LazyBarConfigWidget {
@@ -1489,11 +1491,15 @@ impl LazyBarConfigWidget {
         };
 
         // Auto-initialize when the widget becomes visible (mapped)
+        // Store the handler ID so we can disconnect during cleanup to break the cycle
+        let map_handler_id: Rc<RefCell<Option<gtk4::glib::SignalHandlerId>>> =
+            Rc::new(RefCell::new(None));
         {
             let init_widget_clone = init_widget.clone();
-            container.connect_map(move |_| {
+            let handler_id = container.connect_map(move |_| {
                 init_widget_clone();
             });
+            *map_handler_id.borrow_mut() = Some(handler_id);
         }
 
         Self {
@@ -1503,6 +1509,7 @@ impl LazyBarConfigWidget {
             deferred_theme,
             available_fields,
             on_change,
+            map_handler_id,
         }
     }
 
@@ -1593,5 +1600,18 @@ impl LazyBarConfigWidget {
 
             *self.inner_widget.borrow_mut() = Some(widget);
         }
+    }
+
+    /// Cleanup method to break reference cycles and allow garbage collection.
+    /// This clears the on_change callback which may hold Rc references to this widget,
+    /// and disconnects the map signal handler to break the container->closure->container cycle.
+    pub fn cleanup(&self) {
+        log::debug!("LazyBarConfigWidget::cleanup() - breaking reference cycles");
+        // Disconnect the map signal handler to break the cycle
+        if let Some(handler_id) = self.map_handler_id.borrow_mut().take() {
+            self.container.disconnect(handler_id);
+        }
+        *self.on_change.borrow_mut() = None;
+        *self.inner_widget.borrow_mut() = None;
     }
 }

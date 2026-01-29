@@ -100,6 +100,7 @@ pub struct FighterHudConfigWidget {
     /// Callbacks to refresh theme reference sections
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
 }
 
 impl FighterHudConfigWidget {
@@ -117,6 +118,8 @@ impl FighterHudConfigWidget {
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
@@ -194,6 +197,7 @@ impl FighterHudConfigWidget {
             &source_summaries,
             &available_fields,
             &theme_ref_refreshers,
+            &content_cleanup_callbacks,
         );
         notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
 
@@ -219,6 +223,7 @@ impl FighterHudConfigWidget {
             animation_widgets,
             theme_widgets,
             theme_ref_refreshers,
+            content_cleanup_callbacks,
         }
     }
 
@@ -1131,6 +1136,7 @@ impl FighterHudConfigWidget {
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
@@ -1161,6 +1167,7 @@ impl FighterHudConfigWidget {
             source_summaries,
             available_fields,
             theme_ref_refreshers,
+            content_cleanup_callbacks,
         );
 
         page
@@ -1238,6 +1245,7 @@ impl FighterHudConfigWidget {
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
     ) {
         combo_config_base::rebuild_content_tabs(
             config,
@@ -1252,6 +1260,7 @@ impl FighterHudConfigWidget {
             },
             theme_ref_refreshers,
             |cfg| cfg.frame.theme.clone(),
+            content_cleanup_callbacks,
         );
     }
 
@@ -1436,6 +1445,7 @@ impl FighterHudConfigWidget {
             &self.source_summaries,
             &self.available_fields,
             &self.theme_ref_refreshers,
+            &self.content_cleanup_callbacks,
         );
 
         // Restore the on_change callback now that widget updates are complete
@@ -1515,6 +1525,7 @@ impl FighterHudConfigWidget {
             &self.source_summaries,
             &self.available_fields,
             &self.theme_ref_refreshers,
+            &self.content_cleanup_callbacks,
         );
 
         // Notify that config changed (lesson #12)
@@ -1577,7 +1588,11 @@ impl FighterHudConfigWidget {
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("FighterHudConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
+        combo_config_base::cleanup_common_fields_with_content(
+            &self.on_change,
+            &self.theme_ref_refreshers,
+            &self.content_cleanup_callbacks,
+        );
         *self.frame_widgets.borrow_mut() = None;
         *self.header_widgets.borrow_mut() = None;
         *self.layout_widgets.borrow_mut() = None;

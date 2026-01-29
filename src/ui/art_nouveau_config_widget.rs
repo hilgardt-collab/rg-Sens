@@ -207,6 +207,7 @@ pub struct ArtNouveauConfigWidget {
     layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
     animation_widgets: Rc<RefCell<Option<AnimationWidgets>>>,
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
 }
 
 impl ArtNouveauConfigWidget {
@@ -226,6 +227,8 @@ impl ArtNouveauConfigWidget {
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
@@ -339,6 +342,7 @@ impl ArtNouveauConfigWidget {
             layout_widgets,
             animation_widgets,
             theme_ref_refreshers,
+            content_cleanup_callbacks,
         }
     }
 
@@ -1436,6 +1440,7 @@ impl ArtNouveauConfigWidget {
             &self.source_summaries,
             &self.available_fields,
             &self.theme_ref_refreshers,
+            &self.content_cleanup_callbacks,
         );
 
         // Update Theme Reference section with new theme colors
@@ -1496,6 +1501,7 @@ impl ArtNouveauConfigWidget {
             &self.source_summaries,
             &self.available_fields,
             &self.theme_ref_refreshers,
+            &self.content_cleanup_callbacks,
         );
 
         // Notify that config has changed so displayer gets updated
@@ -1567,6 +1573,7 @@ impl ArtNouveauConfigWidget {
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
         available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
     ) {
         combo_config_base::rebuild_content_tabs(
             config,
@@ -1581,13 +1588,18 @@ impl ArtNouveauConfigWidget {
             },
             theme_ref_refreshers,
             |cfg| cfg.frame.theme.clone(),
+            content_cleanup_callbacks,
         );
     }
 
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("ArtNouveauConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
+        combo_config_base::cleanup_common_fields_with_content(
+            &self.on_change,
+            &self.theme_ref_refreshers,
+            &self.content_cleanup_callbacks,
+        );
         *self.theme_widgets.borrow_mut() = None;
         *self.frame_widgets.borrow_mut() = None;
         *self.background_widgets.borrow_mut() = None;
