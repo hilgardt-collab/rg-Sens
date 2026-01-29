@@ -300,7 +300,7 @@ impl ArtDecoConfigWidget {
         let content_page = Self::create_content_page(&content_notebook);
 
         let animation_page =
-            Self::create_animation_page(&config, &on_change, &preview, &animation_widgets);
+            Self::create_animation_page(&config, &on_change, &animation_widgets);
 
         // Add pages to notebook (Theme first)
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
@@ -1251,35 +1251,22 @@ impl ArtDecoConfigWidget {
     fn create_animation_page(
         config: &Rc<RefCell<ArtDecoDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
-
-        let builder = ConfigWidgetBuilder::new(config, preview, on_change);
-
-        let enable_check = builder.check_button(
-            &page,
-            "Enable Animation",
-            config.borrow().animation_enabled,
-            |cfg, v| cfg.animation_enabled = v,
+        let (page, base_widgets) = combo_config_base::create_animation_page_with_widgets(
+            config,
+            on_change,
+            |c| c.animation_enabled,
+            |c, v| c.animation_enabled = v,
+            |c| c.animation_speed,
+            |c, v| c.animation_speed = v,
         );
 
-        let speed_spin = builder.spin_row(
-            &page,
-            "Animation Speed:",
-            1.0,
-            20.0,
-            0.5,
-            config.borrow().animation_speed,
-            |cfg, v| cfg.animation_speed = v,
-        );
+        // Add any ArtDeco-specific options here if present...
 
-        // Store widget refs
         *animation_widgets_out.borrow_mut() = Some(AnimationWidgets {
-            enable_check,
-            speed_spin,
+            enable_check: base_widgets.enable_check,
+            speed_spin: base_widgets.speed_spin,
         });
 
         page

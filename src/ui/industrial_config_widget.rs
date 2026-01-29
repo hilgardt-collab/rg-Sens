@@ -5,7 +5,7 @@
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, ScrolledWindow, SpinButton, StringList,
+    ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -85,7 +85,7 @@ struct LayoutWidgets {
 /// Holds references to Animation tab widgets
 struct AnimationWidgets {
     enable_check: CheckButton,
-    speed_scale: Scale,
+    speed_spin: SpinButton,
 }
 
 /// Holds references to Theme tab widgets
@@ -1342,47 +1342,20 @@ impl IndustrialConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
+        let (page, base_widgets) = combo_config_base::create_animation_page_with_widgets(
+            config,
+            on_change,
+            |c| c.animation_enabled,
+            |c, v| c.animation_enabled = v,
+            |c| c.animation_speed,
+            |c, v| c.animation_speed = v,
+        );
 
-        // Enable animation
-        let enable_check = CheckButton::with_label("Enable Animation");
-        enable_check.set_active(config.borrow().animation_enabled);
+        // Add any Industrial-specific options here if present...
 
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        enable_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().animation_enabled = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-        page.append(&enable_check);
-
-        // Animation speed
-        let speed_box = GtkBox::new(Orientation::Horizontal, 6);
-        speed_box.append(&Label::new(Some("Animation Speed:")));
-
-        let speed_scale = Scale::with_range(Orientation::Horizontal, 1.0, 20.0, 0.5);
-        speed_scale.set_value(config.borrow().animation_speed);
-        speed_scale.set_hexpand(true);
-        speed_scale.set_draw_value(true);
-        speed_box.append(&speed_scale);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        speed_scale.connect_value_changed(move |scale| {
-            config_clone.borrow_mut().animation_speed = scale.value();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-        page.append(&speed_box);
-
-        // Store widget refs
         *animation_widgets_out.borrow_mut() = Some(AnimationWidgets {
-            enable_check,
-            speed_scale,
+            enable_check: base_widgets.enable_check,
+            speed_spin: base_widgets.speed_spin,
         });
 
         page
@@ -1587,7 +1560,7 @@ impl IndustrialConfigWidget {
         // Update Animation widgets
         if let Some(widgets) = self.animation_widgets.borrow().as_ref() {
             widgets.enable_check.set_active(config.animation_enabled);
-            widgets.speed_scale.set_value(config.animation_speed);
+            widgets.speed_spin.set_value(config.animation_speed);
         }
 
         // Update Theme widgets (fonts and colors)

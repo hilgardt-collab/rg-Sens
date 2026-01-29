@@ -4,8 +4,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation, Scale,
-    ScrolledWindow, SpinButton, StringList,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
+    Scale, ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -72,6 +72,7 @@ struct LayoutWidgets {
 /// Holds references to Animation tab widgets
 struct AnimationWidgets {
     enable_check: CheckButton,
+    speed_spin: SpinButton,
     cursor_blink_check: CheckButton,
     typewriter_check: CheckButton,
 }
@@ -1293,22 +1294,16 @@ impl RetroTerminalConfigWidget {
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         animation_widgets_out: &Rc<RefCell<Option<AnimationWidgets>>>,
     ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
+        let (page, base_widgets) = combo_config_base::create_animation_page_with_widgets(
+            config,
+            on_change,
+            |c| c.animation_enabled,
+            |c, v| c.animation_enabled = v,
+            |c| c.animation_speed,
+            |c, v| c.animation_speed = v,
+        );
 
-        // Enable animation
-        let enable_check = CheckButton::with_label("Enable Animation");
-        enable_check.set_active(config.borrow().animation_enabled);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        enable_check.connect_toggled(move |check| {
-            config_clone.borrow_mut().animation_enabled = check.is_active();
-            if let Some(cb) = on_change_clone.borrow().as_ref() {
-                cb();
-            }
-        });
-        page.append(&enable_check);
+        // Add RetroTerminal-specific animation options
 
         // Cursor blink
         let cursor_blink_check = CheckButton::with_label("Cursor Blink");
@@ -1340,7 +1335,8 @@ impl RetroTerminalConfigWidget {
 
         // Store widget refs
         *animation_widgets_out.borrow_mut() = Some(AnimationWidgets {
-            enable_check,
+            enable_check: base_widgets.enable_check,
+            speed_spin: base_widgets.speed_spin,
             cursor_blink_check,
             typewriter_check,
         });
@@ -1506,6 +1502,7 @@ impl RetroTerminalConfigWidget {
         // Update Animation widgets
         if let Some(widgets) = self.animation_widgets.borrow().as_ref() {
             widgets.enable_check.set_active(config.animation_enabled);
+            widgets.speed_spin.set_value(config.animation_speed);
             widgets
                 .cursor_blink_check
                 .set_active(config.frame.cursor_blink);

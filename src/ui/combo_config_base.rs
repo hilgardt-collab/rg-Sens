@@ -1187,6 +1187,88 @@ where
     page
 }
 
+/// Widgets returned from create_animation_page_with_widgets for storage and later updates.
+pub struct AnimationPageWidgets {
+    pub enable_check: CheckButton,
+    pub speed_spin: SpinButton,
+}
+
+/// Create a standard animation page and return both the page and widget references.
+///
+/// This allows combo widgets to:
+/// 1. Store widget references for later updates in set_config()
+/// 2. Add widget-specific options to the returned page
+///
+/// # Example
+/// ```ignore
+/// let (page, widgets) = combo_config_base::create_animation_page_with_widgets(
+///     &config, &on_change,
+///     |c| c.animation_enabled,
+///     |c, v| c.animation_enabled = v,
+///     |c| c.animation_speed,
+///     |c, v| c.animation_speed = v,
+/// );
+/// // Add widget-specific options
+/// let scanline_check = CheckButton::with_label("Scanline Effect");
+/// page.append(&scanline_check);
+/// // Store for later
+/// animation_widgets_out.borrow_mut() = Some(MyAnimationWidgets { enable_check: widgets.enable_check, ... });
+/// ```
+pub fn create_animation_page_with_widgets<C>(
+    config: &Rc<RefCell<C>>,
+    on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    get_animation_enabled: impl Fn(&C) -> bool + 'static,
+    set_animation_enabled: impl Fn(&mut C, bool) + 'static,
+    get_animation_speed: impl Fn(&C) -> f64 + 'static,
+    set_animation_speed: impl Fn(&mut C, f64) + 'static,
+) -> (GtkBox, AnimationPageWidgets)
+where
+    C: 'static,
+{
+    let page = GtkBox::new(Orientation::Vertical, 8);
+    set_page_margins(&page);
+
+    // Enable animation
+    let enable_check = CheckButton::with_label("Enable Animations");
+    enable_check.set_active(get_animation_enabled(&config.borrow()));
+
+    let config_clone = config.clone();
+    let on_change_clone = on_change.clone();
+    enable_check.connect_toggled(move |check| {
+        set_animation_enabled(&mut config_clone.borrow_mut(), check.is_active());
+        if let Some(cb) = on_change_clone.borrow().as_ref() {
+            cb();
+        }
+    });
+    page.append(&enable_check);
+
+    // Animation speed
+    let (speed_box, speed_spin) = create_spin_row_with_value(
+        "Animation Speed:",
+        1.0,
+        20.0,
+        1.0,
+        get_animation_speed(&config.borrow()),
+    );
+
+    let config_clone = config.clone();
+    let on_change_clone = on_change.clone();
+    speed_spin.connect_value_changed(move |spin| {
+        set_animation_speed(&mut config_clone.borrow_mut(), spin.value());
+        if let Some(cb) = on_change_clone.borrow().as_ref() {
+            cb();
+        }
+    });
+    page.append(&speed_box);
+
+    let widgets = AnimationPageWidgets {
+        enable_check,
+        speed_spin,
+    };
+
+    (page, widgets)
+}
+
 /// Create the content page with tabbed notebook for content items.
 pub fn create_content_page<C, F, S, G>(
     config: &Rc<RefCell<C>>,
