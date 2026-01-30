@@ -385,18 +385,12 @@ impl WindowConfig {
 
         // Window dimensions must be positive (minimum 100x100 for usability)
         if self.width < 100 {
-            log::warn!(
-                "Invalid window width {} corrected to 800",
-                self.width
-            );
+            log::warn!("Invalid window width {} corrected to 800", self.width);
             self.width = 800;
             corrected = true;
         }
         if self.height < 100 {
-            log::warn!(
-                "Invalid window height {} corrected to 600",
-                self.height
-            );
+            log::warn!("Invalid window height {} corrected to 600", self.height);
             self.height = 600;
             corrected = true;
         }
@@ -475,28 +469,19 @@ impl GridConfig {
 
         // Cell dimensions must be positive (minimum 1 pixel)
         if self.cell_width < 1 {
-            log::warn!(
-                "Invalid cell width {} corrected to 16",
-                self.cell_width
-            );
+            log::warn!("Invalid cell width {} corrected to 16", self.cell_width);
             self.cell_width = 16;
             corrected = true;
         }
         if self.cell_height < 1 {
-            log::warn!(
-                "Invalid cell height {} corrected to 16",
-                self.cell_height
-            );
+            log::warn!("Invalid cell height {} corrected to 16", self.cell_height);
             self.cell_height = 16;
             corrected = true;
         }
 
         // Spacing must be non-negative
         if self.spacing < 0 {
-            log::warn!(
-                "Invalid spacing {} corrected to 2",
-                self.spacing
-            );
+            log::warn!("Invalid spacing {} corrected to 2", self.spacing);
             self.spacing = 2;
             corrected = true;
         }

@@ -542,7 +542,10 @@ fn draw_art_deco_ziggurat_corner(
 
     // Draw a second inner stair pattern for more detail
     let inner_offset = step_size * 0.5;
-    cr.move_to(corner_x + h_dir * inner_offset, corner_y + v_dir * (size - inner_offset));
+    cr.move_to(
+        corner_x + h_dir * inner_offset,
+        corner_y + v_dir * (size - inner_offset),
+    );
 
     for i in 0..(steps - 1) {
         let step_x = corner_x + h_dir * (inner_offset + i as f64 * step_size);
@@ -553,7 +556,10 @@ fn draw_art_deco_ziggurat_corner(
         cr.line_to(next_step_x, step_y);
     }
 
-    cr.line_to(corner_x + h_dir * (size - inner_offset), corner_y + v_dir * inner_offset);
+    cr.line_to(
+        corner_x + h_dir * (size - inner_offset),
+        corner_y + v_dir * inner_offset,
+    );
     cr.stroke().ok();
 
     cr.restore().ok();
@@ -733,12 +739,30 @@ fn draw_art_deco_circle_corner(
     let line_spacing = size * 0.08;
 
     // Draw concentric circles
-    cr.arc(circle_cx, circle_cy, circle_radius, 0.0, std::f64::consts::TAU);
+    cr.arc(
+        circle_cx,
+        circle_cy,
+        circle_radius,
+        0.0,
+        std::f64::consts::TAU,
+    );
     cr.stroke().ok();
-    cr.arc(circle_cx, circle_cy, circle_radius * 0.6, 0.0, std::f64::consts::TAU);
+    cr.arc(
+        circle_cx,
+        circle_cy,
+        circle_radius * 0.6,
+        0.0,
+        std::f64::consts::TAU,
+    );
     cr.stroke().ok();
     // Center dot
-    cr.arc(circle_cx, circle_cy, line_width * 1.5, 0.0, std::f64::consts::TAU);
+    cr.arc(
+        circle_cx,
+        circle_cy,
+        line_width * 1.5,
+        0.0,
+        std::f64::consts::TAU,
+    );
     cr.fill().ok();
 
     // Draw horizontal lines extending from corner
@@ -866,9 +890,18 @@ fn draw_art_deco_double_bracket(
     cr.stroke().ok();
 
     // Draw inner L bracket (offset)
-    cr.move_to(corner_x + h_dir * (size - line_spacing * 2.0), corner_y + v_dir * line_spacing);
-    cr.line_to(corner_x + h_dir * line_spacing, corner_y + v_dir * line_spacing);
-    cr.line_to(corner_x + h_dir * line_spacing, corner_y + v_dir * (size - line_spacing * 2.0));
+    cr.move_to(
+        corner_x + h_dir * (size - line_spacing * 2.0),
+        corner_y + v_dir * line_spacing,
+    );
+    cr.line_to(
+        corner_x + h_dir * line_spacing,
+        corner_y + v_dir * line_spacing,
+    );
+    cr.line_to(
+        corner_x + h_dir * line_spacing,
+        corner_y + v_dir * (size - line_spacing * 2.0),
+    );
     cr.stroke().ok();
 
     cr.restore().ok();
@@ -1146,23 +1179,95 @@ fn draw_corner_decorations(
         }
         CornerStyle::Ziggurat => {
             // Top-left: stair steps going right and down
-            draw_art_deco_ziggurat_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_ziggurat_corner(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right: stair steps going left and down
-            draw_art_deco_ziggurat_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_ziggurat_corner(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right: stair steps going left and up
-            draw_art_deco_ziggurat_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_ziggurat_corner(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left: stair steps going right and up
-            draw_art_deco_ziggurat_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_ziggurat_corner(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::Diamond => {
             // Top-left
-            draw_art_deco_diamond_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_diamond_corner(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right
-            draw_art_deco_diamond_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_diamond_corner(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right
-            draw_art_deco_diamond_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_diamond_corner(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left
-            draw_art_deco_diamond_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_diamond_corner(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::Bracket => {
             cr.save().ok();
@@ -1229,53 +1334,233 @@ fn draw_corner_decorations(
         }
         CornerStyle::Hexagon => {
             // Top-left: lines go right and down
-            draw_art_deco_hexagon_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_hexagon_corner(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right: lines go left and down
-            draw_art_deco_hexagon_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_hexagon_corner(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right: lines go left and up
-            draw_art_deco_hexagon_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_hexagon_corner(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left: lines go right and up
-            draw_art_deco_hexagon_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_hexagon_corner(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::Octagon => {
             // Top-left
-            draw_art_deco_octagon_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_octagon_corner(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right
-            draw_art_deco_octagon_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_octagon_corner(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right
-            draw_art_deco_octagon_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_octagon_corner(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left
-            draw_art_deco_octagon_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_octagon_corner(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::Circle => {
             // Top-left
-            draw_art_deco_circle_corner(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_circle_corner(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right
-            draw_art_deco_circle_corner(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_circle_corner(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right
-            draw_art_deco_circle_corner(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_circle_corner(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left
-            draw_art_deco_circle_corner(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_circle_corner(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::DoubleBracket => {
             // Top-left
-            draw_art_deco_double_bracket(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_double_bracket(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right
-            draw_art_deco_double_bracket(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_double_bracket(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right
-            draw_art_deco_double_bracket(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_double_bracket(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left
-            draw_art_deco_double_bracket(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_double_bracket(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::GeometricStack => {
             // Top-left
-            draw_art_deco_geometric_stack(cr, x, y, size, false, false, &accent_color, config.accent_width);
+            draw_art_deco_geometric_stack(
+                cr,
+                x,
+                y,
+                size,
+                false,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Top-right
-            draw_art_deco_geometric_stack(cr, x + w, y, size, true, false, &accent_color, config.accent_width);
+            draw_art_deco_geometric_stack(
+                cr,
+                x + w,
+                y,
+                size,
+                true,
+                false,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-right
-            draw_art_deco_geometric_stack(cr, x + w, y + h, size, true, true, &accent_color, config.accent_width);
+            draw_art_deco_geometric_stack(
+                cr,
+                x + w,
+                y + h,
+                size,
+                true,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
             // Bottom-left
-            draw_art_deco_geometric_stack(cr, x, y + h, size, false, true, &accent_color, config.accent_width);
+            draw_art_deco_geometric_stack(
+                cr,
+                x,
+                y + h,
+                size,
+                false,
+                true,
+                &accent_color,
+                config.accent_width,
+            );
         }
         CornerStyle::None => {}
     }
@@ -1805,8 +2090,22 @@ fn draw_divider(
 
             // Fleur-de-lis shape (simplified leaf/teardrop)
             cr.move_to(cx, cy - size);
-            cr.curve_to(cx + size * 0.6, cy - size * 0.3, cx + size * 0.4, cy + size * 0.5, cx, cy + size);
-            cr.curve_to(cx - size * 0.4, cy + size * 0.5, cx - size * 0.6, cy - size * 0.3, cx, cy - size);
+            cr.curve_to(
+                cx + size * 0.6,
+                cy - size * 0.3,
+                cx + size * 0.4,
+                cy + size * 0.5,
+                cx,
+                cy + size,
+            );
+            cr.curve_to(
+                cx - size * 0.4,
+                cy + size * 0.5,
+                cx - size * 0.6,
+                cy - size * 0.3,
+                cx,
+                cy - size,
+            );
             cr.stroke().ok();
 
             // Small curls on sides

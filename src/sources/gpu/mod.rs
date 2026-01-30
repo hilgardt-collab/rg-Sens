@@ -9,7 +9,9 @@ pub use backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use detector::detect_gpus;
 
 use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB};
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
+use crate::core::{
+    DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
+};
 use crate::ui::{GpuField, GpuSourceConfig, MemoryUnit, TemperatureUnit};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;

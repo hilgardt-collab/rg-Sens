@@ -10,11 +10,11 @@ use std::rc::Rc;
 
 use crate::core::FieldMetadata;
 use crate::ui::background::Color;
-use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::bar_display::{
     BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle,
 };
 use crate::ui::clipboard::CLIPBOARD;
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::shared_font_dialog::show_font_dialog;
@@ -234,7 +234,8 @@ impl CoreBarsConfigWidget {
         });
 
         container.append(&notebook);
-        preview.set_visible(false); container.append(&preview);
+        preview.set_visible(false);
+        container.append(&preview);
 
         Self {
             container,
@@ -1588,4 +1589,3 @@ impl ConfigWidget for CoreBarsConfigWidget {
 
 /// Lazy-loading wrapper for CoreBarsConfigWidget.
 pub type LazyCoreBarsConfigWidget = LazyConfigWidget<CoreBarsConfigWidget>;
-

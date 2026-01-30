@@ -253,56 +253,122 @@ impl Displayer for ClockDigitalDisplayer {
                 return; // Skip frame if lock contention
             };
             data.transform.apply(cr, width as f64, height as f64);
-                let _ = render_digital_clock(cr, &data, width as f64, height as f64);
+            let _ = render_digital_clock(cr, &data, width as f64, height as f64);
 
-                // Flash effect when alarm/timer triggers
-                let show_flash =
-                    (data.alarm_triggered || data.timer_state == "finished") && data.blink_state;
-                if show_flash {
+            // Flash effect when alarm/timer triggers
+            let show_flash =
+                (data.alarm_triggered || data.timer_state == "finished") && data.blink_state;
+            if show_flash {
+                cr.save().ok();
+                cr.set_source_rgba(1.0, 0.3, 0.3, 0.2);
+                cr.rectangle(0.0, 0.0, width as f64, height as f64);
+                cr.fill().ok();
+                cr.restore().ok();
+            }
+
+            // Bottom-right corner: show timer countdown when running/paused/finished, or icon when idle
+            if data.config.show_icon {
+                let timer_active = data.timer_state == "running"
+                    || data.timer_state == "paused"
+                    || data.timer_state == "finished";
+
+                // Get icon config from data.config
+                let icon_font = &data.config.icon_font;
+                let icon_text = &data.config.icon_text;
+                let icon_size_px = data.config.icon_size;
+                let icon_bold = data.config.icon_bold;
+                let font_weight = if icon_bold {
+                    cairo::FontWeight::Bold
+                } else {
+                    cairo::FontWeight::Normal
+                };
+
+                if timer_active && !data.timer_display.is_empty() {
+                    // Show countdown timer text
                     cr.save().ok();
-                    cr.set_source_rgba(1.0, 0.3, 0.3, 0.2);
-                    cr.rectangle(0.0, 0.0, width as f64, height as f64);
+
+                    let font_size = icon_size_px.min(height as f64 * 0.2);
+
+                    let te = pango_text_extents(
+                        cr,
+                        &data.timer_display,
+                        icon_font,
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Bold,
+                        font_size,
+                    );
+                    let (text_w, text_h) = (te.width().max(50.0), te.height().max(12.0));
+                    let text_x = width as f64 - text_w - 6.0;
+                    let text_y = height as f64 - 6.0;
+
+                    // Background for readability
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
+                    cr.rectangle(
+                        text_x - 4.0,
+                        text_y - text_h - 2.0,
+                        text_w + 8.0,
+                        text_h + 6.0,
+                    );
                     cr.fill().ok();
-                    cr.restore().ok();
-                }
 
-                // Bottom-right corner: show timer countdown when running/paused/finished, or icon when idle
-                if data.config.show_icon {
-                    let timer_active = data.timer_state == "running"
-                        || data.timer_state == "paused"
-                        || data.timer_state == "finished";
-
-                    // Get icon config from data.config
-                    let icon_font = &data.config.icon_font;
-                    let icon_text = &data.config.icon_text;
-                    let icon_size_px = data.config.icon_size;
-                    let icon_bold = data.config.icon_bold;
-                    let font_weight = if icon_bold {
-                        cairo::FontWeight::Bold
+                    // Timer text color based on state
+                    if data.timer_state == "finished" {
+                        if data.blink_state {
+                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
+                        } else {
+                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
+                        }
+                    } else if data.timer_state == "paused" {
+                        cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
                     } else {
-                        cairo::FontWeight::Normal
+                        cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
+                    }
+
+                    cr.move_to(text_x, text_y);
+                    pango_show_text(
+                        cr,
+                        &data.timer_display,
+                        icon_font,
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Bold,
+                        font_size,
+                    );
+                    cr.restore().ok();
+                } else {
+                    // Show icon with optional next alarm time
+                    cr.save().ok();
+
+                    let icon_size = icon_size_px.min(height as f64 * 0.25);
+
+                    // Build display text: icon + optional next alarm time
+                    let display_text = if let Some(ref next_time) = data.next_alarm_time {
+                        if data.alarm_enabled {
+                            format!("{} {}", icon_text, next_time)
+                        } else {
+                            icon_text.clone()
+                        }
+                    } else {
+                        icon_text.clone()
                     };
 
-                    if timer_active && !data.timer_display.is_empty() {
-                        // Show countdown timer text
-                        cr.save().ok();
+                    let te = pango_text_extents(
+                        cr,
+                        &display_text,
+                        icon_font,
+                        cairo::FontSlant::Normal,
+                        font_weight,
+                        icon_size,
+                    );
+                    let (text_w, text_h) = (
+                        te.width().max(icon_size * 0.8),
+                        te.height().max(icon_size * 0.8),
+                    );
+                    let text_x = width as f64 - text_w - 6.0;
+                    let text_y = height as f64 - 6.0;
 
-                        let font_size = icon_size_px.min(height as f64 * 0.2);
-
-                        let te = pango_text_extents(
-                            cr,
-                            &data.timer_display,
-                            icon_font,
-                            cairo::FontSlant::Normal,
-                            cairo::FontWeight::Bold,
-                            font_size,
-                        );
-                        let (text_w, text_h) = (te.width().max(50.0), te.height().max(12.0));
-                        let text_x = width as f64 - text_w - 6.0;
-                        let text_y = height as f64 - 6.0;
-
-                        // Background for readability
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
+                    // Background for readability when showing time
+                    if data.next_alarm_time.is_some() && data.alarm_enabled {
+                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
                         cr.rectangle(
                             text_x - 4.0,
                             text_y - text_h - 2.0,
@@ -310,100 +376,34 @@ impl Displayer for ClockDigitalDisplayer {
                             text_h + 6.0,
                         );
                         cr.fill().ok();
-
-                        // Timer text color based on state
-                        if data.timer_state == "finished" {
-                            if data.blink_state {
-                                cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
-                            } else {
-                                cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
-                            }
-                        } else if data.timer_state == "paused" {
-                            cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
-                        } else {
-                            cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
-                        }
-
-                        cr.move_to(text_x, text_y);
-                        pango_show_text(
-                            cr,
-                            &data.timer_display,
-                            icon_font,
-                            cairo::FontSlant::Normal,
-                            cairo::FontWeight::Bold,
-                            font_size,
-                        );
-                        cr.restore().ok();
-                    } else {
-                        // Show icon with optional next alarm time
-                        cr.save().ok();
-
-                        let icon_size = icon_size_px.min(height as f64 * 0.25);
-
-                        // Build display text: icon + optional next alarm time
-                        let display_text = if let Some(ref next_time) = data.next_alarm_time {
-                            if data.alarm_enabled {
-                                format!("{} {}", icon_text, next_time)
-                            } else {
-                                icon_text.clone()
-                            }
-                        } else {
-                            icon_text.clone()
-                        };
-
-                        let te = pango_text_extents(
-                            cr,
-                            &display_text,
-                            icon_font,
-                            cairo::FontSlant::Normal,
-                            font_weight,
-                            icon_size,
-                        );
-                        let (text_w, text_h) = (
-                            te.width().max(icon_size * 0.8),
-                            te.height().max(icon_size * 0.8),
-                        );
-                        let text_x = width as f64 - text_w - 6.0;
-                        let text_y = height as f64 - 6.0;
-
-                        // Background for readability when showing time
-                        if data.next_alarm_time.is_some() && data.alarm_enabled {
-                            cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
-                            cr.rectangle(
-                                text_x - 4.0,
-                                text_y - text_h - 2.0,
-                                text_w + 8.0,
-                                text_h + 6.0,
-                            );
-                            cr.fill().ok();
-                        }
-
-                        // Color based on state
-                        if data.alarm_triggered {
-                            if data.blink_state {
-                                cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
-                            } else {
-                                cr.set_source_rgba(1.0, 0.6, 0.3, 1.0);
-                            }
-                        } else if data.alarm_enabled {
-                            cr.set_source_rgba(0.3, 0.7, 1.0, 1.0); // Blue for alarm enabled
-                        } else {
-                            cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
-                        }
-
-                        cr.move_to(text_x, text_y);
-                        pango_show_text(
-                            cr,
-                            &display_text,
-                            icon_font,
-                            cairo::FontSlant::Normal,
-                            font_weight,
-                            icon_size,
-                        );
-                        cr.restore().ok();
                     }
+
+                    // Color based on state
+                    if data.alarm_triggered {
+                        if data.blink_state {
+                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
+                        } else {
+                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0);
+                        }
+                    } else if data.alarm_enabled {
+                        cr.set_source_rgba(0.3, 0.7, 1.0, 1.0); // Blue for alarm enabled
+                    } else {
+                        cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
+                    }
+
+                    cr.move_to(text_x, text_y);
+                    pango_show_text(
+                        cr,
+                        &display_text,
+                        icon_font,
+                        cairo::FontSlant::Normal,
+                        font_weight,
+                        icon_size,
+                    );
+                    cr.restore().ok();
                 }
-                data.transform.restore(cr);
+            }
+            data.transform.restore(cr);
         });
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs

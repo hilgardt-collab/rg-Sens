@@ -448,10 +448,7 @@ impl UpdateManager {
                 );
                 // Warn if update cycle is taking too long
                 if elapsed > std::time::Duration::from_millis(500) {
-                    log::warn!(
-                        "Update cycle took {:?} - this may cause UI lag",
-                        elapsed
-                    );
+                    log::warn!("Update cycle took {:?} - this may cause UI lag", elapsed);
                 }
             }
         }
@@ -570,11 +567,9 @@ impl UpdateManager {
 
                     // Use timeout to prevent deadlock with GTK main thread's blocking_read/write
                     // If the lock can't be acquired within 5 seconds, skip this update
-                    let write_result = tokio::time::timeout(
-                        std::time::Duration::from_secs(5),
-                        panel.write(),
-                    )
-                    .await;
+                    let write_result =
+                        tokio::time::timeout(std::time::Duration::from_secs(5), panel.write())
+                            .await;
 
                     match write_result {
                         Ok(mut panel_guard) => {

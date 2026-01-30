@@ -15,6 +15,7 @@ use crate::ui::arc_display::{
 };
 use crate::ui::background::ColorStop;
 use crate::ui::clipboard::CLIPBOARD;
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
@@ -23,7 +24,6 @@ use crate::ui::widget_builder::{
     create_dropdown_row, create_labeled_row, create_page_container, create_spin_row_with_value,
     SpinChangeHandler,
 };
-use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::GradientEditor;
 
 /// Arc gauge configuration widget
@@ -180,7 +180,8 @@ impl ArcConfigWidget {
             Some(&Label::new(Some("Text"))),
         );
 
-        preview.set_visible(false); container.append(&preview);
+        preview.set_visible(false);
+        container.append(&preview);
 
         // Copy/Paste buttons for the entire arc config
         let copy_paste_box = GtkBox::new(Orientation::Horizontal, 6);

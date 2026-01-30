@@ -381,7 +381,13 @@ pub fn show_window_settings_dialog<F>(
     renderer_box.append(&Label::new(Some("Renderer:")));
 
     // Renderer options: Default (None), GL, NGL, Vulkan, Cairo
-    let renderer_options = ["Default (auto)", "GL (recommended)", "NGL (GTK 4.14+)", "Vulkan", "Cairo (software)"];
+    let renderer_options = [
+        "Default (auto)",
+        "GL (recommended)",
+        "NGL (GTK 4.14+)",
+        "Vulkan",
+        "Cairo (software)",
+    ];
     let renderer_string_refs: Vec<&str> = renderer_options.to_vec();
     let renderer_list = StringList::new(&renderer_string_refs);
     let renderer_dropdown = DropDown::new(Some(renderer_list), Option::<gtk4::Expression>::None);
@@ -876,11 +882,11 @@ pub fn show_window_settings_dialog<F>(
         // Save renderer setting (requires restart to take effect)
         let renderer_selection = renderer_dropdown_clone.selected();
         let new_renderer = match renderer_selection {
-            0 => None,                          // Default (auto)
-            1 => Some("gl".to_string()),        // GL
-            2 => Some("ngl".to_string()),       // NGL
-            3 => Some("vulkan".to_string()),    // Vulkan
-            4 => Some("cairo".to_string()),     // Cairo
+            0 => None,                       // Default (auto)
+            1 => Some("gl".to_string()),     // GL
+            2 => Some("ngl".to_string()),    // NGL
+            3 => Some("vulkan".to_string()), // Vulkan
+            4 => Some("cairo".to_string()),  // Cairo
             _ => None,
         };
 

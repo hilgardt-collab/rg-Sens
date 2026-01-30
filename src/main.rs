@@ -8,8 +8,8 @@ use rg_sens::core::{DisplayerConfig, PanelData, PanelGeometry, SourceConfig, Upd
 use rg_sens::sources::ClockSourceConfig;
 use rg_sens::ui::{
     auto_scroll, config_helpers, context_menu, new_panel_dialog, theme, window_settings_dialog,
-    AnalogClockConfig, ArcDisplayConfig, CpuField, CpuSourceConfig, GridConfig as UiGridConfig,
-    GridLayout, GpuField, GpuSourceConfig, SpeedometerConfig,
+    AnalogClockConfig, ArcDisplayConfig, CpuField, CpuSourceConfig, GpuField, GpuSourceConfig,
+    GridConfig as UiGridConfig, GridLayout, SpeedometerConfig,
 };
 use rg_sens::{displayers, sources};
 use std::cell::RefCell;
@@ -1179,7 +1179,10 @@ fn build_ui(app: &Application) {
         // Check if click is on a panel - if so, let the panel's context menu handle it
         let grid_x = x + scroll_x;
         let grid_y = y + scroll_y;
-        if grid_layout_for_menu.borrow().is_point_on_panel(grid_x, grid_y) {
+        if grid_layout_for_menu
+            .borrow()
+            .is_point_on_panel(grid_x, grid_y)
+        {
             // Deny this gesture so the event propagates to the panel's gesture
             gesture.set_state(gtk4::EventSequenceState::Denied);
             return;

@@ -1484,7 +1484,9 @@ impl ComboSourceConfigWidget {
     /// which would require creating sysinfo::System objects (50-100MB each).
     /// Instead, we use the registry's field cache which only creates each source
     /// type once and caches its field metadata.
-    fn compute_fields_from_cache(config: &crate::sources::ComboSourceConfig) -> Vec<crate::core::FieldMetadata> {
+    fn compute_fields_from_cache(
+        config: &crate::sources::ComboSourceConfig,
+    ) -> Vec<crate::core::FieldMetadata> {
         use crate::core::global_registry;
 
         let mut fields = Vec::new();
@@ -1531,10 +1533,8 @@ impl ComboSourceConfigWidget {
         for slot_name in slot_names {
             if let Some(slot_config) = config.slots.get(&slot_name) {
                 if !slot_config.source_id.is_empty() && slot_config.source_id != "none" {
-                    let slot_fields = registry.get_source_fields_for_combo_slot(
-                        &slot_name,
-                        &slot_config.source_id,
-                    );
+                    let slot_fields = registry
+                        .get_source_fields_for_combo_slot(&slot_name, &slot_config.source_id);
                     fields.extend(slot_fields);
                 }
             }

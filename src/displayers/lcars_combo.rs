@@ -446,15 +446,168 @@ impl Displayer for LcarsComboDisplayer {
             data.transform.apply(cr, w, h);
 
             // Check if frame cache is valid
-                let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
-                    cache.width == width
-                        && cache.height == height
-                        && cache.config_version == data.config_version
-                });
+            let cache_valid = frame_cache_clone.borrow().as_ref().is_some_and(|cache| {
+                cache.width == width
+                    && cache.height == height
+                    && cache.config_version == data.config_version
+            });
 
-                // Either use cached frame or render fresh
-                let (content_bounds, group_layouts) = if cache_valid {
-                    // Use cached frame
+            // Either use cached frame or render fresh
+            let (content_bounds, group_layouts) = if cache_valid {
+                // Use cached frame
+                let cache_ref = frame_cache_clone.borrow();
+                let cache = cache_ref.as_ref().unwrap();
+                if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
+                    log::debug!("Failed to set cached surface: {:?}", e);
+                }
+                cr.paint().ok();
+                // Clear source reference to allow cached surface to be deallocated
+                // when cache is invalidated (prevents memory leak)
+                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+                (cache.content_bounds, cache.group_layouts.clone())
+            } else {
+                // Try to create cache surface
+                let cache_result =
+                    cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                        .ok()
+                        .and_then(|surface| {
+                            cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
+                        });
+
+                if let Some((surface, cache_cr)) = cache_result {
+                    // Render frame to cache
+                    if let Err(e) = render_lcars_frame(&cache_cr, &data.config.frame, w, h) {
+                        log::debug!("LCARS frame render error: {}", e);
+                    }
+
+                    // Render content background to cache
+                    if let Err(e) = render_content_background(&cache_cr, &data.config.frame, w, h) {
+                        log::debug!("LCARS content background render error: {}", e);
+                    }
+
+                    // Get content bounds
+                    let content_bounds = get_content_bounds(&data.config.frame, w, h);
+                    let (content_x, content_y, content_w, content_h) = content_bounds;
+
+                    // Calculate group layouts and render dividers to cache
+                    let group_count = data.config.frame.group_item_counts.len();
+                    let divider_config = &data.config.frame.divider_config;
+                    let mut group_layouts = Vec::with_capacity(group_count);
+
+                    if group_count == 0 {
+                        // No groups
+                    } else if group_count == 1 {
+                        group_layouts.push((content_x, content_y, content_w, content_h));
+                    } else {
+                        let total_divider_space = divider_config.width
+                            + divider_config.spacing_before
+                            + divider_config.spacing_after;
+                        let num_dividers = (group_count - 1) as f64;
+
+                        let total_weight: f64 = (0..group_count)
+                            .map(|i| {
+                                data.config
+                                    .frame
+                                    .group_size_weights
+                                    .get(i)
+                                    .copied()
+                                    .unwrap_or(1.0)
+                            })
+                            .sum();
+                        let total_weight = if total_weight <= 0.0 {
+                            1.0
+                        } else {
+                            total_weight
+                        };
+
+                        match data.config.frame.layout_orientation {
+                            SplitOrientation::Vertical => {
+                                let available_w = content_w - num_dividers * total_divider_space;
+                                let mut current_x = content_x;
+
+                                for group_idx in 0..group_count {
+                                    let weight = data
+                                        .config
+                                        .frame
+                                        .group_size_weights
+                                        .get(group_idx)
+                                        .copied()
+                                        .unwrap_or(1.0);
+                                    let group_w = (weight / total_weight) * available_w;
+
+                                    group_layouts.push((current_x, content_y, group_w, content_h));
+
+                                    if group_idx < group_count - 1 {
+                                        let divider_x =
+                                            current_x + group_w + divider_config.spacing_before;
+                                        let _ = render_divider(
+                                            &cache_cr,
+                                            divider_x,
+                                            content_y,
+                                            divider_config.width,
+                                            content_h,
+                                            divider_config,
+                                            SplitOrientation::Vertical,
+                                            &data.config.frame.theme,
+                                        );
+                                        current_x = divider_x
+                                            + divider_config.width
+                                            + divider_config.spacing_after;
+                                    }
+                                }
+                            }
+                            SplitOrientation::Horizontal => {
+                                let available_h = content_h - num_dividers * total_divider_space;
+                                let mut current_y = content_y;
+
+                                for group_idx in 0..group_count {
+                                    let weight = data
+                                        .config
+                                        .frame
+                                        .group_size_weights
+                                        .get(group_idx)
+                                        .copied()
+                                        .unwrap_or(1.0);
+                                    let group_h = (weight / total_weight) * available_h;
+
+                                    group_layouts.push((content_x, current_y, content_w, group_h));
+
+                                    if group_idx < group_count - 1 {
+                                        let divider_y =
+                                            current_y + group_h + divider_config.spacing_before;
+                                        let _ = render_divider(
+                                            &cache_cr,
+                                            content_x,
+                                            divider_y,
+                                            content_w,
+                                            divider_config.width,
+                                            divider_config,
+                                            SplitOrientation::Horizontal,
+                                            &data.config.frame.theme,
+                                        );
+                                        current_y = divider_y
+                                            + divider_config.width
+                                            + divider_config.spacing_after;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Flush and store cache
+                    drop(cache_cr);
+                    surface.flush();
+
+                    *frame_cache_clone.borrow_mut() = Some(LcarsFrameCache {
+                        surface,
+                        width,
+                        height,
+                        config_version: data.config_version,
+                        content_bounds,
+                        group_layouts: group_layouts.clone(),
+                    });
+
+                    // Paint cached surface
                     let cache_ref = frame_cache_clone.borrow();
                     let cache = cache_ref.as_ref().unwrap();
                     if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
@@ -464,317 +617,154 @@ impl Displayer for LcarsComboDisplayer {
                     // Clear source reference to allow cached surface to be deallocated
                     // when cache is invalidated (prevents memory leak)
                     cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                    (cache.content_bounds, cache.group_layouts.clone())
+
+                    (content_bounds, group_layouts)
                 } else {
-                    // Try to create cache surface
-                    let cache_result =
-                        cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                            .ok()
-                            .and_then(|surface| {
-                                cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
-                            });
-
-                    if let Some((surface, cache_cr)) = cache_result {
-                        // Render frame to cache
-                        if let Err(e) = render_lcars_frame(&cache_cr, &data.config.frame, w, h) {
-                            log::debug!("LCARS frame render error: {}", e);
-                        }
-
-                        // Render content background to cache
-                        if let Err(e) =
-                            render_content_background(&cache_cr, &data.config.frame, w, h)
-                        {
-                            log::debug!("LCARS content background render error: {}", e);
-                        }
-
-                        // Get content bounds
-                        let content_bounds = get_content_bounds(&data.config.frame, w, h);
-                        let (content_x, content_y, content_w, content_h) = content_bounds;
-
-                        // Calculate group layouts and render dividers to cache
-                        let group_count = data.config.frame.group_item_counts.len();
-                        let divider_config = &data.config.frame.divider_config;
-                        let mut group_layouts = Vec::with_capacity(group_count);
-
-                        if group_count == 0 {
-                            // No groups
-                        } else if group_count == 1 {
-                            group_layouts.push((content_x, content_y, content_w, content_h));
-                        } else {
-                            let total_divider_space = divider_config.width
-                                + divider_config.spacing_before
-                                + divider_config.spacing_after;
-                            let num_dividers = (group_count - 1) as f64;
-
-                            let total_weight: f64 = (0..group_count)
-                                .map(|i| {
-                                    data.config
-                                        .frame
-                                        .group_size_weights
-                                        .get(i)
-                                        .copied()
-                                        .unwrap_or(1.0)
-                                })
-                                .sum();
-                            let total_weight = if total_weight <= 0.0 {
-                                1.0
-                            } else {
-                                total_weight
-                            };
-
-                            match data.config.frame.layout_orientation {
-                                SplitOrientation::Vertical => {
-                                    let available_w =
-                                        content_w - num_dividers * total_divider_space;
-                                    let mut current_x = content_x;
-
-                                    for group_idx in 0..group_count {
-                                        let weight = data
-                                            .config
-                                            .frame
-                                            .group_size_weights
-                                            .get(group_idx)
-                                            .copied()
-                                            .unwrap_or(1.0);
-                                        let group_w = (weight / total_weight) * available_w;
-
-                                        group_layouts
-                                            .push((current_x, content_y, group_w, content_h));
-
-                                        if group_idx < group_count - 1 {
-                                            let divider_x =
-                                                current_x + group_w + divider_config.spacing_before;
-                                            let _ = render_divider(
-                                                &cache_cr,
-                                                divider_x,
-                                                content_y,
-                                                divider_config.width,
-                                                content_h,
-                                                divider_config,
-                                                SplitOrientation::Vertical,
-                                                &data.config.frame.theme,
-                                            );
-                                            current_x = divider_x
-                                                + divider_config.width
-                                                + divider_config.spacing_after;
-                                        }
-                                    }
-                                }
-                                SplitOrientation::Horizontal => {
-                                    let available_h =
-                                        content_h - num_dividers * total_divider_space;
-                                    let mut current_y = content_y;
-
-                                    for group_idx in 0..group_count {
-                                        let weight = data
-                                            .config
-                                            .frame
-                                            .group_size_weights
-                                            .get(group_idx)
-                                            .copied()
-                                            .unwrap_or(1.0);
-                                        let group_h = (weight / total_weight) * available_h;
-
-                                        group_layouts
-                                            .push((content_x, current_y, content_w, group_h));
-
-                                        if group_idx < group_count - 1 {
-                                            let divider_y =
-                                                current_y + group_h + divider_config.spacing_before;
-                                            let _ = render_divider(
-                                                &cache_cr,
-                                                content_x,
-                                                divider_y,
-                                                content_w,
-                                                divider_config.width,
-                                                divider_config,
-                                                SplitOrientation::Horizontal,
-                                                &data.config.frame.theme,
-                                            );
-                                            current_y = divider_y
-                                                + divider_config.width
-                                                + divider_config.spacing_after;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Flush and store cache
-                        drop(cache_cr);
-                        surface.flush();
-
-                        *frame_cache_clone.borrow_mut() = Some(LcarsFrameCache {
-                            surface,
-                            width,
-                            height,
-                            config_version: data.config_version,
-                            content_bounds,
-                            group_layouts: group_layouts.clone(),
-                        });
-
-                        // Paint cached surface
-                        let cache_ref = frame_cache_clone.borrow();
-                        let cache = cache_ref.as_ref().unwrap();
-                        if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
-                            log::debug!("Failed to set cached surface: {:?}", e);
-                        }
-                        cr.paint().ok();
-                        // Clear source reference to allow cached surface to be deallocated
-                        // when cache is invalidated (prevents memory leak)
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-
-                        (content_bounds, group_layouts)
-                    } else {
-                        // Cache creation failed - render directly (fallback)
-                        if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
-                            log::warn!("LCARS frame render error: {}", e);
-                        }
-                        if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
-                            log::warn!("LCARS content background render error: {}", e);
-                        }
-
-                        let content_bounds = get_content_bounds(&data.config.frame, w, h);
-                        let (content_x, content_y, content_w, content_h) = content_bounds;
-
-                        // Calculate group layouts (without caching)
-                        let group_count = data.config.frame.group_item_counts.len();
-                        let divider_config = &data.config.frame.divider_config;
-                        let mut group_layouts = Vec::with_capacity(group_count);
-
-                        if group_count == 1 {
-                            group_layouts.push((content_x, content_y, content_w, content_h));
-                        } else if group_count > 1 {
-                            let total_divider_space = divider_config.width
-                                + divider_config.spacing_before
-                                + divider_config.spacing_after;
-                            let num_dividers = (group_count - 1) as f64;
-
-                            let total_weight: f64 = (0..group_count)
-                                .map(|i| {
-                                    data.config
-                                        .frame
-                                        .group_size_weights
-                                        .get(i)
-                                        .copied()
-                                        .unwrap_or(1.0)
-                                })
-                                .sum();
-                            let total_weight = if total_weight <= 0.0 {
-                                1.0
-                            } else {
-                                total_weight
-                            };
-
-                            match data.config.frame.layout_orientation {
-                                SplitOrientation::Vertical => {
-                                    let available_w =
-                                        content_w - num_dividers * total_divider_space;
-                                    let mut current_x = content_x;
-
-                                    for group_idx in 0..group_count {
-                                        let weight = data
-                                            .config
-                                            .frame
-                                            .group_size_weights
-                                            .get(group_idx)
-                                            .copied()
-                                            .unwrap_or(1.0);
-                                        let group_w = (weight / total_weight) * available_w;
-                                        group_layouts
-                                            .push((current_x, content_y, group_w, content_h));
-
-                                        if group_idx < group_count - 1 {
-                                            let divider_x =
-                                                current_x + group_w + divider_config.spacing_before;
-                                            let _ = render_divider(
-                                                cr,
-                                                divider_x,
-                                                content_y,
-                                                divider_config.width,
-                                                content_h,
-                                                divider_config,
-                                                SplitOrientation::Vertical,
-                                                &data.config.frame.theme,
-                                            );
-                                            current_x = divider_x
-                                                + divider_config.width
-                                                + divider_config.spacing_after;
-                                        }
-                                    }
-                                }
-                                SplitOrientation::Horizontal => {
-                                    let available_h =
-                                        content_h - num_dividers * total_divider_space;
-                                    let mut current_y = content_y;
-
-                                    for group_idx in 0..group_count {
-                                        let weight = data
-                                            .config
-                                            .frame
-                                            .group_size_weights
-                                            .get(group_idx)
-                                            .copied()
-                                            .unwrap_or(1.0);
-                                        let group_h = (weight / total_weight) * available_h;
-                                        group_layouts
-                                            .push((content_x, current_y, content_w, group_h));
-
-                                        if group_idx < group_count - 1 {
-                                            let divider_y =
-                                                current_y + group_h + divider_config.spacing_before;
-                                            let _ = render_divider(
-                                                cr,
-                                                content_x,
-                                                divider_y,
-                                                content_w,
-                                                divider_config.width,
-                                                divider_config,
-                                                SplitOrientation::Horizontal,
-                                                &data.config.frame.theme,
-                                            );
-                                            current_y = divider_y
-                                                + divider_config.width
-                                                + divider_config.spacing_after;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        (content_bounds, group_layouts)
+                    // Cache creation failed - render directly (fallback)
+                    if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
+                        log::warn!("LCARS frame render error: {}", e);
                     }
-                };
+                    if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
+                        log::warn!("LCARS content background render error: {}", e);
+                    }
 
-                let (content_x, content_y, content_w, content_h) = content_bounds;
+                    let content_bounds = get_content_bounds(&data.config.frame, w, h);
+                    let (content_x, content_y, content_w, content_h) = content_bounds;
 
-                // Clip to content area for dynamic content
-                cr.save().ok();
-                cr.rectangle(content_x, content_y, content_w, content_h);
-                cr.clip();
+                    // Calculate group layouts (without caching)
+                    let group_count = data.config.frame.group_item_counts.len();
+                    let divider_config = &data.config.frame.divider_config;
+                    let mut group_layouts = Vec::with_capacity(group_count);
 
-                // Draw dynamic content items for each group
-                for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
-                    let prefixes = data
-                        .group_prefixes
-                        .get(group_idx)
-                        .map(|v| v.as_slice())
-                        .unwrap_or(&[]);
-                    let _ = Self::draw_content_items(
-                        cr,
-                        gx,
-                        gy,
-                        gw,
-                        gh,
-                        prefixes,
-                        group_idx,
-                        &data.config,
-                        &data.values,
-                        &data.bar_values,
-                        &data.core_bar_values,
-                        &data.graph_history,
-                    );
+                    if group_count == 1 {
+                        group_layouts.push((content_x, content_y, content_w, content_h));
+                    } else if group_count > 1 {
+                        let total_divider_space = divider_config.width
+                            + divider_config.spacing_before
+                            + divider_config.spacing_after;
+                        let num_dividers = (group_count - 1) as f64;
+
+                        let total_weight: f64 = (0..group_count)
+                            .map(|i| {
+                                data.config
+                                    .frame
+                                    .group_size_weights
+                                    .get(i)
+                                    .copied()
+                                    .unwrap_or(1.0)
+                            })
+                            .sum();
+                        let total_weight = if total_weight <= 0.0 {
+                            1.0
+                        } else {
+                            total_weight
+                        };
+
+                        match data.config.frame.layout_orientation {
+                            SplitOrientation::Vertical => {
+                                let available_w = content_w - num_dividers * total_divider_space;
+                                let mut current_x = content_x;
+
+                                for group_idx in 0..group_count {
+                                    let weight = data
+                                        .config
+                                        .frame
+                                        .group_size_weights
+                                        .get(group_idx)
+                                        .copied()
+                                        .unwrap_or(1.0);
+                                    let group_w = (weight / total_weight) * available_w;
+                                    group_layouts.push((current_x, content_y, group_w, content_h));
+
+                                    if group_idx < group_count - 1 {
+                                        let divider_x =
+                                            current_x + group_w + divider_config.spacing_before;
+                                        let _ = render_divider(
+                                            cr,
+                                            divider_x,
+                                            content_y,
+                                            divider_config.width,
+                                            content_h,
+                                            divider_config,
+                                            SplitOrientation::Vertical,
+                                            &data.config.frame.theme,
+                                        );
+                                        current_x = divider_x
+                                            + divider_config.width
+                                            + divider_config.spacing_after;
+                                    }
+                                }
+                            }
+                            SplitOrientation::Horizontal => {
+                                let available_h = content_h - num_dividers * total_divider_space;
+                                let mut current_y = content_y;
+
+                                for group_idx in 0..group_count {
+                                    let weight = data
+                                        .config
+                                        .frame
+                                        .group_size_weights
+                                        .get(group_idx)
+                                        .copied()
+                                        .unwrap_or(1.0);
+                                    let group_h = (weight / total_weight) * available_h;
+                                    group_layouts.push((content_x, current_y, content_w, group_h));
+
+                                    if group_idx < group_count - 1 {
+                                        let divider_y =
+                                            current_y + group_h + divider_config.spacing_before;
+                                        let _ = render_divider(
+                                            cr,
+                                            content_x,
+                                            divider_y,
+                                            content_w,
+                                            divider_config.width,
+                                            divider_config,
+                                            SplitOrientation::Horizontal,
+                                            &data.config.frame.theme,
+                                        );
+                                        current_y = divider_y
+                                            + divider_config.width
+                                            + divider_config.spacing_after;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    (content_bounds, group_layouts)
                 }
+            };
+
+            let (content_x, content_y, content_w, content_h) = content_bounds;
+
+            // Clip to content area for dynamic content
+            cr.save().ok();
+            cr.rectangle(content_x, content_y, content_w, content_h);
+            cr.clip();
+
+            // Draw dynamic content items for each group
+            for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
+                let prefixes = data
+                    .group_prefixes
+                    .get(group_idx)
+                    .map(|v| v.as_slice())
+                    .unwrap_or(&[]);
+                let _ = Self::draw_content_items(
+                    cr,
+                    gx,
+                    gy,
+                    gw,
+                    gh,
+                    prefixes,
+                    group_idx,
+                    &data.config,
+                    &data.values,
+                    &data.bar_values,
+                    &data.core_bar_values,
+                    &data.graph_history,
+                );
+            }
 
             cr.restore().ok();
             data.transform.restore(cr);
@@ -787,7 +777,8 @@ impl Displayer for LcarsComboDisplayer {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
                 // Periodic diagnostics (every ~5 seconds at 60fps)
-                static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                static TICK_COUNT: std::sync::atomic::AtomicU64 =
+                    std::sync::atomic::AtomicU64::new(0);
                 let ticks = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if ticks.is_multiple_of(300) {
                     log::info!(

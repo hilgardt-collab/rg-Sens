@@ -364,7 +364,10 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                     std::sync::atomic::AtomicU64::new(0);
                 let count = DRAW_LOCK_FAIL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if count < 10 || count.is_multiple_of(100) {
-                    log::warn!("Draw: try_lock failed ({} total), using cached frame", count + 1);
+                    log::warn!(
+                        "Draw: try_lock failed ({} total), using cached frame",
+                        count + 1
+                    );
                 }
                 if let Some(cache) = frame_cache_clone.borrow().as_ref() {
                     if cache.width == width
@@ -413,132 +416,131 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 }
             };
 
-                // Either use cached frame or render fresh and cache
-                let (content_bounds, group_layouts) = if let Some(result) = cached_result {
-                    result
-                } else {
-                    // Try to create cache surface
-                    let cache_result =
-                        cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                            .ok()
-                            .and_then(|surface| {
-                                cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
-                            });
-
-                    if let Some((surface, cache_cr)) = cache_result {
-                        // Render frame to cache surface
-                        let content_bounds =
-                            match renderer_clone.render_frame(&cache_cr, &data.config, w, h) {
-                                Ok(bounds) => bounds,
-                                Err(e) => {
-                                    log::debug!(
-                                        "{} frame render error: {}",
-                                        renderer_clone.theme_name(),
-                                        e
-                                    );
-                                    data.combo.transform.restore(cr);
-                                    return;
-                                }
-                            };
-
-                        let (cx, cy, cw, ch) = content_bounds;
-
-                        // Calculate and render group dividers to cache
-                        let group_layouts =
-                            renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
-                        renderer_clone.draw_group_dividers(&cache_cr, &data.config, &group_layouts);
-
-                        // Flush cache surface
-                        drop(cache_cr);
-                        surface.flush();
-
-                        // Paint cached surface to main context BEFORE moving into cache
-                        if let Err(e) = cr.set_source_surface(&surface, 0.0, 0.0) {
-                            log::debug!("Failed to set cached surface: {:?}", e);
-                        }
-                        cr.paint().ok();
-                        // Clear source reference to allow cached surface to be deallocated
-                        // when cache is invalidated (prevents memory leak)
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-
-                        // Store surface in cache for future frames
-                        *frame_cache_clone.borrow_mut() = Some(FrameCache {
-                            surface,
-                            width,
-                            height,
-                            config_version: data.config_version,
-                            content_bounds,
-                            group_layouts: group_layouts.clone(),
+            // Either use cached frame or render fresh and cache
+            let (content_bounds, group_layouts) = if let Some(result) = cached_result {
+                result
+            } else {
+                // Try to create cache surface
+                let cache_result =
+                    cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                        .ok()
+                        .and_then(|surface| {
+                            cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
                         });
 
-                        (content_bounds, group_layouts)
-                    } else {
-                        // Cache creation failed - render directly (fallback)
-                        let content_bounds =
-                            match renderer_clone.render_frame(cr, &data.config, w, h) {
-                                Ok(bounds) => bounds,
-                                Err(e) => {
-                                    log::debug!(
-                                        "{} frame render error: {}",
-                                        renderer_clone.theme_name(),
-                                        e
-                                    );
-                                    data.combo.transform.restore(cr);
-                                    return;
-                                }
-                            };
+                if let Some((surface, cache_cr)) = cache_result {
+                    // Render frame to cache surface
+                    let content_bounds =
+                        match renderer_clone.render_frame(&cache_cr, &data.config, w, h) {
+                            Ok(bounds) => bounds,
+                            Err(e) => {
+                                log::debug!(
+                                    "{} frame render error: {}",
+                                    renderer_clone.theme_name(),
+                                    e
+                                );
+                                data.combo.transform.restore(cr);
+                                return;
+                            }
+                        };
 
-                        let (cx, cy, cw, ch) = content_bounds;
-                        let group_layouts =
-                            renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
-                        renderer_clone.draw_group_dividers(cr, &data.config, &group_layouts);
+                    let (cx, cy, cw, ch) = content_bounds;
 
-                        (content_bounds, group_layouts)
+                    // Calculate and render group dividers to cache
+                    let group_layouts =
+                        renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
+                    renderer_clone.draw_group_dividers(&cache_cr, &data.config, &group_layouts);
+
+                    // Flush cache surface
+                    drop(cache_cr);
+                    surface.flush();
+
+                    // Paint cached surface to main context BEFORE moving into cache
+                    if let Err(e) = cr.set_source_surface(&surface, 0.0, 0.0) {
+                        log::debug!("Failed to set cached surface: {:?}", e);
                     }
-                };
+                    cr.paint().ok();
+                    // Clear source reference to allow cached surface to be deallocated
+                    // when cache is invalidated (prevents memory leak)
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
 
-                let (content_x, content_y, content_w, content_h) = content_bounds;
+                    // Store surface in cache for future frames
+                    *frame_cache_clone.borrow_mut() = Some(FrameCache {
+                        surface,
+                        width,
+                        height,
+                        config_version: data.config_version,
+                        content_bounds,
+                        group_layouts: group_layouts.clone(),
+                    });
 
-                // Clip to content area for dynamic content
-                cr.save().ok();
-                cr.rectangle(content_x, content_y, content_w, content_h);
-                cr.clip();
+                    (content_bounds, group_layouts)
+                } else {
+                    // Cache creation failed - render directly (fallback)
+                    let content_bounds = match renderer_clone.render_frame(cr, &data.config, w, h) {
+                        Ok(bounds) => bounds,
+                        Err(e) => {
+                            log::debug!(
+                                "{} frame render error: {}",
+                                renderer_clone.theme_name(),
+                                e
+                            );
+                            data.combo.transform.restore(cr);
+                            return;
+                        }
+                    };
 
-                // Build draw params for dynamic content
-                let draw_params = ContentDrawParams {
-                    values: &data.combo.values,
-                    bar_values: &data.combo.bar_values,
-                    core_bar_values: &data.combo.core_bar_values,
-                    graph_history: &data.combo.graph_history,
-                    content_items: data.config.content_items(),
-                    group_item_orientations: data.config.group_item_orientations(),
-                    split_orientation: data.config.split_orientation(),
-                    theme: data.config.theme(),
-                };
+                    let (cx, cy, cw, ch) = content_bounds;
+                    let group_layouts =
+                        renderer_clone.calculate_group_layouts(&data.config, cx, cy, cw, ch);
+                    renderer_clone.draw_group_dividers(cr, &data.config, &group_layouts);
 
-                // Draw dynamic content items for each group
-                let group_item_counts = data.config.group_item_counts();
-                for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
-                    let item_count = group_item_counts.get(group_idx).copied().unwrap_or(1);
-                    let base_prefix = format!("group{}_", group_idx + 1);
-
-                    // Draw item frames and content
-                    let config_ref = &data.config;
-                    let _ = draw_content_items_generic(
-                        cr,
-                        gx,
-                        gy,
-                        gw,
-                        gh,
-                        &base_prefix,
-                        item_count as u32,
-                        group_idx,
-                        &draw_params,
-                        |cr, x, y, w, h| {
-                            renderer_clone.draw_item_frame(cr, config_ref, x, y, w, h);
-                        },
-                    );
+                    (content_bounds, group_layouts)
                 }
+            };
+
+            let (content_x, content_y, content_w, content_h) = content_bounds;
+
+            // Clip to content area for dynamic content
+            cr.save().ok();
+            cr.rectangle(content_x, content_y, content_w, content_h);
+            cr.clip();
+
+            // Build draw params for dynamic content
+            let draw_params = ContentDrawParams {
+                values: &data.combo.values,
+                bar_values: &data.combo.bar_values,
+                core_bar_values: &data.combo.core_bar_values,
+                graph_history: &data.combo.graph_history,
+                content_items: data.config.content_items(),
+                group_item_orientations: data.config.group_item_orientations(),
+                split_orientation: data.config.split_orientation(),
+                theme: data.config.theme(),
+            };
+
+            // Draw dynamic content items for each group
+            let group_item_counts = data.config.group_item_counts();
+            for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
+                let item_count = group_item_counts.get(group_idx).copied().unwrap_or(1);
+                let base_prefix = format!("group{}_", group_idx + 1);
+
+                // Draw item frames and content
+                let config_ref = &data.config;
+                let _ = draw_content_items_generic(
+                    cr,
+                    gx,
+                    gy,
+                    gw,
+                    gh,
+                    &base_prefix,
+                    item_count as u32,
+                    group_idx,
+                    &draw_params,
+                    |cr, x, y, w, h| {
+                        renderer_clone.draw_item_frame(cr, config_ref, x, y, w, h);
+                    },
+                );
+            }
 
             cr.restore().ok();
             data.combo.transform.restore(cr);

@@ -413,12 +413,7 @@ impl SharedSourceManager {
         // Phase 2: Access data with only Mutexes held (one at a time)
         handles
             .into_iter()
-            .filter_map(|(key, handle)| {
-                handle
-                    .lock()
-                    .ok()
-                    .map(|shared| (key, shared.min_interval))
-            })
+            .filter_map(|(key, handle)| handle.lock().ok().map(|shared| (key, shared.min_interval)))
             .collect()
     }
 

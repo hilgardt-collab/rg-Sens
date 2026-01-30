@@ -198,15 +198,15 @@ pub fn refresh_theme_refs(refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>) {
     }
 }
 
+/// Type alias for cleanup callbacks that break reference cycles
+pub type CleanupCallback = Box<dyn Fn()>;
+
 /// Cleanup common combo config widget fields to break reference cycles.
 /// Call this when a combo config dialog is closed to prevent memory leaks.
 ///
 /// This clears:
 /// - The on_change callback (which may hold references to parent scope)
 /// - The theme_ref_refreshers (which hold closures with Rc references)
-/// Type alias for cleanup callbacks that break reference cycles
-pub type CleanupCallback = Box<dyn Fn()>;
-
 pub fn cleanup_common_fields(
     on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
     theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,

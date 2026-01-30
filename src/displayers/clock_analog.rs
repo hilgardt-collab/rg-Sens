@@ -109,211 +109,210 @@ impl Displayer for ClockAnalogDisplayer {
                 return; // Skip frame if lock contention
             };
             let width = width as f64;
-                let height = height as f64;
-                data.last_width = width;
-                data.last_height = height;
-                data.transform.apply(cr, width, height);
+            let height = height as f64;
+            data.last_width = width;
+            data.last_height = height;
+            data.transform.apply(cr, width, height);
 
-                // Calculate smooth time values
-                let hour = data.hour;
-                let minute = data.minute;
-                let second = data.second;
+            // Calculate smooth time values
+            let hour = data.hour;
+            let minute = data.minute;
+            let second = data.second;
 
-                // Determine if indicator should be shown (icon always shown if show_icon is true)
-                let timer_active = data.timer_state == "running"
-                    || data.timer_state == "paused"
-                    || data.timer_state == "finished";
+            // Determine if indicator should be shown (icon always shown if show_icon is true)
+            let timer_active = data.timer_state == "running"
+                || data.timer_state == "paused"
+                || data.timer_state == "finished";
 
-                // Get indicator text and calculate its size (clone to avoid borrow conflicts)
-                let icon_font = data.config.icon_font.clone();
-                let icon_text = data.config.icon_text.clone();
-                let icon_size_pct = data.config.icon_size;
-                let icon_bold = data.config.icon_bold;
-                let font_weight = if icon_bold {
-                    cairo::FontWeight::Bold
+            // Get indicator text and calculate its size (clone to avoid borrow conflicts)
+            let icon_font = data.config.icon_font.clone();
+            let icon_text = data.config.icon_text.clone();
+            let icon_size_pct = data.config.icon_size;
+            let icon_bold = data.config.icon_bold;
+            let font_weight = if icon_bold {
+                cairo::FontWeight::Bold
+            } else {
+                cairo::FontWeight::Normal
+            };
+
+            // Calculate indicator height for layout purposes - reserve space if shrink_for_indicator is enabled
+            let indicator_height = if data.config.show_icon && data.config.shrink_for_indicator {
+                let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
+                font_size + 16.0 // Font height + padding
+            } else {
+                0.0
+            };
+
+            // Calculate clock area - shrink if icon is shown and shrink option enabled
+            let (clock_width, clock_height, clock_offset_y) =
+                if data.config.show_icon && data.config.shrink_for_indicator {
+                    let available_height = height - indicator_height;
+                    let clock_size = width.min(available_height);
+                    (
+                        clock_size,
+                        clock_size,
+                        (available_height - clock_size) / 2.0,
+                    )
                 } else {
-                    cairo::FontWeight::Normal
+                    (width, height, 0.0)
                 };
 
-                // Calculate indicator height for layout purposes - reserve space if shrink_for_indicator is enabled
-                let indicator_height = if data.config.show_icon && data.config.shrink_for_indicator
-                {
-                    let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
-                    font_size + 16.0 // Font height + padding
-                } else {
-                    0.0
-                };
+            // Draw clock in calculated area
+            cr.save().ok();
+            if clock_offset_y > 0.0 || clock_width < width {
+                let offset_x = (width - clock_width) / 2.0;
+                cr.translate(offset_x, clock_offset_y);
+            }
 
-                // Calculate clock area - shrink if icon is shown and shrink option enabled
-                let (clock_width, clock_height, clock_offset_y) =
-                    if data.config.show_icon && data.config.shrink_for_indicator {
-                        let available_height = height - indicator_height;
-                        let clock_size = width.min(available_height);
-                        (
-                            clock_size,
-                            clock_size,
-                            (available_height - clock_size) / 2.0,
-                        )
-                    } else {
-                        (width, height, 0.0)
-                    };
+            let _ = render_analog_clock_with_theme(
+                cr,
+                &data.config,
+                hour,
+                minute,
+                second,
+                clock_width,
+                clock_height,
+                Some(&data.theme),
+            );
 
-                // Draw clock in calculated area
-                cr.save().ok();
-                if clock_offset_y > 0.0 || clock_width < width {
-                    let offset_x = (width - clock_width) / 2.0;
-                    cr.translate(offset_x, clock_offset_y);
-                }
-
-                let _ = render_analog_clock_with_theme(
-                    cr,
-                    &data.config,
-                    hour,
-                    minute,
-                    second,
-                    clock_width,
-                    clock_height,
-                    Some(&data.theme),
+            // Flash effect when alarm/timer triggers
+            let show_flash =
+                (data.alarm_triggered || data.timer_state == "finished") && data.flash_state;
+            if show_flash {
+                cr.set_source_rgba(1.0, 0.3, 0.3, 0.4);
+                cr.arc(
+                    clock_width / 2.0,
+                    clock_height / 2.0,
+                    clock_width.min(clock_height) / 2.0 - 5.0,
+                    0.0,
+                    2.0 * std::f64::consts::PI,
                 );
+                cr.fill().ok();
+            }
 
-                // Flash effect when alarm/timer triggers
-                let show_flash =
-                    (data.alarm_triggered || data.timer_state == "finished") && data.flash_state;
-                if show_flash {
-                    cr.set_source_rgba(1.0, 0.3, 0.3, 0.4);
-                    cr.arc(
-                        clock_width / 2.0,
-                        clock_height / 2.0,
-                        clock_width.min(clock_height) / 2.0 - 5.0,
-                        0.0,
-                        2.0 * std::f64::consts::PI,
+            cr.restore().ok();
+
+            // Restore transform BEFORE drawing icon so icon is in screen coordinates
+            data.transform.restore(cr);
+
+            // Draw indicator using 3x3 grid positioning (in screen coordinates)
+            if data.config.show_icon {
+                let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
+
+                // Build display text based on state
+                let display_text = if timer_active && !data.timer_display.is_empty() {
+                    data.timer_display.clone()
+                } else if let Some(ref next_time) = data.next_alarm_time {
+                    if data.alarm_enabled {
+                        format!("{} {}", icon_text, next_time)
+                    } else {
+                        icon_text.clone()
+                    }
+                } else {
+                    icon_text.clone()
+                };
+
+                let te = pango_text_extents(
+                    cr,
+                    &display_text,
+                    &icon_font,
+                    cairo::FontSlant::Normal,
+                    font_weight,
+                    font_size,
+                );
+                // Use actual text dimensions for positioning
+                let text_w = te.width().max(1.0);
+                let text_h = te.height().max(font_size);
+
+                // Calculate base position from 3x3 grid
+                // For baseline-positioned text: y is the baseline, text draws ABOVE that
+                let padding = 6.0;
+                let (base_x, base_y) = match data.config.icon_position {
+                    // Top row: baseline at padding + text_h so text top is at padding
+                    TextPosition::TopLeft => (padding, padding + text_h),
+                    TextPosition::TopCenter => ((width - text_w) / 2.0, padding + text_h),
+                    TextPosition::TopRight => (width - text_w - padding, padding + text_h),
+                    // Middle row: baseline at center + text_h/2 so text is vertically centered
+                    TextPosition::CenterLeft => (padding, (height + text_h) / 2.0),
+                    TextPosition::Center => ((width - text_w) / 2.0, (height + text_h) / 2.0),
+                    TextPosition::CenterRight => {
+                        (width - text_w - padding, (height + text_h) / 2.0)
+                    }
+                    // Bottom row: baseline at height - padding so text bottom is at height - padding
+                    TextPosition::BottomLeft => (padding, height - padding),
+                    TextPosition::BottomCenter => ((width - text_w) / 2.0, height - padding),
+                    TextPosition::BottomRight => (width - text_w - padding, height - padding),
+                };
+
+                // Apply user offset
+                let text_x = base_x + data.config.icon_offset_x;
+                let text_y = base_y + data.config.icon_offset_y;
+
+                // Store icon bounds for click detection (with padding for easier clicking)
+                let bounds_padding = 4.0;
+                data.icon_bounds = Some((
+                    text_x - bounds_padding,
+                    text_y - text_h - bounds_padding,
+                    text_w + bounds_padding * 2.0,
+                    text_h + bounds_padding * 2.0,
+                ));
+
+                cr.save().ok();
+
+                // Background for readability
+                let show_background = timer_active
+                    || (data.next_alarm_time.is_some() && data.alarm_enabled)
+                    || data.alarm_triggered;
+                if show_background {
+                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
+                    cr.rectangle(
+                        text_x - 4.0,
+                        text_y - text_h - 2.0,
+                        text_w + 8.0,
+                        text_h + 6.0,
                     );
                     cr.fill().ok();
                 }
 
-                cr.restore().ok();
-
-                // Restore transform BEFORE drawing icon so icon is in screen coordinates
-                data.transform.restore(cr);
-
-                // Draw indicator using 3x3 grid positioning (in screen coordinates)
-                if data.config.show_icon {
-                    let font_size = (width.min(height) * icon_size_pct / 100.0).clamp(14.0, 32.0);
-
-                    // Build display text based on state
-                    let display_text = if timer_active && !data.timer_display.is_empty() {
-                        data.timer_display.clone()
-                    } else if let Some(ref next_time) = data.next_alarm_time {
-                        if data.alarm_enabled {
-                            format!("{} {}", icon_text, next_time)
-                        } else {
-                            icon_text.clone()
-                        }
-                    } else {
-                        icon_text.clone()
-                    };
-
-                    let te = pango_text_extents(
-                        cr,
-                        &display_text,
-                        &icon_font,
-                        cairo::FontSlant::Normal,
-                        font_weight,
-                        font_size,
-                    );
-                    // Use actual text dimensions for positioning
-                    let text_w = te.width().max(1.0);
-                    let text_h = te.height().max(font_size);
-
-                    // Calculate base position from 3x3 grid
-                    // For baseline-positioned text: y is the baseline, text draws ABOVE that
-                    let padding = 6.0;
-                    let (base_x, base_y) = match data.config.icon_position {
-                        // Top row: baseline at padding + text_h so text top is at padding
-                        TextPosition::TopLeft => (padding, padding + text_h),
-                        TextPosition::TopCenter => ((width - text_w) / 2.0, padding + text_h),
-                        TextPosition::TopRight => (width - text_w - padding, padding + text_h),
-                        // Middle row: baseline at center + text_h/2 so text is vertically centered
-                        TextPosition::CenterLeft => (padding, (height + text_h) / 2.0),
-                        TextPosition::Center => ((width - text_w) / 2.0, (height + text_h) / 2.0),
-                        TextPosition::CenterRight => {
-                            (width - text_w - padding, (height + text_h) / 2.0)
-                        }
-                        // Bottom row: baseline at height - padding so text bottom is at height - padding
-                        TextPosition::BottomLeft => (padding, height - padding),
-                        TextPosition::BottomCenter => ((width - text_w) / 2.0, height - padding),
-                        TextPosition::BottomRight => (width - text_w - padding, height - padding),
-                    };
-
-                    // Apply user offset
-                    let text_x = base_x + data.config.icon_offset_x;
-                    let text_y = base_y + data.config.icon_offset_y;
-
-                    // Store icon bounds for click detection (with padding for easier clicking)
-                    let bounds_padding = 4.0;
-                    data.icon_bounds = Some((
-                        text_x - bounds_padding,
-                        text_y - text_h - bounds_padding,
-                        text_w + bounds_padding * 2.0,
-                        text_h + bounds_padding * 2.0,
-                    ));
-
-                    cr.save().ok();
-
-                    // Background for readability
-                    let show_background = timer_active
-                        || (data.next_alarm_time.is_some() && data.alarm_enabled)
-                        || data.alarm_triggered;
-                    if show_background {
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.6);
-                        cr.rectangle(
-                            text_x - 4.0,
-                            text_y - text_h - 2.0,
-                            text_w + 8.0,
-                            text_h + 6.0,
-                        );
-                        cr.fill().ok();
-                    }
-
-                    // Text color based on state
-                    if timer_active {
-                        if data.timer_state == "finished" {
-                            if data.flash_state {
-                                cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
-                            } else {
-                                cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
-                            }
-                        } else if data.timer_state == "paused" {
-                            cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
-                        } else {
-                            cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
-                        }
-                    } else if data.alarm_triggered {
+                // Text color based on state
+                if timer_active {
+                    if data.timer_state == "finished" {
                         if data.flash_state {
-                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
+                            cr.set_source_rgba(1.0, 0.3, 0.3, 1.0); // Red when flashing
                         } else {
-                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0);
+                            cr.set_source_rgba(1.0, 0.6, 0.3, 1.0); // Orange
                         }
-                    } else if data.alarm_enabled {
-                        cr.set_source_rgba(0.3, 0.7, 1.0, 1.0); // Blue for alarm enabled
+                    } else if data.timer_state == "paused" {
+                        cr.set_source_rgba(1.0, 0.9, 0.3, 1.0); // Yellow for paused
                     } else {
-                        cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
+                        cr.set_source_rgba(0.3, 1.0, 0.5, 1.0); // Green for running
                     }
-
-                    cr.move_to(text_x, text_y);
-                    pango_show_text(
-                        cr,
-                        &display_text,
-                        &icon_font,
-                        cairo::FontSlant::Normal,
-                        font_weight,
-                        font_size,
-                    );
-                    cr.restore().ok();
+                } else if data.alarm_triggered {
+                    if data.flash_state {
+                        cr.set_source_rgba(1.0, 0.3, 0.3, 1.0);
+                    } else {
+                        cr.set_source_rgba(1.0, 0.6, 0.3, 1.0);
+                    }
+                } else if data.alarm_enabled {
+                    cr.set_source_rgba(0.3, 0.7, 1.0, 1.0); // Blue for alarm enabled
                 } else {
-                    // No icon shown, clear bounds
-                    data.icon_bounds = None;
+                    cr.set_source_rgba(0.6, 0.6, 0.6, 0.8); // Gray for inactive
                 }
+
+                cr.move_to(text_x, text_y);
+                pango_show_text(
+                    cr,
+                    &display_text,
+                    &icon_font,
+                    cairo::FontSlant::Normal,
+                    font_weight,
+                    font_size,
+                );
+                cr.restore().ok();
+            } else {
+                // No icon shown, clear bounds
+                data.icon_bounds = None;
+            }
         });
 
         // Note: Click handling for alarm/timer icon is done in grid_layout.rs

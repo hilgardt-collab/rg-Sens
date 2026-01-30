@@ -580,7 +580,14 @@ impl GridLayout {
                         {
                             // Get z_index from the panel
                             let z_index = state.panel.blocking_read().z_index;
-                            candidates.push((state, z_index, panel_x, panel_y, panel_width, panel_height));
+                            candidates.push((
+                                state,
+                                z_index,
+                                panel_x,
+                                panel_y,
+                                panel_width,
+                                panel_height,
+                            ));
                         }
                     }
                 }
@@ -590,7 +597,9 @@ impl GridLayout {
             candidates.sort_by(|a, b| b.1.cmp(&a.1));
 
             // Show context menu for the topmost panel
-            if let Some((state, _, panel_x, panel_y, panel_width, panel_height)) = candidates.first() {
+            if let Some((state, _, panel_x, panel_y, panel_width, panel_height)) =
+                candidates.first()
+            {
                 if let Some(ref popover) = state.context_popover {
                     let local_x = x - panel_x;
                     let local_y = y - panel_y;
@@ -1094,11 +1103,7 @@ impl GridLayout {
         // Only redraws when the indicator value actually changes to avoid wasting CPU
         // 500ms interval is sufficient since panel update cycle also triggers redraws
         // Only create timer if panel has indicator background to avoid unnecessary timers
-        let is_indicator_bg = panel
-            .blocking_read()
-            .background
-            .background
-            .is_indicator();
+        let is_indicator_bg = panel.blocking_read().background.background.is_indicator();
         if is_indicator_bg {
             let panel_for_bg_timer = panel.clone();
             let background_area_weak_timer = background_area.downgrade();
@@ -1140,9 +1145,7 @@ impl GridLayout {
                         }
                     } else {
                         // Background type changed from indicator to something else, stop timer
-                        log::debug!(
-                            "Indicator background timer stopping: background type changed"
-                        );
+                        log::debug!("Indicator background timer stopping: background type changed");
                         return gtk4::glib::ControlFlow::Break;
                     }
                 }
@@ -1260,7 +1263,12 @@ impl GridLayout {
     }
 
     /// Setup panel interaction (selection and drag) - returns context popover
-    fn setup_panel_interaction(&self, frame: &Frame, _widget: &Widget, panel: Arc<RwLock<Panel>>) -> PopoverMenu {
+    fn setup_panel_interaction(
+        &self,
+        frame: &Frame,
+        _widget: &Widget,
+        panel: Arc<RwLock<Panel>>,
+    ) -> PopoverMenu {
         let panel_id = panel.blocking_read().id.clone();
 
         // Click for selection (Ctrl+Click for multi-select)
@@ -1333,7 +1341,12 @@ impl GridLayout {
     }
 
     /// Setup context menu for panel - returns PopoverMenu for global handler
-    fn setup_context_menu(&self, widget: &Widget, panel: Arc<RwLock<Panel>>, panel_id: String) -> PopoverMenu {
+    fn setup_context_menu(
+        &self,
+        widget: &Widget,
+        panel: Arc<RwLock<Panel>>,
+        panel_id: String,
+    ) -> PopoverMenu {
         use gtk4::gio;
 
         let menu = create_panel_context_menu();

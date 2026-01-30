@@ -258,47 +258,51 @@ impl Panel {
         // SharedSourceManager returns Arc<HashMap>, we store it to keep the borrow alive
         // The _arc_values variable keeps the Arc alive so Cow can borrow from it
         let _arc_values: Option<Arc<HashMap<String, serde_json::Value>>>;
-        let values: Cow<'_, HashMap<String, serde_json::Value>> =
-            if let Some(ref key) = self.source_key {
-                // Use shared source - values are already updated by UpdateManager
-                if let Some(manager) = global_shared_source_manager() {
-                    _arc_values = manager.get_values(key);
-                    if let Some(ref arc) = _arc_values {
-                        // Borrow from Arc - no clone needed
-                        Cow::Borrowed(arc.as_ref())
-                    } else {
-                        // Log at debug level after first occurrence to avoid log spam
-                        // This typically happens during startup or after source reconfiguration
-                        static WARNED_SOURCES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
-                            std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+        let values: Cow<'_, HashMap<String, serde_json::Value>> = if let Some(ref key) =
+            self.source_key
+        {
+            // Use shared source - values are already updated by UpdateManager
+            if let Some(manager) = global_shared_source_manager() {
+                _arc_values = manager.get_values(key);
+                if let Some(ref arc) = _arc_values {
+                    // Borrow from Arc - no clone needed
+                    Cow::Borrowed(arc.as_ref())
+                } else {
+                    // Log at debug level after first occurrence to avoid log spam
+                    // This typically happens during startup or after source reconfiguration
+                    static WARNED_SOURCES: std::sync::LazyLock<
+                        std::sync::Mutex<std::collections::HashSet<String>>,
+                    > = std::sync::LazyLock::new(|| {
+                        std::sync::Mutex::new(std::collections::HashSet::new())
+                    });
 
-                        let should_warn = WARNED_SOURCES
-                            .lock()
-                            .map(|mut set| set.insert(key.to_string()))
-                            .unwrap_or(true);
+                    let should_warn = WARNED_SOURCES
+                        .lock()
+                        .map(|mut set| set.insert(key.to_string()))
+                        .unwrap_or(true);
 
-                        if should_warn {
-                            log::warn!(
+                    if should_warn {
+                        log::warn!(
                                 "Shared source {} not found for panel {}, falling back to direct poll. \
                                  This may indicate a startup race or stale source reference.",
                                 key, self.id
                             );
-                        }
-                        self.source.update().ok();
-                        Cow::Owned(self.source.get_values())
                     }
-                } else {
-                    // No manager available, fall back to direct poll
-                    _arc_values = None;
-                    self.source.update()?;
+                    self.source.update().ok();
                     Cow::Owned(self.source.get_values())
                 }
             } else {
-                // No shared source, poll directly (legacy behavior)
+                // No manager available, fall back to direct poll
                 _arc_values = None;
                 self.source.update()?;
                 Cow::Owned(self.source.get_values())
-            };
+            }
+        } else {
+            // No shared source, poll directly (legacy behavior)
+            _arc_values = None;
+            self.source.update()?;
+            Cow::Owned(self.source.get_values())
+        };
 
         // Only add transform values if panel has non-default transforms
         // Default: scale=1.0, translate_x=0.0, translate_y=0.0
@@ -497,8 +501,9 @@ impl Panel {
 
     /// Extract displayer config from the legacy config HashMap
     fn extract_displayer_config(&self, displayer_type: &str) -> DisplayerConfig {
-        DisplayerConfig::extract_from_hashmap(&self.config, displayer_type)
-            .unwrap_or_else(|| DisplayerConfig::default_for_type(displayer_type).unwrap_or_default())
+        DisplayerConfig::extract_from_hashmap(&self.config, displayer_type).unwrap_or_else(|| {
+            DisplayerConfig::default_for_type(displayer_type).unwrap_or_default()
+        })
     }
 
     /// Update the panel from new PanelData

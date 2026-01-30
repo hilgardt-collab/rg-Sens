@@ -3,7 +3,9 @@
 //! Provides access to all available fan speed sensors on the system,
 //! including CPU fans, chassis fans, GPU fans, and other cooling fans.
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
+use crate::core::{
+    DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
+};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};

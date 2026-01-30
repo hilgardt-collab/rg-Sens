@@ -3,7 +3,9 @@
 //! Provides access to all available temperature sensors on the system,
 //! including motherboard, drives, GPU packages, and other hardware sensors.
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
+use crate::core::{
+    DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
+};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};

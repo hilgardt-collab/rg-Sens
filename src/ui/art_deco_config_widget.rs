@@ -299,8 +299,7 @@ impl ArtDecoConfigWidget {
 
         let content_page = Self::create_content_page(&content_notebook);
 
-        let animation_page =
-            Self::create_animation_page(&config, &on_change, &animation_widgets);
+        let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
 
         // Add pages to notebook (Theme first)
         notebook.append_page(&theme_page, Some(&Label::new(Some("Theme"))));
@@ -312,7 +311,8 @@ impl ArtDecoConfigWidget {
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
         // Assemble container
-        preview.set_visible(false); container.append(&preview);
+        preview.set_visible(false);
+        container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
 
@@ -788,7 +788,18 @@ impl ArtDecoConfigWidget {
         let corner_style_dropdown = builder.dropdown_row(
             &page,
             "Style:",
-            &["Fan", "Ziggurat", "Diamond", "Bracket", "Hexagon", "Octagon", "Circle", "Double Bracket", "Geometric Stack", "None"],
+            &[
+                "Fan",
+                "Ziggurat",
+                "Diamond",
+                "Bracket",
+                "Hexagon",
+                "Octagon",
+                "Circle",
+                "Double Bracket",
+                "Geometric Stack",
+                "None",
+            ],
             corner_idx,
             |cfg, idx| {
                 cfg.frame.corner_style = match idx {
@@ -1145,7 +1156,21 @@ impl ArtDecoConfigWidget {
         let divider_style_dropdown = builder.dropdown_row(
             &page,
             "Style:",
-            &["Chevron", "Double Line", "Line", "Stepped", "Diamond Cluster", "Crescent", "Arrow Diamond", "Circle Chain", "Crossed Lines", "Fleur de Lis", "Heartbeat", "Diamond Grid", "None"],
+            &[
+                "Chevron",
+                "Double Line",
+                "Line",
+                "Stepped",
+                "Diamond Cluster",
+                "Crescent",
+                "Arrow Diamond",
+                "Circle Chain",
+                "Crossed Lines",
+                "Fleur de Lis",
+                "Heartbeat",
+                "Diamond Grid",
+                "None",
+            ],
             div_style_idx,
             |cfg, idx| {
                 cfg.frame.divider_style = match idx {

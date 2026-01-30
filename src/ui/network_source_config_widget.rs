@@ -397,8 +397,7 @@ impl NetworkSourceConfigWidget {
             interfaces.to_vec()
         };
 
-        let interface_list =
-            StringList::new(&names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        let interface_list = StringList::new(&names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         self.interface_combo.set_model(Some(&interface_list));
 
         // Set up interface selection handler
@@ -414,7 +413,10 @@ impl NetworkSourceConfigWidget {
         if !interfaces.is_empty() {
             // Find the index of the current interface
             let current_interface = self.config.borrow().interface.clone();
-            if let Some(idx) = interfaces.iter().position(|iface| iface == &current_interface) {
+            if let Some(idx) = interfaces
+                .iter()
+                .position(|iface| iface == &current_interface)
+            {
                 self.interface_combo.set_selected(idx as u32);
             } else {
                 self.interface_combo.set_selected(0);

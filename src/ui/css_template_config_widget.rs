@@ -1264,7 +1264,8 @@ impl CssTemplateConfigWidget {
 
                 // Check if this is the start of a group (4 consecutive with same source/instance)
                 let is_group = if i + 3 < sorted_defaults.len() && !default.source.is_empty() {
-                    let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
+                    let group_indices: Vec<u32> =
+                        (0..4).map(|j| *sorted_defaults[i + j].0).collect();
                     let consecutive = group_indices.windows(2).all(|w| w[1] == w[0] + 1);
 
                     if consecutive {
@@ -1272,12 +1273,13 @@ impl CssTemplateConfigWidget {
                             (0..4).map(|j| sorted_defaults[i + j].1).collect();
 
                         // Check same source and instance
-                        let same_source_instance = group_defaults.iter().all(|d| {
-                            d.source == default.source && d.instance == default.instance
-                        });
+                        let same_source_instance = group_defaults
+                            .iter()
+                            .all(|d| d.source == default.source && d.instance == default.instance);
 
                         // Check fields are caption/value/unit/max
-                        let fields: Vec<&str> = group_defaults.iter().map(|d| d.field.as_str()).collect();
+                        let fields: Vec<&str> =
+                            group_defaults.iter().map(|d| d.field.as_str()).collect();
                         let standard_fields = fields == ["caption", "value", "unit", "max"];
 
                         same_source_instance && standard_fields
@@ -1290,7 +1292,8 @@ impl CssTemplateConfigWidget {
 
                 if is_group {
                     // Process as a group - check if ANY member has an existing configured source
-                    let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
+                    let group_indices: Vec<u32> =
+                        (0..4).map(|j| *sorted_defaults[i + j].0).collect();
                     let existing_prefix = group_indices
                         .iter()
                         .filter_map(|idx| existing_mappings.get(idx))
@@ -1530,15 +1533,11 @@ impl CssTemplateConfigWidget {
                 // Check if this could be the start of a group (4 consecutive with same source/instance)
                 let is_group = if idx + 3 < placeholder_indices.len() {
                     // Check if we have defaults for all 4 and they're from the same source/instance
-                    let indices: Vec<u32> = (0..4)
-                        .map(|i| placeholder_indices[idx + i])
-                        .collect();
+                    let indices: Vec<u32> = (0..4).map(|i| placeholder_indices[idx + i]).collect();
 
                     // Check if all 4 have defaults with same source and instance
-                    let group_defaults: Vec<Option<&PlaceholderDefault>> = indices
-                        .iter()
-                        .map(|i| defaults.get(i))
-                        .collect();
+                    let group_defaults: Vec<Option<&PlaceholderDefault>> =
+                        indices.iter().map(|i| defaults.get(i)).collect();
 
                     if group_defaults.iter().all(|d| d.is_some()) {
                         let defs: Vec<&PlaceholderDefault> =
@@ -1547,9 +1546,9 @@ impl CssTemplateConfigWidget {
                         // Check same source and instance
                         let first_source = &defs[0].source;
                         let first_instance = defs[0].instance;
-                        let same_source_instance = defs.iter().all(|d| {
-                            &d.source == first_source && d.instance == first_instance
-                        });
+                        let same_source_instance = defs
+                            .iter()
+                            .all(|d| &d.source == first_source && d.instance == first_instance);
 
                         // Check if fields are caption/value/unit/max
                         let fields: Vec<&str> = defs.iter().map(|d| d.field.as_str()).collect();

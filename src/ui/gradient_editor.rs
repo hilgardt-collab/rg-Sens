@@ -1,9 +1,7 @@
 //! Gradient editor widget for configuring linear and radial gradients
 
 use gtk4::prelude::*;
-use gtk4::{
-    Box as GtkBox, Button, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton,
-};
+use gtk4::{Box as GtkBox, Button, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -20,9 +18,13 @@ struct CachedPreview {
 }
 
 impl CachedPreview {
-    fn compute_hash(stops: &[ColorStopSource], angle: f64, theme: Option<&ComboThemeConfig>) -> u64 {
-        use std::hash::{Hash, Hasher};
+    fn compute_hash(
+        stops: &[ColorStopSource],
+        angle: f64,
+        theme: Option<&ComboThemeConfig>,
+    ) -> u64 {
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
 
@@ -130,13 +132,13 @@ impl GradientEditor {
             let preview_cache = preview_cache.clone();
             let picture = preview_picture.clone();
             Rc::new(move || {
-
                 let stops_ref = stops.borrow();
                 let angle_val = *angle.borrow();
                 let theme = theme_config.borrow();
 
                 // Compute hash of current config
-                let current_hash = CachedPreview::compute_hash(&stops_ref, angle_val, theme.as_ref());
+                let current_hash =
+                    CachedPreview::compute_hash(&stops_ref, angle_val, theme.as_ref());
 
                 // Check if cache is valid
                 {
@@ -152,10 +154,11 @@ impl GradientEditor {
                 let width = 200i32;
                 let height = 30i32;
 
-                let mut surface = match cairo::ImageSurface::create(cairo::Format::ARgb32, width, height) {
-                    Ok(s) => s,
-                    Err(_) => return,
-                };
+                let mut surface =
+                    match cairo::ImageSurface::create(cairo::Format::ARgb32, width, height) {
+                        Ok(s) => s,
+                        Err(_) => return,
+                    };
 
                 {
                     let cr = match cairo::Context::new(&surface) {
@@ -165,8 +168,8 @@ impl GradientEditor {
 
                     // Draw checkerboard pattern for transparency
                     let check_size = 8.0;
-                    for y in 0..(height as i32 / check_size as i32 + 1) {
-                        for x in 0..(width as i32 / check_size as i32 + 1) {
+                    for y in 0..(height / check_size as i32 + 1) {
+                        for x in 0..(width / check_size as i32 + 1) {
                             let is_light = (x + y) % 2 == 0;
                             if is_light {
                                 cr.set_source_rgb(0.8, 0.8, 0.8);
@@ -188,7 +191,7 @@ impl GradientEditor {
                         .iter()
                         .map(|s| {
                             let color = match &s.color {
-                                crate::ui::theme::ColorSource::Custom { color: c } => c.clone(),
+                                crate::ui::theme::ColorSource::Custom { color: c } => *c,
                                 crate::ui::theme::ColorSource::Theme { index: idx } => {
                                     if let Some(ref t) = *theme {
                                         t.get_color(*idx)
@@ -941,7 +944,6 @@ impl GradientEditor {
 
         // Store updated theme
         *self.theme_config.borrow_mut() = Some(theme);
-        
 
         // Rebuild stops list to update ThemeColorSelectors with new theme
         *self.is_updating.borrow_mut() = true;

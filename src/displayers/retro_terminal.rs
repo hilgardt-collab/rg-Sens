@@ -58,7 +58,11 @@ impl RetroTerminalDisplayConfig {
 }
 
 // Use macro to generate displayer struct and basic implementations
-crate::theme_displayer_base!(RetroTerminalDisplayer, RetroTerminalRenderer, RetroTerminalRenderer);
+crate::theme_displayer_base!(
+    RetroTerminalDisplayer,
+    RetroTerminalRenderer,
+    RetroTerminalRenderer
+);
 
 impl Displayer for RetroTerminalDisplayer {
     fn id(&self) -> &str {

@@ -189,7 +189,8 @@ pub use material_display::{
 };
 pub use memory_source_config_widget::{MemoryField, MemorySourceConfig, MemorySourceConfigWidget};
 pub use network_source_config_widget::{
-    NetworkField, NetworkSourceConfig, NetworkSourceConfigWidget, NetworkSpeedUnit, NetworkTotalUnit,
+    NetworkField, NetworkSourceConfig, NetworkSourceConfigWidget, NetworkSpeedUnit,
+    NetworkTotalUnit,
 };
 pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
 pub use retro_terminal_display::{

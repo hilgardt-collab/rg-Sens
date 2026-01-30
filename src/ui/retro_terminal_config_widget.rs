@@ -4,8 +4,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
-    Scale, ScrolledWindow, SpinButton, StringList,
+    Box as GtkBox, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation, Scale,
+    ScrolledWindow, SpinButton, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -207,7 +207,8 @@ impl RetroTerminalConfigWidget {
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
-        preview.set_visible(false); container.append(&preview);
+        preview.set_visible(false);
+        container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
 

@@ -1,6 +1,8 @@
 //! Network interface data source implementation
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
+use crate::core::{
+    DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
+};
 use crate::ui::{NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -301,8 +303,10 @@ impl DataSource for NetworkSource {
         );
 
         // Provide all raw data (in bytes and bytes/s)
-        self.values
-            .insert("raw_download_speed".to_string(), Value::from(download_speed));
+        self.values.insert(
+            "raw_download_speed".to_string(),
+            Value::from(download_speed),
+        );
         self.values
             .insert("raw_upload_speed".to_string(), Value::from(upload_speed));
         self.values.insert(
@@ -344,32 +348,40 @@ impl DataSource for NetworkSource {
                     .insert("caption".to_string(), Value::from(caption));
                 self.values
                     .insert("value".to_string(), Value::from(download_speed_converted));
-                self.values
-                    .insert("unit".to_string(), Value::from(self.get_speed_unit_string()));
+                self.values.insert(
+                    "unit".to_string(),
+                    Value::from(self.get_speed_unit_string()),
+                );
             }
             NetworkField::UploadSpeed => {
                 self.values
                     .insert("caption".to_string(), Value::from(caption));
                 self.values
                     .insert("value".to_string(), Value::from(upload_speed_converted));
-                self.values
-                    .insert("unit".to_string(), Value::from(self.get_speed_unit_string()));
+                self.values.insert(
+                    "unit".to_string(),
+                    Value::from(self.get_speed_unit_string()),
+                );
             }
             NetworkField::TotalDownload => {
                 self.values
                     .insert("caption".to_string(), Value::from(caption));
                 self.values
                     .insert("value".to_string(), Value::from(total_download_converted));
-                self.values
-                    .insert("unit".to_string(), Value::from(self.get_total_unit_string()));
+                self.values.insert(
+                    "unit".to_string(),
+                    Value::from(self.get_total_unit_string()),
+                );
             }
             NetworkField::TotalUpload => {
                 self.values
                     .insert("caption".to_string(), Value::from(caption));
                 self.values
                     .insert("value".to_string(), Value::from(total_upload_converted));
-                self.values
-                    .insert("unit".to_string(), Value::from(self.get_total_unit_string()));
+                self.values.insert(
+                    "unit".to_string(),
+                    Value::from(self.get_total_unit_string()),
+                );
             }
         }
 

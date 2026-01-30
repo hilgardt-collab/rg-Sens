@@ -10,11 +10,11 @@ mod disk;
 mod fan_speed;
 mod gpu;
 mod memory;
+mod network;
 mod shared_sensors;
 mod static_text;
 mod system_temp;
 mod test;
-mod network;
 
 pub use crate::audio::AlarmSoundConfig;
 pub use crate::core::{TimerDisplayConfig, TimerMode, TimerState};
@@ -25,13 +25,13 @@ pub use disk::DiskSource;
 pub use fan_speed::{FanCategory, FanInfo, FanSpeedConfig, FanSpeedSource};
 pub use gpu::GpuSource;
 pub use memory::MemorySource;
+pub use network::NetworkSource;
 pub use static_text::{StaticTextLine, StaticTextSource, StaticTextSourceConfig};
 pub use system_temp::{
     SensorCategory, SensorInfo, SystemTempConfig, SystemTempSource,
     TemperatureUnit as SystemTempUnit,
 };
 pub use test::{TestMode, TestSource, TestSourceConfig, TEST_SOURCE_STATE};
-pub use network::NetworkSource;
 
 /// Initialize shared sensor caches (call once at startup)
 pub fn initialize_sensors() {

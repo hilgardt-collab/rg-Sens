@@ -324,7 +324,10 @@ impl DataSource for TestSource {
             config.keys().collect::<Vec<_>>()
         );
         if let Some(test_config_value) = config.get("test_config") {
-            log::debug!("TestSource::configure found test_config: {:?}", test_config_value);
+            log::debug!(
+                "TestSource::configure found test_config: {:?}",
+                test_config_value
+            );
             if let Ok(test_config) =
                 serde_json::from_value::<TestSourceConfig>(test_config_value.clone())
             {

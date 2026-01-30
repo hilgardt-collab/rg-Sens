@@ -238,7 +238,6 @@ impl ArtNouveauConfigWidget {
         preview.set_halign(gtk4::Align::Fill);
         preview.set_vexpand(false);
 
-
         // Theme reference section
         let (theme_ref_section, main_theme_refresh_cb) =
             combo_config_base::create_theme_reference_section(&config, |cfg| {
@@ -313,7 +312,8 @@ impl ArtNouveauConfigWidget {
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
         // Assemble container
-        preview.set_visible(false); container.append(&preview);
+        preview.set_visible(false);
+        container.append(&preview);
         container.append(&theme_ref_section);
         container.append(&notebook);
 

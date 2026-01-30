@@ -2,8 +2,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, DropDown, Entry, Label, Orientation, Scale, SizeGroup,
-    SizeGroupMode, SpinButton, Stack, StringList,
+    Box as GtkBox, Button, DropDown, Entry, Label, Orientation, Scale, SizeGroup, SizeGroupMode,
+    SpinButton, Stack, StringList,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -103,7 +103,13 @@ impl BackgroundConfigWidget {
                     render_checkerboard(&cr, size as f64, size as f64);
                     let cfg = config.borrow();
                     let theme = theme_config.borrow();
-                    let _ = render_background_with_theme(&cr, &cfg, size as f64, size as f64, Some(&theme));
+                    let _ = render_background_with_theme(
+                        &cr,
+                        &cfg,
+                        size as f64,
+                        size as f64,
+                        Some(&theme),
+                    );
                 }
                 surface.flush();
 
@@ -139,7 +145,9 @@ impl BackgroundConfigWidget {
         let on_change_clone = on_change.clone();
         solid_color_selector.set_on_change(move |new_color_source| {
             let mut cfg = config_clone.borrow_mut();
-            cfg.background = BackgroundType::Solid { color: new_color_source };
+            cfg.background = BackgroundType::Solid {
+                color: new_color_source,
+            };
             drop(cfg);
             update_preview_clone();
             if let Some(callback) = on_change_clone.borrow().as_ref() {
@@ -158,14 +166,23 @@ impl BackgroundConfigWidget {
         let source_fields = Rc::new(RefCell::new(Vec::new()));
         let is_combo_source = Rc::new(RefCell::new(false));
         let indicator_field_list = StringList::new(&["value"]);
-        let indicator_field_dropdown = DropDown::new(Some(indicator_field_list.clone()), Option::<gtk4::Expression>::None);
+        let indicator_field_dropdown = DropDown::new(
+            Some(indicator_field_list.clone()),
+            Option::<gtk4::Expression>::None,
+        );
         let indicator_field_entry = Entry::new();
         let indicator_field_dropdown_box = GtkBox::new(Orientation::Horizontal, 6);
         let indicator_field_entry_box = GtkBox::new(Orientation::Horizontal, 6);
         let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
-        let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
-        let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
-        let polygon_bg_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::default(),
+        )));
+        let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::default(),
+        )));
+        let polygon_bg_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::default(),
+        )));
 
         Self {
             container,
@@ -216,21 +233,32 @@ impl BackgroundConfigWidget {
         let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
         let type_dropdown_handler_id = type_dropdown.connect_selected_notify(|_| {});
 
-        let solid_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
+        let solid_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::default(),
+        )));
         let linear_gradient_editor = Rc::new(GradientEditor::new());
         let radial_gradient_editor = Rc::new(GradientEditor::new_without_angle());
         let indicator_gradient_editor = Rc::new(GradientEditor::new_linear_no_angle());
         let source_fields = Rc::new(RefCell::new(Vec::new()));
         let is_combo_source = Rc::new(RefCell::new(false));
         let indicator_field_list = StringList::new(&["value"]);
-        let indicator_field_dropdown = DropDown::new(Some(indicator_field_list.clone()), Option::<gtk4::Expression>::None);
+        let indicator_field_dropdown = DropDown::new(
+            Some(indicator_field_list.clone()),
+            Option::<gtk4::Expression>::None,
+        );
         let indicator_field_entry = Entry::new();
         let indicator_field_dropdown_box = GtkBox::new(Orientation::Horizontal, 6);
         let indicator_field_entry_box = GtkBox::new(Orientation::Horizontal, 6);
         let syncing_indicator_dropdown = Rc::new(RefCell::new(false));
-        let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
-        let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::default())));
-        let polygon_bg_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(Color::new(0.1, 0.1, 0.12, 1.0))));
+        let polygon_color1_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::default(),
+        )));
+        let polygon_color2_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::default(),
+        )));
+        let polygon_bg_color_selector = Rc::new(ThemeColorSelector::new(ColorSource::custom(
+            Color::new(0.1, 0.1, 0.12, 1.0),
+        )));
         let update_preview: Rc<dyn Fn()> = Rc::new(|| {});
 
         Self {
@@ -307,13 +335,14 @@ impl BackgroundConfigWidget {
                 let size = 200i32;
 
                 // Create Cairo ImageSurface
-                let mut surface = match cairo::ImageSurface::create(cairo::Format::ARgb32, size, size) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        log::error!("Failed to create surface: {}", e);
-                        return;
-                    }
-                };
+                let mut surface =
+                    match cairo::ImageSurface::create(cairo::Format::ARgb32, size, size) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("Failed to create surface: {}", e);
+                            return;
+                        }
+                    };
                 {
                     let cr = match cairo::Context::new(&surface) {
                         Ok(c) => c,
@@ -329,7 +358,13 @@ impl BackgroundConfigWidget {
                     // Render background
                     let cfg = config.borrow();
                     let theme = theme_config.borrow();
-                    let _ = render_background_with_theme(&cr, &cfg, size as f64, size as f64, Some(&theme));
+                    let _ = render_background_with_theme(
+                        &cr,
+                        &cfg,
+                        size as f64,
+                        size as f64,
+                        Some(&theme),
+                    );
                 }
 
                 // Convert to GdkTexture using MemoryTexture
@@ -382,8 +417,12 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&image_page, Some("image"));
 
         // Polygon configuration
-        let (polygon_page, polygon_color1_selector, polygon_color2_selector, polygon_bg_color_selector) =
-            Self::create_polygon_config(&config, &update_preview, &on_change, &theme_config);
+        let (
+            polygon_page,
+            polygon_color1_selector,
+            polygon_color2_selector,
+            polygon_bg_color_selector,
+        ) = Self::create_polygon_config(&config, &update_preview, &on_change, &theme_config);
         config_stack.add_named(&polygon_page, Some("polygons"));
 
         // Initialize source fields storage and syncing flag
@@ -950,7 +989,12 @@ impl BackgroundConfigWidget {
         update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         theme_config: &Rc<RefCell<ComboThemeConfig>>,
-    ) -> (GtkBox, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>, Rc<ThemeColorSelector>) {
+    ) -> (
+        GtkBox,
+        Rc<ThemeColorSelector>,
+        Rc<ThemeColorSelector>,
+        Rc<ThemeColorSelector>,
+    ) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Tile size
@@ -1160,7 +1204,8 @@ impl BackgroundConfigWidget {
         label_size_group.add_widget(&bg_color_label);
         bg_color_box.append(&bg_color_label);
 
-        let bg_color_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background {
+        let bg_color_source = if let BackgroundType::Polygons(ref poly) = config.borrow().background
+        {
             poly.background_color.clone()
         } else {
             ColorSource::custom(Color::new(0.1, 0.1, 0.12, 1.0))
@@ -1523,7 +1568,8 @@ impl BackgroundConfigWidget {
             if let Some(color2) = poly.colors.get(1) {
                 self.polygon_color2_selector.set_source(color2.clone());
             }
-            self.polygon_bg_color_selector.set_source(poly.background_color.clone());
+            self.polygon_bg_color_selector
+                .set_source(poly.background_color.clone());
         }
         if let BackgroundType::Indicator(ref ind) = new_config.background {
             self.indicator_gradient_editor

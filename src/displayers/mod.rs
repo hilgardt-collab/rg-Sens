@@ -92,7 +92,9 @@ where
 /// Rebuild cached field IDs from text overlay config lines.
 ///
 /// Call this when config changes to update the cached field IDs vector.
-pub(crate) fn rebuild_cached_field_ids(lines: &[crate::displayers::text_config::TextLineConfig]) -> Vec<String> {
+pub(crate) fn rebuild_cached_field_ids(
+    lines: &[crate::displayers::text_config::TextLineConfig],
+) -> Vec<String> {
     lines.iter().map(|l| l.field_id.clone()).collect()
 }
 
@@ -139,8 +141,8 @@ macro_rules! theme_display_config {
             fn default() -> Self {
                 Self {
                     frame: <$frame_config>::default(),
-                    animation_enabled: crate::displayers::default_animation_enabled(),
-                    animation_speed: crate::displayers::default_animation_speed(),
+                    animation_enabled: $crate::displayers::default_animation_enabled(),
+                    animation_speed: $crate::displayers::default_animation_speed(),
                 }
             }
         }
@@ -186,13 +188,13 @@ macro_rules! theme_display_config {
 macro_rules! theme_displayer_base {
     ($displayer_name:ident, $renderer_type:ty, $renderer_expr:expr) => {
         pub struct $displayer_name {
-            inner: crate::displayers::combo_generic::GenericComboDisplayerShared<$renderer_type>,
+            inner: $crate::displayers::combo_generic::GenericComboDisplayerShared<$renderer_type>,
         }
 
         impl $displayer_name {
             pub fn new() -> Self {
                 Self {
-                    inner: crate::displayers::combo_generic::GenericComboDisplayerShared::new(
+                    inner: $crate::displayers::combo_generic::GenericComboDisplayerShared::new(
                         $renderer_expr,
                     ),
                 }
@@ -219,13 +221,9 @@ pub mod combo_utils;
 mod cpu_cores;
 // CSS Template backend modules
 #[cfg(any(feature = "webkit", feature = "servo"))]
-mod css_template_backend;
-#[cfg(any(feature = "webkit", feature = "servo"))]
 mod css_template;
-#[cfg(feature = "webkit")]
-pub mod webkit_backend;
-#[cfg(feature = "servo")]
-pub mod servo_backend;
+#[cfg(any(feature = "webkit", feature = "servo"))]
+mod css_template_backend;
 mod cyberpunk;
 mod fighter_hud;
 mod graph;
@@ -234,11 +232,15 @@ mod industrial;
 mod lcars_combo;
 mod material;
 mod retro_terminal;
+#[cfg(feature = "servo")]
+pub mod servo_backend;
 mod speedometer;
 mod steampunk;
 mod synthwave;
 mod text;
 mod text_config;
+#[cfg(feature = "webkit")]
+pub mod webkit_backend;
 // mod level_bar;
 
 pub use arc::ArcDisplayer;
@@ -248,12 +250,10 @@ pub use bar::BarDisplayer;
 pub use clock_analog::ClockAnalogDisplayer;
 pub use clock_digital::{ClockDigitalDisplayer, DigitalClockConfig, DigitalStyle};
 pub use cpu_cores::CpuCoresDisplayer;
-#[cfg(any(feature = "webkit", feature = "servo"))]
-pub use css_template::CssTemplateDisplayer;
 #[cfg(feature = "webkit")]
 pub use css_template::shutdown_all as css_template_shutdown;
-#[cfg(all(feature = "servo", not(feature = "webkit")))]
-pub use servo_backend::shutdown_all as css_template_shutdown;
+#[cfg(any(feature = "webkit", feature = "servo"))]
+pub use css_template::CssTemplateDisplayer;
 pub use cyberpunk::{CyberpunkDisplayConfig, CyberpunkDisplayer};
 pub use fighter_hud::{FighterHudDisplayConfig, FighterHudDisplayer};
 pub use graph::GraphDisplayer;
@@ -264,6 +264,8 @@ pub use industrial::{IndustrialDisplayConfig, IndustrialDisplayer};
 pub use lcars_combo::{LcarsComboDisplayer, LcarsDisplayConfig};
 pub use material::{MaterialDisplayConfig, MaterialDisplayer};
 pub use retro_terminal::{RetroTerminalDisplayConfig, RetroTerminalDisplayer};
+#[cfg(all(feature = "servo", not(feature = "webkit")))]
+pub use servo_backend::shutdown_all as css_template_shutdown;
 pub use speedometer::SpeedometerDisplayer;
 pub use steampunk::{SteampunkDisplayConfig, SteampunkDisplayer};
 pub use synthwave::{SynthwaveDisplayConfig, SynthwaveDisplayer};

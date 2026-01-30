@@ -14,6 +14,7 @@ use crate::ui::bar_display::{
     render_bar, BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
     BarStyle, BarTaperAlignment, BarTaperStyle,
 };
+use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::render_utils::render_checkerboard;
 use crate::ui::text_overlay_config_widget::TextOverlayConfigWidget;
 use crate::ui::theme::{ColorSource, ColorStopSource, ComboThemeConfig};
@@ -22,7 +23,6 @@ use crate::ui::widget_builder::{
     create_dropdown_row, create_page_container, create_percent_spin_row_with_value,
     create_spin_row_with_value,
 };
-use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::GradientEditor;
 
 /// Bar configuration widget

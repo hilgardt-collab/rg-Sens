@@ -1,7 +1,9 @@
 //! Disk usage data source implementation
 
 use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB, BYTES_PER_TB};
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata};
+use crate::core::{
+    DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
+};
 use crate::ui::{DiskField, DiskSourceConfig, DiskUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;

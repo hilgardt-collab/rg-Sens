@@ -424,7 +424,6 @@ fn write_mapped_value(
     mapping: &crate::ui::css_template_display::PlaceholderMapping,
     output: &mut String,
 ) {
-
     if mapping.slot_prefix.is_empty() {
         output.push_str("--");
         return;
@@ -447,11 +446,7 @@ fn write_mapped_value(
 }
 
 /// Write formatted JSON value into output buffer
-fn write_value_to_buffer(
-    value: &serde_json::Value,
-    format: Option<&str>,
-    output: &mut String,
-) {
+fn write_value_to_buffer(value: &serde_json::Value, format: Option<&str>, output: &mut String) {
     use crate::ui::css_template_display::write_format_value_to_buffer;
     use std::fmt::Write;
 

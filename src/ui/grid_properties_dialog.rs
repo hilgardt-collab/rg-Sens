@@ -434,9 +434,9 @@ pub(crate) fn show_panel_properties_dialog(
         let interfaces = crate::sources::NetworkSource::get_available_interfaces();
         widget.set_available_interfaces(&interfaces);
         if let Some(network_config_value) = panel_guard.config.get("network_config") {
-            if let Ok(network_config) =
-                serde_json::from_value::<crate::ui::NetworkSourceConfig>(network_config_value.clone())
-            {
+            if let Ok(network_config) = serde_json::from_value::<crate::ui::NetworkSourceConfig>(
+                network_config_value.clone(),
+            ) {
                 widget.set_config(network_config);
             }
         }
@@ -708,12 +708,14 @@ pub(crate) fn show_panel_properties_dialog(
                     "network" => {
                         if network_widget_clone.borrow().is_none() {
                             let widget = crate::ui::NetworkSourceConfigWidget::new();
-                            let interfaces = crate::sources::NetworkSource::get_available_interfaces();
+                            let interfaces =
+                                crate::sources::NetworkSource::get_available_interfaces();
                             widget.set_available_interfaces(&interfaces);
                             network_placeholder_clone.append(widget.widget());
                             *network_widget_clone.borrow_mut() = Some(widget);
                         }
-                        if let Some(network_config_value) = panel_guard.config.get("network_config") {
+                        if let Some(network_config_value) = panel_guard.config.get("network_config")
+                        {
                             if let Ok(network_config) =
                                 serde_json::from_value::<crate::ui::NetworkSourceConfig>(
                                     network_config_value.clone(),
