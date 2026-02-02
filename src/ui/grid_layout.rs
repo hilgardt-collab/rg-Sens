@@ -578,8 +578,12 @@ impl GridLayout {
                             && y >= panel_y
                             && y <= panel_y + panel_height
                         {
-                            // Get z_index from the panel
-                            let z_index = state.panel.blocking_read().z_index;
+                            // Get z_index from the panel using try_read with fallback
+                            let z_index = state
+                                .panel
+                                .try_read()
+                                .map(|g| g.z_index)
+                                .unwrap_or(0);
                             candidates.push((
                                 state,
                                 z_index,
@@ -2030,9 +2034,8 @@ impl GridLayout {
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        // Read original panel data
-                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
-                            let panel_guard = original_panel.blocking_read();
+                        // Read original panel data using try_read to avoid blocking tokio update thread
+                        let panel_data_result = original_panel.try_read().map(|panel_guard| {
                             (
                                 panel_guard.source.metadata().clone(),
                                 panel_guard.displayer.id().to_string(),
@@ -2048,6 +2051,13 @@ impl GridLayout {
                                 panel_guard.ignore_collision,
                                 panel_guard.data.clone(),
                             )
+                        });
+                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = match panel_data_result {
+                            Ok(data) => data,
+                            Err(_) => {
+                                log::debug!("Skipping panel copy for {} - lock unavailable", old_id);
+                                continue;
+                            }
                         };
 
                         // Generate unique ID for the copy
@@ -2085,9 +2095,8 @@ impl GridLayout {
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
 
-                                // Apply the copied configuration
-                                {
-                                    let mut new_panel_guard = new_panel.blocking_write();
+                                // Apply the copied configuration using try_write (should always succeed for new panel)
+                                if let Ok(mut new_panel_guard) = new_panel.try_write() {
                                     let _ = new_panel_guard.apply_config(config);
                                 }
 
@@ -2121,10 +2130,13 @@ impl GridLayout {
                                     + (geometry_size.1 as i32 - 1) * config_read.spacing;
                                 drop(config_read);
 
-                                // Create displayer widget
-                                let widget = {
-                                    let panel_guard = new_panel.blocking_read();
-                                    panel_guard.displayer.create_widget()
+                                // Create displayer widget using try_read (should always succeed for new panel)
+                                let widget = match new_panel.try_read() {
+                                    Ok(panel_guard) => panel_guard.displayer.create_widget(),
+                                    Err(_) => {
+                                        log::warn!("Failed to acquire read lock for new panel widget creation");
+                                        continue;
+                                    }
                                 };
                                 widget.set_size_request(width, height);
 
@@ -2705,9 +2717,11 @@ impl GridLayout {
                                             / (config.cell_height + config.spacing) as f64)
                                             .floor() as i32;
 
+                                        // Use try_read to avoid blocking tokio update thread
                                         let dragged_panel_orig_grid = if let Some(state) = states.get(&*dragged_id) {
-                                            let geom = state.panel.blocking_read().geometry;
-                                            (geom.x as i32, geom.y as i32)
+                                            state.panel.try_read()
+                                                .map(|g| (g.geometry.x as i32, g.geometry.y as i32))
+                                                .unwrap_or((0, 0))
                                         } else {
                                             (0, 0)
                                         };
@@ -2717,10 +2731,13 @@ impl GridLayout {
 
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                let geom = state.panel.blocking_read().geometry;
-                                                let new_grid_x = (geom.x as i32 + grid_offset_x).max(0) as u32;
-                                                let new_grid_y = (geom.y as i32 + grid_offset_y).max(0) as u32;
-                                                preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                                                // Use try_read with fallback to skip if lock unavailable
+                                                if let Ok(guard) = state.panel.try_read() {
+                                                    let geom = guard.geometry;
+                                                    let new_grid_x = (geom.x as i32 + grid_offset_x).max(0) as u32;
+                                                    let new_grid_y = (geom.y as i32 + grid_offset_y).max(0) as u32;
+                                                    preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                                                }
                                             }
                                         }
                                     }
@@ -2762,12 +2779,14 @@ impl GridLayout {
                                     if !is_copy_mode {
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                let panel_guard = state.panel.blocking_read();
-                                                if !panel_guard.ignore_collision {
-                                                    let geom = panel_guard.geometry;
-                                                    for dx in 0..geom.width {
-                                                        for dy in 0..geom.height {
-                                                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                                                // Use try_read to avoid blocking tokio update thread
+                                                if let Ok(panel_guard) = state.panel.try_read() {
+                                                    if !panel_guard.ignore_collision {
+                                                        let geom = panel_guard.geometry;
+                                                        for dx in 0..geom.width {
+                                                            for dy in 0..geom.height {
+                                                                occupied.remove(&(geom.x + dx, geom.y + dy));
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2798,19 +2817,21 @@ impl GridLayout {
                                                 let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
 
                                                 // Check collision (skip for panels with ignore_collision)
-                                                let panel_guard = state.panel.blocking_read();
-                                                let geom = panel_guard.geometry;
-                                                if !panel_guard.ignore_collision {
-                                                    for dx in 0..geom.width {
-                                                        for dy in 0..geom.height {
-                                                            let cell = (grid_x + dx, grid_y + dy);
-                                                            if occupied.contains(&cell) {
-                                                                group_has_collision = true;
+                                                // Use try_read to avoid blocking tokio update thread
+                                                if let Ok(panel_guard) = state.panel.try_read() {
+                                                    let geom = panel_guard.geometry;
+                                                    if !panel_guard.ignore_collision {
+                                                        for dx in 0..geom.width {
+                                                            for dy in 0..geom.height {
+                                                                let cell = (grid_x + dx, grid_y + dy);
+                                                                if occupied.contains(&cell) {
+                                                                    group_has_collision = true;
+                                                                    break;
+                                                                }
+                                                            }
+                                                            if group_has_collision {
                                                                 break;
                                                             }
-                                                        }
-                                                        if group_has_collision {
-                                                            break;
                                                         }
                                                     }
                                                 }
@@ -2825,12 +2846,14 @@ impl GridLayout {
                                         // Restore original positions (only for panels that participate in collision)
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                let panel_guard = state.panel.blocking_read();
-                                                if !panel_guard.ignore_collision {
-                                                    let geom = panel_guard.geometry;
-                                                    for dx in 0..geom.width {
-                                                        for dy in 0..geom.height {
-                                                            occupied.insert((geom.x + dx, geom.y + dy));
+                                                // Use try_read to avoid blocking tokio update thread
+                                                if let Ok(panel_guard) = state.panel.try_read() {
+                                                    if !panel_guard.ignore_collision {
+                                                        let geom = panel_guard.geometry;
+                                                        for dx in 0..geom.width {
+                                                            for dy in 0..geom.height {
+                                                                occupied.insert((geom.x + dx, geom.y + dy));
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2854,9 +2877,8 @@ impl GridLayout {
                                                     let original_panel = state.panel.clone();
                                                     drop(panel_states_read);
 
-                                                    // Read original panel configuration
-                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
-                                                        let panel_guard = original_panel.blocking_read();
+                                                    // Read original panel configuration using try_read to avoid blocking tokio update thread
+                                                    let panel_data_result = original_panel.try_read().map(|panel_guard| {
                                                         (
                                                             panel_guard.source.metadata().clone(),
                                                             panel_guard.displayer.id().to_string(),
@@ -2872,6 +2894,13 @@ impl GridLayout {
                                                             panel_guard.ignore_collision,
                                                             panel_guard.data.clone(),
                                                         )
+                                                    });
+                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = match panel_data_result {
+                                                        Ok(data) => data,
+                                                        Err(_) => {
+                                                            log::debug!("Skipping panel copy for {} - lock unavailable", old_id);
+                                                            continue;
+                                                        }
                                                     };
 
                                                     // Generate unique ID for the new copy
@@ -2909,9 +2938,8 @@ impl GridLayout {
 
                                                             let new_panel = Arc::new(RwLock::new(new_panel));
 
-                                                            // Apply configuration
-                                                            {
-                                                                let mut panel_guard = new_panel.blocking_write();
+                                                            // Apply configuration using try_write (should always succeed for new panel)
+                                                            if let Ok(mut panel_guard) = new_panel.try_write() {
                                                                 let _ = panel_guard.apply_config(config);
                                                             }
 
@@ -2939,10 +2967,13 @@ impl GridLayout {
                                                                 + (geometry_size.1 as i32 - 1) * config_read.spacing;
                                                             drop(config_read);
 
-                                                            // Create displayer widget
-                                                            let widget = {
-                                                                let panel_guard = new_panel.blocking_read();
-                                                                panel_guard.displayer.create_widget()
+                                                            // Create displayer widget using try_read (should always succeed for new panel)
+                                                            let widget = match new_panel.try_read() {
+                                                                Ok(panel_guard) => panel_guard.displayer.create_widget(),
+                                                                Err(_) => {
+                                                                    log::warn!("Failed to acquire read lock for nested copy panel widget creation");
+                                                                    continue;
+                                                                }
                                                             };
                                                             widget.set_size_request(width, height);
 
@@ -3076,9 +3107,8 @@ impl GridLayout {
                                                             // Add to container
                                                             container_for_nested.put(&frame, x as f64, y as f64);
 
-                                                            // Update the panel with initial data
-                                                            {
-                                                                let mut panel_guard = new_panel.blocking_write();
+                                                            // Update the panel with initial data using try_write (should always succeed for new panel)
+                                                            if let Ok(mut panel_guard) = new_panel.try_write() {
                                                                 let _ = panel_guard.update();
                                                             }
 
@@ -3106,19 +3136,32 @@ impl GridLayout {
                                                         }
                                                     }
 
-                                                    {
-                                                        let mut panel_guard = state.panel.blocking_write();
-                                                        panel_guard.geometry.x = grid_x;
-                                                        panel_guard.geometry.y = grid_y;
+                                                    // Update geometry using try_write to avoid blocking tokio update thread
+                                                    match state.panel.try_write() {
+                                                        Ok(mut panel_guard) => {
+                                                            panel_guard.geometry.x = grid_x;
+                                                            panel_guard.geometry.y = grid_y;
+                                                        }
+                                                        Err(_) => {
+                                                            // Defer update to next idle if lock unavailable
+                                                            let panel = state.panel.clone();
+                                                            gtk4::glib::idle_add_local_once(move || {
+                                                                if let Ok(mut guard) = panel.try_write() {
+                                                                    guard.geometry.x = grid_x;
+                                                                    guard.geometry.y = grid_y;
+                                                                }
+                                                            });
+                                                        }
                                                     }
 
                                                     // Mark new cells as occupied (only if panel participates in collision)
-                                                    let panel_guard = state.panel.blocking_read();
-                                                    if !panel_guard.ignore_collision {
-                                                        let geom = panel_guard.geometry;
-                                                        for dx in 0..geom.width {
-                                                            for dy in 0..geom.height {
-                                                                occupied.insert((grid_x + dx, grid_y + dy));
+                                                    if let Ok(panel_guard) = state.panel.try_read() {
+                                                        if !panel_guard.ignore_collision {
+                                                            let geom = panel_guard.geometry;
+                                                            for dx in 0..geom.width {
+                                                                for dy in 0..geom.height {
+                                                                    occupied.insert((grid_x + dx, grid_y + dy));
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -3142,9 +3185,8 @@ impl GridLayout {
                                 // Add to container
                                 container_for_copy.put(&frame, x as f64, y as f64);
 
-                                // Update the panel to populate the displayer with data
-                                {
-                                    let mut panel_guard = new_panel.blocking_write();
+                                // Update the panel to populate the displayer with data using try_write (should always succeed for new panel)
+                                if let Ok(mut panel_guard) = new_panel.try_write() {
                                     let _ = panel_guard.update();
                                 }
 
@@ -3164,20 +3206,32 @@ impl GridLayout {
                             }
                         }
 
-                        // Update geometry
-                        {
-                            let mut panel_guard = state.panel.blocking_write();
-                            panel_guard.geometry.x = grid_x;
-                            panel_guard.geometry.y = grid_y;
+                        // Update geometry using try_write to avoid blocking tokio update thread
+                        match state.panel.try_write() {
+                            Ok(mut panel_guard) => {
+                                panel_guard.geometry.x = grid_x;
+                                panel_guard.geometry.y = grid_y;
+                            }
+                            Err(_) => {
+                                // Defer update to next idle if lock unavailable
+                                let panel = state.panel.clone();
+                                gtk4::glib::idle_add_local_once(move || {
+                                    if let Ok(mut guard) = panel.try_write() {
+                                        guard.geometry.x = grid_x;
+                                        guard.geometry.y = grid_y;
+                                    }
+                                });
+                            }
                         }
 
                         // Mark new cells as occupied (only if panel participates in collision)
-                        let panel_guard = state.panel.blocking_read();
-                        if !panel_guard.ignore_collision {
-                            let geom = panel_guard.geometry;
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    occupied.insert((grid_x + dx, grid_y + dy));
+                        if let Ok(panel_guard) = state.panel.try_read() {
+                            if !panel_guard.ignore_collision {
+                                let geom = panel_guard.geometry;
+                                for dx in 0..geom.width {
+                                    for dy in 0..geom.height {
+                                        occupied.insert((grid_x + dx, grid_y + dy));
+                                    }
                                 }
                             }
                         }
@@ -3197,12 +3251,14 @@ impl GridLayout {
                 let mut max_height = config.rows as i32 * (cell_height + spacing) - spacing;
 
                 for (_panel_id, state) in states.iter() {
-                    let panel_guard = state.panel.blocking_read();
-                    let geom = &panel_guard.geometry;
-                    let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
-                    let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
-                    max_width = max_width.max(panel_right);
-                    max_height = max_height.max(panel_bottom);
+                    // Use try_read to avoid blocking tokio update thread
+                    if let Ok(panel_guard) = state.panel.try_read() {
+                        let geom = &panel_guard.geometry;
+                        let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
+                        let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
+                        max_width = max_width.max(panel_right);
+                        max_height = max_height.max(panel_bottom);
+                    }
                 }
 
                 container_for_copy.set_size_request(max_width, max_height);
@@ -3228,11 +3284,12 @@ impl GridLayout {
     /// Remove a panel by ID
     pub fn remove_panel(&mut self, panel_id: &str) -> Option<Arc<RwLock<Panel>>> {
         // Find position first, then release borrow before mutating
+        // Use try_read to avoid blocking tokio update thread
         let pos = self
             .panels
             .borrow()
             .iter()
-            .position(|p| p.blocking_read().id == panel_id);
+            .position(|p| p.try_read().map(|g| g.id == panel_id).unwrap_or(false));
 
         if let Some(pos) = pos {
             let panel = self.panels.borrow_mut().remove(pos);
@@ -3252,14 +3309,16 @@ impl GridLayout {
                 self.container.remove(&state.frame);
 
                 // Clear occupied cells (only if panel participated in collision detection)
-                let panel_guard = state.panel.blocking_read();
-                if !panel_guard.ignore_collision {
-                    let geom = panel_guard.geometry;
-                    drop(panel_guard); // Release lock before borrowing occupied_cells
-                    let mut occupied = self.occupied_cells.borrow_mut();
-                    for dx in 0..geom.width {
-                        for dy in 0..geom.height {
-                            occupied.remove(&(geom.x + dx, geom.y + dy));
+                // Use try_read to avoid blocking tokio update thread
+                if let Ok(panel_guard) = state.panel.try_read() {
+                    if !panel_guard.ignore_collision {
+                        let geom = panel_guard.geometry;
+                        drop(panel_guard); // Release lock before borrowing occupied_cells
+                        let mut occupied = self.occupied_cells.borrow_mut();
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.remove(&(geom.x + dx, geom.y + dy));
+                            }
                         }
                     }
                 }
@@ -3276,12 +3335,12 @@ impl GridLayout {
 
     /// Remove all panels from the grid
     pub fn clear_all_panels(&mut self) {
-        // Get all panel IDs
+        // Get all panel IDs using try_read to avoid blocking tokio update thread
         let panel_ids: Vec<String> = self
             .panels
             .borrow()
             .iter()
-            .map(|p| p.blocking_read().id.clone())
+            .filter_map(|p| p.try_read().ok().map(|g| g.id.clone()))
             .collect();
 
         // Remove each panel
@@ -3308,15 +3367,17 @@ impl GridLayout {
 
         // Check if any panels extend beyond the default grid bounds
         for (_panel_id, state) in self.panel_states.borrow().iter() {
-            let panel_guard = state.panel.blocking_read();
-            let geom = &panel_guard.geometry;
+            // Use try_read to avoid blocking tokio update thread
+            if let Ok(panel_guard) = state.panel.try_read() {
+                let geom = &panel_guard.geometry;
 
-            // Calculate pixel position + size for this panel
-            let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
-            let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
+                // Calculate pixel position + size for this panel
+                let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
+                let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
 
-            max_width = max_width.max(panel_right);
-            max_height = max_height.max(panel_bottom);
+                max_width = max_width.max(panel_right);
+                max_height = max_height.max(panel_bottom);
+            }
         }
 
         (max_width, max_height)
@@ -3895,16 +3956,24 @@ fn setup_copied_panel_interaction(
                 .max(0.0) as u32;
 
             if let Some(dragged_state) = states.get(&*dragged_id) {
-                let dragged_geom = dragged_state.panel.blocking_read().geometry;
-                let delta_grid_x = dragged_grid_x as i32 - dragged_geom.x as i32;
-                let delta_grid_y = dragged_grid_y as i32 - dragged_geom.y as i32;
+                // Use try_read to avoid blocking tokio update thread
+                if let Ok(dragged_guard) = dragged_state.panel.try_read() {
+                    let dragged_geom = dragged_guard.geometry;
+                    drop(dragged_guard);
 
-                for id in selected.iter() {
-                    if let Some(state) = states.get(id) {
-                        let geom = state.panel.blocking_read().geometry;
-                        let new_grid_x = (geom.x as i32 + delta_grid_x).max(0) as u32;
-                        let new_grid_y = (geom.y as i32 + delta_grid_y).max(0) as u32;
-                        preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                    let delta_grid_x = dragged_grid_x as i32 - dragged_geom.x as i32;
+                    let delta_grid_y = dragged_grid_y as i32 - dragged_geom.y as i32;
+
+                    for id in selected.iter() {
+                        if let Some(state) = states.get(id) {
+                            // Use try_read with fallback to skip if lock unavailable
+                            if let Ok(guard) = state.panel.try_read() {
+                                let geom = guard.geometry;
+                                let new_grid_x = (geom.x as i32 + delta_grid_x).max(0) as u32;
+                                let new_grid_y = (geom.y as i32 + delta_grid_y).max(0) as u32;
+                                preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                            }
+                        }
                     }
                 }
             }
@@ -3948,12 +4017,14 @@ fn setup_copied_panel_interaction(
         if !is_copy_mode {
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    let panel_guard = state.panel.blocking_read();
-                    if !panel_guard.ignore_collision {
-                        let geom = panel_guard.geometry;
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.remove(&(geom.x + dx, geom.y + dy));
+                    // Use try_read to avoid blocking tokio update thread
+                    if let Ok(panel_guard) = state.panel.try_read() {
+                        if !panel_guard.ignore_collision {
+                            let geom = panel_guard.geometry;
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.remove(&(geom.x + dx, geom.y + dy));
+                                }
                             }
                         }
                     }
@@ -3979,37 +4050,53 @@ fn setup_copied_panel_interaction(
                 .max(0.0) as u32;
 
             if let Some(dragged_state) = states.get(&*dragged_id) {
-                let dragged_geom = dragged_state.panel.blocking_read().geometry;
+                // Use try_read to avoid blocking tokio update thread
+                let dragged_geom = match dragged_state.panel.try_read() {
+                    Ok(guard) => guard.geometry,
+                    Err(_) => {
+                        // Skip position calculation if lock unavailable
+                        log::debug!("Skipping drag_end position calculation - lock unavailable");
+                        *drag_preview_cells_end.borrow_mut() = Vec::new();
+                        *is_dragging_end.borrow_mut() = false;
+                        drop_zone_end.queue_draw();
+                        return;
+                    }
+                };
                 let delta_grid_x = dragged_grid_x as i32 - dragged_geom.x as i32;
                 let delta_grid_y = dragged_grid_y as i32 - dragged_geom.y as i32;
 
                 for id in selected.iter() {
                     if let Some(state) = states.get(id) {
-                        let panel_guard = state.panel.blocking_read();
-                        let geom = panel_guard.geometry;
-                        let grid_x = (geom.x as i32 + delta_grid_x).max(0) as u32;
-                        let grid_y = (geom.y as i32 + delta_grid_y).max(0) as u32;
+                        // Use try_read to avoid blocking tokio update thread
+                        if let Ok(panel_guard) = state.panel.try_read() {
+                            let geom = panel_guard.geometry;
+                            let ignore_collision = panel_guard.ignore_collision;
+                            drop(panel_guard);
 
-                        let snapped_x = grid_x as f64 * (cfg.cell_width + cfg.spacing) as f64;
-                        let snapped_y = grid_y as f64 * (cfg.cell_height + cfg.spacing) as f64;
+                            let grid_x = (geom.x as i32 + delta_grid_x).max(0) as u32;
+                            let grid_y = (geom.y as i32 + delta_grid_y).max(0) as u32;
 
-                        // Check collision (skip for panels with ignore_collision)
-                        if !panel_guard.ignore_collision {
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    let cell = (grid_x + dx, grid_y + dy);
-                                    if occupied.contains(&cell) {
-                                        group_has_collision = true;
+                            let snapped_x = grid_x as f64 * (cfg.cell_width + cfg.spacing) as f64;
+                            let snapped_y = grid_y as f64 * (cfg.cell_height + cfg.spacing) as f64;
+
+                            // Check collision (skip for panels with ignore_collision)
+                            if !ignore_collision {
+                                for dx in 0..geom.width {
+                                    for dy in 0..geom.height {
+                                        let cell = (grid_x + dx, grid_y + dy);
+                                        if occupied.contains(&cell) {
+                                            group_has_collision = true;
+                                            break;
+                                        }
+                                    }
+                                    if group_has_collision {
                                         break;
                                     }
                                 }
-                                if group_has_collision {
-                                    break;
-                                }
                             }
-                        }
 
-                        new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
+                            new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
+                        }
                     }
                 }
             }
@@ -4020,12 +4107,14 @@ fn setup_copied_panel_interaction(
             // Restore original positions (only for panels that participate in collision)
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    let panel_guard = state.panel.blocking_read();
-                    if !panel_guard.ignore_collision {
-                        let geom = panel_guard.geometry;
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.insert((geom.x + dx, geom.y + dy));
+                    // Use try_read to avoid blocking tokio update thread
+                    if let Ok(panel_guard) = state.panel.try_read() {
+                        if !panel_guard.ignore_collision {
+                            let geom = panel_guard.geometry;
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.insert((geom.x + dx, geom.y + dy));
+                                }
                             }
                         }
                     }
@@ -4049,22 +4138,8 @@ fn setup_copied_panel_interaction(
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        let (
-                            source_meta,
-                            displayer_id,
-                            panel_config,
-                            background,
-                            corner_radius,
-                            border,
-                            geometry_size,
-                            scale,
-                            translate_x,
-                            translate_y,
-                            z_index,
-                            ignore_collision,
-                            panel_data,
-                        ) = {
-                            let panel_guard = original_panel.blocking_read();
+                        // Read original panel configuration using try_read to avoid blocking tokio update thread
+                        let panel_data_result = original_panel.try_read().map(|panel_guard| {
                             (
                                 panel_guard.source.metadata().clone(),
                                 panel_guard.displayer.id().to_string(),
@@ -4080,6 +4155,27 @@ fn setup_copied_panel_interaction(
                                 panel_guard.ignore_collision,
                                 panel_guard.data.clone(),
                             )
+                        });
+                        let (
+                            source_meta,
+                            displayer_id,
+                            panel_config,
+                            background,
+                            corner_radius,
+                            border,
+                            geometry_size,
+                            scale,
+                            translate_x,
+                            translate_y,
+                            z_index,
+                            ignore_collision,
+                            panel_data,
+                        ) = match panel_data_result {
+                            Ok(data) => data,
+                            Err(_) => {
+                                log::debug!("Skipping panel copy for {} - lock unavailable", old_id);
+                                continue;
+                            }
                         };
 
                         let new_id = format!("panel_{}", uuid::Uuid::new_v4());
@@ -4108,8 +4204,8 @@ fn setup_copied_panel_interaction(
                                 new_panel.data = panel_data;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
-                                {
-                                    let mut panel_guard = new_panel.blocking_write();
+                                // Apply config using try_write (should always succeed for new panel)
+                                if let Ok(mut panel_guard) = new_panel.try_write() {
                                     let _ = panel_guard.apply_config(panel_config);
                                 }
 
@@ -4140,9 +4236,13 @@ fn setup_copied_panel_interaction(
                                     + (geometry_size.1 as i32 - 1) * cfg.spacing;
                                 drop(cfg);
 
-                                let new_widget = {
-                                    let panel_guard = new_panel.blocking_read();
-                                    panel_guard.displayer.create_widget()
+                                // Create widget using try_read (should always succeed for new panel)
+                                let new_widget = match new_panel.try_read() {
+                                    Ok(panel_guard) => panel_guard.displayer.create_widget(),
+                                    Err(_) => {
+                                        log::warn!("Failed to acquire read lock for new panel widget creation");
+                                        continue;
+                                    }
                                 };
                                 new_widget.set_size_request(width, height);
 
@@ -4315,10 +4415,10 @@ fn setup_copied_panel_interaction(
 
                                 container_end.put(&new_frame, x as f64, y as f64);
 
-                                {
-                                    let mut panel_guard = new_panel.blocking_write();
+                                // Update panel using try_write (should always succeed for new panel)
+                                if let Ok(mut panel_guard) = new_panel.try_write() {
                                     let _ = panel_guard.update();
-                                }
+                                };
                             }
                         }
                     }
@@ -4336,19 +4436,32 @@ fn setup_copied_panel_interaction(
                             }
                         }
 
-                        {
-                            let mut panel_guard = state.panel.blocking_write();
-                            panel_guard.geometry.x = grid_x;
-                            panel_guard.geometry.y = grid_y;
+                        // Update geometry using try_write to avoid blocking tokio update thread
+                        match state.panel.try_write() {
+                            Ok(mut panel_guard) => {
+                                panel_guard.geometry.x = grid_x;
+                                panel_guard.geometry.y = grid_y;
+                            }
+                            Err(_) => {
+                                // Defer update to next idle if lock unavailable
+                                let panel = state.panel.clone();
+                                gtk4::glib::idle_add_local_once(move || {
+                                    if let Ok(mut guard) = panel.try_write() {
+                                        guard.geometry.x = grid_x;
+                                        guard.geometry.y = grid_y;
+                                    }
+                                });
+                            }
                         }
 
                         // Mark new cells as occupied (only if panel participates in collision)
-                        let panel_guard = state.panel.blocking_read();
-                        if !panel_guard.ignore_collision {
-                            let geom = panel_guard.geometry;
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    occupied.insert((grid_x + dx, grid_y + dy));
+                        if let Ok(panel_guard) = state.panel.try_read() {
+                            if !panel_guard.ignore_collision {
+                                let geom = panel_guard.geometry;
+                                for dx in 0..geom.width {
+                                    for dy in 0..geom.height {
+                                        occupied.insert((grid_x + dx, grid_y + dy));
+                                    }
                                 }
                             }
                         }
@@ -4412,10 +4525,9 @@ pub(crate) fn delete_selected_panels(
                 }
             }
 
-            // Remove from panels list
+            // Remove from panels list using try_read to avoid blocking tokio update thread
             panels.borrow_mut().retain(|p| {
-                let p_guard = p.blocking_read();
-                p_guard.id != *panel_id
+                p.try_read().map(|g| g.id != *panel_id).unwrap_or(true)
             });
 
             log::info!("Panel deleted: {}", panel_id);

@@ -168,25 +168,40 @@ fn main() {
 
     // Set graphics renderer before GTK initialization
     // GSK_RENDERER must be set before any GTK calls
-    // Priority: CLI option > saved config > environment variable > GTK default
+    // Priority: CLI option > saved config > environment variable > GL default
+    // Note: We default to GL instead of Vulkan because Vulkan can crash with
+    // VK_ERROR_OUT_OF_DATE_KHR during window state changes (fullscreen, resize, etc.)
     if let Some(renderer) = &cli.renderer {
         let renderer_str = renderer.to_string();
         std::env::set_var("GSK_RENDERER", &renderer_str);
         warn!("Using {} renderer (set via --renderer)", renderer_str);
+        if renderer_str == "vulkan" {
+            warn!("Note: Vulkan renderer may crash during window state changes. Use --renderer gl if you experience issues.");
+        }
     } else if std::env::var("GSK_RENDERER").is_err() {
         // Try to load saved renderer from config (before GTK init)
         if let Ok(config) = AppConfig::load() {
             if let Some(ref saved_renderer) = config.window.renderer {
                 std::env::set_var("GSK_RENDERER", saved_renderer);
                 warn!("Using {} renderer (set via saved config)", saved_renderer);
+                if saved_renderer == "vulkan" {
+                    warn!("Note: Vulkan renderer may crash during window state changes. Consider using 'gl' in settings.");
+                }
             } else {
-                info!("Using default GTK renderer (use --renderer or settings to change)");
+                // Default to GL for stability - Vulkan can crash with VK_ERROR_OUT_OF_DATE_KHR
+                std::env::set_var("GSK_RENDERER", "gl");
+                info!("Using gl renderer (default for stability, use --renderer to change)");
             }
         } else {
-            info!("Using default GTK renderer (use --renderer or settings to change)");
+            // Default to GL for stability
+            std::env::set_var("GSK_RENDERER", "gl");
+            info!("Using gl renderer (default for stability, use --renderer to change)");
         }
     } else if let Ok(renderer) = std::env::var("GSK_RENDERER") {
         info!("Using GSK_RENDERER={} from environment", renderer);
+        if renderer == "vulkan" {
+            warn!("Note: Vulkan renderer may crash during window state changes. Set GSK_RENDERER=gl if you experience issues.");
+        }
     }
 
     // Handle --list option (list monitors and exit)

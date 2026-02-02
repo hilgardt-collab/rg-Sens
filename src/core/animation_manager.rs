@@ -4,13 +4,18 @@
 //! this module provides a single global timer that processes all registered animation callbacks.
 //! This reduces overhead from N timers to 1 timer, where N is the number of animated panels.
 //!
-//! The manager uses adaptive frame rate: 60fps when animations are active, ~10fps when idle.
-//! This dramatically reduces CPU usage when nothing is animating.
+//! The manager uses GTK's frame clock for synchronization with the display's refresh rate.
+//! This ensures queue_draw() calls happen at the right time in the rendering pipeline,
+//! avoiding issues with Vulkan swapchain synchronization.
+//!
+//! The manager uses adaptive frame rate: full frame rate when animations are active,
+//! ~4fps when idle to save CPU.
 
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::DrawingArea;
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crate::core::ANIMATION_FRAME_INTERVAL;
@@ -26,7 +31,7 @@ const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(1000);
 thread_local! {
     /// Thread-local animation manager. Since GTK operations must happen on the main thread,
     /// we use thread-local storage instead of a global static.
-    static ANIMATION_MANAGER: AnimationManager = const { AnimationManager::new() };
+    static ANIMATION_MANAGER: AnimationManager = AnimationManager::new();
 }
 
 /// Initialize the global animation manager. Call this once at startup.
@@ -121,17 +126,26 @@ struct AnimationManager {
     /// Count of consecutive frames with active redraws.
     /// Only sustained activity (2+ frames) keeps us out of idle mode.
     consecutive_active_frames: Cell<u32>,
+    /// Whether we're using frame clock tick callback
+    using_frame_clock: Cell<bool>,
+    /// Flag to signal the frame clock callback to stop
+    stop_frame_clock: Rc<Cell<bool>>,
+    /// Reference widget for frame clock (first registered widget that's still valid)
+    reference_widget: RefCell<Option<glib::WeakRef<DrawingArea>>>,
 }
 
 impl AnimationManager {
     /// Create a new animation manager.
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
             entries: RefCell::new(Vec::new()),
             timer_active: Cell::new(false),
             last_active_time: Cell::new(None),
             in_idle_mode: Cell::new(false),
             consecutive_active_frames: Cell::new(0),
+            using_frame_clock: Cell::new(false),
+            stop_frame_clock: Rc::new(Cell::new(false)),
+            reference_widget: RefCell::new(None),
         }
     }
 
@@ -140,6 +154,11 @@ impl AnimationManager {
     where
         F: Fn() -> bool + 'static,
     {
+        // If this is the first entry, use this widget as the reference for frame clock
+        if self.reference_widget.borrow().is_none() {
+            *self.reference_widget.borrow_mut() = Some(widget_weak.clone());
+        }
+
         self.entries.borrow_mut().push(AnimationEntry {
             widget_weak,
             tick_fn: Box::new(tick_fn),
@@ -163,8 +182,136 @@ impl AnimationManager {
         self.schedule_next_tick();
     }
 
+    /// Try to use frame clock tick callback for synchronization
+    fn try_use_frame_clock(&self) -> bool {
+        // Check if we already have a tick callback
+        if self.using_frame_clock.get() {
+            return true;
+        }
+
+        // Try to get a valid reference widget
+        let reference_widget = self.reference_widget.borrow();
+        let widget = match reference_widget.as_ref().and_then(|w| w.upgrade()) {
+            Some(w) if w.is_mapped() && w.root().is_some() => w,
+            _ => {
+                // Try to find a new reference widget from entries
+                drop(reference_widget);
+                if let Some(new_ref) = self.find_valid_reference_widget() {
+                    *self.reference_widget.borrow_mut() = Some(new_ref.downgrade());
+                    new_ref
+                } else {
+                    return false;
+                }
+            }
+        };
+
+        // Reset the stop flag
+        self.stop_frame_clock.set(false);
+        let stop_flag = self.stop_frame_clock.clone();
+
+        // Set up tick callback on the widget
+        // This synchronizes with GTK's frame clock (VSync)
+        widget.add_tick_callback(move |_widget, _frame_clock| {
+            // Check if we should stop
+            if stop_flag.get() {
+                return glib::ControlFlow::Break;
+            }
+
+            with_animation_manager(|manager| {
+                manager.process_frame_clock_tick();
+            });
+            glib::ControlFlow::Continue
+        });
+
+        self.using_frame_clock.set(true);
+        log::debug!("Animation manager: attached to frame clock");
+        true
+    }
+
+    /// Find a valid widget to use as reference for frame clock
+    fn find_valid_reference_widget(&self) -> Option<DrawingArea> {
+        let entries = self.entries.borrow();
+        for entry in entries.iter() {
+            if let Some(widget) = entry.widget_weak.upgrade() {
+                if widget.is_mapped() && widget.root().is_some() {
+                    return Some(widget);
+                }
+            }
+        }
+        None
+    }
+
+    /// Process tick from frame clock (synchronized with display refresh)
+    fn process_frame_clock_tick(&self) {
+        // In idle mode, skip most frames to save CPU
+        if self.in_idle_mode.get() {
+            static IDLE_SKIP_COUNTER: std::sync::atomic::AtomicU32 =
+                std::sync::atomic::AtomicU32::new(0);
+            let count = IDLE_SKIP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            // At 60fps, skip 14 out of 15 frames (~4fps effective rate)
+            if count % 15 != 0 {
+                return;
+            }
+        }
+
+        let any_active = self.tick();
+        let now = Instant::now();
+
+        // Track consecutive active frames
+        if any_active {
+            let consecutive = self.consecutive_active_frames.get() + 1;
+            self.consecutive_active_frames.set(consecutive);
+
+            if consecutive >= 2 {
+                self.last_active_time.set(Some(now));
+                if self.in_idle_mode.get() {
+                    self.in_idle_mode.set(false);
+                    log::debug!("Animation manager exiting idle mode (sustained animation detected)");
+                }
+            }
+        } else {
+            self.consecutive_active_frames.set(0);
+
+            // Switch to idle mode if no sustained activity
+            if let Some(last_active) = self.last_active_time.get() {
+                if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
+                    && !self.in_idle_mode.get()
+                {
+                    self.in_idle_mode.set(true);
+                    log::debug!(
+                        "Animation manager entering idle mode (no activity for {:?})",
+                        IDLE_TIME_THRESHOLD
+                    );
+                }
+            } else if !self.in_idle_mode.get() {
+                self.in_idle_mode.set(true);
+            }
+        }
+
+        // Check if we should stop
+        if self.entries.borrow().is_empty() {
+            self.stop_frame_clock();
+            self.timer_active.set(false);
+        }
+    }
+
+    /// Stop using frame clock
+    fn stop_frame_clock(&self) {
+        if self.using_frame_clock.get() {
+            // Signal the tick callback to stop on next invocation
+            self.stop_frame_clock.set(true);
+            self.using_frame_clock.set(false);
+        }
+    }
+
     /// Schedule the next tick with appropriate interval based on idle state.
     fn schedule_next_tick(&self) {
+        // Try to use frame clock first (synchronized with display)
+        if self.try_use_frame_clock() {
+            return; // Frame clock will handle ticks
+        }
+
+        // Fall back to timeout-based ticking if no widget available yet
         let interval = if self.in_idle_mode.get() {
             IDLE_FRAME_INTERVAL
         } else {
@@ -173,6 +320,11 @@ impl AnimationManager {
 
         glib::timeout_add_local_once(interval, move || {
             with_animation_manager(|manager| {
+                // Try again to attach to frame clock
+                if manager.try_use_frame_clock() {
+                    return;
+                }
+
                 let any_active = manager.tick();
                 let now = Instant::now();
 
@@ -188,7 +340,9 @@ impl AnimationManager {
                         manager.last_active_time.set(Some(now));
                         if manager.in_idle_mode.get() {
                             manager.in_idle_mode.set(false);
-                            log::debug!("Animation manager exiting idle mode (sustained animation detected)");
+                            log::debug!(
+                                "Animation manager exiting idle mode (sustained animation detected)"
+                            );
                         }
                     }
                 } else {
@@ -309,7 +463,9 @@ impl AnimationManager {
             "Animation manager shutdown: clearing {} entries",
             self.entries.borrow().len()
         );
+        self.stop_frame_clock();
         self.entries.borrow_mut().clear();
+        *self.reference_widget.borrow_mut() = None;
         // The timer will stop on next tick since entries is empty
     }
 }

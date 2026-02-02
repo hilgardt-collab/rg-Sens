@@ -395,29 +395,36 @@ impl TemplateBackend for WebKitBackend {
                                 // Cancel pending JS calls
                                 state.js_cancellable.cancel();
 
-                                // Destroy old WebView completely
-                                if let Some(ref old_webview) = state.webview {
-                                    // Remove from overlay first
-                                    state.overlay.set_child(None::<&Widget>);
-                                    destroy_webview(old_webview);
-                                }
-
-                                // Create fresh WebView
+                                // Create new WebView FIRST (before touching the old one)
                                 let new_webview = create_webview();
 
-                                // Load cached HTML into new WebView
+                                // Load cached HTML into new WebView before it's visible
                                 if let Some(ref html) = cached_html {
                                     new_webview.load_html(html, base_uri.as_deref());
                                 }
 
-                                // Put new WebView in overlay
-                                state.overlay.set_child(Some(&new_webview));
-                                // Re-add event layer on top
-                                state.overlay.add_overlay(&event_layer_clone);
+                                // Capture old webview for deferred destruction
+                                let old_webview = state.webview.take();
 
-                                // Update state
-                                state.webview = Some(new_webview);
+                                // Update state with new webview
+                                state.webview = Some(new_webview.clone());
                                 state.js_cancellable = gtk4::gio::Cancellable::new();
+
+                                // Defer the actual widget swap to an idle callback
+                                // This ensures we're not in the middle of a frame render
+                                let overlay = state.overlay.clone();
+                                let event_layer = event_layer_clone.clone();
+                                glib::idle_add_local_once(move || {
+                                    // Atomically swap: setting new child removes the old one
+                                    overlay.set_child(Some(&new_webview));
+                                    // Re-add event layer on top
+                                    overlay.add_overlay(&event_layer);
+
+                                    // Now destroy the old WebView (it's already detached)
+                                    if let Some(old_wv) = old_webview {
+                                        destroy_webview(&old_wv);
+                                    }
+                                });
 
                                 return glib::ControlFlow::Continue;
                             }
