@@ -177,10 +177,31 @@ impl AnimationManager {
         self.ensure_timer_running();
     }
 
+    /// Check if the reference widget is still valid (mapped with a root).
+    fn is_reference_widget_valid(&self) -> bool {
+        self.reference_widget
+            .borrow()
+            .as_ref()
+            .and_then(|w| w.upgrade())
+            .map(|w| w.is_mapped() && w.root().is_some())
+            .unwrap_or(false)
+    }
+
     /// Ensure the global animation timer is running.
     fn ensure_timer_running(&self) {
         if self.timer_active.get() {
-            return;
+            // If using frame clock, verify the reference widget is still alive.
+            // GTK silently removes tick callbacks when their widget is destroyed/unmapped,
+            // which leaves us thinking the frame clock is active when it's actually dead.
+            if self.using_frame_clock.get() && !self.is_reference_widget_valid() {
+                log::warn!(
+                    "Animation manager: frame clock reference widget lost, restarting tick mechanism"
+                );
+                self.stop_frame_clock();
+                // Fall through to restart
+            } else {
+                return;
+            }
         }
 
         self.timer_active.set(true);
@@ -191,7 +212,17 @@ impl AnimationManager {
     fn try_use_frame_clock(&self) -> bool {
         // Check if we already have a tick callback
         if self.using_frame_clock.get() {
-            return true;
+            // Verify the reference widget is still valid. If the widget was destroyed
+            // or unmapped, GTK silently removed the tick callback - we must re-attach.
+            if self.is_reference_widget_valid() {
+                return true;
+            }
+            log::warn!(
+                "Animation manager: reference widget invalid while frame clock claimed active, re-attaching"
+            );
+            self.using_frame_clock.set(false);
+            self.stop_frame_clock.set(true);
+            // Fall through to find a new widget and attach a new callback
         }
 
         // Try to get a valid reference widget
@@ -317,6 +348,17 @@ impl AnimationManager {
         if self.entries.borrow().is_empty() {
             self.stop_frame_clock();
             self.timer_active.set(false);
+        } else if !self.is_reference_widget_valid() {
+            // Entries still exist but the reference widget is gone (destroyed/orphaned).
+            // tick() may have removed the reference widget's entry while other entries remain.
+            // We're still inside the dying widget's callback, so we have one last chance to
+            // re-attach to a new widget's frame clock before GTK stops calling us.
+            log::warn!(
+                "Animation manager: reference widget lost while {} entries remain, re-attaching",
+                self.entries.borrow().len()
+            );
+            self.stop_frame_clock();
+            self.schedule_next_tick();
         }
     }
 
