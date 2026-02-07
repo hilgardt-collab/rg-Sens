@@ -471,7 +471,8 @@ impl UpdateManager {
         let mut panels = self.panels.write().await;
         let panel_count = panels.len();
         // Use Arc<str> for tasks to avoid cloning String for each task spawn
-        let mut tasks: Vec<(Arc<str>, tokio::task::JoinHandle<()>)> =
+        // Tasks return true if the panel update succeeded (lock acquired + update ran)
+        let mut tasks: Vec<(Arc<str>, tokio::task::JoinHandle<bool>)> =
             Vec::with_capacity(panel_count);
         // Use HashMap for O(1) lookup instead of Vec with O(n) linear search
         let mut config_updates: HashMap<String, (u64, Duration, Option<String>)> = HashMap::new();
@@ -578,12 +579,14 @@ impl UpdateManager {
                             if let Err(e) = panel_guard.update() {
                                 error!("Error updating panel {}: {}", panel_id_for_task, e);
                             }
+                            true // Lock acquired and update attempted
                         }
                         Err(_) => {
                             log::warn!(
                                 "Panel {} update skipped - lock timeout (GTK may be holding it)",
                                 panel_id_for_task
                             );
+                            false // Lock timeout - update was skipped
                         }
                     }
                 });
@@ -663,21 +666,22 @@ impl UpdateManager {
             }
         }
 
-        // Update last_update times
-        for (panel_id, _) in &tasks {
-            // Use &**panel_id to deref &Arc<str> to &str for HashMap lookup
-            if let Some(state) = panels.get_mut(&**panel_id) {
-                state.last_update = now;
-            }
-        }
-
         drop(panels);
 
         // Wait for all panel updates to complete with timeout
         // This prevents a hung source from blocking all updates indefinitely
+        // Collect IDs of panels that completed successfully for last_update tracking
+        let mut successful_panels: Vec<Arc<str>> = Vec::with_capacity(tasks.len());
         for (panel_id, task) in tasks {
             match tokio::time::timeout(PANEL_UPDATE_TIMEOUT, task).await {
-                Ok(Ok(())) => {}
+                Ok(Ok(true)) => {
+                    // Task completed and lock was acquired - mark as successful
+                    successful_panels.push(panel_id);
+                }
+                Ok(Ok(false)) => {
+                    // Task completed but lock timed out - don't update last_update
+                    // so the panel will be retried on the next cycle
+                }
                 Ok(Err(e)) => {
                     error!("Panel update task failed for {}: {}", panel_id, e);
                 }
@@ -688,6 +692,18 @@ impl UpdateManager {
                          Consider checking system logs for driver issues.",
                         panel_id, PANEL_UPDATE_TIMEOUT
                     );
+                }
+            }
+        }
+
+        // Only update last_update for panels whose tasks succeeded.
+        // This ensures panels that were skipped due to lock timeout or task failure
+        // will be retried on the next cycle instead of waiting a full interval.
+        if !successful_panels.is_empty() {
+            let mut panels = self.panels.write().await;
+            for panel_id in &successful_panels {
+                if let Some(state) = panels.get_mut(&**panel_id) {
+                    state.last_update = now;
                 }
             }
         }
@@ -747,35 +763,64 @@ impl UpdateManager {
                 trace!("Retrying source {} (circuit breaker half-open)", key);
             }
 
-            // Measure update time to detect slow/hung sources
+            // Wrap the blocking update_source call in spawn_blocking + timeout.
+            // This prevents a hung source (e.g., blocked GPU driver, sensor timeout)
+            // from stalling the entire update loop.
+            let manager_clone = manager.clone();
+            let key_clone = key.clone();
             let update_start = Instant::now();
-            let result = manager.update_source(&key);
+
+            let update_result = tokio::time::timeout(
+                SOURCE_UPDATE_CRITICAL_THRESHOLD,
+                tokio::task::spawn_blocking(move || manager_clone.update_source(&key_clone)),
+            )
+            .await;
+
             let update_duration = update_start.elapsed();
 
-            // Log warnings for slow updates (helps diagnose performance issues)
-            if update_duration >= SOURCE_UPDATE_CRITICAL_THRESHOLD {
-                error!(
-                    "Shared source {} update took {:?} (critical threshold: {:?}). \
-                     This may indicate a hung GPU driver, unresponsive sensor, or hardware issue.",
-                    key, update_duration, SOURCE_UPDATE_CRITICAL_THRESHOLD
-                );
-            } else if update_duration >= SOURCE_UPDATE_WARN_THRESHOLD {
-                warn!(
-                    "Shared source {} update took {:?} (warning threshold: {:?})",
-                    key, update_duration, SOURCE_UPDATE_WARN_THRESHOLD
-                );
-            }
+            // Process the nested Result<Result<Result<...>>> from timeout + spawn_blocking + update_source
+            let result: Result<(), String> = match update_result {
+                Ok(Ok(inner_result)) => {
+                    // spawn_blocking completed within timeout
+                    // Log warnings for slow (but not timed-out) updates
+                    if update_duration >= SOURCE_UPDATE_WARN_THRESHOLD {
+                        warn!(
+                            "Shared source {} update took {:?} (warning threshold: {:?})",
+                            key, update_duration, SOURCE_UPDATE_WARN_THRESHOLD
+                        );
+                    }
+                    match inner_result {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(e.to_string()),
+                    }
+                }
+                Ok(Err(join_err)) => {
+                    // spawn_blocking task panicked
+                    Err(format!("Source update task panicked: {}", join_err))
+                }
+                Err(_) => {
+                    // Timeout - source is hung on I/O
+                    error!(
+                        "Shared source {} update TIMED OUT after {:?}. \
+                         This may indicate a hung GPU driver, unresponsive sensor, or hardware issue.",
+                        key, SOURCE_UPDATE_CRITICAL_THRESHOLD
+                    );
+                    Err(format!(
+                        "Source update timed out after {:?}",
+                        SOURCE_UPDATE_CRITICAL_THRESHOLD
+                    ))
+                }
+            };
 
             let new_interval = manager.get_interval(&key);
 
             match &result {
-                Ok(_) => {
+                Ok(()) => {
                     trace!("Updated shared source {}", key);
                     updated.insert(key.clone());
                     update_results.push((key, Ok(()), new_interval, is_half_open));
                 }
-                Err(e) => {
-                    let err_str = e.to_string();
+                Err(err_str) => {
                     if err_str.contains("Source not found") {
                         debug!(
                             "Shared source {} no longer exists, removing from update tracking",
@@ -783,11 +828,11 @@ impl UpdateManager {
                         );
                     } else if !is_half_open {
                         // Only log errors for non-retry attempts to reduce log spam
-                        error!("Error updating shared source {}: {}", key, e);
+                        error!("Error updating shared source {}: {}", key, err_str);
                     } else {
-                        debug!("Retry failed for shared source {}: {}", key, e);
+                        debug!("Retry failed for shared source {}: {}", key, err_str);
                     }
-                    update_results.push((key, Err(err_str), None, is_half_open));
+                    update_results.push((key, Err(err_str.clone()), None, is_half_open));
                 }
             }
         }

@@ -130,6 +130,10 @@ struct AnimationManager {
     using_frame_clock: Cell<bool>,
     /// Flag to signal the frame clock callback to stop
     stop_frame_clock: Rc<Cell<bool>>,
+    /// Generation counter for frame clock callbacks.
+    /// Incremented each time a new callback is registered. Old callbacks detect
+    /// a generation mismatch and return Break, preventing callback accumulation.
+    frame_clock_generation: Rc<Cell<u64>>,
     /// Reference widget for frame clock (first registered widget that's still valid)
     reference_widget: RefCell<Option<glib::WeakRef<DrawingArea>>>,
 }
@@ -145,6 +149,7 @@ impl AnimationManager {
             consecutive_active_frames: Cell::new(0),
             using_frame_clock: Cell::new(false),
             stop_frame_clock: Rc::new(Cell::new(false)),
+            frame_clock_generation: Rc::new(Cell::new(0)),
             reference_widget: RefCell::new(None),
         }
     }
@@ -205,15 +210,35 @@ impl AnimationManager {
             }
         };
 
-        // Reset the stop flag
+        // Reset the stop flag and increment generation counter.
+        // The generation counter prevents callback accumulation: if a new callback
+        // is registered before the old one checks the stop flag, the old callback
+        // will detect the generation mismatch and return Break.
         self.stop_frame_clock.set(false);
         let stop_flag = self.stop_frame_clock.clone();
+
+        let new_generation = self.frame_clock_generation.get() + 1;
+        self.frame_clock_generation.set(new_generation);
+        let generation = self.frame_clock_generation.clone();
+        let my_generation = new_generation;
 
         // Set up tick callback on the widget
         // This synchronizes with GTK's frame clock (VSync)
         widget.add_tick_callback(move |_widget, _frame_clock| {
             // Check if we should stop
             if stop_flag.get() {
+                return glib::ControlFlow::Break;
+            }
+
+            // Check if this callback is stale (a newer one has been registered).
+            // This prevents the race where: old callback sets stop_flag=true,
+            // new registration resets stop_flag=false, old callback never dies.
+            if generation.get() != my_generation {
+                log::debug!(
+                    "Animation manager: removing stale frame clock callback (gen {} vs current {})",
+                    my_generation,
+                    generation.get()
+                );
                 return glib::ControlFlow::Break;
             }
 
