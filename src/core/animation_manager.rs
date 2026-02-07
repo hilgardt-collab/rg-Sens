@@ -385,7 +385,10 @@ impl AnimationManager {
             ANIMATION_FRAME_INTERVAL
         };
 
-        glib::timeout_add_local_once(interval, move || {
+        // Use DEFAULT_IDLE priority so user input events (mouse, keyboard) are always
+        // processed before animation ticks. This prevents animations from starving the
+        // event loop and keeps the UI responsive during user interaction.
+        glib::source::timeout_add_local_full(interval, glib::Priority::DEFAULT_IDLE, move || {
             with_animation_manager(|manager| {
                 // Try again to attach to frame clock
                 if manager.try_use_frame_clock() {
@@ -441,6 +444,8 @@ impl AnimationManager {
                     manager.timer_active.set(false);
                 }
             });
+            // Fire once, then re-schedule via schedule_next_tick() above
+            glib::ControlFlow::Break
         });
     }
 

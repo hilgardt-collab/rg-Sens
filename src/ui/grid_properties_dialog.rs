@@ -1825,6 +1825,7 @@ pub(crate) fn show_panel_properties_dialog(
                 let synthwave_w = synthwave_widget_clone.clone();
                 let art_deco_w = art_deco_widget_clone.clone();
                 let art_nouveau_w = art_nouveau_widget_clone.clone();
+                let steampunk_w = steampunk_config_widget.clone();
                 let css_template_w = css_template_config_widget.clone();
 
                 widget.set_on_fields_updated(move |fields| {
@@ -1837,16 +1838,9 @@ pub(crate) fn show_panel_properties_dialog(
                     };
                     let summaries = combo_widget.get_source_summaries();
 
-                    // Get displayer ID with read lock (non-blocking)
-                    let displayer_id = match panel_for_fields.try_read() {
-                        Ok(panel_guard) => panel_guard.displayer.id().to_string(),
-                        Err(_) => {
-                            log::debug!(
-                                "on_fields_updated: couldn't get read lock on panel, skipping"
-                            );
-                            return;
-                        }
-                    };
+                    // Get displayer ID - use blocking_read since this is a one-time callback
+                    // when fields are computed, not a hot path
+                    let displayer_id = panel_for_fields.blocking_read().displayer.id().to_string();
 
                     log::debug!(
                         "on_fields_updated: updating '{}' with {} fields, {} summaries",
@@ -1908,6 +1902,12 @@ pub(crate) fn show_panel_properties_dialog(
                         }
                         "art_nouveau" => {
                             if let Some(ref widget) = *art_nouveau_w.borrow() {
+                                widget.set_available_fields(fields);
+                                widget.set_source_summaries(summaries);
+                            }
+                        }
+                        "steampunk" => {
+                            if let Some(ref widget) = *steampunk_w.borrow() {
                                 widget.set_available_fields(fields);
                                 widget.set_source_summaries(summaries);
                             }

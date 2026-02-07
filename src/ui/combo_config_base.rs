@@ -1495,7 +1495,7 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
     let content_cleanup_callbacks_clone = content_cleanup_callbacks.clone();
 
-    glib::idle_add_local(move || {
+    glib::source::idle_add_local_full(glib::Priority::DEFAULT_IDLE, move || {
         // Check if this build has been superseded
         if CONTENT_REBUILD_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation {
             return glib::ControlFlow::Break;

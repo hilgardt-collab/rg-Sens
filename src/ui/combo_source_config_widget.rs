@@ -641,7 +641,7 @@ impl ComboSourceConfigWidget {
         let is_first = Rc::new(Cell::new(true));
         let generation_ref = rebuild_generation.clone();
 
-        glib::idle_add_local(move || {
+        glib::source::idle_add_local_full(glib::Priority::DEFAULT_IDLE, move || {
             // Check if this operation has been superseded by a newer rebuild
             if generation_ref.get() != current_generation {
                 return glib::ControlFlow::Break;
@@ -907,7 +907,7 @@ impl ComboSourceConfigWidget {
         let is_first = Rc::new(Cell::new(true));
         let generation_ref = rebuild_generation.clone();
 
-        glib::idle_add_local(move || {
+        glib::source::idle_add_local_full(glib::Priority::DEFAULT_IDLE, move || {
             // Check if this operation has been superseded by a newer rebuild
             if generation_ref.get() != current_generation {
                 return glib::ControlFlow::Break;
