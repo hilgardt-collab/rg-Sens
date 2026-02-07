@@ -2034,8 +2034,12 @@ impl GridLayout {
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        // Read original panel data using try_read to avoid blocking tokio update thread
-                        let panel_data_result = original_panel.try_read().map(|panel_guard| {
+                        // Read original panel data using blocking_read since copy is a
+                        // one-time user action (not a hot path like drag_update).
+                        // try_read() would silently skip the copy if the update manager
+                        // briefly holds the write lock during a panel update cycle.
+                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
+                            let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
                                 panel_guard.displayer.id().to_string(),
@@ -2051,13 +2055,6 @@ impl GridLayout {
                                 panel_guard.ignore_collision,
                                 panel_guard.data.clone(),
                             )
-                        });
-                        let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = match panel_data_result {
-                            Ok(data) => data,
-                            Err(_) => {
-                                log::debug!("Skipping panel copy for {} - lock unavailable", old_id);
-                                continue;
-                            }
                         };
 
                         // Generate unique ID for the copy
@@ -2095,8 +2092,9 @@ impl GridLayout {
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
 
-                                // Apply the copied configuration using try_write (should always succeed for new panel)
-                                if let Ok(mut new_panel_guard) = new_panel.try_write() {
+                                // Apply the copied configuration
+                                {
+                                    let mut new_panel_guard = new_panel.blocking_write();
                                     let _ = new_panel_guard.apply_config(config);
                                 }
 
@@ -2130,13 +2128,10 @@ impl GridLayout {
                                     + (geometry_size.1 as i32 - 1) * config_read.spacing;
                                 drop(config_read);
 
-                                // Create displayer widget using try_read (should always succeed for new panel)
-                                let widget = match new_panel.try_read() {
-                                    Ok(panel_guard) => panel_guard.displayer.create_widget(),
-                                    Err(_) => {
-                                        log::warn!("Failed to acquire read lock for new panel widget creation");
-                                        continue;
-                                    }
+                                // Create displayer widget
+                                let widget = {
+                                    let panel_guard = new_panel.blocking_read();
+                                    panel_guard.displayer.create_widget()
                                 };
                                 widget.set_size_request(width, height);
 
@@ -2877,8 +2872,10 @@ impl GridLayout {
                                                     let original_panel = state.panel.clone();
                                                     drop(panel_states_read);
 
-                                                    // Read original panel configuration using try_read to avoid blocking tokio update thread
-                                                    let panel_data_result = original_panel.try_read().map(|panel_guard| {
+                                                    // Read original panel configuration using blocking_read since
+                                                    // copy is a one-time user action (not a hot path)
+                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = {
+                                                        let panel_guard = original_panel.blocking_read();
                                                         (
                                                             panel_guard.source.metadata().clone(),
                                                             panel_guard.displayer.id().to_string(),
@@ -2894,13 +2891,6 @@ impl GridLayout {
                                                             panel_guard.ignore_collision,
                                                             panel_guard.data.clone(),
                                                         )
-                                                    });
-                                                    let (source_meta, displayer_id, config, background, corner_radius, border, geometry_size, scale, translate_x, translate_y, z_index, ignore_collision, panel_data) = match panel_data_result {
-                                                        Ok(data) => data,
-                                                        Err(_) => {
-                                                            log::debug!("Skipping panel copy for {} - lock unavailable", old_id);
-                                                            continue;
-                                                        }
                                                     };
 
                                                     // Generate unique ID for the new copy
@@ -2938,8 +2928,9 @@ impl GridLayout {
 
                                                             let new_panel = Arc::new(RwLock::new(new_panel));
 
-                                                            // Apply configuration using try_write (should always succeed for new panel)
-                                                            if let Ok(mut panel_guard) = new_panel.try_write() {
+                                                            // Apply configuration
+                                                            {
+                                                                let mut panel_guard = new_panel.blocking_write();
                                                                 let _ = panel_guard.apply_config(config);
                                                             }
 
@@ -2967,13 +2958,10 @@ impl GridLayout {
                                                                 + (geometry_size.1 as i32 - 1) * config_read.spacing;
                                                             drop(config_read);
 
-                                                            // Create displayer widget using try_read (should always succeed for new panel)
-                                                            let widget = match new_panel.try_read() {
-                                                                Ok(panel_guard) => panel_guard.displayer.create_widget(),
-                                                                Err(_) => {
-                                                                    log::warn!("Failed to acquire read lock for nested copy panel widget creation");
-                                                                    continue;
-                                                                }
+                                                            // Create displayer widget
+                                                            let widget = {
+                                                                let panel_guard = new_panel.blocking_read();
+                                                                panel_guard.displayer.create_widget()
                                                             };
                                                             widget.set_size_request(width, height);
 
@@ -4138,8 +4126,24 @@ fn setup_copied_panel_interaction(
                         let original_panel = state.panel.clone();
                         drop(panel_states_read);
 
-                        // Read original panel configuration using try_read to avoid blocking tokio update thread
-                        let panel_data_result = original_panel.try_read().map(|panel_guard| {
+                        // Read original panel configuration using blocking_read since
+                        // copy is a one-time user action (not a hot path)
+                        let (
+                            source_meta,
+                            displayer_id,
+                            panel_config,
+                            background,
+                            corner_radius,
+                            border,
+                            geometry_size,
+                            scale,
+                            translate_x,
+                            translate_y,
+                            z_index,
+                            ignore_collision,
+                            panel_data,
+                        ) = {
+                            let panel_guard = original_panel.blocking_read();
                             (
                                 panel_guard.source.metadata().clone(),
                                 panel_guard.displayer.id().to_string(),
@@ -4155,27 +4159,6 @@ fn setup_copied_panel_interaction(
                                 panel_guard.ignore_collision,
                                 panel_guard.data.clone(),
                             )
-                        });
-                        let (
-                            source_meta,
-                            displayer_id,
-                            panel_config,
-                            background,
-                            corner_radius,
-                            border,
-                            geometry_size,
-                            scale,
-                            translate_x,
-                            translate_y,
-                            z_index,
-                            ignore_collision,
-                            panel_data,
-                        ) = match panel_data_result {
-                            Ok(data) => data,
-                            Err(_) => {
-                                log::debug!("Skipping panel copy for {} - lock unavailable", old_id);
-                                continue;
-                            }
                         };
 
                         let new_id = format!("panel_{}", uuid::Uuid::new_v4());
@@ -4204,8 +4187,9 @@ fn setup_copied_panel_interaction(
                                 new_panel.data = panel_data;
 
                                 let new_panel = Arc::new(RwLock::new(new_panel));
-                                // Apply config using try_write (should always succeed for new panel)
-                                if let Ok(mut panel_guard) = new_panel.try_write() {
+                                // Apply configuration
+                                {
+                                    let mut panel_guard = new_panel.blocking_write();
                                     let _ = panel_guard.apply_config(panel_config);
                                 }
 
@@ -4236,13 +4220,10 @@ fn setup_copied_panel_interaction(
                                     + (geometry_size.1 as i32 - 1) * cfg.spacing;
                                 drop(cfg);
 
-                                // Create widget using try_read (should always succeed for new panel)
-                                let new_widget = match new_panel.try_read() {
-                                    Ok(panel_guard) => panel_guard.displayer.create_widget(),
-                                    Err(_) => {
-                                        log::warn!("Failed to acquire read lock for new panel widget creation");
-                                        continue;
-                                    }
+                                // Create displayer widget
+                                let new_widget = {
+                                    let panel_guard = new_panel.blocking_read();
+                                    panel_guard.displayer.create_widget()
                                 };
                                 new_widget.set_size_request(width, height);
 
