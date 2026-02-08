@@ -1362,7 +1362,10 @@ impl GridLayout {
         let popover_weak = popover.downgrade();
         widget.connect_destroy(move |_| {
             if let Some(p) = popover_weak.upgrade() {
-                p.unparent();
+                // Defer unparent to avoid re-entrancy during widget teardown
+                gtk4::glib::idle_add_local_once(move || {
+                    p.unparent();
+                });
             }
         });
 
@@ -2597,7 +2600,10 @@ impl GridLayout {
                                 let popover_weak = popover.downgrade();
                                 frame_for_menu.connect_destroy(move |_| {
                                     if let Some(p) = popover_weak.upgrade() {
-                                        p.unparent();
+                                        // Defer unparent to avoid re-entrancy during widget teardown
+                                        gtk4::glib::idle_add_local_once(move || {
+                                            p.unparent();
+                                        });
                                     }
                                 });
 
@@ -3836,7 +3842,10 @@ fn setup_copied_panel_interaction(
     let popover_weak = popover.downgrade();
     widget.connect_destroy(move |_| {
         if let Some(p) = popover_weak.upgrade() {
-            p.unparent();
+            // Defer unparent to avoid re-entrancy during widget teardown
+            gtk4::glib::idle_add_local_once(move || {
+                p.unparent();
+            });
         }
     });
 

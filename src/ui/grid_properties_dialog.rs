@@ -100,27 +100,11 @@ pub(crate) fn show_panel_properties_dialog(
     }
 
     // No cached dialog - create new one
-    // Try to acquire read lock with retries (avoid blocking GTK main thread indefinitely)
-    let panel_guard = {
-        let mut guard = None;
-        for attempt in 0..100 {
-            // 100 attempts * 10ms = 1s max wait
-            if let Ok(g) = panel.try_read() {
-                guard = Some(g);
-                break;
-            }
-            if attempt < 99 {
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-        }
-        match guard {
-            Some(g) => g,
-            None => {
-                log::error!("Could not acquire panel lock after 1s - dialog cannot open");
-                return; // Cannot proceed without panel access
-            }
-        }
-    };
+    // Use blocking_read() to wait for the lock. This blocks the GTK main thread
+    // but only for the brief duration that the update manager holds a write lock
+    // (typically < 1ms). The previous try_read() + sleep(10ms) loop was worse:
+    // it blocked the main thread for up to 1 second, freezing all event processing.
+    let panel_guard = panel.blocking_read();
 
     let old_geometry = Rc::new(RefCell::new(panel_guard.geometry));
     let old_source_id = panel_guard.source.metadata().id.clone();
