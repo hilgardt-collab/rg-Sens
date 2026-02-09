@@ -37,9 +37,11 @@ coverage/
 debug.log
 
 # AUR packaging
+/aur/
 /aur-repo-git/
-/aur/pkg/
-/aur/*.pkg.tar.zst
+
+# Scripts
+/scripts/
 
 # Flatpak packaging
 /flatpak/
