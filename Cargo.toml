@@ -1,6 +1,6 @@
 [package]
 name = "rg-sens"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2021"
 authors = ["rg-Sens Contributors"]
 description = "A fast, customizable system monitoring dashboard for Linux"

@@ -222,6 +222,9 @@ pub fn cleanup_common_fields_with_content(
     theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     content_cleanup_callbacks: &Rc<RefCell<Vec<CleanupCallback>>>,
 ) {
+    // Cancel any orphaned idle sources from rebuild_content_tabs so they
+    // don't keep creating widgets for a destroyed dialog.
+    cancel_pending_content_rebuilds();
     *on_change.borrow_mut() = None;
     theme_ref_refreshers.borrow_mut().clear();
     // Call all cleanup callbacks to break Lazy widget reference cycles
@@ -1332,6 +1335,13 @@ where
 /// Generation counter for canceling stale content tab rebuilds
 static CONTENT_REBUILD_GENERATION: std::sync::atomic::AtomicU32 =
     std::sync::atomic::AtomicU32::new(0);
+
+/// Cancel any pending incremental content tab rebuilds.
+/// Called during widget cleanup to prevent orphaned idle sources from
+/// continuing to create widgets after the dialog is destroyed.
+pub fn cancel_pending_content_rebuilds() {
+    CONTENT_REBUILD_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
 
 /// Rebuild the content tabs based on source summaries.
 /// This function builds tabs incrementally to avoid freezing the UI.

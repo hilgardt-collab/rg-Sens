@@ -345,22 +345,26 @@ gtk4::glib::MainContext::default().spawn_local(async move {
 
 ### Animation in Displayers
 
-For animated visualizations (like the arc gauge), use `glib::timeout_add_local` for periodic updates:
+All animations go through the global `AnimationManager` (`src/core/animation_manager.rs`). Register via `register_animation()`:
 
 ```rust
-glib::timeout_add_local(std::time::Duration::from_millis(16), {
-    let data_clone = self.data.clone();
-    let drawing_area = drawing_area.clone();
-    move || {
-        if let Ok(mut data) = data_clone.lock() {
-            // Update animated values
-            data.animated_value = lerp(data.animated_value, data.target_value, delta);
-        }
-        drawing_area.queue_draw();
-        glib::ControlFlow::Continue
+use crate::core::register_animation;
+
+register_animation(drawing_area.downgrade(), move || {
+    if let Ok(mut data) = data_for_animation.try_lock() {
+        // Animation logic (lerp, etc.)
+        needs_redraw  // return true if widget needs redraw
+    } else {
+        false  // Lock contended, skip this frame
     }
 });
 ```
+
+**Key design:**
+- Uses GTK frame clock (`add_tick_callback`) for VSync-synchronized animation
+- Falls back to `timeout_add_local_full` with `Priority::DEFAULT_IDLE` (user input takes priority)
+- Generation counter prevents callback accumulation when widgets are destroyed/recreated
+- Adaptive frame rate: 60fps when animating, ~4fps when idle
 
 ## Performance Considerations
 
@@ -384,6 +388,11 @@ glib::timeout_add_local(std::time::Duration::from_millis(16), {
 10. **AMD GPU support:** Uses sysfs files (`/sys/class/drm/card*/device/*`) - may require permissions on some systems
 11. **Signal handler memory leaks:** GTK signal handlers (like `connect_map`) that capture container clones create reference cycles. Store the `SignalHandlerId` and call `container.disconnect(handler_id)` during cleanup to break the cycle
 12. **RefCell + GTK signals:** Never call `dialog.close()` or similar GTK methods while holding a `borrow_mut()` on a RefCell - the resulting signal handlers may try to borrow the same RefCell, causing a panic. Extract the value first, release the borrow, then call the GTK method
+13. **NEVER use `std::thread::sleep` on the GTK main thread** — freezes all event processing (context menus, auto-hide, drawing). Use `blocking_read()` instead of `try_read()` + `sleep()` loops; it returns as soon as the lock is released (~1ms vs 10ms fixed intervals)
+14. **Lock strategy for `tokio::sync::RwLock`:** Use `try_read()`/`try_lock()` only for hot paths (60fps animation ticks, draw functions). Use `blocking_read()` for one-time user actions (dialog open, save, copy, context menu). Never silently skip user-initiated operations via `try_read()` + `continue`
+15. **Combo displayer registration:** When adding a new combo displayer, add it to the `on_fields_updated` match in `grid_properties_dialog.rs` — otherwise content properties won't receive field metadata
+16. **Popover cleanup:** Defer `popover.unparent()` in `connect_destroy` handlers via `gtk4::glib::idle_add_local_once` to avoid re-entrancy during widget teardown
+17. **Animation priority:** Use `glib::Priority::DEFAULT_IDLE` for animation timers and incremental widget building (`idle_add_local_full`) so user input events are always processed first
 
 ## GPU Support
 

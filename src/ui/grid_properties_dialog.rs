@@ -1788,7 +1788,6 @@ pub(crate) fn show_panel_properties_dialog(
         let art_deco_widget_clone = art_deco_config_widget.clone();
         let art_nouveau_widget_clone = art_nouveau_config_widget.clone();
         let combo_widget_for_lcars = combo_config_widget.clone();
-        let panel_for_combo_change = panel.clone();
 
         // Only set up callbacks if the widget exists (lazy init)
         if let Some(ref widget) = *combo_config_widget.borrow() {
@@ -1799,7 +1798,8 @@ pub(crate) fn show_panel_properties_dialog(
             // This is called asynchronously after fields are computed in background.
             {
                 let combo_widget_weak_fields = Rc::downgrade(&combo_widget_for_lcars);
-                let panel_for_fields = panel_for_combo_change.clone();
+                let displayers_for_fields = displayers.clone();
+                let displayer_combo_for_fields = displayer_combo.clone();
                 let lcars_w = lcars_widget_clone.clone();
                 let cyberpunk_w = cyberpunk_widget_clone.clone();
                 let material_w = material_widget_clone.clone();
@@ -1822,9 +1822,14 @@ pub(crate) fn show_panel_properties_dialog(
                     };
                     let summaries = combo_widget.get_source_summaries();
 
-                    // Get displayer ID - use blocking_read since this is a one-time callback
-                    // when fields are computed, not a hot path
-                    let displayer_id = panel_for_fields.blocking_read().displayer.id().to_string();
+                    // Get displayer ID from the dropdown widget directly — avoids
+                    // blocking_read() on the GTK main thread which can disrupt event
+                    // processing and break the auto-hide header after repeated dialog opens.
+                    let displayer_id = displayers_for_fields
+                        .borrow()
+                        .get(displayer_combo_for_fields.selected() as usize)
+                        .cloned()
+                        .unwrap_or_default();
 
                     log::debug!(
                         "on_fields_updated: updating '{}' with {} fields, {} summaries",
@@ -4815,7 +4820,12 @@ pub(crate) fn show_panel_properties_dialog(
     let arc_widget_for_cleanup = arc_config_widget.clone();
     let speedometer_widget_for_cleanup = speedometer_config_widget.clone();
     let graph_widget_for_cleanup = graph_config_widget.clone();
-    dialog.connect_close_request(move |_| {
+    dialog.connect_close_request(move |dialog| {
+        // Explicitly clear transient_for to break the parent-child window
+        // relationship before destruction.  Prevents stale transient state
+        // from accumulating across repeated dialog open/close cycles.
+        dialog.set_transient_for(gtk4::Window::NONE);
+
         // Remove from per-panel cache using try_borrow_mut to avoid panic if already borrowed
         CACHED_PANEL_DIALOGS.with(|dialogs| {
             if let Ok(mut map) = dialogs.try_borrow_mut() {

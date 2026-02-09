@@ -1566,6 +1566,10 @@ impl ComboSourceConfigWidget {
         self.fields_debounce_id
             .set(self.fields_debounce_id.get().wrapping_add(1));
 
+        // Clear the on_fields_updated callback to prevent stale execution
+        // if a debounced timer fires after cleanup
+        *self.on_fields_updated.borrow_mut() = None;
+
         // Disconnect all map signal handlers to break reference cycles
         // This is critical for preventing memory leaks - the connect_map closures
         // capture Rc references that would otherwise keep the widget alive indefinitely
