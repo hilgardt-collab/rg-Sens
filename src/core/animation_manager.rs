@@ -156,6 +156,10 @@ struct AnimationManager {
     last_tick_time: Cell<Option<Instant>>,
     /// Whether the watchdog timer has been started.
     watchdog_active: Cell<bool>,
+    /// Cooldown: avoid frame clock until this time (after watchdog recovery).
+    /// When the watchdog restarts the tick mechanism, the frame clock may still be dead.
+    /// We use timeout-based ticking until the cooldown expires, then try frame clock again.
+    frame_clock_cooldown_until: Cell<Option<Instant>>,
 }
 
 impl AnimationManager {
@@ -172,6 +176,7 @@ impl AnimationManager {
             reference_widget: RefCell::new(None),
             last_tick_time: Cell::new(None),
             watchdog_active: Cell::new(false),
+            frame_clock_cooldown_until: Cell::new(None),
         }
     }
 
@@ -231,6 +236,16 @@ impl AnimationManager {
 
     /// Try to use frame clock tick callback for synchronization
     fn try_use_frame_clock(&self) -> bool {
+        // Respect cooldown after watchdog recovery - frame clock may still be dead
+        if let Some(cooldown_until) = self.frame_clock_cooldown_until.get() {
+            if Instant::now() < cooldown_until {
+                return false;
+            }
+            // Cooldown expired, clear it and try frame clock
+            self.frame_clock_cooldown_until.set(None);
+            log::debug!("Animation manager: frame clock cooldown expired, re-attempting");
+        }
+
         // Check if we already have a tick callback
         if self.using_frame_clock.get() {
             // Verify the reference widget is still valid. If the widget was destroyed
@@ -549,6 +564,7 @@ impl AnimationManager {
         self.entries.borrow_mut().clear();
         *self.reference_widget.borrow_mut() = None;
         self.last_tick_time.set(None);
+        self.frame_clock_cooldown_until.set(None);
         // The timer will stop on next tick since entries is empty
     }
 
@@ -607,9 +623,55 @@ impl AnimationManager {
             *self.reference_widget.borrow_mut() = Some(new_ref.downgrade());
         }
 
-        // Restart
-        self.ensure_timer_running();
-        log::info!("Animation watchdog: tick mechanism restarted successfully");
+        // Force timeout-based fallback instead of trying frame clock immediately.
+        // The frame clock may be dead (system suspend, compositor throttling, Wayland
+        // not sending frame events), and re-attaching immediately would just stall again.
+        // Set a cooldown so schedule_next_tick() also avoids the frame clock for a while.
+        self.frame_clock_cooldown_until
+            .set(Some(Instant::now() + WATCHDOG_STALE_THRESHOLD));
+        self.timer_active.set(true);
+        self.schedule_timeout_tick();
+        log::info!("Animation watchdog: tick mechanism restarted via timeout fallback");
+    }
+
+    /// Schedule a single timeout-based tick, bypassing frame clock.
+    /// Used by the watchdog recovery path to ensure at least one tick runs reliably.
+    fn schedule_timeout_tick(&self) {
+        let interval = if self.in_idle_mode.get() {
+            IDLE_FRAME_INTERVAL
+        } else {
+            ANIMATION_FRAME_INTERVAL
+        };
+
+        glib::source::timeout_add_local_full(interval, glib::Priority::DEFAULT_IDLE, move || {
+            with_animation_manager(|manager| {
+                let any_active = manager.tick();
+                let now = Instant::now();
+
+                if any_active {
+                    manager.last_active_time.set(Some(now));
+                    if manager.in_idle_mode.get() {
+                        manager.in_idle_mode.set(false);
+                    }
+                } else if let Some(last_active) = manager.last_active_time.get() {
+                    if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
+                        && !manager.in_idle_mode.get()
+                    {
+                        manager.in_idle_mode.set(true);
+                    }
+                } else if !manager.in_idle_mode.get() {
+                    manager.in_idle_mode.set(true);
+                }
+
+                // Re-schedule: now try frame clock again for subsequent ticks
+                if !manager.entries.borrow().is_empty() {
+                    manager.schedule_next_tick();
+                } else {
+                    manager.timer_active.set(false);
+                }
+            });
+            glib::ControlFlow::Break
+        });
     }
 
     /// Check if the tick mechanism appears stalled.
