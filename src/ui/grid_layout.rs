@@ -3295,6 +3295,11 @@ impl GridLayout {
 
             // Remove from states and container
             if let Some(state) = self.panel_states.borrow_mut().remove(panel_id) {
+                // Unparent popover BEFORE removing frame to avoid GTK finalization crash
+                if let Some(popover) = &state.context_popover {
+                    popover.unparent();
+                }
+
                 // Clean up event controllers and action groups to prevent memory leaks
                 cleanup_widget_controllers(&state.widget);
                 cleanup_widget_controllers(&state.frame);
@@ -4495,6 +4500,11 @@ pub(crate) fn delete_selected_panels(
 
         // Remove from panel states and UI
         if let Some(state) = panel_states.borrow_mut().remove(panel_id) {
+            // Unparent popover BEFORE removing frame to avoid GTK finalization crash
+            if let Some(popover) = &state.context_popover {
+                popover.unparent();
+            }
+
             // Clean up event controllers and action groups to prevent memory leaks
             cleanup_widget_controllers(&state.widget);
             cleanup_widget_controllers(&state.frame);

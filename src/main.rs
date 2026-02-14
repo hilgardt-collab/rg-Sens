@@ -1317,6 +1317,15 @@ fn build_ui(app: &Application) {
             );
         }
 
+        // Check if animation tick mechanism has stalled
+        if let Some(stall_duration) = rg_sens::core::check_animation_stall() {
+            error!(
+                "ANIMATION TICK STALLED! No tick for {:.1}s. \
+                 Watchdog should auto-recover. If panels remain frozen, this indicates a deeper issue.",
+                stall_duration.as_secs_f64()
+            );
+        }
+
         // Also log animation manager status for correlation
         let anim_count = rg_sens::core::animation_entry_count();
         info!(

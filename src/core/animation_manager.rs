@@ -10,6 +10,10 @@
 //!
 //! The manager uses adaptive frame rate: full frame rate when animations are active,
 //! ~4fps when idle to save CPU.
+//!
+//! A watchdog timer runs every 2 seconds to detect and recover from silently dead
+//! frame clock callbacks (GTK removes tick callbacks without notification when their
+//! widget is destroyed or unmapped).
 
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -28,6 +32,13 @@ const IDLE_FRAME_INTERVAL: Duration = Duration::from_millis(250);
 /// This is time-based rather than frame-based to work correctly at any frame rate
 const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(1000);
 
+/// Watchdog check interval - how often we verify the tick mechanism is alive
+const WATCHDOG_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Watchdog staleness threshold - if no tick has occurred for this long, restart
+/// Must be > IDLE_FRAME_INTERVAL to avoid false positives during idle mode
+const WATCHDOG_STALE_THRESHOLD: Duration = Duration::from_secs(3);
+
 thread_local! {
     /// Thread-local animation manager. Since GTK operations must happen on the main thread,
     /// we use thread-local storage instead of a global static.
@@ -35,11 +46,12 @@ thread_local! {
 }
 
 /// Initialize the global animation manager. Call this once at startup.
-/// (Currently a no-op since thread_local! auto-initializes, but kept for API consistency.)
+/// Starts the watchdog timer that monitors tick mechanism health.
 pub fn init_global_animation_manager() {
     // Thread-local storage is lazily initialized on first access.
-    // This function exists for API consistency with other managers.
-    ANIMATION_MANAGER.with(|_| {});
+    ANIMATION_MANAGER.with(|manager| {
+        manager.start_watchdog();
+    });
 }
 
 /// Access the global animation manager and perform an operation.
@@ -94,6 +106,12 @@ pub fn animation_entry_count() -> usize {
     with_animation_manager(|manager| manager.entry_count())
 }
 
+/// Check if the animation tick mechanism appears stalled.
+/// Returns Some(elapsed) if stalled, None if healthy or no entries exist.
+pub fn check_animation_stall() -> Option<Duration> {
+    with_animation_manager(|manager| manager.check_stall())
+}
+
 /// Shutdown the animation manager by clearing all entries.
 /// This breaks reference cycles and allows clean app exit.
 pub fn shutdown_animation_manager() {
@@ -123,9 +141,6 @@ struct AnimationManager {
     last_active_time: Cell<Option<Instant>>,
     /// Whether we're currently in idle mode (slow polling).
     in_idle_mode: Cell<bool>,
-    /// Count of consecutive frames with active redraws.
-    /// Only sustained activity (2+ frames) keeps us out of idle mode.
-    consecutive_active_frames: Cell<u32>,
     /// Whether we're using frame clock tick callback
     using_frame_clock: Cell<bool>,
     /// Flag to signal the frame clock callback to stop
@@ -136,6 +151,11 @@ struct AnimationManager {
     frame_clock_generation: Rc<Cell<u64>>,
     /// Reference widget for frame clock (first registered widget that's still valid)
     reference_widget: RefCell<Option<glib::WeakRef<DrawingArea>>>,
+    /// Timestamp of the last successful tick() call - used by watchdog to detect stalls.
+    /// Updated every time tick() runs, regardless of whether any animations were active.
+    last_tick_time: Cell<Option<Instant>>,
+    /// Whether the watchdog timer has been started.
+    watchdog_active: Cell<bool>,
 }
 
 impl AnimationManager {
@@ -146,11 +166,12 @@ impl AnimationManager {
             timer_active: Cell::new(false),
             last_active_time: Cell::new(None),
             in_idle_mode: Cell::new(false),
-            consecutive_active_frames: Cell::new(0),
             using_frame_clock: Cell::new(false),
             stop_frame_clock: Rc::new(Cell::new(false)),
             frame_clock_generation: Rc::new(Cell::new(0)),
             reference_widget: RefCell::new(None),
+            last_tick_time: Cell::new(None),
+            watchdog_active: Cell::new(false),
         }
     }
 
@@ -305,7 +326,9 @@ impl AnimationManager {
                 std::sync::atomic::AtomicU32::new(0);
             let count = IDLE_SKIP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             // At 60fps, skip 14 out of 15 frames (~4fps effective rate)
-            if count % 15 != 0 {
+            if !count.is_multiple_of(15) {
+                // Still update last_tick_time so the watchdog knows we're alive
+                self.last_tick_time.set(Some(Instant::now()));
                 return;
             }
         }
@@ -313,22 +336,16 @@ impl AnimationManager {
         let any_active = self.tick();
         let now = Instant::now();
 
-        // Track consecutive active frames
+        // Track activity for idle mode transitions
         if any_active {
-            let consecutive = self.consecutive_active_frames.get() + 1;
-            self.consecutive_active_frames.set(consecutive);
-
-            if consecutive >= 2 {
-                self.last_active_time.set(Some(now));
-                if self.in_idle_mode.get() {
-                    self.in_idle_mode.set(false);
-                    log::debug!("Animation manager exiting idle mode (sustained animation detected)");
-                }
+            // Any redraw activity resets the idle timer and exits idle mode
+            self.last_active_time.set(Some(now));
+            if self.in_idle_mode.get() {
+                self.in_idle_mode.set(false);
+                log::debug!("Animation manager exiting idle mode (activity detected)");
             }
         } else {
-            self.consecutive_active_frames.set(0);
-
-            // Switch to idle mode if no sustained activity
+            // Switch to idle mode if no activity for IDLE_TIME_THRESHOLD
             if let Some(last_active) = self.last_active_time.get() {
                 if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
                     && !self.in_idle_mode.get()
@@ -398,27 +415,17 @@ impl AnimationManager {
                 let any_active = manager.tick();
                 let now = Instant::now();
 
-                // Track consecutive active frames to distinguish sustained animation
-                // from single-frame dirty redraws
+                // Track activity for idle mode transitions
                 if any_active {
-                    let consecutive = manager.consecutive_active_frames.get() + 1;
-                    manager.consecutive_active_frames.set(consecutive);
-
-                    // Only treat as "real" animation if we have 2+ consecutive active frames
-                    // Single-frame activity is likely just a dirty redraw from data update
-                    if consecutive >= 2 {
-                        manager.last_active_time.set(Some(now));
-                        if manager.in_idle_mode.get() {
-                            manager.in_idle_mode.set(false);
-                            log::debug!(
-                                "Animation manager exiting idle mode (sustained animation detected)"
-                            );
-                        }
+                    manager.last_active_time.set(Some(now));
+                    if manager.in_idle_mode.get() {
+                        manager.in_idle_mode.set(false);
+                        log::debug!(
+                            "Animation manager exiting idle mode (activity detected)"
+                        );
                     }
                 } else {
-                    manager.consecutive_active_frames.set(0);
-
-                    // Switch to idle mode if no sustained activity for IDLE_TIME_THRESHOLD
+                    // Switch to idle mode if no activity for IDLE_TIME_THRESHOLD
                     if let Some(last_active) = manager.last_active_time.get() {
                         if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
                             && !manager.in_idle_mode.get()
@@ -452,6 +459,9 @@ impl AnimationManager {
     /// Process one animation frame for all registered widgets.
     /// Returns true if any animation needed a redraw.
     fn tick(&self) -> bool {
+        // Record tick time for watchdog monitoring
+        self.last_tick_time.set(Some(Instant::now()));
+
         let mut entries = self.entries.borrow_mut();
         let mut any_active = false;
         let mut active_count = 0;
@@ -538,6 +548,88 @@ impl AnimationManager {
         self.stop_frame_clock();
         self.entries.borrow_mut().clear();
         *self.reference_widget.borrow_mut() = None;
+        self.last_tick_time.set(None);
         // The timer will stop on next tick since entries is empty
+    }
+
+    /// Start the watchdog timer that periodically checks if the tick mechanism is alive.
+    /// This runs independently of the frame clock and can detect/recover from a silently
+    /// dead frame clock callback.
+    fn start_watchdog(&self) {
+        if self.watchdog_active.get() {
+            return;
+        }
+        self.watchdog_active.set(true);
+
+        glib::timeout_add_local(WATCHDOG_INTERVAL, move || {
+            with_animation_manager(|manager| {
+                let entry_count = manager.entries.borrow().len();
+                if entry_count == 0 {
+                    // No entries, nothing to watch
+                    return;
+                }
+
+                // Check if ticks have stalled
+                if let Some(last_tick) = manager.last_tick_time.get() {
+                    let elapsed = Instant::now().duration_since(last_tick);
+                    if elapsed >= WATCHDOG_STALE_THRESHOLD {
+                        log::warn!(
+                            "Animation watchdog: tick mechanism stalled for {:.1}s with {} entries, restarting",
+                            elapsed.as_secs_f64(),
+                            entry_count
+                        );
+                        manager.restart_tick_mechanism();
+                    }
+                } else if manager.timer_active.get() {
+                    // Timer claims to be active but no tick has ever run - may be stuck
+                    log::warn!(
+                        "Animation watchdog: timer_active=true but no tick recorded with {} entries, restarting",
+                        entry_count
+                    );
+                    manager.restart_tick_mechanism();
+                }
+            });
+            glib::ControlFlow::Continue
+        });
+    }
+
+    /// Forcibly restart the tick mechanism.
+    /// Called by the watchdog when it detects the frame clock callback has silently died.
+    fn restart_tick_mechanism(&self) {
+        // Reset all tick state
+        self.stop_frame_clock();
+        self.timer_active.set(false);
+        self.in_idle_mode.set(false);
+        self.last_active_time.set(Some(Instant::now()));
+
+        // Try to find a new valid reference widget
+        if let Some(new_ref) = self.find_valid_reference_widget() {
+            *self.reference_widget.borrow_mut() = Some(new_ref.downgrade());
+        }
+
+        // Restart
+        self.ensure_timer_running();
+        log::info!("Animation watchdog: tick mechanism restarted successfully");
+    }
+
+    /// Check if the tick mechanism appears stalled.
+    /// Returns Some(elapsed) if stalled, None if healthy or no entries.
+    fn check_stall(&self) -> Option<Duration> {
+        if self.entries.borrow().is_empty() {
+            return None;
+        }
+        if let Some(last_tick) = self.last_tick_time.get() {
+            let elapsed = Instant::now().duration_since(last_tick);
+            if elapsed >= WATCHDOG_STALE_THRESHOLD {
+                Some(elapsed)
+            } else {
+                None
+            }
+        } else if self.timer_active.get() {
+            // Active but never ticked
+            Some(Duration::from_secs(0))
+        } else {
+            None
+        }
     }
 }
