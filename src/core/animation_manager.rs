@@ -11,6 +11,9 @@
 //!
 //! The manager uses adaptive frame rate: full frame rate when animations are active,
 //! ~4fps when idle to save CPU.
+//!
+//! A lightweight watchdog runs every 2 seconds to detect and recover from any unexpected
+//! breaks in the timeout chain.
 
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -28,6 +31,13 @@ const IDLE_FRAME_INTERVAL: Duration = Duration::from_millis(250);
 /// This is time-based rather than frame-based to work correctly at any frame rate
 const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(1000);
 
+/// Watchdog check interval - how often we verify ticks are running
+const WATCHDOG_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Watchdog staleness threshold - if no tick for this long, restart the timer chain.
+/// Must be > IDLE_FRAME_INTERVAL to avoid false positives during idle mode.
+const WATCHDOG_STALE_THRESHOLD: Duration = Duration::from_secs(1);
+
 thread_local! {
     /// Thread-local animation manager. Since GTK operations must happen on the main thread,
     /// we use thread-local storage instead of a global static.
@@ -35,9 +45,11 @@ thread_local! {
 }
 
 /// Initialize the global animation manager. Call this once at startup.
+/// Starts the watchdog timer that monitors tick chain health.
 pub fn init_global_animation_manager() {
-    // Thread-local storage is lazily initialized on first access.
-    ANIMATION_MANAGER.with(|_manager| {});
+    ANIMATION_MANAGER.with(|manager| {
+        manager.start_watchdog();
+    });
 }
 
 /// Access the global animation manager and perform an operation.
@@ -120,8 +132,10 @@ struct AnimationManager {
     last_active_time: Cell<Option<Instant>>,
     /// Whether we're currently in idle mode (slow polling).
     in_idle_mode: Cell<bool>,
-    /// Timestamp of the last successful tick() call - for diagnostics.
+    /// Timestamp of the last successful tick() call - used by watchdog to detect stalls.
     last_tick_time: Cell<Option<Instant>>,
+    /// Whether the watchdog timer has been started.
+    watchdog_active: Cell<bool>,
 }
 
 impl AnimationManager {
@@ -133,6 +147,7 @@ impl AnimationManager {
             last_active_time: Cell::new(None),
             in_idle_mode: Cell::new(false),
             last_tick_time: Cell::new(None),
+            watchdog_active: Cell::new(false),
         }
     }
 
@@ -166,16 +181,16 @@ impl AnimationManager {
 
     /// Schedule the next tick with appropriate interval based on idle state.
     fn schedule_next_tick(&self) {
-        let interval = if self.in_idle_mode.get() {
-            IDLE_FRAME_INTERVAL
+        let (interval, priority) = if self.in_idle_mode.get() {
+            // Idle mode: low frequency, low priority
+            (IDLE_FRAME_INTERVAL, glib::Priority::DEFAULT_IDLE)
         } else {
-            ANIMATION_FRAME_INTERVAL
+            // Active mode: high frequency, default priority to avoid starvation
+            // by GTK's internal event processing
+            (ANIMATION_FRAME_INTERVAL, glib::Priority::DEFAULT)
         };
 
-        // Use DEFAULT_IDLE priority so user input events (mouse, keyboard) are always
-        // processed before animation ticks. This prevents animations from starving the
-        // event loop and keeps the UI responsive during user interaction.
-        glib::source::timeout_add_local_full(interval, glib::Priority::DEFAULT_IDLE, move || {
+        glib::source::timeout_add_local_full(interval, priority, move || {
             with_animation_manager(|manager| {
                 let any_active = manager.tick();
                 let now = Instant::now();
@@ -224,7 +239,7 @@ impl AnimationManager {
     /// Process one animation frame for all registered widgets.
     /// Returns true if any animation needed a redraw.
     fn tick(&self) -> bool {
-        // Record tick time for diagnostics
+        // Record tick time for watchdog monitoring
         self.last_tick_time.set(Some(Instant::now()));
 
         let mut entries = self.entries.borrow_mut();
@@ -313,5 +328,45 @@ impl AnimationManager {
         self.entries.borrow_mut().clear();
         self.last_tick_time.set(None);
         // The timer will stop on next tick since entries is empty
+    }
+
+    /// Start the watchdog timer that periodically checks if the tick chain is alive.
+    /// Uses a repeating timer at DEFAULT priority so it always fires regardless of
+    /// the one-shot tick chain's state.
+    fn start_watchdog(&self) {
+        if self.watchdog_active.get() {
+            return;
+        }
+        self.watchdog_active.set(true);
+
+        glib::timeout_add_local(WATCHDOG_INTERVAL, move || {
+            with_animation_manager(|manager| {
+                let entry_count = manager.entries.borrow().len();
+                if entry_count == 0 {
+                    return;
+                }
+
+                // Check if ticks have stalled
+                let stalled = if let Some(last_tick) = manager.last_tick_time.get() {
+                    Instant::now().duration_since(last_tick) >= WATCHDOG_STALE_THRESHOLD
+                } else {
+                    // Timer claims active but never ticked
+                    manager.timer_active.get()
+                };
+
+                if stalled {
+                    log::warn!(
+                        "Animation watchdog: tick chain stalled with {} entries, restarting",
+                        entry_count
+                    );
+                    // Force restart: reset timer_active so ensure_timer_running starts a new chain
+                    manager.timer_active.set(false);
+                    manager.in_idle_mode.set(false);
+                    manager.last_active_time.set(Some(Instant::now()));
+                    manager.ensure_timer_running();
+                }
+            });
+            glib::ControlFlow::Continue
+        });
     }
 }
