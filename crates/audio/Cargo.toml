@@ -6,9 +6,6 @@ license = "MIT OR Apache-2.0"
 description = "Audio playback for rg-Sens alarms and timers"
 
 [dependencies]
-rg-sens-types = { path = "../types" }
+anyhow = "1"
 rodio = "0.19"
-directories = "5"
-log = "0.4"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
