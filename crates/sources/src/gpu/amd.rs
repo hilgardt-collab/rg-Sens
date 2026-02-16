@@ -153,7 +153,7 @@ impl AmdBackend {
     /// Try to read GPU utilization
     fn read_utilization(&self) -> Option<u32> {
         let path = self.device_path.join("gpu_busy_percent");
-        Self::read_int_file(&path).ok().map(|v| v as u32)
+        Self::read_int_file(&path).ok().map(|v| v.max(0) as u32)
     }
 
     /// Try to read VRAM usage
@@ -161,13 +161,13 @@ impl AmdBackend {
         // Try to read VRAM used
         let vram_used_path = self.device_path.join("mem_info_vram_used");
         if let Ok(used) = Self::read_int_file(&vram_used_path) {
-            self.metrics.memory_used = Some(used as u64);
+            self.metrics.memory_used = Some(used.max(0) as u64);
         }
 
         // Try to read total VRAM
         let vram_total_path = self.device_path.join("mem_info_vram_total");
         if let Ok(total) = Self::read_int_file(&vram_total_path) {
-            self.metrics.memory_total = Some(total as u64);
+            self.metrics.memory_total = Some(total.max(0) as u64);
         }
 
         Ok(())

@@ -118,9 +118,10 @@ fn render_background_arc(
     if config.segmented {
         // Draw segmented background
         let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
+        let segment_count = config.segment_count.max(1);
         let segment_angle = (total_angle
-            - (config.segment_count - 1) as f64 * config.segment_spacing)
-            / config.segment_count as f64;
+            - (segment_count - 1) as f64 * config.segment_spacing)
+            / segment_count as f64;
 
         for i in 0..config.segment_count {
             let seg_start =
@@ -279,8 +280,9 @@ fn render_segmented_arc(
     let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
-    let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing)
-        / config.segment_count as f64;
+    let segment_count = config.segment_count.max(1);
+    let segment_angle = (total_angle - (segment_count - 1) as f64 * config.segment_spacing)
+        / segment_count as f64;
     let width = radius * config.arc_width;
 
     let filled_segments = (value * config.segment_count as f64).ceil() as u32;
@@ -450,8 +452,9 @@ fn render_full_segmented_arc(
     let config = resolved.config;
     let start_rad = config.start_angle.to_radians();
     let total_angle = normalize_angle_range(config.start_angle, config.end_angle);
-    let segment_angle = (total_angle - (config.segment_count - 1) as f64 * config.segment_spacing)
-        / config.segment_count as f64;
+    let segment_count = config.segment_count.max(1);
+    let segment_angle = (total_angle - (segment_count - 1) as f64 * config.segment_spacing)
+        / segment_count as f64;
     let width = radius * config.arc_width;
 
     cr.save()?;
@@ -536,9 +539,10 @@ fn render_overlay_arc(
 
     if config.segmented {
         // Overlay on unfilled segments
+        let segment_count = config.segment_count.max(1);
         let segment_angle = (total_angle
-            - (config.segment_count - 1) as f64 * config.segment_spacing)
-            / config.segment_count as f64;
+            - (segment_count - 1) as f64 * config.segment_spacing)
+            / segment_count as f64;
         let filled_segments = (value * config.segment_count as f64).ceil() as u32;
 
         for i in filled_segments..config.segment_count {

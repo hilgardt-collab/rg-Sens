@@ -33,6 +33,7 @@ pub struct TextLineConfigWidget {
     fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>>,
     fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>>,
     font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
+    position_grids: Rc<RefCell<Vec<Rc<PositionGridWidget>>>>,
 }
 
 impl TextLineConfigWidget {
@@ -98,6 +99,8 @@ impl TextLineConfigWidget {
             Rc::new(RefCell::new(Vec::new()));
         let font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>> =
             Rc::new(RefCell::new(Vec::new()));
+        let position_grids: Rc<RefCell<Vec<Rc<PositionGridWidget>>>> =
+            Rc::new(RefCell::new(Vec::new()));
 
         // Set up add button - uses a self-contained rebuild callback
         let lines_for_add = lines.clone();
@@ -118,6 +121,7 @@ impl TextLineConfigWidget {
             let font_selectors_inner = font_selectors.clone();
             let fill_color_selectors_inner = fill_color_selectors.clone();
             let fill_gradient_editors_inner = fill_gradient_editors.clone();
+            let position_grids_inner = position_grids.clone();
 
             move || {
                 // Save current visible page name before rebuild
@@ -127,6 +131,12 @@ impl TextLineConfigWidget {
                 while let Some(child) = stack_inner.first_child() {
                     stack_inner.remove(&child);
                 }
+
+                // Clean up position grids to break signal handler reference cycles
+                for grid in position_grids_inner.borrow().iter() {
+                    grid.cleanup();
+                }
+                position_grids_inner.borrow_mut().clear();
 
                 // Clear font and color selectors when rebuilding
                 font_selectors_inner.borrow_mut().clear();
@@ -149,6 +159,7 @@ impl TextLineConfigWidget {
                         font_selectors_inner.clone(),
                         fill_color_selectors_inner.clone(),
                         fill_gradient_editors_inner.clone(),
+                        position_grids_inner.clone(),
                     );
                 }
 
@@ -216,6 +227,7 @@ impl TextLineConfigWidget {
         let font_selectors_for_paste = font_selectors.clone();
         let fill_color_selectors_for_paste = fill_color_selectors.clone();
         let fill_gradient_editors_for_paste = fill_gradient_editors.clone();
+        let position_grids_for_paste = position_grids.clone();
         paste_btn.connect_clicked(move |_| {
             let pasted = if let Ok(clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
                 clipboard.paste_text_display()
@@ -226,6 +238,12 @@ impl TextLineConfigWidget {
             if let Some(config) = pasted {
                 // Update lines
                 *lines_for_paste.borrow_mut() = config.lines;
+
+                // Clean up position grids to break signal handler reference cycles
+                for grid in position_grids_for_paste.borrow().iter() {
+                    grid.cleanup();
+                }
+                position_grids_for_paste.borrow_mut().clear();
 
                 // Clear font and color selectors when rebuilding
                 font_selectors_for_paste.borrow_mut().clear();
@@ -251,6 +269,7 @@ impl TextLineConfigWidget {
                         font_selectors_for_paste.clone(),
                         fill_color_selectors_for_paste.clone(),
                         fill_gradient_editors_for_paste.clone(),
+                        position_grids_for_paste.clone(),
                     );
                 }
 
@@ -272,6 +291,7 @@ impl TextLineConfigWidget {
             fill_color_selectors,
             fill_gradient_editors,
             font_selectors,
+            position_grids,
         }
     }
 
@@ -288,6 +308,7 @@ impl TextLineConfigWidget {
         font_selectors: Rc<RefCell<Vec<Rc<ThemeFontSelector>>>>,
         fill_color_selectors: Rc<RefCell<Vec<Rc<ThemeColorSelector>>>>,
         fill_gradient_editors: Rc<RefCell<Vec<Rc<GradientEditor>>>>,
+        position_grids: Rc<RefCell<Vec<Rc<PositionGridWidget>>>>,
     ) {
         let row_box = GtkBox::new(Orientation::Vertical, 6);
         row_box.set_margin_top(6);
@@ -392,6 +413,7 @@ impl TextLineConfigWidget {
 
         let position_grid = Rc::new(PositionGridWidget::new(line_config.position));
         pos_box.append(position_grid.widget());
+        position_grids.borrow_mut().push(position_grid.clone());
 
         // Connect position grid change handler
         let lines_clone_pos = lines.clone();
@@ -434,6 +456,7 @@ impl TextLineConfigWidget {
         alignment_row.append(&Label::new(Some("Align:")));
         let alignment_grid = Rc::new(PositionGridWidget::new(line_config.combine_alignment));
         alignment_row.append(alignment_grid.widget());
+        position_grids.borrow_mut().push(alignment_grid.clone());
         direction_align_box.append(&alignment_row);
 
         // Helper to check if direction/alignment should be visible:
@@ -1375,6 +1398,7 @@ impl TextLineConfigWidget {
         let font_selectors_for_rebuild = font_selectors_clone.clone();
         let fill_color_selectors_for_rebuild = fill_color_selectors_clone.clone();
         let fill_gradient_editors_for_rebuild = fill_gradient_editors_clone.clone();
+        let position_grids_for_rebuild = self.position_grids.clone();
 
         let rebuild_closure: Rc<dyn Fn()> = Rc::new(move || {
             // Save current visible page name before rebuild
@@ -1384,6 +1408,12 @@ impl TextLineConfigWidget {
             while let Some(child) = stack_clone.first_child() {
                 stack_clone.remove(&child);
             }
+
+            // Clean up position grids to break signal handler reference cycles
+            for grid in position_grids_for_rebuild.borrow().iter() {
+                grid.cleanup();
+            }
+            position_grids_for_rebuild.borrow_mut().clear();
 
             // Clear font and color selectors when rebuilding
             font_selectors_for_rebuild.borrow_mut().clear();
@@ -1406,6 +1436,7 @@ impl TextLineConfigWidget {
                     font_selectors_for_rebuild.clone(),
                     fill_color_selectors_for_rebuild.clone(),
                     fill_gradient_editors_for_rebuild.clone(),
+                    position_grids_for_rebuild.clone(),
                 );
             }
 
@@ -1435,6 +1466,7 @@ impl TextLineConfigWidget {
                 font_selectors_clone.clone(),
                 fill_color_selectors_clone.clone(),
                 fill_gradient_editors_clone.clone(),
+                self.position_grids.clone(),
             );
         }
 
@@ -1493,6 +1525,11 @@ impl TextLineConfigWidget {
     /// Cleanup method to break reference cycles
     pub fn cleanup(&self) {
         *self.on_change.borrow_mut() = None;
+        // Clean up position grids to break signal handler reference cycles
+        for grid in self.position_grids.borrow().iter() {
+            grid.cleanup();
+        }
+        self.position_grids.borrow_mut().clear();
     }
 }
 

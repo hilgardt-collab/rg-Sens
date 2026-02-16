@@ -1,6 +1,7 @@
 //! Widget for selecting position from a 3x3 grid with arrow icons
 
 use crate::displayers::TextPosition;
+use gtk4::glib::SignalHandlerId;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Orientation, ToggleButton};
 use std::cell::RefCell;
@@ -37,6 +38,7 @@ const POSITIONS: [[TextPosition; 3]; 3] = [
 pub struct PositionGridWidget {
     container: GtkBox,
     buttons: [[ToggleButton; 3]; 3],
+    handler_ids: RefCell<Vec<(usize, usize, SignalHandlerId)>>,
     position: Rc<RefCell<TextPosition>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn(TextPosition)>>>>,
     updating: Rc<RefCell<bool>>, // Guard flag to prevent recursion
@@ -102,6 +104,7 @@ impl PositionGridWidget {
         ];
 
         // Connect click handlers for mutual exclusion
+        let mut handler_ids = Vec::with_capacity(9);
         for row in 0..3 {
             for col in 0..3 {
                 let pos = POSITIONS[row][col];
@@ -131,7 +134,7 @@ impl PositionGridWidget {
                 let current_row = row;
                 let current_col = col;
 
-                buttons[row][col].connect_toggled(move |btn| {
+                let handler_id = buttons[row][col].connect_toggled(move |btn| {
                     // Skip if we're already updating (prevents recursion)
                     if *updating_clone.borrow() {
                         return;
@@ -167,12 +170,14 @@ impl PositionGridWidget {
                         *updating_clone.borrow_mut() = false;
                     }
                 });
+                handler_ids.push((row, col, handler_id));
             }
         }
 
         Self {
             container,
             buttons,
+            handler_ids: RefCell::new(handler_ids),
             position,
             on_change,
             updating,
@@ -214,5 +219,14 @@ impl PositionGridWidget {
     /// Set the callback for when the position changes
     pub fn set_on_change<F: Fn(TextPosition) + 'static>(&self, callback: F) {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Clean up signal handlers to break reference cycles between buttons.
+    /// Must be called before dropping to prevent memory leaks.
+    pub fn cleanup(&self) {
+        *self.on_change.borrow_mut() = None;
+        for (row, col, handler_id) in self.handler_ids.borrow_mut().drain(..) {
+            self.buttons[row][col].disconnect(handler_id);
+        }
     }
 }

@@ -983,6 +983,11 @@ impl ClockAnalogConfigWidget {
         self.second_color_selector.set_theme_config(theme.clone());
         self.center_hub_color_selector.set_theme_config(theme);
     }
+
+    /// Clean up signal handlers to break reference cycles
+    pub fn cleanup(&self) {
+        self.icon_position_grid.cleanup();
+    }
 }
 
 impl Default for ClockAnalogConfigWidget {

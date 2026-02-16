@@ -58,12 +58,11 @@ impl AppConfig {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
 
-        if !config_path.exists() {
-            return Ok(Self::default());
+        match std::fs::read_to_string(&config_path) {
+            Ok(content) => Self::load_from_string(&content),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(e.into()),
         }
-
-        let content = std::fs::read_to_string(&config_path)?;
-        Self::load_from_string(&content)
     }
 
     /// Load configuration from a JSON string with auto-migration

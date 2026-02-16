@@ -31,10 +31,10 @@ pub fn check_update_stall(threshold_secs: u64) -> Option<Duration> {
         return None; // No update yet, can't determine stall
     }
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
+    let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as u64,
+        Err(_) => return None, // System clock error, can't determine stall
+    };
 
     let elapsed_ms = now.saturating_sub(last);
     let threshold_ms = threshold_secs * 1000;
@@ -427,11 +427,10 @@ impl UpdateManager {
             trace!("Update cycle took {:?}", elapsed);
 
             // Update watchdog timestamp to indicate update thread is alive
-            let now_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64;
-            LAST_UPDATE_TIMESTAMP.store(now_ms, Ordering::Relaxed);
+            if let Ok(duration) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            {
+                LAST_UPDATE_TIMESTAMP.store(duration.as_millis() as u64, Ordering::Relaxed);
+            }
 
             // Periodic diagnostic logging (every ~60 seconds)
             static CYCLE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

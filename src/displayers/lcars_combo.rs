@@ -386,7 +386,9 @@ impl LcarsComboDisplayer {
         // Either use cached frame or render fresh
         let (content_bounds, group_layouts) = if cache_valid {
             let cache_ref = frame_cache.borrow();
-            let cache = cache_ref.as_ref().unwrap();
+            let Some(cache) = cache_ref.as_ref() else {
+                return; // Cache became None unexpectedly
+            };
             if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
                 log::debug!("Failed to set cached surface: {:?}", e);
             }
@@ -529,7 +531,9 @@ impl LcarsComboDisplayer {
 
                 // Paint cached surface
                 let cache_ref = frame_cache.borrow();
-                let cache = cache_ref.as_ref().unwrap();
+                let Some(cache) = cache_ref.as_ref() else {
+                    return; // Cache became None unexpectedly
+                };
                 if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
                     log::debug!("Failed to set cached surface: {:?}", e);
                 }

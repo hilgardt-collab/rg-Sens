@@ -305,7 +305,13 @@ impl SharedSourceManager {
 
             // Check ref_count without holding any RwLock (avoids deadlock)
             let still_empty = if let Some(ref h) = handle_for_recheck {
-                h.lock().ok().map(|s| s.ref_count == 0).unwrap_or(false)
+                h.lock()
+                    .unwrap_or_else(|poisoned| {
+                        log::warn!("Shared source mutex poisoned during cleanup check");
+                        poisoned.into_inner()
+                    })
+                    .ref_count
+                    == 0
             } else {
                 false
             };
@@ -413,7 +419,13 @@ impl SharedSourceManager {
         // Phase 2: Access data with only Mutexes held (one at a time)
         handles
             .into_iter()
-            .filter_map(|(key, handle)| handle.lock().ok().map(|shared| (key, shared.min_interval)))
+            .map(|(key, handle)| {
+                let shared = handle.lock().unwrap_or_else(|poisoned| {
+                    log::warn!("Shared source '{}' mutex poisoned, recovering", key);
+                    poisoned.into_inner()
+                });
+                (key, shared.min_interval)
+            })
             .collect()
     }
 
