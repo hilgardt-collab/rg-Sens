@@ -4,12 +4,14 @@ use super::constants::TRANSFORM_THRESHOLD;
 use super::panel_data::{DisplayerConfig, PanelAppearance, PanelData, SourceConfig};
 use super::shared_source_manager::{global_shared_source_manager, SharedSourceManager};
 use super::{global_registry, BoxedDataSource, BoxedDisplayer, Registry};
-use crate::ui::{BackgroundConfig, Color};
+use crate::ui::BackgroundConfig;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+// Re-export types from rg-sens-types for backward compatibility
+pub use rg_sens_types::panel::{PanelBorderConfig, PanelGeometry};
 
 /// Keys to sync from source values to panel.config for UI access
 /// Used by alarm/timer displayers to persist state
@@ -21,33 +23,6 @@ const SYNC_KEYS: &[&str] = &[
     "alarm_triggered",
     "alarm_enabled",
 ];
-
-/// Position and size of a panel in the grid
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
-pub struct PanelGeometry {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
-/// Panel border configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PanelBorderConfig {
-    pub enabled: bool,
-    pub width: f64,
-    pub color: Color,
-}
-
-impl Default for PanelBorderConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            width: 1.0,
-            color: Color::new(1.0, 1.0, 1.0, 1.0), // White
-        }
-    }
-}
 
 /// A panel combines a data source and a displayer
 ///

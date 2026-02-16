@@ -4,71 +4,13 @@ use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton, StringList,
 };
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::widget_builder::create_page_container;
 
-/// Disk source field types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum DiskField {
-    Used,
-    Free,
-    Total,
-    Percent,
-}
-
-/// Disk capacity unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum DiskUnit {
-    MB,
-    #[default]
-    GB,
-    TB,
-}
-
-/// Disk source configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DiskSourceConfig {
-    pub field: DiskField,
-    #[serde(default)]
-    pub disk_unit: DiskUnit,
-    pub disk_path: String,
-    #[serde(default)]
-    pub custom_caption: Option<String>,
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    #[serde(default)]
-    pub min_limit: Option<f64>,
-    #[serde(default)]
-    pub max_limit: Option<f64>,
-    #[serde(default = "default_auto_detect_limits")]
-    pub auto_detect_limits: bool,
-}
-
-fn default_update_interval() -> u64 {
-    2000 // 2 seconds default (disk stats don't change as frequently)
-}
-
-fn default_auto_detect_limits() -> bool {
-    false
-}
-
-impl Default for DiskSourceConfig {
-    fn default() -> Self {
-        Self {
-            field: DiskField::Percent,
-            disk_unit: DiskUnit::GB,
-            disk_path: "/".to_string(),
-            custom_caption: None,
-            update_interval_ms: default_update_interval(),
-            min_limit: None,
-            max_limit: None,
-            auto_detect_limits: default_auto_detect_limits(),
-        }
-    }
-}
+// Re-export disk source config types from rg-sens-types
+pub use rg_sens_types::source_configs::disk::{DiskField, DiskSourceConfig, DiskUnit};
 
 /// Widget for configuring disk source
 #[allow(dead_code)]

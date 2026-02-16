@@ -10,53 +10,13 @@
 use anyhow::Result;
 use cairo::Context;
 use gtk4::Widget;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::ui::fighter_hud_display::{FighterHudFrameConfig, FighterHudRenderer};
 
-// Use shared animation defaults from parent module
-use super::{default_animation_enabled, default_animation_speed};
-
-/// Full Fighter HUD display configuration (wrapper for backward compatibility)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FighterHudDisplayConfig {
-    #[serde(default)]
-    pub frame: FighterHudFrameConfig,
-    #[serde(default = "default_animation_enabled")]
-    pub animation_enabled: bool,
-    #[serde(default = "default_animation_speed")]
-    pub animation_speed: f64,
-}
-
-impl Default for FighterHudDisplayConfig {
-    fn default() -> Self {
-        Self {
-            frame: FighterHudFrameConfig::default(),
-            animation_enabled: default_animation_enabled(),
-            animation_speed: default_animation_speed(),
-        }
-    }
-}
-
-impl FighterHudDisplayConfig {
-    pub fn from_frame(frame: FighterHudFrameConfig) -> Self {
-        Self {
-            animation_enabled: frame.animation_enabled,
-            animation_speed: frame.animation_speed,
-            frame,
-        }
-    }
-
-    pub fn to_frame(&self) -> FighterHudFrameConfig {
-        let mut frame = self.frame.clone();
-        frame.animation_enabled = self.animation_enabled;
-        frame.animation_speed = self.animation_speed;
-        frame
-    }
-}
+pub use rg_sens_types::display_configs::themed_configs::FighterHudDisplayConfig;
 
 // Use macro to generate displayer struct and basic implementations
 crate::theme_displayer_base!(FighterHudDisplayer, FighterHudRenderer, FighterHudRenderer);

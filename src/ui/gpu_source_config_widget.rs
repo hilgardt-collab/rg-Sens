@@ -4,90 +4,14 @@ use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton, StringList,
 };
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::widget_builder::create_page_container;
 
-/// GPU source field types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum GpuField {
-    Temperature,
-    Utilization,
-    MemoryUsed,
-    MemoryTotal,
-    MemoryPercent,
-    PowerUsage,
-    FanSpeed,
-    ClockCore,
-    ClockMemory,
-}
-
-/// Memory unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum MemoryUnit {
-    MB,
-    #[default]
-    GB,
-}
-
-/// Frequency unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum FrequencyUnit {
-    #[default]
-    MHz,
-    GHz,
-}
-
-use crate::ui::TemperatureUnit;
-
-/// GPU source configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GpuSourceConfig {
-    pub field: GpuField,
-    pub temp_unit: TemperatureUnit,
-    #[serde(default)]
-    pub memory_unit: MemoryUnit,
-    #[serde(default)]
-    pub frequency_unit: FrequencyUnit,
-    pub gpu_index: u32,
-    #[serde(default)]
-    pub custom_caption: Option<String>,
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    #[serde(default)]
-    pub min_limit: Option<f64>,
-    #[serde(default)]
-    pub max_limit: Option<f64>,
-    #[serde(default = "default_auto_detect_limits")]
-    pub auto_detect_limits: bool,
-}
-
-fn default_update_interval() -> u64 {
-    1000 // 1 second default
-}
-
-fn default_auto_detect_limits() -> bool {
-    false
-}
-
-impl Default for GpuSourceConfig {
-    fn default() -> Self {
-        Self {
-            field: GpuField::Temperature,
-            temp_unit: TemperatureUnit::Celsius,
-            memory_unit: MemoryUnit::GB,
-            frequency_unit: FrequencyUnit::MHz,
-            gpu_index: 0,
-            custom_caption: None,
-            update_interval_ms: default_update_interval(),
-            min_limit: None,
-            max_limit: None,
-            auto_detect_limits: default_auto_detect_limits(),
-        }
-    }
-}
+// Re-export GPU source config types from rg-sens-types
+pub use rg_sens_types::source_configs::gpu::{FrequencyUnit, GpuField, GpuSourceConfig, MemoryUnit};
+pub use rg_sens_types::source_configs::cpu::TemperatureUnit;
 
 /// Widget for configuring GPU source
 pub struct GpuSourceConfigWidget {

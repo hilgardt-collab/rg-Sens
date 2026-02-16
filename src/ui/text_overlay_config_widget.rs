@@ -10,27 +10,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
-use crate::displayers::TextDisplayerConfig;
 use crate::ui::config::{ConfigWidget, LazyConfigWidget};
 use crate::ui::text_line_config_widget::TextLineConfigWidget;
 use crate::ui::theme::ComboThemeConfig;
 
-/// Configuration for text overlay (shared structure used by multiple displayers)
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct TextOverlayConfig {
-    pub enabled: bool,
-    #[serde(default)]
-    pub text_config: TextDisplayerConfig,
-}
-
-impl Default for TextOverlayConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            text_config: TextDisplayerConfig::default(),
-        }
-    }
-}
+// Re-export TextOverlayConfig from rg-sens-types for backward compatibility
+pub use rg_sens_types::text::TextOverlayConfig;
 
 /// Reusable widget for configuring text overlays.
 ///

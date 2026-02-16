@@ -28,8 +28,8 @@ pub use memory::MemorySource;
 pub use network::NetworkSource;
 pub use static_text::{StaticTextLine, StaticTextSource, StaticTextSourceConfig};
 pub use system_temp::{
-    SensorCategory, SensorInfo, SystemTempConfig, SystemTempSource,
-    TemperatureUnit as SystemTempUnit,
+    resolve_sensor_index, set_sensor_by_index, SensorCategory, SensorInfo, SystemTempConfig,
+    SystemTempSource, TemperatureUnit as SystemTempUnit,
 };
 pub use test::{TestMode, TestSource, TestSourceConfig, TEST_SOURCE_STATE};
 

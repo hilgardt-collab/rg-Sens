@@ -27,7 +27,7 @@ categories = ["gui", "visualization"]
 
 [dependencies]
 # Workspace crates
-rg-sens-types = { path = "crates/types" }
+rg-sens-types = { path = "crates/types", features = ["gtk"] }
 rg-sens-audio = { path = "crates/audio" }
 rg-sens-core = { path = "crates/core" }
 rg-sens-render = { path = "crates/render" }

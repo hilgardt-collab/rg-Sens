@@ -6,80 +6,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use std::time::Duration;
 
-/// Test value generation mode
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum TestMode {
-    /// Manual static value
-    #[default]
-    Manual,
-    /// Sine wave oscillation
-    SineWave,
-    /// Sawtooth wave (linear ramp)
-    Sawtooth,
-    /// Triangle wave
-    Triangle,
-    /// Square wave
-    Square,
-}
-
-/// Configuration for the test source
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TestSourceConfig {
-    /// Current mode
-    #[serde(default)]
-    pub mode: TestMode,
-    /// Manual value (used in Manual mode)
-    #[serde(default = "default_manual_value")]
-    pub manual_value: f64,
-    /// Minimum value
-    #[serde(default)]
-    pub min_value: f64,
-    /// Maximum value
-    #[serde(default = "default_max_value")]
-    pub max_value: f64,
-    /// Wave period in seconds (for oscillation modes)
-    #[serde(default = "default_period")]
-    pub period: f64,
-    /// Update interval in milliseconds
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-}
-
-fn default_manual_value() -> f64 {
-    50.0
-}
-
-fn default_max_value() -> f64 {
-    100.0
-}
-
-fn default_period() -> f64 {
-    5.0
-}
-
-fn default_update_interval() -> u64 {
-    100
-}
-
-impl Default for TestSourceConfig {
-    fn default() -> Self {
-        Self {
-            mode: TestMode::Manual,
-            manual_value: 50.0,
-            min_value: 0.0,
-            max_value: 100.0,
-            period: 5.0,
-            update_interval_ms: 100,
-        }
-    }
-}
+// Re-export test source config types from rg-sens-types
+pub use rg_sens_types::source_configs::test::{TestMode, TestSourceConfig};
 
 /// Shared state for the test source that can be modified from UI
 #[derive(Debug)]

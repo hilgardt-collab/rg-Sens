@@ -5,88 +5,15 @@ use gtk4::{
     Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
     StringList,
 };
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::widget_builder::create_page_container;
 
-/// CPU source field types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum CpuField {
-    Temperature,
-    Usage,
-    Frequency,
-}
-
-/// Temperature units
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum TemperatureUnit {
-    Celsius,
-    Fahrenheit,
-    Kelvin,
-}
-
-/// Frequency units
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum FrequencyUnit {
-    #[default]
-    MHz,
-    GHz,
-}
-
-/// CPU core selection
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CoreSelection {
-    Overall,
-    Core(usize),
-}
-
-/// CPU source configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CpuSourceConfig {
-    pub field: CpuField,
-    pub temp_unit: TemperatureUnit,
-    #[serde(default)]
-    pub freq_unit: FrequencyUnit,
-    pub sensor_index: usize,
-    pub core_selection: CoreSelection,
-    #[serde(default)]
-    pub custom_caption: Option<String>,
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    #[serde(default)]
-    pub min_limit: Option<f64>,
-    #[serde(default)]
-    pub max_limit: Option<f64>,
-    #[serde(default = "default_auto_detect_limits")]
-    pub auto_detect_limits: bool,
-}
-
-fn default_update_interval() -> u64 {
-    1000 // 1 second default
-}
-
-fn default_auto_detect_limits() -> bool {
-    false
-}
-
-impl Default for CpuSourceConfig {
-    fn default() -> Self {
-        Self {
-            field: CpuField::Usage,
-            temp_unit: TemperatureUnit::Celsius,
-            freq_unit: FrequencyUnit::MHz,
-            sensor_index: 0,
-            core_selection: CoreSelection::Overall,
-            custom_caption: None,
-            update_interval_ms: default_update_interval(),
-            min_limit: None,
-            max_limit: None,
-            auto_detect_limits: default_auto_detect_limits(),
-        }
-    }
-}
+// Re-export CPU source config types from rg-sens-types
+pub use rg_sens_types::source_configs::cpu::{
+    CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit,
+};
 
 /// Widget for configuring CPU source
 pub struct CpuSourceConfigWidget {

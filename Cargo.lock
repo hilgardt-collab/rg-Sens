@@ -1968,7 +1968,10 @@ dependencies = [
 name = "rg-sens-types"
 version = "0.7.5"
 dependencies = [
+ "cairo-rs",
  "chrono",
+ "gdk4",
+ "gtk4",
  "log",
  "serde",
  "serde_json",

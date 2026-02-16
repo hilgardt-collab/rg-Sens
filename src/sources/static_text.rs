@@ -4,58 +4,12 @@
 
 use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 
-/// A single configurable text line
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StaticTextLine {
-    /// Field ID used as key in get_values() (e.g., "line1", "line2")
-    pub field_id: String,
-    /// The actual text content to display
-    pub text: String,
-    /// Human-readable label for UI
-    pub label: String,
-}
-
-impl Default for StaticTextLine {
-    fn default() -> Self {
-        Self {
-            field_id: "line1".to_string(),
-            text: "Static Text".to_string(),
-            label: "Line 1".to_string(),
-        }
-    }
-}
-
-/// Configuration for the static text source
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StaticTextSourceConfig {
-    /// Configurable text lines
-    pub lines: Vec<StaticTextLine>,
-    /// Update interval in milliseconds (default: 1000ms, static text doesn't need frequent updates)
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    /// Custom caption for the source
-    #[serde(default)]
-    pub custom_caption: Option<String>,
-}
-
-fn default_update_interval() -> u64 {
-    1000
-}
-
-impl Default for StaticTextSourceConfig {
-    fn default() -> Self {
-        Self {
-            lines: vec![StaticTextLine::default()],
-            update_interval_ms: default_update_interval(),
-            custom_caption: None,
-        }
-    }
-}
+// Re-export static text source config types from rg-sens-types
+pub use rg_sens_types::source_configs::static_text::{StaticTextLine, StaticTextSourceConfig};
 
 /// Static Text data source
 ///

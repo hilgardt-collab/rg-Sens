@@ -8,120 +8,39 @@ use crate::core::{
 };
 use anyhow::Result;
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 
 use super::shared_sensors;
 
-/// Temperature unit for display
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
-pub enum TemperatureUnit {
-    #[serde(rename = "celsius")]
-    #[default]
-    Celsius,
-    #[serde(rename = "fahrenheit")]
-    Fahrenheit,
-    #[serde(rename = "kelvin")]
-    Kelvin,
-}
+// Re-export system temp source config types from rg-sens-types
+pub use rg_sens_types::source_configs::system_temp::{
+    SensorCategory, SensorInfo, SystemTempConfig, TemperatureUnit,
+};
 
-/// Information about a discovered temperature sensor
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SensorInfo {
-    pub index: usize,
-    pub label: String,
-    pub category: SensorCategory,
-}
-
-/// Category of temperature sensor
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-pub enum SensorCategory {
-    #[serde(rename = "cpu")]
-    CPU,
-    #[serde(rename = "gpu")]
-    GPU,
-    #[serde(rename = "motherboard")]
-    Motherboard,
-    #[serde(rename = "storage")]
-    Storage,
-    #[serde(rename = "other")]
-    Other,
-}
-
-/// Configuration for system temperature source
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SystemTempConfig {
-    /// Sensor label - stable identifier (preferred over index)
-    #[serde(default)]
-    pub sensor_label: Option<String>,
-    /// Sensor index - deprecated, kept for backward compatibility
-    /// Will be resolved from sensor_label if available
-    #[serde(default)]
-    pub sensor_index: usize,
-    #[serde(default)]
-    pub temp_unit: TemperatureUnit,
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    #[serde(default)]
-    pub custom_caption: Option<String>,
-    #[serde(default)]
-    pub min_limit: Option<f64>,
-    #[serde(default)]
-    pub max_limit: Option<f64>,
-    #[serde(default = "default_auto_detect_limits")]
-    pub auto_detect_limits: bool,
-}
-
-fn default_update_interval() -> u64 {
-    1000 // 1 second default
-}
-
-fn default_auto_detect_limits() -> bool {
-    false
-}
-
-impl Default for SystemTempConfig {
-    fn default() -> Self {
-        Self {
-            sensor_label: None,
-            sensor_index: 0,
-            temp_unit: TemperatureUnit::Celsius,
-            update_interval_ms: default_update_interval(),
-            custom_caption: None,
-            min_limit: None,
-            max_limit: None,
-            auto_detect_limits: default_auto_detect_limits(),
+/// Resolve sensor_label to sensor_index, updating the index if label is set.
+/// Returns the effective sensor index to use.
+pub fn resolve_sensor_index(config: &mut SystemTempConfig) -> usize {
+    if let Some(ref label) = config.sensor_label {
+        if let Some(idx) = SYSTEM_SENSORS.iter().position(|s| s.label == *label) {
+            config.sensor_index = idx;
+            return idx;
+        } else {
+            log::warn!(
+                "Sensor label '{}' not found, falling back to index {}",
+                label,
+                config.sensor_index
+            );
         }
     }
+    config.sensor_index
 }
 
-impl SystemTempConfig {
-    /// Resolve sensor_label to sensor_index, updating the index if label is set
-    /// Returns the effective sensor index to use
-    pub fn resolve_sensor_index(&mut self) -> usize {
-        if let Some(ref label) = self.sensor_label {
-            // Find the sensor by label
-            if let Some(idx) = SYSTEM_SENSORS.iter().position(|s| s.label == *label) {
-                self.sensor_index = idx;
-                return idx;
-            } else {
-                log::warn!(
-                    "Sensor label '{}' not found, falling back to index {}",
-                    label,
-                    self.sensor_index
-                );
-            }
-        }
-        self.sensor_index
-    }
-
-    /// Set sensor by index and also store the label for stability
-    pub fn set_sensor_by_index(&mut self, index: usize) {
-        self.sensor_index = index;
-        self.sensor_label = SYSTEM_SENSORS.get(index).map(|s| s.label.clone());
-    }
+/// Set sensor by index and also store the label for stability.
+pub fn set_sensor_by_index(config: &mut SystemTempConfig, index: usize) {
+    config.sensor_index = index;
+    config.sensor_label = SYSTEM_SENSORS.get(index).map(|s| s.label.clone());
 }
 
 /// Cached sensor information (discovered once at startup)
@@ -462,7 +381,7 @@ impl DataSource for SystemTempSource {
             self.config = serde_json::from_value(config_value.clone())?;
 
             // Resolve sensor_label to sensor_index for stable sensor selection
-            self.config.resolve_sensor_index();
+            resolve_sensor_index(&mut self.config);
 
             // Reset detected limits when configuration changes
             if self.config.auto_detect_limits {

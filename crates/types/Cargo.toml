@@ -11,3 +11,12 @@ serde_json = "1"
 chrono = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 log = "0.4"
+
+# Optional GTK/Cairo deps for Color's GTK convenience methods
+gtk4 = { version = "0.9", features = ["v4_10"], optional = true }
+gdk4 = { version = "0.9", optional = true }
+cairo-rs = { version = "0.20", optional = true }
+
+[features]
+default = []
+gtk = ["gtk4", "gdk4", "cairo-rs"]

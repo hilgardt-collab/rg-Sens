@@ -10,7 +10,6 @@
 use anyhow::Result;
 use cairo::Context;
 use gtk4::{prelude::*, DrawingArea, Widget};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -28,37 +27,11 @@ use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     calculate_item_layouts_with_orientation, get_content_bounds, render_content_background,
     render_content_bar, render_content_core_bars, render_content_graph, render_content_static,
-    render_content_text, render_divider, render_lcars_frame, ContentDisplayType, ContentItemConfig,
-    LcarsFrameConfig, SplitOrientation,
+    render_content_text, render_divider, render_lcars_frame, ContentDisplayType, ContentItemConfig, SplitOrientation,
 };
 use crate::ui::speedometer_display::render_speedometer_with_theme;
 
-// Use shared animation defaults from parent module
-use super::{default_animation_enabled, default_animation_speed};
-
-/// Full LCARS display configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LcarsDisplayConfig {
-    /// Frame and sidebar configuration
-    #[serde(default)]
-    pub frame: LcarsFrameConfig,
-
-    /// Animation settings
-    #[serde(default = "default_animation_enabled")]
-    pub animation_enabled: bool,
-    #[serde(default = "default_animation_speed")]
-    pub animation_speed: f64,
-}
-
-impl Default for LcarsDisplayConfig {
-    fn default() -> Self {
-        Self {
-            frame: LcarsFrameConfig::default(),
-            animation_enabled: default_animation_enabled(),
-            animation_speed: default_animation_speed(),
-        }
-    }
-}
+pub use rg_sens_types::display_configs::themed_configs::LcarsDisplayConfig;
 
 /// Cached frame rendering for LCARS (stored in draw closure, not Send/Sync)
 struct LcarsFrameCache {

@@ -9,53 +9,13 @@
 use anyhow::Result;
 use cairo::Context;
 use gtk4::Widget;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::ui::retro_terminal_display::{RetroTerminalFrameConfig, RetroTerminalRenderer};
 
-// Use shared animation defaults from parent module
-use super::{default_animation_enabled, default_animation_speed};
-
-/// Full Retro Terminal display configuration (wrapper for backward compatibility)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetroTerminalDisplayConfig {
-    #[serde(default)]
-    pub frame: RetroTerminalFrameConfig,
-    #[serde(default = "default_animation_enabled")]
-    pub animation_enabled: bool,
-    #[serde(default = "default_animation_speed")]
-    pub animation_speed: f64,
-}
-
-impl Default for RetroTerminalDisplayConfig {
-    fn default() -> Self {
-        Self {
-            frame: RetroTerminalFrameConfig::default(),
-            animation_enabled: default_animation_enabled(),
-            animation_speed: default_animation_speed(),
-        }
-    }
-}
-
-impl RetroTerminalDisplayConfig {
-    pub fn from_frame(frame: RetroTerminalFrameConfig) -> Self {
-        Self {
-            animation_enabled: frame.animation_enabled,
-            animation_speed: frame.animation_speed,
-            frame,
-        }
-    }
-
-    pub fn to_frame(&self) -> RetroTerminalFrameConfig {
-        let mut frame = self.frame.clone();
-        frame.animation_enabled = self.animation_enabled;
-        frame.animation_speed = self.animation_speed;
-        frame
-    }
-}
+pub use rg_sens_types::display_configs::themed_configs::RetroTerminalDisplayConfig;
 
 // Use macro to generate displayer struct and basic implementations
 crate::theme_displayer_base!(

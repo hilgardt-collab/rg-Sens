@@ -4,86 +4,15 @@ use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton, StringList,
 };
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ui::widget_builder::create_page_container;
 
-/// Network source field types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum NetworkField {
-    #[default]
-    DownloadSpeed,
-    UploadSpeed,
-    TotalDownload,
-    TotalUpload,
-}
-
-/// Network speed unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum NetworkSpeedUnit {
-    BytesPerSec,
-    #[default]
-    KBPerSec,
-    MBPerSec,
-    GBPerSec,
-}
-
-/// Network total data unit types
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum NetworkTotalUnit {
-    Bytes,
-    KB,
-    #[default]
-    MB,
-    GB,
-}
-
-/// Network source configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkSourceConfig {
-    pub field: NetworkField,
-    #[serde(default)]
-    pub speed_unit: NetworkSpeedUnit,
-    #[serde(default)]
-    pub total_unit: NetworkTotalUnit,
-    pub interface: String,
-    #[serde(default)]
-    pub custom_caption: Option<String>,
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    #[serde(default)]
-    pub min_limit: Option<f64>,
-    #[serde(default)]
-    pub max_limit: Option<f64>,
-    #[serde(default = "default_auto_detect_limits")]
-    pub auto_detect_limits: bool,
-}
-
-fn default_update_interval() -> u64 {
-    1000 // 1 second default for network stats
-}
-
-fn default_auto_detect_limits() -> bool {
-    true
-}
-
-impl Default for NetworkSourceConfig {
-    fn default() -> Self {
-        Self {
-            field: NetworkField::DownloadSpeed,
-            speed_unit: NetworkSpeedUnit::KBPerSec,
-            total_unit: NetworkTotalUnit::MB,
-            interface: "".to_string(), // Will be set to first available interface
-            custom_caption: None,
-            update_interval_ms: default_update_interval(),
-            min_limit: None,
-            max_limit: Some(100.0), // 100 KB/s default max
-            auto_detect_limits: default_auto_detect_limits(),
-        }
-    }
-}
+// Re-export network source config types from rg-sens-types
+pub use rg_sens_types::source_configs::network::{
+    NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit,
+};
 
 /// Widget for configuring network source
 #[allow(dead_code)]

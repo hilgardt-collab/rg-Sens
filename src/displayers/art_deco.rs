@@ -10,55 +10,13 @@
 use anyhow::Result;
 use cairo::Context;
 use gtk4::Widget;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::ui::art_deco_display::{ArtDecoFrameConfig, ArtDecoRenderer};
 
-// Use shared animation defaults from parent module
-use super::{default_animation_enabled, default_animation_speed};
-
-/// Full Art Deco display configuration (wrapper for backward compatibility)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArtDecoDisplayConfig {
-    #[serde(default)]
-    pub frame: ArtDecoFrameConfig,
-    #[serde(default = "default_animation_enabled")]
-    pub animation_enabled: bool,
-    #[serde(default = "default_animation_speed")]
-    pub animation_speed: f64,
-}
-
-impl Default for ArtDecoDisplayConfig {
-    fn default() -> Self {
-        Self {
-            frame: ArtDecoFrameConfig::default(),
-            animation_enabled: default_animation_enabled(),
-            animation_speed: default_animation_speed(),
-        }
-    }
-}
-
-impl ArtDecoDisplayConfig {
-    /// Create config from frame config, syncing animation fields
-    pub fn from_frame(frame: ArtDecoFrameConfig) -> Self {
-        Self {
-            animation_enabled: frame.animation_enabled,
-            animation_speed: frame.animation_speed,
-            frame,
-        }
-    }
-
-    /// Convert to frame config, syncing animation fields from wrapper
-    pub fn to_frame(&self) -> ArtDecoFrameConfig {
-        let mut frame = self.frame.clone();
-        frame.animation_enabled = self.animation_enabled;
-        frame.animation_speed = self.animation_speed;
-        frame
-    }
-}
+pub use rg_sens_types::display_configs::themed_configs::ArtDecoDisplayConfig;
 
 // Use macro to generate displayer struct and basic implementations
 crate::theme_displayer_base!(ArtDecoDisplayer, ArtDecoRenderer, ArtDecoRenderer);

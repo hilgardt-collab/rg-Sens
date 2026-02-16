@@ -10,7 +10,6 @@ use crate::core::{
 use anyhow::Result;
 use chrono::{Datelike, Local, Timelike, Utc};
 use chrono_tz::Tz;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -18,74 +17,8 @@ use std::time::Duration;
 // Re-export types from core for backward compatibility
 pub use crate::core::{AlarmConfig, TimerConfig};
 
-/// Time format
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
-pub enum TimeFormat {
-    #[serde(rename = "24h")]
-    #[default]
-    Hour24,
-    #[serde(rename = "12h")]
-    Hour12,
-}
-
-/// Date format
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
-pub enum DateFormat {
-    #[serde(rename = "yyyy-mm-dd")]
-    #[default]
-    YearMonthDay,
-    #[serde(rename = "dd/mm/yyyy")]
-    DayMonthYear,
-    #[serde(rename = "mm/dd/yyyy")]
-    MonthDayYear,
-    #[serde(rename = "day, month dd, yyyy")]
-    LongFormat,
-}
-
-/// Clock source configuration
-/// Note: Timer and alarm data is stored globally, not per-source
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClockSourceConfig {
-    #[serde(default = "default_update_interval")]
-    pub update_interval_ms: u64,
-    #[serde(default)]
-    pub time_format: TimeFormat,
-    #[serde(default)]
-    pub date_format: DateFormat,
-    #[serde(default)]
-    pub show_seconds: bool,
-    /// Timezone ID (e.g., "America/New_York", "Europe/London", "Local")
-    #[serde(default = "default_timezone")]
-    pub timezone: String,
-    /// Legacy alarms field (for migration to global manager)
-    #[serde(default, skip_serializing)]
-    pub alarms: Vec<AlarmConfig>,
-    /// Legacy timers field (for migration to global manager)
-    #[serde(default, skip_serializing)]
-    pub timers: Vec<TimerConfig>,
-}
-
-fn default_timezone() -> String {
-    "Local".to_string()
-}
-
-fn default_update_interval() -> u64 {
-    100 // 100ms for smooth second hand movement
-}
-
-impl Default for ClockSourceConfig {
-    fn default() -> Self {
-        Self {
-            update_interval_ms: default_update_interval(),
-            time_format: TimeFormat::Hour24,
-            date_format: DateFormat::YearMonthDay,
-            show_seconds: true,
-            timezone: default_timezone(),
-            alarms: Vec::new(),
-            timers: Vec::new(),
-        }
-    }
-}
+// Re-export clock source config types from rg-sens-types
+pub use rg_sens_types::source_configs::clock::{ClockSourceConfig, DateFormat, TimeFormat};
 
 /// Clock data source
 pub struct ClockSource {
@@ -656,11 +589,22 @@ impl DataSource for ClockSource {
             let new_config: ClockSourceConfig = serde_json::from_value(config_value.clone())?;
 
             // Migrate any legacy alarms/timers to global manager
+            // (legacy fields are now serde_json::Value, deserialize to concrete types)
             if !new_config.alarms.is_empty() || !new_config.timers.is_empty() {
                 if let Ok(mut manager) = global_timer_manager().write() {
                     // Only add if global manager is empty (first load)
                     if manager.alarms.is_empty() && manager.timers.is_empty() {
-                        manager.load_config(new_config.timers.clone(), new_config.alarms.clone());
+                        let timers: Vec<TimerConfig> = new_config
+                            .timers
+                            .iter()
+                            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                            .collect();
+                        let alarms: Vec<AlarmConfig> = new_config
+                            .alarms
+                            .iter()
+                            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                            .collect();
+                        manager.load_config(timers, alarms);
                     }
                 }
             }

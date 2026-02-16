@@ -8,7 +8,10 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::sources::{SensorCategory, SystemTempConfig, SystemTempSource, SystemTempUnit};
+use crate::sources::{
+    resolve_sensor_index, set_sensor_by_index, SensorCategory, SystemTempConfig, SystemTempSource,
+    SystemTempUnit,
+};
 use crate::ui::widget_builder::create_page_container;
 
 /// Widget for configuring System Temperature source
@@ -165,9 +168,10 @@ impl SystemTempConfigWidget {
             if let Some(model) = combo.model() {
                 if (selected as usize) < model.n_items() as usize {
                     // Use set_sensor_by_index to store both index and label for stability
-                    config_clone
-                        .borrow_mut()
-                        .set_sensor_by_index(selected as usize);
+                    set_sensor_by_index(
+                        &mut config_clone.borrow_mut(),
+                        selected as usize,
+                    );
                 }
             }
         });
@@ -251,7 +255,7 @@ impl SystemTempConfigWidget {
     pub fn set_config(&self, config: SystemTempConfig) {
         // Resolve sensor_label to get the correct index (handles sensor order changes)
         let mut config = config;
-        let sensor_index = config.resolve_sensor_index();
+        let sensor_index = resolve_sensor_index(&mut config);
 
         // Update UI widgets based on config
         self.sensor_combo.set_selected(sensor_index as u32);
@@ -306,7 +310,7 @@ impl SystemTempConfigWidget {
         let selected = self.sensor_combo.selected();
         // Only update if a valid selection (GTK returns INVALID_LIST_POSITION when nothing selected)
         if selected != gtk4::INVALID_LIST_POSITION {
-            config.set_sensor_by_index(selected as usize);
+            set_sensor_by_index(&mut config, selected as usize);
         }
 
         // When auto_detect is disabled, ensure we use the spinbutton values

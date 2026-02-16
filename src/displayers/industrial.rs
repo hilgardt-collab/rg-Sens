@@ -9,57 +9,13 @@
 use anyhow::Result;
 use cairo::Context;
 use gtk4::Widget;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::ui::industrial_display::{IndustrialFrameConfig, IndustrialRenderer};
 
-// Use shared animation defaults from parent module
-use super::{default_animation_enabled, default_animation_speed};
-
-/// Industrial display configuration (wrapper for backward compatibility)
-///
-/// This struct maintains backward compatibility with saved configs that have
-/// the animation fields at the top level alongside a `frame` field.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IndustrialDisplayConfig {
-    pub frame: IndustrialFrameConfig,
-    #[serde(default = "default_animation_enabled")]
-    pub animation_enabled: bool,
-    #[serde(default = "default_animation_speed")]
-    pub animation_speed: f64,
-}
-
-impl Default for IndustrialDisplayConfig {
-    fn default() -> Self {
-        Self {
-            frame: IndustrialFrameConfig::default(),
-            animation_enabled: default_animation_enabled(),
-            animation_speed: default_animation_speed(),
-        }
-    }
-}
-
-impl IndustrialDisplayConfig {
-    /// Create config from frame config, syncing animation fields
-    pub fn from_frame(frame: IndustrialFrameConfig) -> Self {
-        Self {
-            animation_enabled: frame.animation_enabled,
-            animation_speed: frame.animation_speed,
-            frame,
-        }
-    }
-
-    /// Convert to frame config, syncing animation fields from wrapper
-    pub fn to_frame(&self) -> IndustrialFrameConfig {
-        let mut frame = self.frame.clone();
-        frame.animation_enabled = self.animation_enabled;
-        frame.animation_speed = self.animation_speed;
-        frame
-    }
-}
+pub use rg_sens_types::display_configs::themed_configs::IndustrialDisplayConfig;
 
 // Use macro to generate displayer struct and basic implementations
 crate::theme_displayer_base!(IndustrialDisplayer, IndustrialRenderer, IndustrialRenderer);

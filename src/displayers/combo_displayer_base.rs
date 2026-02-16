@@ -43,8 +43,8 @@ use crate::ui::lcars_display::{
 use crate::ui::speedometer_display::render_speedometer_with_theme;
 use crate::ui::theme::ComboThemeConfig;
 
-// Re-export the existing traits from combo_config_base for convenience
-pub use crate::ui::combo_config_base::{LayoutFrameConfig, ThemedFrameConfig};
+// Re-export combo traits from the types crate
+pub use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 
 /// Parameters needed for drawing content items.
 /// This struct collects all the data needed by draw_content_items_generic.
@@ -675,42 +675,6 @@ pub fn combo_needs_redraw(data: &Arc<Mutex<ComboDisplayData>>) -> bool {
 // The following traits and types enable a data-driven approach to combo panels
 // where theme-specific frame rendering is encapsulated in a FrameRenderer trait,
 // allowing a single GenericComboDisplayer to work with any theme.
-
-use serde::{de::DeserializeOwned, Serialize};
-
-/// Trait for combo frame configurations that support the generic displayer.
-///
-/// This combines ThemedFrameConfig and LayoutFrameConfig with animation accessors.
-/// All combo panel frame configs should implement this trait.
-pub trait ComboFrameConfig:
-    ThemedFrameConfig
-    + LayoutFrameConfig
-    + Clone
-    + Default
-    + Serialize
-    + DeserializeOwned
-    + Send
-    + Sync
-    + 'static
-{
-    /// Get animation enabled state
-    fn animation_enabled(&self) -> bool;
-
-    /// Set animation enabled state
-    fn set_animation_enabled(&mut self, enabled: bool);
-
-    /// Get animation speed multiplier
-    fn animation_speed(&self) -> f64;
-
-    /// Set animation speed multiplier
-    fn set_animation_speed(&mut self, speed: f64);
-
-    /// Get the group item counts
-    fn group_item_counts(&self) -> &[usize];
-
-    /// Get mutable reference to group item counts
-    fn group_item_counts_mut(&mut self) -> &mut Vec<usize>;
-}
 
 /// Trait for theme-specific frame rendering.
 ///
