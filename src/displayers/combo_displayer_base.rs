@@ -581,6 +581,9 @@ pub type NoCustomAnimation = fn(&mut (), f64) -> bool;
 
 /// Handle update_data for a combo displayer.
 /// This updates values, animations, and graph history.
+///
+/// NOTE: This holds the lock for the entire duration. For reduced lock contention,
+/// use `prepare_combo_update` + `apply_combo_update` instead.
 pub fn handle_combo_update_data(
     data: &mut ComboDisplayData,
     input: &HashMap<String, Value>,
@@ -660,6 +663,139 @@ pub fn handle_combo_update_data(
     combo_utils::cleanup_graph_history(&mut data.graph_history, &data.cached_prefixes);
 
     data.transform = PanelTransform::from_values(input);
+    data.dirty = true;
+}
+
+/// Pre-computed data for a combo update, produced by `prepare_combo_update`.
+///
+/// Expensive work (prefix generation, value filtering, item data extraction) is done
+/// up-front without holding the mutex, so `apply_combo_update` only needs a brief lock.
+pub struct ComboUpdatePrep {
+    prefixes: Vec<String>,
+    prefix_set: std::collections::HashSet<String>,
+    filtered_values: HashMap<String, Value>,
+    item_updates: Vec<ComboItemUpdate>,
+    timestamp: f64,
+    animation_enabled: bool,
+    group_item_counts: Vec<usize>,
+    transform: PanelTransform,
+}
+
+struct ComboItemUpdate {
+    target_percent: f64,
+    numerical_value: f64,
+    display_as: ContentDisplayType,
+    graph_max_points: usize,
+    core_bars_config: crate::ui::core_bars_display::CoreBarsConfig,
+}
+
+/// Phase 1: Pre-compute expensive work outside the mutex lock.
+///
+/// Call this after extracting config from a brief lock, then pass the result
+/// to `apply_combo_update` under a second brief lock.
+pub fn prepare_combo_update(
+    input: &HashMap<String, Value>,
+    group_item_counts: Vec<usize>,
+    content_items: &HashMap<String, ContentItemConfig>,
+    animation_enabled: bool,
+    timestamp: f64,
+) -> ComboUpdatePrep {
+    let prefixes = combo_utils::generate_prefixes(&group_item_counts);
+    let prefix_set: std::collections::HashSet<String> = prefixes.iter().cloned().collect();
+
+    let mut filtered_values = HashMap::with_capacity(prefixes.len() * 8);
+    combo_utils::filter_values_with_owned_prefix_set(input, &prefix_set, &mut filtered_values);
+
+    let item_updates: Vec<ComboItemUpdate> = prefixes
+        .iter()
+        .map(|prefix| {
+            let item_data = combo_utils::get_item_data(input, prefix);
+            let default_config = ContentItemConfig::default();
+            let item_config = content_items.get(prefix).unwrap_or(&default_config);
+            ComboItemUpdate {
+                target_percent: item_data.percent(),
+                numerical_value: item_data.numerical_value,
+                display_as: item_config.display_as,
+                graph_max_points: item_config.graph_config.max_data_points,
+                core_bars_config: item_config.core_bars_config.clone(),
+            }
+        })
+        .collect();
+
+    let transform = PanelTransform::from_values(input);
+
+    ComboUpdatePrep {
+        prefixes,
+        prefix_set,
+        filtered_values,
+        item_updates,
+        timestamp,
+        animation_enabled,
+        group_item_counts,
+        transform,
+    }
+}
+
+/// Phase 2: Apply pre-computed update results under a brief mutex lock.
+///
+/// Only does quick HashMap mutations and simple math — no string allocations
+/// or expensive filtering. Typically completes in <1ms.
+pub fn apply_combo_update(
+    data: &mut ComboDisplayData,
+    prep: ComboUpdatePrep,
+    input: &HashMap<String, Value>,
+) {
+    // Update caches
+    data.cached_group_counts.clear();
+    data.cached_group_counts
+        .extend_from_slice(&prep.group_item_counts);
+
+    // Swap in pre-computed values
+    data.values = prep.filtered_values;
+    data.cached_prefixes = prep.prefixes;
+    data.cached_prefix_set = prep.prefix_set;
+
+    // Apply per-item animation updates (quick math per entry)
+    for (i, update) in prep.item_updates.iter().enumerate() {
+        let prefix = &data.cached_prefixes[i];
+        combo_utils::update_bar_animation(
+            &mut data.bar_values,
+            prefix,
+            update.target_percent,
+            prep.animation_enabled,
+        );
+
+        match update.display_as {
+            ContentDisplayType::Graph => {
+                let prefix = &data.cached_prefixes[i];
+                combo_utils::update_graph_history(
+                    &mut data.graph_history,
+                    prefix,
+                    update.numerical_value,
+                    prep.timestamp,
+                    update.graph_max_points,
+                );
+            }
+            ContentDisplayType::CoreBars => {
+                let prefix = &data.cached_prefixes[i];
+                combo_utils::update_core_bars(
+                    input,
+                    &mut data.core_bar_values,
+                    prefix,
+                    &update.core_bars_config,
+                    prep.animation_enabled,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    // Clean up stale animation entries
+    combo_utils::cleanup_bar_values(&mut data.bar_values, &data.cached_prefixes);
+    combo_utils::cleanup_core_bar_values(&mut data.core_bar_values, &data.cached_prefixes);
+    combo_utils::cleanup_graph_history(&mut data.graph_history, &data.cached_prefixes);
+
+    data.transform = prep.transform;
     data.dirty = true;
 }
 

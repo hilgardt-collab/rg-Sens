@@ -15,9 +15,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::{ConfigOption, ConfigSchema, Displayer, DisplayerConfig};
 use crate::displayers::combo_displayer_base::{
-    draw_content_items_generic, handle_combo_update_data, setup_combo_animation_timer_ext,
-    ComboDisplayData, ComboFrameConfig, ContentDrawParams, FrameRenderer, LayoutFrameConfig,
-    ThemedFrameConfig,
+    apply_combo_update, draw_content_items_generic, prepare_combo_update,
+    setup_combo_animation_timer_ext, ComboDisplayData, ComboFrameConfig, ContentDrawParams,
+    FrameRenderer, LayoutFrameConfig, ThemedFrameConfig,
 };
 
 /// Cached frame rendering data to avoid re-rendering static elements
@@ -199,18 +199,32 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        if let Ok(mut display_data) = self.data.lock() {
-            let animation_enabled = display_data.config.animation_enabled();
-            let group_item_counts = display_data.config.group_item_counts().to_vec();
-            let content_items = display_data.config.content_items().clone();
+        // Phase 1: Brief lock to extract config
+        let config_snapshot = {
+            let Ok(display_data) = self.data.lock() else {
+                return;
+            };
+            (
+                display_data.config.animation_enabled(),
+                display_data.config.group_item_counts().to_vec(),
+                display_data.config.content_items().clone(),
+                display_data.combo.graph_start_time.elapsed().as_secs_f64(),
+            )
+        };
+        let (animation_enabled, group_item_counts, content_items, timestamp) = config_snapshot;
 
-            handle_combo_update_data(
-                &mut display_data.combo,
-                data,
-                &group_item_counts,
-                &content_items,
-                animation_enabled,
-            );
+        // Phase 2: Expensive pre-computation (no lock held)
+        let prep = prepare_combo_update(
+            data,
+            group_item_counts,
+            &content_items,
+            animation_enabled,
+            timestamp,
+        );
+
+        // Phase 3: Brief lock to apply results
+        if let Ok(mut display_data) = self.data.lock() {
+            apply_combo_update(&mut display_data.combo, prep, data);
         }
     }
 
@@ -616,18 +630,32 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        if let Ok(mut display_data) = self.data.lock() {
-            let animation_enabled = display_data.config.animation_enabled();
-            let group_item_counts = display_data.config.group_item_counts().to_vec();
-            let content_items = display_data.config.content_items().clone();
+        // Phase 1: Brief lock to extract config
+        let config_snapshot = {
+            let Ok(display_data) = self.data.lock() else {
+                return;
+            };
+            (
+                display_data.config.animation_enabled(),
+                display_data.config.group_item_counts().to_vec(),
+                display_data.config.content_items().clone(),
+                display_data.combo.graph_start_time.elapsed().as_secs_f64(),
+            )
+        };
+        let (animation_enabled, group_item_counts, content_items, timestamp) = config_snapshot;
 
-            handle_combo_update_data(
-                &mut display_data.combo,
-                data,
-                &group_item_counts,
-                &content_items,
-                animation_enabled,
-            );
+        // Phase 2: Expensive pre-computation (no lock held)
+        let prep = prepare_combo_update(
+            data,
+            group_item_counts,
+            &content_items,
+            animation_enabled,
+            timestamp,
+        );
+
+        // Phase 3: Brief lock to apply results
+        if let Ok(mut display_data) = self.data.lock() {
+            apply_combo_update(&mut display_data.combo, prep, data);
         }
     }
 

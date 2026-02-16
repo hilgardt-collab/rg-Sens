@@ -896,11 +896,12 @@ impl Displayer for LcarsComboDisplayer {
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
         let start = std::time::Instant::now();
-        if let Ok(mut display_data) = self.data.lock() {
-            let animation_enabled = display_data.config.animation_enabled;
-            let timestamp = display_data.graph_start_time.elapsed().as_secs_f64();
 
-            // Convert group_item_counts to usize for generate_prefixes
+        // Phase 1: Brief lock to extract config
+        let config_snapshot = {
+            let Ok(display_data) = self.data.lock() else {
+                return;
+            };
             let group_item_counts: Vec<usize> = display_data
                 .config
                 .frame
@@ -908,21 +909,27 @@ impl Displayer for LcarsComboDisplayer {
                 .iter()
                 .map(|&x| x as usize)
                 .collect();
+            (
+                display_data.config.animation_enabled,
+                display_data.graph_start_time.elapsed().as_secs_f64(),
+                group_item_counts,
+                display_data.config.frame.content_items.clone(),
+            )
+        };
+        let (animation_enabled, timestamp, group_item_counts, content_items) = config_snapshot;
 
-            // Generate prefixes and filter values using optimized utils
-            let prefixes = combo_utils::generate_prefixes(&group_item_counts);
-            combo_utils::filter_values_by_prefixes_into(data, &prefixes, &mut display_data.values);
+        // Phase 2: Expensive pre-computation (no lock held)
+        let prefixes = combo_utils::generate_prefixes(&group_item_counts);
+        let prefix_set: std::collections::HashSet<String> =
+            prefixes.iter().cloned().collect();
+        let mut filtered_values = HashMap::with_capacity(prefixes.len() * 8);
+        combo_utils::filter_values_with_owned_prefix_set(data, &prefix_set, &mut filtered_values);
 
-            // Cache per-group prefixes for efficient draw loop (avoids format! allocations)
-            // Only rebuild if group structure changed
-            let needs_rebuild = display_data.group_prefixes.len() != group_item_counts.len()
-                || display_data
-                    .group_prefixes
-                    .iter()
-                    .zip(group_item_counts.iter())
-                    .any(|(cached, &count)| cached.len() != count);
-            if needs_rebuild {
-                display_data.group_prefixes = group_item_counts
+        // Pre-compute group prefixes if structure changed (string allocations)
+        let group_prefixes: Option<Vec<Vec<String>>> = {
+            // Always compute — we'll check if rebuild is needed under lock
+            Some(
+                group_item_counts
                     .iter()
                     .enumerate()
                     .map(|(group_idx, &count)| {
@@ -931,39 +938,72 @@ impl Displayer for LcarsComboDisplayer {
                             .map(|item_idx| format!("group{}_{}", group_num, item_idx))
                             .collect()
                     })
-                    .collect();
+                    .collect(),
+            )
+        };
+
+        // Pre-extract per-item data
+        struct ItemUpdate {
+            target_percent: f64,
+            numerical_value: f64,
+            display_as: ContentDisplayType,
+            graph_max_points: usize,
+            core_bars_config: crate::ui::core_bars_display::CoreBarsConfig,
+        }
+        let item_updates: Vec<ItemUpdate> = prefixes
+            .iter()
+            .map(|prefix| {
+                let item_data = combo_utils::get_item_data(data, prefix);
+                let default_config = ContentItemConfig::default();
+                let item_config = content_items.get(prefix).unwrap_or(&default_config);
+                ItemUpdate {
+                    target_percent: item_data.percent(),
+                    numerical_value: item_data.numerical_value,
+                    display_as: item_config.display_as,
+                    graph_max_points: item_config.graph_config.max_data_points,
+                    core_bars_config: item_config.core_bars_config.clone(),
+                }
+            })
+            .collect();
+
+        let transform = PanelTransform::from_values(data);
+
+        // Phase 3: Brief lock to apply results
+        if let Ok(mut display_data) = self.data.lock() {
+            display_data.values = filtered_values;
+
+            // Only update group_prefixes if structure changed
+            if let Some(new_group_prefixes) = group_prefixes {
+                let needs_rebuild =
+                    display_data.group_prefixes.len() != group_item_counts.len()
+                        || display_data
+                            .group_prefixes
+                            .iter()
+                            .zip(group_item_counts.iter())
+                            .any(|(cached, &count)| cached.len() != count);
+                if needs_rebuild {
+                    display_data.group_prefixes = new_group_prefixes;
+                }
             }
 
-            // Update each item
-            for prefix in &prefixes {
-                let item_data = combo_utils::get_item_data(data, prefix);
+            // Apply per-item animation updates (quick math)
+            for (i, update) in item_updates.iter().enumerate() {
+                let prefix = &prefixes[i];
                 combo_utils::update_bar_animation(
                     &mut display_data.bar_values,
                     prefix,
-                    item_data.percent(),
+                    update.target_percent,
                     animation_enabled,
                 );
 
-                // Get item config and extract what we need before mutable borrows
-                let default_config = ContentItemConfig::default();
-                let item_config = display_data
-                    .config
-                    .frame
-                    .content_items
-                    .get(prefix)
-                    .unwrap_or(&default_config);
-                let display_as = item_config.display_as;
-                let graph_max_points = item_config.graph_config.max_data_points;
-                let core_bars_config = item_config.core_bars_config.clone();
-
-                match display_as {
+                match update.display_as {
                     ContentDisplayType::Graph => {
                         combo_utils::update_graph_history(
                             &mut display_data.graph_history,
                             prefix,
-                            item_data.numerical_value,
+                            update.numerical_value,
                             timestamp,
-                            graph_max_points,
+                            update.graph_max_points,
                         );
                     }
                     ContentDisplayType::CoreBars => {
@@ -971,7 +1011,7 @@ impl Displayer for LcarsComboDisplayer {
                             data,
                             &mut display_data.core_bar_values,
                             prefix,
-                            &core_bars_config,
+                            &update.core_bars_config,
                             animation_enabled,
                         );
                     }
@@ -981,14 +1021,16 @@ impl Displayer for LcarsComboDisplayer {
 
             // Clean up stale animation entries
             combo_utils::cleanup_bar_values(&mut display_data.bar_values, &prefixes);
-            combo_utils::cleanup_core_bar_values(&mut display_data.core_bar_values, &prefixes);
+            combo_utils::cleanup_core_bar_values(
+                &mut display_data.core_bar_values,
+                &prefixes,
+            );
             combo_utils::cleanup_graph_history(&mut display_data.graph_history, &prefixes);
 
-            // Extract transform from values
-            display_data.transform = PanelTransform::from_values(data);
-
+            display_data.transform = transform;
             display_data.dirty = true;
         }
+
         // Log slow updates (>50ms is concerning)
         let elapsed = start.elapsed();
         if elapsed.as_millis() > 50 {
