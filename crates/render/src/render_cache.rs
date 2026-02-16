@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::ui::background::{Color, ColorStop};
+use crate::background::{Color, ColorStop};
 
 // Thread-local image cache (GTK objects aren't thread-safe)
 thread_local! {

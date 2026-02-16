@@ -10,9 +10,9 @@
 use anyhow::Result;
 use cairo::Context;
 
-use crate::displayers::combo_displayer_base::FrameRenderer;
-use crate::ui::background::Color;
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
+use crate::combo_traits::FrameRenderer;
+use crate::background::Color;
+use crate::pango_text::{pango_show_text, pango_text_extents};
 
 pub use rg_sens_types::display_configs::synthwave::*;
 
@@ -618,7 +618,7 @@ fn draw_header(cr: &Context, config: &SynthwaveFrameConfig, x: f64, y: f64, w: f
         SynthwaveHeaderStyle::Outline => {
             // Outlined text using Pango layout path
             cr.set_source_rgba(accent.r, accent.g, accent.b, 1.0);
-            let font_desc = crate::ui::pango_text::get_font_description(
+            let font_desc = crate::pango_text::get_font_description(
                 &config.header_font,
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Bold,

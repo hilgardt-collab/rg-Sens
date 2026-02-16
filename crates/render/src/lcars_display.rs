@@ -11,13 +11,13 @@ use std::f64::consts::PI;
 
 use std::cell::RefCell;
 
-use crate::displayers::combo_displayer_base::FrameRenderer;
-use crate::ui::background::{render_background_with_theme, Color};
-use crate::ui::bar_display::render_bar;
-use crate::ui::core_bars_display::render_core_bars;
-use crate::ui::graph_display::render_graph_with_theme;
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::ComboThemeConfig;
+use crate::combo_traits::FrameRenderer;
+use crate::background::{render_background_with_theme, Color};
+use crate::bar_display::render_bar;
+use crate::core_bars_display::render_core_bars;
+use crate::graph_display::render_graph_with_theme;
+use crate::pango_text::{pango_show_text, pango_text_extents};
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export all LCARS types from the types crate
 pub use rg_sens_types::display_configs::lcars::*;
@@ -1047,7 +1047,7 @@ pub fn render_content_core_bars(
 
     // Call the core_bars_display render function with source values for text overlay
     if let Some(values) = slot_values {
-        crate::ui::core_bars_display::render_core_bars_with_values(
+        crate::core_bars_display::render_core_bars_with_values(
             cr,
             config,
             theme,
@@ -1090,7 +1090,7 @@ pub fn render_content_static(
     // Render text overlay if enabled
     if config.text_overlay.enabled {
         let values = slot_values.cloned().unwrap_or_default();
-        crate::ui::text_renderer::render_text_lines_with_theme(
+        crate::text_renderer::render_text_lines_with_theme(
             cr,
             w,
             h,

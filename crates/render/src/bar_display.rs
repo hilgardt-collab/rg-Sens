@@ -2,8 +2,8 @@
 
 use gtk4::cairo;
 
-use crate::ui::background::{Color, ColorStop};
-use crate::ui::theme::ComboThemeConfig;
+use crate::background::{Color, ColorStop};
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export bar display config types from rg-sens-types
 pub use rg_sens_types::display_configs::bar::{
@@ -865,7 +865,7 @@ fn render_text_overlay(
     height: f64,
 ) -> Result<(), cairo::Error> {
     // Use shared text renderer for proper combined field handling
-    crate::ui::text_renderer::render_text_lines_with_theme(
+    crate::text_renderer::render_text_lines_with_theme(
         cr,
         width,
         height,

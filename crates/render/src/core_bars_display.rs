@@ -8,13 +8,13 @@ use gtk4::cairo;
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::ui::background::{Color, ColorStop};
-use crate::ui::bar_display::{
+use crate::background::{Color, ColorStop};
+use crate::bar_display::{
     BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle,
 };
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::text_renderer::render_text_lines_with_theme;
-use crate::ui::theme::ComboThemeConfig;
+use crate::pango_text::{pango_show_text, pango_text_extents};
+use crate::text_renderer::render_text_lines_with_theme;
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export core bars config types from rg-sens-types
 pub use rg_sens_types::display_configs::core_bars::{CoreBarsConfig, LabelPosition};

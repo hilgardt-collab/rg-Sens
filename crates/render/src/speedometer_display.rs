@@ -4,9 +4,9 @@ use gtk4::cairo;
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::ui::background::{Color, ColorStop};
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::ComboThemeConfig;
+use crate::background::{Color, ColorStop};
+use crate::pango_text::{pango_show_text, pango_text_extents};
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export speedometer config types from rg-sens-types
 pub use rg_sens_types::display_configs::speedometer::{
@@ -99,7 +99,7 @@ pub fn render_speedometer_with_theme(
 
     // Draw text overlay
     if config.text_overlay.enabled {
-        crate::ui::text_renderer::render_text_lines_with_theme(
+        crate::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,
@@ -158,7 +158,7 @@ fn draw_bezel(
     // Render background within the clipped region
     // Use theme-aware color for solid backgrounds
     match &config.bezel_background.background {
-        crate::ui::background::BackgroundType::Solid { .. } => {
+        crate::background::BackgroundType::Solid { .. } => {
             // Use theme-aware bezel_solid_color instead of the raw color
             let color = config.bezel_solid_color.resolve(theme);
             color.apply_to_cairo(cr);
@@ -167,7 +167,7 @@ fn draw_bezel(
         }
         _ => {
             // For gradients, images, and polygons, use theme-aware background rendering
-            crate::ui::background::render_background_with_theme(
+            crate::background::render_background_with_theme(
                 cr,
                 &config.bezel_background,
                 width,
@@ -653,7 +653,7 @@ fn draw_center_hub(
 }
 
 fn interpolate_color_stops(stops: &[ColorStop], t: f64) -> Color {
-    use crate::ui::render_cache::get_cached_color_at;
+    use crate::render_cache::get_cached_color_at;
 
     if stops.is_empty() {
         return Color {

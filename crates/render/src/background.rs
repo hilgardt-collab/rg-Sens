@@ -1,6 +1,6 @@
 use gtk4::cairo;
 
-use crate::ui::theme::ComboThemeConfig;
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export all background/color types from rg-sens-types for backward compatibility
 pub use rg_sens_types::background::{
@@ -197,7 +197,7 @@ fn render_image_background(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    use crate::ui::render_cache::{get_cached_scaled_surface, get_cached_tile_surface};
+    use crate::render_cache::{get_cached_scaled_surface, get_cached_tile_surface};
 
     let target_width = width as i32;
     let target_height = height as i32;
@@ -542,7 +542,7 @@ pub fn render_indicator_background_with_value(
 /// Interpolate gradient for indicator background
 /// Uses cached LUT for efficient repeated lookups
 fn interpolate_indicator_gradient(stops: &[ColorStop], value: f64, min: f64, max: f64) -> Color {
-    use crate::ui::render_cache::get_cached_color_at;
+    use crate::render_cache::get_cached_color_at;
 
     if stops.is_empty() {
         return Color::new(0.5, 0.5, 0.5, 1.0);

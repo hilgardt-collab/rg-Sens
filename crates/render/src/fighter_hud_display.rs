@@ -10,10 +10,10 @@
 use anyhow::Result;
 use cairo::Context;
 
-use crate::displayers::combo_displayer_base::FrameRenderer;
-use crate::ui::background::Color;
-use crate::ui::lcars_display::SplitOrientation;
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
+use crate::combo_traits::FrameRenderer;
+use crate::background::Color;
+use crate::lcars_display::SplitOrientation;
+use crate::pango_text::{pango_show_text, pango_text_extents};
 
 // Re-export all type definitions from rg_sens_types
 pub use rg_sens_types::display_configs::fighter_hud::*;

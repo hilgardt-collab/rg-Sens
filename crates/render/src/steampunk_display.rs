@@ -13,9 +13,9 @@ use std::f64::consts::PI;
 use anyhow::Result;
 use cairo::Context;
 
-use crate::displayers::combo_displayer_base::FrameRenderer;
-use crate::ui::background::Color;
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
+use crate::combo_traits::FrameRenderer;
+use crate::background::Color;
+use crate::pango_text::{pango_show_text, pango_text_extents};
 
 pub use rg_sens_types::display_configs::steampunk::*;
 

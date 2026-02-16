@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use super::pango_text::{pango_show_text, pango_text_extents};
-use super::theme::ComboThemeConfig;
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export graph display config types from rg-sens-types
 pub use rg_sens_types::display_configs::graph::{
@@ -475,7 +475,7 @@ pub fn render_graph_with_theme(
             config.text_overlay.text_config.lines.len(),
             source_values.keys().collect::<Vec<_>>()
         );
-        crate::ui::text_renderer::render_text_lines_with_theme(
+        crate::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,

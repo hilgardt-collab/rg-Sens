@@ -5,12 +5,12 @@ use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::displayers::{
+use rg_sens_types::text::{
     CombineDirection, HorizontalPosition, TextBackgroundConfig, TextBackgroundType,
     TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition, VerticalPosition,
 };
-use crate::ui::pango_text::{get_font_description, pango_show_text, pango_text_extents};
-use crate::ui::theme::ComboThemeConfig;
+use crate::pango_text::{get_font_description, pango_show_text, pango_text_extents};
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Thread-local buffers to avoid allocations in hot render paths
 thread_local! {
@@ -216,7 +216,7 @@ fn render_combined_parts(
     const SPACING: f64 = 5.0;
 
     // Calculate dimensions for each part using Pango
-    let mut part_extents: Vec<crate::ui::pango_text::TextExtents> = Vec::new();
+    let mut part_extents: Vec<crate::pango_text::TextExtents> = Vec::new();
     for (config, text) in parts {
         // Resolve font using theme if available
         let (font_family, font_size) = config.resolved_font(theme);
@@ -419,7 +419,7 @@ fn render_text_part(
     text: &str,
     x: f64,
     y: f64,
-    extents: &crate::ui::pango_text::TextExtents,
+    extents: &crate::pango_text::TextExtents,
     theme: Option<&ComboThemeConfig>,
     skip_background: bool,
 ) {
@@ -508,10 +508,10 @@ fn render_text_background(
                 color.resolve(theme)
             } else {
                 match color {
-                    crate::ui::theme::ColorSource::Custom { color } => *color,
-                    crate::ui::theme::ColorSource::Theme { .. } => {
+                    rg_sens_types::theme::ColorSource::Custom { color } => *color,
+                    rg_sens_types::theme::ColorSource::Theme { .. } => {
                         // Fallback to semi-transparent gray when no theme
-                        crate::ui::background::Color::new(0.3, 0.3, 0.3, 0.5)
+                        crate::background::Color::new(0.3, 0.3, 0.3, 0.5)
                     }
                 }
             };
@@ -576,7 +576,7 @@ fn render_text_fill(
     text: &str,
     x: f64,
     y: f64,
-    extents: &crate::ui::pango_text::TextExtents,
+    extents: &crate::pango_text::TextExtents,
     font_family: &str,
     font_slant: cairo::FontSlant,
     font_weight: cairo::FontWeight,

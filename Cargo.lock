@@ -1928,6 +1928,7 @@ dependencies = [
 name = "rg-sens-render"
 version = "0.7.5"
 dependencies = [
+ "anyhow",
  "cairo-rs",
  "gdk4",
  "gtk4",

@@ -5,8 +5,8 @@
 use gtk4::cairo;
 use std::f64::consts::PI;
 
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
-use crate::ui::theme::{ColorSource, ComboThemeConfig};
+use crate::pango_text::{pango_show_text, pango_text_extents};
+use rg_sens_types::theme::{ColorSource, ComboThemeConfig};
 
 // Re-export clock display config types from rg-sens-types
 pub use rg_sens_types::display_configs::clock::{
@@ -122,7 +122,7 @@ fn draw_face(
     // Render background using common background system with theme
     let face_width = radius * 2.0;
     let face_height = radius * 2.0;
-    let _ = crate::ui::render_background_with_theme(
+    let _ = crate::background::render_background_with_theme(
         cr,
         &config.face_background,
         face_width,

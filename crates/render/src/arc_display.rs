@@ -2,8 +2,8 @@
 
 use gtk4::cairo;
 
-use crate::ui::background::{Color, ColorStop};
-use crate::ui::theme::ComboThemeConfig;
+use crate::background::{Color, ColorStop};
+use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export arc display config types from rg-sens-types
 pub use rg_sens_types::display_configs::arc::{
@@ -79,7 +79,7 @@ pub fn render_arc(
 
     // Render text overlay if enabled
     if config.text_overlay.enabled {
-        crate::ui::text_renderer::render_text_lines_with_theme(
+        crate::text_renderer::render_text_lines_with_theme(
             cr,
             width,
             height,
@@ -392,7 +392,7 @@ fn calculate_tapered_width(base_width: f64, t: f64, style: ArcTaperStyle, amount
 
 /// Get color at a specific value (0.0 to 1.0) using color stops
 fn get_color_at_value(value: f64, stops: &[ColorStop], transition: ColorTransitionStyle) -> Color {
-    use crate::ui::render_cache::{get_abrupt_color, get_cached_color_at};
+    use crate::render_cache::{get_abrupt_color, get_cached_color_at};
 
     match transition {
         ColorTransitionStyle::Abrupt => get_abrupt_color(stops, value),

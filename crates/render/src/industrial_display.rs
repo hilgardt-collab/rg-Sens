@@ -10,8 +10,8 @@
 use cairo::Context;
 use std::f64::consts::PI;
 
-use crate::displayers::combo_displayer_base::FrameRenderer;
-use crate::ui::pango_text::{pango_show_text, pango_text_extents};
+use crate::combo_traits::FrameRenderer;
+use crate::pango_text::{pango_show_text, pango_text_extents};
 
 // Re-export all type definitions from rg_sens_types
 pub use rg_sens_types::display_configs::industrial::*;
