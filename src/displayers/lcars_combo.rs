@@ -729,8 +729,8 @@ impl Displayer for LcarsComboDisplayer {
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
                 let count = lock_fail_count_draw.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count.is_multiple_of(100) {
-                    log::warn!("LCARS draw: try_lock failed {} times", count + 1);
+                if count.is_multiple_of(1000) {
+                    log::info!("LCARS draw: try_lock failed {} times", count + 1);
                 }
                 // Lock contention - use last complete frame (includes dynamic content)
                 if let Some(surface) = last_frame_clone.borrow().as_ref() {
@@ -884,8 +884,8 @@ impl Displayer for LcarsComboDisplayer {
                 redraw
             } else {
                 let count = lock_fail_count_anim.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count.is_multiple_of(100) {
-                    log::warn!("LCARS anim: try_lock failed {} times", count + 1);
+                if count.is_multiple_of(1000) {
+                    log::info!("LCARS anim: try_lock failed {} times", count + 1);
                 }
                 false
             }

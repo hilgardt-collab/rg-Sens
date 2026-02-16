@@ -528,8 +528,8 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 static DRAW_LOCK_FAIL: std::sync::atomic::AtomicU64 =
                     std::sync::atomic::AtomicU64::new(0);
                 let count = DRAW_LOCK_FAIL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count < 10 || count.is_multiple_of(100) {
-                    log::warn!(
+                if count < 5 {
+                    log::debug!(
                         "Draw: try_lock failed ({} total), using cached frame",
                         count + 1
                     );

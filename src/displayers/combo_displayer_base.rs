@@ -481,8 +481,13 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
             static TICK_LOCK_FAIL_COUNT: std::sync::atomic::AtomicU64 =
                 std::sync::atomic::AtomicU64::new(0);
             let count = TICK_LOCK_FAIL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count < 5 || count.is_multiple_of(100) {
-                log::warn!(
+            if count < 5 {
+                log::debug!(
+                    "Animation tick: try_lock failed ({} total failures)",
+                    count + 1
+                );
+            } else if count.is_multiple_of(1000) {
+                log::info!(
                     "Animation tick: try_lock failed ({} total failures)",
                     count + 1
                 );

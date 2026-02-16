@@ -358,9 +358,17 @@ impl AnimationManager {
                         .unwrap_or(true);
 
                     if stalled {
-                        log::warn!(
-                            "Animation manager: frame clock did not tick within 500ms of attachment, falling back to timeout"
-                        );
+                        let restarts = manager.consecutive_watchdog_restarts.get();
+                        if restarts < 3 {
+                            log::warn!(
+                                "Animation manager: frame clock did not tick within 500ms of attachment, falling back to timeout"
+                            );
+                        } else {
+                            log::debug!(
+                                "Animation manager: frame clock still not ticking, staying on timeout (attempt {})",
+                                restarts + 1
+                            );
+                        }
                         manager.stop_frame_clock();
 
                         // Apply the same exponential backoff as watchdog restarts
