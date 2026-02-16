@@ -1845,7 +1845,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rg-sens"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1884,7 +1884,7 @@ dependencies = [
 
 [[package]]
 name = "rg-sens-audio"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "rg-sens-types",
@@ -1894,7 +1894,7 @@ dependencies = [
 
 [[package]]
 name = "rg-sens-core"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "cairo-rs",
@@ -1906,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "rg-sens-render"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "cairo-rs",
@@ -1923,7 +1923,7 @@ dependencies = [
 
 [[package]]
 name = "rg-sens-sources"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1943,7 +1943,7 @@ dependencies = [
 
 [[package]]
 name = "rg-sens-types"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "cairo-rs",
  "chrono",
