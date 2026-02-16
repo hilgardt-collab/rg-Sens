@@ -1,15 +1,39 @@
-[package]
-name = "rg-sens"
+[workspace]
+members = [
+    ".",
+    "crates/types",
+    "crates/audio",
+    "crates/core",
+    "crates/render",
+    "crates/sources",
+    "crates/displayers",
+]
+
+[workspace.package]
 version = "0.7.5"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[package]
+name = "rg-sens"
+version.workspace = true
+edition.workspace = true
 authors = ["rg-Sens Contributors"]
 description = "A fast, customizable system monitoring dashboard for Linux"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 repository = "https://github.com/hilgardt-collab/rg-Sens"
 keywords = ["system-monitor", "gtk", "dashboard", "linux"]
 categories = ["gui", "visualization"]
 
 [dependencies]
+# Workspace crates
+rg-sens-types = { path = "crates/types" }
+rg-sens-audio = { path = "crates/audio" }
+rg-sens-core = { path = "crates/core" }
+rg-sens-render = { path = "crates/render" }
+rg-sens-sources = { path = "crates/sources", features = [] }
+rg-sens-displayers = { path = "crates/displayers", features = [] }
+
 # GTK4 and graphics
 gtk4 = { version = "0.9", features = ["v4_10"] }
 gdk4 = "0.9"
@@ -66,9 +90,9 @@ criterion = "0.5"
 
 [features]
 default = ["nvidia", "webkit"]
-nvidia = ["nvml-wrapper"]  # NVIDIA GPU support
-webkit = ["webkit6", "notify"]  # CSS Template panel with WebKit WebView support
-servo = []  # CSS Template panel with Servo rendering (skeleton - libservo disabled due to dependency conflicts)
+nvidia = ["nvml-wrapper", "rg-sens-sources/nvidia"]  # NVIDIA GPU support
+webkit = ["webkit6", "notify", "rg-sens-displayers/webkit"]  # CSS Template panel with WebKit WebView support
+servo = ["rg-sens-displayers/servo"]  # CSS Template panel with Servo rendering (skeleton - libservo disabled due to dependency conflicts)
 
 [profile.release]
 opt-level = 3

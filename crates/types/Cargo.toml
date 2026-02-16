@@ -1,0 +1,13 @@
+[package]
+name = "rg-sens-types"
+version = "0.7.5"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Shared data types for rg-Sens system monitoring dashboard"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+uuid = { version = "1", features = ["v4", "serde"] }
+log = "0.4"
