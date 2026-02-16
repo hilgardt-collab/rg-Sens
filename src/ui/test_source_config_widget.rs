@@ -95,10 +95,10 @@ impl TestSourceConfigWidget {
     }
 
     pub fn set_config(&self, config: &TestSourceConfig) {
-        // Only update local state (update interval)
-        // Do NOT modify global TEST_SOURCE_STATE - that's controlled by the Test Source Dialog
-        // The global state is the "live" running state and should not be reset by config dialogs
-        self.config.borrow_mut().update_interval_ms = config.update_interval_ms;
+        // Store the full config locally (mode, min/max, period, manual_value, update_interval)
+        // so get_config() has a valid fallback if the global state lock is poisoned.
+        // Do NOT modify global TEST_SOURCE_STATE - that's controlled by the Test Source Dialog.
+        *self.config.borrow_mut() = config.clone();
 
         // Update UI
         self.update_interval_spin

@@ -274,8 +274,9 @@ impl DataSource for TestSource {
                 );
                 if let Ok(mut state) = TEST_SOURCE_STATE.lock() {
                     state.config = test_config;
-                    // Reset start time when loading config so oscillations start fresh
-                    state.start_time = Instant::now();
+                    // Don't reset start_time — preserves oscillation phase across
+                    // dialog Apply and config reload. On fresh app start, start_time
+                    // is already set to Instant::now() by TestSourceState::default().
                 }
             } else {
                 log::warn!("TestSource::configure failed to deserialize test_config");
