@@ -1887,12 +1887,9 @@ dependencies = [
 name = "rg-sens-audio"
 version = "0.7.5"
 dependencies = [
- "directories",
- "log",
- "rg-sens-types",
+ "anyhow",
  "rodio",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1900,11 +1897,10 @@ name = "rg-sens-core"
 version = "0.7.5"
 dependencies = [
  "anyhow",
+ "cairo-rs",
+ "gtk4",
  "log",
- "once_cell",
- "rg-sens-audio",
  "rg-sens-types",
- "serde",
  "serde_json",
 ]
 

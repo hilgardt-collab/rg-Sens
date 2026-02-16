@@ -1,6 +1,6 @@
 //! Registry for data sources and displayers
 
-use super::{BoxedDataSource, BoxedDisplayer};
+use crate::{BoxedDataSource, BoxedDisplayer, FieldMetadata};
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
@@ -29,17 +29,12 @@ pub struct DisplayerInfo {
 }
 
 /// Registry for data sources and displayers
-///
-/// This allows for compile-time registration of built-in sources/displayers
-/// and runtime registration of plugin-provided ones.
 pub struct Registry {
     sources: RwLock<HashMap<String, SourceFactory>>,
     displayers: RwLock<HashMap<String, DisplayerFactory>>,
     source_info: RwLock<HashMap<String, SourceInfo>>,
     displayer_info: RwLock<HashMap<String, DisplayerInfo>>,
-    /// Cache for source field metadata to avoid creating full source instances
-    /// just to read static field definitions. Key is source ID, value is field list.
-    source_fields_cache: RwLock<HashMap<String, Vec<super::FieldMetadata>>>,
+    source_fields_cache: RwLock<HashMap<String, Vec<FieldMetadata>>>,
 }
 
 impl Registry {
@@ -56,7 +51,6 @@ impl Registry {
 
     /// Register a data source (legacy API, kept for compatibility)
     pub fn register_source(&self, id: &str, factory: SourceFactory) {
-        // Use capitalized ID as default display name
         let display_name = capitalize_id(id);
         self.register_source_with_info(id, &display_name, &[], factory);
     }
@@ -101,7 +95,6 @@ impl Registry {
 
     /// Register a displayer (legacy API, kept for compatibility)
     pub fn register_displayer(&self, id: &str, factory: DisplayerFactory) {
-        // Use capitalized ID as default display name
         let display_name = capitalize_id(id);
         self.register_displayer_with_info(id, &display_name, factory);
     }
@@ -216,27 +209,18 @@ impl Registry {
     }
 
     /// Get cached field metadata for a source type.
-    ///
-    /// This avoids creating expensive source instances just to read static field metadata.
-    /// Fields are cached on first access per source type.
-    ///
-    /// Note: This should NOT be used for "combination" source since its fields depend
-    /// on the configured slots. Use `get_source_fields_for_combo_slot` for that.
-    pub fn get_source_fields_cached(&self, source_id: &str) -> Vec<super::FieldMetadata> {
-        // Skip caching for combination source - its fields are dynamic
+    pub fn get_source_fields_cached(&self, source_id: &str) -> Vec<FieldMetadata> {
         if source_id == "combination" {
             log::warn!("get_source_fields_cached called for 'combination' - use get_source_fields_for_combo_slot instead");
             return Vec::new();
         }
 
-        // Check cache first
         if let Ok(cache) = self.source_fields_cache.read() {
             if let Some(fields) = cache.get(source_id) {
                 return fields.clone();
             }
         }
 
-        // Not in cache - create a source instance to get fields, then cache them
         log::info!(
             "Caching field metadata for source '{}' (one-time cost)",
             source_id
@@ -245,12 +229,10 @@ impl Registry {
         let fields = match self.create_source(source_id) {
             Ok(source) => {
                 let fields = source.fields();
-                // Cache the fields for future use
                 if let Ok(mut cache) = self.source_fields_cache.write() {
                     cache.insert(source_id.to_string(), fields.clone());
                 }
                 fields
-                // source is dropped here, freeing memory
             }
             Err(e) => {
                 log::error!("Failed to get fields for source '{}': {}", source_id, e);
@@ -261,26 +243,22 @@ impl Registry {
         fields
     }
 
-    /// Get field metadata for a combo slot by constructing prefixed fields from cached source fields.
-    ///
-    /// This is much cheaper than creating a full ComboSource with all its child sources,
-    /// because it uses cached field metadata for each individual source type.
+    /// Get field metadata for a combo slot by constructing prefixed fields.
     pub fn get_source_fields_for_combo_slot(
         &self,
         slot_name: &str,
         source_id: &str,
-    ) -> Vec<super::FieldMetadata> {
+    ) -> Vec<FieldMetadata> {
         if source_id.is_empty() || source_id == "none" {
             return Vec::new();
         }
 
         let base_fields = self.get_source_fields_cached(source_id);
 
-        // Prefix field IDs and names with slot name (matching ComboSource::fields() behavior)
         base_fields
             .into_iter()
             .map(|field| {
-                super::FieldMetadata::new(
+                FieldMetadata::new(
                     format!("{}_{}", slot_name, field.id),
                     format!("{} {}", slot_name, field.name),
                     &field.description,
@@ -327,10 +305,9 @@ impl Registry {
     pub fn get_compatible_displayers(&self, source_id: &str) -> Vec<DisplayerInfo> {
         let source_info = match self.get_source_info(source_id) {
             Some(info) => info,
-            None => return self.list_displayers_with_info(), // fallback to all (already sorted)
+            None => return self.list_displayers_with_info(),
         };
 
-        // If no compatible displayers specified, return all (except special ones)
         if source_info.compatible_displayers.is_empty() {
             return self
                 .list_displayers_with_info()
@@ -339,7 +316,6 @@ impl Registry {
                 .collect();
         }
 
-        // Return only compatible displayers, sorted alphabetically by display name
         let mut displayers: Vec<DisplayerInfo> = source_info
             .compatible_displayers
             .iter()
@@ -352,7 +328,6 @@ impl Registry {
 
 /// Helper to capitalize an ID like "cpu" -> "Cpu", "clock_analog" -> "Clock Analog"
 fn capitalize_id(id: &str) -> String {
-    // Convert snake_case to Title Case (first letter of each word capitalized)
     id.split('_')
         .map(|word| {
             let mut chars = word.chars();
@@ -372,28 +347,9 @@ impl Default for Registry {
 }
 
 /// Global registry instance
-///
-/// In the future, this might be replaced with a more sophisticated
-/// plugin system, but for now we use a static registry.
 static GLOBAL_REGISTRY: OnceLock<Registry> = OnceLock::new();
 
 /// Get the global registry
 pub fn global_registry() -> &'static Registry {
     GLOBAL_REGISTRY.get_or_init(Registry::new)
-}
-
-/// Macro to register a data source
-#[macro_export]
-macro_rules! register_source {
-    ($id:expr, $type:ty) => {
-        $crate::core::global_registry().register_source($id, || Box::new(<$type>::default()));
-    };
-}
-
-/// Macro to register a displayer
-#[macro_export]
-macro_rules! register_displayer {
-    ($id:expr, $type:ty) => {
-        $crate::core::global_registry().register_displayer($id, || Box::new(<$type>::default()));
-    };
 }
