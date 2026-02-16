@@ -1,9 +1,9 @@
 //! CPU data source implementation
 
-use crate::core::{
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use crate::ui::{CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit};
+use rg_sens_types::source_configs::{CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;

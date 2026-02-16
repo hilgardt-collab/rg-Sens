@@ -13,6 +13,7 @@ pub mod panel;
 pub mod source_configs;
 pub mod text;
 pub mod theme;
+pub mod timer;
 
 // Re-export commonly used types at the crate root for convenience
 pub use background::{

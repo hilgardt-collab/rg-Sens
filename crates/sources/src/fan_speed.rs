@@ -3,7 +3,7 @@
 //! Provides access to all available fan speed sensors on the system,
 //! including CPU fans, chassis fans, GPU fans, and other cooling fans.
 
-use crate::core::{
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
 use anyhow::Result;

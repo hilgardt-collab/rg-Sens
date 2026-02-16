@@ -1,9 +1,9 @@
 //! Network interface data source implementation
 
-use crate::core::{
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use crate::ui::{NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit};
+use rg_sens_types::source_configs::{NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;

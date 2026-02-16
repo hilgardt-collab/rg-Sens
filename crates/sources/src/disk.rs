@@ -1,10 +1,10 @@
 //! Disk usage data source implementation
 
-use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB, BYTES_PER_TB};
-use crate::core::{
+use rg_sens_core::constants::{BYTES_PER_GB, BYTES_PER_MB, BYTES_PER_TB};
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use crate::ui::{DiskField, DiskSourceConfig, DiskUnit};
+use rg_sens_types::source_configs::{DiskField, DiskSourceConfig, DiskUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;

@@ -1888,6 +1888,7 @@ name = "rg-sens-audio"
 version = "0.7.5"
 dependencies = [
  "anyhow",
+ "rg-sens-types",
  "rodio",
  "serde",
 ]

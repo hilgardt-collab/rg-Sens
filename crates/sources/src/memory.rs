@@ -1,10 +1,10 @@
 //! Memory (RAM) data source implementation
 
-use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB};
-use crate::core::{
+use rg_sens_core::constants::{BYTES_PER_GB, BYTES_PER_MB};
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use crate::ui::{MemoryField, MemorySourceConfig, MemoryUnit};
+use rg_sens_types::source_configs::{MemoryField, MemorySourceConfig, MemoryUnit};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde_json::Value;

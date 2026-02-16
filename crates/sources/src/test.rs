@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use rg_sens_core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use std::time::Duration;
 
 // Re-export test source config types from rg-sens-types
@@ -233,7 +233,7 @@ impl DataSource for TestSource {
         Some(&self.values)
     }
 
-    fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {
+    fn get_typed_config(&self) -> Option<rg_sens_core::SourceConfig> {
         if let Ok(state) = TEST_SOURCE_STATE.lock() {
             log::debug!(
                 "TestSource::get_typed_config: mode={:?}, manual_value={}, min={}, max={}, period={}",
@@ -243,7 +243,7 @@ impl DataSource for TestSource {
                 state.config.max_value,
                 state.config.period
             );
-            Some(crate::core::SourceConfig::Test(state.config.clone()))
+            Some(rg_sens_core::SourceConfig::Test(state.config.clone()))
         } else {
             None
         }

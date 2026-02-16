@@ -3,7 +3,7 @@
 //! Provides access to all available temperature sensors on the system,
 //! including motherboard, drives, GPU packages, and other hardware sensors.
 
-use crate::core::{
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
 use anyhow::Result;

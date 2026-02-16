@@ -8,11 +8,11 @@ mod nvidia;
 pub use backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use detector::detect_gpus;
 
-use crate::core::constants::{BYTES_PER_GB, BYTES_PER_MB};
-use crate::core::{
+use rg_sens_core::constants::{BYTES_PER_GB, BYTES_PER_MB};
+use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use crate::ui::{GpuField, GpuSourceConfig, MemoryUnit, TemperatureUnit};
+use rg_sens_types::source_configs::{GpuField, GpuSourceConfig, MemoryUnit, TemperatureUnit};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use serde_json::Value;
@@ -400,7 +400,7 @@ impl DataSource for GpuSource {
             }
             GpuField::ClockCore => {
                 if let Some(clock) = self.clock_core {
-                    use crate::ui::GpuFrequencyUnit;
+                    use rg_sens_types::source_configs::gpu::FrequencyUnit as GpuFrequencyUnit;
                     let (value, unit) = match self.config.frequency_unit {
                         GpuFrequencyUnit::MHz => (clock as f64, "MHz"),
                         GpuFrequencyUnit::GHz => (clock as f64 / 1000.0, "GHz"),
@@ -415,7 +415,7 @@ impl DataSource for GpuSource {
             }
             GpuField::ClockMemory => {
                 if let Some(clock) = self.clock_memory {
-                    use crate::ui::GpuFrequencyUnit;
+                    use rg_sens_types::source_configs::gpu::FrequencyUnit as GpuFrequencyUnit;
                     let (value, unit) = match self.config.frequency_unit {
                         GpuFrequencyUnit::MHz => (clock as f64, "MHz"),
                         GpuFrequencyUnit::GHz => (clock as f64 / 1000.0, "GHz"),
@@ -519,7 +519,7 @@ impl DataSource for GpuSource {
                 }
             }
             GpuField::ClockCore => {
-                use crate::ui::GpuFrequencyUnit;
+                use rg_sens_types::source_configs::gpu::FrequencyUnit as GpuFrequencyUnit;
                 let default_max = match self.config.frequency_unit {
                     GpuFrequencyUnit::MHz => 3000.0,
                     GpuFrequencyUnit::GHz => 3.0, // 3 GHz = 3000 MHz
@@ -534,7 +534,7 @@ impl DataSource for GpuSource {
                 }
             }
             GpuField::ClockMemory => {
-                use crate::ui::GpuFrequencyUnit;
+                use rg_sens_types::source_configs::gpu::FrequencyUnit as GpuFrequencyUnit;
                 let default_max = match self.config.frequency_unit {
                     GpuFrequencyUnit::MHz => 2500.0,
                     GpuFrequencyUnit::GHz => 2.5, // 2.5 GHz = 2500 MHz

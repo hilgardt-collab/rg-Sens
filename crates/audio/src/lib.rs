@@ -134,49 +134,8 @@ impl AudioPlayer {
     }
 }
 
-/// Configuration for alarm/timer sounds
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct AlarmSoundConfig {
-    /// Whether sound is enabled
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-
-    /// Custom sound file path (None = use system alert)
-    #[serde(default)]
-    pub custom_sound_path: Option<String>,
-
-    /// Whether to loop the sound until dismissed
-    #[serde(default = "default_true")]
-    pub loop_sound: bool,
-
-    /// Volume level (0.0 to 1.0)
-    #[serde(default = "default_volume")]
-    pub volume: f32,
-
-    /// Whether visual flash effect is enabled
-    #[serde(default = "default_true")]
-    pub visual_enabled: bool,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-fn default_volume() -> f32 {
-    0.8
-}
-
-impl Default for AlarmSoundConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            custom_sound_path: None,
-            loop_sound: true,
-            volume: 0.8,
-            visual_enabled: true,
-        }
-    }
-}
+// Re-export AlarmSoundConfig from the types crate
+pub use rg_sens_types::timer::AlarmSoundConfig;
 
 #[cfg(test)]
 mod tests {

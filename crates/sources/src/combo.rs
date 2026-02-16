@@ -3,7 +3,7 @@
 //! This source is designed for complex displayers (like LCARS) that need
 //! to show data from multiple sources simultaneously.
 
-use crate::core::{
+use rg_sens_core::{
     global_registry, DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata,
 };
 use anyhow::Result;
@@ -339,7 +339,7 @@ impl DataSource for ComboSource {
         Ok(())
     }
 
-    fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {
-        Some(crate::core::SourceConfig::Combo(self.config.clone()))
+    fn get_typed_config(&self) -> Option<rg_sens_core::SourceConfig> {
+        Some(rg_sens_core::SourceConfig::Combo(self.config.clone()))
     }
 }

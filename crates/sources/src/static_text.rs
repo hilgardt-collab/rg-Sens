@@ -2,7 +2,7 @@
 //!
 //! Provides configurable static text lines for custom text overlays.
 
-use crate::core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
+use rg_sens_core::{DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata};
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -194,7 +194,7 @@ impl DataSource for StaticTextSource {
         Ok(())
     }
 
-    fn get_typed_config(&self) -> Option<crate::core::SourceConfig> {
-        Some(crate::core::SourceConfig::StaticText(self.config.clone()))
+    fn get_typed_config(&self) -> Option<rg_sens_core::SourceConfig> {
+        Some(rg_sens_core::SourceConfig::StaticText(self.config.clone()))
     }
 }
