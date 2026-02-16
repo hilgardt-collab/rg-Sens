@@ -258,11 +258,7 @@ fn render_continuous_arc(
         } else {
             get_color_at_value(0.0, &resolved.color_stops, config.color_transition)
         };
-        let end_color = if config.color_mode == ColorApplicationMode::Progressive {
-            get_color_at_value(value, &resolved.color_stops, config.color_transition)
-        } else {
-            get_color_at_value(value, &resolved.color_stops, config.color_transition)
-        };
+        let end_color = get_color_at_value(value, &resolved.color_stops, config.color_transition);
         draw_pointed_cap(cr, cx, cy, radius, width, start_rad, true, &start_color)?;
         draw_pointed_cap(cr, cx, cy, radius, width, end_rad, false, &end_color)?;
     }

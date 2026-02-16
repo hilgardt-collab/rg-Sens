@@ -418,12 +418,8 @@ pub fn render_graph_with_theme(
             for i in 0..=num_labels {
                 let value = max_val - (i as f64 / num_labels as f64) * value_range;
                 // Use adaptive formatting based on value magnitude
-                let label = if value.abs() >= 1000.0 {
+                let label = if value.abs() >= 100.0 {
                     format!("{:.0}", value)
-                } else if value.abs() >= 100.0 {
-                    format!("{:.0}", value)
-                } else if value.abs() >= 10.0 {
-                    format!("{:.1}", value)
                 } else {
                     format!("{:.1}", value)
                 };

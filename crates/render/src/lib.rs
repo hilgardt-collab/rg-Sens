@@ -1,4 +1,5 @@
 //! rg-sens-render: Cairo rendering functions for bars, arcs, graphs, etc.
+#![allow(clippy::too_many_arguments)]
 
 pub mod arc_display;
 pub mod background;
