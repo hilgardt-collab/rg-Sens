@@ -322,7 +322,67 @@ impl AnimationManager {
 
         self.using_frame_clock.set(true);
         log::debug!("Animation manager: attached to frame clock");
+
+        // Schedule a safety check to verify the frame clock actually fires.
+        // If the compositor isn't sending frame events (window covered, system suspended,
+        // Wayland throttling), the callback will never fire. This catches that within
+        // 500ms instead of waiting for the 3+ second watchdog timeout.
+        self.schedule_frame_clock_verify(new_generation);
+
         true
+    }
+
+    /// Verify that a newly-attached frame clock callback is actually firing.
+    /// Called 500ms after attachment. If no tick has occurred, the frame clock is dead —
+    /// fall back to timeout immediately instead of waiting for the watchdog.
+    fn schedule_frame_clock_verify(&self, expected_generation: u64) {
+        glib::source::timeout_add_local_full(
+            Duration::from_millis(500),
+            glib::Priority::DEFAULT_IDLE,
+            move || {
+                with_animation_manager(|manager| {
+                    // Skip if frame clock was already stopped or replaced since we scheduled
+                    if !manager.using_frame_clock.get()
+                        || manager.frame_clock_generation.get() != expected_generation
+                    {
+                        return;
+                    }
+
+                    // Check if ANY tick has run since we attached. If the frame clock fired,
+                    // process_frame_clock_tick() would have called tick() which updates
+                    // last_tick_time. A 500ms gap means nothing is ticking.
+                    let stalled = manager
+                        .last_tick_time
+                        .get()
+                        .map(|t| Instant::now().duration_since(t) >= Duration::from_millis(500))
+                        .unwrap_or(true);
+
+                    if stalled {
+                        log::warn!(
+                            "Animation manager: frame clock did not tick within 500ms of attachment, falling back to timeout"
+                        );
+                        manager.stop_frame_clock();
+
+                        // Apply the same exponential backoff as watchdog restarts
+                        let restarts = manager.consecutive_watchdog_restarts.get() + 1;
+                        manager.consecutive_watchdog_restarts.set(restarts);
+                        let base_secs = WATCHDOG_STALE_THRESHOLD.as_secs_f64();
+                        let multiplier = 1u32 << restarts.min(4);
+                        let cooldown_secs = (base_secs * multiplier as f64).min(30.0);
+                        manager.frame_clock_cooldown_until.set(Some(
+                            Instant::now() + Duration::from_secs_f64(cooldown_secs),
+                        ));
+
+                        // Resume timeout-based ticking immediately
+                        if !manager.entries.borrow().is_empty() {
+                            manager.tick();
+                            manager.schedule_next_tick();
+                        }
+                    }
+                });
+                glib::ControlFlow::Break
+            },
+        );
     }
 
     /// Find a valid widget to use as reference for frame clock
@@ -436,11 +496,9 @@ impl AnimationManager {
         // event loop and keeps the UI responsive during user interaction.
         glib::source::timeout_add_local_full(interval, glib::Priority::DEFAULT_IDLE, move || {
             with_animation_manager(|manager| {
-                // Try again to attach to frame clock
-                if manager.try_use_frame_clock() {
-                    return;
-                }
-
+                // Always call tick() first, then let schedule_next_tick() decide whether
+                // to switch to frame clock. Never try frame clock here — doing so would
+                // skip tick() and break the timeout chain if the frame clock is dead.
                 let any_active = manager.tick();
                 let now = Instant::now();
 
