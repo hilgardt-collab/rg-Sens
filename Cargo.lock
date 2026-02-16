@@ -1869,7 +1869,6 @@ dependencies = [
  "regex",
  "rg-sens-audio",
  "rg-sens-core",
- "rg-sens-displayers",
  "rg-sens-render",
  "rg-sens-sources",
  "rg-sens-types",
@@ -1902,26 +1901,6 @@ dependencies = [
  "gtk4",
  "log",
  "rg-sens-types",
- "serde_json",
-]
-
-[[package]]
-name = "rg-sens-displayers"
-version = "0.7.5"
-dependencies = [
- "anyhow",
- "cairo-rs",
- "gdk4",
- "gtk4",
- "log",
- "once_cell",
- "pango",
- "pangocairo",
- "rand",
- "rg-sens-core",
- "rg-sens-render",
- "rg-sens-types",
- "serde",
  "serde_json",
 ]
 
