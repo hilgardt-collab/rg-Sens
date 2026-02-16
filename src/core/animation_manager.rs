@@ -160,6 +160,10 @@ struct AnimationManager {
     /// When the watchdog restarts the tick mechanism, the frame clock may still be dead.
     /// We use timeout-based ticking until the cooldown expires, then try frame clock again.
     frame_clock_cooldown_until: Cell<Option<Instant>>,
+    /// Consecutive watchdog restarts without a successful frame clock tick.
+    /// Used for exponential backoff on the frame clock cooldown to avoid futile
+    /// re-attach cycles when the compositor isn't sending frame events.
+    consecutive_watchdog_restarts: Cell<u32>,
 }
 
 impl AnimationManager {
@@ -177,6 +181,7 @@ impl AnimationManager {
             last_tick_time: Cell::new(None),
             watchdog_active: Cell::new(false),
             frame_clock_cooldown_until: Cell::new(None),
+            consecutive_watchdog_restarts: Cell::new(0),
         }
     }
 
@@ -335,6 +340,15 @@ impl AnimationManager {
 
     /// Process tick from frame clock (synchronized with display refresh)
     fn process_frame_clock_tick(&self) {
+        // Frame clock is alive — reset the watchdog backoff counter
+        if self.consecutive_watchdog_restarts.get() > 0 {
+            log::debug!(
+                "Animation manager: frame clock recovered after {} watchdog restarts",
+                self.consecutive_watchdog_restarts.get()
+            );
+            self.consecutive_watchdog_restarts.set(0);
+        }
+
         // In idle mode, skip most frames to save CPU
         if self.in_idle_mode.get() {
             static IDLE_SKIP_COUNTER: std::sync::atomic::AtomicU32 =
@@ -565,6 +579,7 @@ impl AnimationManager {
         *self.reference_widget.borrow_mut() = None;
         self.last_tick_time.set(None);
         self.frame_clock_cooldown_until.set(None);
+        self.consecutive_watchdog_restarts.set(0);
         // The timer will stop on next tick since entries is empty
     }
 
@@ -612,6 +627,9 @@ impl AnimationManager {
     /// Forcibly restart the tick mechanism.
     /// Called by the watchdog when it detects the frame clock callback has silently died.
     fn restart_tick_mechanism(&self) {
+        let restarts = self.consecutive_watchdog_restarts.get() + 1;
+        self.consecutive_watchdog_restarts.set(restarts);
+
         // Reset all tick state
         self.stop_frame_clock();
         self.timer_active.set(false);
@@ -626,12 +644,25 @@ impl AnimationManager {
         // Force timeout-based fallback instead of trying frame clock immediately.
         // The frame clock may be dead (system suspend, compositor throttling, Wayland
         // not sending frame events), and re-attaching immediately would just stall again.
-        // Set a cooldown so schedule_next_tick() also avoids the frame clock for a while.
+        //
+        // Use exponential backoff: 3s, 6s, 12s, 24s, cap at 30s.
+        // Each consecutive restart without a successful frame clock tick doubles the
+        // cooldown, avoiding futile re-attach cycles that spam logs and waste CPU.
+        // The timeout fallback provides smooth animation regardless.
+        let base_secs = WATCHDOG_STALE_THRESHOLD.as_secs_f64();
+        let multiplier = 1u32 << restarts.min(4); // 2, 4, 8, 16
+        let cooldown_secs = (base_secs * multiplier as f64).min(30.0);
+        let cooldown = Duration::from_secs_f64(cooldown_secs);
+
         self.frame_clock_cooldown_until
-            .set(Some(Instant::now() + WATCHDOG_STALE_THRESHOLD));
+            .set(Some(Instant::now() + cooldown));
         self.timer_active.set(true);
         self.schedule_timeout_tick();
-        log::info!("Animation watchdog: tick mechanism restarted via timeout fallback");
+        log::info!(
+            "Animation watchdog: tick mechanism restarted via timeout fallback (attempt {}, next frame clock retry in {:.0}s)",
+            restarts,
+            cooldown_secs
+        );
     }
 
     /// Schedule a single timeout-based tick, bypassing frame clock.
