@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-const APP_ID: &str = "rg-sens";
+const APP_ID: &str = "com.github.rg-sens";
 
 /// Graphics renderer to use
 #[derive(Debug, Clone, Copy, ValueEnum)]
