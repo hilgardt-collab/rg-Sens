@@ -4,22 +4,18 @@
 //! this module provides a single global timer that processes all registered animation callbacks.
 //! This reduces overhead from N timers to 1 timer, where N is the number of animated panels.
 //!
-//! The manager uses GTK's frame clock for synchronization with the display's refresh rate.
-//! This ensures queue_draw() calls happen at the right time in the rendering pipeline,
-//! avoiding issues with Vulkan swapchain synchronization.
+//! Uses timeout-based ticking for reliable animation delivery. GTK4's `queue_draw()` already
+//! synchronizes with the display's frame clock for actual rendering, so timeout-based tick
+//! scheduling provides equivalent visual quality without the stall risks of frame clock
+//! callbacks (which silently die when the Wayland compositor stops sending frame events).
 //!
 //! The manager uses adaptive frame rate: full frame rate when animations are active,
 //! ~4fps when idle to save CPU.
-//!
-//! A watchdog timer runs every 2 seconds to detect and recover from silently dead
-//! frame clock callbacks (GTK removes tick callbacks without notification when their
-//! widget is destroyed or unmapped).
 
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::DrawingArea;
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crate::core::ANIMATION_FRAME_INTERVAL;
@@ -32,13 +28,6 @@ const IDLE_FRAME_INTERVAL: Duration = Duration::from_millis(250);
 /// This is time-based rather than frame-based to work correctly at any frame rate
 const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(1000);
 
-/// Watchdog check interval - how often we verify the tick mechanism is alive
-const WATCHDOG_INTERVAL: Duration = Duration::from_secs(2);
-
-/// Watchdog staleness threshold - if no tick has occurred for this long, restart
-/// Must be > IDLE_FRAME_INTERVAL to avoid false positives during idle mode
-const WATCHDOG_STALE_THRESHOLD: Duration = Duration::from_secs(3);
-
 thread_local! {
     /// Thread-local animation manager. Since GTK operations must happen on the main thread,
     /// we use thread-local storage instead of a global static.
@@ -46,16 +35,12 @@ thread_local! {
 }
 
 /// Initialize the global animation manager. Call this once at startup.
-/// Starts the watchdog timer that monitors tick mechanism health.
 pub fn init_global_animation_manager() {
     // Thread-local storage is lazily initialized on first access.
-    ANIMATION_MANAGER.with(|manager| {
-        manager.start_watchdog();
-    });
+    ANIMATION_MANAGER.with(|_manager| {});
 }
 
 /// Access the global animation manager and perform an operation.
-/// Returns None if called from a thread without an initialized manager.
 fn with_animation_manager<F, R>(f: F) -> R
 where
     F: FnOnce(&AnimationManager) -> R,
@@ -106,12 +91,6 @@ pub fn animation_entry_count() -> usize {
     with_animation_manager(|manager| manager.entry_count())
 }
 
-/// Check if the animation tick mechanism appears stalled.
-/// Returns Some(elapsed) if stalled, None if healthy or no entries exist.
-pub fn check_animation_stall() -> Option<Duration> {
-    with_animation_manager(|manager| manager.check_stall())
-}
-
 /// Shutdown the animation manager by clearing all entries.
 /// This breaks reference cycles and allows clean app exit.
 pub fn shutdown_animation_manager() {
@@ -141,29 +120,8 @@ struct AnimationManager {
     last_active_time: Cell<Option<Instant>>,
     /// Whether we're currently in idle mode (slow polling).
     in_idle_mode: Cell<bool>,
-    /// Whether we're using frame clock tick callback
-    using_frame_clock: Cell<bool>,
-    /// Flag to signal the frame clock callback to stop
-    stop_frame_clock: Rc<Cell<bool>>,
-    /// Generation counter for frame clock callbacks.
-    /// Incremented each time a new callback is registered. Old callbacks detect
-    /// a generation mismatch and return Break, preventing callback accumulation.
-    frame_clock_generation: Rc<Cell<u64>>,
-    /// Reference widget for frame clock (first registered widget that's still valid)
-    reference_widget: RefCell<Option<glib::WeakRef<DrawingArea>>>,
-    /// Timestamp of the last successful tick() call - used by watchdog to detect stalls.
-    /// Updated every time tick() runs, regardless of whether any animations were active.
+    /// Timestamp of the last successful tick() call - for diagnostics.
     last_tick_time: Cell<Option<Instant>>,
-    /// Whether the watchdog timer has been started.
-    watchdog_active: Cell<bool>,
-    /// Cooldown: avoid frame clock until this time (after watchdog recovery).
-    /// When the watchdog restarts the tick mechanism, the frame clock may still be dead.
-    /// We use timeout-based ticking until the cooldown expires, then try frame clock again.
-    frame_clock_cooldown_until: Cell<Option<Instant>>,
-    /// Consecutive watchdog restarts without a successful frame clock tick.
-    /// Used for exponential backoff on the frame clock cooldown to avoid futile
-    /// re-attach cycles when the compositor isn't sending frame events.
-    consecutive_watchdog_restarts: Cell<u32>,
 }
 
 impl AnimationManager {
@@ -174,14 +132,7 @@ impl AnimationManager {
             timer_active: Cell::new(false),
             last_active_time: Cell::new(None),
             in_idle_mode: Cell::new(false),
-            using_frame_clock: Cell::new(false),
-            stop_frame_clock: Rc::new(Cell::new(false)),
-            frame_clock_generation: Rc::new(Cell::new(0)),
-            reference_widget: RefCell::new(None),
             last_tick_time: Cell::new(None),
-            watchdog_active: Cell::new(false),
-            frame_clock_cooldown_until: Cell::new(None),
-            consecutive_watchdog_restarts: Cell::new(0),
         }
     }
 
@@ -190,11 +141,6 @@ impl AnimationManager {
     where
         F: Fn() -> bool + 'static,
     {
-        // If this is the first entry, use this widget as the reference for frame clock
-        if self.reference_widget.borrow().is_none() {
-            *self.reference_widget.borrow_mut() = Some(widget_weak.clone());
-        }
-
         self.entries.borrow_mut().push(AnimationEntry {
             widget_weak,
             tick_fn: Box::new(tick_fn),
@@ -208,291 +154,18 @@ impl AnimationManager {
         self.ensure_timer_running();
     }
 
-    /// Check if the reference widget is still valid (mapped with a root).
-    fn is_reference_widget_valid(&self) -> bool {
-        self.reference_widget
-            .borrow()
-            .as_ref()
-            .and_then(|w| w.upgrade())
-            .map(|w| w.is_mapped() && w.root().is_some())
-            .unwrap_or(false)
-    }
-
     /// Ensure the global animation timer is running.
     fn ensure_timer_running(&self) {
         if self.timer_active.get() {
-            // If using frame clock, verify the reference widget is still alive.
-            // GTK silently removes tick callbacks when their widget is destroyed/unmapped,
-            // which leaves us thinking the frame clock is active when it's actually dead.
-            if self.using_frame_clock.get() && !self.is_reference_widget_valid() {
-                log::warn!(
-                    "Animation manager: frame clock reference widget lost, restarting tick mechanism"
-                );
-                self.stop_frame_clock();
-                // Fall through to restart
-            } else {
-                return;
-            }
+            return;
         }
 
         self.timer_active.set(true);
         self.schedule_next_tick();
     }
 
-    /// Try to use frame clock tick callback for synchronization
-    fn try_use_frame_clock(&self) -> bool {
-        // Respect cooldown after watchdog recovery - frame clock may still be dead
-        if let Some(cooldown_until) = self.frame_clock_cooldown_until.get() {
-            if Instant::now() < cooldown_until {
-                return false;
-            }
-            // Cooldown expired, clear it and try frame clock
-            self.frame_clock_cooldown_until.set(None);
-            log::debug!("Animation manager: frame clock cooldown expired, re-attempting");
-        }
-
-        // Check if we already have a tick callback
-        if self.using_frame_clock.get() {
-            // Verify the reference widget is still valid. If the widget was destroyed
-            // or unmapped, GTK silently removed the tick callback - we must re-attach.
-            if self.is_reference_widget_valid() {
-                return true;
-            }
-            log::warn!(
-                "Animation manager: reference widget invalid while frame clock claimed active, re-attaching"
-            );
-            self.using_frame_clock.set(false);
-            self.stop_frame_clock.set(true);
-            // Fall through to find a new widget and attach a new callback
-        }
-
-        // Try to get a valid reference widget
-        let reference_widget = self.reference_widget.borrow();
-        let widget = match reference_widget.as_ref().and_then(|w| w.upgrade()) {
-            Some(w) if w.is_mapped() && w.root().is_some() => w,
-            _ => {
-                // Try to find a new reference widget from entries
-                drop(reference_widget);
-                if let Some(new_ref) = self.find_valid_reference_widget() {
-                    *self.reference_widget.borrow_mut() = Some(new_ref.downgrade());
-                    new_ref
-                } else {
-                    return false;
-                }
-            }
-        };
-
-        // Reset the stop flag and increment generation counter.
-        // The generation counter prevents callback accumulation: if a new callback
-        // is registered before the old one checks the stop flag, the old callback
-        // will detect the generation mismatch and return Break.
-        self.stop_frame_clock.set(false);
-        let stop_flag = self.stop_frame_clock.clone();
-
-        let new_generation = self.frame_clock_generation.get() + 1;
-        self.frame_clock_generation.set(new_generation);
-        let generation = self.frame_clock_generation.clone();
-        let my_generation = new_generation;
-
-        // Set up tick callback on the widget
-        // This synchronizes with GTK's frame clock (VSync)
-        widget.add_tick_callback(move |_widget, _frame_clock| {
-            // Check if we should stop
-            if stop_flag.get() {
-                return glib::ControlFlow::Break;
-            }
-
-            // Check if this callback is stale (a newer one has been registered).
-            // This prevents the race where: old callback sets stop_flag=true,
-            // new registration resets stop_flag=false, old callback never dies.
-            if generation.get() != my_generation {
-                log::debug!(
-                    "Animation manager: removing stale frame clock callback (gen {} vs current {})",
-                    my_generation,
-                    generation.get()
-                );
-                return glib::ControlFlow::Break;
-            }
-
-            with_animation_manager(|manager| {
-                manager.process_frame_clock_tick();
-            });
-            glib::ControlFlow::Continue
-        });
-
-        self.using_frame_clock.set(true);
-        log::debug!("Animation manager: attached to frame clock");
-
-        // Schedule a safety check to verify the frame clock actually fires.
-        // If the compositor isn't sending frame events (window covered, system suspended,
-        // Wayland throttling), the callback will never fire. This catches that within
-        // 500ms instead of waiting for the 3+ second watchdog timeout.
-        self.schedule_frame_clock_verify(new_generation);
-
-        true
-    }
-
-    /// Verify that a newly-attached frame clock callback is actually firing.
-    /// Called 500ms after attachment. If no tick has occurred, the frame clock is dead —
-    /// fall back to timeout immediately instead of waiting for the watchdog.
-    fn schedule_frame_clock_verify(&self, expected_generation: u64) {
-        glib::source::timeout_add_local_full(
-            Duration::from_millis(500),
-            glib::Priority::DEFAULT_IDLE,
-            move || {
-                with_animation_manager(|manager| {
-                    // Skip if frame clock was already stopped or replaced since we scheduled
-                    if !manager.using_frame_clock.get()
-                        || manager.frame_clock_generation.get() != expected_generation
-                    {
-                        return;
-                    }
-
-                    // Check if ANY tick has run since we attached. If the frame clock fired,
-                    // process_frame_clock_tick() would have called tick() which updates
-                    // last_tick_time. A 500ms gap means nothing is ticking.
-                    let stalled = manager
-                        .last_tick_time
-                        .get()
-                        .map(|t| Instant::now().duration_since(t) >= Duration::from_millis(500))
-                        .unwrap_or(true);
-
-                    if stalled {
-                        let restarts = manager.consecutive_watchdog_restarts.get();
-                        if restarts < 3 {
-                            log::warn!(
-                                "Animation manager: frame clock did not tick within 500ms of attachment, falling back to timeout"
-                            );
-                        } else {
-                            log::debug!(
-                                "Animation manager: frame clock still not ticking, staying on timeout (attempt {})",
-                                restarts + 1
-                            );
-                        }
-                        manager.stop_frame_clock();
-
-                        // Apply the same exponential backoff as watchdog restarts
-                        let restarts = manager.consecutive_watchdog_restarts.get() + 1;
-                        manager.consecutive_watchdog_restarts.set(restarts);
-                        let base_secs = WATCHDOG_STALE_THRESHOLD.as_secs_f64();
-                        let multiplier = 1u32 << restarts.min(4);
-                        let cooldown_secs = (base_secs * multiplier as f64).min(30.0);
-                        manager.frame_clock_cooldown_until.set(Some(
-                            Instant::now() + Duration::from_secs_f64(cooldown_secs),
-                        ));
-
-                        // Resume timeout-based ticking immediately
-                        if !manager.entries.borrow().is_empty() {
-                            manager.tick();
-                            manager.schedule_next_tick();
-                        }
-                    }
-                });
-                glib::ControlFlow::Break
-            },
-        );
-    }
-
-    /// Find a valid widget to use as reference for frame clock
-    fn find_valid_reference_widget(&self) -> Option<DrawingArea> {
-        let entries = self.entries.borrow();
-        for entry in entries.iter() {
-            if let Some(widget) = entry.widget_weak.upgrade() {
-                if widget.is_mapped() && widget.root().is_some() {
-                    return Some(widget);
-                }
-            }
-        }
-        None
-    }
-
-    /// Process tick from frame clock (synchronized with display refresh)
-    fn process_frame_clock_tick(&self) {
-        // Frame clock is alive — reset the watchdog backoff counter
-        if self.consecutive_watchdog_restarts.get() > 0 {
-            log::debug!(
-                "Animation manager: frame clock recovered after {} watchdog restarts",
-                self.consecutive_watchdog_restarts.get()
-            );
-            self.consecutive_watchdog_restarts.set(0);
-        }
-
-        // In idle mode, skip most frames to save CPU
-        if self.in_idle_mode.get() {
-            static IDLE_SKIP_COUNTER: std::sync::atomic::AtomicU32 =
-                std::sync::atomic::AtomicU32::new(0);
-            let count = IDLE_SKIP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            // At 60fps, skip 14 out of 15 frames (~4fps effective rate)
-            if !count.is_multiple_of(15) {
-                // Still update last_tick_time so the watchdog knows we're alive
-                self.last_tick_time.set(Some(Instant::now()));
-                return;
-            }
-        }
-
-        let any_active = self.tick();
-        let now = Instant::now();
-
-        // Track activity for idle mode transitions
-        if any_active {
-            // Any redraw activity resets the idle timer and exits idle mode
-            self.last_active_time.set(Some(now));
-            if self.in_idle_mode.get() {
-                self.in_idle_mode.set(false);
-                log::debug!("Animation manager exiting idle mode (activity detected)");
-            }
-        } else {
-            // Switch to idle mode if no activity for IDLE_TIME_THRESHOLD
-            if let Some(last_active) = self.last_active_time.get() {
-                if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
-                    && !self.in_idle_mode.get()
-                {
-                    self.in_idle_mode.set(true);
-                    log::debug!(
-                        "Animation manager entering idle mode (no activity for {:?})",
-                        IDLE_TIME_THRESHOLD
-                    );
-                }
-            } else if !self.in_idle_mode.get() {
-                self.in_idle_mode.set(true);
-            }
-        }
-
-        // Check if we should stop
-        if self.entries.borrow().is_empty() {
-            self.stop_frame_clock();
-            self.timer_active.set(false);
-        } else if !self.is_reference_widget_valid() {
-            // Entries still exist but the reference widget is gone (destroyed/orphaned).
-            // tick() may have removed the reference widget's entry while other entries remain.
-            // We're still inside the dying widget's callback, so we have one last chance to
-            // re-attach to a new widget's frame clock before GTK stops calling us.
-            log::warn!(
-                "Animation manager: reference widget lost while {} entries remain, re-attaching",
-                self.entries.borrow().len()
-            );
-            self.stop_frame_clock();
-            self.schedule_next_tick();
-        }
-    }
-
-    /// Stop using frame clock
-    fn stop_frame_clock(&self) {
-        if self.using_frame_clock.get() {
-            // Signal the tick callback to stop on next invocation
-            self.stop_frame_clock.set(true);
-            self.using_frame_clock.set(false);
-        }
-    }
-
     /// Schedule the next tick with appropriate interval based on idle state.
     fn schedule_next_tick(&self) {
-        // Try to use frame clock first (synchronized with display)
-        if self.try_use_frame_clock() {
-            return; // Frame clock will handle ticks
-        }
-
-        // Fall back to timeout-based ticking if no widget available yet
         let interval = if self.in_idle_mode.get() {
             IDLE_FRAME_INTERVAL
         } else {
@@ -504,9 +177,6 @@ impl AnimationManager {
         // event loop and keeps the UI responsive during user interaction.
         glib::source::timeout_add_local_full(interval, glib::Priority::DEFAULT_IDLE, move || {
             with_animation_manager(|manager| {
-                // Always call tick() first, then let schedule_next_tick() decide whether
-                // to switch to frame clock. Never try frame clock here — doing so would
-                // skip tick() and break the timeout chain if the frame clock is dead.
                 let any_active = manager.tick();
                 let now = Instant::now();
 
@@ -554,7 +224,7 @@ impl AnimationManager {
     /// Process one animation frame for all registered widgets.
     /// Returns true if any animation needed a redraw.
     fn tick(&self) -> bool {
-        // Record tick time for watchdog monitoring
+        // Record tick time for diagnostics
         self.last_tick_time.set(Some(Instant::now()));
 
         let mut entries = self.entries.borrow_mut();
@@ -640,155 +310,8 @@ impl AnimationManager {
             "Animation manager shutdown: clearing {} entries",
             self.entries.borrow().len()
         );
-        self.stop_frame_clock();
         self.entries.borrow_mut().clear();
-        *self.reference_widget.borrow_mut() = None;
         self.last_tick_time.set(None);
-        self.frame_clock_cooldown_until.set(None);
-        self.consecutive_watchdog_restarts.set(0);
         // The timer will stop on next tick since entries is empty
-    }
-
-    /// Start the watchdog timer that periodically checks if the tick mechanism is alive.
-    /// This runs independently of the frame clock and can detect/recover from a silently
-    /// dead frame clock callback.
-    fn start_watchdog(&self) {
-        if self.watchdog_active.get() {
-            return;
-        }
-        self.watchdog_active.set(true);
-
-        glib::timeout_add_local(WATCHDOG_INTERVAL, move || {
-            with_animation_manager(|manager| {
-                let entry_count = manager.entries.borrow().len();
-                if entry_count == 0 {
-                    // No entries, nothing to watch
-                    return;
-                }
-
-                // Check if ticks have stalled
-                if let Some(last_tick) = manager.last_tick_time.get() {
-                    let elapsed = Instant::now().duration_since(last_tick);
-                    if elapsed >= WATCHDOG_STALE_THRESHOLD {
-                        log::warn!(
-                            "Animation watchdog: tick mechanism stalled for {:.1}s with {} entries, restarting",
-                            elapsed.as_secs_f64(),
-                            entry_count
-                        );
-                        manager.restart_tick_mechanism();
-                    }
-                } else if manager.timer_active.get() {
-                    // Timer claims to be active but no tick has ever run - may be stuck
-                    log::warn!(
-                        "Animation watchdog: timer_active=true but no tick recorded with {} entries, restarting",
-                        entry_count
-                    );
-                    manager.restart_tick_mechanism();
-                }
-            });
-            glib::ControlFlow::Continue
-        });
-    }
-
-    /// Forcibly restart the tick mechanism.
-    /// Called by the watchdog when it detects the frame clock callback has silently died.
-    fn restart_tick_mechanism(&self) {
-        let restarts = self.consecutive_watchdog_restarts.get() + 1;
-        self.consecutive_watchdog_restarts.set(restarts);
-
-        // Reset all tick state
-        self.stop_frame_clock();
-        self.timer_active.set(false);
-        self.in_idle_mode.set(false);
-        self.last_active_time.set(Some(Instant::now()));
-
-        // Try to find a new valid reference widget
-        if let Some(new_ref) = self.find_valid_reference_widget() {
-            *self.reference_widget.borrow_mut() = Some(new_ref.downgrade());
-        }
-
-        // Force timeout-based fallback instead of trying frame clock immediately.
-        // The frame clock may be dead (system suspend, compositor throttling, Wayland
-        // not sending frame events), and re-attaching immediately would just stall again.
-        //
-        // Use exponential backoff: 3s, 6s, 12s, 24s, cap at 30s.
-        // Each consecutive restart without a successful frame clock tick doubles the
-        // cooldown, avoiding futile re-attach cycles that spam logs and waste CPU.
-        // The timeout fallback provides smooth animation regardless.
-        let base_secs = WATCHDOG_STALE_THRESHOLD.as_secs_f64();
-        let multiplier = 1u32 << restarts.min(4); // 2, 4, 8, 16
-        let cooldown_secs = (base_secs * multiplier as f64).min(30.0);
-        let cooldown = Duration::from_secs_f64(cooldown_secs);
-
-        self.frame_clock_cooldown_until
-            .set(Some(Instant::now() + cooldown));
-        self.timer_active.set(true);
-        self.schedule_timeout_tick();
-        log::info!(
-            "Animation watchdog: tick mechanism restarted via timeout fallback (attempt {}, next frame clock retry in {:.0}s)",
-            restarts,
-            cooldown_secs
-        );
-    }
-
-    /// Schedule a single timeout-based tick, bypassing frame clock.
-    /// Used by the watchdog recovery path to ensure at least one tick runs reliably.
-    fn schedule_timeout_tick(&self) {
-        let interval = if self.in_idle_mode.get() {
-            IDLE_FRAME_INTERVAL
-        } else {
-            ANIMATION_FRAME_INTERVAL
-        };
-
-        glib::source::timeout_add_local_full(interval, glib::Priority::DEFAULT_IDLE, move || {
-            with_animation_manager(|manager| {
-                let any_active = manager.tick();
-                let now = Instant::now();
-
-                if any_active {
-                    manager.last_active_time.set(Some(now));
-                    if manager.in_idle_mode.get() {
-                        manager.in_idle_mode.set(false);
-                    }
-                } else if let Some(last_active) = manager.last_active_time.get() {
-                    if now.duration_since(last_active) >= IDLE_TIME_THRESHOLD
-                        && !manager.in_idle_mode.get()
-                    {
-                        manager.in_idle_mode.set(true);
-                    }
-                } else if !manager.in_idle_mode.get() {
-                    manager.in_idle_mode.set(true);
-                }
-
-                // Re-schedule: now try frame clock again for subsequent ticks
-                if !manager.entries.borrow().is_empty() {
-                    manager.schedule_next_tick();
-                } else {
-                    manager.timer_active.set(false);
-                }
-            });
-            glib::ControlFlow::Break
-        });
-    }
-
-    /// Check if the tick mechanism appears stalled.
-    /// Returns Some(elapsed) if stalled, None if healthy or no entries.
-    fn check_stall(&self) -> Option<Duration> {
-        if self.entries.borrow().is_empty() {
-            return None;
-        }
-        if let Some(last_tick) = self.last_tick_time.get() {
-            let elapsed = Instant::now().duration_since(last_tick);
-            if elapsed >= WATCHDOG_STALE_THRESHOLD {
-                Some(elapsed)
-            } else {
-                None
-            }
-        } else if self.timer_active.get() {
-            // Active but never ticked
-            Some(Duration::from_secs(0))
-        } else {
-            None
-        }
     }
 }

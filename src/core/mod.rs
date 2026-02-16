@@ -15,8 +15,8 @@ mod timer_manager;
 mod update_manager;
 
 pub use animation_manager::{
-    animation_entry_count, check_animation_stall, init_global_animation_manager,
-    register_animation, shutdown_animation_manager,
+    animation_entry_count, init_global_animation_manager, register_animation,
+    shutdown_animation_manager,
 };
 pub use panel::{Panel, PanelBorderConfig, PanelGeometry};
 pub use panel_data::{DisplayerConfig, PanelAppearance, PanelData, SourceConfig};
