@@ -1,6 +1,6 @@
 [package]
 name = "rg-sens-audio"
-version = "0.7.6"
+version = "0.7.7"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Audio playback for rg-Sens alarms and timers"
