@@ -40,7 +40,7 @@ pub struct PositionGridWidget {
     buttons: [[ToggleButton; 3]; 3],
     handler_ids: RefCell<Vec<(usize, usize, SignalHandlerId)>>,
     position: Rc<RefCell<TextPosition>>,
-    on_change: Rc<RefCell<Option<Box<dyn Fn(TextPosition)>>>>,
+    on_change: Rc<RefCell<Option<Rc<dyn Fn(TextPosition)>>>>,
     updating: Rc<RefCell<bool>>, // Guard flag to prevent recursion
 }
 
@@ -51,7 +51,7 @@ impl PositionGridWidget {
         container.add_css_class("position-grid");
 
         let position = Rc::new(RefCell::new(initial));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn(TextPosition)>>>> = Rc::new(RefCell::new(None));
+        let on_change: Rc<RefCell<Option<Rc<dyn Fn(TextPosition)>>>> = Rc::new(RefCell::new(None));
         let updating = Rc::new(RefCell::new(false)); // Guard flag
 
         // Create all buttons first
@@ -159,7 +159,11 @@ impl PositionGridWidget {
 
                         *position_clone.borrow_mut() = pos;
 
-                        if let Some(ref callback) = *on_change_clone.borrow() {
+                        // Clone the callback out so we release the borrow before
+                        // invoking it — the callback may trigger cleanup() which
+                        // needs a mutable borrow on on_change.
+                        let callback = on_change_clone.borrow().clone();
+                        if let Some(ref callback) = callback {
                             callback(pos);
                         }
                     } else {
@@ -218,7 +222,7 @@ impl PositionGridWidget {
 
     /// Set the callback for when the position changes
     pub fn set_on_change<F: Fn(TextPosition) + 'static>(&self, callback: F) {
-        *self.on_change.borrow_mut() = Some(Box::new(callback));
+        *self.on_change.borrow_mut() = Some(Rc::new(callback));
     }
 
     /// Clean up signal handlers to break reference cycles between buttons.
