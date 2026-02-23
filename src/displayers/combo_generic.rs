@@ -20,18 +20,15 @@ use crate::displayers::combo_displayer_base::{
     FrameRenderer, LayoutFrameConfig, ThemedFrameConfig,
 };
 
-/// Cached frame rendering data to avoid re-rendering static elements
-/// This is stored in RefCell within the draw closure (not Send/Sync)
-struct FrameCache {
-    /// Cached frame surface (borders, decorations, background)
-    surface: cairo::ImageSurface,
-    /// Size the cache was rendered at
+/// Cached frame layout data to avoid re-computing group layouts every frame.
+/// Only stores computed geometry — frame rendering is done directly to the
+/// GTK-provided Cairo context to avoid CPU→GPU texture uploads with GL/NGL renderers.
+struct FrameLayoutCache {
+    /// Size the cache was computed at
     width: i32,
     height: i32,
     /// Config version when cache was created
     config_version: u64,
-    /// Content bounds from frame render (x, y, width, height)
-    content_bounds: (f64, f64, f64, f64),
     /// Group layouts from frame render
     group_layouts: Vec<(f64, f64, f64, f64)>,
 }
@@ -345,119 +342,65 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         }
     }
 
-    /// Render the complete frame (static frame + dynamic content) to the given context.
+    /// Render the complete frame (static frame + dynamic content) directly to
+    /// the GTK-provided Cairo context.
     ///
-    /// Extracted as a helper so it can be called with either the screen context
-    /// (fallback) or an offscreen context (normal path for flicker-free rendering).
+    /// Frame rendering uses native Cairo draw operations (rectangles, arcs, fills)
+    /// which are efficient on GL/NGL-backed contexts. Group layouts are cached to
+    /// avoid redundant computation, but no ImageSurface is used — this prevents
+    /// the CPU→GPU texture uploads that freeze GL renderers.
     fn render_frame_and_content(
         cr: &Context,
         width: i32,
         height: i32,
         data: &DisplayData<R::Config>,
         renderer: &Arc<R>,
-        frame_cache: &Rc<RefCell<Option<FrameCache>>>,
+        layout_cache: &Rc<RefCell<Option<FrameLayoutCache>>>,
     ) {
         let w = width as f64;
         let h = height as f64;
 
         data.combo.transform.apply(cr, w, h);
 
-        // Check if frame cache is valid (same size and config version)
-        let cached_result = {
-            let cache_ref = frame_cache.borrow();
-            if let Some(cache) = cache_ref.as_ref() {
-                if cache.width == width
-                    && cache.height == height
-                    && cache.config_version == data.config_version
-                {
-                    if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
-                        log::debug!("Failed to set cached surface: {:?}", e);
-                    }
-                    cr.paint().ok();
-                    cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                    Some((cache.content_bounds, cache.group_layouts.clone()))
-                } else {
-                    None
-                }
-            } else {
-                None
+        // Always render frame directly to cr — native GPU operations on GL contexts
+        let content_bounds = match renderer.render_frame(cr, &data.config, w, h) {
+            Ok(bounds) => bounds,
+            Err(e) => {
+                log::debug!("{} frame render error: {}", renderer.theme_name(), e);
+                data.combo.transform.restore(cr);
+                return;
             }
         };
 
-        // Either use cached frame or render fresh and cache
-        let (content_bounds, group_layouts) = if let Some(result) = cached_result {
-            result
-        } else {
-            // Try to create cache surface for static frame
-            let cache_result =
-                cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                    .ok()
-                    .and_then(|surface| {
-                        cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
-                    });
-
-            if let Some((surface, cache_cr)) = cache_result {
-                let content_bounds =
-                    match renderer.render_frame(&cache_cr, &data.config, w, h) {
-                        Ok(bounds) => bounds,
-                        Err(e) => {
-                            log::debug!(
-                                "{} frame render error: {}",
-                                renderer.theme_name(),
-                                e
-                            );
-                            data.combo.transform.restore(cr);
-                            return;
-                        }
-                    };
-
-                let (cx, cy, cw, ch) = content_bounds;
-                let group_layouts =
-                    renderer.calculate_group_layouts(&data.config, cx, cy, cw, ch);
-                renderer.draw_group_dividers(&cache_cr, &data.config, &group_layouts);
-
-                drop(cache_cr);
-                surface.flush();
-
-                if let Err(e) = cr.set_source_surface(&surface, 0.0, 0.0) {
-                    log::debug!("Failed to set cached surface: {:?}", e);
-                }
-                cr.paint().ok();
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-
-                *frame_cache.borrow_mut() = Some(FrameCache {
-                    surface,
-                    width,
-                    height,
-                    config_version: data.config_version,
-                    content_bounds,
-                    group_layouts: group_layouts.clone(),
-                });
-
-                (content_bounds, group_layouts)
-            } else {
-                // Cache creation failed - render directly
-                let content_bounds = match renderer.render_frame(cr, &data.config, w, h) {
-                    Ok(bounds) => bounds,
-                    Err(e) => {
-                        log::debug!(
-                            "{} frame render error: {}",
-                            renderer.theme_name(),
-                            e
-                        );
-                        data.combo.transform.restore(cr);
-                        return;
-                    }
-                };
-
-                let (cx, cy, cw, ch) = content_bounds;
-                let group_layouts =
-                    renderer.calculate_group_layouts(&data.config, cx, cy, cw, ch);
-                renderer.draw_group_dividers(cr, &data.config, &group_layouts);
-
-                (content_bounds, group_layouts)
-            }
+        // Use cached group layouts if size and config haven't changed
+        let group_layouts = {
+            let cache_ref = layout_cache.borrow();
+            cache_ref
+                .as_ref()
+                .filter(|c| {
+                    c.width == width
+                        && c.height == height
+                        && c.config_version == data.config_version
+                })
+                .map(|c| c.group_layouts.clone())
         };
+
+        let group_layouts = group_layouts.unwrap_or_else(|| {
+            let (cx, cy, cw, ch) = content_bounds;
+            let layouts = renderer.calculate_group_layouts(&data.config, cx, cy, cw, ch);
+
+            *layout_cache.borrow_mut() = Some(FrameLayoutCache {
+                width,
+                height,
+                config_version: data.config_version,
+                group_layouts: layouts.clone(),
+            });
+
+            layouts
+        });
+
+        // Draw dividers directly to cr
+        renderer.draw_group_dividers(cr, &data.config, &group_layouts);
 
         let (content_x, content_y, content_w, content_h) = content_bounds;
 
@@ -522,14 +465,9 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
         let data_clone = self.data.clone();
         let renderer_clone = self.renderer.clone();
 
-        // Frame cache lives in the draw closure (not Send/Sync required)
-        let frame_cache: Rc<RefCell<Option<FrameCache>>> = Rc::new(RefCell::new(None));
-        let frame_cache_clone = frame_cache.clone();
-
-        // Last complete frame (static + dynamic content) for flicker-free lock contention fallback
-        let last_complete_frame: Rc<RefCell<Option<cairo::ImageSurface>>> =
-            Rc::new(RefCell::new(None));
-        let last_frame_clone = last_complete_frame.clone();
+        // Layout cache lives in the draw closure (not Send/Sync required)
+        let layout_cache: Rc<RefCell<Option<FrameLayoutCache>>> = Rc::new(RefCell::new(None));
+        let layout_cache_clone = layout_cache.clone();
 
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if width < 10 || height < 10 {
@@ -538,82 +476,23 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                // Lock contention - use last complete frame (includes dynamic content)
-                static DRAW_LOCK_FAIL: std::sync::atomic::AtomicU64 =
-                    std::sync::atomic::AtomicU64::new(0);
-                let count = DRAW_LOCK_FAIL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count < 5 {
-                    log::debug!(
-                        "Draw: try_lock failed ({} total), using cached frame",
-                        count + 1
-                    );
-                }
-                if let Some(surface) = last_frame_clone.borrow().as_ref() {
-                    if cr.set_source_surface(surface, 0.0, 0.0).is_ok() {
-                        cr.paint().ok();
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                        return;
-                    }
-                }
-                // No complete frame yet - fall back to static frame cache
-                if let Some(cache) = frame_cache_clone.borrow().as_ref() {
-                    if cache.width == width
-                        && cache.height == height
-                        && cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok()
-                    {
-                        cr.paint().ok();
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                        return;
-                    }
-                }
-                // No cache at all - solid background
+                // Lock contention - skip this frame (solid background)
                 cr.set_source_rgba(0.1, 0.1, 0.1, 1.0);
                 cr.paint().ok();
                 return;
             };
 
-            // Create offscreen surface for complete frame rendering
-            let off_result =
-                cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                    .ok()
-                    .and_then(|s| cairo::Context::new(&s).ok().map(|c| (s, c)));
-
-            let (off_surface, off_cr) = match off_result {
-                Some(pair) => pair,
-                None => {
-                    // Can't create offscreen - render directly to cr (no flicker protection)
-                    Self::render_frame_and_content(
-                        cr,
-                        width,
-                        height,
-                        &data,
-                        &renderer_clone,
-                        &frame_cache_clone,
-                    );
-                    return;
-                }
-            };
-
-            // Render everything to the offscreen surface
+            // Render directly to the GTK-provided context. All Cairo draw operations
+            // (rectangles, arcs, fills) are native GPU operations on GL/NGL contexts.
+            // No ImageSurface is used, avoiding CPU→GPU texture uploads.
             Self::render_frame_and_content(
-                &off_cr,
+                cr,
                 width,
                 height,
                 &data,
                 &renderer_clone,
-                &frame_cache_clone,
+                &layout_cache_clone,
             );
-
-            // Paint offscreen surface to screen
-            drop(off_cr);
-            off_surface.flush();
-            if cr.set_source_surface(&off_surface, 0.0, 0.0).is_ok() {
-                cr.paint().ok();
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-            }
-
-            // Store as last complete frame for lock contention fallback
-            *last_frame_clone.borrow_mut() = Some(off_surface);
         });
 
         // Set up animation timer

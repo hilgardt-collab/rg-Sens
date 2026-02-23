@@ -33,17 +33,15 @@ use crate::ui::speedometer_display::render_speedometer_with_theme;
 
 pub use rg_sens_types::display_configs::themed_configs::LcarsDisplayConfig;
 
-/// Cached frame rendering for LCARS (stored in draw closure, not Send/Sync)
-struct LcarsFrameCache {
-    /// Cached frame surface (LCARS sidebar, content background, dividers)
-    surface: cairo::ImageSurface,
-    /// Size cache was rendered at
+/// Cached frame layout data for LCARS (stored in draw closure, not Send/Sync).
+/// Only stores computed geometry — frame rendering is done directly to the
+/// GTK-provided Cairo context to avoid CPU→GPU texture uploads with GL/NGL renderers.
+struct LcarsLayoutCache {
+    /// Size the cache was computed at
     width: i32,
     height: i32,
     /// Config version when cache was created
     config_version: u64,
-    /// Content bounds from frame render
-    content_bounds: (f64, f64, f64, f64),
     /// Pre-calculated group layouts: Vec of (x, y, w, h) for each group
     group_layouts: Vec<(f64, f64, f64, f64)>,
 }
@@ -360,304 +358,163 @@ impl LcarsComboDisplayer {
         Ok(())
     }
 
-    /// Render the complete frame (static frame + dynamic content) to the given context.
+    /// Render the complete frame (static frame + dynamic content) directly to
+    /// the GTK-provided Cairo context.
     ///
-    /// Extracted as a helper so it can be called with either the screen context
-    /// (fallback) or an offscreen context (normal path for flicker-free rendering).
+    /// Frame rendering uses native Cairo draw operations (rectangles, arcs, fills)
+    /// which are efficient on GL/NGL-backed contexts. Group layouts are cached to
+    /// avoid redundant computation, but no ImageSurface is used — this prevents
+    /// the CPU→GPU texture uploads that freeze GL renderers.
     fn render_frame_and_content(
         cr: &Context,
         width: i32,
         height: i32,
         data: &DisplayData,
-        frame_cache: &Rc<RefCell<Option<LcarsFrameCache>>>,
+        layout_cache: &Rc<RefCell<Option<LcarsLayoutCache>>>,
     ) {
         let w = width as f64;
         let h = height as f64;
 
         data.transform.apply(cr, w, h);
 
-        // Check if frame cache is valid
-        let cache_valid = frame_cache.borrow().as_ref().is_some_and(|cache| {
-            cache.width == width
-                && cache.height == height
-                && cache.config_version == data.config_version
-        });
+        // Always render frame directly to cr — native GPU operations on GL contexts
+        if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
+            log::debug!("LCARS frame render error: {}", e);
+        }
+        if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
+            log::debug!("LCARS content background render error: {}", e);
+        }
 
-        // Either use cached frame or render fresh
-        let (content_bounds, group_layouts) = if cache_valid {
-            let cache_ref = frame_cache.borrow();
-            let Some(cache) = cache_ref.as_ref() else {
-                return; // Cache became None unexpectedly
-            };
-            if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
-                log::debug!("Failed to set cached surface: {:?}", e);
-            }
-            cr.paint().ok();
-            cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-            (cache.content_bounds, cache.group_layouts.clone())
-        } else {
-            // Try to create cache surface
-            let cache_result =
-                cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                    .ok()
-                    .and_then(|surface| {
-                        cairo::Context::new(&surface).ok().map(|ctx| (surface, ctx))
-                    });
+        let content_bounds = get_content_bounds(&data.config.frame, w, h);
 
-            if let Some((surface, cache_cr)) = cache_result {
-                if let Err(e) = render_lcars_frame(&cache_cr, &data.config.frame, w, h) {
-                    log::debug!("LCARS frame render error: {}", e);
-                }
-                if let Err(e) = render_content_background(&cache_cr, &data.config.frame, w, h) {
-                    log::debug!("LCARS content background render error: {}", e);
-                }
-
-                let content_bounds = get_content_bounds(&data.config.frame, w, h);
-                let (content_x, content_y, content_w, content_h) = content_bounds;
-
-                let group_count = data.config.frame.group_item_counts.len();
-                let divider_config = &data.config.frame.divider_config;
-                let mut group_layouts = Vec::with_capacity(group_count);
-
-                if group_count == 0 {
-                    // No groups
-                } else if group_count == 1 {
-                    group_layouts.push((content_x, content_y, content_w, content_h));
-                } else {
-                    let total_divider_space = divider_config.width
-                        + divider_config.spacing_before
-                        + divider_config.spacing_after;
-                    let num_dividers = (group_count - 1) as f64;
-
-                    let total_weight: f64 = (0..group_count)
-                        .map(|i| {
-                            data.config
-                                .frame
-                                .group_size_weights
-                                .get(i)
-                                .copied()
-                                .unwrap_or(1.0)
-                        })
-                        .sum();
-                    let total_weight = if total_weight <= 0.0 {
-                        1.0
-                    } else {
-                        total_weight
-                    };
-
-                    match data.config.frame.layout_orientation {
-                        SplitOrientation::Vertical => {
-                            let available_w = content_w - num_dividers * total_divider_space;
-                            let mut current_x = content_x;
-
-                            for group_idx in 0..group_count {
-                                let weight = data
-                                    .config
-                                    .frame
-                                    .group_size_weights
-                                    .get(group_idx)
-                                    .copied()
-                                    .unwrap_or(1.0);
-                                let group_w = (weight / total_weight) * available_w;
-                                group_layouts.push((current_x, content_y, group_w, content_h));
-
-                                if group_idx < group_count - 1 {
-                                    let divider_x =
-                                        current_x + group_w + divider_config.spacing_before;
-                                    let _ = render_divider(
-                                        &cache_cr,
-                                        divider_x,
-                                        content_y,
-                                        divider_config.width,
-                                        content_h,
-                                        divider_config,
-                                        SplitOrientation::Vertical,
-                                        &data.config.frame.theme,
-                                    );
-                                    current_x = divider_x
-                                        + divider_config.width
-                                        + divider_config.spacing_after;
-                                }
-                            }
-                        }
-                        SplitOrientation::Horizontal => {
-                            let available_h = content_h - num_dividers * total_divider_space;
-                            let mut current_y = content_y;
-
-                            for group_idx in 0..group_count {
-                                let weight = data
-                                    .config
-                                    .frame
-                                    .group_size_weights
-                                    .get(group_idx)
-                                    .copied()
-                                    .unwrap_or(1.0);
-                                let group_h = (weight / total_weight) * available_h;
-                                group_layouts.push((content_x, current_y, content_w, group_h));
-
-                                if group_idx < group_count - 1 {
-                                    let divider_y =
-                                        current_y + group_h + divider_config.spacing_before;
-                                    let _ = render_divider(
-                                        &cache_cr,
-                                        content_x,
-                                        divider_y,
-                                        content_w,
-                                        divider_config.width,
-                                        divider_config,
-                                        SplitOrientation::Horizontal,
-                                        &data.config.frame.theme,
-                                    );
-                                    current_y = divider_y
-                                        + divider_config.width
-                                        + divider_config.spacing_after;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                drop(cache_cr);
-                surface.flush();
-
-                *frame_cache.borrow_mut() = Some(LcarsFrameCache {
-                    surface,
-                    width,
-                    height,
-                    config_version: data.config_version,
-                    content_bounds,
-                    group_layouts: group_layouts.clone(),
-                });
-
-                // Paint cached surface
-                let cache_ref = frame_cache.borrow();
-                let Some(cache) = cache_ref.as_ref() else {
-                    return; // Cache became None unexpectedly
-                };
-                if let Err(e) = cr.set_source_surface(&cache.surface, 0.0, 0.0) {
-                    log::debug!("Failed to set cached surface: {:?}", e);
-                }
-                cr.paint().ok();
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-
-                (content_bounds, group_layouts)
-            } else {
-                // Cache creation failed - render directly
-                if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
-                    log::warn!("LCARS frame render error: {}", e);
-                }
-                if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
-                    log::warn!("LCARS content background render error: {}", e);
-                }
-
-                let content_bounds = get_content_bounds(&data.config.frame, w, h);
-                let (content_x, content_y, content_w, content_h) = content_bounds;
-
-                let group_count = data.config.frame.group_item_counts.len();
-                let divider_config = &data.config.frame.divider_config;
-                let mut group_layouts = Vec::with_capacity(group_count);
-
-                if group_count == 1 {
-                    group_layouts.push((content_x, content_y, content_w, content_h));
-                } else if group_count > 1 {
-                    let total_divider_space = divider_config.width
-                        + divider_config.spacing_before
-                        + divider_config.spacing_after;
-                    let num_dividers = (group_count - 1) as f64;
-
-                    let total_weight: f64 = (0..group_count)
-                        .map(|i| {
-                            data.config
-                                .frame
-                                .group_size_weights
-                                .get(i)
-                                .copied()
-                                .unwrap_or(1.0)
-                        })
-                        .sum();
-                    let total_weight = if total_weight <= 0.0 {
-                        1.0
-                    } else {
-                        total_weight
-                    };
-
-                    match data.config.frame.layout_orientation {
-                        SplitOrientation::Vertical => {
-                            let available_w = content_w - num_dividers * total_divider_space;
-                            let mut current_x = content_x;
-
-                            for group_idx in 0..group_count {
-                                let weight = data
-                                    .config
-                                    .frame
-                                    .group_size_weights
-                                    .get(group_idx)
-                                    .copied()
-                                    .unwrap_or(1.0);
-                                let group_w = (weight / total_weight) * available_w;
-                                group_layouts.push((current_x, content_y, group_w, content_h));
-
-                                if group_idx < group_count - 1 {
-                                    let divider_x =
-                                        current_x + group_w + divider_config.spacing_before;
-                                    let _ = render_divider(
-                                        cr,
-                                        divider_x,
-                                        content_y,
-                                        divider_config.width,
-                                        content_h,
-                                        divider_config,
-                                        SplitOrientation::Vertical,
-                                        &data.config.frame.theme,
-                                    );
-                                    current_x = divider_x
-                                        + divider_config.width
-                                        + divider_config.spacing_after;
-                                }
-                            }
-                        }
-                        SplitOrientation::Horizontal => {
-                            let available_h = content_h - num_dividers * total_divider_space;
-                            let mut current_y = content_y;
-
-                            for group_idx in 0..group_count {
-                                let weight = data
-                                    .config
-                                    .frame
-                                    .group_size_weights
-                                    .get(group_idx)
-                                    .copied()
-                                    .unwrap_or(1.0);
-                                let group_h = (weight / total_weight) * available_h;
-                                group_layouts.push((content_x, current_y, content_w, group_h));
-
-                                if group_idx < group_count - 1 {
-                                    let divider_y =
-                                        current_y + group_h + divider_config.spacing_before;
-                                    let _ = render_divider(
-                                        cr,
-                                        content_x,
-                                        divider_y,
-                                        content_w,
-                                        divider_config.width,
-                                        divider_config,
-                                        SplitOrientation::Horizontal,
-                                        &data.config.frame.theme,
-                                    );
-                                    current_y = divider_y
-                                        + divider_config.width
-                                        + divider_config.spacing_after;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                (content_bounds, group_layouts)
-            }
+        // Use cached group layouts if size and config haven't changed
+        let cached_layouts = {
+            let cache_ref = layout_cache.borrow();
+            cache_ref
+                .as_ref()
+                .filter(|c| {
+                    c.width == width
+                        && c.height == height
+                        && c.config_version == data.config_version
+                })
+                .map(|c| c.group_layouts.clone())
         };
 
+        let group_layouts = cached_layouts.unwrap_or_else(|| {
+            let (content_x, content_y, content_w, content_h) = content_bounds;
+            let group_count = data.config.frame.group_item_counts.len();
+            let divider_config = &data.config.frame.divider_config;
+            let mut layouts = Vec::with_capacity(group_count);
+
+            if group_count == 1 {
+                layouts.push((content_x, content_y, content_w, content_h));
+            } else if group_count > 1 {
+                let total_divider_space = divider_config.width
+                    + divider_config.spacing_before
+                    + divider_config.spacing_after;
+                let num_dividers = (group_count - 1) as f64;
+
+                let total_weight: f64 = (0..group_count)
+                    .map(|i| {
+                        data.config
+                            .frame
+                            .group_size_weights
+                            .get(i)
+                            .copied()
+                            .unwrap_or(1.0)
+                    })
+                    .sum();
+                let total_weight = if total_weight <= 0.0 {
+                    1.0
+                } else {
+                    total_weight
+                };
+
+                match data.config.frame.layout_orientation {
+                    SplitOrientation::Vertical => {
+                        let available_w = content_w - num_dividers * total_divider_space;
+                        let mut current_x = content_x;
+
+                        for group_idx in 0..group_count {
+                            let weight = data
+                                .config
+                                .frame
+                                .group_size_weights
+                                .get(group_idx)
+                                .copied()
+                                .unwrap_or(1.0);
+                            let group_w = (weight / total_weight) * available_w;
+                            layouts.push((current_x, content_y, group_w, content_h));
+                            current_x += group_w + total_divider_space;
+                        }
+                    }
+                    SplitOrientation::Horizontal => {
+                        let available_h = content_h - num_dividers * total_divider_space;
+                        let mut current_y = content_y;
+
+                        for group_idx in 0..group_count {
+                            let weight = data
+                                .config
+                                .frame
+                                .group_size_weights
+                                .get(group_idx)
+                                .copied()
+                                .unwrap_or(1.0);
+                            let group_h = (weight / total_weight) * available_h;
+                            layouts.push((content_x, current_y, content_w, group_h));
+                            current_y += group_h + total_divider_space;
+                        }
+                    }
+                }
+            }
+
+            *layout_cache.borrow_mut() = Some(LcarsLayoutCache {
+                width,
+                height,
+                config_version: data.config_version,
+                group_layouts: layouts.clone(),
+            });
+
+            layouts
+        });
+
+        // Draw dividers directly to cr
         let (content_x, content_y, content_w, content_h) = content_bounds;
+        let group_count = data.config.frame.group_item_counts.len();
+        let divider_config = &data.config.frame.divider_config;
+        if group_count > 1 {
+            for group_idx in 0..group_count - 1 {
+                let (gx, gy, gw, gh) = group_layouts[group_idx];
+                match data.config.frame.layout_orientation {
+                    SplitOrientation::Vertical => {
+                        let divider_x = gx + gw + divider_config.spacing_before;
+                        let _ = render_divider(
+                            cr,
+                            divider_x,
+                            content_y,
+                            divider_config.width,
+                            content_h,
+                            divider_config,
+                            SplitOrientation::Vertical,
+                            &data.config.frame.theme,
+                        );
+                    }
+                    SplitOrientation::Horizontal => {
+                        let divider_y = gy + gh + divider_config.spacing_before;
+                        let _ = render_divider(
+                            cr,
+                            content_x,
+                            divider_y,
+                            content_w,
+                            divider_config.width,
+                            divider_config,
+                            SplitOrientation::Horizontal,
+                            &data.config.frame.theme,
+                        );
+                    }
+                }
+            }
+        }
 
         // Clip to content area for dynamic content
         cr.save().ok();
@@ -711,14 +568,9 @@ impl Displayer for LcarsComboDisplayer {
         let drawing_area = DrawingArea::new();
         drawing_area.set_size_request(400, 300);
 
-        // Frame cache lives in the draw closure (not Send/Sync required)
-        let frame_cache: Rc<RefCell<Option<LcarsFrameCache>>> = Rc::new(RefCell::new(None));
-        let frame_cache_clone = frame_cache.clone();
-
-        // Last complete frame (static + dynamic content) for flicker-free lock contention fallback
-        let last_complete_frame: Rc<RefCell<Option<cairo::ImageSurface>>> =
-            Rc::new(RefCell::new(None));
-        let last_frame_clone = last_complete_frame.clone();
+        // Layout cache lives in the draw closure (not Send/Sync required)
+        let layout_cache: Rc<RefCell<Option<LcarsLayoutCache>>> = Rc::new(RefCell::new(None));
+        let layout_cache_clone = layout_cache.clone();
 
         // Set up draw function
         let data_clone = self.data.clone();
@@ -732,71 +584,22 @@ impl Displayer for LcarsComboDisplayer {
                 if count.is_multiple_of(1000) {
                     log::info!("LCARS draw: try_lock failed {} times", count + 1);
                 }
-                // Lock contention - use last complete frame (includes dynamic content)
-                if let Some(surface) = last_frame_clone.borrow().as_ref() {
-                    if cr.set_source_surface(surface, 0.0, 0.0).is_ok() {
-                        cr.paint().ok();
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                        return;
-                    }
-                }
-                // No complete frame yet - fall back to static frame cache
-                if let Some(cache) = frame_cache_clone.borrow().as_ref() {
-                    if cache.width == width
-                        && cache.height == height
-                        && cr.set_source_surface(&cache.surface, 0.0, 0.0).is_ok()
-                    {
-                        cr.paint().ok();
-                        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                        return;
-                    }
-                }
-                // No cache at all - solid background
+                // Lock contention - skip this frame (solid background)
                 cr.set_source_rgba(0.05, 0.05, 0.1, 1.0);
                 cr.paint().ok();
                 return;
             };
 
-            // Create offscreen surface for complete frame rendering
-            let off_result =
-                cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-                    .ok()
-                    .and_then(|s| cairo::Context::new(&s).ok().map(|c| (s, c)));
-
-            let (off_surface, off_cr) = match off_result {
-                Some(pair) => pair,
-                None => {
-                    // Can't create offscreen - render directly to cr (no flicker protection)
-                    Self::render_frame_and_content(
-                        cr,
-                        width,
-                        height,
-                        &data,
-                        &frame_cache_clone,
-                    );
-                    return;
-                }
-            };
-
-            // Render everything to the offscreen surface
+            // Render directly to the GTK-provided context. All Cairo draw operations
+            // (rectangles, arcs, fills) are native GPU operations on GL/NGL contexts.
+            // No ImageSurface is used, avoiding CPU→GPU texture uploads.
             Self::render_frame_and_content(
-                &off_cr,
+                cr,
                 width,
                 height,
                 &data,
-                &frame_cache_clone,
+                &layout_cache_clone,
             );
-
-            // Paint offscreen surface to screen
-            drop(off_cr);
-            off_surface.flush();
-            if cr.set_source_surface(&off_surface, 0.0, 0.0).is_ok() {
-                cr.paint().ok();
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-            }
-
-            // Store as last complete frame for lock contention fallback
-            *last_frame_clone.borrow_mut() = Some(off_surface);
         });
 
         // Register with global animation manager for smooth animations
