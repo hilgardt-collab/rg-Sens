@@ -75,6 +75,11 @@
   </screenshots>
 
   <releases>
+    <release version="0.8.0" date="2026-02-28">
+      <description>
+        <p>Fix GL renderer stall on secondary GPU in multi-GPU Wayland setups</p>
+      </description>
+    </release>
     <release version="0.7.7" date="2026-02-20">
       <description>
         <p>Bug fixes and improvements</p>

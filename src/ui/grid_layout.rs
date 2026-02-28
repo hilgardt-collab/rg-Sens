@@ -343,6 +343,13 @@ impl GridLayout {
 
         self.drop_zone_layer
             .set_draw_func(move |_, cr, width, height| {
+                // Paint transparent fill so GL renderer has valid texture content.
+                // Without this, the draw_func may return without any Cairo operations
+                // when there's no selection and no drag, leaving the GL texture
+                // uninitialized on some drivers.
+                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+                cr.paint().ok();
+
                 let config = config.borrow();
                 let sel_box = selection_box.borrow();
                 let viewport = *viewport_size.borrow();

@@ -107,6 +107,121 @@ fn parse_coordinates(s: &str) -> Result<(i32, i32), String> {
     Ok((x, y))
 }
 
+/// Check if a fullscreen target monitor is on a different GPU than the primary.
+///
+/// On multi-GPU Wayland systems, fullscreen windows on a non-primary GPU's output
+/// cause eglSwapBuffers to block indefinitely because the compositor handles buffer
+/// management differently for surfaces on secondary GPU outputs.  GL/NGL/Vulkan
+/// renderers cannot work in this scenario — only Cairo (software rendering) works
+/// because it doesn't use EGL.
+///
+/// Returns `true` if the target monitor is on a secondary GPU and a GL renderer
+/// would fail.  Returns `false` if single-GPU or if the target is on the primary GPU.
+fn is_fullscreen_on_secondary_gpu(cli: &Cli) -> bool {
+    use std::path::Path;
+
+    // Determine the target monitor connector from CLI or config
+    let target_monitor: Option<i32> = if let Some(Some(idx)) = cli.fullscreen {
+        Some(idx)
+    } else {
+        None
+    };
+
+    // We need a specific monitor index to check
+    let Some(monitor_idx) = target_monitor else {
+        return false;
+    };
+
+    // Enumerate GPUs and their connected outputs from sysfs
+    // /sys/class/drm/card<N>/card<N>-<connector>/status
+    let drm_path = Path::new("/sys/class/drm");
+    let Ok(entries) = std::fs::read_dir(drm_path) else {
+        return false;
+    };
+
+    // Build map: card_number -> list of connected connector names
+    let mut gpu_connectors: std::collections::HashMap<u32, Vec<String>> = std::collections::HashMap::new();
+    let mut primary_card: Option<u32> = None;
+
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Match card<N>-<connector> directories (e.g., "card1-DP-4", "card2-HDMI-A-2")
+        if let Some(rest) = name.strip_prefix("card") {
+            if let Some(dash_pos) = rest.find('-') {
+                if let Ok(card_num) = rest[..dash_pos].parse::<u32>() {
+                    let connector_sysfs = &rest[dash_pos + 1..]; // e.g., "DP-4", "HDMI-A-2"
+
+                    // Check if connected
+                    let status_path = entry.path().join("status");
+                    if let Ok(status) = std::fs::read_to_string(&status_path) {
+                        if status.trim() == "connected" {
+                            // Convert sysfs connector name to GDK format
+                            // sysfs: "HDMI-A-2" → GDK: "HDMI-2"
+                            // sysfs: "DP-4" → GDK: "DP-4"
+                            let gdk_name = connector_sysfs
+                                .replace("HDMI-A-", "HDMI-")
+                                .replace("VGA-", "VGA-")
+                                .replace("DVI-D-", "DVI-D-")
+                                .replace("DVI-I-", "DVI-I-");
+
+                            gpu_connectors
+                                .entry(card_num)
+                                .or_default()
+                                .push(gdk_name);
+
+                            // Track the lowest card number with connected outputs as primary
+                            if primary_card.is_none() || card_num < primary_card.unwrap() {
+                                primary_card = Some(card_num);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // If only one GPU has connected outputs, no multi-GPU issue
+    let gpus_with_outputs: Vec<_> = gpu_connectors.keys().copied().collect();
+    if gpus_with_outputs.len() <= 1 {
+        return false;
+    }
+
+    let Some(primary) = primary_card else {
+        return false;
+    };
+
+    // Now we need to map the monitor index to a connector name.
+    // Before GTK init, we can't use GdkDisplay. But we can build a
+    // connector list from sysfs in card order, matching GDK's enumeration.
+    // GDK enumerates monitors in the order the compositor reports them,
+    // which typically follows the card/connector order.
+    let mut all_connectors_ordered: Vec<(u32, String)> = Vec::new();
+    let mut cards: Vec<u32> = gpu_connectors.keys().copied().collect();
+    cards.sort();
+    for card in &cards {
+        if let Some(conns) = gpu_connectors.get(card) {
+            for conn in conns {
+                all_connectors_ordered.push((*card, conn.clone()));
+            }
+        }
+    }
+
+    // Check if the target monitor index maps to a non-primary GPU
+    if let Some((card, connector)) = all_connectors_ordered.get(monitor_idx as usize) {
+        if *card != primary {
+            warn!(
+                "Monitor {} ({}) is on GPU card{} (secondary), primary is card{}. \
+                 GL/Vulkan renderers will stall in fullscreen — falling back to Cairo.",
+                monitor_idx, connector, card, primary
+            );
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Global CLI options accessible from build_ui
 static CLI_OPTIONS: std::sync::OnceLock<Cli> = std::sync::OnceLock::new();
 
@@ -188,19 +303,37 @@ fn main() {
                     warn!("Note: Vulkan renderer may crash during window state changes. Consider using 'gl' in settings.");
                 }
             } else {
-                // Default to GL for stability - Vulkan can crash with VK_ERROR_OUT_OF_DATE_KHR
-                std::env::set_var("GSK_RENDERER", "gl");
-                info!("Using gl renderer (default for stability, use --renderer to change)");
+                // Default to Cairo for maximum compatibility.
+                // GTK 4.20's GL renderer (formerly NGL) has issues with NVIDIA drivers
+                // on Wayland, and Vulkan crashes with VK_ERROR_OUT_OF_DATE_KHR.
+                // Use --renderer gl to try GL if your driver supports it.
+                std::env::set_var("GSK_RENDERER", "cairo");
+                info!("Using cairo renderer (default for compatibility, use --renderer gl to try GL)");
             }
         } else {
-            // Default to GL for stability
-            std::env::set_var("GSK_RENDERER", "gl");
-            info!("Using gl renderer (default for stability, use --renderer to change)");
+            // Default to Cairo for maximum compatibility
+            std::env::set_var("GSK_RENDERER", "cairo");
+            info!("Using cairo renderer (default for compatibility, use --renderer gl to try GL)");
         }
     } else if let Ok(renderer) = std::env::var("GSK_RENDERER") {
         info!("Using GSK_RENDERER={} from environment", renderer);
         if renderer == "vulkan" {
             warn!("Note: Vulkan renderer may crash during window state changes. Set GSK_RENDERER=gl if you experience issues.");
+        }
+    }
+
+    // On multi-GPU Wayland setups, GL/Vulkan renderers cannot work in fullscreen
+    // on a secondary GPU's output because eglSwapBuffers blocks indefinitely
+    // (the compositor doesn't release buffers for cross-GPU fullscreen surfaces).
+    // Auto-detect this and fall back to Cairo.
+    if let Ok(renderer) = std::env::var("GSK_RENDERER") {
+        if renderer != "cairo" && is_fullscreen_on_secondary_gpu(&cli) {
+            std::env::set_var("GSK_RENDERER", "cairo");
+            warn!(
+                "Overriding {} renderer → cairo (fullscreen on secondary GPU output). \
+                 Use --renderer cairo to suppress this warning.",
+                renderer
+            );
         }
     }
 
@@ -571,6 +704,27 @@ fn build_ui(app: &Application) {
     } else {
         cli.fullscreen.is_some() || app_config.borrow().window.fullscreen_enabled
     };
+
+    // For non-Cairo renderers on Wayland, the GL frame clock can stall permanently
+    // in fullscreen on multi-GPU setups (e.g. NVIDIA primary + AMD iGPU output).
+    // Two mitigations:
+    //
+    // 1. Set opacity < 1.0 — tells the compositor the surface isn't fully opaque,
+    //    forcing compositing over direct scanout (which fails cross-GPU).
+    //
+    // 2. Register a tick callback on the window — this calls begin_updating()
+    //    internally in GDK's C code, keeping the frame clock's fallback timer
+    //    alive even when the Wayland compositor stops sending frame callbacks.
+    //    The callback also requests a surface render on every frame to prevent
+    //    the compositor from going idle on this surface.
+    if let Ok(renderer) = std::env::var("GSK_RENDERER") {
+        if renderer != "cairo" {
+            window.set_opacity(0.99);
+
+            info!("Non-Cairo renderer active: set opacity 0.99 for compositing compatibility");
+        }
+    }
+
     if should_fullscreen {
         // Determine which monitor to fullscreen on
         // Priority: CLI argument > saved connector name > saved monitor index

@@ -84,7 +84,9 @@ impl Displayer for ArcDisplayer {
         drawing_area.set_draw_func(move |_, cr, width, height| {
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                // Lock contention - skip this frame, will redraw on next animation tick
+                // Draw transparent fill so GL renderer has valid content
+                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+                cr.paint().ok();
                 return;
             };
             data.transform.apply(cr, width as f64, height as f64);
