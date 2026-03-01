@@ -25,7 +25,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">rg-sens.desktop</launchable>
+  <launchable type="desktop-id">com.github.rg-sens.desktop</launchable>
 
   <url type="homepage">https://github.com/hilgardt-collab/rg-Sens</url>
   <url type="bugtracker">https://github.com/hilgardt-collab/rg-Sens/issues</url>
