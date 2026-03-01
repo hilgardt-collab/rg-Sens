@@ -98,6 +98,16 @@ pub(crate) fn rebuild_cached_field_ids(
     lines.iter().map(|l| l.field_id.clone()).collect()
 }
 
+/// Paint a transparent fill to ensure the GL renderer has valid texture content.
+///
+/// When `try_lock()` fails in a draw_func, the GL/NGL renderer needs *something*
+/// painted to the surface — otherwise `eglSwapBuffers` can stall on some drivers.
+/// Call this before returning early from any draw_func lock-failure branch.
+pub(crate) fn paint_gl_fallback(cr: &cairo::Context) {
+    cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+    cr.paint().ok();
+}
+
 // ============================================================================
 // Theme Displayer Helpers
 // ============================================================================

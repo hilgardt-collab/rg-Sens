@@ -168,9 +168,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
 
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                // Draw transparent fill so GL renderer has valid content
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                cr.paint().ok();
+                super::paint_gl_fallback(cr);
                 return;
             };
             let w = width as f64;

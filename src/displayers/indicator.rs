@@ -231,9 +231,7 @@ impl Displayer for IndicatorDisplayer {
         drawing_area.set_draw_func(move |_widget, cr, width, height| {
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                // Draw transparent fill so GL renderer has valid content
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-                cr.paint().ok();
+                super::paint_gl_fallback(cr);
                 return;
             };
             data.transform.apply(cr, width as f64, height as f64);
