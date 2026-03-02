@@ -1,8 +1,9 @@
-//! GPU data source with multi-vendor support (NVIDIA, AMD)
+//! GPU data source with multi-vendor support (NVIDIA, AMD, Intel)
 
 mod amd;
 mod backend;
 mod detector;
+mod intel;
 mod nvidia;
 
 pub use backend::{GpuBackend, GpuBackendEnum, GpuInfo};
@@ -78,7 +79,7 @@ impl GpuSource {
         let metadata = SourceMetadata {
             id: "gpu".to_string(),
             name: "GPU".to_string(),
-            description: "GPU monitoring (NVIDIA/AMD) - temperature, utilization, memory, power"
+            description: "GPU monitoring (NVIDIA/AMD/Intel) - temperature, utilization, memory, power"
                 .to_string(),
             available_keys: vec![
                 "caption".to_string(),

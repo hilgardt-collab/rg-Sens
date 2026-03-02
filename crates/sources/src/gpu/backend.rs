@@ -1,6 +1,7 @@
 //! Abstract GPU backend trait
 
 use super::amd::AmdBackend;
+use super::intel::IntelBackend;
 use super::nvidia::NvidiaBackend;
 use anyhow::Result;
 
@@ -79,6 +80,7 @@ pub trait GpuBackend: Send + Sync {
 pub enum GpuBackendEnum {
     Nvidia(Box<NvidiaBackend>),
     Amd(Box<AmdBackend>),
+    Intel(Box<IntelBackend>),
 }
 
 impl GpuBackend for GpuBackendEnum {
@@ -86,6 +88,7 @@ impl GpuBackend for GpuBackendEnum {
         match self {
             GpuBackendEnum::Nvidia(b) => b.info(),
             GpuBackendEnum::Amd(b) => b.info(),
+            GpuBackendEnum::Intel(b) => b.info(),
         }
     }
 
@@ -93,6 +96,7 @@ impl GpuBackend for GpuBackendEnum {
         match self {
             GpuBackendEnum::Nvidia(b) => b.update(),
             GpuBackendEnum::Amd(b) => b.update(),
+            GpuBackendEnum::Intel(b) => b.update(),
         }
     }
 
@@ -100,6 +104,7 @@ impl GpuBackend for GpuBackendEnum {
         match self {
             GpuBackendEnum::Nvidia(b) => b.metrics(),
             GpuBackendEnum::Amd(b) => b.metrics(),
+            GpuBackendEnum::Intel(b) => b.metrics(),
         }
     }
 
@@ -107,6 +112,7 @@ impl GpuBackend for GpuBackendEnum {
         match self {
             GpuBackendEnum::Nvidia(b) => b.is_available(),
             GpuBackendEnum::Amd(b) => b.is_available(),
+            GpuBackendEnum::Intel(b) => b.is_available(),
         }
     }
 }

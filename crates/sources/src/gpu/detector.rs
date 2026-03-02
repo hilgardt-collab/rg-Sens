@@ -2,6 +2,7 @@
 
 use super::amd::AmdBackend;
 use super::backend::{GpuBackend, GpuBackendEnum, GpuInfo};
+use super::intel::IntelBackend;
 use super::nvidia::NvidiaBackend;
 
 /// GPU detection result
@@ -22,6 +23,9 @@ pub fn detect_gpus() -> DetectedGpus {
 
     // Detect AMD GPUs
     detect_amd_gpus(&mut gpus, &mut info);
+
+    // Detect Intel GPUs
+    detect_intel_gpus(&mut gpus, &mut info);
 
     // Log summary
     if gpus.is_empty() {
@@ -106,6 +110,33 @@ fn detect_amd_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
         log::info!("  No AMD GPUs found");
     } else {
         log::info!("  Found {} AMD GPU(s)", amd_count);
+    }
+}
+
+/// Detect Intel GPUs using sysfs
+fn detect_intel_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
+    log::info!("Detecting Intel GPUs via sysfs...");
+
+    let mut intel_count = 0;
+    for i in 0..16 {
+        match IntelBackend::new(i) {
+            Ok(backend) => {
+                let gpu_info = backend.info().clone();
+                log::info!("  Intel GPU {}: {}", i, gpu_info.name);
+                info.push(gpu_info);
+                gpus.push(GpuBackendEnum::Intel(Box::new(backend)));
+                intel_count += 1;
+            }
+            Err(_) => {
+                // Silently skip - not all card indices will be Intel GPUs
+            }
+        }
+    }
+
+    if intel_count == 0 {
+        log::info!("  No Intel GPUs found");
+    } else {
+        log::info!("  Found {} Intel GPU(s)", intel_count);
     }
 }
 
