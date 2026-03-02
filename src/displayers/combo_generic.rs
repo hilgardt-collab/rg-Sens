@@ -477,9 +477,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
             // Use try_lock to avoid blocking GTK main thread if update is in progress
             let Ok(data) = data_clone.try_lock() else {
-                // Lock contention - skip this frame (solid background)
-                cr.set_source_rgba(0.1, 0.1, 0.1, 1.0);
-                cr.paint().ok();
+                super::paint_gl_fallback(cr);
                 return;
             };
 

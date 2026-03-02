@@ -160,10 +160,7 @@ fn is_fullscreen_on_secondary_gpu(cli: &Cli) -> bool {
                             // sysfs: "HDMI-A-2" → GDK: "HDMI-2"
                             // sysfs: "DP-4" → GDK: "DP-4"
                             let gdk_name = connector_sysfs
-                                .replace("HDMI-A-", "HDMI-")
-                                .replace("VGA-", "VGA-")
-                                .replace("DVI-D-", "DVI-D-")
-                                .replace("DVI-I-", "DVI-I-");
+                                .replace("HDMI-A-", "HDMI-");
 
                             gpu_connectors
                                 .entry(card_num)
@@ -182,8 +179,7 @@ fn is_fullscreen_on_secondary_gpu(cli: &Cli) -> bool {
     }
 
     // If only one GPU has connected outputs, no multi-GPU issue
-    let gpus_with_outputs: Vec<_> = gpu_connectors.keys().copied().collect();
-    if gpus_with_outputs.len() <= 1 {
+    if gpu_connectors.len() <= 1 {
         return false;
     }
 
@@ -707,16 +703,8 @@ fn build_ui(app: &Application) {
 
     // For non-Cairo renderers on Wayland, the GL frame clock can stall permanently
     // in fullscreen on multi-GPU setups (e.g. NVIDIA primary + AMD iGPU output).
-    // Two mitigations:
-    //
-    // 1. Set opacity < 1.0 — tells the compositor the surface isn't fully opaque,
-    //    forcing compositing over direct scanout (which fails cross-GPU).
-    //
-    // 2. Register a tick callback on the window — this calls begin_updating()
-    //    internally in GDK's C code, keeping the frame clock's fallback timer
-    //    alive even when the Wayland compositor stops sending frame callbacks.
-    //    The callback also requests a surface render on every frame to prevent
-    //    the compositor from going idle on this surface.
+    // Set opacity < 1.0 — tells the compositor the surface isn't fully opaque,
+    // forcing compositing over direct scanout (which fails cross-GPU).
     if let Ok(renderer) = std::env::var("GSK_RENDERER") {
         if renderer != "cairo" {
             window.set_opacity(0.99);

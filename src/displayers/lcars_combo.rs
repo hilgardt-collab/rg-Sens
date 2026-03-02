@@ -584,9 +584,7 @@ impl Displayer for LcarsComboDisplayer {
                 if count.is_multiple_of(1000) {
                     log::info!("LCARS draw: try_lock failed {} times", count + 1);
                 }
-                // Lock contention - skip this frame (solid background)
-                cr.set_source_rgba(0.05, 0.05, 0.1, 1.0);
-                cr.paint().ok();
+                super::paint_gl_fallback(cr);
                 return;
             };
 
