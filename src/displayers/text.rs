@@ -100,8 +100,7 @@ impl Displayer for TextDisplayer {
         // Set up draw function
         let data_clone = self.data.clone();
         drawing_area.set_draw_func(move |_widget, cr, width, height| {
-            // Use try_lock to avoid blocking GTK main thread if update is in progress
-            let Ok(data) = data_clone.try_lock() else {
+            let Ok(data) = data_clone.lock() else {
                 super::paint_gl_fallback(cr);
                 return;
             };

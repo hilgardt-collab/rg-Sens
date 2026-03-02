@@ -574,16 +574,8 @@ impl Displayer for LcarsComboDisplayer {
 
         // Set up draw function
         let data_clone = self.data.clone();
-        // Counter for lock contention tracking
-        let lock_fail_count = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let lock_fail_count_draw = lock_fail_count.clone();
         drawing_area.set_draw_func(move |_, cr, width, height| {
-            // Use try_lock to avoid blocking GTK main thread if update is in progress
-            let Ok(data) = data_clone.try_lock() else {
-                let count = lock_fail_count_draw.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count.is_multiple_of(1000) {
-                    log::info!("LCARS draw: try_lock failed {} times", count + 1);
-                }
+            let Ok(data) = data_clone.lock() else {
                 super::paint_gl_fallback(cr);
                 return;
             };
@@ -602,7 +594,6 @@ impl Displayer for LcarsComboDisplayer {
 
         // Register with global animation manager for smooth animations
         let data_for_animation = self.data.clone();
-        let lock_fail_count_anim = lock_fail_count;
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
@@ -684,10 +675,6 @@ impl Displayer for LcarsComboDisplayer {
 
                 redraw
             } else {
-                let count = lock_fail_count_anim.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count.is_multiple_of(1000) {
-                    log::info!("LCARS anim: try_lock failed {} times", count + 1);
-                }
                 false
             }
         });

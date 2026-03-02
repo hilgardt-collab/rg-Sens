@@ -166,8 +166,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayer<R> {
                 return;
             }
 
-            // Use try_lock to avoid blocking GTK main thread if update is in progress
-            let Ok(data) = data_clone.try_lock() else {
+            let Ok(data) = data_clone.lock() else {
                 super::paint_gl_fallback(cr);
                 return;
             };
@@ -475,8 +474,7 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
                 return;
             }
 
-            // Use try_lock to avoid blocking GTK main thread if update is in progress
-            let Ok(data) = data_clone.try_lock() else {
+            let Ok(data) = data_clone.lock() else {
                 super::paint_gl_fallback(cr);
                 return;
             };
