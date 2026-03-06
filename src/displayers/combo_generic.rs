@@ -445,6 +445,12 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         }
 
         cr.restore().ok();
+
+        // Draw overlay effects (e.g., CRT scanlines, vignette) on top of all content
+        if let Err(e) = renderer.render_overlay(cr, &data.config, w, h) {
+            log::debug!("{} overlay render error: {}", renderer.theme_name(), e);
+        }
+
         data.combo.transform.restore(cr);
     }
 }

@@ -1420,16 +1420,19 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     drop(summaries);
     drop(notebook);
 
-    // Build content items incrementally using idle callbacks
-    let work_queue: Rc<RefCell<Vec<(Notebook, usize, String, String)>>> =
+    // Build content items incrementally using idle callbacks.
+    // Use weak references for notebooks to prevent use-after-free if the dialog
+    // is closed while idle callbacks are still pending (SIGSEGV fix).
+    let work_queue: Rc<RefCell<Vec<(glib::WeakRef<Notebook>, usize, String, String)>>> =
         Rc::new(RefCell::new(Vec::new()));
 
     // Flatten work items into a queue of individual items to create
     for (_group_num, items_notebook, _group_box, item_list) in work_items {
+        let weak_notebook = items_notebook.downgrade();
         for (idx, (slot_name, tab_label)) in item_list.into_iter().enumerate() {
             work_queue
                 .borrow_mut()
-                .push((items_notebook.clone(), idx, slot_name, tab_label));
+                .push((weak_notebook.clone(), idx, slot_name, tab_label));
         }
     }
 
@@ -1455,7 +1458,13 @@ pub fn rebuild_content_tabs<C, F, S, G>(
         // Get next item to create
         let next_item = work_queue.borrow_mut().pop();
 
-        if let Some((items_notebook, page_idx, slot_name, _tab_label)) = next_item {
+        if let Some((weak_notebook, page_idx, slot_name, _tab_label)) = next_item {
+            // Upgrade weak reference — if the notebook was destroyed (dialog closed),
+            // skip this item to avoid use-after-free.
+            let Some(items_notebook) = weak_notebook.upgrade() else {
+                return glib::ControlFlow::Continue;
+            };
+
             // Create the actual content item config
             let tab_box = create_content_item_config(
                 &config_clone,

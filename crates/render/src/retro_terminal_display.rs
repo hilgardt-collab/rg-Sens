@@ -65,6 +65,16 @@ impl FrameRenderer for RetroTerminalRenderer {
     ) {
         draw_group_dividers(cr, config, group_layouts);
     }
+
+    fn render_overlay(
+        &self,
+        cr: &Context,
+        config: &Self::Config,
+        width: f64,
+        height: f64,
+    ) -> anyhow::Result<()> {
+        render_retro_terminal_overlay(cr, config, width, height)
+    }
 }
 
 /// Draw the monitor bezel (outer frame)
@@ -703,11 +713,8 @@ pub fn render_retro_terminal_frame(
     // Draw header and get its height
     let header_height = draw_header(cr, config, screen_x, screen_y, screen_w);
 
-    // Draw scanlines (on top of content area but under content items)
-    draw_scanlines(cr, config, screen_x, screen_y, screen_w, screen_h);
-
-    // Draw curvature/vignette effect last (on top of everything)
-    draw_curvature_vignette(cr, config, screen_x, screen_y, screen_w, screen_h);
+    // NOTE: Scanlines and vignette are now drawn in render_retro_terminal_overlay()
+    // which is called AFTER content items, so effects overlay everything.
 
     cr.restore()?;
 
@@ -718,6 +725,38 @@ pub fn render_retro_terminal_frame(
     let content_h = screen_h - header_height - config.content_padding * 2.0;
 
     Ok((content_x, content_y, content_w.max(0.0), content_h.max(0.0)))
+}
+
+/// Render CRT overlay effects (scanlines, vignette) on top of all content.
+///
+/// This is called after content items are drawn so the effects visually
+/// overlay the entire screen area including bars, text, and graphs.
+pub fn render_retro_terminal_overlay(
+    cr: &Context,
+    config: &RetroTerminalFrameConfig,
+    width: f64,
+    height: f64,
+) -> Result<()> {
+    if width < 1.0 || height < 1.0 {
+        return Ok(());
+    }
+
+    // Recalculate screen bounds (same cheap bezel math as render_frame)
+    let (screen_x, screen_y, screen_w, screen_h) = if matches!(config.bezel_style, BezelStyle::None)
+    {
+        (0.0, 0.0, width, height)
+    } else {
+        let bw = config.bezel_width;
+        (bw, bw, width - bw * 2.0, height - bw * 2.0)
+    };
+
+    cr.save()?;
+
+    draw_scanlines(cr, config, screen_x, screen_y, screen_w, screen_h);
+    draw_curvature_vignette(cr, config, screen_x, screen_y, screen_w, screen_h);
+
+    cr.restore()?;
+    Ok(())
 }
 
 /// Calculate group layouts within content area

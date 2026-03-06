@@ -75,6 +75,24 @@ pub trait FrameRenderer: Send + Sync + 'static {
         // Default: no item frame
     }
 
+    /// Render overlay effects on top of content items.
+    ///
+    /// Called after all content items have been drawn. Use this for effects
+    /// that should visually overlay everything (e.g., CRT scanlines, vignette,
+    /// holographic noise). The full widget dimensions are provided so
+    /// implementations can recalculate screen bounds as needed.
+    ///
+    /// Default implementation does nothing (no overlay).
+    fn render_overlay(
+        &self,
+        _cr: &Context,
+        _config: &Self::Config,
+        _width: f64,
+        _height: f64,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// Run custom per-frame animation logic (e.g., scanlines, cursor blink).
     ///
     /// Called every animation frame. Returns true if a redraw is needed.
