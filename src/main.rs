@@ -1156,6 +1156,7 @@ fn build_ui(app: &Application) {
 
     // Wrap headerbar in a box with styling for visibility against content
     let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    header_bar.set_hexpand(true);
     header_box.append(&header_bar);
     header_box.set_hexpand(true);
     header_box.add_css_class("auto-hide-header");
