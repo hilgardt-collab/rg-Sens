@@ -71,12 +71,23 @@ fn schedule_auto_scroll(
         let content_size = layout.borrow().get_content_size();
         let content_width = content_size.0 as f64;
         let content_height = content_size.1 as f64;
-        let viewport_width = h_adj.page_size();
-        let viewport_height = v_adj.page_size();
 
-        // Check if whole pages mode is enabled
+        // Use CONFIGURED viewport dimensions for page boundaries, not GTK page_size().
+        // GTK's page_size() reflects the actual visible area which is reduced by scrollbars
+        // and title bars, causing page boundaries to misalign with panel positions.
+        // Fall back to GTK page_size if configured values are 0.
         let cfg = config.borrow();
         let whole_pages = cfg.window.auto_scroll_whole_pages;
+        let viewport_width = if cfg.window.viewport_width > 0 {
+            cfg.window.viewport_width as f64
+        } else {
+            h_adj.page_size()
+        };
+        let viewport_height = if cfg.window.viewport_height > 0 {
+            cfg.window.viewport_height as f64
+        } else {
+            v_adj.page_size()
+        };
         drop(cfg);
 
         // Calculate effective scroll bounds and container size

@@ -1,6 +1,6 @@
 [package]
 name = "rg-sens-render"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Cairo rendering functions for rg-Sens visualizations"
