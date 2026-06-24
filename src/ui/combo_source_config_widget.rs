@@ -6,9 +6,10 @@
 use crate::core::global_registry;
 use crate::sources::ComboSourceConfig;
 use crate::ui::{
-    ClockSourceConfigWidget, CpuSourceConfigWidget, DiskSourceConfigWidget, FanSpeedConfigWidget,
-    GpuSourceConfigWidget, MemorySourceConfigWidget, NetworkSourceConfigWidget,
-    StaticTextConfigWidget, SystemTempConfigWidget, TestSourceConfigWidget,
+    ClaudeSourceConfigWidget, ClockSourceConfigWidget, CpuSourceConfigWidget,
+    DiskSourceConfigWidget, FanSpeedConfigWidget, GpuSourceConfigWidget, MemorySourceConfigWidget,
+    NetworkSourceConfigWidget, StaticTextConfigWidget, SystemTempConfigWidget,
+    TestSourceConfigWidget,
 };
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -35,6 +36,7 @@ enum SourceConfigWidgetType {
     Disk(DiskSourceConfigWidget),
     Network(NetworkSourceConfigWidget),
     Clock(ClockSourceConfigWidget),
+    Claude(ClaudeSourceConfigWidget),
     StaticText(StaticTextConfigWidget),
     Test(TestSourceConfigWidget),
 }
@@ -50,6 +52,7 @@ impl SourceConfigWidgetType {
             SourceConfigWidgetType::Disk(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::Network(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::Clock(w) => w.widget().clone().upcast(),
+            SourceConfigWidgetType::Claude(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::StaticText(w) => w.widget().clone().upcast(),
             SourceConfigWidgetType::Test(w) => w.widget().clone().upcast(),
         }
@@ -65,6 +68,7 @@ impl SourceConfigWidgetType {
             SourceConfigWidgetType::Disk(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::Network(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::Clock(w) => serde_json::to_value(w.get_config()).ok(),
+            SourceConfigWidgetType::Claude(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::StaticText(w) => serde_json::to_value(w.get_config()).ok(),
             SourceConfigWidgetType::Test(w) => serde_json::to_value(w.get_config()).ok(),
         }
@@ -138,6 +142,13 @@ impl SourceConfigWidgetType {
                     w.set_config(&cfg);
                 }
                 Err(e) => log::warn!("Failed to deserialize Clock config: {}", e),
+            },
+            SourceConfigWidgetType::Claude(w) => match serde_json::from_value(json_value) {
+                Ok(cfg) => {
+                    log::info!("Successfully loaded Claude config");
+                    w.set_config(cfg);
+                }
+                Err(e) => log::warn!("Failed to deserialize Claude config: {}", e),
             },
             SourceConfigWidgetType::StaticText(w) => match serde_json::from_value(json_value) {
                 Ok(cfg) => {
@@ -983,6 +994,9 @@ impl ComboSourceConfigWidget {
                 Some(SourceConfigWidgetType::Network(network_widget))
             }
             "clock" => Some(SourceConfigWidgetType::Clock(ClockSourceConfigWidget::new())),
+            "claude" => Some(SourceConfigWidgetType::Claude(
+                ClaudeSourceConfigWidget::new(),
+            )),
             "static_text" => Some(SourceConfigWidgetType::StaticText(
                 StaticTextConfigWidget::new(),
             )),
