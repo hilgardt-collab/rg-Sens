@@ -1,5 +1,7 @@
 //! Source configuration types for all data sources.
 
+pub mod claude;
+pub mod claude_plan;
 pub mod clock;
 pub mod combo;
 pub mod cpu;
@@ -13,6 +15,8 @@ pub mod system_temp;
 pub mod test;
 
 // Re-export all source config types for convenience
+pub use claude::ClaudeSourceConfig;
+pub use claude_plan::ClaudePlanSourceConfig;
 pub use clock::{ClockSourceConfig, DateFormat, TimeFormat};
 pub use combo::{ComboSourceConfig, GroupConfig, SlotConfig};
 pub use cpu::{CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit};

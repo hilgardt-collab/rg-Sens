@@ -424,6 +424,24 @@ impl WindowConfig {
 
         corrected
     }
+
+    /// Resolve the effective viewport width: configured value if > 0, else `default`.
+    pub fn effective_viewport_width(&self, default: i32) -> i32 {
+        if self.viewport_width > 0 {
+            self.viewport_width
+        } else {
+            default
+        }
+    }
+
+    /// Resolve the effective viewport height: configured value if > 0, else `default`.
+    pub fn effective_viewport_height(&self, default: i32) -> i32 {
+        if self.viewport_height > 0 {
+            self.viewport_height
+        } else {
+            default
+        }
+    }
 }
 
 /// Grid configuration

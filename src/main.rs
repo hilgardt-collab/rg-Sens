@@ -1097,19 +1097,14 @@ fn build_ui(app: &Application) {
     });
 
     // Set initial viewport size for drag visualization from config
-    // If config values are 0, use default window dimensions
     {
         let config = app_config.borrow();
-        let vp_width = if config.window.viewport_width > 0 {
-            config.window.viewport_width
-        } else {
-            config.window.width
-        };
-        let vp_height = if config.window.viewport_height > 0 {
-            config.window.viewport_height
-        } else {
-            config.window.height
-        };
+        let vp_width = config
+            .window
+            .effective_viewport_width(config.window.width);
+        let vp_height = config
+            .window
+            .effective_viewport_height(config.window.height);
         grid_layout.borrow().set_viewport_size(vp_width, vp_height);
     }
 

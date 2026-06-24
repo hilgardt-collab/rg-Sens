@@ -894,17 +894,12 @@ pub fn show_window_settings_dialog<F>(
         let renderer_changed = new_renderer != original_renderer;
         cfg.window.renderer = new_renderer;
 
-        // Calculate effective viewport size (use window size if set to 0)
-        let vp_width = if cfg.window.viewport_width > 0 {
-            cfg.window.viewport_width
-        } else {
-            parent_window_clone.width()
-        };
-        let vp_height = if cfg.window.viewport_height > 0 {
-            cfg.window.viewport_height
-        } else {
-            parent_window_clone.height()
-        };
+        let vp_width = cfg
+            .window
+            .effective_viewport_width(parent_window_clone.width());
+        let vp_height = cfg
+            .window
+            .effective_viewport_height(parent_window_clone.height());
         drop(cfg);
 
         // Update grid layout viewport size for drag visualization

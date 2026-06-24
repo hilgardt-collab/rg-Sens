@@ -1,5 +1,7 @@
 //! rg-sens-sources: Data source implementations for rg-Sens system monitoring.
 
+mod claude;
+mod claude_plan;
 mod combo;
 mod cpu;
 mod disk;
@@ -13,6 +15,8 @@ mod system_temp;
 mod test;
 
 pub use rg_sens_types::timer::{AlarmConfig, AlarmSoundConfig, TimerConfig, TimerDisplayConfig, TimerMode, TimerState};
+pub use claude::ClaudeSource;
+pub use claude_plan::ClaudePlanSource;
 pub use combo::{ComboSource, ComboSourceConfig, GroupConfig, SlotConfig};
 pub use cpu::{CpuSensor, CpuSource};
 pub use disk::DiskSource;
@@ -83,6 +87,17 @@ pub fn register_all() {
     global_registry().register_source_with_info("network", "Network", general_displayers, || {
         Box::new(NetworkSource::new())
     });
+
+    global_registry().register_source_with_info("claude", "Claude Tokens", general_displayers, || {
+        Box::new(ClaudeSource::new())
+    });
+
+    global_registry().register_source_with_info(
+        "claude_plan",
+        "Claude Plan Usage",
+        general_displayers,
+        || Box::new(ClaudePlanSource::new()),
+    );
 
     // Note: Clock source is registered by the main crate (depends on timer_manager)
 

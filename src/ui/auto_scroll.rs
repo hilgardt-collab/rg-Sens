@@ -31,7 +31,6 @@ fn schedule_auto_scroll(
     scrolled: ScrolledWindow,
     config: Rc<RefCell<AppConfig>>,
     layout: Rc<RefCell<GridLayout>>,
-    active: Rc<RefCell<bool>>,
     generation: Rc<RefCell<u32>>,
     current_gen: u32,
     bg: DrawingArea,
@@ -43,13 +42,10 @@ fn schedule_auto_scroll(
 
     let cfg = config.borrow();
     if !cfg.window.auto_scroll_enabled {
-        *active.borrow_mut() = false;
         return;
     }
     let delay_ms = cfg.window.auto_scroll_delay_ms;
     drop(cfg);
-
-    *active.borrow_mut() = true;
 
     // Schedule the scroll after delay
     gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(delay_ms), move || {
@@ -58,14 +54,6 @@ fn schedule_auto_scroll(
             return;
         }
 
-        let cfg = config.borrow();
-        if !cfg.window.auto_scroll_enabled {
-            *active.borrow_mut() = false;
-            return;
-        }
-        drop(cfg);
-
-        // Get scroll info
         let h_adj = scrolled.hadjustment();
         let v_adj = scrolled.vadjustment();
         let content_size = layout.borrow().get_content_size();
@@ -75,38 +63,29 @@ fn schedule_auto_scroll(
         // Use CONFIGURED viewport dimensions for page boundaries, not GTK page_size().
         // GTK's page_size() reflects the actual visible area which is reduced by scrollbars
         // and title bars, causing page boundaries to misalign with panel positions.
-        // Fall back to GTK page_size if configured values are 0.
         let cfg = config.borrow();
+        if !cfg.window.auto_scroll_enabled {
+            return;
+        }
         let whole_pages = cfg.window.auto_scroll_whole_pages;
-        let viewport_width = if cfg.window.viewport_width > 0 {
-            cfg.window.viewport_width as f64
-        } else {
-            h_adj.page_size()
-        };
-        let viewport_height = if cfg.window.viewport_height > 0 {
-            cfg.window.viewport_height as f64
-        } else {
-            v_adj.page_size()
-        };
+        let viewport_width = cfg
+            .window
+            .effective_viewport_width(h_adj.page_size() as i32) as f64;
+        let viewport_height = cfg
+            .window
+            .effective_viewport_height(v_adj.page_size() as i32) as f64;
         drop(cfg);
 
-        // Calculate effective scroll bounds and container size
-        // When whole_pages is enabled, align to complete page boundaries
         let (max_h_scroll, max_v_scroll, container_width, container_height) =
             if whole_pages && viewport_width > 0.0 && viewport_height > 0.0 {
-                // Calculate number of complete pages needed to cover content
                 let h_pages = (content_width / viewport_width).ceil() as i32;
                 let v_pages = (content_height / viewport_height).ceil() as i32;
-                // Max scroll position is (pages - 1) * viewport_size
                 let max_h = ((h_pages - 1).max(0) as f64) * viewport_width;
                 let max_v = ((v_pages - 1).max(0) as f64) * viewport_height;
-                // Container size must be large enough to scroll to all page boundaries
-                // Size = pages * viewport_size (so we can scroll to the last page)
                 let cont_w = (h_pages as f64 * viewport_width) as i32;
                 let cont_h = (v_pages as f64 * viewport_height) as i32;
                 (max_h, max_v, cont_w, cont_h)
             } else {
-                // Default: scroll to content bounds
                 (
                     (content_width - viewport_width).max(0.0),
                     (content_height - viewport_height).max(0.0),
@@ -120,15 +99,7 @@ fn schedule_auto_scroll(
 
         if !needs_h_scroll && !needs_v_scroll {
             // No scrolling needed, reschedule check
-            schedule_auto_scroll(
-                scrolled,
-                config,
-                layout,
-                active,
-                generation,
-                current_gen,
-                bg,
-            );
+            schedule_auto_scroll(scrolled, config, layout, generation, current_gen, bg);
             return;
         }
 
@@ -186,7 +157,6 @@ fn schedule_auto_scroll(
                     scrolled.clone(),
                     config.clone(),
                     layout.clone(),
-                    active.clone(),
                     generation.clone(),
                     current_gen,
                     bg.clone(),
@@ -214,12 +184,9 @@ pub fn create_auto_scroll_starter(
     let app_config = app_config.clone();
     let grid_layout = grid_layout.clone();
     let window_background = window_background.clone();
-    let active = Rc::new(RefCell::new(false));
     let generation = Rc::new(RefCell::new(0u32));
 
     move || {
-        *active.borrow_mut() = false;
-
         // Increment generation to invalidate any pending scroll cycles
         let new_gen = {
             let mut gen = generation.borrow_mut();
@@ -242,7 +209,6 @@ pub fn create_auto_scroll_starter(
             scrolled_window.clone(),
             app_config.clone(),
             grid_layout.clone(),
-            active.clone(),
             generation.clone(),
             new_gen,
             window_background.clone(),
