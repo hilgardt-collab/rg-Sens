@@ -4590,6 +4590,31 @@ pub(crate) fn show_panel_properties_dialog(
                 }
             }
 
+            // Apply Claude source configuration if claude source is active
+            if new_source_id == "claude" {
+                if let Some(ref widget) = *claude_config_widget_clone.borrow() {
+                    let claude_config = widget.get_config();
+                    if let Ok(claude_config_json) = serde_json::to_value(&claude_config) {
+                        panel_guard
+                            .config
+                            .insert("claude_config".to_string(), claude_config_json);
+
+                        // Clone config before applying to avoid borrow checker issues
+                        let config_clone = panel_guard.config.clone();
+
+                        // Apply the configuration to the source
+                        if let Err(e) = panel_guard.apply_config(config_clone) {
+                            log::warn!("Failed to apply claude config to source: {}", e);
+                        }
+
+                        // Update the source with new configuration
+                        if let Err(e) = panel_guard.update() {
+                            log::warn!("Failed to update panel after config change: {}", e);
+                        }
+                    }
+                }
+            }
+
             // Apply Network source configuration if network source is active
             if new_source_id == "network" {
                 if let Some(ref widget) = *network_config_widget_clone.borrow() {
