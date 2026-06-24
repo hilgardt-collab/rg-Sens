@@ -30,6 +30,7 @@ mod arc_config_widget;
 mod background_config_widget;
 mod bar_config_widget;
 pub mod clipboard;
+mod claude_source_config_widget;
 mod clock_analog_config_widget;
 mod clock_digital_config_widget;
 mod clock_source_config_widget;
@@ -127,6 +128,7 @@ pub use clock_digital_config_widget::ClockDigitalConfigWidget;
 pub use clock_display::{
     render_analog_clock, AnalogClockConfig, FaceStyle, HandStyle, TickStyle as ClockTickStyle,
 };
+pub use claude_source_config_widget::{ClaudeMetric, ClaudeSourceConfig, ClaudeSourceConfigWidget};
 pub use clock_source_config_widget::ClockSourceConfigWidget;
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;

@@ -407,6 +407,25 @@ pub(crate) fn show_panel_properties_dialog(
         *disk_config_widget.borrow_mut() = Some(widget);
     }
 
+    // Claude usage source configuration widget (lazy)
+    let claude_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
+    claude_placeholder.set_visible(old_source_id == "claude");
+    source_tab_box.append(&claude_placeholder);
+    let claude_config_widget: Rc<RefCell<Option<crate::ui::ClaudeSourceConfigWidget>>> =
+        Rc::new(RefCell::new(None));
+    if old_source_id == "claude" {
+        let widget = crate::ui::ClaudeSourceConfigWidget::new();
+        if let Some(claude_config_value) = panel_guard.config.get("claude_config") {
+            if let Ok(claude_config) =
+                serde_json::from_value::<crate::ui::ClaudeSourceConfig>(claude_config_value.clone())
+            {
+                widget.set_config(claude_config);
+            }
+        }
+        claude_placeholder.append(widget.widget());
+        *claude_config_widget.borrow_mut() = Some(widget);
+    }
+
     // Network source configuration widget (lazy)
     let network_placeholder = GtkBox::new(gtk4::Orientation::Vertical, 0);
     network_placeholder.set_visible(old_source_id == "network");
@@ -534,6 +553,8 @@ pub(crate) fn show_panel_properties_dialog(
         let fan_speed_placeholder_clone = fan_speed_placeholder.clone();
         let disk_widget_clone = disk_config_widget.clone();
         let disk_placeholder_clone = disk_placeholder.clone();
+        let claude_widget_clone = claude_config_widget.clone();
+        let claude_placeholder_clone = claude_placeholder.clone();
         let network_widget_clone = network_config_widget.clone();
         let network_placeholder_clone = network_placeholder.clone();
         let clock_widget_clone = clock_config_widget.clone();
@@ -557,6 +578,7 @@ pub(crate) fn show_panel_properties_dialog(
                 system_temp_placeholder_clone.set_visible(source_id == "system_temp");
                 fan_speed_placeholder_clone.set_visible(source_id == "fan_speed");
                 disk_placeholder_clone.set_visible(source_id == "disk");
+                claude_placeholder_clone.set_visible(source_id == "claude");
                 network_placeholder_clone.set_visible(source_id == "network");
                 clock_placeholder_clone.set_visible(source_id == "clock");
                 combo_placeholder_clone.set_visible(source_id == "combination");
@@ -685,6 +707,24 @@ pub(crate) fn show_panel_properties_dialog(
                             {
                                 if let Some(ref widget) = *disk_widget_clone.borrow() {
                                     widget.set_config(disk_config);
+                                }
+                            }
+                        }
+                    }
+                    "claude" => {
+                        if claude_widget_clone.borrow().is_none() {
+                            let widget = crate::ui::ClaudeSourceConfigWidget::new();
+                            claude_placeholder_clone.append(widget.widget());
+                            *claude_widget_clone.borrow_mut() = Some(widget);
+                        }
+                        if let Some(claude_config_value) = panel_guard.config.get("claude_config") {
+                            if let Ok(claude_config) =
+                                serde_json::from_value::<crate::ui::ClaudeSourceConfig>(
+                                    claude_config_value.clone(),
+                                )
+                            {
+                                if let Some(ref widget) = *claude_widget_clone.borrow() {
+                                    widget.set_config(claude_config);
                                 }
                             }
                         }
@@ -3196,6 +3236,7 @@ pub(crate) fn show_panel_properties_dialog(
     let system_temp_config_widget_clone = system_temp_config_widget.clone();
     let fan_speed_config_widget_clone = fan_speed_config_widget.clone();
     let disk_config_widget_clone = disk_config_widget.clone();
+    let claude_config_widget_clone = claude_config_widget.clone();
     let network_config_widget_clone = network_config_widget.clone();
     let clock_config_widget_clone = clock_config_widget.clone();
     let combo_config_widget_clone = combo_config_widget.clone();
@@ -3487,6 +3528,10 @@ pub(crate) fn show_panel_properties_dialog(
                                     .borrow()
                                     .as_ref()
                                     .map(|w| crate::core::SourceConfig::Disk(w.get_config())),
+                                "claude" => claude_config_widget_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .map(|w| crate::core::SourceConfig::Claude(w.get_config())),
                                 "network" => network_config_widget_clone
                                     .borrow()
                                     .as_ref()

@@ -1,37 +1,69 @@
-//! Claude Code token-usage data source.
+//! Unified Claude usage data source.
 //!
-//! Reads local Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) and
-//! reports token usage for the current rolling session and all-time, bucketed by
-//! model family (Opus / Sonnet / Haiku / Other).
+//! Surfaces Claude usage through one source with a configurable metric. Two
+//! local data paths sit behind it:
 //!
-//! ## Scope & honesty
+//! - **Plan usage** — percentage of plan limits (current session and weekly),
+//!   fetched live from Anthropic's `/api/oauth/usage` endpoint using the local
+//!   Claude Code OAuth token. This is the same data the `/usage` screen shows.
+//! - **Token counts** — raw tokens parsed from local `~/.claude/projects/**.jsonl`
+//!   transcripts, de-duplicated and bucketed by model family.
 //!
-//! This is a **local proxy**: it only sees Claude Code usage recorded on *this*
-//! machine. It is not a mirror of the account-wide plan-usage screen, which is a
-//! usage-against-a-limit figure, not a raw token count. Treat the numbers as
-//! "Claude Code tokens seen locally in the last N hours", not billing truth.
+//! ## Honesty & safety
 //!
-//! ## How usage is counted
-//!
-//! Transcripts log each assistant turn, sometimes repeating the same message
-//! across streaming lines, so entries are de-duplicated by `message.id` +
-//! `requestId`. The current-session figure reconstructs Claude's rolling
-//! "session" the way the plan-usage screen does: a 5-hour block anchored at the
-//! first message of the block (floored to the hour). See [`current_session`].
+//! - The usage endpoint is **undocumented**; Anthropic may change/remove it,
+//!   after which the percentage metrics report `status` errors.
+//! - The OAuth token is read **read-only** from `~/.claude/.credentials.json`.
+//!   This source NEVER writes that file and NEVER refreshes the token (refresh
+//!   tokens can rotate; refreshing here could desync Claude Code's own login).
+//!   On 401 the percentages go stale until Claude Code refreshes the token.
+//! - Token counts are a *local* proxy: only Claude Code usage on this machine.
 
 use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use rg_sens_types::source_configs::claude::ClaudeSourceConfig;
+use rg_sens_types::source_configs::claude::{ClaudeMetric, ClaudeSourceConfig};
 
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::sync::Mutex;
+use std::time::{Duration, Instant, SystemTime};
 
-/// Model families we bucket usage into. `Other` catches anything unrecognised.
+const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+const OAUTH_BETA: &str = "oauth-2025-04-20";
+/// Minimum wall-clock between live usage fetches, regardless of update interval,
+/// so a fast panel refresh can't hammer the endpoint.
+const MIN_FETCH_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Back-off applied after an HTTP 429, since the usage endpoint's rate limit is
+/// tight (a single fetch tripped 429 in testing) and we don't want to sit in a
+/// permanent retry loop.
+const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(300);
+
+/// Process-wide cache for the plan-usage response, shared across every
+/// `ClaudeSource` instance so that N panels make at most one fetch per
+/// `MIN_FETCH_INTERVAL` (per-instance throttling alone is not enough — the
+/// endpoint rate-limits aggressively).
+struct UsageCache {
+    /// Earliest instant a new fetch is allowed; `None` means "fetch now".
+    next_allowed: Option<Instant>,
+    payload: Option<Value>,
+    status: String,
+}
+
+static USAGE_CACHE: Lazy<Mutex<UsageCache>> = Lazy::new(|| {
+    Mutex::new(UsageCache {
+        next_allowed: None,
+        payload: None,
+        status: "not yet fetched".to_string(),
+    })
+});
+
+/// Model families we bucket token usage into. `Other` catches anything else.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Family {
     Opus,
@@ -76,7 +108,7 @@ impl Family {
     }
 }
 
-/// A single de-duplicated usage record.
+/// A single de-duplicated token-usage record.
 #[derive(Debug, Clone, Copy)]
 struct Entry {
     /// Unix timestamp in milliseconds.
@@ -107,7 +139,7 @@ struct Usage {
 /// Decide how many tokens a single assistant turn contributes to the totals.
 ///
 /// ─────────────────────────────────────────────────────────────────────────
-/// LEARNING-MODE CONTRIBUTION — this is the one genuine judgement call here.
+/// LEARNING-MODE CONTRIBUTION — the one genuine judgement call for token counts.
 ///
 /// A Claude Code turn reports four token counts:
 ///   • `input`          — fresh prompt tokens sent this turn
@@ -116,30 +148,27 @@ struct Usage {
 ///   • `cache_read`     — prompt tokens served from the cache (cheap, and the
 ///                        single largest number in a typical Claude Code turn)
 ///
-/// What should "tokens used" mean for this sensor? Options:
+/// What should "tokens used" mean? Options:
 ///   (a) Everything:      input + output + cache_creation + cache_read
-///                        → biggest number; dominated by cache reads.
-///   (b) Billable-ish:    input + output + cache_creation
-///                        → excludes cheap cache hits; closer to "work done".
+///   (b) Billable-ish:    input + output + cache_creation   (ignore cheap hits)
 ///   (c) Generation only: input + output
-///                        → ignores all caching.
 ///
-/// The default below is (a). Change this body to (b)/(c) — or weight the terms —
-/// if you prefer a different definition. Whatever you pick is applied uniformly
-/// to both the session and all-time figures.
+/// Default is (a). Change this body to (b)/(c) — or weight the terms — to pick a
+/// different definition; it applies to both the session and all-time figures.
 /// ─────────────────────────────────────────────────────────────────────────
 fn count_tokens(u: &Usage) -> u64 {
     u.input + u.output + u.cache_creation + u.cache_read
 }
 
-/// Claude Code token-usage source.
+/// Unified Claude usage source.
 pub struct ClaudeSource {
     metadata: SourceMetadata,
     config: ClaudeSourceConfig,
 
+    // --- token-count state (local transcripts) ---
     /// Per-file parse cache, keyed by absolute path.
     file_cache: HashMap<PathBuf, FileCache>,
-    /// Largest session total seen so far, used for auto gauge limits.
+    /// Largest session token total seen so far, for auto gauge limits.
     running_max: f64,
 
     values: HashMap<String, Value>,
@@ -151,8 +180,18 @@ impl ClaudeSource {
             "caption".to_string(),
             "value".to_string(),
             "unit".to_string(),
+            // plan usage
+            "session_pct".to_string(),
+            "weekly_pct".to_string(),
+            "weekly_opus_pct".to_string(),
+            "weekly_sonnet_pct".to_string(),
+            "session_resets_at".to_string(),
+            "weekly_resets_at".to_string(),
+            "session_minutes_left".to_string(),
+            "weekly_minutes_left".to_string(),
+            "status".to_string(),
+            // token counts
             "session_total".to_string(),
-            "session_active".to_string(),
             "alltime_total".to_string(),
         ];
         for (_, suffix) in Family::ALL {
@@ -162,10 +201,10 @@ impl ClaudeSource {
 
         let metadata = SourceMetadata {
             id: "claude".to_string(),
-            name: "Claude Tokens".to_string(),
-            description: "Local Claude Code token usage (current session and all-time)".to_string(),
+            name: "Claude Usage".to_string(),
+            description: "Claude plan usage (% of limits) and local token counts".to_string(),
             available_keys,
-            default_interval: Duration::from_millis(10_000),
+            default_interval: Duration::from_millis(60_000),
         };
 
         Self {
@@ -173,7 +212,7 @@ impl ClaudeSource {
             config: ClaudeSourceConfig::default(),
             file_cache: HashMap::new(),
             running_max: 0.0,
-            values: HashMap::with_capacity(24),
+            values: HashMap::with_capacity(32),
         }
     }
 
@@ -185,20 +224,21 @@ impl ClaudeSource {
         &self.config
     }
 
-    /// Locate the Claude config directory: `$CLAUDE_CONFIG_DIR` or `$HOME/.claude`.
-    fn projects_dir() -> Option<PathBuf> {
+    // ----- token counts (local transcripts) -----
+
+    /// Locate the Claude config dir: `$CLAUDE_CONFIG_DIR` or `$HOME/.claude`.
+    fn claude_dir() -> Option<PathBuf> {
         if let Ok(dir) = std::env::var("CLAUDE_CONFIG_DIR") {
             if !dir.is_empty() {
-                return Some(PathBuf::from(dir).join("projects"));
+                return Some(PathBuf::from(dir));
             }
         }
         std::env::var("HOME")
             .ok()
-            .map(|home| PathBuf::from(home).join(".claude").join("projects"))
+            .map(|home| PathBuf::from(home).join(".claude"))
     }
 
-    /// Collect every `*.jsonl` transcript under `root` (one level of project
-    /// subdirectories, plus any nested ones).
+    /// Collect every `*.jsonl` transcript under `root` recursively.
     fn collect_transcripts(root: &Path, out: &mut Vec<PathBuf>) {
         let Ok(entries) = fs::read_dir(root) else {
             return;
@@ -239,7 +279,6 @@ impl ClaudeSource {
                 _ => continue,
             };
 
-            // Skip pseudo-models and bucket by family.
             let model = message.get("model").and_then(Value::as_str).unwrap_or("");
             let Some(family) = Family::from_model(model) else {
                 continue;
@@ -291,7 +330,7 @@ impl ClaudeSource {
 
             if let Some(cached) = self.file_cache.get(path) {
                 if cached.mtime == mtime && cached.len == len {
-                    continue; // unchanged — reuse cache
+                    continue;
                 }
             }
 
@@ -307,9 +346,110 @@ impl ClaudeSource {
             );
         }
     }
+
+    // ----- plan usage (network) -----
+
+    /// Path to the Claude credentials file (read-only).
+    fn credentials_path() -> Option<PathBuf> {
+        Self::claude_dir().map(|d| d.join(".credentials.json"))
+    }
+
+    /// Read the current OAuth access token (read-only; never written back).
+    fn read_access_token() -> Option<String> {
+        let path = Self::credentials_path()?;
+        let content = fs::read_to_string(path).ok()?;
+        let json: Value = serde_json::from_str(&content).ok()?;
+        json.get("claudeAiOauth")?
+            .get("accessToken")?
+            .as_str()
+            .map(|s| s.to_string())
+    }
+
+    /// Perform the blocking GET. `update()` runs off the GTK thread (the update
+    /// manager wraps sources in `spawn_blocking`), so blocking I/O is fine here.
+    fn fetch(token: &str) -> Result<Value, String> {
+        let resp = ureq::get(USAGE_URL)
+            .set("Authorization", &format!("Bearer {token}"))
+            .set("anthropic-beta", OAUTH_BETA)
+            .set("Content-Type", "application/json")
+            .timeout(Duration::from_secs(10))
+            .call();
+
+        match resp {
+            Ok(r) => r
+                .into_json::<Value>()
+                .map_err(|e| format!("bad response body: {e}")),
+            Err(ureq::Error::Status(code, _)) => Err(match code {
+                401 | 403 => "token expired — open Claude Code to refresh".to_string(),
+                _ => format!("HTTP {code}"),
+            }),
+            Err(e) => Err(format!("network error: {e}")),
+        }
+    }
+
+    /// Ensure the shared plan-usage cache is fresh and return a copy of the last
+    /// good payload plus the latest status.
+    ///
+    /// `want_fetch` is false for token-only metrics, so a panel that never shows
+    /// a percentage makes no network calls. The cache is still shared, so as
+    /// long as *some* panel wants a percentage, all panels see fresh data.
+    ///
+    /// The blocking HTTP call happens **without holding the mutex**: the slot is
+    /// claimed under lock (so siblings see "not due" and return cached data
+    /// immediately), the guard is dropped, the fetch runs, then the lock is
+    /// re-taken to store the result. This avoids stalling sibling panels for the
+    /// duration of the request.
+    fn plan_usage(want_fetch: bool) -> (Option<Value>, String) {
+        let lock = || match USAGE_CACHE.lock() {
+            Ok(c) => c,
+            Err(p) => p.into_inner(), // poisoned: recover and carry on
+        };
+
+        // Phase 1: under lock, decide whether to fetch and claim the slot.
+        {
+            let mut cache = lock();
+            let due = want_fetch
+                && cache
+                    .next_allowed
+                    .map(|t| Instant::now() >= t)
+                    .unwrap_or(true);
+            if !due {
+                return (cache.payload.clone(), cache.status.clone());
+            }
+            // Claim the slot so concurrent siblings don't also fetch.
+            cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
+        }
+
+        // Phase 2: fetch with the lock released.
+        let result = match Self::read_access_token() {
+            Some(token) => Self::fetch(&token),
+            None => Err("no credentials found".to_string()),
+        };
+
+        // Phase 3: re-lock and store the outcome.
+        let mut cache = lock();
+        match result {
+            Ok(payload) => {
+                cache.payload = Some(payload);
+                cache.status = "ok".to_string();
+                cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
+            }
+            Err(e) => {
+                // Back off harder on rate-limiting; keep the last good payload.
+                let backoff = if e.contains("429") {
+                    RATE_LIMIT_BACKOFF
+                } else {
+                    MIN_FETCH_INTERVAL
+                };
+                cache.next_allowed = Some(Instant::now() + backoff);
+                cache.status = e;
+            }
+        }
+        (cache.payload.clone(), cache.status.clone())
+    }
 }
 
-/// Intermediate parse result (avoids constructing a `FileCache` without metadata).
+/// Intermediate parse result (avoids building a `FileCache` without metadata).
 struct ParsedFile {
     alltime: [u64; 4],
     entries: Vec<Entry>,
@@ -325,24 +465,37 @@ fn parse_ts_millis(ts: &str) -> Option<i64> {
         .map(|dt| dt.timestamp_millis())
 }
 
-/// Reconstruct the current usage "session" from de-duplicated entries.
+/// Read `block.utilization` as a float percentage; missing/null block → `None`.
+fn block_pct(payload: &Value, key: &str) -> Option<f64> {
+    payload.get(key)?.get("utilization")?.as_f64()
+}
+
+/// Read `block.resets_at` as an RFC3339 string.
+fn block_resets_at<'a>(payload: &'a Value, key: &str) -> Option<&'a str> {
+    payload.get(key)?.get("resets_at")?.as_str()
+}
+
+/// Minutes from now until `resets_at`, clamped to >= 0. `None` if unparseable.
+fn minutes_until(resets_at: Option<&str>) -> Option<f64> {
+    let ts = resets_at?;
+    let target = chrono::DateTime::parse_from_rfc3339(ts).ok()?;
+    let now = chrono::Utc::now();
+    let mins = (target.timestamp_millis() - now.timestamp_millis()) as f64 / 60_000.0;
+    Some(mins.max(0.0))
+}
+
+/// Reconstruct the current local token "session" from de-duplicated entries.
 ///
-/// Mirrors how Claude's plan-usage screen blocks usage: a session is a fixed
-/// `window`-long block anchored at the first message of the block (floored to
-/// the hour). A new block starts when an entry falls `window` or more past the
-/// current block's start, or `window` or more after the previous entry. The
-/// current session is the most recent block, but only while `now` is still
-/// inside it — once the window elapses with no new activity, the session has
-/// reset and the totals are zero.
-///
-/// Returns per-family totals (indexed by `Family::index`) and whether a session
-/// is currently active.
+/// Mirrors Claude's plan-usage blocking: a session is a fixed `window`-long
+/// block anchored at the first message of the block (floored to the hour). A new
+/// block starts when an entry falls `window` or more past the block start, or
+/// `window` or more after the previous entry. The current session is the most
+/// recent block, but only while `now` is still inside it.
 fn current_session(entries: &[Entry], now: i64, window: i64) -> ([u64; 4], bool) {
     if entries.is_empty() || window <= 0 {
         return ([0; 4], false);
     }
 
-    // Entries arrive per-file; sort ascending by timestamp before blocking.
     let mut sorted: Vec<Entry> = entries.to_vec();
     sorted.sort_by_key(|e| e.ts);
 
@@ -354,7 +507,6 @@ fn current_session(entries: &[Entry], now: i64, window: i64) -> ([u64; 4], bool)
 
     for e in &sorted {
         if e.ts - block_start >= window || e.ts - last_ts >= window {
-            // Gap too large — begin a fresh block.
             block_start = floor_hour(e.ts);
             block_sums = [0; 4];
         }
@@ -362,8 +514,7 @@ fn current_session(entries: &[Entry], now: i64, window: i64) -> ([u64; 4], bool)
         last_ts = e.ts;
     }
 
-    let active = now - block_start < window;
-    if active {
+    if now - block_start < window {
         (block_sums, true)
     } else {
         ([0; 4], false)
@@ -393,7 +544,7 @@ impl DataSource for ClaudeSource {
             FieldMetadata::new(
                 "value",
                 "Value",
-                "Current session total tokens (all models)",
+                "The selected metric's value",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
@@ -405,24 +556,80 @@ impl DataSource for ClaudeSource {
                 FieldPurpose::Unit,
             ),
             FieldMetadata::new(
+                "session_pct",
+                "Session Usage %",
+                "Current 5-hour session usage as a percentage of the plan limit",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_pct",
+                "Weekly Usage %",
+                "Weekly (7-day) usage as a percentage of the plan limit",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_opus_pct",
+                "Weekly Opus %",
+                "Weekly Opus usage as a percentage of its limit (0 if N/A)",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_sonnet_pct",
+                "Weekly Sonnet %",
+                "Weekly Sonnet usage as a percentage of its limit (0 if N/A)",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "session_minutes_left",
+                "Session Resets In (min)",
+                "Minutes until the current session limit resets",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_minutes_left",
+                "Weekly Resets In (min)",
+                "Minutes until the weekly limit resets",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "session_resets_at",
+                "Session Resets At",
+                "Timestamp when the current session limit resets",
+                FieldType::Text,
+                FieldPurpose::Other,
+            ),
+            FieldMetadata::new(
+                "weekly_resets_at",
+                "Weekly Resets At",
+                "Timestamp when the weekly limit resets",
+                FieldType::Text,
+                FieldPurpose::Other,
+            ),
+            FieldMetadata::new(
                 "session_total",
-                "Session Total",
-                "Tokens used in the current rolling session (all models)",
+                "Session Tokens",
+                "Local tokens used in the current session window (all models)",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
             FieldMetadata::new(
                 "alltime_total",
-                "All-Time Total",
-                "Tokens used across all local Claude Code sessions (all models)",
+                "All-Time Tokens",
+                "Local tokens used across all transcripts (all models)",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
             FieldMetadata::new(
-                "session_active",
-                "Session Active",
-                "1 if a usage session is currently active, else 0",
-                FieldType::Numerical,
+                "status",
+                "Status",
+                "Most recent plan-usage fetch status (ok / error message)",
+                FieldType::Text,
                 FieldPurpose::Other,
             ),
         ];
@@ -436,14 +643,14 @@ impl DataSource for ClaudeSource {
             };
             fields.push(FieldMetadata::new(
                 format!("session_{suffix}"),
-                format!("Session {name}"),
+                format!("Session {name} Tokens"),
                 "Session tokens for this model family",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ));
             fields.push(FieldMetadata::new(
                 format!("alltime_{suffix}"),
-                format!("All-Time {name}"),
+                format!("All-Time {name} Tokens"),
                 "All-time tokens for this model family",
                 FieldType::Numerical,
                 FieldPurpose::Value,
@@ -454,13 +661,13 @@ impl DataSource for ClaudeSource {
     }
 
     fn update(&mut self) -> Result<()> {
+        // --- token counts from local transcripts ---
         let mut transcripts = Vec::new();
-        if let Some(dir) = Self::projects_dir() {
-            Self::collect_transcripts(&dir, &mut transcripts);
+        if let Some(dir) = Self::claude_dir() {
+            Self::collect_transcripts(&dir.join("projects"), &mut transcripts);
         }
         self.refresh_cache(&transcripts);
 
-        // Aggregate all-time totals and gather entries for the session window.
         let mut alltime = [0u64; 4];
         let window_ms = (self.config.session_hours * 3_600_000.0) as i64;
         let now = chrono::Utc::now().timestamp_millis();
@@ -471,43 +678,75 @@ impl DataSource for ClaudeSource {
             for (i, total) in cache.alltime.iter().enumerate() {
                 alltime[i] += total;
             }
-            // Only entries that could fall in (or near) the window matter.
             session_entries.extend(cache.entries.iter().filter(|e| e.ts >= session_cutoff));
         }
-
-        let (session, active) = current_session(&session_entries, now, window_ms);
-
+        let (session, _active) = current_session(&session_entries, now, window_ms);
         let session_total: u64 = session.iter().sum();
         let alltime_total: u64 = alltime.iter().sum();
-
-        // Track a running max so gauges have a sensible scale by default.
         self.running_max = self.running_max.max(session_total as f64);
-        let max_limit = self
-            .config
-            .max_limit
-            .unwrap_or_else(|| self.running_max.max(1.0));
 
-        let caption = self
-            .config
-            .custom_caption
-            .clone()
-            .unwrap_or_else(|| "Claude Tokens".to_string());
+        // --- plan usage from the network (shared, throttled cache) ---
+        // Only drive a network fetch when this panel actually shows a
+        // percentage; token-only panels stay fully offline.
+        let (plan, status) = Self::plan_usage(self.config.metric.is_percentage());
 
+        let session_pct = plan
+            .as_ref()
+            .and_then(|p| block_pct(p, "five_hour"))
+            .unwrap_or(0.0);
+        let weekly_pct = plan
+            .as_ref()
+            .and_then(|p| block_pct(p, "seven_day"))
+            .unwrap_or(0.0);
+        let weekly_opus_pct = plan
+            .as_ref()
+            .and_then(|p| block_pct(p, "seven_day_opus"))
+            .unwrap_or(0.0);
+        let weekly_sonnet_pct = plan
+            .as_ref()
+            .and_then(|p| block_pct(p, "seven_day_sonnet"))
+            .unwrap_or(0.0);
+        let session_reset = plan
+            .as_ref()
+            .and_then(|p| block_resets_at(p, "five_hour").map(str::to_string));
+        let weekly_reset = plan
+            .as_ref()
+            .and_then(|p| block_resets_at(p, "seven_day").map(str::to_string));
+
+        // --- publish every field ---
         self.values.clear();
-        self.values.insert("caption".to_string(), Value::from(caption));
         self.values
-            .insert("value".to_string(), Value::from(session_total));
+            .insert("session_pct".to_string(), Value::from(session_pct));
         self.values
-            .insert("unit".to_string(), Value::from("tokens"));
+            .insert("weekly_pct".to_string(), Value::from(weekly_pct));
+        self.values
+            .insert("weekly_opus_pct".to_string(), Value::from(weekly_opus_pct));
+        self.values.insert(
+            "weekly_sonnet_pct".to_string(),
+            Value::from(weekly_sonnet_pct),
+        );
+        self.values.insert(
+            "session_resets_at".to_string(),
+            Value::from(session_reset.clone().unwrap_or_default()),
+        );
+        self.values.insert(
+            "weekly_resets_at".to_string(),
+            Value::from(weekly_reset.clone().unwrap_or_default()),
+        );
+        self.values.insert(
+            "session_minutes_left".to_string(),
+            Value::from(minutes_until(session_reset.as_deref()).unwrap_or(0.0)),
+        );
+        self.values.insert(
+            "weekly_minutes_left".to_string(),
+            Value::from(minutes_until(weekly_reset.as_deref()).unwrap_or(0.0)),
+        );
+        self.values
+            .insert("status".to_string(), Value::from(status));
         self.values
             .insert("session_total".to_string(), Value::from(session_total));
         self.values
             .insert("alltime_total".to_string(), Value::from(alltime_total));
-        self.values.insert(
-            "session_active".to_string(),
-            Value::from(if active { 1.0 } else { 0.0 }),
-        );
-
         for (family, suffix) in Family::ALL {
             let i = family.index();
             self.values
@@ -516,8 +755,34 @@ impl DataSource for ClaudeSource {
                 .insert(format!("alltime_{suffix}"), Value::from(alltime[i]));
         }
 
-        self.values
-            .insert("min_limit".to_string(), Value::from(0.0));
+        // --- route the selected metric into value/caption/unit/limits ---
+        let (raw_value, auto_caption): (f64, &str) = match self.config.metric {
+            ClaudeMetric::SessionUsage => (session_pct, "Claude Session"),
+            ClaudeMetric::WeeklyUsage => (weekly_pct, "Claude Weekly"),
+            ClaudeMetric::WeeklyOpusUsage => (weekly_opus_pct, "Claude Weekly Opus"),
+            ClaudeMetric::WeeklySonnetUsage => (weekly_sonnet_pct, "Claude Weekly Sonnet"),
+            ClaudeMetric::SessionTokens => (session_total as f64, "Claude Session Tokens"),
+            ClaudeMetric::AllTimeTokens => (alltime_total as f64, "Claude Tokens"),
+        };
+
+        let caption = self
+            .config
+            .custom_caption
+            .clone()
+            .unwrap_or_else(|| auto_caption.to_string());
+        let (unit, max_limit) = if self.config.metric.is_percentage() {
+            ("%", 100.0)
+        } else {
+            (
+                "tokens",
+                self.config.max_limit.unwrap_or_else(|| self.running_max.max(1.0)),
+            )
+        };
+
+        self.values.insert("caption".to_string(), Value::from(caption));
+        self.values.insert("value".to_string(), Value::from(raw_value));
+        self.values.insert("unit".to_string(), Value::from(unit));
+        self.values.insert("min_limit".to_string(), Value::from(0.0));
         self.values
             .insert("max_limit".to_string(), Value::from(max_limit));
 
@@ -533,7 +798,7 @@ impl DataSource for ClaudeSource {
     }
 
     fn is_available(&self) -> bool {
-        Self::projects_dir().is_some_and(|p| p.exists())
+        Self::claude_dir().is_some_and(|p| p.exists())
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
@@ -582,14 +847,12 @@ mod tests {
 
     #[test]
     fn active_session_sums_only_the_current_block() {
-        // Block A at hour 0-1, then a >5h gap, block B at hours 10-11.
         let entries = [
             e(0, Family::Opus, 100),
             e(1, Family::Opus, 50),
             e(10, Family::Opus, 7),
             e(11, Family::Sonnet, 3),
         ];
-        // "now" sits inside block B's window (block B anchors at hour 10).
         let (sums, active) = current_session(&entries, 11 * HOUR, WINDOW);
         assert!(active);
         assert_eq!(sums[Family::Opus.index()], 7);
@@ -600,7 +863,6 @@ mod tests {
     #[test]
     fn session_expires_once_the_window_elapses() {
         let entries = [e(0, Family::Opus, 100), e(1, Family::Opus, 50)];
-        // Block anchors at hour 0, resets at hour 5; "now" is hour 8.
         let (sums, active) = current_session(&entries, 8 * HOUR, WINDOW);
         assert!(!active);
         assert_eq!(sums.iter().sum::<u64>(), 0);
@@ -611,5 +873,60 @@ mod tests {
         let (sums, active) = current_session(&[], 5 * HOUR, WINDOW);
         assert!(!active);
         assert_eq!(sums.iter().sum::<u64>(), 0);
+    }
+
+    // A trimmed copy of a real `/api/oauth/usage` response, to pin the schema.
+    const SAMPLE: &str = r#"{
+        "five_hour": { "utilization": 5.0, "resets_at": "2026-06-24T20:49:59.494649+00:00" },
+        "seven_day": { "utilization": 40.0, "resets_at": "2026-06-26T10:59:59.494671+00:00" },
+        "seven_day_opus": null,
+        "seven_day_sonnet": { "utilization": 0.0, "resets_at": null }
+    }"#;
+
+    #[test]
+    fn maps_real_payload_to_percentages() {
+        let payload: Value = serde_json::from_str(SAMPLE).unwrap();
+        assert_eq!(block_pct(&payload, "five_hour"), Some(5.0));
+        assert_eq!(block_pct(&payload, "seven_day"), Some(40.0));
+        assert_eq!(block_pct(&payload, "seven_day_opus"), None);
+        assert_eq!(block_pct(&payload, "seven_day_sonnet"), Some(0.0));
+        assert_eq!(
+            block_resets_at(&payload, "five_hour"),
+            Some("2026-06-24T20:49:59.494649+00:00")
+        );
+        assert_eq!(block_resets_at(&payload, "seven_day_sonnet"), None);
+    }
+
+    // Live end-to-end check; ignored by default (needs network + valid token).
+    // Run: cargo test -p rg-sens-sources live_merged -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn live_merged_update_routes_metric() {
+        let mut src = ClaudeSource::new();
+        src.set_config(ClaudeSourceConfig {
+            metric: ClaudeMetric::SessionUsage,
+            ..Default::default()
+        });
+        src.update().unwrap();
+        let v = src.get_values();
+        eprintln!("status        = {:?}", v.get("status"));
+        eprintln!("value (route) = {:?}", v.get("value"));
+        eprintln!("unit          = {:?}", v.get("unit"));
+        eprintln!("session_pct   = {:?}", v.get("session_pct"));
+        eprintln!("weekly_pct    = {:?}", v.get("weekly_pct"));
+        eprintln!("session_total = {:?}", v.get("session_total"));
+        eprintln!("alltime_total = {:?}", v.get("alltime_total"));
+        // SessionUsage routes session_pct -> value, unit "%".
+        assert_eq!(v.get("unit").and_then(Value::as_str), Some("%"));
+        assert_eq!(v.get("value"), v.get("session_pct"));
+        // Token fields still populated from local transcripts regardless of metric.
+        assert!(v.get("alltime_total").and_then(Value::as_u64).is_some());
+    }
+
+    #[test]
+    fn minutes_until_is_nonnegative_and_zero_for_past() {
+        assert_eq!(minutes_until(Some("2000-01-01T00:00:00+00:00")), Some(0.0));
+        assert_eq!(minutes_until(None), None);
+        assert_eq!(minutes_until(Some("not-a-date")), None);
     }
 }

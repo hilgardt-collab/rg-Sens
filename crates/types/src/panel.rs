@@ -17,7 +17,6 @@ use crate::display_configs::themed_configs::{
     SynthwaveDisplayConfig,
 };
 use crate::source_configs::claude::ClaudeSourceConfig;
-use crate::source_configs::claude_plan::ClaudePlanSourceConfig;
 use crate::source_configs::clock::ClockSourceConfig;
 use crate::source_configs::combo::ComboSourceConfig;
 use crate::source_configs::cpu::CpuSourceConfig;
@@ -84,9 +83,6 @@ pub enum SourceConfig {
     #[serde(rename = "claude")]
     Claude(ClaudeSourceConfig),
 
-    #[serde(rename = "claude_plan")]
-    ClaudePlan(ClaudePlanSourceConfig),
-
     #[serde(rename = "combination")]
     Combo(ComboSourceConfig),
 
@@ -114,7 +110,6 @@ impl SourceConfig {
             SourceConfig::Network(_) => "network",
             SourceConfig::Clock(_) => "clock",
             SourceConfig::Claude(_) => "claude",
-            SourceConfig::ClaudePlan(_) => "claude_plan",
             SourceConfig::Combo(_) => "combination",
             SourceConfig::SystemTemp(_) => "system_temp",
             SourceConfig::FanSpeed(_) => "fan_speed",
@@ -133,7 +128,6 @@ impl SourceConfig {
             SourceConfig::Network(cfg) => cfg.update_interval_ms,
             SourceConfig::Clock(cfg) => cfg.update_interval_ms,
             SourceConfig::Claude(cfg) => cfg.update_interval_ms,
-            SourceConfig::ClaudePlan(cfg) => cfg.update_interval_ms,
             SourceConfig::Combo(cfg) => cfg.update_interval_ms,
             SourceConfig::SystemTemp(cfg) => cfg.update_interval_ms,
             SourceConfig::FanSpeed(cfg) => cfg.update_interval_ms,
@@ -181,11 +175,6 @@ impl SourceConfig {
                     map.insert("claude_config".to_string(), val);
                 }
             }
-            SourceConfig::ClaudePlan(cfg) => {
-                if let Ok(val) = serde_json::to_value(cfg) {
-                    map.insert("claude_plan_config".to_string(), val);
-                }
-            }
             SourceConfig::Combo(cfg) => {
                 if let Ok(val) = serde_json::to_value(cfg) {
                     map.insert("combo_config".to_string(), val);
@@ -225,7 +214,6 @@ impl SourceConfig {
             "network" => Some(SourceConfig::Network(NetworkSourceConfig::default())),
             "clock" => Some(SourceConfig::Clock(ClockSourceConfig::default())),
             "claude" => Some(SourceConfig::Claude(ClaudeSourceConfig::default())),
-            "claude_plan" => Some(SourceConfig::ClaudePlan(ClaudePlanSourceConfig::default())),
             "combination" => Some(SourceConfig::Combo(ComboSourceConfig::default())),
             "system_temp" => Some(SourceConfig::SystemTemp(SystemTempConfig::default())),
             "fan_speed" => Some(SourceConfig::FanSpeed(FanSpeedConfig::default())),
@@ -251,7 +239,6 @@ impl SourceConfig {
             "network" => "network_config",
             "clock" => "clock_config",
             "claude" => "claude_config",
-            "claude_plan" => "claude_plan_config",
             "combination" => "combo_config",
             "system_temp" => "system_temp_config",
             "fan_speed" => "fan_speed_config",
@@ -282,9 +269,6 @@ impl SourceConfig {
             "claude" => serde_json::from_value::<ClaudeSourceConfig>(value.clone())
                 .ok()
                 .map(SourceConfig::Claude),
-            "claude_plan" => serde_json::from_value::<ClaudePlanSourceConfig>(value.clone())
-                .ok()
-                .map(SourceConfig::ClaudePlan),
             "combination" => serde_json::from_value::<ComboSourceConfig>(value.clone())
                 .ok()
                 .map(SourceConfig::Combo),
