@@ -285,10 +285,14 @@ fn post_token(body: &serde_json::Value) -> Result<StoredTokens, TokenError> {
                 .map(str::to_string)
         })
         .ok_or_else(|| TokenError::transient("response had no refresh_token".to_string()))?;
+    // Clamp to a sane range: a negative value would mark the token expired
+    // immediately (refresh storm), and a huge one would overflow the ms maths
+    // below. 60s..=1 year covers every legitimate response.
     let expires_in = json
         .get("expires_in")
         .and_then(|v| v.as_i64())
-        .unwrap_or(3600);
+        .unwrap_or(3600)
+        .clamp(60, 366 * 24 * 3600);
     let expires_at_ms = chrono::Utc::now().timestamp_millis() + expires_in * 1000;
 
     Ok(StoredTokens {

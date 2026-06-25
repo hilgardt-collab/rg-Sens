@@ -368,6 +368,15 @@ impl ClaudeSource {
         if let Some(token) = crate::claude_auth::access_token() {
             return Some(token);
         }
+        // No usable rg-Sens token. If the user IS signed in, access_token()
+        // returning None means a refresh failed (transient) — log it, since the
+        // silent fall-through to Claude Code's read-only token is otherwise hard
+        // to diagnose.
+        if crate::claude_auth::is_signed_in() {
+            log::debug!(
+                "claude: rg-Sens token unavailable (refresh failed?); falling back to Claude Code token"
+            );
+        }
         Self::read_claude_code_token()
     }
 
@@ -760,17 +769,20 @@ impl DataSource for ClaudeSource {
         let window_ms = (self.config.session_hours * 3_600_000.0) as i64;
         let now = chrono::Utc::now().timestamp_millis();
 
+        // current_session anchors the rolling block at the first message and
+        // cascades window boundaries forward, so truncating too aggressively
+        // re-anchors and undercounts. But feeding the entire (ever-growing)
+        // history into a per-update sort is unbounded work. Compromise: keep a
+        // generous lookback (48 windows ≈ 10 days at the default 5h window) — far
+        // longer than any gap-free human session, so anchoring is unaffected,
+        // while bounding the sorted set to recent entries.
+        let session_cutoff = now - window_ms.saturating_mul(48);
         let mut session_entries: Vec<Entry> = Vec::new();
         for cache in self.file_cache.values() {
             for (i, total) in cache.alltime.iter().enumerate() {
                 alltime[i] += total;
             }
-            // Feed ALL entries to current_session, not a recent slice. It anchors
-            // the rolling block at the first message and cascades window
-            // boundaries forward, so a truncated slice re-anchors and undercounts
-            // session tokens during long, gap-free use. The source polls ~60s, so
-            // sorting the full entry set each update is cheap.
-            session_entries.extend(cache.entries.iter().copied());
+            session_entries.extend(cache.entries.iter().filter(|e| e.ts >= session_cutoff).copied());
         }
         let (session, _active) = current_session(&session_entries, now, window_ms);
         let session_total: u64 = session.iter().sum();

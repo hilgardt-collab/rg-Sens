@@ -30,6 +30,8 @@ const SOURCE_CONFIG_KEYS: &[&str] = &[
     "fan_speed_config",
     "test_config",
     "static_text_config",
+    "network_config",
+    "claude_config",
 ];
 
 /// Filter out source-specific config keys from a panel config.

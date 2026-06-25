@@ -394,10 +394,10 @@ impl SharedSourceManager {
                 Arc::clone(&shared.cached_values)
             };
             // Publish to the leaf-level value cache (instant) so readers never
-            // block behind the source lock during a network update.
-            if let Ok(mut cache) = handle.values.lock() {
-                *cache = Arc::clone(&values);
-            }
+            // block behind the source lock during a network update. Recover from
+            // poisoning (consistent with the source lock) so a one-off panic can't
+            // permanently freeze this source's published values.
+            *handle.values.lock().unwrap_or_else(|p| p.into_inner()) = Arc::clone(&values);
             Ok(values)
         } else {
             Err(anyhow!("Source not found: {}", key))
@@ -416,9 +416,10 @@ impl SharedSourceManager {
         // RwLock released here - now safe to acquire Mutex
 
         // Phase 2: Read the reader-facing value cache (leaf lock) — NOT the source
-        // lock — so this never blocks behind a source that is mid-update.
+        // lock — so this never blocks behind a source that is mid-update. Recover
+        // from poisoning rather than returning None (a stale read beats no data).
         let handle = handle?;
-        let cache = handle.values.lock().ok()?;
+        let cache = handle.values.lock().unwrap_or_else(|p| p.into_inner());
         Some(Arc::clone(&cache))
     }
 
