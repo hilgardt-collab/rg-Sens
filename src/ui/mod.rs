@@ -132,7 +132,7 @@ pub use claude_source_config_widget::{ClaudeMetric, ClaudeSourceConfig, ClaudeSo
 pub use clock_source_config_widget::ClockSourceConfigWidget;
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;
-pub use combo_source_config_widget::ComboSourceConfigWidget;
+pub use combo_source_config_widget::{ComboReorder, ComboSourceConfigWidget};
 pub use core_bars_config_widget::{CoreBarsConfigWidget, LazyCoreBarsConfigWidget};
 pub use core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
 pub use cpu_source_config_widget::{

@@ -880,6 +880,33 @@ impl ComboFrameConfig for LcarsFrameConfig {
             self.group_item_counts.iter().map(|&c| c as usize).collect();
         &mut self.group_item_counts_usize
     }
+
+    // LCARS stores the authoritative item counts in a `Vec<u32>` and exposes
+    // only a transient `usize` shadow through `group_item_counts_mut`. The
+    // default `swap_groups` would reorder that shadow, which is discarded — so
+    // override it to swap the real `u32` field (and keep the shadow in sync).
+    fn swap_groups(&mut self, group_a: usize, group_b: usize) {
+        if group_a == group_b {
+            return;
+        }
+        if group_a < self.group_size_weights.len() && group_b < self.group_size_weights.len() {
+            self.group_size_weights.swap(group_a, group_b);
+        }
+        if group_a < self.group_item_orientations.len()
+            && group_b < self.group_item_orientations.len()
+        {
+            self.group_item_orientations.swap(group_a, group_b);
+        }
+        if group_a < self.group_item_counts.len() && group_b < self.group_item_counts.len() {
+            self.group_item_counts.swap(group_a, group_b);
+        }
+        self.sync_group_item_counts();
+        crate::combo::reorder::swap_group_prefixes(
+            &mut self.content_items,
+            group_a + 1,
+            group_b + 1,
+        );
+    }
 }
 
 impl LcarsFrameConfig {

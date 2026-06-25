@@ -198,11 +198,39 @@ impl CachedSources {
     }
 }
 
+/// A reorder operation emitted by the combo source config widget when the user
+/// moves a group or item up/down. The dialog forwards this to the paired
+/// display config widget so it applies the identical swap (keeping per-slot
+/// display settings attached to their source). All indices are 0-based.
+#[derive(Clone, Copy, Debug)]
+pub enum ComboReorder {
+    /// Swap two groups.
+    Group { a: usize, b: usize },
+    /// Swap two items within a group.
+    Item { group: usize, i: usize, j: usize },
+}
+
+/// Callback storage for [`ComboReorder`] notifications.
+type ReorderCb = Rc<RefCell<Option<Box<dyn Fn(ComboReorder)>>>>;
+
+/// Parse a `"group{N}_{M}"` slot key into 0-based `(group_idx, item_idx)`.
+/// Returns `None` if the key isn't in the expected form.
+fn parse_slot_indices(slot_name: &str) -> Option<(usize, usize)> {
+    let rest = slot_name.strip_prefix("group")?;
+    let (group_str, item_str) = rest.split_once('_')?;
+    let group_num: usize = group_str.parse().ok()?;
+    let item_num: usize = item_str.parse().ok()?;
+    if group_num == 0 || item_num == 0 {
+        return None;
+    }
+    Some((group_num - 1, item_num - 1))
+}
+
 /// Widget for configuring a Combination data source
 pub struct ComboSourceConfigWidget {
     container: GtkBox,
     config: Rc<RefCell<ComboSourceConfig>>,
-    /// Spinner for number of groups (1-8)
+    /// Spinner for number of groups (1-16)
     group_count_spin: SpinButton,
     update_interval_spin: SpinButton,
     /// Main notebook for groups
@@ -210,6 +238,9 @@ pub struct ComboSourceConfigWidget {
     /// Maps slot name (e.g., "group1_1") to its widgets
     slot_widgets: Rc<RefCell<HashMap<String, SlotWidgets>>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+    /// Fired when the user reorders a group or item, so the paired display
+    /// config can apply the identical swap.
+    on_reorder: ReorderCb,
     /// Cached source registry info (computed once)
     cached_sources: Rc<CachedSources>,
     /// Debounce counter for group count spinner
@@ -282,7 +313,7 @@ impl ComboSourceConfigWidget {
         // Group count spinner
         let group_count_box = GtkBox::new(Orientation::Horizontal, 8);
         let group_count_label = Label::new(Some("Number of Groups:"));
-        let group_count_spin = SpinButton::with_range(1.0, 8.0, 1.0);
+        let group_count_spin = SpinButton::with_range(1.0, 16.0, 1.0);
         group_count_spin.set_value(config.borrow().groups.len() as f64);
         group_count_box.append(&group_count_label);
         group_count_box.append(&group_count_spin);
@@ -330,6 +361,9 @@ impl ComboSourceConfigWidget {
         let on_fields_updated: Rc<RefCell<Option<Box<dyn Fn(Vec<crate::core::FieldMetadata>)>>>> =
             Rc::new(RefCell::new(None));
 
+        // Reorder notification callback (set by the dialog)
+        let on_reorder: ReorderCb = Rc::new(RefCell::new(None));
+
         // Destroyed flag - set when widget is destroyed to cancel async callbacks
         let destroyed = Rc::new(Cell::new(false));
 
@@ -341,6 +375,7 @@ impl ComboSourceConfigWidget {
             notebook,
             slot_widgets,
             on_change,
+            on_reorder,
             cached_sources,
             group_debounce_id,
             rebuild_generation,
@@ -382,6 +417,7 @@ impl ComboSourceConfigWidget {
             let cached_sources_clone = widget.cached_sources.clone();
             let debounce_id = widget.group_debounce_id.clone();
             let rebuild_generation_clone = widget.rebuild_generation.clone();
+            let on_reorder_clone = widget.on_reorder.clone();
 
             widget.group_count_spin.connect_value_changed(move |spin| {
                 let new_count = spin.value() as usize;
@@ -411,6 +447,7 @@ impl ComboSourceConfigWidget {
                 let cached_for_rebuild = cached_sources_clone.clone();
                 let debounce_check = debounce_id.clone();
                 let rebuild_gen_for_rebuild = rebuild_generation_clone.clone();
+                let on_reorder_for_rebuild = on_reorder_clone.clone();
 
                 glib::timeout_add_local_once(
                     Duration::from_millis(SPINNER_DEBOUNCE_MS),
@@ -429,6 +466,7 @@ impl ComboSourceConfigWidget {
                                 &cached_for_rebuild,
                                 &rebuild_gen_for_rebuild,
                                 generation,
+                                &on_reorder_for_rebuild,
                             );
                             if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
                                 cb();
@@ -542,6 +580,143 @@ impl ComboSourceConfigWidget {
         *self.on_change.borrow_mut() = Some(Box::new(callback));
     }
 
+    /// Set the reorder callback. Invoked when the user moves a group or item;
+    /// the dialog uses it to apply the same swap to the active display config.
+    pub fn set_on_reorder<F: Fn(ComboReorder) + 'static>(&self, callback: F) {
+        *self.on_reorder.borrow_mut() = Some(Box::new(callback));
+    }
+
+    /// Flush the live widget values (selected source, caption, embedded source
+    /// config) back into `config.slots`. Must be called before reordering so the
+    /// swap operates on current data, and before clearing `slot_widgets`.
+    fn save_slot_widgets_to_config(
+        config: &Rc<RefCell<ComboSourceConfig>>,
+        slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
+    ) {
+        let mut cfg = config.borrow_mut();
+        for (slot_name, widgets) in slot_widgets.borrow().iter() {
+            let slot_config = cfg.slots.entry(slot_name.clone()).or_default();
+
+            let selected_idx = widgets.source_dropdown.selected() as usize;
+            if selected_idx < widgets.source_ids.len() {
+                slot_config.source_id = widgets.source_ids[selected_idx].clone();
+            }
+            slot_config.caption_override = widgets.caption_entry.text().to_string();
+
+            if let Some(ref source_widget) = *widgets.source_config_widget.borrow() {
+                if let Some(config_value) = source_widget.get_config_json() {
+                    if let Some(obj) = config_value.as_object() {
+                        slot_config.source_config =
+                            obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Perform a group swap: flush widgets, swap source config, rebuild the
+    /// group notebook, then notify the dialog so it mirrors the swap onto the
+    /// display config. `idx`/`other` are 0-based group indices.
+    #[allow(clippy::too_many_arguments)]
+    fn perform_group_reorder(
+        idx: usize,
+        other: usize,
+        config: &Rc<RefCell<ComboSourceConfig>>,
+        notebook: &Notebook,
+        slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        on_reorder: &ReorderCb,
+        cached_sources: &Rc<CachedSources>,
+        rebuild_generation: &Rc<Cell<u32>>,
+    ) {
+        {
+            let len = config.borrow().groups.len();
+            if idx >= len || other >= len {
+                return;
+            }
+        }
+        // Flush current widget values into config, then clear so the rebuild
+        // does not save stale (pre-swap) widget values back over the swap.
+        Self::save_slot_widgets_to_config(config, slot_widgets);
+        slot_widgets.borrow_mut().clear();
+        config.borrow_mut().swap_groups(idx, other);
+
+        let generation = rebuild_generation.get().wrapping_add(1);
+        rebuild_generation.set(generation);
+        Self::rebuild_tabs_internal(
+            config,
+            notebook,
+            slot_widgets,
+            on_change,
+            cached_sources,
+            rebuild_generation,
+            generation,
+            on_reorder,
+        );
+
+        if let Some(cb) = on_reorder.borrow().as_ref() {
+            cb(ComboReorder::Group { a: idx, b: other });
+        }
+    }
+
+    /// Perform an item swap within a group: flush widgets, swap source config,
+    /// rebuild this group's item notebook, then notify the dialog. `group` and
+    /// `i`/`j` are 0-based.
+    #[allow(clippy::too_many_arguments)]
+    fn perform_item_reorder(
+        group: usize,
+        i: usize,
+        j: usize,
+        items_notebook: &Notebook,
+        config: &Rc<RefCell<ComboSourceConfig>>,
+        slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        on_reorder: &ReorderCb,
+        source_ids: &[String],
+        source_names: &[String],
+        rebuild_generation: &Rc<Cell<u32>>,
+    ) {
+        let item_count = {
+            let cfg = config.borrow();
+            match cfg.groups.get(group) {
+                Some(g) => g.item_count,
+                None => return,
+            }
+        };
+        if i >= item_count as usize || j >= item_count as usize {
+            return;
+        }
+        // Flush all widgets into config, then drop only THIS group's tracked
+        // widgets — rebuild_items_notebook only rebuilds this group, so other
+        // groups' widgets must stay registered in slot_widgets.
+        Self::save_slot_widgets_to_config(config, slot_widgets);
+        let group_prefix = format!("group{}_", group + 1);
+        slot_widgets
+            .borrow_mut()
+            .retain(|k, _| !k.starts_with(&group_prefix));
+        config.borrow_mut().swap_items(group, i, j);
+
+        let generation = rebuild_generation.get().wrapping_add(1);
+        rebuild_generation.set(generation);
+        Self::rebuild_items_notebook(
+            items_notebook,
+            slot_widgets,
+            on_change,
+            config,
+            group + 1,
+            item_count,
+            source_ids,
+            source_names,
+            rebuild_generation,
+            generation,
+            on_reorder,
+        );
+
+        if let Some(cb) = on_reorder.borrow().as_ref() {
+            cb(ComboReorder::Item { group, i, j });
+        }
+    }
+
     /// Rebuild the notebook tabs based on current configuration
     fn rebuild_tabs(&self) {
         // Increment generation to cancel any pending async operations
@@ -556,9 +731,11 @@ impl ComboSourceConfigWidget {
             &self.cached_sources,
             &self.rebuild_generation,
             generation,
+            &self.on_reorder,
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn rebuild_tabs_internal(
         config: &Rc<RefCell<ComboSourceConfig>>,
         notebook: &Notebook,
@@ -567,6 +744,7 @@ impl ComboSourceConfigWidget {
         cached_sources: &Rc<CachedSources>,
         rebuild_generation: &Rc<Cell<u32>>,
         current_generation: u32,
+        on_reorder: &ReorderCb,
     ) {
         // IMPORTANT: Before clearing widgets, save their current values back to config
         // This preserves settings when group/item counts change
@@ -651,6 +829,7 @@ impl ComboSourceConfigWidget {
         let loading_box_clone = loading_box.clone();
         let is_first = Rc::new(Cell::new(true));
         let generation_ref = rebuild_generation.clone();
+        let on_reorder_clone = on_reorder.clone();
 
         glib::source::idle_add_local_full(glib::Priority::DEFAULT_IDLE, move || {
             // Check if this operation has been superseded by a newer rebuild
@@ -681,6 +860,8 @@ impl ComboSourceConfigWidget {
                     &cached_sources_clone.source_ids,
                     &cached_sources_clone.source_names,
                     &cached_sources_clone,
+                    &generation_ref,
+                    &on_reorder_clone,
                 );
 
                 glib::ControlFlow::Continue
@@ -695,6 +876,7 @@ impl ComboSourceConfigWidget {
     }
 
     /// Create a group tab containing an item count spinner and nested items notebook
+    #[allow(clippy::too_many_arguments)]
     fn create_group_tab(
         parent_notebook: &Notebook,
         slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
@@ -705,6 +887,8 @@ impl ComboSourceConfigWidget {
         source_ids: &[String],
         source_names: &[String],
         cached_sources: &Rc<CachedSources>,
+        rebuild_generation: &Rc<Cell<u32>>,
+        on_reorder: &ReorderCb,
     ) {
         let group_box = GtkBox::new(Orientation::Vertical, 8);
         group_box.set_margin_start(8);
@@ -712,10 +896,72 @@ impl ComboSourceConfigWidget {
         group_box.set_margin_top(8);
         group_box.set_margin_bottom(8);
 
+        // Group reorder row: move this group earlier/later in the order.
+        // Buttons are sensitivity-clamped at the first/last group.
+        let group_count = config.borrow().groups.len();
+        let group_idx = group_num - 1;
+        let reorder_box = GtkBox::new(Orientation::Horizontal, 8);
+        let reorder_label = Label::new(Some("Group order:"));
+        let move_up_btn = gtk4::Button::from_icon_name("go-up-symbolic");
+        move_up_btn.set_tooltip_text(Some("Move this group earlier"));
+        move_up_btn.set_sensitive(group_idx > 0);
+        let move_down_btn = gtk4::Button::from_icon_name("go-down-symbolic");
+        move_down_btn.set_tooltip_text(Some("Move this group later"));
+        move_down_btn.set_sensitive(group_idx + 1 < group_count);
+        reorder_box.append(&reorder_label);
+        reorder_box.append(&move_up_btn);
+        reorder_box.append(&move_down_btn);
+        group_box.append(&reorder_box);
+
+        {
+            let config_c = config.clone();
+            let notebook_c = parent_notebook.clone();
+            let slot_widgets_c = slot_widgets.clone();
+            let on_change_c = on_change.clone();
+            let on_reorder_c = on_reorder.clone();
+            let cached_c = cached_sources.clone();
+            let rebuild_gen_c = rebuild_generation.clone();
+            move_up_btn.connect_clicked(move |_| {
+                Self::perform_group_reorder(
+                    group_idx,
+                    group_idx.wrapping_sub(1),
+                    &config_c,
+                    &notebook_c,
+                    &slot_widgets_c,
+                    &on_change_c,
+                    &on_reorder_c,
+                    &cached_c,
+                    &rebuild_gen_c,
+                );
+            });
+        }
+        {
+            let config_c = config.clone();
+            let notebook_c = parent_notebook.clone();
+            let slot_widgets_c = slot_widgets.clone();
+            let on_change_c = on_change.clone();
+            let on_reorder_c = on_reorder.clone();
+            let cached_c = cached_sources.clone();
+            let rebuild_gen_c = rebuild_generation.clone();
+            move_down_btn.connect_clicked(move |_| {
+                Self::perform_group_reorder(
+                    group_idx,
+                    group_idx + 1,
+                    &config_c,
+                    &notebook_c,
+                    &slot_widgets_c,
+                    &on_change_c,
+                    &on_reorder_c,
+                    &cached_c,
+                    &rebuild_gen_c,
+                );
+            });
+        }
+
         // Item count spinner row
         let item_count_box = GtkBox::new(Orientation::Horizontal, 8);
         let item_count_label = Label::new(Some("Items in this group:"));
-        let item_count_spin = SpinButton::with_range(1.0, 8.0, 1.0);
+        let item_count_spin = SpinButton::with_range(1.0, 16.0, 1.0);
         item_count_spin.set_value(item_count as f64);
         item_count_box.append(&item_count_label);
         item_count_box.append(&item_count_spin);
@@ -739,6 +985,8 @@ impl ComboSourceConfigWidget {
                 &tab_label,
                 source_ids,
                 source_names,
+                rebuild_generation,
+                on_reorder,
             );
         }
 
@@ -755,6 +1003,7 @@ impl ComboSourceConfigWidget {
             let items_notebook_clone = items_notebook.clone();
             let slot_widgets_clone = slot_widgets.clone();
             let on_change_clone = on_change.clone();
+            let on_reorder_clone = on_reorder.clone();
             let cached_sources_clone = cached_sources.clone();
             let group_num_copy = group_num;
             let debounce_id = item_debounce_id.clone();
@@ -783,6 +1032,7 @@ impl ComboSourceConfigWidget {
                 let cached_for_rebuild = cached_sources_clone.clone();
                 let debounce_check = debounce_id.clone();
                 let rebuild_gen_for_rebuild = rebuild_gen.clone();
+                let on_reorder_for_rebuild = on_reorder_clone.clone();
 
                 glib::timeout_add_local_once(
                     Duration::from_millis(SPINNER_DEBOUNCE_MS),
@@ -804,6 +1054,7 @@ impl ComboSourceConfigWidget {
                                 &cached_for_rebuild.source_names,
                                 &rebuild_gen_for_rebuild,
                                 generation,
+                                &on_reorder_for_rebuild,
                             );
 
                             if let Some(cb) = on_change_for_rebuild.borrow().as_ref() {
@@ -821,6 +1072,7 @@ impl ComboSourceConfigWidget {
     }
 
     /// Rebuild items notebook when item count changes
+    #[allow(clippy::too_many_arguments)]
     fn rebuild_items_notebook(
         notebook: &Notebook,
         slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
@@ -832,6 +1084,7 @@ impl ComboSourceConfigWidget {
         source_names: &[String],
         rebuild_generation: &Rc<Cell<u32>>,
         current_generation: u32,
+        on_reorder: &ReorderCb,
     ) {
         // Save current values for this group's slots before clearing
         // Only iterate over slots that actually exist in slot_widgets (not hardcoded 1-8)
@@ -917,6 +1170,7 @@ impl ComboSourceConfigWidget {
         let loading_box_clone = loading_box.clone();
         let is_first = Rc::new(Cell::new(true));
         let generation_ref = rebuild_generation.clone();
+        let on_reorder_clone = on_reorder.clone();
 
         glib::source::idle_add_local_full(glib::Priority::DEFAULT_IDLE, move || {
             // Check if this operation has been superseded by a newer rebuild
@@ -947,6 +1201,8 @@ impl ComboSourceConfigWidget {
                     &tab_label,
                     &source_ids_clone,
                     &source_names_clone,
+                    &generation_ref,
+                    &on_reorder_clone,
                 );
 
                 glib::ControlFlow::Continue
@@ -1005,6 +1261,7 @@ impl ComboSourceConfigWidget {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_slot_tab(
         notebook: &Notebook,
         slot_widgets: &Rc<RefCell<HashMap<String, SlotWidgets>>>,
@@ -1014,6 +1271,8 @@ impl ComboSourceConfigWidget {
         tab_label: &str,
         source_ids: &[String],
         source_names: &[String],
+        rebuild_generation: &Rc<Cell<u32>>,
+        on_reorder: &ReorderCb,
     ) {
         // Create scrolled window for each tab to handle long config widgets
         let tab_scrolled = ScrolledWindow::new();
@@ -1025,6 +1284,82 @@ impl ComboSourceConfigWidget {
         tab_box.set_margin_end(12);
         tab_box.set_margin_top(12);
         tab_box.set_margin_bottom(12);
+
+        // Item reorder row: move this item earlier/later within its group.
+        // Parse the 0-based group/item indices out of the "group{N}_{M}" key.
+        if let Some((group_idx, item_idx)) = parse_slot_indices(slot_name) {
+            let item_count = config
+                .borrow()
+                .groups
+                .get(group_idx)
+                .map(|g| g.item_count as usize)
+                .unwrap_or(0);
+            let reorder_box = GtkBox::new(Orientation::Horizontal, 8);
+            let reorder_label = Label::new(Some("Item order:"));
+            reorder_label.set_width_chars(12);
+            reorder_label.set_xalign(0.0);
+            let move_up_btn = gtk4::Button::from_icon_name("go-up-symbolic");
+            move_up_btn.set_tooltip_text(Some("Move this item earlier"));
+            move_up_btn.set_sensitive(item_idx > 0);
+            let move_down_btn = gtk4::Button::from_icon_name("go-down-symbolic");
+            move_down_btn.set_tooltip_text(Some("Move this item later"));
+            move_down_btn.set_sensitive(item_idx + 1 < item_count);
+            reorder_box.append(&reorder_label);
+            reorder_box.append(&move_up_btn);
+            reorder_box.append(&move_down_btn);
+            tab_box.append(&reorder_box);
+
+            {
+                let config_c = config.clone();
+                let notebook_c = notebook.clone();
+                let slot_widgets_c = slot_widgets.clone();
+                let on_change_c = on_change.clone();
+                let on_reorder_c = on_reorder.clone();
+                let source_ids_c = source_ids.to_vec();
+                let source_names_c = source_names.to_vec();
+                let rebuild_gen_c = rebuild_generation.clone();
+                move_up_btn.connect_clicked(move |_| {
+                    Self::perform_item_reorder(
+                        group_idx,
+                        item_idx,
+                        item_idx.wrapping_sub(1),
+                        &notebook_c,
+                        &config_c,
+                        &slot_widgets_c,
+                        &on_change_c,
+                        &on_reorder_c,
+                        &source_ids_c,
+                        &source_names_c,
+                        &rebuild_gen_c,
+                    );
+                });
+            }
+            {
+                let config_c = config.clone();
+                let notebook_c = notebook.clone();
+                let slot_widgets_c = slot_widgets.clone();
+                let on_change_c = on_change.clone();
+                let on_reorder_c = on_reorder.clone();
+                let source_ids_c = source_ids.to_vec();
+                let source_names_c = source_names.to_vec();
+                let rebuild_gen_c = rebuild_generation.clone();
+                move_down_btn.connect_clicked(move |_| {
+                    Self::perform_item_reorder(
+                        group_idx,
+                        item_idx,
+                        item_idx + 1,
+                        &notebook_c,
+                        &config_c,
+                        &slot_widgets_c,
+                        &on_change_c,
+                        &on_reorder_c,
+                        &source_ids_c,
+                        &source_names_c,
+                        &rebuild_gen_c,
+                    );
+                });
+            }
+        }
 
         // Source selection row
         let source_row = GtkBox::new(Orientation::Horizontal, 8);

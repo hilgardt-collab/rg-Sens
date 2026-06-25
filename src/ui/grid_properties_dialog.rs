@@ -1966,6 +1966,152 @@ pub(crate) fn show_panel_properties_dialog(
                 };
                 widget.update_fields_cache_async();
             });
+
+            // Mirror group/item reorders from the source config onto the active
+            // display config, so per-slot display settings move with their
+            // source. The frame config of every theme implements ComboFrameConfig
+            // and gets the same swap_groups/swap_items via the shared helpers.
+            {
+                use crate::ui::ComboReorder;
+                use rg_sens_types::combo::ComboFrameConfig;
+
+                /// Apply a reorder op to any theme frame config.
+                fn apply_reorder<C: ComboFrameConfig>(frame: &mut C, op: ComboReorder) {
+                    match op {
+                        ComboReorder::Group { a, b } => frame.swap_groups(a, b),
+                        ComboReorder::Item { group, i, j } => frame.swap_items(group, i, j),
+                    }
+                }
+
+                let combo_widget_weak_ro = Rc::downgrade(&combo_widget_for_lcars);
+                let displayers_ro = displayers.clone();
+                let displayer_combo_ro = displayer_combo.clone();
+                let lcars_ro = lcars_widget_clone.clone();
+                let cyberpunk_ro = cyberpunk_widget_clone.clone();
+                let material_ro = material_widget_clone.clone();
+                let industrial_ro = industrial_widget_clone.clone();
+                let retro_terminal_ro = retro_terminal_widget_clone.clone();
+                let fighter_hud_ro = fighter_hud_widget_clone.clone();
+                let synthwave_ro = synthwave_widget_clone.clone();
+                let art_deco_ro = art_deco_widget_clone.clone();
+                let art_nouveau_ro = art_nouveau_widget_clone.clone();
+                let steampunk_ro = steampunk_config_widget.clone();
+                let css_template_ro = css_template_config_widget.clone();
+
+                widget.set_on_reorder(move |op| {
+                    let displayer_id = displayers_ro
+                        .borrow()
+                        .get(displayer_combo_ro.selected() as usize)
+                        .cloned()
+                        .unwrap_or_default();
+
+                    match displayer_id.as_str() {
+                        "lcars" => {
+                            if let Some(w) = lcars_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(cfg);
+                            }
+                        }
+                        "cyberpunk" => {
+                            if let Some(w) = cyberpunk_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "material" => {
+                            if let Some(w) = material_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "industrial" => {
+                            if let Some(w) = industrial_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "retro_terminal" => {
+                            if let Some(w) = retro_terminal_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "fighter_hud" => {
+                            if let Some(w) = fighter_hud_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(cfg);
+                            }
+                        }
+                        "synthwave" => {
+                            if let Some(w) = synthwave_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(cfg);
+                            }
+                        }
+                        "art_deco" => {
+                            if let Some(w) = art_deco_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "art_nouveau" => {
+                            if let Some(w) = art_nouveau_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "steampunk" => {
+                            if let Some(w) = steampunk_ro.borrow().as_ref() {
+                                let mut cfg = w.get_config();
+                                apply_reorder(&mut cfg.frame, op);
+                                w.set_config(&cfg);
+                            }
+                        }
+                        "css_template" => {
+                            // CSS template references source slots by string
+                            // ("group1_1"), not via ComboFrameConfig. Remap each
+                            // placeholder mapping's slot_prefix with the same swap.
+                            if let Some(w) = css_template_ro.borrow().as_ref() {
+                                use rg_sens_types::combo::reorder;
+                                let mut cfg = w.get_config();
+                                for m in cfg.mappings.iter_mut() {
+                                    m.slot_prefix = match op {
+                                        ComboReorder::Group { a, b } => {
+                                            reorder::remap_group_swap(&m.slot_prefix, a + 1, b + 1)
+                                        }
+                                        ComboReorder::Item { group, i, j } => reorder::remap_item_swap(
+                                            &m.slot_prefix,
+                                            group + 1,
+                                            i + 1,
+                                            j + 1,
+                                        ),
+                                    };
+                                }
+                                w.set_config(&cfg);
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    // The source->slot mapping changed, so the per-slot source
+                    // summaries shown in the display config are now stale.
+                    // Recompute them (re-pushed via on_fields_updated).
+                    if let Some(combo_widget_rc) = combo_widget_weak_ro.upgrade() {
+                        if let Some(ref combo_widget) = *combo_widget_rc.borrow() {
+                            combo_widget.update_fields_cache_async();
+                        }
+                    }
+                });
+            }
         }
 
         // Initialize ONLY the ACTIVE combo config widget with current source summaries if combo source is selected

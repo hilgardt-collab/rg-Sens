@@ -143,6 +143,24 @@ impl ComboSourceConfig {
         self.groups.iter().map(|g| g.item_count).sum()
     }
 
+    /// Swap two groups by 0-based index, carrying their slot sources with them.
+    ///
+    /// Reorders the `groups` vector and renames every `"group{N}_*"` slot key
+    /// via the shared [`crate::combo::reorder`] helpers — the same helpers the
+    /// display config uses, so the two never desync.
+    pub fn swap_groups(&mut self, group_a: usize, group_b: usize) {
+        if group_a == group_b || group_a >= self.groups.len() || group_b >= self.groups.len() {
+            return;
+        }
+        self.groups.swap(group_a, group_b);
+        crate::combo::reorder::swap_group_prefixes(&mut self.slots, group_a + 1, group_b + 1);
+    }
+
+    /// Swap two item slots within a group, all 0-based.
+    pub fn swap_items(&mut self, group: usize, item_i: usize, item_j: usize) {
+        crate::combo::reorder::swap_item_keys(&mut self.slots, group + 1, item_i + 1, item_j + 1);
+    }
+
     /// Get update interval as Duration
     pub fn update_interval(&self) -> Duration {
         Duration::from_millis(self.update_interval_ms)
