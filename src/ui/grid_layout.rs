@@ -36,7 +36,7 @@ const SOURCE_CONFIG_KEYS: &[&str] = &[
 
 /// Filter out source-specific config keys from a panel config.
 /// Used when copying/pasting panel styles to preserve only visual settings.
-fn filter_source_config_keys(config: &mut HashMap<String, serde_json::Value>) {
+pub(crate) fn filter_source_config_keys(config: &mut HashMap<String, serde_json::Value>) {
     for key in SOURCE_CONFIG_KEYS {
         config.remove(*key);
     }
@@ -72,7 +72,7 @@ fn cleanup_widget_controllers(widget: &impl IsA<Widget>) {
 
 /// Create the standard panel context menu model.
 /// Returns a Menu with Properties, Copy/Paste Style, Save to File, and Delete sections.
-fn create_panel_context_menu() -> gtk4::gio::Menu {
+pub(crate) fn create_panel_context_menu() -> gtk4::gio::Menu {
     use gtk4::gio;
 
     let menu = gio::Menu::new();
@@ -2423,15 +2423,7 @@ impl GridLayout {
                                     use crate::ui::{PanelStyle, CLIPBOARD};
 
                                     let mut displayer_config = panel_guard.config.clone();
-                                    displayer_config.remove("cpu_config");
-                                    displayer_config.remove("gpu_config");
-                                    displayer_config.remove("memory_config");
-                                    displayer_config.remove("disk_config");
-                                    displayer_config.remove("clock_config");
-                                    displayer_config.remove("combo_config");
-                                    displayer_config.remove("system_temp_config");
-                                    displayer_config.remove("fan_speed_config");
-                                    displayer_config.remove("test_config");
+                                    filter_source_config_keys(&mut displayer_config);
 
                                     let style = PanelStyle {
                                         background: panel_guard.background.clone(),
@@ -2446,6 +2438,42 @@ impl GridLayout {
                                     }
                                 });
                                 action_group.add_action(&copy_style_action);
+
+                                // Set as Default Style action (self-contained; was missing
+                                // from this duplication path, mirroring the creation path).
+                                let set_default_style_action =
+                                    gio::SimpleAction::new("set_default_style", None);
+                                let panel_set_default = new_panel.clone();
+                                set_default_style_action.connect_activate(move |_, _| {
+                                    use crate::config::DefaultsConfig;
+                                    let panel_guard = panel_set_default.blocking_read();
+                                    let displayer_id = panel_guard.displayer.id().to_string();
+                                    let displayer_config = if let Some(typed_config) =
+                                        panel_guard.displayer.get_typed_config()
+                                    {
+                                        typed_config.to_inner_value()
+                                    } else {
+                                        let mut config = panel_guard.config.clone();
+                                        filter_source_config_keys(&mut config);
+                                        serde_json::to_value(&config).ok()
+                                    };
+                                    drop(panel_guard);
+                                    if let Some(config_value) = displayer_config {
+                                        let mut defaults = DefaultsConfig::load();
+                                        defaults.set_displayer_default(&displayer_id, config_value);
+                                        match defaults.save() {
+                                            Ok(()) => log::info!(
+                                                "Default style saved for displayer: {displayer_id}"
+                                            ),
+                                            Err(e) => log::warn!("Failed to save default style: {e}"),
+                                        }
+                                    } else {
+                                        log::warn!(
+                                            "Could not serialize displayer config for default style"
+                                        );
+                                    }
+                                });
+                                action_group.add_action(&set_default_style_action);
 
                                 // Add Paste Style action
                                 let paste_style_action = gio::SimpleAction::new("paste_style", None);
@@ -2576,30 +2604,12 @@ impl GridLayout {
                                 });
                                 action_group.add_action(&save_to_file_action);
 
-                                // Setup context menu popover (no per-panel gesture - global handler shows it)
-                                use gtk4::{PopoverMenu, gio::Menu};
-                                let menu = Menu::new();
-
-                                // Section 1: Properties
-                                let section1 = gio::Menu::new();
-                                section1.append(Some("Properties..."), Some("panel.properties"));
-                                menu.append_section(None, &section1);
-
-                                // Section 2: Copy/Paste Style
-                                let section2 = gio::Menu::new();
-                                section2.append(Some("Copy Style"), Some("panel.copy_style"));
-                                section2.append(Some("Paste Style"), Some("panel.paste_style"));
-                                menu.append_section(None, &section2);
-
-                                // Section 3: Save to File
-                                let section3 = gio::Menu::new();
-                                section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
-                                menu.append_section(None, &section3);
-
-                                // Section 4: Delete
-                                let section4 = gio::Menu::new();
-                                section4.append(Some("Delete"), Some("panel.delete"));
-                                menu.append_section(None, &section4);
+                                // Setup context menu popover (no per-panel gesture - global handler shows it).
+                                // Reuse the shared menu model so a duplicated panel's menu
+                                // can't drift from the creation path (it previously omitted
+                                // "Set as Default Style").
+                                use gtk4::PopoverMenu;
+                                let menu = create_panel_context_menu();
 
                                 let popover = PopoverMenu::from_model(Some(&menu));
                                 popover.set_parent(&frame_for_menu);

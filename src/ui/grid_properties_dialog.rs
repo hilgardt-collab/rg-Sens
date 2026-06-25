@@ -14,7 +14,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::grid_layout::{delete_selected_panels, GridConfig, PanelState};
+use super::grid_layout::{
+    create_panel_context_menu, delete_selected_panels, filter_source_config_keys, GridConfig,
+    PanelState,
+};
 use super::widget_builder::create_spin_row_with_value;
 
 thread_local! {
@@ -3229,19 +3232,9 @@ pub(crate) fn show_panel_properties_dialog(
         let panel_guard = panel_for_copy_btn.blocking_read();
         use crate::ui::{PanelStyle, CLIPBOARD};
 
-        // Filter out source-specific config keys
+        // Filter out source-specific config keys (shared list, so it can't drift)
         let mut displayer_config = panel_guard.config.clone();
-        displayer_config.remove("cpu_config");
-        displayer_config.remove("gpu_config");
-        displayer_config.remove("memory_config");
-        displayer_config.remove("disk_config");
-        displayer_config.remove("network_config");
-        displayer_config.remove("clock_config");
-        displayer_config.remove("combo_config");
-        displayer_config.remove("system_temp_config");
-        displayer_config.remove("fan_speed_config");
-        displayer_config.remove("test_config");
-        displayer_config.remove("static_text_config");
+        filter_source_config_keys(&mut displayer_config);
 
         let style = PanelStyle {
             background: panel_guard.background.clone(),
@@ -3876,30 +3869,12 @@ pub(crate) fn show_panel_properties_dialog(
 
                         new_widget.add_controller(gesture_click);
 
-                        // 2. Right-click context menu with actions
+                        // 2. Right-click context menu with actions.
+                        // Reuse the shared menu model (grid_layout) so this swap path
+                        // can't drift from panel creation — they previously diverged,
+                        // leaving the swapped panel without "Set as Default Style".
                         use gtk4::gio;
-                        let menu = gio::Menu::new();
-
-                        // Section 1: Properties
-                        let section1 = gio::Menu::new();
-                        section1.append(Some("Properties..."), Some("panel.properties"));
-                        menu.append_section(None, &section1);
-
-                        // Section 2: Copy/Paste Style
-                        let section2 = gio::Menu::new();
-                        section2.append(Some("Copy Style"), Some("panel.copy_style"));
-                        section2.append(Some("Paste Style"), Some("panel.paste_style"));
-                        menu.append_section(None, &section2);
-
-                        // Section 3: Save to File
-                        let section3 = gio::Menu::new();
-                        section3.append(Some("Save Panel to File..."), Some("panel.save_to_file"));
-                        menu.append_section(None, &section3);
-
-                        // Section 4: Delete
-                        let section4 = gio::Menu::new();
-                        section4.append(Some("Delete"), Some("panel.delete"));
-                        menu.append_section(None, &section4);
+                        let menu = create_panel_context_menu();
 
                         let popover_menu = gtk4::PopoverMenu::from_model(Some(&menu));
                         popover_menu.set_parent(&new_widget);
@@ -3970,16 +3945,9 @@ pub(crate) fn show_panel_properties_dialog(
                             use crate::ui::{PanelStyle, CLIPBOARD};
 
                             let mut displayer_config = panel_guard.config.clone();
-                            displayer_config.remove("cpu_config");
-                            displayer_config.remove("gpu_config");
-                            displayer_config.remove("memory_config");
-                            displayer_config.remove("disk_config");
-                            displayer_config.remove("network_config");
-                            displayer_config.remove("clock_config");
-                            displayer_config.remove("combo_config");
-                            displayer_config.remove("system_temp_config");
-                            displayer_config.remove("fan_speed_config");
-                            displayer_config.remove("test_config");
+                            // Shared filter (was a hardcoded list here that had already
+                            // drifted — it omitted claude_config/static_text_config).
+                            filter_source_config_keys(&mut displayer_config);
 
                             let style = PanelStyle {
                                 background: panel_guard.background.clone(),
@@ -3994,6 +3962,42 @@ pub(crate) fn show_panel_properties_dialog(
                             }
                         });
                         action_group.add_action(&copy_style_action);
+
+                        // Set as Default Style action. Self-contained (needs only the
+                        // panel), but it was missing from this swap path entirely, so a
+                        // swapped panel's menu offered no such item. Mirrors the
+                        // creation path in grid_layout.
+                        let set_default_style_action =
+                            gio::SimpleAction::new("set_default_style", None);
+                        let panel_set_default = panel_clone.clone();
+                        set_default_style_action.connect_activate(move |_, _| {
+                            use crate::config::DefaultsConfig;
+                            let panel_guard = panel_set_default.blocking_read();
+                            let displayer_id = panel_guard.displayer.id().to_string();
+                            let displayer_config = if let Some(typed_config) =
+                                panel_guard.displayer.get_typed_config()
+                            {
+                                typed_config.to_inner_value()
+                            } else {
+                                let mut config = panel_guard.config.clone();
+                                filter_source_config_keys(&mut config);
+                                serde_json::to_value(&config).ok()
+                            };
+                            drop(panel_guard);
+                            if let Some(config_value) = displayer_config {
+                                let mut defaults = DefaultsConfig::load();
+                                defaults.set_displayer_default(&displayer_id, config_value);
+                                match defaults.save() {
+                                    Ok(()) => {
+                                        log::info!("Default style saved for displayer: {displayer_id}")
+                                    }
+                                    Err(e) => log::warn!("Failed to save default style: {e}"),
+                                }
+                            } else {
+                                log::warn!("Could not serialize displayer config for default style");
+                            }
+                        });
+                        action_group.add_action(&set_default_style_action);
 
                         // Paste Style action
                         let paste_style_action = gio::SimpleAction::new("paste_style", None);
