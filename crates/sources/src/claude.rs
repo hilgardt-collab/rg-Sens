@@ -189,6 +189,10 @@ impl ClaudeSource {
             "weekly_resets_at".to_string(),
             "session_minutes_left".to_string(),
             "weekly_minutes_left".to_string(),
+            "session_resets_in_text".to_string(),
+            "weekly_resets_in_text".to_string(),
+            "session_reset_day".to_string(),
+            "weekly_reset_day".to_string(),
             "status".to_string(),
             // token counts
             "session_total".to_string(),
@@ -354,8 +358,21 @@ impl ClaudeSource {
         Self::claude_dir().map(|d| d.join(".credentials.json"))
     }
 
-    /// Read the current OAuth access token (read-only; never written back).
+    /// Read a usable OAuth access token, preferring rg-Sens's own (which it can
+    /// refresh itself) and falling back to Claude Code's read-only token.
+    ///
+    /// The fallback token is read but NEVER written or refreshed — refreshing it
+    /// could rotate Claude Code's refresh token and break its login. Sign in via
+    /// the source config tab so rg-Sens keeps its own refreshable token.
     fn read_access_token() -> Option<String> {
+        if let Some(token) = crate::claude_auth::access_token() {
+            return Some(token);
+        }
+        Self::read_claude_code_token()
+    }
+
+    /// Read Claude Code's OAuth access token read-only from its credentials file.
+    fn read_claude_code_token() -> Option<String> {
         let path = Self::credentials_path()?;
         let content = fs::read_to_string(path).ok()?;
         let json: Value = serde_json::from_str(&content).ok()?;
@@ -482,6 +499,46 @@ fn minutes_until(resets_at: Option<&str>) -> Option<f64> {
     let now = chrono::Utc::now();
     let mins = (target.timestamp_millis() - now.timestamp_millis()) as f64 / 60_000.0;
     Some(mins.max(0.0))
+}
+
+/// Format a minutes-until-reset value as a compact countdown.
+///
+/// Granularity drops the smallest unit as the duration grows, so the string
+/// stays short on a panel: `"3d 4h"`, `"2h 35m"`, `"12m"`, `"<1m"`, `"now"`.
+fn format_countdown(minutes: f64) -> String {
+    if minutes <= 0.0 {
+        return "now".to_string();
+    }
+    let total = minutes.round() as i64;
+    if total == 0 {
+        return "<1m".to_string();
+    }
+    let days = total / 1440;
+    let hours = (total % 1440) / 60;
+    let mins = total % 60;
+    if days > 0 {
+        format!("{days}d {hours}h")
+    } else if hours > 0 {
+        format!("{hours}h {mins}m")
+    } else {
+        format!("{mins}m")
+    }
+}
+
+/// Format an RFC3339 reset timestamp as a local weekday + 24h clock, e.g.
+/// `"Wed 11:00"`. Empty string if missing/unparseable. Uses the machine's local
+/// timezone (the user reads resets in their own clock, not UTC).
+fn format_reset_day(resets_at: Option<&str>) -> String {
+    let Some(ts) = resets_at else {
+        return String::new();
+    };
+    match chrono::DateTime::parse_from_rfc3339(ts) {
+        Ok(dt) => dt
+            .with_timezone(&chrono::Local)
+            .format("%a %H:%M")
+            .to_string(),
+        Err(_) => String::new(),
+    }
 }
 
 /// Reconstruct the current local token "session" from de-duplicated entries.
@@ -612,6 +669,34 @@ impl DataSource for ClaudeSource {
                 FieldPurpose::Other,
             ),
             FieldMetadata::new(
+                "session_resets_in_text",
+                "Session Resets In",
+                "Compact countdown to the session reset (e.g. \"2h 35m\")",
+                FieldType::Text,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_resets_in_text",
+                "Weekly Resets In",
+                "Compact countdown to the weekly reset (e.g. \"3d 4h\")",
+                FieldType::Text,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "session_reset_day",
+                "Session Reset Day",
+                "Local weekday + time the session resets (e.g. \"Wed 16:49\")",
+                FieldType::Text,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_reset_day",
+                "Weekly Reset Day",
+                "Local weekday + time the weekly limit resets (e.g. \"Wed 11:00\")",
+                FieldType::Text,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
                 "session_total",
                 "Session Tokens",
                 "Local tokens used in the current session window (all models)",
@@ -733,13 +818,31 @@ impl DataSource for ClaudeSource {
             "weekly_resets_at".to_string(),
             Value::from(weekly_reset.clone().unwrap_or_default()),
         );
+        let session_minutes = minutes_until(session_reset.as_deref()).unwrap_or(0.0);
+        let weekly_minutes = minutes_until(weekly_reset.as_deref()).unwrap_or(0.0);
         self.values.insert(
             "session_minutes_left".to_string(),
-            Value::from(minutes_until(session_reset.as_deref()).unwrap_or(0.0)),
+            Value::from(session_minutes),
         );
         self.values.insert(
             "weekly_minutes_left".to_string(),
-            Value::from(minutes_until(weekly_reset.as_deref()).unwrap_or(0.0)),
+            Value::from(weekly_minutes),
+        );
+        self.values.insert(
+            "session_resets_in_text".to_string(),
+            Value::from(format_countdown(session_minutes)),
+        );
+        self.values.insert(
+            "weekly_resets_in_text".to_string(),
+            Value::from(format_countdown(weekly_minutes)),
+        );
+        self.values.insert(
+            "session_reset_day".to_string(),
+            Value::from(format_reset_day(session_reset.as_deref())),
+        );
+        self.values.insert(
+            "weekly_reset_day".to_string(),
+            Value::from(format_reset_day(weekly_reset.as_deref())),
         );
         self.values
             .insert("status".to_string(), Value::from(status));
@@ -763,6 +866,8 @@ impl DataSource for ClaudeSource {
             ClaudeMetric::WeeklySonnetUsage => (weekly_sonnet_pct, "Claude Weekly Sonnet"),
             ClaudeMetric::SessionTokens => (session_total as f64, "Claude Session Tokens"),
             ClaudeMetric::AllTimeTokens => (alltime_total as f64, "Claude Tokens"),
+            ClaudeMetric::SessionResetIn => (session_minutes, "Claude Session Reset"),
+            ClaudeMetric::WeeklyResetIn => (weekly_minutes, "Claude Weekly Reset"),
         };
 
         let caption = self
@@ -772,6 +877,14 @@ impl DataSource for ClaudeSource {
             .unwrap_or_else(|| auto_caption.to_string());
         let (unit, max_limit) = if self.config.metric.is_percentage() {
             ("%", 100.0)
+        } else if self.config.metric.is_reset_time() {
+            // Scale the gauge against the reset window itself, not the token
+            // running-max (which is a token count and meaningless for minutes).
+            let window_minutes = match self.config.metric {
+                ClaudeMetric::SessionResetIn => self.config.session_hours * 60.0,
+                _ => 7.0 * 24.0 * 60.0, // weekly window
+            };
+            ("min", window_minutes.max(1.0))
         } else {
             (
                 "tokens",
@@ -798,7 +911,9 @@ impl DataSource for ClaudeSource {
     }
 
     fn is_available(&self) -> bool {
-        Self::claude_dir().is_some_and(|p| p.exists())
+        // Available if Claude Code data exists locally (token counts) OR rg-Sens
+        // has its own sign-in (plan usage works without a local ~/.claude).
+        Self::claude_dir().is_some_and(|p| p.exists()) || crate::claude_auth::is_signed_in()
     }
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
@@ -928,5 +1043,26 @@ mod tests {
         assert_eq!(minutes_until(Some("2000-01-01T00:00:00+00:00")), Some(0.0));
         assert_eq!(minutes_until(None), None);
         assert_eq!(minutes_until(Some("not-a-date")), None);
+    }
+
+    #[test]
+    fn countdown_drops_smallest_unit_as_duration_grows() {
+        assert_eq!(format_countdown(0.0), "now");
+        assert_eq!(format_countdown(0.4), "<1m"); // rounds to 0 but is positive
+        assert_eq!(format_countdown(12.0), "12m");
+        assert_eq!(format_countdown(155.0), "2h 35m");
+        assert_eq!(format_countdown(4_564.0), "3d 4h"); // 3d 4h 4m -> "3d 4h"
+    }
+
+    #[test]
+    fn reset_day_is_empty_for_missing_or_bad_input() {
+        assert_eq!(format_reset_day(None), "");
+        assert_eq!(format_reset_day(Some("not-a-date")), "");
+        // A real timestamp renders as "<weekday> HH:MM" in local time; we only
+        // assert the shape (3-letter day, space, HH:MM) to stay timezone-agnostic.
+        let s = format_reset_day(Some("2026-06-24T20:49:59+00:00"));
+        assert_eq!(s.len(), 9, "expected 'Ddd HH:MM', got {s:?}");
+        assert_eq!(&s[3..4], " ");
+        assert_eq!(&s[6..7], ":");
     }
 }

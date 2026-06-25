@@ -1,6 +1,7 @@
 //! rg-sens-sources: Data source implementations for rg-Sens system monitoring.
 
 mod claude;
+pub mod claude_auth;
 mod combo;
 mod cpu;
 mod disk;
