@@ -1,6 +1,6 @@
 [package]
 name = "rg-sens-types"
-version = "0.8.3"
+version = "0.8.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Shared data types for rg-Sens system monitoring dashboard"
