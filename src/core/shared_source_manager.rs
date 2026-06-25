@@ -73,7 +73,10 @@ impl SharedSource {
     /// Update the source and cache the values
     pub fn update(&mut self) -> Result<()> {
         self.source.update()?;
-        // Use values_ref if available to avoid cloning (e.g., for ComboSource)
+        // Prefer borrowing the source's values (values_ref) over get_values, then
+        // clone once into the shared Arc. Both paths clone the map once; values_ref
+        // only avoids extra work for sources whose get_values does more than hand
+        // back an already-owned map (e.g. ComboSource).
         self.cached_values = if let Some(values) = self.source.values_ref() {
             Arc::new(values.clone())
         } else {

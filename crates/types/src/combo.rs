@@ -177,6 +177,14 @@ pub trait ComboFrameConfig:
         if group_a == group_b {
             return;
         }
+        // Mirror the source side's all-or-nothing range check (it aborts when
+        // either index is out of range) so the two configs never make different
+        // swap/no-swap decisions and desync. The per-group `size_weights` vector
+        // has one entry per group, so its length is the authoritative group count.
+        let group_count = self.group_size_weights().len();
+        if group_a >= group_count || group_b >= group_count {
+            return;
+        }
         // Parallel per-group vectors (only swap when both indices are present).
         let weights = self.group_size_weights_mut();
         if group_a < weights.len() && group_b < weights.len() {

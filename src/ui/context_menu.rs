@@ -496,14 +496,16 @@ pub fn show_context_menu<F>(
             // Save to all panels that use test source (use with_panels to avoid Vec clone)
             grid_layout.borrow().with_panels(|panels| {
                 for panel in panels {
-                    if let Ok(mut panel_guard) = panel.try_write() {
-                        if panel_guard.source.metadata().id == "test" {
-                            if let Ok(config_json) = serde_json::to_value(test_config) {
-                                panel_guard
-                                    .config
-                                    .insert("test_config".to_string(), config_json);
-                                log::debug!("Saved test source config to panel {}", panel_guard.id);
-                            }
+                    // User-initiated save: use blocking_write, not try_write, so the
+                    // config isn't silently dropped for a panel whose lock is briefly
+                    // held by the update loop (per the project's lock-strategy rule).
+                    let mut panel_guard = panel.blocking_write();
+                    if panel_guard.source.metadata().id == "test" {
+                        if let Ok(config_json) = serde_json::to_value(test_config) {
+                            panel_guard
+                                .config
+                                .insert("test_config".to_string(), config_json);
+                            log::debug!("Saved test source config to panel {}", panel_guard.id);
                         }
                     }
                 }

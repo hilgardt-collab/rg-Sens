@@ -171,11 +171,12 @@ fn render_line_group_inline(
                 continue;
             }
 
-            // Collect matching parts into a temporary slice (reuse parts buffer structure)
-            let matching: Vec<(&TextLineConfig, String)> = parts
+            // Borrow the matching parts (config + text) — no String clone; the
+            // text lives in `parts` which outlives this call.
+            let matching: Vec<(&TextLineConfig, &str)> = parts
                 .iter()
                 .filter(|(idx, _)| all_lines[*idx].horizontal_position() == h_pos)
-                .map(|(idx, text)| (&all_lines[*idx], text.clone()))
+                .map(|(idx, text)| (&all_lines[*idx], text.as_str()))
                 .collect();
 
             render_combined_parts(
@@ -199,7 +200,7 @@ fn render_combined_parts(
     cr: &Context,
     width: f64,
     height: f64,
-    parts: &[(&TextLineConfig, String)],
+    parts: &[(&TextLineConfig, &str)],
     v_pos: &VerticalPosition,
     h_pos: &HorizontalPosition,
     rotation_angle: f64,

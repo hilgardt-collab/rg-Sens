@@ -56,7 +56,7 @@ pub fn render_background_with_theme(
             render_polygon_background(cr, poly, width, height, theme)?;
         }
         BackgroundType::Indicator(indicator) => {
-            render_indicator_background(cr, indicator, width, height)?;
+            render_indicator_background(cr, indicator, indicator.static_value, width, height)?;
         }
     }
     Ok(())
@@ -430,12 +430,13 @@ fn render_generic_polygon_tiling(
 fn render_indicator_background(
     cr: &cairo::Context,
     config: &IndicatorBackgroundConfig,
+    value: f64,
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
     let color = interpolate_indicator_gradient(
         &config.gradient_stops,
-        config.static_value,
+        value,
         config.min_value,
         config.max_value,
     );
@@ -534,9 +535,9 @@ pub fn render_indicator_background_with_value(
     width: f64,
     height: f64,
 ) -> Result<(), cairo::Error> {
-    let mut config_copy = config.clone();
-    config_copy.static_value = value;
-    render_indicator_background(cr, &config_copy, width, height)
+    // Pass `value` through directly instead of cloning the whole config (incl. its
+    // gradient-stops Vec) every frame just to overwrite one field.
+    render_indicator_background(cr, config, value, width, height)
 }
 
 /// Interpolate gradient for indicator background
