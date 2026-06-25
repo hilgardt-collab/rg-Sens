@@ -73,8 +73,11 @@ const PANEL_UPDATE_TIMEOUT: Duration = Duration::from_secs(30);
 const SOURCE_UPDATE_WARN_THRESHOLD: Duration = Duration::from_secs(1);
 
 /// Critical threshold for very slow source updates
-/// If a source update takes longer than this, log an error
-const SOURCE_UPDATE_CRITICAL_THRESHOLD: Duration = Duration::from_secs(5);
+/// If a source update takes longer than this, it's treated as a hang (logged as
+/// an error and counted toward the circuit breaker). MUST stay above every
+/// source's own I/O timeout (e.g. the Claude usage fetch, 4s) so a slow-but-
+/// healthy network update isn't misclassified as a hung source.
+const SOURCE_UPDATE_CRITICAL_THRESHOLD: Duration = Duration::from_secs(12);
 
 /// Tracks update timing for a panel
 struct PanelUpdateState {

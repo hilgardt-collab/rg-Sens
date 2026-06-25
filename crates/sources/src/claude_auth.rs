@@ -54,6 +54,33 @@ const REFRESH_SKEW_MS: i64 = 60_000;
 /// invalidate the first), so we claim the lock for the whole refresh sequence.
 static AUTH_LOCK: Mutex<()> = Mutex::new(());
 
+/// Process-wide in-memory copy of the current tokens. Written on every `save`
+/// (even when the disk write fails) and read preferentially by `load`, so a
+/// refresh-token rotation is never lost mid-session to a disk error.
+static MEM_TOKENS: Mutex<Option<StoredTokens>> = Mutex::new(None);
+
+fn mem_lock() -> std::sync::MutexGuard<'static, Option<StoredTokens>> {
+    MEM_TOKENS.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Error from the token endpoint.
+struct TokenError {
+    /// The server definitively rejected our credentials (HTTP 400/401/403, e.g.
+    /// `invalid_grant`). A stored refresh token that gets this is dead — retrying
+    /// won't help, so the caller should sign out rather than loop forever.
+    auth_rejected: bool,
+    message: String,
+}
+
+impl TokenError {
+    fn transient(message: String) -> Self {
+        Self {
+            auth_rejected: false,
+            message,
+        }
+    }
+}
+
 /// Tokens rg-Sens owns, persisted to `claude_auth.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredTokens {
@@ -128,7 +155,7 @@ pub fn complete(pending: &PendingAuth, pasted: &str) -> Result<(), String> {
         "code_verifier": pending.verifier,
     });
 
-    let tokens = post_token(&body)?;
+    let tokens = post_token(&body).map_err(|e| e.message)?;
     save(&tokens).map_err(|e| format!("signed in, but could not save token: {e}"))?;
     Ok(())
 }
@@ -141,6 +168,7 @@ pub fn is_signed_in() -> bool {
 
 /// Forget rg-Sens's token. Does not affect Claude Code.
 pub fn sign_out() {
+    *mem_lock() = None;
     if let Some(path) = auth_path() {
         let _ = std::fs::remove_file(path);
     }
@@ -164,16 +192,33 @@ pub fn access_token() -> Option<String> {
     }
     match refresh(&tokens.refresh_token) {
         Ok(fresh) => {
-            let _ = save(&fresh);
+            if let Err(e) = save(&fresh) {
+                // `save` already updated the in-memory copy with the rotated
+                // tokens, so this session keeps working; surface the disk failure
+                // so a persistent problem (full disk, bad perms) is visible
+                // instead of silently corrupting the stored refresh token.
+                log::warn!("claude_auth: refreshed token but failed to persist: {e}");
+            }
             Some(fresh.access_token)
         }
-        Err(_) => None,
+        Err(e) if e.auth_rejected => {
+            // The refresh token is dead (revoked/expired). Clear it so we stop
+            // retrying every cycle and fall back to Claude Code's read-only
+            // token; the config tab will show "not signed in".
+            log::warn!("claude_auth: refresh rejected ({}); signing out", e.message);
+            sign_out();
+            None
+        }
+        Err(e) => {
+            log::debug!("claude_auth: refresh failed (transient): {}", e.message);
+            None
+        }
     }
 }
 
 // --- token endpoint ------------------------------------------------------
 
-fn refresh(refresh_token: &str) -> Result<StoredTokens, String> {
+fn refresh(refresh_token: &str) -> Result<StoredTokens, TokenError> {
     let body = serde_json::json!({
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
@@ -183,38 +228,50 @@ fn refresh(refresh_token: &str) -> Result<StoredTokens, String> {
 }
 
 /// POST a token-endpoint request and parse the response into `StoredTokens`.
-fn post_token(body: &serde_json::Value) -> Result<StoredTokens, String> {
+fn post_token(body: &serde_json::Value) -> Result<StoredTokens, TokenError> {
     let resp = ureq::post(TOKEN_URL)
         .set("Content-Type", "application/json")
         .timeout(Duration::from_secs(15))
         .send_json(body);
 
     let json: serde_json::Value = match resp {
-        Ok(r) => r.into_json().map_err(|e| format!("bad token response: {e}"))?,
+        Ok(r) => r
+            .into_json()
+            .map_err(|e| TokenError::transient(format!("bad token response: {e}")))?,
         Err(ureq::Error::Status(code, r)) => {
-            let detail = r
-                .into_json::<serde_json::Value>()
-                .ok()
-                .and_then(|v| {
-                    v.get("error_description")
-                        .or_else(|| v.get("error"))
-                        .and_then(|x| x.as_str())
-                        .map(str::to_string)
-                })
-                .unwrap_or_default();
-            return Err(if detail.is_empty() {
-                format!("token endpoint HTTP {code}")
-            } else {
-                format!("HTTP {code}: {detail}")
+            let body = r.into_json::<serde_json::Value>().ok();
+            let error_code = body
+                .as_ref()
+                .and_then(|v| v.get("error"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            let detail = body
+                .as_ref()
+                .and_then(|v| v.get("error_description"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            return Err(TokenError {
+                // ONLY a genuine `invalid_grant` means the refresh token is dead
+                // and should be discarded. Other 4xx (malformed request, server
+                // validation blip, an API change) are transient — don't nuke the
+                // user's session over them.
+                auth_rejected: error_code == "invalid_grant",
+                message: match (detail.as_str(), error_code.as_str()) {
+                    ("", "") => format!("token endpoint HTTP {code}"),
+                    ("", code_str) => format!("HTTP {code}: {code_str}"),
+                    (detail_str, _) => format!("HTTP {code}: {detail_str}"),
+                },
             });
         }
-        Err(e) => return Err(format!("network error: {e}")),
+        Err(e) => return Err(TokenError::transient(format!("network error: {e}"))),
     };
 
     let access_token = json
         .get("access_token")
         .and_then(|v| v.as_str())
-        .ok_or("response had no access_token")?
+        .ok_or_else(|| TokenError::transient("response had no access_token".to_string()))?
         .to_string();
     // A refresh response may omit refresh_token (token not rotated); reuse the
     // request's one in that case. For an auth-code exchange it's always present.
@@ -227,7 +284,7 @@ fn post_token(body: &serde_json::Value) -> Result<StoredTokens, String> {
                 .and_then(|v| v.as_str())
                 .map(str::to_string)
         })
-        .ok_or("response had no refresh_token")?;
+        .ok_or_else(|| TokenError::transient("response had no refresh_token".to_string()))?;
     let expires_in = json
         .get("expires_in")
         .and_then(|v| v.as_i64())
@@ -250,12 +307,22 @@ fn auth_path() -> Option<PathBuf> {
 }
 
 fn load() -> Option<StoredTokens> {
+    // Prefer the in-memory copy: it's always at least as fresh as disk and
+    // survives a failed disk write (see `save`).
+    if let Some(t) = mem_lock().clone() {
+        return Some(t);
+    }
     let path = auth_path()?;
     let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&content).ok()
+    let tokens: StoredTokens = serde_json::from_str(&content).ok()?;
+    *mem_lock() = Some(tokens.clone());
+    Some(tokens)
 }
 
 fn save(tokens: &StoredTokens) -> Result<(), String> {
+    // Update the in-memory copy first, so the running process keeps the latest
+    // (rotated) tokens even if the disk write below fails.
+    *mem_lock() = Some(tokens.clone());
     let path = auth_path().ok_or("could not determine config directory")?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

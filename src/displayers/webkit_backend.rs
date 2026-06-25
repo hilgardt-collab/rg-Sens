@@ -417,7 +417,11 @@ impl TemplateBackend for WebKitBackend {
                                 glib::idle_add_local_once(move || {
                                     // Atomically swap: setting new child removes the old one
                                     overlay.set_child(Some(&new_webview));
-                                    // Re-add event layer on top
+                                    // `set_child` replaces only the MAIN child, so the event
+                                    // layer is still parented to this overlay. Remove before
+                                    // re-adding, otherwise add_overlay re-parents an already-
+                                    // parented widget (GTK assertion on every recycle).
+                                    overlay.remove_overlay(&event_layer);
                                     overlay.add_overlay(&event_layer);
 
                                     // Now destroy the old WebView (it's already detached)

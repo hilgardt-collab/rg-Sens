@@ -21,8 +21,15 @@ use std::time::{Duration, Instant};
 
 use crate::core::ANIMATION_FRAME_INTERVAL;
 
-/// Time without active animations before switching to idle mode (1 second)
-const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(1000);
+/// Time without active animations before switching to idle mode.
+///
+/// Kept well below the typical 1s data-update interval: panels animate to a new
+/// value in a few hundred ms and then settle, so a 1s threshold equal to the
+/// update cadence meant the manager almost never reached idle and ran the full
+/// per-entry tick at 60fps continuously. 400ms lets it settle into the cheap
+/// idle path between updates. (Active animations keep resetting this, so smooth
+/// animation is unaffected.)
+const IDLE_TIME_THRESHOLD: Duration = Duration::from_millis(400);
 
 /// In idle mode, process 1 out of every N timer ticks.
 /// At 60fps (16ms interval), skipping 14/15 gives ~4fps effective rate.

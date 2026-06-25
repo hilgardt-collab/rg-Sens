@@ -389,7 +389,10 @@ impl ClaudeSource {
             .set("Authorization", &format!("Bearer {token}"))
             .set("anthropic-beta", OAUTH_BETA)
             .set("Content-Type", "application/json")
-            .timeout(Duration::from_secs(10))
+            // Keep this BELOW the update loop's per-source critical threshold
+            // (SOURCE_UPDATE_CRITICAL_THRESHOLD) so a slow-but-healthy fetch isn't
+            // misclassified as a hung source and tripped into the circuit breaker.
+            .timeout(Duration::from_secs(4))
             .call();
 
         match resp {
@@ -756,14 +759,18 @@ impl DataSource for ClaudeSource {
         let mut alltime = [0u64; 4];
         let window_ms = (self.config.session_hours * 3_600_000.0) as i64;
         let now = chrono::Utc::now().timestamp_millis();
-        let session_cutoff = now - window_ms.saturating_mul(2);
 
         let mut session_entries: Vec<Entry> = Vec::new();
         for cache in self.file_cache.values() {
             for (i, total) in cache.alltime.iter().enumerate() {
                 alltime[i] += total;
             }
-            session_entries.extend(cache.entries.iter().filter(|e| e.ts >= session_cutoff));
+            // Feed ALL entries to current_session, not a recent slice. It anchors
+            // the rolling block at the first message and cascades window
+            // boundaries forward, so a truncated slice re-anchors and undercounts
+            // session tokens during long, gap-free use. The source polls ~60s, so
+            // sorting the full entry set each update is cheap.
+            session_entries.extend(cache.entries.iter().copied());
         }
         let (session, _active) = current_session(&session_entries, now, window_ms);
         let session_total: u64 = session.iter().sum();

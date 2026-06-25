@@ -88,8 +88,32 @@ impl SharedSource {
     }
 }
 
-/// Thread-safe wrapper for SharedSource
-type SharedSourceHandle = Arc<Mutex<SharedSource>>;
+/// Thread-safe handle for a shared source.
+///
+/// `source` guards the data-source instance itself and is held for the whole of
+/// the possibly-slow `update()` (including network I/O). `values` is a separate
+/// leaf-level lock holding the last cached values, so readers (`get_values`)
+/// never block behind a source that is mid-update.
+///
+/// Lock rule: never hold `source` and `values` simultaneously — `update_source`
+/// drops the `source` guard before storing into `values`, and `values` is only
+/// ever locked alone and briefly. Combined with the existing "RwLock first, then
+/// Mutex" rule, this keeps the manager deadlock-free.
+#[derive(Clone)]
+struct SharedSourceHandle {
+    source: Arc<Mutex<SharedSource>>,
+    values: Arc<Mutex<Arc<HashMap<String, serde_json::Value>>>>,
+}
+
+impl SharedSourceHandle {
+    fn new(shared: SharedSource) -> Self {
+        let values = Arc::clone(&shared.cached_values);
+        Self {
+            source: Arc::new(Mutex::new(shared)),
+            values: Arc::new(Mutex::new(values)),
+        }
+    }
+}
 
 /// Manages shared data source instances
 ///
@@ -177,7 +201,7 @@ impl SharedSourceManager {
 
         if let Some(handle) = existing_handle {
             // Source already exists, increment ref count and track panel interval
-            if let Ok(mut shared) = handle.lock() {
+            if let Ok(mut shared) = handle.source.lock() {
                 shared.ref_count += 1;
                 shared
                     .panel_intervals
@@ -200,11 +224,12 @@ impl SharedSourceManager {
             key, panel_id, interval
         );
 
-        // Create the shared source and do initial update BEFORE acquiring write lock
-        let mut shared = SharedSource::new(source, interval, panel_id.to_string());
-        if let Err(e) = shared.update() {
-            warn!("Initial update failed for source {}: {}", key, e);
-        }
+        // Create the shared source. Do NOT update it inline: this runs on the
+        // caller's thread (the GTK main thread during panel/UI construction), and
+        // a slow source — e.g. the Claude usage fetch — would freeze the UI for up
+        // to its I/O timeout. The update loop does the first refresh (a brand-new
+        // source is immediately "due"), so values appear within a tick.
+        let shared = SharedSource::new(source, interval, panel_id.to_string());
 
         // Phase 3: Insert into map (quick write lock)
         // Re-check in case another thread created it while we were doing I/O
@@ -219,7 +244,7 @@ impl SharedSourceManager {
 
         if let Some(handle) = existing_handle {
             // Another thread created it - just increment ref count and discard ours
-            if let Ok(mut existing) = handle.lock() {
+            if let Ok(mut existing) = handle.source.lock() {
                 existing.ref_count += 1;
                 existing
                     .panel_intervals
@@ -239,7 +264,7 @@ impl SharedSourceManager {
             // Double-check after acquiring write lock (another thread may have inserted)
             sources
                 .entry(key.clone())
-                .or_insert_with(|| Arc::new(Mutex::new(shared)));
+                .or_insert_with(|| SharedSourceHandle::new(shared));
         }
 
         Ok(key)
@@ -274,7 +299,7 @@ impl SharedSourceManager {
         // Read lock released here - now safe to acquire Mutex
 
         let should_remove = if let Some(handle) = handle {
-            if let Ok(mut shared) = handle.lock() {
+            if let Ok(mut shared) = handle.source.lock() {
                 shared.ref_count = shared.ref_count.saturating_sub(1);
                 shared.panel_intervals.remove(panel_id);
                 shared.recalculate_min_interval();
@@ -305,7 +330,7 @@ impl SharedSourceManager {
 
             // Check ref_count without holding any RwLock (avoids deadlock)
             let still_empty = if let Some(ref h) = handle_for_recheck {
-                h.lock()
+                h.source.lock()
                     .unwrap_or_else(|poisoned| {
                         log::warn!("Shared source mutex poisoned during cleanup check");
                         poisoned.into_inner()
@@ -323,7 +348,7 @@ impl SharedSourceManager {
                     // If ref_count was incremented by another thread, they have their own Arc
                     if let Some((_, handle)) = sources.remove_entry(key) {
                         // Final check after removal - if ref_count > 0, put it back
-                        if let Ok(shared) = handle.lock() {
+                        if let Ok(shared) = handle.source.lock() {
                             if shared.ref_count > 0 {
                                 // Another thread added a reference, put it back
                                 sources.insert(key.to_string(), handle.clone());
@@ -355,11 +380,22 @@ impl SharedSourceManager {
 
         // Phase 2: Update the source (only source mutex held, not collection lock)
         if let Some(handle) = handle {
-            let mut shared = handle
-                .lock()
-                .map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
-            shared.update()?;
-            Ok(Arc::clone(&shared.cached_values))
+            // Hold ONLY the source lock across the (possibly slow) update, then
+            // drop it before publishing to the reader-facing cache.
+            let values = {
+                let mut shared = handle
+                    .source
+                    .lock()
+                    .map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
+                shared.update()?;
+                Arc::clone(&shared.cached_values)
+            };
+            // Publish to the leaf-level value cache (instant) so readers never
+            // block behind the source lock during a network update.
+            if let Ok(mut cache) = handle.values.lock() {
+                *cache = Arc::clone(&values);
+            }
+            Ok(values)
         } else {
             Err(anyhow!("Source not found: {}", key))
         }
@@ -376,10 +412,11 @@ impl SharedSourceManager {
         };
         // RwLock released here - now safe to acquire Mutex
 
-        // Phase 2: Access data with only Mutex held
+        // Phase 2: Read the reader-facing value cache (leaf lock) — NOT the source
+        // lock — so this never blocks behind a source that is mid-update.
         let handle = handle?;
-        let shared = handle.lock().ok()?;
-        Some(Arc::clone(&shared.cached_values))
+        let cache = handle.values.lock().ok()?;
+        Some(Arc::clone(&cache))
     }
 
     /// Get the minimum update interval for a source
@@ -395,7 +432,7 @@ impl SharedSourceManager {
 
         // Phase 2: Access data with only Mutex held
         let handle = handle?;
-        let shared = handle.lock().ok()?;
+        let shared = handle.source.lock().ok()?;
         Some(shared.min_interval)
     }
 
@@ -420,7 +457,7 @@ impl SharedSourceManager {
         handles
             .into_iter()
             .map(|(key, handle)| {
-                let shared = handle.lock().unwrap_or_else(|poisoned| {
+                let shared = handle.source.lock().unwrap_or_else(|poisoned| {
                     log::warn!("Shared source '{}' mutex poisoned, recovering", key);
                     poisoned.into_inner()
                 });
@@ -445,7 +482,7 @@ impl SharedSourceManager {
 
         // Phase 2: Update data with only Mutex held
         if let Some(handle) = handle {
-            if let Ok(mut shared) = handle.lock() {
+            if let Ok(mut shared) = handle.source.lock() {
                 // Update this panel's interval and recalculate minimum
                 let old_min = shared.min_interval;
                 shared
@@ -477,6 +514,7 @@ impl SharedSourceManager {
         // Configure with only source lock held
         if let Some(handle) = handle {
             let mut shared = handle
+                .source
                 .lock()
                 .map_err(|e| anyhow!("Source lock poisoned: {}", e))?;
             shared.source.configure_typed(config)?;
@@ -499,7 +537,7 @@ impl SharedSourceManager {
 
         // Phase 2: Access data with only Mutex held
         let handle = handle?;
-        let shared = handle.lock().ok()?;
+        let shared = handle.source.lock().ok()?;
         Some(shared.source.metadata().clone())
     }
 
@@ -516,7 +554,7 @@ impl SharedSourceManager {
 
         // Phase 2: Access data with only Mutex held
         let handle = handle?;
-        let shared = handle.lock().ok()?;
+        let shared = handle.source.lock().ok()?;
         Some(shared.source.fields())
     }
 
@@ -540,7 +578,7 @@ impl SharedSourceManager {
 
         // Phase 2: Print data with only Mutexes held (one at a time)
         for (key, handle) in handles {
-            if let Ok(shared) = handle.lock() {
+            if let Ok(shared) = handle.source.lock() {
                 let panel_ids: Vec<_> = shared.panel_intervals.keys().collect();
                 info!(
                     "  {} : ref_count={}, interval={:?}, panels={:?}",
