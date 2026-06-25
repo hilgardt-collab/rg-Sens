@@ -3759,22 +3759,54 @@ pub(crate) fn show_panel_properties_dialog(
                             + (panel_guard.geometry.height as i32 - 1) * config.spacing;
                         new_widget.set_size_request(pixel_width, pixel_height);
 
-                        // Recreate overlay structure with background_area and new widget
-                        // This is necessary because frame.set_child(new_widget) would lose the overlay
-                        let overlay = gtk4::Overlay::new();
-                        overlay.set_child(Some(&background_area));
                         new_widget.add_css_class("transparent-background");
-                        overlay.add_overlay(&new_widget);
 
-                        // Replace frame's child with the new overlay structure
-                        frame.set_child(Some(&overlay));
+                        // Swap the displayer widget IN PLACE inside the existing overlay.
+                        // The previous code built a *fresh* Overlay and tried to move the
+                        // shared `background_area` into it — but background_area still
+                        // belonged to the old overlay, so `gtk_overlay_set_child` asserted
+                        // and no-op'd. That orphaned the old widget tree and left its
+                        // context-menu popover parented to a soon-to-be-finalized
+                        // DrawingArea, segfaulting on the next swap. Reusing the overlay
+                        // keeps background_area's parent intact; we only swap the overlay
+                        // child (the displayer widget).
+                        if let Some(overlay) =
+                            frame.child().and_then(|w| w.downcast::<gtk4::Overlay>().ok())
+                        {
+                            // `widget` is still the OLD displayer widget here (it is
+                            // reassigned to `new_widget` further below).
+                            overlay.remove_overlay(&widget);
+                            overlay.add_overlay(&new_widget);
+                        } else {
+                            // Fallback (shouldn't happen): rebuild the overlay, detaching
+                            // background_area from any stale parent first so set_child
+                            // can't assert.
+                            if let Some(old) = background_area
+                                .parent()
+                                .and_then(|w| w.downcast::<gtk4::Overlay>().ok())
+                            {
+                                old.set_child(gtk4::Widget::NONE);
+                            }
+                            let overlay = gtk4::Overlay::new();
+                            overlay.set_child(Some(&background_area));
+                            overlay.add_overlay(&new_widget);
+                            frame.set_child(Some(&overlay));
+                        }
 
                         // Update panel displayer
                         panel_guard.displayer = new_displayer;
 
-                        // Update panel state widget reference (need to re-borrow panel_states)
+                        // In one borrow (so a contended borrow can't half-apply): unparent
+                        // the OLD context popover and repoint the panel state at the new
+                        // widget. Unparenting the old popover before the old DrawingArea is
+                        // dropped stops it being finalized "with children left". A direct
+                        // unparent is safe here — this is a normal event context, not widget
+                        // teardown, so gotcha #16's deferral doesn't apply.
                         if let Ok(mut states) = panel_states_for_apply.try_borrow_mut() {
                             if let Some(state) = states.get_mut(&panel_id_for_apply) {
+                                if let Some(old_popover) = state.context_popover.take() {
+                                    old_popover.unparent();
+                                }
                                 state.widget = new_widget.clone();
                             }
                         }
@@ -3883,6 +3915,15 @@ pub(crate) fn show_panel_properties_dialog(
                                 });
                             }
                         });
+
+                        // Track the new popover in panel state so the NEXT displayer swap
+                        // unparents it the same way. Without this, swap #3 finds `None`,
+                        // skips the cleanup, and the crash simply moves one swap later.
+                        if let Ok(mut states) = panel_states_for_apply.try_borrow_mut() {
+                            if let Some(state) = states.get_mut(&panel_id_for_apply) {
+                                state.context_popover = Some(popover_menu.clone());
+                            }
+                        }
 
                         // Setup action group for this panel
                         let action_group = gio::SimpleActionGroup::new();
