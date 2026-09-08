@@ -3,9 +3,15 @@
 //! Surfaces Claude usage through one source with a configurable metric. Two
 //! local data paths sit behind it:
 //!
-//! - **Plan usage** — percentage of plan limits (current session and weekly),
-//!   fetched live from Anthropic's `/api/oauth/usage` endpoint using the local
-//!   Claude Code OAuth token. This is the same data the `/usage` screen shows.
+//! - **Plan usage** — percentage of plan limits, fetched live from Anthropic's
+//!   `/api/oauth/usage` endpoint using the local Claude Code OAuth token. This is
+//!   the same data the `/usage` screen shows. The endpoint's current shape is a
+//!   `limits` array (`kind` = `session` / `weekly_all` / `weekly_scoped`), which
+//!   this source reads in preference to the older top-level `five_hour` /
+//!   `seven_day` blocks (kept as a fallback). The fixed per-model weekly blocks
+//!   (`seven_day_opus` / `seven_day_sonnet`) were retired: Anthropic now reports a
+//!   single `weekly_scoped` limit tagged with whichever model the plan currently
+//!   meters, exposed as `weekly_scoped_pct` + `weekly_scoped_model`.
 //! - **Token counts** — raw tokens parsed from local `~/.claude/projects/**.jsonl`
 //!   transcripts, de-duplicated and bucketed by model family.
 //!
@@ -189,10 +195,14 @@ impl ClaudeSource {
             // plan usage
             "session_pct".to_string(),
             "weekly_pct".to_string(),
+            "weekly_scoped_pct".to_string(),
+            "weekly_scoped_model".to_string(),
+            "extra_usage_pct".to_string(),
             "weekly_opus_pct".to_string(),
             "weekly_sonnet_pct".to_string(),
             "session_resets_at".to_string(),
             "weekly_resets_at".to_string(),
+            "weekly_scoped_resets_at".to_string(),
             "session_minutes_left".to_string(),
             "weekly_minutes_left".to_string(),
             "session_resets_in_text".to_string(),
@@ -575,6 +585,82 @@ fn block_resets_at<'a>(payload: &'a Value, key: &str) -> Option<&'a str> {
     payload.get(key)?.get("resets_at")?.as_str()
 }
 
+/// Find an entry in the newer `limits` array by its `kind`
+/// (`"session"`, `"weekly_all"`, `"weekly_scoped"`).
+fn limit_entry<'a>(payload: &'a Value, kind: &str) -> Option<&'a Value> {
+    payload
+        .get("limits")?
+        .as_array()?
+        .iter()
+        .find(|l| l.get("kind").and_then(Value::as_str) == Some(kind))
+}
+
+/// Percentage (0–100) for a `limits[]` entry. The array reports an integer
+/// `percent` rather than the legacy blocks' float `utilization`.
+fn limit_pct(payload: &Value, kind: &str) -> Option<f64> {
+    limit_entry(payload, kind)?.get("percent")?.as_f64()
+}
+
+/// `resets_at` (RFC3339) for a `limits[]` entry.
+fn limit_resets_at<'a>(payload: &'a Value, kind: &str) -> Option<&'a str> {
+    limit_entry(payload, kind)?.get("resets_at")?.as_str()
+}
+
+/// Session usage %, preferring the `limits` array and falling back to the
+/// legacy top-level `five_hour` block for older endpoint/token shapes.
+fn session_pct_of(payload: &Value) -> Option<f64> {
+    limit_pct(payload, "session").or_else(|| block_pct(payload, "five_hour"))
+}
+
+/// Weekly (all-usage) %, `limits` array preferred, legacy `seven_day` fallback.
+fn weekly_pct_of(payload: &Value) -> Option<f64> {
+    limit_pct(payload, "weekly_all").or_else(|| block_pct(payload, "seven_day"))
+}
+
+fn session_resets_of(payload: &Value) -> Option<String> {
+    limit_resets_at(payload, "session")
+        .or_else(|| block_resets_at(payload, "five_hour"))
+        .map(str::to_string)
+}
+
+fn weekly_resets_of(payload: &Value) -> Option<String> {
+    limit_resets_at(payload, "weekly_all")
+        .or_else(|| block_resets_at(payload, "seven_day"))
+        .map(str::to_string)
+}
+
+/// Display name of the model the `weekly_scoped` limit currently meters
+/// (e.g. `"Fable"`), if any.
+fn scoped_model_name(payload: &Value) -> Option<String> {
+    limit_entry(payload, "weekly_scoped")?
+        .get("scope")?
+        .get("model")?
+        .get("display_name")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Overage/extra-usage credit consumption as a percentage of the credit limit.
+/// `null` (credits disabled or never enabled) → `None`.
+fn extra_usage_pct(payload: &Value) -> Option<f64> {
+    payload.get("extra_usage")?.get("utilization")?.as_f64()
+}
+
+/// Weekly % for a legacy per-model block (`seven_day_opus` / `seven_day_sonnet`),
+/// falling back to the `weekly_scoped` limit when it happens to meter a model
+/// whose display name contains `model_hint` (case-insensitive).
+fn legacy_model_weekly_pct(payload: &Value, legacy_key: &str, model_hint: &str) -> Option<f64> {
+    if let Some(pct) = block_pct(payload, legacy_key) {
+        return Some(pct);
+    }
+    let name = scoped_model_name(payload)?;
+    if name.to_ascii_lowercase().contains(&model_hint.to_ascii_lowercase()) {
+        limit_pct(payload, "weekly_scoped")
+    } else {
+        None
+    }
+}
+
 /// Minutes from now until `resets_at`, clamped to >= 0. `None` if unparseable.
 fn minutes_until(resets_at: Option<&str>) -> Option<f64> {
     let ts = resets_at?;
@@ -705,23 +791,51 @@ impl DataSource for ClaudeSource {
             FieldMetadata::new(
                 "weekly_pct",
                 "Weekly Usage %",
-                "Weekly (7-day) usage as a percentage of the plan limit",
+                "Weekly (7-day) all-usage as a percentage of the plan limit",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_scoped_pct",
+                "Weekly Model Usage %",
+                "Weekly usage for the current model-scoped limit, as a percentage",
+                FieldType::Numerical,
+                FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_scoped_model",
+                "Weekly Model Name",
+                "Display name of the model the weekly scoped limit meters (e.g. Fable)",
+                FieldType::Text,
+                FieldPurpose::Other,
+            ),
+            FieldMetadata::new(
+                "extra_usage_pct",
+                "Extra Usage %",
+                "Overage/extra-usage credits consumed as a percentage (0 if disabled)",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
             FieldMetadata::new(
                 "weekly_opus_pct",
-                "Weekly Opus %",
-                "Weekly Opus usage as a percentage of its limit (0 if N/A)",
+                "Weekly Opus % (legacy)",
+                "Legacy Opus weekly usage; the endpoint no longer splits by model, so 0 unless the scoped limit meters Opus",
                 FieldType::Numerical,
                 FieldPurpose::Value,
             ),
             FieldMetadata::new(
                 "weekly_sonnet_pct",
-                "Weekly Sonnet %",
-                "Weekly Sonnet usage as a percentage of its limit (0 if N/A)",
+                "Weekly Sonnet % (legacy)",
+                "Legacy Sonnet weekly usage; the endpoint no longer splits by model, so 0 unless the scoped limit meters Sonnet",
                 FieldType::Numerical,
                 FieldPurpose::Value,
+            ),
+            FieldMetadata::new(
+                "weekly_scoped_resets_at",
+                "Weekly Model Resets At",
+                "Timestamp when the model-scoped weekly limit resets",
+                FieldType::Text,
+                FieldPurpose::Other,
             ),
             FieldMetadata::new(
                 "session_minutes_left",
@@ -865,28 +979,34 @@ impl DataSource for ClaudeSource {
         // percentage; token-only panels stay fully offline.
         let (plan, status) = Self::plan_usage(self.config.metric.is_percentage());
 
-        let session_pct = plan
+        let session_pct = plan.as_ref().and_then(session_pct_of).unwrap_or(0.0);
+        let weekly_pct = plan.as_ref().and_then(weekly_pct_of).unwrap_or(0.0);
+        // Current model-scoped weekly limit (replaces the old fixed Opus/Sonnet
+        // split) plus the model it meters.
+        let weekly_scoped_pct = plan
             .as_ref()
-            .and_then(|p| block_pct(p, "five_hour"))
+            .and_then(|p| limit_pct(p, "weekly_scoped"))
             .unwrap_or(0.0);
-        let weekly_pct = plan
+        let weekly_scoped_model = plan
             .as_ref()
-            .and_then(|p| block_pct(p, "seven_day"))
-            .unwrap_or(0.0);
+            .and_then(scoped_model_name)
+            .unwrap_or_default();
+        // Legacy per-model fields: null from the API now, so they fall back to
+        // the scoped limit when it meters that model, else read 0.
         let weekly_opus_pct = plan
             .as_ref()
-            .and_then(|p| block_pct(p, "seven_day_opus"))
+            .and_then(|p| legacy_model_weekly_pct(p, "seven_day_opus", "opus"))
             .unwrap_or(0.0);
         let weekly_sonnet_pct = plan
             .as_ref()
-            .and_then(|p| block_pct(p, "seven_day_sonnet"))
+            .and_then(|p| legacy_model_weekly_pct(p, "seven_day_sonnet", "sonnet"))
             .unwrap_or(0.0);
-        let session_reset = plan
+        let extra_usage_pct = plan.as_ref().and_then(extra_usage_pct).unwrap_or(0.0);
+        let session_reset = plan.as_ref().and_then(session_resets_of);
+        let weekly_reset = plan.as_ref().and_then(weekly_resets_of);
+        let weekly_scoped_reset = plan
             .as_ref()
-            .and_then(|p| block_resets_at(p, "five_hour").map(str::to_string));
-        let weekly_reset = plan
-            .as_ref()
-            .and_then(|p| block_resets_at(p, "seven_day").map(str::to_string));
+            .and_then(|p| limit_resets_at(p, "weekly_scoped").map(str::to_string));
 
         // --- publish every field ---
         self.values.clear();
@@ -894,11 +1014,25 @@ impl DataSource for ClaudeSource {
             .insert("session_pct".to_string(), Value::from(session_pct));
         self.values
             .insert("weekly_pct".to_string(), Value::from(weekly_pct));
+        self.values.insert(
+            "weekly_scoped_pct".to_string(),
+            Value::from(weekly_scoped_pct),
+        );
+        self.values.insert(
+            "weekly_scoped_model".to_string(),
+            Value::from(weekly_scoped_model.clone()),
+        );
+        self.values
+            .insert("extra_usage_pct".to_string(), Value::from(extra_usage_pct));
         self.values
             .insert("weekly_opus_pct".to_string(), Value::from(weekly_opus_pct));
         self.values.insert(
             "weekly_sonnet_pct".to_string(),
             Value::from(weekly_sonnet_pct),
+        );
+        self.values.insert(
+            "weekly_scoped_resets_at".to_string(),
+            Value::from(weekly_scoped_reset.clone().unwrap_or_default()),
         );
         self.values.insert(
             "session_resets_at".to_string(),
@@ -949,22 +1083,35 @@ impl DataSource for ClaudeSource {
         }
 
         // --- route the selected metric into value/caption/unit/limits ---
-        let (raw_value, auto_caption): (f64, &str) = match self.config.metric {
-            ClaudeMetric::SessionUsage => (session_pct, "Claude Session"),
-            ClaudeMetric::WeeklyUsage => (weekly_pct, "Claude Weekly"),
-            ClaudeMetric::WeeklyOpusUsage => (weekly_opus_pct, "Claude Weekly Opus"),
-            ClaudeMetric::WeeklySonnetUsage => (weekly_sonnet_pct, "Claude Weekly Sonnet"),
-            ClaudeMetric::SessionTokens => (session_total as f64, "Claude Session Tokens"),
-            ClaudeMetric::AllTimeTokens => (alltime_total as f64, "Claude Tokens"),
-            ClaudeMetric::SessionResetIn => (session_minutes, "Claude Session Reset"),
-            ClaudeMetric::WeeklyResetIn => (weekly_minutes, "Claude Weekly Reset"),
+        // Captions are `String` because the scoped-usage label folds in the
+        // current model name (e.g. "Claude Weekly (Fable)").
+        let (raw_value, auto_caption): (f64, String) = match self.config.metric {
+            ClaudeMetric::SessionUsage => (session_pct, "Claude Session".to_string()),
+            ClaudeMetric::WeeklyUsage => (weekly_pct, "Claude Weekly".to_string()),
+            ClaudeMetric::WeeklyScopedUsage => {
+                let label = if weekly_scoped_model.is_empty() {
+                    "Claude Weekly (Model)".to_string()
+                } else {
+                    format!("Claude Weekly ({weekly_scoped_model})")
+                };
+                (weekly_scoped_pct, label)
+            }
+            ClaudeMetric::ExtraUsage => (extra_usage_pct, "Claude Extra Usage".to_string()),
+            ClaudeMetric::WeeklyOpusUsage => (weekly_opus_pct, "Claude Weekly Opus".to_string()),
+            ClaudeMetric::WeeklySonnetUsage => {
+                (weekly_sonnet_pct, "Claude Weekly Sonnet".to_string())
+            }
+            ClaudeMetric::SessionTokens => (session_total as f64, "Claude Session Tokens".to_string()),
+            ClaudeMetric::AllTimeTokens => (alltime_total as f64, "Claude Tokens".to_string()),
+            ClaudeMetric::SessionResetIn => (session_minutes, "Claude Session Reset".to_string()),
+            ClaudeMetric::WeeklyResetIn => (weekly_minutes, "Claude Weekly Reset".to_string()),
         };
 
         let caption = self
             .config
             .custom_caption
             .clone()
-            .unwrap_or_else(|| auto_caption.to_string());
+            .unwrap_or(auto_caption);
         let (unit, max_limit) = if self.config.metric.is_percentage() {
             ("%", 100.0)
         } else if self.config.metric.is_reset_time() {
@@ -1080,7 +1227,8 @@ mod tests {
         assert_eq!(sums.iter().sum::<u64>(), 0);
     }
 
-    // A trimmed copy of a real `/api/oauth/usage` response, to pin the schema.
+    // A trimmed copy of a legacy `/api/oauth/usage` response (top-level blocks
+    // only), to pin the fallback path.
     const SAMPLE: &str = r#"{
         "five_hour": { "utilization": 5.0, "resets_at": "2026-06-24T20:49:59.494649+00:00" },
         "seven_day": { "utilization": 40.0, "resets_at": "2026-06-26T10:59:59.494671+00:00" },
@@ -1088,8 +1236,24 @@ mod tests {
         "seven_day_sonnet": { "utilization": 0.0, "resets_at": null }
     }"#;
 
+    // A trimmed copy of the CURRENT response shape: the `limits` array plus the
+    // retired per-model blocks (now null) and an `extra_usage` block.
+    const SAMPLE_CURRENT: &str = r#"{
+        "five_hour": { "utilization": 73.0, "resets_at": "2026-09-08T16:29:59.878426+00:00" },
+        "seven_day": { "utilization": 32.0, "resets_at": "2026-09-11T10:59:59.878448+00:00" },
+        "seven_day_opus": null,
+        "seven_day_sonnet": null,
+        "extra_usage": { "is_enabled": false, "utilization": null },
+        "limits": [
+            { "kind": "session", "percent": 73, "resets_at": "2026-09-08T16:29:59.878426+00:00" },
+            { "kind": "weekly_all", "percent": 32, "resets_at": "2026-09-11T10:59:59.878448+00:00" },
+            { "kind": "weekly_scoped", "percent": 57, "resets_at": "2026-09-11T10:59:59.878622+00:00",
+              "scope": { "model": { "id": null, "display_name": "Fable" } } }
+        ]
+    }"#;
+
     #[test]
-    fn maps_real_payload_to_percentages() {
+    fn maps_legacy_payload_to_percentages() {
         let payload: Value = serde_json::from_str(SAMPLE).unwrap();
         assert_eq!(block_pct(&payload, "five_hour"), Some(5.0));
         assert_eq!(block_pct(&payload, "seven_day"), Some(40.0));
@@ -1100,6 +1264,56 @@ mod tests {
             Some("2026-06-24T20:49:59.494649+00:00")
         );
         assert_eq!(block_resets_at(&payload, "seven_day_sonnet"), None);
+        // With no `limits` array, the source falls back to the top-level blocks.
+        assert_eq!(session_pct_of(&payload), Some(5.0));
+        assert_eq!(weekly_pct_of(&payload), Some(40.0));
+        assert_eq!(scoped_model_name(&payload), None);
+    }
+
+    #[test]
+    fn maps_current_payload_from_limits_array() {
+        let payload: Value = serde_json::from_str(SAMPLE_CURRENT).unwrap();
+        // limits[] is preferred over the legacy blocks (both agree here).
+        assert_eq!(session_pct_of(&payload), Some(73.0));
+        assert_eq!(weekly_pct_of(&payload), Some(32.0));
+        assert_eq!(limit_pct(&payload, "weekly_scoped"), Some(57.0));
+        assert_eq!(scoped_model_name(&payload).as_deref(), Some("Fable"));
+        // Retired per-model blocks are null; the Fable scope doesn't match
+        // opus/sonnet, so the legacy metrics read None (→ 0 when published).
+        assert_eq!(
+            legacy_model_weekly_pct(&payload, "seven_day_opus", "opus"),
+            None
+        );
+        assert_eq!(
+            legacy_model_weekly_pct(&payload, "seven_day_sonnet", "sonnet"),
+            None
+        );
+        // extra_usage disabled → utilization null → None.
+        assert_eq!(extra_usage_pct(&payload), None);
+        assert_eq!(
+            limit_resets_at(&payload, "session"),
+            Some("2026-09-08T16:29:59.878426+00:00")
+        );
+    }
+
+    #[test]
+    fn scoped_limit_backfills_matching_legacy_model() {
+        // If the scoped limit ever meters Opus, the legacy opus metric picks it up.
+        let payload: Value = serde_json::from_str(
+            r#"{ "seven_day_opus": null, "limits": [
+                { "kind": "weekly_scoped", "percent": 44,
+                  "scope": { "model": { "display_name": "Opus" } } }
+            ] }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            legacy_model_weekly_pct(&payload, "seven_day_opus", "opus"),
+            Some(44.0)
+        );
+        assert_eq!(
+            legacy_model_weekly_pct(&payload, "seven_day_sonnet", "sonnet"),
+            None
+        );
     }
 
     // Live end-to-end check; ignored by default (needs network + valid token).

@@ -23,11 +23,25 @@ pub enum ClaudeMetric {
     /// Current 5-hour session usage as a percentage of the plan limit.
     #[default]
     SessionUsage,
-    /// Weekly (7-day) usage as a percentage of the plan limit.
+    /// Weekly (7-day) all-usage as a percentage of the plan limit.
     WeeklyUsage,
+    /// Weekly usage for the current model-scoped limit, as a percentage of that
+    /// limit. Anthropic replaced the fixed per-model weekly caps with a single
+    /// scoped limit that tracks whichever model the plan currently meters (its
+    /// display name is exposed as `weekly_scoped_model`).
+    WeeklyScopedUsage,
+    /// Overage/extra-usage credits consumed as a percentage of the credit limit
+    /// (0 when credits are disabled).
+    ExtraUsage,
     /// Weekly Opus usage as a percentage of its limit.
+    ///
+    /// Legacy: the usage endpoint no longer returns a dedicated Opus weekly
+    /// block (it reports `null`), so this reads 0 unless the current scoped
+    /// limit happens to meter Opus. Prefer `WeeklyScopedUsage`. Retained so
+    /// existing saved configs keep deserializing.
     WeeklyOpusUsage,
-    /// Weekly Sonnet usage as a percentage of its limit.
+    /// Weekly Sonnet usage as a percentage of its limit. Legacy — see
+    /// `WeeklyOpusUsage`; prefer `WeeklyScopedUsage`.
     WeeklySonnetUsage,
     /// Local token total in the current session window (all model families).
     SessionTokens,
@@ -41,11 +55,13 @@ pub enum ClaudeMetric {
 
 impl ClaudeMetric {
     /// Stable order for UI dropdowns, paired with a human label.
-    pub const ALL: [(ClaudeMetric, &'static str); 8] = [
+    pub const ALL: [(ClaudeMetric, &'static str); 10] = [
         (ClaudeMetric::SessionUsage, "Session Usage (%)"),
         (ClaudeMetric::WeeklyUsage, "Weekly Usage (%)"),
-        (ClaudeMetric::WeeklyOpusUsage, "Weekly Opus (%)"),
-        (ClaudeMetric::WeeklySonnetUsage, "Weekly Sonnet (%)"),
+        (ClaudeMetric::WeeklyScopedUsage, "Weekly Model Usage (%)"),
+        (ClaudeMetric::ExtraUsage, "Extra Usage / Credits (%)"),
+        (ClaudeMetric::WeeklyOpusUsage, "Weekly Opus (%, legacy)"),
+        (ClaudeMetric::WeeklySonnetUsage, "Weekly Sonnet (%, legacy)"),
         (ClaudeMetric::SessionTokens, "Session Tokens"),
         (ClaudeMetric::AllTimeTokens, "All-Time Tokens"),
         (ClaudeMetric::SessionResetIn, "Session Resets In (min)"),
@@ -58,6 +74,8 @@ impl ClaudeMetric {
             self,
             ClaudeMetric::SessionUsage
                 | ClaudeMetric::WeeklyUsage
+                | ClaudeMetric::WeeklyScopedUsage
+                | ClaudeMetric::ExtraUsage
                 | ClaudeMetric::WeeklyOpusUsage
                 | ClaudeMetric::WeeklySonnetUsage
         )
