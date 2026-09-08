@@ -236,11 +236,22 @@ fn render_image_background(
     if let Some(scaled_surface) =
         get_cached_scaled_surface(path, target_width, target_height, mode_code, alpha)
     {
-        // Fast path: just paint the pre-scaled, pre-alpha'd surface
+        // Fast path: paint the pre-scaled, pre-alpha'd surface.
+        // The cached surface is rendered at dimensions rounded to 16px, so
+        // scale it to the actual panel size at paint time — otherwise a size
+        // that rounds down leaves an up-to-8px transparent stripe at the
+        // right/bottom edges (SurfacePattern defaults to Extend::None).
+        let cached_w = scaled_surface.width() as f64;
+        let cached_h = scaled_surface.height() as f64;
+        cr.save()?;
+        if cached_w > 0.0 && cached_h > 0.0 && (cached_w != width || cached_h != height) {
+            cr.scale(width / cached_w, height / cached_h);
+        }
         cr.set_source_surface(&scaled_surface, 0.0, 0.0)?;
         cr.paint()?;
         // Clear source reference to prevent GL texture memory leak
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+        cr.restore()?;
     } else {
         // Fallback to solid color if image can't be loaded
         cr.set_source_rgb(0.2, 0.2, 0.2);
@@ -274,7 +285,10 @@ fn render_polygon_background(
     cr.rectangle(0.0, 0.0, width, height);
     cr.fill()?;
 
-    let size = config.tile_size as f64;
+    // Guard against tile_size = 0 (hand-edited config): the tiling loops divide
+    // panel dimensions by this, and 0 saturates the row/col counts to i32::MAX,
+    // hanging the GTK main thread.
+    let size = (config.tile_size as f64).max(1.0);
     let sides = config.num_sides.max(3); // Minimum 3 sides
     let angle = config.rotation_angle.to_radians();
 

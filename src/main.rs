@@ -1232,12 +1232,16 @@ fn build_ui(app: &Application) {
     let app_config_for_close = app_config.clone();
     let update_manager_for_close = update_manager.clone();
 
-    window.connect_close_request(move |window| {
+    // Teardown that must run only when the app is actually exiting. Running it
+    // before the save-confirmation dialog is shown would leave a cancelled
+    // close with a dead update loop, force-closed dialogs, and terminated web
+    // backends (the window stays open but nothing updates).
+    fn teardown_for_exit(update_manager: &Arc<UpdateManager>) {
         // Close all open dialogs first
         rg_sens::ui::close_all_dialogs();
 
         // Stop the update manager gracefully
-        update_manager_for_close.stop();
+        update_manager.stop();
 
         // Signal CSS template displayers to stop their timers and terminate web processes
         // IMPORTANT: shutdown_all() now directly terminates all backend instances instead of just
@@ -1259,14 +1263,25 @@ fn build_ui(app: &Application) {
                 ctx.iteration(false);
             }
         }
+    }
 
+    window.connect_close_request(move |window| {
         let is_dirty = config_dirty_clone4.load(Ordering::Relaxed);
 
         if is_dirty {
-            // Show save confirmation dialog
-            config_helpers::show_save_dialog(window, &grid_layout_for_close, &app_config_for_close);
+            // Show save confirmation dialog; teardown runs only if the user
+            // chooses Save or Don't Save (Cancel keeps the app fully alive)
+            let update_manager_for_teardown = update_manager_for_close.clone();
+            config_helpers::show_save_dialog(
+                window,
+                &grid_layout_for_close,
+                &app_config_for_close,
+                move || teardown_for_exit(&update_manager_for_teardown),
+            );
             glib::Propagation::Stop // Prevent immediate close
         } else {
+            teardown_for_exit(&update_manager_for_close);
+
             // Clean up grid layout to release references and allow clean exit
             grid_layout_for_close.borrow().cleanup();
 

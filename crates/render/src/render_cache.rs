@@ -85,9 +85,11 @@ impl ScaledSurfaceCache {
         alpha: f64,
     ) -> Option<cairo::ImageSurface> {
         // Round dimensions to nearest 16 pixels to reduce cache key explosion
-        // This prevents creating new 30MB+ surfaces for tiny size changes
-        let rounded_width = ((target_width + 8) / 16) * 16;
-        let rounded_height = ((target_height + 8) / 16) * 16;
+        // This prevents creating new 30MB+ surfaces for tiny size changes.
+        // Callers must scale the surface to the actual panel size at paint time
+        // (see render_image_background); the .max(16) avoids zero-size surfaces.
+        let rounded_width = (((target_width + 8) / 16) * 16).max(16);
+        let rounded_height = (((target_height + 8) / 16) * 16).max(16);
 
         // Quantize alpha to 10% precision (was 1%) to further reduce cache entries
         let alpha_key = (alpha * 10.0) as i32;
@@ -181,11 +183,20 @@ impl ScaledSurfaceCache {
 struct ImageCache {
     /// Cached pixbufs keyed by file path
     pixbufs: HashMap<String, CachedImage>,
+    /// Paths that failed to load, with the time of the failed attempt.
+    /// Prevents disk I/O + decode attempts on every draw for stale paths;
+    /// retried after FAILED_RETRY_INTERVAL so a later-appearing file is picked up.
+    failed: HashMap<String, Instant>,
     /// Maximum cache size in entries
     max_entries: usize,
     /// Time after which cache entries expire
     expiry_duration: Duration,
 }
+
+/// How long to wait before retrying a path that failed to load
+const FAILED_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+/// Maximum number of failed paths to remember
+const MAX_FAILED_ENTRIES: usize = 32;
 
 struct CachedImage {
     pixbuf: Pixbuf,
@@ -198,6 +209,7 @@ impl ImageCache {
     fn new() -> Self {
         Self {
             pixbufs: HashMap::new(),
+            failed: HashMap::new(),
             max_entries: 10, // Reduced from 50 - each image can be several MB
             expiry_duration: Duration::from_secs(300), // 5 minutes
         }
@@ -209,6 +221,15 @@ impl ImageCache {
         if let Some(entry) = self.pixbufs.get_mut(path) {
             entry.last_access = Instant::now();
             return Some(entry.pixbuf.clone());
+        }
+
+        // Negative cache: skip paths that recently failed to load
+        // (avoids disk I/O + decode attempt on every draw for stale paths)
+        if let Some(failed_at) = self.failed.get(path) {
+            if failed_at.elapsed() < FAILED_RETRY_INTERVAL {
+                return None;
+            }
+            self.failed.remove(path);
         }
 
         // Try to load the image
@@ -226,6 +247,18 @@ impl ImageCache {
             );
             Some(pixbuf)
         } else {
+            // Remember the failure so we only retry after FAILED_RETRY_INTERVAL
+            if self.failed.len() >= MAX_FAILED_ENTRIES {
+                if let Some(oldest_key) = self
+                    .failed
+                    .iter()
+                    .min_by_key(|(_, time)| **time)
+                    .map(|(k, _)| k.clone())
+                {
+                    self.failed.remove(&oldest_key);
+                }
+            }
+            self.failed.insert(path.to_string(), Instant::now());
             None
         }
     }
@@ -290,6 +323,7 @@ impl ImageCache {
     /// Invalidate a specific path (call when file might have changed)
     fn invalidate(&mut self, path: &str) {
         self.pixbufs.remove(path);
+        self.failed.remove(path);
     }
 }
 
@@ -560,7 +594,12 @@ fn hash_color_stops(stops: &[ColorStop]) -> u64 {
 /// Get a cached color gradient LUT or create one
 /// Resolution of 256 is enough for smooth gradients while being efficient
 /// Returns Arc to avoid expensive Vec cloning on every call
-fn get_gradient_lut(stops: &[ColorStop]) -> Arc<ColorGradientLUT> {
+///
+/// Hot loops that need many lookups per frame (segmented arcs, speedometer
+/// tracks) should call this ONCE per draw and use `lut.get_color(t)` on the
+/// returned handle, instead of calling `get_cached_color_at` per segment
+/// (which re-hashes the entire stop list on every call).
+pub fn get_cached_gradient_lut(stops: &[ColorStop]) -> Arc<ColorGradientLUT> {
     const DEFAULT_RESOLUTION: usize = 256;
     GRADIENT_LUT_CACHE.with(|cache| cache.borrow_mut().get_or_create(stops, DEFAULT_RESOLUTION))
 }
@@ -575,7 +614,7 @@ pub fn get_cached_color_at(stops: &[ColorStop], t: f64) -> Color {
         return stops[0].color;
     }
 
-    let lut = get_gradient_lut(stops);
+    let lut = get_cached_gradient_lut(stops);
     lut.get_color(t)
 }
 
@@ -604,7 +643,9 @@ pub fn get_abrupt_color(stops: &[ColorStop], t: f64) -> Color {
 pub fn clear_all_render_caches() {
     // Clear image cache
     IMAGE_CACHE.with(|cache| {
-        cache.borrow_mut().pixbufs.clear();
+        let mut cache = cache.borrow_mut();
+        cache.pixbufs.clear();
+        cache.failed.clear();
     });
 
     // Clear scaled surface cache

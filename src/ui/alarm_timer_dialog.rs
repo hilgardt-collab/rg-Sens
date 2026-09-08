@@ -13,10 +13,26 @@ use gtk4::{
     ListBox, ListBoxRow, Orientation, ScrolledWindow, Separator, SpinButton, Window,
 };
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 thread_local! {
     static ALARM_TIMER_DIALOG: RefCell<Option<WeakRef<Window>>> = const { RefCell::new(None) };
+
+    /// Live countdown labels for the currently-built timer rows, keyed by
+    /// timer id. Lets the per-second tick update only the label text instead
+    /// of tearing down and rebuilding both widget trees (which destroyed
+    /// in-progress spinner edits on other rows).
+    static TIMER_TIME_LABELS: RefCell<HashMap<String, Label>> = RefCell::new(HashMap::new());
+
+    /// Structure signature of the last-built timer list: (id, state) pairs.
+    /// The tick performs a full rebuild only when this changes.
+    static TIMER_LIST_SIGNATURE: RefCell<Vec<(String, TimerState)>> =
+        const { RefCell::new(Vec::new()) };
+
+    /// Structure signature of the last-built alarm list: (id, is_triggered).
+    static ALARM_LIST_SIGNATURE: RefCell<Vec<(String, bool)>> =
+        const { RefCell::new(Vec::new()) };
 }
 
 /// Close the alarm/timer dialog if it's open
@@ -211,22 +227,55 @@ impl AlarmTimerDialog {
                     return gtk4::glib::ControlFlow::Continue;
                 }
 
-                // Use try_read to avoid blocking GTK main thread
-                // If lock is held, skip this refresh cycle
-                let needs_refresh = if let Ok(manager) = global_timer_manager().try_read() {
-                    manager.timers.iter().any(|t| {
-                        t.state == TimerState::Running
-                            || t.state == TimerState::Paused
-                            || t.state == TimerState::Finished
-                    }) || !manager.triggered_alarms.is_empty()
-                } else {
-                    false // Lock is busy, skip this cycle
+                // Use try_read to avoid blocking GTK main thread; this is a
+                // periodic tick, so skipping one cycle on contention is invisible
+                let manager_lock = global_timer_manager();
+                let Ok(manager) = manager_lock.try_read() else {
+                    return gtk4::glib::ControlFlow::Continue;
                 };
+                let timer_sig: Vec<(String, TimerState)> = manager
+                    .timers
+                    .iter()
+                    .map(|t| (t.id.clone(), t.state))
+                    .collect();
+                let alarm_sig: Vec<(String, bool)> = manager
+                    .alarms
+                    .iter()
+                    .map(|a| (a.id.clone(), manager.triggered_alarms.contains(&a.id)))
+                    .collect();
+                let countdowns: Vec<(String, String)> = manager
+                    .timers
+                    .iter()
+                    .filter(|t| t.state != TimerState::Stopped)
+                    .map(|t| (t.id.clone(), t.display_string()))
+                    .collect();
+                drop(manager);
 
-                if needs_refresh {
+                // Rebuild a list only when its row STRUCTURE changed (timer
+                // added/removed/state changed, alarm added/removed/(un)triggered).
+                // Otherwise update just the countdown label text in place so
+                // in-progress spinner edits on other rows survive the tick.
+                let timers_changed = TIMER_LIST_SIGNATURE.with(|sig| *sig.borrow() != timer_sig);
+                if timers_changed {
                     Self::refresh_timer_list_static(&timer_list_box);
+                } else {
+                    TIMER_TIME_LABELS.with(|labels| {
+                        let labels = labels.borrow();
+                        for (id, text) in &countdowns {
+                            if let Some(label) = labels.get(id) {
+                                if label.text() != text.as_str() {
+                                    label.set_text(text);
+                                }
+                            }
+                        }
+                    });
+                }
+
+                let alarms_changed = ALARM_LIST_SIGNATURE.with(|sig| *sig.borrow() != alarm_sig);
+                if alarms_changed {
                     Self::refresh_alarm_list_static(&alarm_list_box);
                 }
+
                 gtk4::glib::ControlFlow::Continue
             });
         *dialog.refresh_source_id.borrow_mut() = Some(refresh_id);
@@ -328,12 +377,14 @@ impl AlarmTimerDialog {
             gtk4::glib::Propagation::Proceed
         });
 
-        // Stop refresh timer when window is destroyed
+        // Stop refresh timer when window is destroyed and drop the live-label
+        // registry so destroyed widgets aren't kept alive
         let refresh_id_for_destroy = dialog.refresh_source_id.clone();
         window.connect_destroy(move |_| {
             if let Some(id) = refresh_id_for_destroy.borrow_mut().take() {
                 id.remove();
             }
+            TIMER_TIME_LABELS.with(|labels| labels.borrow_mut().clear());
         });
 
         dialog
@@ -381,6 +432,13 @@ impl AlarmTimerDialog {
             Vec::new()
         };
 
+        // Record the structure signature and reset the live-label registry;
+        // the per-second tick only rebuilds when the signature changes.
+        TIMER_LIST_SIGNATURE.with(|sig| {
+            *sig.borrow_mut() = timers.iter().map(|t| (t.id.clone(), t.state)).collect();
+        });
+        TIMER_TIME_LABELS.with(|labels| labels.borrow_mut().clear());
+
         if timers.is_empty() {
             let empty_label = Label::new(Some("No timers. Click '+ Add Timer' to create one."));
             empty_label.add_css_class("dim-label");
@@ -395,12 +453,19 @@ impl AlarmTimerDialog {
         }
 
         for timer in &timers {
-            let row = Self::create_timer_row(timer, list_box);
+            let (row, time_label) = Self::create_timer_row(timer, list_box);
+            if let Some(label) = time_label {
+                TIMER_TIME_LABELS.with(|labels| {
+                    labels.borrow_mut().insert(timer.id.clone(), label);
+                });
+            }
             list_box.append(&row);
         }
     }
 
-    fn create_timer_row(timer: &TimerConfig, list_box: &ListBox) -> ListBoxRow {
+    /// Build a timer row. Also returns the live countdown label (present for
+    /// non-stopped timers) so the per-second tick can update it in place.
+    fn create_timer_row(timer: &TimerConfig, list_box: &ListBox) -> (ListBoxRow, Option<Label>) {
         let row = ListBoxRow::new();
         row.set_selectable(false);
         row.set_activatable(false);
@@ -502,6 +567,7 @@ impl AlarmTimerDialog {
         hbox.append(&sec_spin);
 
         // Current time display (when running/paused/finished)
+        let mut live_time_label = None;
         if !is_stopped {
             let time_str = timer.display_string();
             let time_label = Label::new(Some(&time_str));
@@ -514,6 +580,7 @@ impl AlarmTimerDialog {
                 _ => {}
             }
             hbox.append(&time_label);
+            live_time_label = Some(time_label);
         }
 
         // Spacer
@@ -570,7 +637,7 @@ impl AlarmTimerDialog {
         }
 
         row.set_child(Some(&hbox));
-        row
+        (row, live_time_label)
     }
 
     fn refresh_alarm_list(&self) {
@@ -587,6 +654,15 @@ impl AlarmTimerDialog {
         } else {
             (Vec::new(), std::collections::HashSet::new())
         };
+
+        // Record the structure signature; the per-second tick only rebuilds
+        // when the signature changes.
+        ALARM_LIST_SIGNATURE.with(|sig| {
+            *sig.borrow_mut() = alarms
+                .iter()
+                .map(|a| (a.id.clone(), triggered_ids.contains(&a.id)))
+                .collect();
+        });
 
         if alarms.is_empty() {
             let empty_label = Label::new(Some("No alarms. Click '+ Add Alarm' to create one."));
@@ -813,9 +889,14 @@ impl AlarmTimerDialog {
         sound_label.set_hexpand(true);
         sound_box.append(&sound_label);
 
+        // Stage the chosen sound path locally; it is only written to the
+        // manager on Save, so Cancel discards the new sound.
+        let staged_sound_path: Rc<RefCell<Option<String>>> =
+            Rc::new(RefCell::new(alarm.sound.custom_sound_path.clone()));
+
         let browse_btn = Button::with_label("Browse...");
         let sound_label_for_browse = sound_label.clone();
-        let alarm_id_for_sound = alarm_id.clone();
+        let staged_sound_for_browse = staged_sound_path.clone();
         browse_btn.connect_clicked(move |btn| {
             let filter = FileFilter::new();
             filter.add_mime_type("audio/*");
@@ -830,7 +911,7 @@ impl AlarmTimerDialog {
                 .build();
 
             let lbl = sound_label_for_browse.clone();
-            let aid = alarm_id_for_sound.clone();
+            let staged = staged_sound_for_browse.clone();
             let win = btn.root().and_downcast::<Window>();
 
             file_dialog.open(win.as_ref(), gtk4::gio::Cancellable::NONE, move |result| {
@@ -838,11 +919,7 @@ impl AlarmTimerDialog {
                     if let Some(path) = file.path() {
                         let path_str = path.to_string_lossy().to_string();
                         lbl.set_text(&path_str);
-                        if let Ok(mut manager) = global_timer_manager().write() {
-                            manager.update_alarm(&aid, |a| {
-                                a.sound.custom_sound_path = Some(path_str);
-                            });
-                        }
+                        *staged.borrow_mut() = Some(path_str);
                     }
                 }
             });
@@ -854,13 +931,17 @@ impl AlarmTimerDialog {
         preview_alarm_btn.set_icon_name("audio-speakers-symbolic");
         preview_alarm_btn.set_tooltip_text(Some("Preview alarm sound"));
         let alarm_id_for_preview = alarm.id.clone();
+        let staged_sound_for_preview = staged_sound_path.clone();
         preview_alarm_btn.connect_clicked(move |_| {
             // Stop any currently playing sound
             stop_all_sounds();
-            // Play this alarm's sound
+            // Play this alarm's sound, using the STAGED (not yet saved) path so
+            // the user hears the sound they just browsed to
             if let Ok(manager) = global_timer_manager().read() {
                 if let Some(alarm) = manager.alarms.iter().find(|a| a.id == alarm_id_for_preview) {
-                    play_preview_sound(&alarm.sound);
+                    let mut sound = alarm.sound.clone();
+                    sound.custom_sound_path = staged_sound_for_preview.borrow().clone();
+                    play_preview_sound(&sound);
                 }
             }
         });
@@ -894,12 +975,15 @@ impl AlarmTimerDialog {
         let save_btn = Button::with_label("Save");
         save_btn.add_css_class("suggested-action");
         let dialog_for_save = dialog.clone();
+        let staged_sound_for_save = staged_sound_path.clone();
         save_btn.connect_clicked(move |_| {
+            let staged_path = staged_sound_for_save.borrow().clone();
             if let Ok(mut manager) = global_timer_manager().write() {
                 manager.update_alarm(&alarm_id, |a| {
                     a.hour = hour_spin.value() as u32;
                     a.minute = min_spin.value() as u32;
                     a.second = sec_spin.value() as u32;
+                    a.sound.custom_sound_path = staged_path.clone();
 
                     let mut days = Vec::new();
                     for (i, check) in day_checks.iter().enumerate() {

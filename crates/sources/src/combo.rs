@@ -183,7 +183,16 @@ impl ComboSource {
         self.values.clear();
 
         for (slot_name, source) in &self.child_sources {
-            let source_values = source.get_values();
+            // Borrow the child's values in place when possible; get_values()
+            // clones the whole map (keys included) only to discard the keys.
+            let owned;
+            let source_values: &HashMap<String, Value> = match source.values_ref() {
+                Some(values) => values,
+                None => {
+                    owned = source.get_values();
+                    &owned
+                }
+            };
             let slot_config = self.config.slots.get(slot_name);
 
             // Log limit values for debugging
@@ -197,7 +206,7 @@ impl ComboSource {
             // Prefix all keys with the slot name
             for (key, value) in source_values {
                 let prefixed_key = format!("{}_{}", slot_name, key);
-                self.values.insert(prefixed_key, value);
+                self.values.insert(prefixed_key, value.clone());
             }
 
             // Handle caption override

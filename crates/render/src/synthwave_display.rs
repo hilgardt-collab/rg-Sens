@@ -231,7 +231,8 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
         }
         GridStyle::Flat => {
             // Simple flat grid
-            let spacing = config.grid_spacing;
+            // (.max(1.0): a non-positive spacing would hang the loops below)
+            let spacing = config.grid_spacing.max(1.0);
             cr.set_source_rgba(accent.r, accent.g, accent.b, 0.3);
 
             // Horizontal lines
@@ -253,7 +254,8 @@ fn draw_grid(cr: &Context, config: &SynthwaveFrameConfig, width: f64, height: f6
         }
         GridStyle::Hexagon => {
             // Hexagonal pattern
-            let size = config.grid_spacing;
+            // (.max(1.0): a non-positive size would hang the loops below)
+            let size = config.grid_spacing.max(1.0);
             let hex_height = size * 3.0_f64.sqrt();
             let hex_width = size * 2.0;
 

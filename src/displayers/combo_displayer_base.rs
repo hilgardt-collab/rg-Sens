@@ -103,7 +103,14 @@ where
         use std::fmt::Write;
         let _ = write!(prefix_buf, "{}{}", base_prefix, i + 1);
         if let Some(cfg) = params.content_items.get(&prefix_buf) {
-            if !cfg.auto_height || matches!(cfg.display_as, ContentDisplayType::Graph) {
+            // Use fixed size if auto_height is disabled or for Graph/LevelBar
+            // display types (kept in sync with the LCARS path)
+            if !cfg.auto_height
+                || matches!(
+                    cfg.display_as,
+                    ContentDisplayType::Graph | ContentDisplayType::LevelBar
+                )
+            {
                 fixed_sizes.insert(i, cfg.item_height);
             }
         }
@@ -121,6 +128,9 @@ where
         item_orientation,
     );
 
+    // Hoisted default so per-item config lookups can borrow instead of clone
+    let default_item_config = ContentItemConfig::default();
+
     // Draw each item
     for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
         // Build prefix without allocation using reusable buffer
@@ -130,12 +140,11 @@ where
         let item_data = combo_utils::get_item_data(params.values, &prefix_buf);
         let slot_values = combo_utils::get_slot_values(params.values, &prefix_buf);
 
-        // Get item config (or use default)
+        // Get item config (or use default) — borrow, don't clone per frame
         let item_config = params
             .content_items
             .get(&prefix_buf)
-            .cloned()
-            .unwrap_or_default();
+            .unwrap_or(&default_item_config);
 
         // Draw item frame using the provided closure
         draw_item_frame(cr, item_x, item_y, item_w, item_h);
@@ -359,86 +368,6 @@ impl Default for ComboDisplayData {
     }
 }
 
-/// Set up the animation timer for a combo displayer.
-/// Registers the animation callback with the global AnimationManager.
-/// Call this after creating the drawing area.
-pub fn setup_combo_animation_timer<F, G>(
-    drawing_area: &DrawingArea,
-    data: Arc<Mutex<ComboDisplayData>>,
-    animation_enabled: F,
-    animation_speed: G,
-) where
-    F: Fn(&ComboDisplayData) -> bool + 'static,
-    G: Fn(&ComboDisplayData) -> f64 + 'static,
-{
-    register_animation(drawing_area.downgrade(), move || {
-        if let Ok(mut data) = data.try_lock() {
-            let mut redraw = data.dirty;
-            if data.dirty {
-                data.dirty = false;
-            }
-
-            if animation_enabled(&data) {
-                // Quick check: any animations in progress?
-                // This avoids Instant::now() and iteration when nothing is animating
-                let has_bar_animations = data
-                    .bar_values
-                    .values()
-                    .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD);
-                let has_core_animations = data.core_bar_values.values().any(|v| {
-                    v.iter()
-                        .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
-                });
-
-                if has_bar_animations || has_core_animations {
-                    let now = Instant::now();
-                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                    data.last_update = now;
-
-                    let speed = animation_speed(&data);
-
-                    // Animate bar values
-                    if has_bar_animations {
-                        for anim in data.bar_values.values_mut() {
-                            if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                let delta = (anim.target - anim.current) * speed * elapsed;
-                                anim.current += delta;
-
-                                if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
-                                    anim.current = anim.target;
-                                }
-                                redraw = true;
-                            }
-                        }
-                    }
-
-                    // Animate core bar values
-                    if has_core_animations {
-                        for core_anims in data.core_bar_values.values_mut() {
-                            for anim in core_anims.iter_mut() {
-                                if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                    let delta = (anim.target - anim.current) * speed * elapsed;
-                                    anim.current += delta;
-
-                                    if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD
-                                    {
-                                        anim.current = anim.target;
-                                    }
-                                    redraw = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            redraw
-        } else {
-            false
-        }
-    });
-}
-
 /// Extended animation timer that works with wrapper types containing ComboDisplayData.
 ///
 /// This version allows displayers to wrap ComboDisplayData in their own DisplayData struct
@@ -520,13 +449,19 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
                 })
             };
 
-            // Only calculate elapsed time if something actually needs it
-            if has_custom_anim || has_bar_animations || has_core_animations {
+            // Refresh the timestamp on EVERY tick, not just while animating:
+            // the first animating frame after idle must not see the stale
+            // `elapsed` accumulated since the previous animation converged
+            // (with default speed 8.0 that overshot the target several times).
+            let elapsed = {
                 let combo = get_combo(&mut data);
                 let now = Instant::now();
                 let elapsed = now.duration_since(combo.last_update).as_secs_f64();
                 combo.last_update = now;
+                elapsed
+            };
 
+            if has_custom_anim || has_bar_animations || has_core_animations {
                 // Run custom animation if provided
                 if let Some(ref custom_anim) = custom_animation {
                     if custom_anim(&mut data, elapsed) {
@@ -537,13 +472,16 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
                 // Run bar/core bar animations if enabled
                 if has_bar_animations || has_core_animations {
                     let speed = animation_speed(&data);
+                    // Cap the step so a long frame lands at most exactly on
+                    // the target, never past it
+                    let step = (speed * elapsed).min(1.0);
                     let combo = get_combo(&mut data);
 
                     // Animate bar values
                     if has_bar_animations {
                         for anim in combo.bar_values.values_mut() {
                             if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                let delta = (anim.target - anim.current) * speed * elapsed;
+                                let delta = (anim.target - anim.current) * step;
                                 anim.current += delta;
 
                                 if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD {
@@ -559,7 +497,7 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
                         for core_anims in combo.core_bar_values.values_mut() {
                             for anim in core_anims.iter_mut() {
                                 if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                    let delta = (anim.target - anim.current) * speed * elapsed;
+                                    let delta = (anim.target - anim.current) * step;
                                     anim.current += delta;
 
                                     if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD
@@ -579,96 +517,6 @@ pub fn setup_combo_animation_timer_ext<D, AE, AS, GC, CA>(
             false
         }
     });
-}
-
-/// Convenience type alias for displayers without custom animation
-pub type NoCustomAnimation = fn(&mut (), f64) -> bool;
-
-/// Handle update_data for a combo displayer.
-/// This updates values, animations, and graph history.
-///
-/// NOTE: This holds the lock for the entire duration. For reduced lock contention,
-/// use `prepare_combo_update` + `apply_combo_update` instead.
-pub fn handle_combo_update_data(
-    data: &mut ComboDisplayData,
-    input: &HashMap<String, Value>,
-    group_item_counts: &[usize],
-    content_items: &HashMap<String, ContentItemConfig>,
-    animation_enabled: bool,
-) {
-    let timestamp = data.graph_start_time.elapsed().as_secs_f64();
-
-    // Only regenerate prefixes if group_item_counts changed (avoid allocation every frame)
-    if data.cached_group_counts.as_slice() != group_item_counts {
-        data.cached_prefixes = combo_utils::generate_prefixes(group_item_counts);
-        // Also regenerate the prefix set for O(1) lookups
-        data.cached_prefix_set = data.cached_prefixes.iter().cloned().collect();
-        data.cached_group_counts.clear();
-        data.cached_group_counts
-            .extend_from_slice(group_item_counts);
-    }
-
-    // Filter values using cached prefix set (avoids HashSet creation on every call)
-    combo_utils::filter_values_with_owned_prefix_set(
-        input,
-        &data.cached_prefix_set,
-        &mut data.values,
-    );
-
-    // Update each item using index-based iteration to avoid cloning cached_prefixes
-    let prefix_count = data.cached_prefixes.len();
-    for i in 0..prefix_count {
-        // Get prefix reference - safe because prefix_count is fixed and we only mutate other fields
-        let prefix = &data.cached_prefixes[i];
-        let item_data = combo_utils::get_item_data(input, prefix);
-        let target_percent = item_data.percent();
-        let numerical_value = item_data.numerical_value;
-
-        // Get item config before mutating data
-        let default_config = ContentItemConfig::default();
-        let item_config = content_items.get(prefix).cloned().unwrap_or(default_config);
-
-        // Now do the mutable operations
-        let prefix = &data.cached_prefixes[i]; // Re-borrow after item_config lookup
-        combo_utils::update_bar_animation(
-            &mut data.bar_values,
-            prefix,
-            target_percent,
-            animation_enabled,
-        );
-
-        match item_config.display_as {
-            ContentDisplayType::Graph => {
-                let prefix = &data.cached_prefixes[i];
-                combo_utils::update_graph_history(
-                    &mut data.graph_history,
-                    prefix,
-                    numerical_value,
-                    timestamp,
-                    item_config.graph_config.max_data_points,
-                );
-            }
-            ContentDisplayType::CoreBars => {
-                let prefix = &data.cached_prefixes[i];
-                combo_utils::update_core_bars(
-                    input,
-                    &mut data.core_bar_values,
-                    prefix,
-                    &item_config.core_bars_config,
-                    animation_enabled,
-                );
-            }
-            _ => {}
-        }
-    }
-
-    // Clean up stale animation entries
-    combo_utils::cleanup_bar_values(&mut data.bar_values, &data.cached_prefixes);
-    combo_utils::cleanup_core_bar_values(&mut data.core_bar_values, &data.cached_prefixes);
-    combo_utils::cleanup_graph_history(&mut data.graph_history, &data.cached_prefixes);
-
-    data.transform = PanelTransform::from_values(input);
-    data.dirty = true;
 }
 
 /// Pre-computed data for a combo update, produced by `prepare_combo_update`.
@@ -795,18 +643,16 @@ pub fn apply_combo_update(
         }
     }
 
-    // Clean up stale animation entries
-    combo_utils::cleanup_bar_values(&mut data.bar_values, &data.cached_prefixes);
-    combo_utils::cleanup_core_bar_values(&mut data.core_bar_values, &data.cached_prefixes);
-    combo_utils::cleanup_graph_history(&mut data.graph_history, &data.cached_prefixes);
+    // Clean up stale animation entries (builds the prefix set once)
+    combo_utils::cleanup_all_animation_state(
+        &mut data.bar_values,
+        &mut data.core_bar_values,
+        &mut data.graph_history,
+        &data.cached_prefixes,
+    );
 
     data.transform = prep.transform;
     data.dirty = true;
-}
-
-/// Helper to check if a combo displayer needs redraw.
-pub fn combo_needs_redraw(data: &Arc<Mutex<ComboDisplayData>>) -> bool {
-    data.try_lock().map(|data| data.dirty).unwrap_or(true)
 }
 
 // ============================================================================

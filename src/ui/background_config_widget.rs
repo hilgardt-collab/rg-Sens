@@ -18,6 +18,43 @@ use crate::ui::theme::{ColorSource, ComboThemeConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
 use crate::ui::GradientEditor;
 
+/// Per-type page controls that set_config must re-sync (promoted from locals
+/// so the programmatic sync can reach them)
+struct SyncedControls {
+    image_path_entry: Entry,
+    image_mode_dropdown: DropDown,
+    image_alpha_scale: Scale,
+    polygon_size_spin: SpinButton,
+    polygon_sides_spin: SpinButton,
+    polygon_angle_scale: Scale,
+    polygon_angle_spin: SpinButton,
+    radial_radius_scale: Scale,
+    indicator_shape_dropdown: DropDown,
+    indicator_size_scale: Scale,
+    indicator_rotation_spin: SpinButton,
+    indicator_value_scale: Scale,
+}
+
+impl SyncedControls {
+    /// Dummy controls for the debug-only constructors
+    fn dummy() -> Self {
+        Self {
+            image_path_entry: Entry::new(),
+            image_mode_dropdown: DropDown::from_strings(&[]),
+            image_alpha_scale: Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1),
+            polygon_size_spin: SpinButton::with_range(0.0, 1.0, 0.1),
+            polygon_sides_spin: SpinButton::with_range(0.0, 1.0, 0.1),
+            polygon_angle_scale: Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1),
+            polygon_angle_spin: SpinButton::with_range(0.0, 1.0, 0.1),
+            radial_radius_scale: Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1),
+            indicator_shape_dropdown: DropDown::from_strings(&[]),
+            indicator_size_scale: Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1),
+            indicator_rotation_spin: SpinButton::with_range(0.0, 1.0, 0.1),
+            indicator_value_scale: Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.1),
+        }
+    }
+}
+
 /// Background configuration widget
 pub struct BackgroundConfigWidget {
     container: GtkBox,
@@ -46,6 +83,11 @@ pub struct BackgroundConfigWidget {
     polygon_color1_selector: Rc<ThemeColorSelector>,
     polygon_color2_selector: Rc<ThemeColorSelector>,
     polygon_bg_color_selector: Rc<ThemeColorSelector>,
+    // Per-type numeric/entry controls that set_config re-syncs
+    synced_controls: SyncedControls,
+    // Guard flag: set during programmatic set_config so control change handlers
+    // don't fire spuriously while widgets are being synced
+    updating_from_config: Rc<RefCell<bool>>,
     // Function to update the preview (using Picture instead of DrawingArea to avoid GL issues)
     update_preview: Rc<dyn Fn()>,
 }
@@ -207,6 +249,8 @@ impl BackgroundConfigWidget {
             polygon_color1_selector,
             polygon_color2_selector,
             polygon_bg_color_selector,
+            synced_controls: SyncedControls::dummy(),
+            updating_from_config: Rc::new(RefCell::new(false)),
             update_preview,
         }
     }
@@ -284,6 +328,8 @@ impl BackgroundConfigWidget {
             polygon_color1_selector,
             polygon_color2_selector,
             polygon_bg_color_selector,
+            synced_controls: SyncedControls::dummy(),
+            updating_from_config: Rc::new(RefCell::new(false)),
             update_preview,
         }
     }
@@ -299,6 +345,7 @@ impl BackgroundConfigWidget {
         let config = Rc::new(RefCell::new(BackgroundConfig::default()));
         let on_change = Rc::new(RefCell::new(None));
         let theme_config = Rc::new(RefCell::new(ComboThemeConfig::default()));
+        let updating_from_config = Rc::new(RefCell::new(false));
 
         // Type selector
         let type_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -408,12 +455,18 @@ impl BackgroundConfigWidget {
         config_stack.add_named(&linear_page, Some("linear_gradient"));
 
         // Radial gradient configuration
-        let (radial_page, radial_gradient_editor) =
-            Self::create_radial_gradient_config(&config, &update_preview, &on_change);
+        let (radial_page, radial_gradient_editor, radial_radius_scale) =
+            Self::create_radial_gradient_config(
+                &config,
+                &update_preview,
+                &on_change,
+                &updating_from_config,
+            );
         config_stack.add_named(&radial_page, Some("radial_gradient"));
 
         // Image configuration
-        let image_page = Self::create_image_config(&config, &update_preview, &on_change);
+        let (image_page, image_path_entry, image_mode_dropdown, image_alpha_scale) =
+            Self::create_image_config(&config, &update_preview, &on_change, &updating_from_config);
         config_stack.add_named(&image_page, Some("image"));
 
         // Polygon configuration
@@ -422,7 +475,17 @@ impl BackgroundConfigWidget {
             polygon_color1_selector,
             polygon_color2_selector,
             polygon_bg_color_selector,
-        ) = Self::create_polygon_config(&config, &update_preview, &on_change, &theme_config);
+            polygon_size_spin,
+            polygon_sides_spin,
+            polygon_angle_scale,
+            polygon_angle_spin,
+        ) = Self::create_polygon_config(
+            &config,
+            &update_preview,
+            &on_change,
+            &theme_config,
+            &updating_from_config,
+        );
         config_stack.add_named(&polygon_page, Some("polygons"));
 
         // Initialize source fields storage and syncing flag
@@ -440,11 +503,13 @@ impl BackgroundConfigWidget {
             indicator_field_dropdown_box,
             indicator_field_entry_box,
             indicator_field_dropdown_handler_id,
+            indicator_shape_controls,
         ) = Self::create_indicator_config(
             &config,
             &update_preview,
             &on_change,
             &syncing_indicator_dropdown,
+            &updating_from_config,
         );
         config_stack.add_named(&indicator_page, Some("indicator"));
 
@@ -580,6 +645,21 @@ impl BackgroundConfigWidget {
             polygon_color1_selector,
             polygon_color2_selector,
             polygon_bg_color_selector,
+            synced_controls: SyncedControls {
+                image_path_entry,
+                image_mode_dropdown,
+                image_alpha_scale,
+                polygon_size_spin,
+                polygon_sides_spin,
+                polygon_angle_scale,
+                polygon_angle_spin,
+                radial_radius_scale,
+                indicator_shape_dropdown: indicator_shape_controls.0,
+                indicator_size_scale: indicator_shape_controls.1,
+                indicator_rotation_spin: indicator_shape_controls.2,
+                indicator_value_scale: indicator_shape_controls.3,
+            },
+            updating_from_config,
             update_preview,
         }
     }
@@ -719,7 +799,8 @@ impl BackgroundConfigWidget {
         config: &Rc<RefCell<BackgroundConfig>>,
         update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> (GtkBox, Rc<GradientEditor>) {
+        updating_from_config: &Rc<RefCell<bool>>,
+    ) -> (GtkBox, Rc<GradientEditor>, Scale) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
         // Create gradient editor first so we can reference it in paste handler
@@ -796,8 +877,12 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
 
         radius_scale.connect_value_changed(move |scale| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::RadialGradient(ref mut grad) = cfg.background {
                 grad.radius = scale.value();
@@ -834,14 +919,15 @@ impl BackgroundConfigWidget {
         });
 
         page.append(gradient_editor_ref.widget());
-        (page, gradient_editor_ref.clone())
+        (page, gradient_editor_ref.clone(), radius_scale)
     }
 
     fn create_image_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
-    ) -> GtkBox {
+        updating_from_config: &Rc<RefCell<bool>>,
+    ) -> (GtkBox, Entry, DropDown, Scale) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
         let path_entry = Entry::new();
@@ -871,16 +957,10 @@ impl BackgroundConfigWidget {
         alpha_scale.set_value_pos(gtk4::PositionType::Right);
         alpha_box.append(&alpha_scale);
 
-        let config_clone = config.clone();
-        let update_preview_clone = update_preview.clone();
         let path_entry_clone = path_entry.clone();
-        let on_change_clone = on_change.clone();
 
         browse_button.connect_clicked(move |btn| {
-            let config_clone2 = config_clone.clone();
-            let update_preview_clone2 = update_preview_clone.clone();
             let path_entry_clone2 = path_entry_clone.clone();
-            let on_change_clone2 = on_change_clone.clone();
 
             let window = btn.root().and_downcast::<gtk4::Window>();
 
@@ -911,29 +991,45 @@ impl BackgroundConfigWidget {
                 if let Ok(file) = dialog.open_future(window.as_ref()).await {
                     if let Some(path) = file.path() {
                         let path_str = path.to_string_lossy().to_string();
+                        // The entry's connect_changed handler updates the config,
+                        // preview, and fires on_change.
                         path_entry_clone2.set_text(&path_str);
-
-                        let mut cfg = config_clone2.borrow_mut();
-                        if let BackgroundType::Image { ref mut path, .. } = cfg.background {
-                            *path = path_str;
-                            drop(cfg);
-                            update_preview_clone2();
-
-                            if let Some(callback) = on_change_clone2.borrow().as_ref() {
-                                callback();
-                            }
-                        }
                     }
                 }
             });
+        });
+
+        // Path entry change handler - covers both hand-typed paths and Browse
+        let config_clone = config.clone();
+        let update_preview_clone = update_preview.clone();
+        let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
+        path_entry.connect_changed(move |entry| {
+            if *updating_clone.borrow() {
+                return;
+            }
+            let mut cfg = config_clone.borrow_mut();
+            if let BackgroundType::Image { ref mut path, .. } = cfg.background {
+                *path = entry.text().to_string();
+                drop(cfg);
+                update_preview_clone();
+
+                if let Some(callback) = on_change_clone.borrow().as_ref() {
+                    callback();
+                }
+            }
         });
 
         // Display mode change handler
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
 
         mode_dropdown.connect_selected_notify(move |dropdown| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let selected = dropdown.selected();
             let display_mode = match selected {
                 0 => ImageDisplayMode::Fit,
@@ -963,8 +1059,12 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
 
         alpha_scale.connect_value_changed(move |scale| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Image { ref mut alpha, .. } = cfg.background {
                 *alpha = scale.value();
@@ -981,19 +1081,25 @@ impl BackgroundConfigWidget {
         page.append(&browse_button);
         page.append(&mode_box);
         page.append(&alpha_box);
-        page
+        (page, path_entry, mode_dropdown, alpha_scale)
     }
 
+    #[allow(clippy::type_complexity)]
     fn create_polygon_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         theme_config: &Rc<RefCell<ComboThemeConfig>>,
+        updating_from_config: &Rc<RefCell<bool>>,
     ) -> (
         GtkBox,
         Rc<ThemeColorSelector>,
         Rc<ThemeColorSelector>,
         Rc<ThemeColorSelector>,
+        SpinButton,
+        SpinButton,
+        Scale,
+        SpinButton,
     ) {
         let page = GtkBox::new(Orientation::Vertical, 12);
 
@@ -1008,8 +1114,12 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
 
         size_spin.connect_value_changed(move |spin| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 poly.tile_size = spin.value() as u32;
@@ -1036,8 +1146,12 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
 
         sides_spin.connect_value_changed(move |spin| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Polygons(ref mut poly) = cfg.background {
                 poly.num_sides = spin.value() as u32;
@@ -1074,8 +1188,9 @@ impl BackgroundConfigWidget {
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         let syncing_clone = syncing.clone();
+        let updating_clone = updating_from_config.clone();
         angle_scale.connect_value_changed(move |scale| {
-            if *syncing_clone.borrow() {
+            if *syncing_clone.borrow() || *updating_clone.borrow() {
                 return;
             }
             *syncing_clone.borrow_mut() = true;
@@ -1099,8 +1214,9 @@ impl BackgroundConfigWidget {
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
         let syncing_clone = syncing.clone();
+        let updating_clone = updating_from_config.clone();
         angle_spin.connect_value_changed(move |spin| {
-            if *syncing_clone.borrow() {
+            if *syncing_clone.borrow() || *updating_clone.borrow() {
                 return;
             }
             *syncing_clone.borrow_mut() = true;
@@ -1230,16 +1346,28 @@ impl BackgroundConfigWidget {
             }
         });
 
-        (page, color1_selector, color2_selector, bg_color_selector)
+        (
+            page,
+            color1_selector,
+            color2_selector,
+            bg_color_selector,
+            size_spin,
+            sides_spin,
+            angle_scale,
+            angle_spin,
+        )
     }
 
     /// Create indicator configuration page
-    /// Returns (page, gradient_editor, field_dropdown, field_list, field_entry, dropdown_box, entry_box, dropdown_handler_id)
+    /// Returns (page, gradient_editor, field_dropdown, field_list, field_entry, dropdown_box,
+    /// entry_box, dropdown_handler_id, (shape_dropdown, size_scale, rotation_spin, value_scale))
+    #[allow(clippy::type_complexity)]
     fn create_indicator_config(
         config: &Rc<RefCell<BackgroundConfig>>,
         update_preview: &Rc<dyn Fn()>,
         on_change: &Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
         syncing_flag: &Rc<RefCell<bool>>,
+        updating_from_config: &Rc<RefCell<bool>>,
     ) -> (
         GtkBox,
         Rc<GradientEditor>,
@@ -1249,6 +1377,7 @@ impl BackgroundConfigWidget {
         GtkBox,
         GtkBox,
         gtk4::glib::SignalHandlerId,
+        (DropDown, Scale, SpinButton, Scale),
     ) {
         use crate::ui::background::IndicatorBackgroundShape;
 
@@ -1389,7 +1518,11 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
         shape_dropdown.connect_selected_notify(move |dropdown| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let shape = match dropdown.selected() {
                 0 => IndicatorBackgroundShape::Fill,
                 1 => IndicatorBackgroundShape::Circle,
@@ -1413,7 +1546,11 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
         size_scale.connect_value_changed(move |scale| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Indicator(ref mut ind) = cfg.background {
                 ind.shape_size = scale.value();
@@ -1428,7 +1565,11 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
         rotation_spin.connect_value_changed(move |spin| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Indicator(ref mut ind) = cfg.background {
                 ind.rotation_angle = spin.value();
@@ -1477,7 +1618,11 @@ impl BackgroundConfigWidget {
         // Value field entry change handler (for combo sources)
         let config_clone = config.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
         field_entry.connect_changed(move |entry| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Indicator(ref mut ind) = cfg.background {
                 ind.value_field = entry.text().to_string();
@@ -1491,7 +1636,11 @@ impl BackgroundConfigWidget {
         let config_clone = config.clone();
         let update_preview_clone = update_preview.clone();
         let on_change_clone = on_change.clone();
+        let updating_clone = updating_from_config.clone();
         value_scale.connect_value_changed(move |scale| {
+            if *updating_clone.borrow() {
+                return;
+            }
             let mut cfg = config_clone.borrow_mut();
             if let BackgroundType::Indicator(ref mut ind) = cfg.background {
                 ind.static_value = scale.value();
@@ -1530,6 +1679,7 @@ impl BackgroundConfigWidget {
             field_dropdown_box,
             field_entry_box,
             field_dropdown_handler_id,
+            (shape_dropdown, size_scale, rotation_spin, value_scale),
         )
     }
 
@@ -1550,6 +1700,9 @@ impl BackgroundConfigWidget {
             BackgroundType::Indicator(_) => 5,
         };
 
+        // Guard control change handlers while widgets are synced programmatically
+        *self.updating_from_config.borrow_mut() = true;
+
         // Load data into widgets if applicable
         if let BackgroundType::Solid { ref color } = new_config.background {
             self.solid_color_selector.set_source(color.clone());
@@ -1559,6 +1712,23 @@ impl BackgroundConfigWidget {
         }
         if let BackgroundType::RadialGradient(ref grad) = new_config.background {
             self.radial_gradient_editor.set_stops(grad.stops.clone());
+            self.synced_controls.radial_radius_scale.set_value(grad.radius);
+        }
+        if let BackgroundType::Image {
+            ref path,
+            display_mode,
+            alpha,
+        } = new_config.background
+        {
+            self.synced_controls.image_path_entry.set_text(path);
+            let mode_idx = match display_mode {
+                ImageDisplayMode::Fit => 0,
+                ImageDisplayMode::Stretch => 1,
+                ImageDisplayMode::Zoom => 2,
+                ImageDisplayMode::Tile => 3,
+            };
+            self.synced_controls.image_mode_dropdown.set_selected(mode_idx);
+            self.synced_controls.image_alpha_scale.set_value(alpha);
         }
         if let BackgroundType::Polygons(ref poly) = new_config.background {
             // Update polygon color selectors with saved color sources
@@ -1570,15 +1740,51 @@ impl BackgroundConfigWidget {
             }
             self.polygon_bg_color_selector
                 .set_source(poly.background_color.clone());
+            self.synced_controls
+                .polygon_size_spin
+                .set_value(poly.tile_size as f64);
+            self.synced_controls
+                .polygon_sides_spin
+                .set_value(poly.num_sides as f64);
+            self.synced_controls
+                .polygon_angle_scale
+                .set_value(poly.rotation_angle);
+            self.synced_controls
+                .polygon_angle_spin
+                .set_value(poly.rotation_angle);
         }
         if let BackgroundType::Indicator(ref ind) = new_config.background {
+            use crate::ui::background::IndicatorBackgroundShape;
+
             self.indicator_gradient_editor
                 .set_stops(ind.gradient_stops.clone());
             // Update the field entry with saved value (for combo sources)
             self.indicator_field_entry.set_text(&ind.value_field);
+            let shape_idx = match ind.shape {
+                IndicatorBackgroundShape::Fill => 0,
+                IndicatorBackgroundShape::Circle => 1,
+                IndicatorBackgroundShape::Square => 2,
+                IndicatorBackgroundShape::Polygon(3) => 3,
+                IndicatorBackgroundShape::Polygon(5) => 4,
+                IndicatorBackgroundShape::Polygon(_) => 5,
+            };
+            self.synced_controls
+                .indicator_shape_dropdown
+                .set_selected(shape_idx);
+            self.synced_controls
+                .indicator_size_scale
+                .set_value(ind.shape_size);
+            self.synced_controls
+                .indicator_rotation_spin
+                .set_value(ind.rotation_angle);
+            self.synced_controls
+                .indicator_value_scale
+                .set_value(ind.static_value);
         }
 
         *self.config.borrow_mut() = new_config;
+
+        *self.updating_from_config.borrow_mut() = false;
 
         // Block the signal handler to prevent it from overwriting our config
         self.type_dropdown

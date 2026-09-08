@@ -117,12 +117,14 @@ fn draw_frame_corners(
             cr.set_line_width(1.0);
 
             // Top edge ticks
+            // (.max(1.0): a non-positive step would hang the loops below)
             let tick_len = 4.0;
+            let tick_step = (config.tick_spacing * 3.0).max(1.0);
             let mut tx = x + bracket_size + 10.0;
             while tx < x + w - bracket_size - 10.0 {
                 cr.move_to(tx, y);
                 cr.line_to(tx, y + tick_len);
-                tx += config.tick_spacing * 3.0;
+                tx += tick_step;
             }
             cr.stroke().ok();
 
@@ -131,7 +133,7 @@ fn draw_frame_corners(
             while tx < x + w - bracket_size - 10.0 {
                 cr.move_to(tx, y + h);
                 cr.line_to(tx, y + h - tick_len);
-                tx += config.tick_spacing * 3.0;
+                tx += tick_step;
             }
             cr.stroke().ok();
         }
@@ -563,8 +565,9 @@ fn draw_divider(
             cr.stroke().ok();
 
             // Tick marks
+            // (.max(1.0): a non-positive spacing would hang the loops below)
             let tick_len = 4.0;
-            let spacing = config.tick_spacing;
+            let spacing = config.tick_spacing.max(1.0);
 
             if horizontal {
                 let mut tx = x + spacing;

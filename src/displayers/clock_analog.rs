@@ -35,6 +35,12 @@ struct DisplayData {
     timer_display: String,
     flash_state: bool,
     flash_elapsed: f64, // Track elapsed time for flash toggle (every 0.5s)
+    // Wall-clock timestamp of the previous animation tick; flash timing must
+    // use real elapsed time because idle-mode ticks run at ~4fps, not 60fps
+    last_tick: Option<std::time::Instant>,
+    // Set by update_data so the tick redraws even when no animation is active
+    // (without this the face freezes when smooth seconds is disabled)
+    dirty: bool,
     transform: PanelTransform,
     // Icon bounds for click detection (x, y, width, height) - updated on each draw
     icon_bounds: Option<(f64, f64, f64, f64)>,
@@ -59,6 +65,8 @@ impl ClockAnalogDisplayer {
             timer_display: String::new(),
             flash_state: false,
             flash_elapsed: 0.0,
+            last_tick: None,
+            dirty: false,
             transform: PanelTransform::default(),
             icon_bounds: None,
             last_width: 0.0,
@@ -325,12 +333,24 @@ impl Displayer for ClockAnalogDisplayer {
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
-                let mut redraw = false;
+                // Redraw when update_data delivered new time/alarm/timer state
+                let mut redraw = data.dirty;
+                data.dirty = false;
 
-                // Toggle flash state every ~500ms (using elapsed time at 60fps = ~30 frames)
+                // Real elapsed time since the previous tick — the manager runs
+                // at ~4fps in idle mode, so counting frames as 1/60s made the
+                // first alarm flash take ~7.5s instead of 0.5s
+                let now = std::time::Instant::now();
+                let elapsed = data
+                    .last_tick
+                    .map(|t| now.duration_since(t).as_secs_f64())
+                    .unwrap_or(0.0);
+                data.last_tick = Some(now);
+
+                // Toggle flash state every ~500ms
                 // Only track flash if alarm or timer is active
                 if data.alarm_triggered || data.timer_state == "finished" {
-                    data.flash_elapsed += 1.0 / 60.0; // ~16ms per frame
+                    data.flash_elapsed += elapsed;
                     if data.flash_elapsed >= 0.5 {
                         data.flash_elapsed = 0.0;
                         data.flash_state = !data.flash_state;
@@ -426,6 +446,10 @@ impl Displayer for ClockAnalogDisplayer {
 
             // Extract transform from values
             data.transform = PanelTransform::from_values(values);
+
+            // Request a redraw on the next tick — without this the face only
+            // repaints while smooth-seconds animation keeps redraw=true
+            data.dirty = true;
         }
     }
 

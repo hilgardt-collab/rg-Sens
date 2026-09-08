@@ -656,7 +656,8 @@ fn draw_background_pattern(
             cr.set_source_rgba(faint_color.r, faint_color.g, faint_color.b, faint_color.a);
             cr.set_line_width(1.0);
 
-            let spacing = config.pattern_spacing;
+            // (.max(1.0): a non-positive spacing would hang the loops below)
+            let spacing = config.pattern_spacing.max(1.0);
             let mut yy = y;
             while yy < y + h {
                 // Draw a wavy vine line
@@ -679,7 +680,8 @@ fn draw_background_pattern(
                 faint_color.b,
                 faint_color.a * 1.5,
             );
-            let spacing = config.pattern_spacing;
+            // (.max(1.0): a non-positive spacing would hang the loops below)
+            let spacing = config.pattern_spacing.max(1.0);
 
             let mut yy = y + spacing / 2.0;
             let mut row = 0;
@@ -706,7 +708,8 @@ fn draw_background_pattern(
             cr.set_source_rgba(faint_color.r, faint_color.g, faint_color.b, faint_color.a);
             cr.set_line_width(1.0);
 
-            let spacing = config.pattern_spacing;
+            // (.max(1.0): a non-positive spacing would hang the loops below)
+            let spacing = config.pattern_spacing.max(1.0);
             let amplitude = 6.0;
             let freq = config.wave_frequency * 0.1;
 
@@ -732,7 +735,8 @@ fn draw_background_pattern(
                 faint_color.a * 2.0,
             );
 
-            let spacing = config.pattern_spacing * 1.5;
+            // (.max(1.0): a non-positive spacing would hang the loops below)
+            let spacing = config.pattern_spacing.max(1.0) * 1.5;
             let eye_size = 8.0;
 
             let mut yy = y + spacing / 2.0;

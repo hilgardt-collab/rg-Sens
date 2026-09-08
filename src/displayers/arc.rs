@@ -130,8 +130,10 @@ impl Displayer for ArcDisplayer {
                 {
                     // Calculate animation speed based on duration (prevent division by zero)
                     let animation_speed = 1.0 / data.config.animation_duration.max(0.1);
-                    let delta =
-                        (data.target_value - data.animated_value) * animation_speed * elapsed;
+                    // Cap the step so a long frame (e.g. idle-mode ~0.25s tick)
+                    // lands at most exactly on the target, never past it
+                    let step = (animation_speed * elapsed).min(1.0);
+                    let delta = (data.target_value - data.animated_value) * step;
 
                     // Apply easing (ease-out)
                     data.animated_value += delta;

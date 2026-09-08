@@ -39,6 +39,11 @@ fn default_auto_detect_limits() -> bool {
 /// Configuration for fan speed source
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FanSpeedConfig {
+    /// Fan label - stable identifier (preferred over index, since hwmon
+    /// ordering can change across boots)
+    #[serde(default)]
+    pub sensor_label: Option<String>,
+    /// Fan index - kept for backward compatibility and as fallback
     #[serde(default)]
     pub sensor_index: usize,
     #[serde(default = "default_update_interval")]
@@ -56,6 +61,7 @@ pub struct FanSpeedConfig {
 impl Default for FanSpeedConfig {
     fn default() -> Self {
         Self {
+            sensor_label: None,
             sensor_index: 0,
             update_interval_ms: default_update_interval(),
             custom_caption: None,

@@ -141,7 +141,8 @@ fn categorize_sensor(label: &str) -> SensorCategory {
 pub struct SystemTempSource {
     metadata: SourceMetadata,
     config: SystemTempConfig,
-    current_temp: f64,
+    /// `None` when the sensor could not be read (published as "N/A")
+    current_temp: Option<f64>,
     detected_min: Option<f64>,
     detected_max: Option<f64>,
 
@@ -178,7 +179,7 @@ impl SystemTempSource {
             },
             // Temperature readings use shared_sensors module, not a local Components instance
             config: SystemTempConfig::default(),
-            current_temp: 0.0,
+            current_temp: None,
             detected_min: None,
             detected_max: None,
             values: HashMap::with_capacity(8),
@@ -266,40 +267,45 @@ impl DataSource for SystemTempSource {
         if let Some(temp_celsius) =
             shared_sensors::get_temperature_by_index(self.config.sensor_index)
         {
-            self.current_temp = self.convert_temperature(temp_celsius as f64);
+            let temp = self.convert_temperature(temp_celsius as f64);
+            self.current_temp = Some(temp);
 
             // Update detected limits if auto-detect is enabled
             if self.config.auto_detect_limits {
                 // Update min
-                self.detected_min = Some(
-                    self.detected_min
-                        .map(|min| min.min(self.current_temp))
-                        .unwrap_or(self.current_temp),
-                );
+                self.detected_min =
+                    Some(self.detected_min.map(|min| min.min(temp)).unwrap_or(temp));
 
                 // Update max
-                self.detected_max = Some(
-                    self.detected_max
-                        .map(|max| max.max(self.current_temp))
-                        .unwrap_or(self.current_temp),
-                );
+                self.detected_max =
+                    Some(self.detected_max.map(|max| max.max(temp)).unwrap_or(temp));
             }
         } else {
             log::warn!(
                 "Selected sensor index {} not found",
                 self.config.sensor_index
             );
-            self.current_temp = 0.0;
+            self.current_temp = None;
         }
 
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();
 
-        // Temperature value - MUST provide "value" key for displayers
-        self.values
-            .insert("value".to_string(), Value::from(self.current_temp));
-        self.values
-            .insert("temperature".to_string(), Value::from(self.current_temp)); // Keep for compatibility
+        // Temperature value - MUST provide "value" key for displayers.
+        // On read failure publish "N/A" (same convention as cpu/gpu/disk)
+        // instead of a misleading unconverted 0.
+        match self.current_temp {
+            Some(temp) => {
+                self.values.insert("value".to_string(), Value::from(temp));
+                self.values
+                    .insert("temperature".to_string(), Value::from(temp)); // Keep for compatibility
+            }
+            None => {
+                self.values.insert("value".to_string(), Value::from("N/A"));
+                self.values
+                    .insert("temperature".to_string(), Value::from("N/A"));
+            }
+        }
 
         // Sensor label
         let sensor_label = SYSTEM_SENSORS
@@ -309,9 +315,13 @@ impl DataSource for SystemTempSource {
         self.values
             .insert("sensor_label".to_string(), Value::from(sensor_label));
 
-        // Unit
-        self.values
-            .insert("unit".to_string(), Value::from(self.unit_suffix()));
+        // Unit (empty when the value is N/A, matching cpu/gpu/disk)
+        let unit = if self.current_temp.is_some() {
+            self.unit_suffix()
+        } else {
+            ""
+        };
+        self.values.insert("unit".to_string(), Value::from(unit));
 
         // Caption (custom or auto-generated)
         let caption = self

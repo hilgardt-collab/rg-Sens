@@ -289,6 +289,8 @@ fn render_tapered_bar_foreground(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height);
             cr.clip();
+            // Align the gradient (anchored at the origin) with the bar position
+            cr.translate(bar_x, bar_y);
             source.apply(cr)?;
             cr.restore()?;
         }
@@ -314,6 +316,8 @@ fn render_tapered_bar_foreground(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
             cr.clip();
+            // Align the gradient (anchored at the origin) with the bar position
+            cr.translate(bar_x, bar_y);
             source.apply(cr)?;
             cr.restore()?;
         }
@@ -425,11 +429,12 @@ fn render_tapered_rectangle_background(
         return Ok(());
     }
 
-    let num_segments = 50;
     let is_horizontal = matches!(
         config.fill_direction,
         BarFillDirection::LeftToRight | BarFillDirection::RightToLeft
     );
+    let num_segments =
+        calculate_tapered_segments(if is_horizontal { bar_width } else { bar_height });
 
     cr.save()?;
 
@@ -446,6 +451,8 @@ fn render_tapered_rectangle_background(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, segment_width + 0.5, seg_height);
             cr.clip();
+            // Align the gradient (anchored at the origin) with the bar position
+            cr.translate(bar_x, bar_y);
             source.apply(cr)?;
             cr.restore()?;
         }
@@ -462,6 +469,8 @@ fn render_tapered_rectangle_background(
             cr.save()?;
             cr.rectangle(seg_x, seg_y, seg_width, segment_height + 0.5);
             cr.clip();
+            // Align the gradient (anchored at the origin) with the bar position
+            cr.translate(bar_x, bar_y);
             source.apply(cr)?;
             cr.restore()?;
         }
@@ -616,8 +625,9 @@ fn render_segment(
 
     if is_filled {
         cr.clip();
-        // Translate to align gradient with full bar
-        cr.translate(-full_bar_x, -full_bar_y);
+        // Translate to align gradient (spanning 0..full_bar_width in user space)
+        // with the full bar's on-screen position
+        cr.translate(full_bar_x, full_bar_y);
         render_foreground_resolved(
             cr,
             foreground,
@@ -627,8 +637,9 @@ fn render_segment(
         )?;
     } else {
         cr.clip();
-        // Translate to align gradient with full bar
-        cr.translate(-full_bar_x, -full_bar_y);
+        // Translate to align gradient (spanning 0..full_bar_width in user space)
+        // with the full bar's on-screen position
+        cr.translate(full_bar_x, full_bar_y);
         render_background_resolved(cr, background, full_bar_width, full_bar_height)?;
     }
 

@@ -134,8 +134,9 @@ impl Displayer for CssTemplateDisplayer {
     }
 
     fn update_data(&mut self, data: &HashMap<String, Value>) {
-        // Use try_lock to avoid blocking tokio worker threads
-        if let Ok(mut display_data) = self.data.try_lock() {
+        // Blocking lock per project rule: draw/update paths use lock() —
+        // try_lock here silently dropped the whole update on contention
+        if let Ok(mut display_data) = self.data.lock() {
             let mut values = std::mem::take(&mut display_data.values);
             combo_utils::filter_values_with_owned_prefix_set(
                 data,

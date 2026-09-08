@@ -161,13 +161,8 @@ impl DefaultsConfig {
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
 
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(&config_path, content)?;
+        super::write_atomic(&config_path, &content)?;
         info!("Saved defaults to {:?}", config_path);
 
         // Update the global cache

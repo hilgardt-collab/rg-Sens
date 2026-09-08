@@ -475,6 +475,9 @@ fn draw_metal_plate_texture(
     rivet_color: &Color,
     rivet_spacing: f64,
 ) {
+    // (.max(1.0): a non-positive spacing would hang the rivet loops below)
+    let rivet_spacing = rivet_spacing.max(1.0);
+
     cr.save().ok();
 
     // Base metal with beveled edge effect
@@ -809,21 +812,23 @@ fn draw_border(cr: &Context, config: &SteampunkFrameConfig, x: f64, y: f64, w: f
             if config.show_rivets {
                 let rivet_color = config.rivet_color.resolve(&config.theme);
                 let margin = config.border_width + config.rivet_size;
+                // (.max(1.0): a non-positive spacing would hang the loops below)
+                let rivet_spacing = config.rivet_spacing.max(1.0);
 
                 // Top and bottom
                 let mut rx = x + margin;
                 while rx < x + w - margin {
                     draw_rivet(cr, rx, y + margin, config.rivet_size, &rivet_color);
                     draw_rivet(cr, rx, y + h - margin, config.rivet_size, &rivet_color);
-                    rx += config.rivet_spacing;
+                    rx += rivet_spacing;
                 }
 
                 // Left and right (skip corners)
-                let mut ry = y + margin + config.rivet_spacing;
-                while ry < y + h - margin - config.rivet_spacing {
+                let mut ry = y + margin + rivet_spacing;
+                while ry < y + h - margin - rivet_spacing {
                     draw_rivet(cr, x + margin, ry, config.rivet_size, &rivet_color);
                     draw_rivet(cr, x + w - margin, ry, config.rivet_size, &rivet_color);
-                    ry += config.rivet_spacing;
+                    ry += rivet_spacing;
                 }
             }
         }
@@ -1373,7 +1378,9 @@ fn draw_divider(
             }
         }
         DividerStyle::GearChain => {
-            let gear_size = config.divider_width;
+            // (.max(1.0): a non-positive divider_width would give a
+            // non-positive gear_spacing and hang the loops below)
+            let gear_size = config.divider_width.max(1.0);
             let gear_spacing = gear_size * 2.5;
             let highlight = Color::new(
                 (divider_color.r + 0.2).min(1.0),

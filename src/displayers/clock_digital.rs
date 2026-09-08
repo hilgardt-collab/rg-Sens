@@ -466,11 +466,10 @@ fn render_digital_clock(
     // Draw time
     cr.save()?;
 
-    let time_str = if config.blink_colon && !data.blink_state {
-        data.time_string.replace(':', " ")
-    } else {
-        data.time_string.clone()
-    };
+    // When blinking, the colons are hidden by clipping them out of an otherwise
+    // unchanged layout — substituting ' ' for ':' changes glyph advances in
+    // proportional fonts and made the digits jitter every blink.
+    let hide_colons = config.blink_colon && !data.blink_state;
 
     let font_weight = if config.time_bold {
         cairo::FontWeight::Bold
@@ -495,7 +494,7 @@ fn render_digital_clock(
 
             let extents = pango_text_extents(
                 cr,
-                &time_str,
+                &data.time_string,
                 &config.time_font,
                 time_slant,
                 font_weight,
@@ -504,18 +503,19 @@ fn render_digital_clock(
             let x = (width - extents.width()) / 2.0;
             y_offset += config.time_size;
             cr.move_to(x, y_offset);
-            pango_show_text(
+            show_time_text(
                 cr,
-                &time_str,
+                &data.time_string,
                 &config.time_font,
                 time_slant,
                 font_weight,
                 config.time_size,
+                hide_colons,
             );
         }
         DigitalStyle::Segment | DigitalStyle::LCD => {
             // Draw 7-segment style
-            draw_segment_text(cr, &time_str, width, y_offset, config)?;
+            draw_segment_text(cr, &data.time_string, width, y_offset, config, hide_colons)?;
             y_offset += config.time_size;
         }
     }
@@ -643,12 +643,84 @@ fn render_digital_clock(
     Ok(())
 }
 
+/// Draw `text` at the current point (baseline-relative, like `pango_show_text`),
+/// optionally hiding colon glyphs while preserving their advance.
+///
+/// The layout always contains the full string including the colons; when
+/// `hide_colons` is set the colon glyph columns are clipped out instead of
+/// substituting characters, so glyph positions are identical in both blink
+/// states (no horizontal jitter in proportional fonts).
+fn show_time_text(
+    cr: &cairo::Context,
+    text: &str,
+    family: &str,
+    slant: cairo::FontSlant,
+    weight: cairo::FontWeight,
+    size: f64,
+    hide_colons: bool,
+) {
+    if !hide_colons || !text.contains(':') {
+        pango_show_text(cr, text, family, slant, weight, size);
+        return;
+    }
+
+    // Build a layout with the same font setup as pango_show_text to locate
+    // the colon glyph columns.
+    let layout = pangocairo::functions::create_layout(cr);
+    let mut desc = pango::FontDescription::new();
+    desc.set_family(family);
+    desc.set_style(match slant {
+        cairo::FontSlant::Italic => pango::Style::Italic,
+        cairo::FontSlant::Oblique => pango::Style::Oblique,
+        _ => pango::Style::Normal,
+    });
+    desc.set_weight(match weight {
+        cairo::FontWeight::Bold => pango::Weight::Bold,
+        _ => pango::Weight::Normal,
+    });
+    desc.set_size((size * pango::SCALE as f64) as i32);
+    layout.set_font_description(Some(&desc));
+    layout.set_text(text);
+
+    let scale = pango::SCALE as f64;
+    let (x, y) = cr.current_point().unwrap_or((0.0, 0.0));
+
+    // Clip to everything except the colon columns (generous vertical bounds)
+    let clip_left = x - 4.0 * size;
+    let clip_top = y - 4.0 * size;
+    let clip_h = 8.0 * size;
+    let logical_width = layout.extents().1.width() as f64 / scale;
+    let clip_right = x + logical_width + 4.0 * size;
+
+    cr.save().ok();
+    let mut left = clip_left;
+    for (idx, _) in text.match_indices(':') {
+        let pos = layout.index_to_pos(idx as i32);
+        let colon_x0 = x + pos.x() as f64 / scale;
+        let colon_x1 = colon_x0 + pos.width() as f64 / scale;
+        if colon_x0 > left {
+            cr.rectangle(left, clip_top, colon_x0 - left, clip_h);
+        }
+        left = left.max(colon_x1);
+    }
+    if clip_right > left {
+        cr.rectangle(left, clip_top, clip_right - left, clip_h);
+    }
+    cr.clip();
+
+    // clip() consumed the path and current point — restore the draw position
+    cr.move_to(x, y);
+    pango_show_text(cr, text, family, slant, weight, size);
+    cr.restore().ok();
+}
+
 fn draw_segment_text(
     cr: &cairo::Context,
     text: &str,
     width: f64,
     y_offset: f64,
     config: &DigitalClockConfig,
+    hide_colons: bool,
 ) -> Result<(), cairo::Error> {
     // For segment style, we use a monospace font with a glow effect
     let time_slant = if config.time_italic {
@@ -673,8 +745,14 @@ fn draw_segment_text(
     let x = (width - extents.width()) / 2.0;
     let y = y_offset + config.time_size;
 
-    // Draw background glow for LCD effect
+    // Draw background glow for LCD effect: all segments lit, derived from the
+    // actual time format (12h "8:88 88" vs 24h "88:88:88" etc.) instead of a
+    // hardcoded pattern that misaligns for 12h/AM-PM or HH:MM formats
     if config.style == DigitalStyle::LCD {
+        let ghost: String = text
+            .chars()
+            .map(|c| if c.is_ascii_digit() { '8' } else { c })
+            .collect();
         cr.set_source_rgba(
             config.time_color.r * 0.2,
             config.time_color.g * 0.2,
@@ -684,7 +762,7 @@ fn draw_segment_text(
         cr.move_to(x, y);
         pango_show_text(
             cr,
-            "88:88:88",
+            &ghost,
             &config.time_font,
             time_slant,
             time_weight,
@@ -702,13 +780,14 @@ fn draw_segment_text(
     );
     for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
         cr.move_to(x + dx, y + dy);
-        pango_show_text(
+        show_time_text(
             cr,
             text,
             &config.time_font,
             time_slant,
             time_weight,
             config.time_size,
+            hide_colons,
         );
     }
 
@@ -720,13 +799,14 @@ fn draw_segment_text(
         config.time_color.a,
     );
     cr.move_to(x, y);
-    pango_show_text(
+    show_time_text(
         cr,
         text,
         &config.time_font,
         time_slant,
         time_weight,
         config.time_size,
+        hide_colons,
     );
 
     Ok(())

@@ -593,6 +593,9 @@ fn draw_vertical_lines_pattern(
     spacing: f64,
     color: &Color,
 ) {
+    // (.max(1.0): a non-positive spacing would hang the loop below)
+    let spacing = spacing.max(1.0);
+
     cr.save().ok();
     cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.15);
     cr.set_line_width(1.0);
@@ -622,7 +625,8 @@ fn draw_diamond_grid_pattern(
     cr.set_line_width(0.5);
 
     // Draw diagonal lines in both directions
-    let diagonal_spacing = spacing;
+    // (.max(1.0): a non-positive spacing would hang the loops below)
+    let diagonal_spacing = spacing.max(1.0);
 
     // Top-left to bottom-right diagonals
     let mut start = x;
@@ -693,7 +697,8 @@ fn draw_chevron_background(
     cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.1);
     cr.set_line_width(1.0);
 
-    let chevron_height = spacing;
+    // (.max(1.0): a non-positive spacing would hang the loop below)
+    let chevron_height = spacing.max(1.0);
     let mut py = y;
     while py < y + h + chevron_height {
         let mid_x = x + w / 2.0;

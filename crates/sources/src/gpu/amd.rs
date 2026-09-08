@@ -156,21 +156,20 @@ impl AmdBackend {
         Self::read_int_file(&path).ok().map(|v| v.max(0) as u32)
     }
 
-    /// Try to read VRAM usage
-    fn read_memory_info(&mut self) -> Result<()> {
+    /// Try to read VRAM usage. Resets the metrics to `None` on failure so a
+    /// broken read doesn't leave stale values frozen forever.
+    fn read_memory_info(&mut self) {
         // Try to read VRAM used
         let vram_used_path = self.device_path.join("mem_info_vram_used");
-        if let Ok(used) = Self::read_int_file(&vram_used_path) {
-            self.metrics.memory_used = Some(used.max(0) as u64);
-        }
+        self.metrics.memory_used = Self::read_int_file(&vram_used_path)
+            .ok()
+            .map(|used| used.max(0) as u64);
 
         // Try to read total VRAM
         let vram_total_path = self.device_path.join("mem_info_vram_total");
-        if let Ok(total) = Self::read_int_file(&vram_total_path) {
-            self.metrics.memory_total = Some(total.max(0) as u64);
-        }
-
-        Ok(())
+        self.metrics.memory_total = Self::read_int_file(&vram_total_path)
+            .ok()
+            .map(|total| total.max(0) as u64);
     }
 
     /// Try to read power usage (caches successful path)
@@ -322,7 +321,7 @@ impl GpuBackend for AmdBackend {
         self.metrics.utilization = self.read_utilization();
 
         // Update memory info
-        let _ = self.read_memory_info();
+        self.read_memory_info();
 
         // Update power usage
         self.metrics.power_usage = self.read_power_usage();

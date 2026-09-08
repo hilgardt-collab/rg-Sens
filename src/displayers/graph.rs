@@ -180,7 +180,9 @@ impl Displayer for GraphDisplayer {
                     // Add new points if needed (copy values to avoid borrow conflicts)
                     // If adding multiple points at once (e.g., animation just enabled),
                     // initialize to actual values to avoid jarring "grow from zero" effect
-                    let initialize_to_actual = (target_len - animated_len) > 1;
+                    // saturating_sub: animated_len can exceed target_len when
+                    // max_data_points is reduced (excess is trimmed below)
+                    let initialize_to_actual = target_len.saturating_sub(animated_len) > 1;
                     for i in animated_len..target_len {
                         if let Some(p) = data_guard.data_points.get(i) {
                             let timestamp = p.timestamp;
@@ -262,8 +264,12 @@ impl Displayer for GraphDisplayer {
                         .as_secs_f64();
                     let relative_time = current_time - data.start_time;
 
-                    // Remove old data points first to maintain strict bounds
-                    while data.data_points.len() >= data.config.max_data_points {
+                    // Remove old data points first to maintain strict bounds.
+                    // Guard against max_data_points == 0 (hand-edited config):
+                    // `len() >= 0` is always true and pop on empty is a no-op,
+                    // which would loop forever.
+                    let max_points = data.config.max_data_points.max(1);
+                    while data.data_points.len() >= max_points {
                         data.data_points.pop_front();
                     }
 

@@ -1375,6 +1375,12 @@ impl TextLineConfigWidget {
             self.stack.remove(&child);
         }
 
+        // Clean up position grids to break signal handler reference cycles
+        for grid in self.position_grids.borrow().iter() {
+            grid.cleanup();
+        }
+        self.position_grids.borrow_mut().clear();
+
         // Clear font and color selectors when rebuilding
         self.font_selectors.borrow_mut().clear();
         self.fill_color_selectors.borrow_mut().clear();

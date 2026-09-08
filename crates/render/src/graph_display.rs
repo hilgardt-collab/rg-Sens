@@ -212,35 +212,30 @@ pub fn render_graph_with_theme(
 
     if !data.is_empty() {
         // Calculate point spacing and scroll offset in pixels
-        let point_spacing = plot_width / (config.max_data_points - 1).max(1) as f64;
+        // (saturating_sub: max_data_points may be 0 in a hand-edited config)
+        let point_spacing = plot_width / config.max_data_points.saturating_sub(1).max(1) as f64;
         let scroll_pixels = if config.animate_new_points {
             scroll_offset * point_spacing
         } else {
             0.0
         };
 
-        // Use thread-local buffer to avoid allocation per frame
-        // Take ownership temporarily, populate, use, then return
-        let points = POINTS_BUFFER.with(|buf| {
-            let mut points = buf.borrow_mut();
-            points.clear();
+        // Use thread-local buffer to avoid allocation per frame: take the
+        // buffer out (leaving an empty Vec), populate and draw with it, then
+        // move it back so its capacity is reused next frame without cloning.
+        let mut points = POINTS_BUFFER.with(|buf| std::mem::take(&mut *buf.borrow_mut()));
+        points.clear();
 
-            // Pre-compute divisor to avoid repeated division
-            let max_points_divisor = (config.max_data_points - 1).max(1) as f64;
+        // Pre-compute divisor to avoid repeated division
+        let max_points_divisor = config.max_data_points.saturating_sub(1).max(1) as f64;
 
-            for (i, point) in data.iter().enumerate() {
-                let base_x = plot_x + (i as f64 / max_points_divisor) * plot_width;
-                let x = base_x - scroll_pixels;
-                let normalized = ((point.value - min_val) / value_range).clamp(0.0, 1.0);
-                let y = plot_y + plot_height - (normalized * plot_height);
-                points.push((x, y));
-            }
-
-            // Return a clone of the points for use outside the closure
-            // This is still faster than allocating fresh each time as the buffer
-            // capacity is maintained across frames
-            points.clone()
-        });
+        for (i, point) in data.iter().enumerate() {
+            let base_x = plot_x + (i as f64 / max_points_divisor) * plot_width;
+            let x = base_x - scroll_pixels;
+            let normalized = ((point.value - min_val) / value_range).clamp(0.0, 1.0);
+            let y = plot_y + plot_height - (normalized * plot_height);
+            points.push((x, y));
+        }
 
         match config.graph_type {
             GraphType::Line | GraphType::SteppedLine | GraphType::Area => {
@@ -362,7 +357,7 @@ pub fn render_graph_with_theme(
                 }
             }
             GraphType::Bar => {
-                let bar_width = (plot_width / config.max_data_points as f64) * 0.8;
+                let bar_width = (plot_width / config.max_data_points.max(1) as f64) * 0.8;
                 cr.save()?;
                 cr.set_source_rgba(line_color.r, line_color.g, line_color.b, line_color.a);
 
@@ -374,6 +369,11 @@ pub fn render_graph_with_theme(
                 cr.restore()?;
             }
         }
+
+        // Return the buffer so its capacity is reused next frame.
+        // (Skipped if a Cairo call above errored out early, which only costs
+        // one reallocation on the next frame.)
+        POINTS_BUFFER.with(|buf| *buf.borrow_mut() = points);
     }
 
     // Restore from clip region

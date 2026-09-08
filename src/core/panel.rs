@@ -92,6 +92,9 @@ pub struct Panel {
     /// When `Some`, this is the authoritative source for all panel configuration.
     /// The legacy fields above are automatically synced from this data.
     pub data: Option<PanelData>,
+    /// Whether the last direct-poll fallback update failed. Used to log the
+    /// error only on state transitions instead of every tick.
+    direct_poll_errored: bool,
 }
 
 impl Panel {
@@ -118,6 +121,7 @@ impl Panel {
             z_index: 0,
             ignore_collision: false,
             data: None, // Legacy panels don't have PanelData yet
+            direct_poll_errored: false,
         }
     }
 
@@ -184,6 +188,7 @@ impl Panel {
             z_index: data.appearance.z_index,
             ignore_collision: data.appearance.ignore_collision,
             data: Some(data),
+            direct_poll_errored: false,
         };
 
         // Apply configurations to source and displayer
@@ -263,7 +268,25 @@ impl Panel {
                                 key, self.id
                             );
                     }
-                    self.source.update().ok();
+                    // Log errors only on state transitions (this runs every tick)
+                    match self.source.update() {
+                        Ok(()) => {
+                            if self.direct_poll_errored {
+                                log::info!("Panel {} direct-poll fallback recovered", self.id);
+                                self.direct_poll_errored = false;
+                            }
+                        }
+                        Err(e) => {
+                            if !self.direct_poll_errored {
+                                log::warn!(
+                                    "Panel {} direct-poll fallback update failed: {}",
+                                    self.id,
+                                    e
+                                );
+                                self.direct_poll_errored = true;
+                            }
+                        }
+                    }
                     Cow::Owned(self.source.get_values())
                 }
             } else {
@@ -388,6 +411,18 @@ impl Panel {
             if key_changed {
                 self.release_shared_source();
                 self.register_shared_source(&typed_config, global_registry());
+            } else if let Some(ref key) = self.source_key {
+                // The source key deliberately excludes update_interval_ms, so an
+                // interval-only change lands here: push the new interval to the
+                // shared source manager (min_interval/panel_intervals), which the
+                // UpdateManager picks up on its next config check.
+                if let Some(manager) = global_shared_source_manager() {
+                    manager.update_interval(
+                        key,
+                        &self.id,
+                        std::time::Duration::from_millis(typed_config.update_interval_ms()),
+                    );
+                }
             }
         }
 
@@ -425,6 +460,16 @@ impl Panel {
             if key_changed {
                 self.release_shared_source();
                 self.register_shared_source(&source_config, global_registry());
+            } else if let Some(ref key) = self.source_key {
+                // Interval-only changes don't alter the key (it excludes
+                // update_interval_ms), so propagate the new interval explicitly.
+                if let Some(manager) = global_shared_source_manager() {
+                    manager.update_interval(
+                        key,
+                        &self.id,
+                        std::time::Duration::from_millis(source_config.update_interval_ms()),
+                    );
+                }
             }
         }
         Ok(())

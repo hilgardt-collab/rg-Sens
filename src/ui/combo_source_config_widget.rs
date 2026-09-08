@@ -258,6 +258,9 @@ pub struct ComboSourceConfigWidget {
     /// Flag to indicate widget is destroyed - checked by async callbacks to abort early
     /// This prevents memory leaks from async callbacks holding Rc references after dialog closes
     destroyed: Rc<Cell<bool>>,
+    /// Guard flag: set during programmatic set_config so spin button change
+    /// handlers don't arm the debounced rebuild / fire on_change spuriously
+    is_programmatic_set: Rc<Cell<bool>>,
 }
 
 /// Widgets for a single slot configuration
@@ -367,6 +370,9 @@ impl ComboSourceConfigWidget {
         // Destroyed flag - set when widget is destroyed to cancel async callbacks
         let destroyed = Rc::new(Cell::new(false));
 
+        // Guard flag for programmatic spin button updates (see set_config)
+        let is_programmatic_set = Rc::new(Cell::new(false));
+
         let widget = Self {
             container,
             config,
@@ -384,6 +390,7 @@ impl ComboSourceConfigWidget {
             fields_debounce_id,
             on_fields_updated,
             destroyed,
+            is_programmatic_set,
         };
 
         // Connect unrealize signal to cancel async callbacks and prevent memory leaks.
@@ -418,8 +425,14 @@ impl ComboSourceConfigWidget {
             let debounce_id = widget.group_debounce_id.clone();
             let rebuild_generation_clone = widget.rebuild_generation.clone();
             let on_reorder_clone = widget.on_reorder.clone();
+            let is_programmatic = widget.is_programmatic_set.clone();
 
             widget.group_count_spin.connect_value_changed(move |spin| {
+                // Skip during programmatic set_config - it rebuilds explicitly
+                if is_programmatic.get() {
+                    return;
+                }
+
                 let new_count = spin.value() as usize;
 
                 // Update config immediately (cheap operation)
@@ -481,9 +494,14 @@ impl ComboSourceConfigWidget {
         {
             let config_for_interval = widget.config.clone();
             let on_change_for_interval = widget.on_change.clone();
+            let is_programmatic = widget.is_programmatic_set.clone();
             widget
                 .update_interval_spin
                 .connect_value_changed(move |spin| {
+                    // Skip during programmatic set_config - config is already correct
+                    if is_programmatic.get() {
+                        return;
+                    }
                     config_for_interval.borrow_mut().update_interval_ms = spin.value() as u64;
                     if let Some(cb) = on_change_for_interval.borrow().as_ref() {
                         cb();
@@ -530,11 +548,14 @@ impl ComboSourceConfigWidget {
         // Set the full config
         *self.config.borrow_mut() = config;
 
-        // Update spin buttons - callbacks will trigger but slot_widgets is empty
-        // so no save-back will occur.
+        // Update spin buttons with change handlers guarded, so the group count
+        // spinner doesn't arm its debounced rebuild (which would double up with
+        // the explicit rebuild below) and no spurious on_change fires.
+        self.is_programmatic_set.set(true);
         self.group_count_spin.set_value(group_count as f64);
         self.update_interval_spin
             .set_value(update_interval_ms as f64);
+        self.is_programmatic_set.set(false);
 
         // Final rebuild with the correct config
         self.rebuild_tabs();

@@ -23,6 +23,17 @@ static SHARED_DISKS: Lazy<Mutex<Disks>> = Lazy::new(|| {
     Mutex::new(Disks::new_with_refreshed_list())
 });
 
+/// Counts update() calls across all DiskSource instances so the mount list is
+/// re-enumerated periodically. `Disks::refresh()` only statvfs-refreshes disks
+/// discovered at startup (and never updates total_space), so without an
+/// occasional `refresh_list()` a filesystem mounted after launch stays
+/// invisible forever and an unmounted one keeps reporting the parent
+/// filesystem's numbers against the stale total.
+static DISK_UPDATE_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Re-enumerate the mount list every N updates (~30s at the default 1s interval)
+const DISK_LIST_REFRESH_EVERY: u32 = 30;
+
 /// Disk usage data source
 ///
 /// Provides disk usage information for mounted filesystems.
@@ -239,16 +250,49 @@ impl DataSource for DiskSource {
         let mut disks = SHARED_DISKS
             .lock()
             .map_err(|e| anyhow::anyhow!("Disks mutex poisoned: {}", e))?;
-        disks.refresh();
+
+        // Periodically re-enumerate mounts so hotplugged/unmounted filesystems
+        // are noticed; plain refresh() only updates disks known at startup
+        let tick = DISK_UPDATE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if tick.is_multiple_of(DISK_LIST_REFRESH_EVERY) {
+            disks.refresh_list();
+        } else {
+            disks.refresh();
+        }
 
         // Find the disk matching our configured path and cache all values
-        if let Some(disk) = disks
+        let mut found = disks
             .iter()
             .find(|d| d.mount_point().to_string_lossy() == self.config.disk_path)
-        {
-            self.total_space = disk.total_space();
-            self.available_space = disk.available_space();
-            self.file_system = disk.file_system().to_string_lossy().into_owned();
+            .map(|d| {
+                (
+                    d.total_space(),
+                    d.available_space(),
+                    d.file_system().to_string_lossy().into_owned(),
+                )
+            });
+
+        // Not in the (possibly stale) list — re-enumerate once and retry, so a
+        // freshly mounted filesystem shows up without waiting for the periodic
+        // list refresh
+        if found.is_none() && !tick.is_multiple_of(DISK_LIST_REFRESH_EVERY) {
+            disks.refresh_list();
+            found = disks
+                .iter()
+                .find(|d| d.mount_point().to_string_lossy() == self.config.disk_path)
+                .map(|d| {
+                    (
+                        d.total_space(),
+                        d.available_space(),
+                        d.file_system().to_string_lossy().into_owned(),
+                    )
+                });
+        }
+
+        if let Some((total, available, fs)) = found {
+            self.total_space = total;
+            self.available_space = available;
+            self.file_system = fs;
         } else {
             // Disk not found, reset values
             self.total_space = 0;

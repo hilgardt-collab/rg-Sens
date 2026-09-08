@@ -162,6 +162,9 @@ pub struct TimerAlarmManager {
     alarm_sound_played: HashSet<String>,
     /// Last check time for each alarm
     last_alarm_check: HashMap<String, (u32, u32, u32)>,
+    /// Wall time seen by the previous update — lets alarm checks cover the
+    /// whole gap since then, so a stalled update loop can't skip an alarm
+    last_seen_time: Option<(u32, u32, u32)>,
     /// Timers that have played their sound
     timer_sound_played: HashSet<String>,
     /// Next alarm info
@@ -181,6 +184,7 @@ impl TimerAlarmManager {
             triggered_alarms: HashSet::new(),
             alarm_sound_played: HashSet::new(),
             last_alarm_check: HashMap::new(),
+            last_seen_time: None,
             timer_sound_played: HashSet::new(),
             next_alarm_time: None,
             next_alarm_id: None,
@@ -491,43 +495,88 @@ impl TimerAlarmManager {
     }
 
     fn check_alarms(&mut self, hour: u32, minute: u32, second: u32, day_of_week: u32) {
+        // If updates stall past this, treat it as a clock jump (suspend/resume,
+        // timezone change) rather than replaying the whole gap for alarms
+        const MAX_CATCHUP_SECS: u32 = 120;
+
         let current = (hour, minute, second);
+        let cur_s = hour * 3600 + minute * 60 + second;
+        let prev_s = self.last_seen_time.map(|(h, m, s)| h * 3600 + m * 60 + s);
+        self.last_seen_time = Some(current);
+        // Day the pre-midnight portion of a wrapped window belonged to
+        let prev_day = (day_of_week + 6) % 7;
+
+        // Fire if the alarm second fell within (previous update, now].
+        // Exact-equality alone missed alarms whenever consecutive updates were
+        // more than one second apart (e.g. a slow source stalling the
+        // sequential update loop across the alarm second).
+        let fires = |alarm: &AlarmConfig| -> bool {
+            let alarm_s = alarm.hour * 3600 + alarm.minute * 60 + alarm.second;
+            let (in_window, on_prev_day) = match prev_s {
+                None => (cur_s == alarm_s, false),
+                Some(prev) => {
+                    let gap = if cur_s >= prev {
+                        cur_s - prev
+                    } else {
+                        cur_s + 86400 - prev
+                    };
+                    if gap > MAX_CATCHUP_SECS {
+                        (cur_s == alarm_s, false)
+                    } else if prev <= cur_s {
+                        (alarm_s > prev && alarm_s <= cur_s, false)
+                    } else if alarm_s > prev {
+                        (true, true) // late yesterday, clock wrapped midnight
+                    } else {
+                        (alarm_s <= cur_s, false) // early today after wrap
+                    }
+                }
+            };
+            let day = if on_prev_day { prev_day } else { day_of_week };
+            let day_matches = alarm.days.is_empty() || alarm.days.contains(&day);
+            in_window && day_matches
+        };
+
+        // Cheap pre-filter: on the common tick nothing fires in the window and
+        // no re-arm bookkeeping is pending (last_alarm_check is only populated
+        // while an alarm is firing), so return before the allocating pass
+        // below (this runs 10x/s at a 100ms clock interval)
+        if self.last_alarm_check.is_empty() && !self.alarms.iter().any(|a| a.enabled && fires(a)) {
+            return;
+        }
 
         // First pass: collect indices and minimal data (no sound clone)
-        // Store: (index, alarm_id, alarm_time, day_matches)
         let alarm_checks: Vec<_> = self
             .alarms
             .iter()
             .enumerate()
             .filter(|(_, a)| a.enabled)
-            .map(|(idx, alarm)| {
-                let alarm_time = (alarm.hour, alarm.minute, alarm.second);
-                let day_matches = alarm.days.is_empty() || alarm.days.contains(&day_of_week);
-                (idx, alarm.id.clone(), alarm_time, day_matches)
-            })
+            .map(|(idx, alarm)| (idx, alarm.id.clone(), fires(alarm)))
             .collect();
 
         // Collect indices of alarms that need sound played (rare case)
         let mut play_sound_indices: Vec<usize> = Vec::new();
 
-        for (idx, alarm_id, alarm_time, day_matches) in alarm_checks {
-            let last_check = self.last_alarm_check.get(&alarm_id).cloned();
+        for (idx, alarm_id, fire) in alarm_checks {
+            if fire {
+                // Triggered state persists until explicitly dismissed (same as
+                // Finished timers) — clearing it on the next tick made the ring
+                // indicator vanish after ~1s with the sound still playing
+                self.triggered_alarms.insert(alarm_id.clone());
+                self.last_alarm_check.insert(alarm_id.clone(), current);
 
-            if day_matches && current == alarm_time {
-                // Only trigger once per second
-                if last_check != Some(current) {
-                    self.triggered_alarms.insert(alarm_id.clone());
-                    self.last_alarm_check.insert(alarm_id.clone(), current);
-
-                    // Mark for sound playback if not already played
-                    if !self.alarm_sound_played.contains(&alarm_id) {
-                        play_sound_indices.push(idx);
-                        self.alarm_sound_played.insert(alarm_id);
-                    }
+                // Mark for sound playback if not already played
+                if !self.alarm_sound_played.contains(&alarm_id) {
+                    play_sound_indices.push(idx);
+                    self.alarm_sound_played.insert(alarm_id);
                 }
-            } else if last_check.is_some() && last_check != Some(current) {
-                // Time has passed - auto re-arm for repeating alarms
-                self.triggered_alarms.remove(&alarm_id);
+            } else if self
+                .last_alarm_check
+                .get(&alarm_id)
+                .is_some_and(|t| *t != current)
+            {
+                // The trigger second has passed: re-arm the sound for the next
+                // occurrence, but keep the alarm visibly triggered until the
+                // user dismisses it
                 self.alarm_sound_played.remove(&alarm_id);
                 self.last_alarm_check.remove(&alarm_id);
             }

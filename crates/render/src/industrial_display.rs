@@ -454,7 +454,8 @@ fn draw_rivets(
 
     // Draw edge rivets
     if config.show_edge_rivets {
-        let spacing = config.rivet_spacing;
+        // (.max(1.0): a non-positive spacing would hang the loops below)
+        let spacing = config.rivet_spacing.max(1.0);
 
         // Top and bottom edges
         let mut rx = x + margin + spacing;

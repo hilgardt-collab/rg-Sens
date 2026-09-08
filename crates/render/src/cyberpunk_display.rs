@@ -198,7 +198,9 @@ fn draw_grid(cr: &Context, config: &CyberpunkFrameConfig, x: f64, y: f64, w: f64
     );
     cr.set_line_width(0.5);
 
-    let spacing = config.grid_spacing;
+    // Guard against grid_spacing <= 0 (hand-edited config): a non-positive
+    // step would make the while loops below never terminate
+    let spacing = config.grid_spacing.max(1.0);
 
     // Vertical lines
     let mut gx = x + spacing;

@@ -39,6 +39,17 @@ pub struct ClockSource {
     day_name: String,
     month_name: String,
 
+    /// Parsed timezone, cached in configure() so the 100ms update tick doesn't
+    /// re-parse the timezone string. `None` means "Local" (or unparseable).
+    cached_tz: Option<Tz>,
+
+    /// Cached serialized alarm/timer lists — re-serialized at most once per
+    /// second (or when a list length changes) instead of on every 100ms tick.
+    alarms_json: Value,
+    timers_json: Value,
+    /// (second, alarm_count, timer_count) at the last serialization.
+    lists_cache_key: Option<(u32, usize, usize)>,
+
     /// Cached output values - updated in update(), returned by reference in values_ref()
     values: HashMap<String, Value>,
 }
@@ -87,6 +98,10 @@ impl ClockSource {
             date_string: String::new(),
             day_name: String::new(),
             month_name: String::new(),
+            cached_tz: None,
+            alarms_json: Value::Array(vec![]),
+            timers_json: Value::Array(vec![]),
+            lists_cache_key: None,
             values: HashMap::with_capacity(32),
         }
     }
@@ -371,7 +386,7 @@ impl DataSource for ClockSource {
                     now.year(),
                     now.weekday().num_days_from_sunday(),
                 )
-            } else if let Ok(tz) = self.config.timezone.parse::<Tz>() {
+            } else if let Some(tz) = self.cached_tz {
                 let now = Utc::now().with_timezone(&tz);
                 (
                     now.hour(),
@@ -412,9 +427,18 @@ impl DataSource for ClockSource {
         self.day_name = Self::get_day_name(self.day_of_week).to_string();
         self.month_name = Self::get_month_name(self.month).to_string();
 
-        // Update global timer manager with current time
+        // Update the global timer manager with the system's LOCAL wall time,
+        // regardless of this clock's display timezone: alarms and timers are
+        // set in local time, and a Tokyo clock panel must not make a 07:00
+        // alarm fire at 07:00 Tokyo time.
+        let local_now = Local::now();
         if let Ok(mut manager) = global_timer_manager().write() {
-            manager.update(self.hour, self.minute, self.second, self.day_of_week);
+            manager.update(
+                local_now.hour(),
+                local_now.minute(),
+                local_now.second(),
+                local_now.weekday().num_days_from_sunday(),
+            );
         }
 
         // Build values HashMap (reuse allocation, just clear and refill)
@@ -502,15 +526,21 @@ impl DataSource for ClockSource {
                     .insert("timer_state".to_string(), Value::from("stopped"));
             }
 
-            // Expose all alarms and timers for UI
-            self.values.insert(
-                "alarms".to_string(),
-                serde_json::to_value(&manager.alarms).unwrap_or(Value::Array(vec![])),
-            );
-            self.values.insert(
-                "timers".to_string(),
-                serde_json::to_value(&manager.timers).unwrap_or(Value::Array(vec![])),
-            );
+            // Expose all alarms and timers for UI. Re-serializing on every
+            // 100ms tick is wasted work — refresh the cached JSON only when
+            // the second ticks over or a list length changes.
+            let cache_key = (self.second, manager.alarms.len(), manager.timers.len());
+            if self.lists_cache_key != Some(cache_key) {
+                self.alarms_json =
+                    serde_json::to_value(&manager.alarms).unwrap_or(Value::Array(vec![]));
+                self.timers_json =
+                    serde_json::to_value(&manager.timers).unwrap_or(Value::Array(vec![]));
+                self.lists_cache_key = Some(cache_key);
+            }
+            self.values
+                .insert("alarms".to_string(), self.alarms_json.clone());
+            self.values
+                .insert("timers".to_string(), self.timers_json.clone());
 
             // Check if needs attention (for visual cue)
             self.values.insert(
@@ -608,6 +638,15 @@ impl DataSource for ClockSource {
                     }
                 }
             }
+
+            // Cache the parsed timezone so the 100ms update tick doesn't
+            // re-parse the string every time. None = Local (or unparseable,
+            // which falls back to local time exactly as before).
+            self.cached_tz = if new_config.timezone == "Local" {
+                None
+            } else {
+                new_config.timezone.parse::<Tz>().ok()
+            };
 
             self.config = new_config;
         }

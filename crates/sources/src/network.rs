@@ -17,6 +17,10 @@ const BYTES_PER_KB: f64 = 1024.0;
 const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
 const BYTES_PER_GB: f64 = 1024.0 * 1024.0 * 1024.0;
 
+/// Floor (in bytes/s) for auto-detected speed limits, so early tiny samples
+/// don't pin the gauge at 100% before real traffic has been observed.
+const AUTO_SPEED_FLOOR_BYTES: f64 = BYTES_PER_MB; // 1 MB/s
+
 /// Cached network interface list for UI dropdowns
 static CACHED_INTERFACES: OnceLock<Vec<String>> = OnceLock::new();
 
@@ -42,6 +46,9 @@ pub struct NetworkSource {
     prev_received: u64,
     prev_transmitted: u64,
     prev_time: Option<Instant>,
+    // Largest observed speeds (bytes/s) for auto-detected gauge limits
+    detected_max_download: f64,
+    detected_max_upload: f64,
 
     /// Cached output values - updated in update(), returned by reference in values_ref()
     values: HashMap<String, Value>,
@@ -74,6 +81,8 @@ impl NetworkSource {
             prev_received: 0,
             prev_transmitted: 0,
             prev_time: None,
+            detected_max_download: 0.0,
+            detected_max_upload: 0.0,
             values: HashMap::with_capacity(16),
         }
     }
@@ -85,6 +94,8 @@ impl NetworkSource {
         self.prev_received = 0;
         self.prev_transmitted = 0;
         self.prev_time = None;
+        self.detected_max_download = 0.0;
+        self.detected_max_upload = 0.0;
     }
 
     /// Get current configuration
@@ -249,7 +260,17 @@ impl DataSource for NetworkSource {
             .map_err(|e| anyhow::anyhow!("Networks mutex poisoned: {}", e))?;
         networks.refresh();
 
-        // Find the network interface matching our configured interface
+        // Find the network interface matching our configured interface.
+        // refresh() only updates interfaces known at startup, so if ours is
+        // missing (VPN tun device, USB tether, docker bridge created after
+        // launch) re-enumerate the list once and retry before giving up.
+        if !networks
+            .iter()
+            .any(|(name, _)| name.as_str() == self.config.interface)
+        {
+            networks.refresh_list();
+        }
+
         if let Some((_, data)) = networks
             .iter()
             .find(|(name, _)| name.as_str() == self.config.interface)
@@ -287,6 +308,10 @@ impl DataSource for NetworkSource {
         self.prev_received = self.total_received;
         self.prev_transmitted = self.total_transmitted;
         self.prev_time = Some(now);
+
+        // Track observed maxima (bytes/s) for auto-detected limits
+        self.detected_max_download = self.detected_max_download.max(download_speed);
+        self.detected_max_upload = self.detected_max_upload.max(upload_speed);
 
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();
@@ -389,9 +414,17 @@ impl DataSource for NetworkSource {
         let (min_limit, max_limit) = match self.config.field {
             NetworkField::DownloadSpeed | NetworkField::UploadSpeed => {
                 if self.config.auto_detect_limits {
-                    // For speed, we don't have a natural max, so use a reasonable default
-                    // or track the max seen value over time
-                    (0.0, self.config.max_limit.unwrap_or(100.0))
+                    // Speed has no natural max: scale the gauge against the
+                    // largest speed observed so far (floored so early tiny
+                    // samples don't pin the needle), in the configured unit.
+                    let observed = match self.config.field {
+                        NetworkField::UploadSpeed => self.detected_max_upload,
+                        _ => self.detected_max_download,
+                    };
+                    (
+                        0.0,
+                        self.convert_speed(observed.max(AUTO_SPEED_FLOOR_BYTES)),
+                    )
                 } else {
                     (
                         self.config.min_limit.unwrap_or(0.0),

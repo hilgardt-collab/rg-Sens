@@ -15,6 +15,30 @@ use std::time::Duration;
 // Re-export fan speed source config types from rg-sens-types
 pub use rg_sens_types::source_configs::fan_speed::{FanCategory, FanInfo, FanSpeedConfig};
 
+/// Resolve sensor_label to sensor_index, updating the index if label is set.
+/// Returns the effective sensor index to use.
+pub fn resolve_fan_index(config: &mut FanSpeedConfig) -> usize {
+    if let Some(ref label) = config.sensor_label {
+        if let Some(idx) = FAN_SENSORS.iter().position(|f| f.label == *label) {
+            config.sensor_index = idx;
+            return idx;
+        } else {
+            log::warn!(
+                "Fan label '{}' not found, falling back to index {}",
+                label,
+                config.sensor_index
+            );
+        }
+    }
+    config.sensor_index
+}
+
+/// Set fan by index and also store the label for stability.
+pub fn set_fan_by_index(config: &mut FanSpeedConfig, index: usize) {
+    config.sensor_index = index;
+    config.sensor_label = FAN_SENSORS.get(index).map(|f| f.label.clone());
+}
+
 /// Cached fan sensor information (discovered once at startup)
 static FAN_SENSORS: Lazy<Vec<FanInfo>> = Lazy::new(|| {
     log::warn!("=== Discovering fan speed sensors (one-time initialization) ===");
@@ -49,31 +73,34 @@ fn discover_all_fans() -> Vec<FanInfo> {
                         if filename_str.starts_with("fan") && filename_str.ends_with("_input") {
                             let fan_path = file.path();
 
-                            // Try to read the fan speed
+                            // Try to read the fan speed. Keep every fan that
+                            // exposes a readable input file regardless of the
+                            // current speed: zero-RPM-idle fans (GPU fan-stop,
+                            // PSU hybrid mode) are legitimate sensors, and
+                            // dropping them would also shift later fans'
+                            // indices.
                             if let Ok(speed_str) = std::fs::read_to_string(&fan_path) {
                                 if let Ok(speed) = speed_str.trim().parse::<i32>() {
-                                    if speed > 0 {
-                                        // Get the label for this fan
-                                        let label = get_fan_label(&path, &filename_str);
-                                        let category = categorize_fan(&label);
+                                    // Get the label for this fan
+                                    let label = get_fan_label(&path, &filename_str);
+                                    let category = categorize_fan(&label);
 
-                                        let index = fans.len();
-                                        fans.push(FanInfo {
-                                            index,
-                                            label: label.clone(),
-                                            category,
-                                            path: Some(fan_path.clone()),
-                                        });
+                                    let index = fans.len();
+                                    fans.push(FanInfo {
+                                        index,
+                                        label: label.clone(),
+                                        category,
+                                        path: Some(fan_path.clone()),
+                                    });
 
-                                        log::info!(
-                                            "  [{}] {:?}: {} = {} RPM ({})",
-                                            index,
-                                            category,
-                                            label,
-                                            speed,
-                                            fan_path.display()
-                                        );
-                                    }
+                                    log::info!(
+                                        "  [{}] {:?}: {} = {} RPM ({})",
+                                        index,
+                                        category,
+                                        label,
+                                        speed,
+                                        fan_path.display()
+                                    );
                                 }
                             }
                         }
@@ -165,7 +192,8 @@ fn categorize_fan(label: &str) -> FanCategory {
 pub struct FanSpeedSource {
     metadata: SourceMetadata,
     config: FanSpeedConfig,
-    current_rpm: f64,
+    /// `None` when the sensor could not be read (published as "N/A")
+    current_rpm: Option<f64>,
     detected_min: Option<f64>,
     detected_max: Option<f64>,
 
@@ -194,7 +222,7 @@ impl FanSpeedSource {
                 default_interval: Duration::from_millis(1000),
             },
             config: FanSpeedConfig::default(),
-            current_rpm: 0.0,
+            current_rpm: None,
             detected_min: None,
             detected_max: None,
             values: HashMap::with_capacity(8),
@@ -262,56 +290,55 @@ impl DataSource for FanSpeedSource {
     fn update(&mut self) -> Result<()> {
         // Read the selected fan sensor using the path stored in FAN_SENSORS
         // This ensures we always read from the correct fan file
+        self.current_rpm = None;
         if let Some(fan_info) = FAN_SENSORS.get(self.config.sensor_index) {
             if let Some(ref fan_path) = fan_info.path {
                 if let Ok(speed_str) = std::fs::read_to_string(fan_path) {
                     if let Ok(speed) = speed_str.trim().parse::<i32>() {
-                        self.current_rpm = speed as f64;
-
-                        // Update detected limits if auto-detect is enabled
-                        if self.config.auto_detect_limits {
-                            // Update min
-                            self.detected_min = Some(
-                                self.detected_min
-                                    .map(|min| min.min(self.current_rpm))
-                                    .unwrap_or(self.current_rpm),
-                            );
-
-                            // Update max
-                            self.detected_max = Some(
-                                self.detected_max
-                                    .map(|max| max.max(self.current_rpm))
-                                    .unwrap_or(self.current_rpm),
-                            );
-                        }
+                        self.current_rpm = Some(speed as f64);
                     } else {
                         log::warn!("Failed to parse fan speed from {:?}", fan_path);
-                        self.current_rpm = 0.0;
                     }
                 } else {
                     log::warn!("Failed to read fan speed from {:?}", fan_path);
-                    self.current_rpm = 0.0;
                 }
             } else {
                 log::warn!("Fan sensor {} has no path stored", self.config.sensor_index);
-                self.current_rpm = 0.0;
             }
         } else {
             log::warn!(
                 "Selected fan sensor index {} not found in FAN_SENSORS",
                 self.config.sensor_index
             );
-            self.current_rpm = 0.0;
+        }
+
+        // Update detected limits if auto-detect is enabled (only from real reads)
+        if let Some(rpm) = self.current_rpm {
+            if self.config.auto_detect_limits {
+                // Update min
+                self.detected_min = Some(self.detected_min.map(|min| min.min(rpm)).unwrap_or(rpm));
+
+                // Update max
+                self.detected_max = Some(self.detected_max.map(|max| max.max(rpm)).unwrap_or(rpm));
+            }
         }
 
         // Build values HashMap (reuse allocation, just clear and refill)
         self.values.clear();
 
-        // Fan speed value - MUST provide "value" key for displayers
-        self.values
-            .insert("value".to_string(), Value::from(self.current_rpm));
-        self.values
-            .insert("rpm".to_string(), Value::from(self.current_rpm)); // Keep for compatibility
+        // Fan speed value - MUST provide "value" key for displayers.
+        // On read failure publish "N/A" (same convention as cpu/gpu/disk)
+        // instead of a misleading 0.
+        match self.current_rpm {
+            Some(rpm) => {
+                self.values.insert("value".to_string(), Value::from(rpm));
+                self.values.insert("rpm".to_string(), Value::from(rpm)); // Keep for compatibility
+            }
+            None => {
+                self.values.insert("value".to_string(), Value::from("N/A"));
+                self.values.insert("rpm".to_string(), Value::from("N/A"));
+            }
+        }
 
         // Sensor label
         let sensor_label = FAN_SENSORS
@@ -321,8 +348,9 @@ impl DataSource for FanSpeedSource {
         self.values
             .insert("sensor_label".to_string(), Value::from(sensor_label));
 
-        // Unit
-        self.values.insert("unit".to_string(), Value::from("RPM"));
+        // Unit (empty when the value is N/A, matching cpu/gpu/disk)
+        let unit = if self.current_rpm.is_some() { "RPM" } else { "" };
+        self.values.insert("unit".to_string(), Value::from(unit));
 
         // Caption (custom or auto-generated)
         let caption = self
@@ -389,7 +417,28 @@ impl DataSource for FanSpeedSource {
 
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("fan_speed_config") {
-            self.config = serde_json::from_value(config_value.clone())?;
+            let mut new_config: FanSpeedConfig = serde_json::from_value(config_value.clone())?;
+
+            // Stable fan selection across hwmon reordering: prefer the stored
+            // label. Exception: the config UI only writes sensor_index, so an
+            // index change with an unchanged label means the user picked a
+            // different fan — the index wins and the label is refreshed from it.
+            if new_config.sensor_index != self.config.sensor_index
+                && new_config.sensor_label == self.config.sensor_label
+            {
+                let idx = new_config.sensor_index;
+                set_fan_by_index(&mut new_config, idx);
+            } else {
+                resolve_fan_index(&mut new_config);
+                // Backfill the label for configs saved before labels existed,
+                // so the selection becomes stable on the next save.
+                if new_config.sensor_label.is_none() {
+                    new_config.sensor_label = FAN_SENSORS
+                        .get(new_config.sensor_index)
+                        .map(|f| f.label.clone());
+                }
+            }
+            self.config = new_config;
 
             // Reset detected limits when configuration changes
             if self.config.auto_detect_limits {

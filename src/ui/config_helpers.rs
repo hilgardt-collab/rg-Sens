@@ -18,10 +18,15 @@ use crate::core::{Panel, PanelData};
 use crate::ui::GridLayout;
 
 /// Show save dialog when closing with unsaved changes
+///
+/// `teardown` runs only when the user actually chooses to close (Save or
+/// Don't Save) — it must NOT run before the dialog, so that Cancel leaves the
+/// app fully functional (update loop, dialogs, and web backends intact).
 pub fn show_save_dialog(
     window: &ApplicationWindow,
     grid_layout: &Rc<RefCell<GridLayout>>,
     app_config: &Rc<RefCell<AppConfig>>,
+    teardown: impl Fn() + 'static,
 ) {
     use gtk4::AlertDialog;
 
@@ -54,6 +59,7 @@ pub fn show_save_dialog(
                             panels,
                         );
                     });
+                    teardown();
                     // Clean up to allow clean exit
                     grid_layout_clone.borrow().cleanup();
                     crate::core::shutdown_animation_manager();
@@ -63,6 +69,7 @@ pub fn show_save_dialog(
                 Ok(0) => {
                     // Don't Save button (index 0)
                     info!("User chose not to save configuration");
+                    teardown();
                     // Clean up to allow clean exit
                     grid_layout_clone.borrow().cleanup();
                     crate::core::shutdown_animation_manager();

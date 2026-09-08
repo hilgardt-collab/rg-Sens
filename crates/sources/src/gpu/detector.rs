@@ -3,6 +3,7 @@
 use super::amd::AmdBackend;
 use super::backend::{GpuBackend, GpuBackendEnum, GpuInfo};
 use super::intel::IntelBackend;
+#[cfg(feature = "nvidia")]
 use super::nvidia::NvidiaBackend;
 
 /// GPU detection result
@@ -49,10 +50,10 @@ pub fn detect_gpus() -> DetectedGpus {
 fn detect_nvidia_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
     #[cfg(feature = "nvidia")]
     {
-        use nvml_wrapper::Nvml;
-
-        match Nvml::init() {
-            Ok(nvml) => match nvml.device_count() {
+        // Use the process-wide shared NVML handle (also used by the backends)
+        // instead of initializing NVML once here and once per backend.
+        match super::nvidia::shared_nvml() {
+            Some(nvml) => match nvml.device_count() {
                 Ok(count) => {
                     log::info!("NVML: Found {} NVIDIA GPU(s)", count);
                     for i in 0..count {
@@ -73,14 +74,15 @@ fn detect_nvidia_gpus(gpus: &mut Vec<GpuBackendEnum>, info: &mut Vec<GpuInfo>) {
                     log::warn!("NVML: Failed to get GPU count: {}", e);
                 }
             },
-            Err(e) => {
-                log::info!("NVML: Not available ({})", e);
+            None => {
+                // shared_nvml() already logged the init failure
             }
         }
     }
 
     #[cfg(not(feature = "nvidia"))]
     {
+        let _ = (gpus, info);
         log::info!("NVML: NVIDIA support not compiled in");
     }
 }

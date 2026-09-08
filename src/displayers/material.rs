@@ -79,13 +79,20 @@ impl Displayer for MaterialDisplayer {
 
     fn apply_config(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         if let Some(config_value) = config.get("material_config") {
-            if let Ok(display_config) =
-                serde_json::from_value::<MaterialDisplayConfig>(config_value.clone())
-            {
-                self.inner.set_config(display_config.to_frame());
-                return Ok(());
-            }
-            if let Ok(frame_config) =
+            // MaterialDisplayConfig has all-#[serde(default)] fields, so parsing
+            // it can never fail — a frame-form config would silently load as
+            // all-defaults. Decide the form by the presence of the "frame" key.
+            let is_display_form = config_value
+                .as_object()
+                .is_some_and(|obj| obj.contains_key("frame"));
+            if is_display_form {
+                if let Ok(display_config) =
+                    serde_json::from_value::<MaterialDisplayConfig>(config_value.clone())
+                {
+                    self.inner.set_config(display_config.to_frame());
+                    return Ok(());
+                }
+            } else if let Ok(frame_config) =
                 serde_json::from_value::<MaterialFrameConfig>(config_value.clone())
             {
                 self.inner.set_config(frame_config);

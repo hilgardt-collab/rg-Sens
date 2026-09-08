@@ -231,6 +231,29 @@ impl GpuSource {
         values.insert("value".into(), Value::from("N/A"));
         values.insert("unit".into(), Value::from(""));
     }
+
+    /// Clear cached metrics and publish N/A values. Used when the backend
+    /// itself fails so the previous dataset isn't left displayed frozen with
+    /// no indication of staleness.
+    fn mark_unavailable(&mut self) {
+        self.temperature = None;
+        self.utilization = None;
+        self.memory_used = None;
+        self.memory_total = None;
+        self.power_usage = None;
+        self.fan_speed = None;
+        self.clock_core = None;
+        self.clock_memory = None;
+
+        self.values.clear();
+        let caption = self
+            .config
+            .custom_caption
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| self.generate_auto_caption());
+        Self::insert_na_values(&mut self.values, caption);
+    }
 }
 
 impl Default for GpuSource {
@@ -271,19 +294,30 @@ impl DataSource for GpuSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        let backend = self.backend.as_ref().ok_or_else(|| {
-            anyhow!(
+        let Some(backend) = self.backend.clone() else {
+            self.mark_unavailable();
+            return Err(anyhow!(
                 "No GPU backend available for index {}",
                 self.config.gpu_index
-            )
-        })?;
+            ));
+        };
 
-        let mut backend_guard = backend
-            .lock()
-            .map_err(|e| anyhow!("Failed to lock GPU backend: {}", e))?;
+        let mut backend_guard = match backend.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                let msg = format!("Failed to lock GPU backend: {}", e);
+                self.mark_unavailable();
+                return Err(anyhow!(msg));
+            }
+        };
 
-        // Update backend (refresh hardware data)
-        backend_guard.update()?;
+        // Update backend (refresh hardware data). On failure publish N/A
+        // instead of leaving the previous dataset displayed frozen.
+        if let Err(e) = backend_guard.update() {
+            drop(backend_guard);
+            self.mark_unavailable();
+            return Err(e);
+        }
 
         // Copy metrics to our cache
         let metrics = backend_guard.metrics();
@@ -353,7 +387,9 @@ impl DataSource for GpuSource {
             GpuField::MemoryPercent => {
                 if let (Some(used), Some(total)) = (self.memory_used, self.memory_total) {
                     if total > 0 {
-                        let percent = (used as f64 / total as f64 * 100.0) as u32;
+                        // Keep f64 (consistent with disk.rs) — truncating to
+                        // u32 turned 99.9% into 99
+                        let percent = used as f64 / total as f64 * 100.0;
                         self.values.insert(KEY_CAPTION.into(), Value::from(caption));
                         self.values.insert(KEY_VALUE.into(), Value::from(percent));
                         self.values
@@ -460,13 +496,22 @@ impl DataSource for GpuSource {
         // Add limits
         let (min_limit, max_limit) = match self.config.field {
             GpuField::Temperature => {
+                // The reasonable default range is 0-100 °C; convert it with
+                // the same unit conversion the value gets, so Fahrenheit and
+                // Kelvin gauges aren't permanently pegged (cf. cpu.rs).
                 if self.config.auto_detect_limits {
-                    // Auto-detect reasonable temperature range
-                    (0.0, 100.0)
+                    (
+                        self.convert_temperature(0.0) as f64,
+                        self.convert_temperature(100.0) as f64,
+                    )
                 } else {
                     (
-                        self.config.min_limit.unwrap_or(0.0),
-                        self.config.max_limit.unwrap_or(100.0),
+                        self.config
+                            .min_limit
+                            .unwrap_or_else(|| self.convert_temperature(0.0) as f64),
+                        self.config
+                            .max_limit
+                            .unwrap_or_else(|| self.convert_temperature(100.0) as f64),
                     )
                 }
             }

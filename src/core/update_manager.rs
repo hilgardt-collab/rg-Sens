@@ -175,7 +175,10 @@ impl CircuitBreaker {
 
 /// Tracks update timing for a shared source
 struct SharedSourceUpdateState {
-    last_update: Instant,
+    /// `None` means no update has run yet — the source is due immediately.
+    /// (An Option rather than `now - interval`: that subtraction panics when
+    /// system uptime is shorter than the interval, e.g. autostart at login.)
+    last_update: Option<Instant>,
     interval: Duration,
     /// Circuit breaker for handling repeated failures
     circuit_breaker: CircuitBreaker,
@@ -364,7 +367,25 @@ impl UpdateManager {
         // Register shared source if panel uses one
         if let Some(ref key) = source_key {
             let mut shared_sources = self.shared_sources.write().await;
-            if !shared_sources.contains_key(key) {
+            if let Some(state) = shared_sources.get_mut(key) {
+                // Key already registered: refresh the interval (this panel may
+                // have lowered the min) and force an immediate update if the
+                // cadence got faster — otherwise a new 5s panel joining a 300s
+                // source would wait up to 300s for its first values.
+                let interval = global_shared_source_manager()
+                    .and_then(|m| m.get_interval(key))
+                    .unwrap_or(cached_interval);
+                if interval < state.interval {
+                    state.last_update = None; // Force immediate update
+                }
+                if interval != state.interval {
+                    debug!(
+                        "Refreshed shared source {} interval from {:?} to {:?} (panel joined)",
+                        key, state.interval, interval
+                    );
+                    state.interval = interval;
+                }
+            } else {
                 // Get interval from SharedSourceManager
                 let interval = global_shared_source_manager()
                     .and_then(|m| m.get_interval(key))
@@ -373,7 +394,7 @@ impl UpdateManager {
                 shared_sources.insert(
                     key.clone(),
                     SharedSourceUpdateState {
-                        last_update: Instant::now() - interval, // Force immediate update
+                        last_update: None, // Force immediate update
                         interval,
                         circuit_breaker: CircuitBreaker::new(),
                     },
@@ -622,7 +643,7 @@ impl UpdateManager {
                             shared_sources.insert(
                                 new_key.clone(),
                                 SharedSourceUpdateState {
-                                    last_update: Instant::now() - interval, // Force immediate update
+                                    last_update: None, // Force immediate update
                                     interval,
                                     circuit_breaker: CircuitBreaker::new(),
                                 },
@@ -631,6 +652,30 @@ impl UpdateManager {
                                 "Registered new shared source {} for panel {} with interval {:?}",
                                 new_key, panel_id, interval
                             );
+                        }
+                    }
+                } else if let Some(ref key) = new_source_key {
+                    // Source key unchanged, but the config hash includes
+                    // update_interval_ms — so an interval-only change lands
+                    // here. Panel::apply_config has already pushed the panel's
+                    // new interval to the SharedSourceManager; refresh the
+                    // scheduler's copy now instead of waiting for the next
+                    // successful update at the OLD cadence, and update
+                    // immediately if the cadence got faster.
+                    let mut shared_sources = self.shared_sources.write().await;
+                    if let Some(sstate) = shared_sources.get_mut(key) {
+                        let interval = global_shared_source_manager()
+                            .and_then(|m| m.get_interval(key))
+                            .unwrap_or(new_interval);
+                        if interval < sstate.interval {
+                            sstate.last_update = None; // Force immediate update
+                        }
+                        if interval != sstate.interval {
+                            debug!(
+                                "Refreshed shared source {} interval from {:?} to {:?} (config change)",
+                                key, sstate.interval, interval
+                            );
+                            sstate.interval = interval;
                         }
                     }
                 }
@@ -735,8 +780,10 @@ impl UpdateManager {
             shared_sources
                 .iter()
                 .filter(|(key, state)| {
-                    // Check if update is due based on interval
-                    let interval_due = now.duration_since(state.last_update) >= state.interval;
+                    // Check if update is due based on interval (never updated => due now)
+                    let interval_due = state
+                        .last_update
+                        .is_none_or(|t| now.duration_since(t) >= state.interval);
                     if !interval_due {
                         return false;
                     }
@@ -850,7 +897,7 @@ impl UpdateManager {
                 match result {
                     Ok(()) => {
                         if let Some(state) = shared_sources.get_mut(&key) {
-                            state.last_update = now;
+                            state.last_update = Some(now);
                             state.circuit_breaker.record_success();
 
                             // Also refresh interval from manager in case it changed

@@ -50,10 +50,12 @@ pub fn show_window_settings_dialog<F>(
         .default_height(650)
         .build();
 
-    // Clean up child widgets when dialog closes to help with GTK cleanup
-    let dialog_for_close_request = dialog.clone();
-    dialog.connect_close_request(move |_| {
-        dialog_for_close_request.set_child(Option::<&gtk4::Widget>::None);
+    // Clean up child widgets when dialog closes to help with GTK cleanup.
+    // Use the handler's own &Window parameter — capturing a strong clone of the
+    // dialog in its own handler created a reference cycle that leaked the
+    // Window (and everything it captured) on every Options open.
+    dialog.connect_close_request(move |dialog| {
+        dialog.set_child(Option::<&gtk4::Widget>::None);
         log::info!("Settings dialog closed");
         glib::Propagation::Proceed
     });
@@ -199,17 +201,19 @@ pub fn show_window_settings_dialog<F>(
     ));
 
     // Border color button handler
+    // Use weak reference to avoid reference cycle (dialog owns button, button handler owns dialog)
     {
         let border_color_clone = border_color.clone();
-        let dialog_clone = dialog.clone();
+        let dialog_weak = dialog.downgrade();
         border_color_btn.connect_clicked(move |_| {
             let current_color = *border_color_clone.borrow();
-            let window_opt = dialog_clone.clone().upcast::<Window>();
+            let window_opt = dialog_weak.upgrade().map(|d| d.upcast::<Window>());
             let border_color_clone2 = border_color_clone.clone();
 
             gtk4::glib::MainContext::default().spawn_local(async move {
                 if let Some(new_color) =
-                    crate::ui::ColorPickerDialog::pick_color(Some(&window_opt), current_color).await
+                    crate::ui::ColorPickerDialog::pick_color(window_opt.as_ref(), current_color)
+                        .await
                 {
                     *border_color_clone2.borrow_mut() = new_color;
                 }
@@ -783,10 +787,13 @@ pub fn show_window_settings_dialog<F>(
     let accept_button = Button::with_label("Accept");
     accept_button.add_css_class("suggested-action");
 
-    let dialog_clone = dialog.clone();
+    // Weak reference: the dialog owns this button, so a strong clone would cycle
+    let dialog_weak_for_cancel = dialog.downgrade();
     cancel_button.connect_clicked(move |_| {
         log::info!("Settings dialog cancel button clicked");
-        dialog_clone.close();
+        if let Some(d) = dialog_weak_for_cancel.upgrade() {
+            d.close();
+        }
     });
 
     // Apply logic
@@ -809,7 +816,10 @@ pub fn show_window_settings_dialog<F>(
     let viewport_height_spin_clone = viewport_height_spin.clone();
     let parent_window_clone = parent_window.clone();
     let renderer_dropdown_clone = renderer_dropdown.clone();
-    let original_renderer = app_config.borrow().window.renderer.clone();
+    // Refreshed after each Apply so only an actual change (relative to the
+    // last-applied value) triggers the "Restart Required" alert, instead of
+    // every subsequent Apply after the first renderer change.
+    let original_renderer = Rc::new(RefCell::new(app_config.borrow().window.renderer.clone()));
     let on_auto_scroll_change_clone = on_auto_scroll_change.clone();
     // Clones for defaults
     let defaults_config_clone = defaults_config.clone();
@@ -890,8 +900,10 @@ pub fn show_window_settings_dialog<F>(
             _ => None,
         };
 
-        // Check if renderer changed and warn user
-        let renderer_changed = new_renderer != original_renderer;
+        // Check if renderer changed and warn user; update the stored value so
+        // the alert doesn't repeat on every subsequent Apply
+        let renderer_changed = new_renderer != *original_renderer.borrow();
+        *original_renderer.borrow_mut() = new_renderer.clone();
         cfg.window.renderer = new_renderer;
 
         let vp_width = cfg
@@ -963,9 +975,10 @@ pub fn show_window_settings_dialog<F>(
 
             let panels = grid_layout_clone.borrow().get_panels();
             for panel in &panels {
-                if let Ok(mut panel_guard) = panel.try_write() {
-                    let _ = panel_guard.displayer.apply_config(&theme_config);
-                }
+                // Apply is a one-time user action: blocking_write so a contended
+                // panel can't silently keep the old theme
+                let mut panel_guard = panel.blocking_write();
+                let _ = panel_guard.displayer.apply_config(&theme_config);
             }
         }
 
@@ -1003,12 +1016,15 @@ pub fn show_window_settings_dialog<F>(
     });
 
     // Accept button
+    // Weak reference: the dialog owns this button, so a strong clone would cycle
     let apply_changes_clone2 = apply_changes.clone();
-    let dialog_clone2 = dialog.clone();
+    let dialog_weak_for_accept = dialog.downgrade();
     accept_button.connect_clicked(move |_| {
         log::info!("Settings dialog accept button clicked");
         apply_changes_clone2();
-        dialog_clone2.close();
+        if let Some(d) = dialog_weak_for_accept.upgrade() {
+            d.close();
+        }
     });
 
     button_box.append(&cancel_button);

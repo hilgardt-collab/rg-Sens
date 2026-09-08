@@ -36,8 +36,10 @@
 //! - Servo `resources/` directory copied to app data dir
 
 use gtk4::{glib, prelude::*, DrawingArea, Widget};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use crate::displayers::css_template_backend::{DisplayData, TemplateBackend};
@@ -45,10 +47,18 @@ use crate::displayers::css_template_backend::{DisplayData, TemplateBackend};
 /// Global shutdown flag - when set, all Servo backend timers will stop
 static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
 
+/// Number of consecutive timer ticks the widget must stay orphaned (no root)
+/// before the instance is shut down. Widgets can be transiently unparented
+/// (displayer swap, panel re-parenting), so shutting down on the first orphan
+/// tick would permanently kill a panel that still exists.
+const ORPHAN_GRACE_TICKS: u32 = 5;
+
 // Thread-local registry of active Servo instances for proper shutdown.
+// Holds weak references (like the WebKit backend) so the registry never keeps
+// destroyed instances alive until app shutdown.
 thread_local! {
-    static ACTIVE_SERVOS: std::cell::RefCell<Vec<Arc<Mutex<ServoInstance>>>> =
-        std::cell::RefCell::new(Vec::new());
+    static ACTIVE_SERVOS: RefCell<Vec<Weak<Mutex<ServoInstance>>>> =
+        const { RefCell::new(Vec::new()) };
 }
 
 /// Placeholder for Servo instance state
@@ -62,6 +72,10 @@ struct ServoInstance {
     height: i32,
     /// Flag indicating if the instance is active
     active: bool,
+    /// Incremented whenever paint() produces a new frame; lets the draw
+    /// function and the update timer detect new content without cloning the
+    /// pixel buffer or redrawing unconditionally.
+    frame_serial: u64,
     // TODO: Add actual Servo fields:
     // servo: Servo<SoftwareRenderingContext>,
     // webview: WebView,
@@ -74,6 +88,7 @@ impl ServoInstance {
             width: 0,
             height: 0,
             active: true,
+            frame_serial: 0,
         }
     }
 
@@ -115,6 +130,7 @@ impl ServoInstance {
                 chunk[2] = 0x40; // R
                 chunk[3] = 0xFF; // A
             }
+            self.frame_serial = self.frame_serial.wrapping_add(1);
             return true;
         }
         false
@@ -133,10 +149,14 @@ impl ServoInstance {
 /// Register a Servo instance for tracking
 fn register_servo(instance: &Arc<Mutex<ServoInstance>>) {
     ACTIVE_SERVOS.with(|servos| {
-        servos.borrow_mut().push(instance.clone());
+        let mut servos = servos.borrow_mut();
+        // Prune entries whose instances are already gone (there is no
+        // explicit unregister; weak refs make this cheap)
+        servos.retain(|weak| weak.strong_count() > 0);
+        servos.push(Arc::downgrade(instance));
         log::debug!(
             "Registered Servo instance for shutdown tracking (total: {})",
-            servos.borrow().len()
+            servos.len()
         );
     });
 }
@@ -150,10 +170,13 @@ pub fn shutdown_all() {
 
     ACTIVE_SERVOS.with(|servos| {
         let mut servos = servos.borrow_mut();
-        let count = servos.len();
-        for instance in servos.drain(..) {
-            if let Ok(mut inst) = instance.lock() {
-                inst.shutdown();
+        let mut count = 0;
+        for weak in servos.drain(..) {
+            if let Some(instance) = weak.upgrade() {
+                if let Ok(mut inst) = instance.lock() {
+                    inst.shutdown();
+                    count += 1;
+                }
             }
         }
         if count > 0 {
@@ -209,8 +232,12 @@ impl TemplateBackend for ServoBackend {
             }
         }
 
-        // Set up draw function to render Servo's pixel buffer via Cairo
+        // Set up draw function to render Servo's pixel buffer via Cairo.
+        // The surface is cached per frame_serial so the pixel buffer is copied
+        // once per new frame instead of being cloned on every draw.
         let servo_for_draw = servo_instance.clone();
+        let surface_cache: Rc<RefCell<Option<(u64, cairo::ImageSurface)>>> =
+            Rc::new(RefCell::new(None));
         drawing_area.set_draw_func(move |_, cr, width, height| {
             if let Ok(inst) = servo_for_draw.lock() {
                 if inst.pixel_buffer.is_empty() || inst.width <= 0 || inst.height <= 0 {
@@ -239,16 +266,35 @@ impl TemplateBackend for ServoBackend {
                     return;
                 }
 
-                // Create Cairo ImageSurface from Servo's pixel buffer
-                // Servo renders in BGRA format, which matches Cairo's Format::ARgb32 on little-endian
-                match cairo::ImageSurface::create_for_data(
-                    inst.pixel_buffer.clone(),
-                    cairo::Format::ARgb32,
-                    inst.width,
-                    inst.height,
-                    inst.width * 4, // stride
-                ) {
-                    Ok(surface) => {
+                // Rebuild the cached surface only when a new frame was rendered
+                // (or the surface size changed) — never per draw.
+                let mut cache = surface_cache.borrow_mut();
+                let cache_valid = cache.as_ref().is_some_and(|(serial, surface)| {
+                    *serial == inst.frame_serial
+                        && surface.width() == inst.width
+                        && surface.height() == inst.height
+                });
+                if !cache_valid {
+                    // Create Cairo ImageSurface from Servo's pixel buffer
+                    // Servo renders in BGRA format, which matches Cairo's
+                    // Format::ARgb32 on little-endian
+                    match cairo::ImageSurface::create_for_data(
+                        inst.pixel_buffer.clone(),
+                        cairo::Format::ARgb32,
+                        inst.width,
+                        inst.height,
+                        inst.width * 4, // stride
+                    ) {
+                        Ok(surface) => *cache = Some((inst.frame_serial, surface)),
+                        Err(e) => {
+                            log::error!("Servo backend: failed to create surface: {}", e);
+                            *cache = None;
+                        }
+                    }
+                }
+
+                match cache.as_ref() {
+                    Some((_, surface)) => {
                         // Scale to fit the drawing area if needed
                         let scale_x = width as f64 / inst.width as f64;
                         let scale_y = height as f64 / inst.height as f64;
@@ -256,14 +302,13 @@ impl TemplateBackend for ServoBackend {
 
                         cr.save().ok();
                         cr.scale(scale, scale);
-                        let _ = cr.set_source_surface(&surface, 0.0, 0.0);
+                        let _ = cr.set_source_surface(surface, 0.0, 0.0);
                         let _ = cr.paint();
                         // Clear source reference to prevent GL texture memory leak
                         cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
                         cr.restore().ok();
                     }
-                    Err(e) => {
-                        log::error!("Servo backend: failed to create surface: {}", e);
+                    None => {
                         cr.set_source_rgba(0.5, 0.0, 0.0, 1.0);
                         let _ = cr.paint();
                     }
@@ -287,6 +332,8 @@ impl TemplateBackend for ServoBackend {
             let data_clone = data.clone();
             let servo_clone = servo_instance.clone();
             let drawing_area_weak = drawing_area.downgrade();
+            let mut orphan_ticks: u32 = 0;
+            let mut last_drawn_serial: u64 = 0;
             move || {
                 // Check shutdown flag
                 if SHUTDOWN_FLAG.load(Ordering::SeqCst) {
@@ -302,8 +349,14 @@ impl TemplateBackend for ServoBackend {
                     return glib::ControlFlow::Break;
                 };
 
-                // Check if widget is orphaned
+                // Check if widget is orphaned. Only shut down after the widget
+                // has stayed orphaned for several consecutive ticks — transient
+                // reparents (displayer swap, panel drag) must not kill it.
                 if drawing_area.root().is_none() {
+                    orphan_ticks += 1;
+                    if orphan_ticks < ORPHAN_GRACE_TICKS {
+                        return glib::ControlFlow::Continue;
+                    }
                     log::debug!("Servo backend timer stopping: DrawingArea orphaned");
                     if let Ok(mut inst) = servo_clone.lock() {
                         inst.shutdown();
@@ -313,6 +366,7 @@ impl TemplateBackend for ServoBackend {
                     }
                     return glib::ControlFlow::Break;
                 }
+                orphan_ticks = 0;
 
                 // Skip if not visible
                 if !drawing_area.is_mapped() {
@@ -361,8 +415,15 @@ impl TemplateBackend for ServoBackend {
                     }
                 }
 
-                // Request redraw
-                drawing_area.queue_draw();
+                // Request redraw only when a new frame was actually rendered
+                let current_serial = servo_clone
+                    .lock()
+                    .map(|inst| inst.frame_serial)
+                    .unwrap_or(last_drawn_serial);
+                if current_serial != last_drawn_serial {
+                    last_drawn_serial = current_serial;
+                    drawing_area.queue_draw();
+                }
 
                 glib::ControlFlow::Continue
             }
@@ -372,19 +433,17 @@ impl TemplateBackend for ServoBackend {
     }
 }
 
-/// Clear all buffers in DisplayData to release memory
+/// Clear all buffers in DisplayData to release memory.
+///
+/// NOTE: `cached_prefix_set` is intentionally NOT cleared — it is only populated
+/// in `DisplayData::default()` and never rebuilt, and the same DisplayData Arc is
+/// reused if the widget is recreated. Clearing it would filter out every value
+/// forever ("--" until restart).
 fn clear_display_data(data: &mut DisplayData) {
     data.values.clear();
     data.values.shrink_to_fit();
     data.cached_html = None;
     data.last_js_values = String::new();
-    data.entries_buffer = Vec::new();
-    data.js_values_buffer = String::new();
-    data.value_buffer = String::new();
-    data.key_buffer = String::new();
-    data.js_call_buffer = String::new();
-    data.cached_prefix_set.clear();
-    data.cached_prefix_set.shrink_to_fit();
 }
 
 /// Build the JavaScript update call string from display data
@@ -401,16 +460,15 @@ fn build_js_update_call(data: &DisplayData) -> String {
         let mut entry = String::new();
         entry.push('"');
         let _ = write!(entry, "{}", mapping.index);
-        entry.push_str("\": \"");
-        // Escape for JavaScript
-        for c in value.chars() {
-            match c {
-                '\\' => entry.push_str("\\\\"),
-                '"' => entry.push_str("\\\""),
-                _ => entry.push(c),
-            }
+        entry.push_str("\": ");
+        // Serialize via serde_json: unlike hand-rolled escaping this handles
+        // newlines, CR, control chars, etc. (one multi-line value would
+        // otherwise syntax-error the whole updateValues payload). JSON string
+        // output is valid JS for all these cases.
+        match serde_json::to_string(&value) {
+            Ok(quoted) => entry.push_str(&quoted),
+            Err(_) => entry.push_str("\"--\""),
         }
-        entry.push('"');
         entries.push(entry);
     }
 

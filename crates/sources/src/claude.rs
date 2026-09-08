@@ -118,14 +118,20 @@ struct Entry {
 }
 
 /// Cached parse result for one transcript file, keyed by (mtime, len) so an
-/// unchanged file is never re-read.
+/// unchanged file is never re-read and a grown (append-only) file is only
+/// tail-parsed from the previously cached length.
 struct FileCache {
     mtime: SystemTime,
+    /// Bytes of the file actually consumed by parsing (tail parses resume here).
     len: u64,
     /// All-time token totals for this file, indexed by `Family::index`.
     alltime: [u64; 4],
     /// De-duplicated entries, retained for session-window reconstruction.
     entries: Vec<Entry>,
+    /// Dedup keys (`"id:req"`) claimed by this file, kept so appended tails
+    /// and *other* files (resumed/branched sessions duplicate lines across
+    /// transcripts) can de-duplicate against it.
+    seen: HashSet<String>,
 }
 
 /// Token usage as logged in a transcript `usage` object.
@@ -242,30 +248,75 @@ impl ClaudeSource {
             .map(|home| PathBuf::from(home).join(".claude"))
     }
 
-    /// Collect every `*.jsonl` transcript under `root` recursively.
-    fn collect_transcripts(root: &Path, out: &mut Vec<PathBuf>) {
+    /// Collect every `*.jsonl` transcript under `root` recursively. Directory
+    /// symlinks are not followed and depth is capped, so a symlink cycle (or a
+    /// pathological tree) can't recurse until the stack overflows.
+    fn collect_transcripts(root: &Path, out: &mut Vec<PathBuf>, depth: u32) {
+        const MAX_DEPTH: u32 = 10;
+        if depth > MAX_DEPTH {
+            return;
+        }
         let Ok(entries) = fs::read_dir(root) else {
             return;
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                Self::collect_transcripts(&path, out);
-            } else if path.extension().is_some_and(|e| e == "jsonl") {
+            // symlink_metadata does not follow symlinks, so a symlinked
+            // directory fails is_dir() here and is skipped (cycle guard).
+            let Ok(meta) = fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if meta.is_dir() {
+                Self::collect_transcripts(&path, out, depth + 1);
+            } else if path.extension().is_some_and(|e| e == "jsonl") && path.is_file() {
                 out.push(path);
             }
         }
     }
 
-    /// Parse one transcript file into all-time totals + de-duplicated entries.
-    fn parse_file(path: &Path) -> ParsedFile {
-        let mut alltime = [0u64; 4];
-        let mut entries = Vec::new();
-        let mut seen: HashSet<String> = HashSet::new();
+    /// Parse transcript content starting at byte `offset` into `cache`.
+    ///
+    /// De-duplication spans the whole update pass: `pass_seen` holds every
+    /// dedup key already claimed (by this file's cached head, by unchanged
+    /// files, and by files parsed earlier in the pass), so lines duplicated
+    /// across resumed/branched session transcripts count once. Newly claimed
+    /// keys are recorded in both `cache.seen` and `pass_seen`.
+    ///
+    /// Returns the number of bytes consumed (offset + parsed bytes) so the
+    /// next update can tail-parse from exactly where this one stopped. A
+    /// torn (partially appended) final line is left unconsumed for the next
+    /// pass. On read failure returns `offset` unchanged.
+    fn parse_into(
+        path: &Path,
+        offset: u64,
+        cache: &mut FileCache,
+        pass_seen: &mut HashSet<String>,
+    ) -> u64 {
+        use std::io::{Read, Seek, SeekFrom};
 
-        let Ok(content) = fs::read_to_string(path) else {
-            return ParsedFile { alltime, entries };
-        };
+        let mut content = String::new();
+        let read_ok = (|| -> std::io::Result<()> {
+            let mut file = fs::File::open(path)?;
+            if offset > 0 {
+                file.seek(SeekFrom::Start(offset))?;
+            }
+            file.read_to_string(&mut content)?;
+            Ok(())
+        })();
+        if read_ok.is_err() {
+            return offset;
+        }
+
+        // If the final line has no trailing newline it may be mid-append:
+        // hold it back for the next pass unless it already parses as JSON
+        // (i.e. the file legitimately ends without a newline).
+        if !content.ends_with('\n') && !content.is_empty() {
+            let tail_start = content.rfind('\n').map(|p| p + 1).unwrap_or(0);
+            if serde_json::from_str::<Value>(&content[tail_start..]).is_err() {
+                content.truncate(tail_start);
+            }
+        }
+        let consumed = offset + content.len() as u64;
 
         for line in content.lines() {
             if line.is_empty() {
@@ -288,14 +339,17 @@ impl ClaudeSource {
                 continue;
             };
 
-            // De-duplicate streaming repeats by message id + request id.
+            // De-duplicate streaming repeats (and cross-file duplicates from
+            // resumed/branched sessions) by message id + request id.
             let id = message.get("id").and_then(Value::as_str).unwrap_or("");
             let req = obj.get("requestId").and_then(Value::as_str).unwrap_or("");
             if !id.is_empty() {
                 let key = format!("{id}:{req}");
-                if !seen.insert(key) {
+                if pass_seen.contains(&key) {
                     continue;
                 }
+                cache.seen.insert(key.clone());
+                pass_seen.insert(key);
             }
 
             let u = Usage {
@@ -305,49 +359,72 @@ impl ClaudeSource {
                 cache_read: usage_field(usage, "cache_read_input_tokens"),
             };
             let tokens = count_tokens(&u);
-            alltime[family.index()] += tokens;
+            cache.alltime[family.index()] += tokens;
 
             if let Some(ts) = obj
                 .get("timestamp")
                 .and_then(Value::as_str)
                 .and_then(parse_ts_millis)
             {
-                entries.push(Entry { ts, family, tokens });
+                cache.entries.push(Entry { ts, family, tokens });
             }
         }
 
-        ParsedFile { alltime, entries }
+        consumed
     }
 
-    /// Refresh `file_cache`: re-parse only files whose (mtime, len) changed, and
-    /// drop entries for files that no longer exist.
+    /// Refresh `file_cache`: drop entries for files that no longer exist,
+    /// tail-parse only the appended data of grown files (transcripts are
+    /// append-only JSONL), and fully re-parse files that shrank or changed
+    /// in place. Message-id de-duplication spans all files in the pass.
     fn refresh_cache(&mut self, transcripts: &[PathBuf]) {
         let present: HashSet<&PathBuf> = transcripts.iter().collect();
         self.file_cache.retain(|path, _| present.contains(path));
 
+        // Classify the work first, dropping fully re-parsed files from the
+        // cache immediately so their old dedup keys can't suppress their own
+        // re-parse below. `offset > 0` means append-only tail parse.
+        let mut work: Vec<(PathBuf, SystemTime, u64)> = Vec::new();
         for path in transcripts {
             let Ok(meta) = fs::metadata(path) else {
                 continue;
             };
             let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
             let len = meta.len();
-
-            if let Some(cached) = self.file_cache.get(path) {
-                if cached.mtime == mtime && cached.len == len {
-                    continue;
+            match self.file_cache.get(path) {
+                Some(cached) if cached.mtime == mtime && cached.len == len => continue,
+                // Grown file: parse only the appended tail.
+                Some(cached) if len > cached.len => work.push((path.clone(), mtime, cached.len)),
+                // Shrunk or same-length-but-touched file: full re-parse.
+                _ => {
+                    self.file_cache.remove(path);
+                    work.push((path.clone(), mtime, 0));
                 }
             }
+        }
+        if work.is_empty() {
+            return;
+        }
 
-            let parsed = Self::parse_file(path);
-            self.file_cache.insert(
-                path.clone(),
-                FileCache {
-                    mtime,
-                    len,
-                    alltime: parsed.alltime,
-                    entries: parsed.entries,
-                },
-            );
+        // Dedup keys already claimed by cached files (unchanged files and the
+        // already-parsed heads of tail-parsed files).
+        let mut pass_seen: HashSet<String> = self
+            .file_cache
+            .values()
+            .flat_map(|c| c.seen.iter().cloned())
+            .collect();
+
+        for (path, mtime, offset) in work {
+            let mut cache = self.file_cache.remove(&path).unwrap_or_else(|| FileCache {
+                mtime,
+                len: 0,
+                alltime: [0; 4],
+                entries: Vec::new(),
+                seen: HashSet::new(),
+            });
+            cache.len = Self::parse_into(&path, offset, &mut cache, &mut pass_seen);
+            cache.mtime = mtime;
+            self.file_cache.insert(path, cache);
         }
     }
 
@@ -476,12 +553,6 @@ impl ClaudeSource {
         }
         (cache.payload.clone(), cache.status.clone())
     }
-}
-
-/// Intermediate parse result (avoids building a `FileCache` without metadata).
-struct ParsedFile {
-    alltime: [u64; 4],
-    entries: Vec<Entry>,
 }
 
 fn usage_field(usage: &serde_json::Map<String, Value>, key: &str) -> u64 {
@@ -761,7 +832,7 @@ impl DataSource for ClaudeSource {
         // --- token counts from local transcripts ---
         let mut transcripts = Vec::new();
         if let Some(dir) = Self::claude_dir() {
-            Self::collect_transcripts(&dir.join("projects"), &mut transcripts);
+            Self::collect_transcripts(&dir.join("projects"), &mut transcripts, 0);
         }
         self.refresh_cache(&transcripts);
 

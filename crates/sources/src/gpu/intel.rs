@@ -325,35 +325,22 @@ impl IntelBackend {
         None
     }
 
-    /// Estimate GPU utilization from frequency ratio (cur_freq / max_freq * 100)
-    ///
-    /// Intel GPUs don't expose a direct utilization counter via sysfs.
-    /// The frequency ratio is a reasonable proxy: the GPU driver scales frequency
-    /// based on workload, so high frequency ≈ high utilization.
-    fn read_utilization(&mut self) -> Option<u32> {
-        let cur = self.read_core_clock()?;
-        let max = self.read_max_clock()?;
-        if max == 0 {
-            return None;
-        }
-        Some(((cur as f64 / max as f64) * 100.0).clamp(0.0, 100.0) as u32)
-    }
-
-    /// Try to read VRAM usage (discrete GPUs only)
+    /// Try to read VRAM usage (discrete GPUs only). Resets the metrics to
+    /// `None` on failure so a broken read doesn't leave stale values frozen.
     fn read_memory_info(&mut self) {
         if !self.is_discrete {
             return;
         }
 
         let vram_used_path = self.device_path.join("mem_info_vram_used");
-        if let Ok(used) = Self::read_int_file(&vram_used_path) {
-            self.metrics.memory_used = Some(used.max(0) as u64);
-        }
+        self.metrics.memory_used = Self::read_int_file(&vram_used_path)
+            .ok()
+            .map(|used| used.max(0) as u64);
 
         let vram_total_path = self.device_path.join("mem_info_vram_total");
-        if let Ok(total) = Self::read_int_file(&vram_total_path) {
-            self.metrics.memory_total = Some(total.max(0) as u64);
-        }
+        self.metrics.memory_total = Self::read_int_file(&vram_total_path)
+            .ok()
+            .map(|total| total.max(0) as u64);
     }
 
     /// Try to read power usage in watts (caches successful path).
@@ -464,10 +451,18 @@ impl GpuBackend for IntelBackend {
     fn update(&mut self) -> Result<()> {
         self.metrics.temperature = self.read_temperature();
 
-        // Utilization reads clocks internally (cur/max ratio)
-        self.metrics.utilization = self.read_utilization();
-        // Store the core clock from the cached path (populated by read_utilization)
-        self.metrics.clock_core = self.read_core_clock();
+        // Read the current core clock once and derive utilization from it.
+        // Intel GPUs don't expose a direct utilization counter via sysfs; the
+        // frequency ratio (cur/max) is a reasonable proxy: the driver scales
+        // frequency based on workload, so high frequency ≈ high utilization.
+        let cur_clock = self.read_core_clock();
+        self.metrics.clock_core = cur_clock;
+        self.metrics.utilization = match (cur_clock, self.read_max_clock()) {
+            (Some(cur), Some(max)) if max > 0 => {
+                Some(((cur as f64 / max as f64) * 100.0).clamp(0.0, 100.0) as u32)
+            }
+            _ => None,
+        };
 
         self.read_memory_info();
         self.metrics.power_usage = self.read_power_usage();

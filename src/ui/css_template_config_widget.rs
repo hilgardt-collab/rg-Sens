@@ -9,17 +9,19 @@ use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, FileDialog, Label, Notebook, Orientation,
     ScrolledWindow, SpinButton, StringList,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::ui::css_template_display::{
     detect_placeholders, extract_placeholder_defaults, extract_placeholder_hints,
     CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping,
 };
 use crate::ui::widget_builder::{create_page_container, create_section_header};
+
+/// Debounce delay for the HTML path entry (reads + parses the template file)
+const HTML_PATH_DEBOUNCE_MS: u64 = 300;
 
 /// CSS Template configuration widget
 pub struct CssTemplateConfigWidget {
@@ -120,31 +122,57 @@ impl CssTemplateConfigWidget {
         let auto_config_btn = self.auto_config_btn.clone();
         let placeholder_hints = self.placeholder_hints.clone();
         let placeholder_defaults = self.placeholder_defaults.clone();
+        // Debounce counter: reading + parsing the template per keystroke is
+        // expensive, so wait for a typing pause (cancel-and-replace pattern)
+        let debounce_id: Rc<Cell<u32>> = Rc::new(Cell::new(0));
 
         self.html_path_entry.connect_changed(move |entry| {
-            let path = PathBuf::from(entry.text().as_str());
+            let current_id = debounce_id.get().wrapping_add(1);
+            debounce_id.set(current_id);
 
-            if !path.as_os_str().is_empty() && path.exists() {
-                if let Ok(html) = std::fs::read_to_string(&path) {
-                    // Extract hints and defaults
-                    let hints = crate::ui::css_template_display::extract_placeholder_hints(&html);
-                    *placeholder_hints.borrow_mut() = hints;
+            let entry = entry.clone();
+            let scan_btn = scan_btn.clone();
+            let auto_config_btn = auto_config_btn.clone();
+            let placeholder_hints = placeholder_hints.clone();
+            let placeholder_defaults = placeholder_defaults.clone();
+            let debounce_check = debounce_id.clone();
 
-                    let defaults =
-                        crate::ui::css_template_display::extract_placeholder_defaults(&html);
-                    let has_defaults = defaults.values().any(|d| !d.source.is_empty());
-                    *placeholder_defaults.borrow_mut() = defaults;
+            glib::timeout_add_local_once(
+                std::time::Duration::from_millis(HTML_PATH_DEBOUNCE_MS),
+                move || {
+                    // Only run if this is still the latest change
+                    if debounce_check.get() != current_id {
+                        return;
+                    }
 
-                    // Enable buttons
-                    scan_btn.set_sensitive(true);
-                    auto_config_btn.set_sensitive(has_defaults);
-                    return;
-                }
-            }
+                    let path = PathBuf::from(entry.text().as_str());
 
-            // Disable buttons if path is invalid
-            scan_btn.set_sensitive(false);
-            auto_config_btn.set_sensitive(false);
+                    if !path.as_os_str().is_empty() && path.exists() {
+                        if let Ok(html) = std::fs::read_to_string(&path) {
+                            // Extract hints and defaults
+                            let hints =
+                                crate::ui::css_template_display::extract_placeholder_hints(&html);
+                            *placeholder_hints.borrow_mut() = hints;
+
+                            let defaults =
+                                crate::ui::css_template_display::extract_placeholder_defaults(
+                                    &html,
+                                );
+                            let has_defaults = defaults.values().any(|d| !d.source.is_empty());
+                            *placeholder_defaults.borrow_mut() = defaults;
+
+                            // Enable buttons
+                            scan_btn.set_sensitive(true);
+                            auto_config_btn.set_sensitive(has_defaults);
+                            return;
+                        }
+                    }
+
+                    // Disable buttons if path is invalid
+                    scan_btn.set_sensitive(false);
+                    auto_config_btn.set_sensitive(false);
+                },
+            );
         });
     }
 
@@ -669,11 +697,11 @@ impl CssTemplateConfigWidget {
         // Remove button
         let remove_btn = Button::with_label("X");
         let container_for_remove = container.clone();
-        let outer_box_for_remove = outer_box.clone();
         let config_for_remove = config.clone();
         let on_change_for_remove = on_change.clone();
+        let source_summaries_for_remove = source_summaries.clone();
+        let placeholder_hints_for_remove = placeholder_hints.clone();
         remove_btn.connect_clicked(move |_| {
-            container_for_remove.remove(&outer_box_for_remove);
             let mut cfg = config_for_remove.borrow_mut();
             if row_idx < cfg.mappings.len() {
                 cfg.mappings.remove(row_idx);
@@ -687,6 +715,24 @@ impl CssTemplateConfigWidget {
             if let Some(ref cb) = *on_change_for_remove.borrow() {
                 cb();
             }
+
+            // Rebuild all rows so the survivors' captured indices match the
+            // shifted mappings Vec. Deferred: we're inside a click handler of
+            // a button the rebuild is about to destroy.
+            let container = container_for_remove.clone();
+            let config = config_for_remove.clone();
+            let on_change = on_change_for_remove.clone();
+            let source_summaries = source_summaries_for_remove.clone();
+            let placeholder_hints = placeholder_hints_for_remove.clone();
+            glib::idle_add_local_once(move || {
+                Self::rebuild_mapping_rows(
+                    &container,
+                    &config,
+                    &on_change,
+                    &source_summaries,
+                    &placeholder_hints,
+                );
+            });
         });
 
         row.append(&remove_btn);
@@ -793,12 +839,12 @@ impl CssTemplateConfigWidget {
         // Remove group button
         let remove_btn = Button::with_label("Remove");
         let container_for_remove = container.clone();
-        let frame_for_remove = frame.clone();
         let config_for_remove = config.clone();
         let on_change_for_remove = on_change.clone();
+        let source_summaries_for_remove = source_summaries.clone();
+        let placeholder_hints_for_remove = placeholder_hints.clone();
         let num_mappings = mappings.len();
         remove_btn.connect_clicked(move |_| {
-            container_for_remove.remove(&frame_for_remove);
             let mut cfg = config_for_remove.borrow_mut();
 
             // Remove all mappings in this group (in reverse order to maintain indices)
@@ -818,6 +864,24 @@ impl CssTemplateConfigWidget {
             if let Some(ref cb) = *on_change_for_remove.borrow() {
                 cb();
             }
+
+            // Rebuild all rows so the survivors' captured indices match the
+            // shifted mappings Vec. Deferred: we're inside a click handler of
+            // a button the rebuild is about to destroy.
+            let container = container_for_remove.clone();
+            let config = config_for_remove.clone();
+            let on_change = on_change_for_remove.clone();
+            let source_summaries = source_summaries_for_remove.clone();
+            let placeholder_hints = placeholder_hints_for_remove.clone();
+            glib::idle_add_local_once(move || {
+                Self::rebuild_mapping_rows(
+                    &container,
+                    &config,
+                    &on_change,
+                    &source_summaries,
+                    &placeholder_hints,
+                );
+            });
         });
         header_row.append(&remove_btn);
 
@@ -1010,9 +1074,19 @@ impl CssTemplateConfigWidget {
     /// Existing mappings with a configured source (non-empty slot_prefix) are preserved.
     /// Groups (4 consecutive placeholders with same source/instance) are processed together,
     /// and if any member has an existing configured source, it's used for all members.
-    pub fn apply_auto_config(&self) {
-        let defaults = self.placeholder_defaults.borrow();
-        let summaries = self.source_summaries.borrow();
+    ///
+    /// Associated fn (same pattern as `rebuild_mapping_rows`) so the click
+    /// handler and any future callers share one implementation.
+    fn apply_auto_config_internal(
+        config: &Rc<RefCell<CssTemplateDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        placeholder_hints: &Rc<RefCell<HashMap<u32, String>>>,
+        placeholder_defaults: &Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
+        mappings_container: &GtkBox,
+    ) {
+        let defaults = placeholder_defaults.borrow();
+        let summaries = source_summaries.borrow();
 
         if defaults.is_empty() || summaries.is_empty() {
             log::warn!("Cannot auto-configure: no defaults or no sources available");
@@ -1020,8 +1094,7 @@ impl CssTemplateConfigWidget {
         }
 
         // Build a map of existing mappings by index for quick lookup
-        let existing_mappings: HashMap<u32, PlaceholderMapping> = self
-            .config
+        let existing_mappings: HashMap<u32, PlaceholderMapping> = config
             .borrow()
             .mappings
             .iter()
@@ -1202,13 +1275,19 @@ impl CssTemplateConfigWidget {
         drop(summaries);
 
         // Apply new mappings
-        self.config.borrow_mut().mappings = new_mappings;
+        config.borrow_mut().mappings = new_mappings;
 
         // Rebuild UI
-        self.rebuild_mappings();
+        Self::rebuild_mapping_rows(
+            mappings_container,
+            config,
+            on_change,
+            source_summaries,
+            placeholder_hints,
+        );
 
         // Trigger change callback
-        if let Some(ref cb) = *self.on_change.borrow() {
+        if let Some(ref cb) = *on_change.borrow() {
             cb();
         }
     }
@@ -1224,257 +1303,14 @@ impl CssTemplateConfigWidget {
         let self_mappings_container = self.mappings_container.clone();
 
         self.auto_config_btn.connect_clicked(move |_| {
-            let defaults = self_placeholder_defaults.borrow();
-            let summaries = self_source_summaries.borrow();
-
-            if defaults.is_empty() || summaries.is_empty() {
-                log::warn!("Cannot auto-configure: no defaults or no sources available");
-                return;
-            }
-
-            // Build a map of existing mappings by index for quick lookup
-            let existing_mappings: HashMap<u32, PlaceholderMapping> = self_config
-                .borrow()
-                .mappings
-                .iter()
-                .map(|m| (m.index, m.clone()))
-                .collect();
-
-            // Group source summaries by source type
-            let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
-            for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
-                let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
-                source_slots
-                    .entry(source_type)
-                    .or_default()
-                    .push((prefix.clone(), *slot_idx));
-            }
-
-            let mut used_instances: HashMap<String, usize> = HashMap::new();
-            let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
-
-            // Sort defaults by index for predictable order
-            let mut sorted_defaults: Vec<_> = defaults.iter().collect();
-            sorted_defaults.sort_by_key(|(idx, _)| *idx);
-
-            // Process defaults, detecting groups (4 consecutive with same source/instance)
-            let mut i = 0;
-            while i < sorted_defaults.len() {
-                let (idx, default) = sorted_defaults[i];
-
-                // Check if this is the start of a group (4 consecutive with same source/instance)
-                let is_group = if i + 3 < sorted_defaults.len() && !default.source.is_empty() {
-                    let group_indices: Vec<u32> =
-                        (0..4).map(|j| *sorted_defaults[i + j].0).collect();
-                    let consecutive = group_indices.windows(2).all(|w| w[1] == w[0] + 1);
-
-                    if consecutive {
-                        let group_defaults: Vec<&PlaceholderDefault> =
-                            (0..4).map(|j| sorted_defaults[i + j].1).collect();
-
-                        // Check same source and instance
-                        let same_source_instance = group_defaults
-                            .iter()
-                            .all(|d| d.source == default.source && d.instance == default.instance);
-
-                        // Check fields are caption/value/unit/max
-                        let fields: Vec<&str> =
-                            group_defaults.iter().map(|d| d.field.as_str()).collect();
-                        let standard_fields = fields == ["caption", "value", "unit", "max"];
-
-                        same_source_instance && standard_fields
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-
-                if is_group {
-                    // Process as a group - check if ANY member has an existing configured source
-                    let group_indices: Vec<u32> =
-                        (0..4).map(|j| *sorted_defaults[i + j].0).collect();
-                    let existing_prefix = group_indices
-                        .iter()
-                        .filter_map(|idx| existing_mappings.get(idx))
-                        .find(|m| !m.slot_prefix.is_empty())
-                        .map(|m| m.slot_prefix.clone());
-
-                    let slot_prefix = if let Some(prefix) = existing_prefix {
-                        // Use the existing configured prefix for all group members
-                        prefix
-                    } else {
-                        // Auto-configure: find a slot for this source type
-                        let source_type = default.source.to_lowercase();
-                        if let Some(slots) = source_slots.get(&source_type) {
-                            let instance = default.instance as usize;
-                            let used = used_instances.entry(source_type.clone()).or_insert(0);
-
-                            let slot_to_use = if instance > 0 {
-                                slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
-                            } else {
-                                let target = *used;
-                                slots.get(target)
-                            };
-
-                            if let Some((prefix, _)) = slot_to_use {
-                                if instance == 0 {
-                                    *used += 1;
-                                }
-                                prefix.clone()
-                            } else {
-                                String::new()
-                            }
-                        } else {
-                            String::new()
-                        }
-                    };
-
-                    // Add all 4 group members with the same prefix
-                    for j in 0..4 {
-                        let (group_idx, group_default) = sorted_defaults[i + j];
-                        new_mappings.push(PlaceholderMapping {
-                            index: *group_idx,
-                            slot_prefix: slot_prefix.clone(),
-                            field: group_default.field.clone(),
-                            format: group_default.format.clone(),
-                        });
-                    }
-                    i += 4;
-                } else {
-                    // Process as individual mapping
-                    // Check if there's an existing mapping with a configured source
-                    if let Some(existing) = existing_mappings.get(idx) {
-                        if !existing.slot_prefix.is_empty() {
-                            // Preserve the existing mapping
-                            new_mappings.push(existing.clone());
-                            i += 1;
-                            continue;
-                        }
-                    }
-
-                    // No existing configured mapping, try to auto-configure
-                    if default.source.is_empty() {
-                        new_mappings.push(PlaceholderMapping {
-                            index: *idx,
-                            slot_prefix: String::new(),
-                            field: default.field.clone(),
-                            format: default.format.clone(),
-                        });
-                        i += 1;
-                        continue;
-                    }
-
-                    let source_type = default.source.to_lowercase();
-
-                    if let Some(slots) = source_slots.get(&source_type) {
-                        let instance = default.instance as usize;
-                        let used = used_instances.entry(source_type.clone()).or_insert(0);
-
-                        let slot_to_use = if instance > 0 {
-                            slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
-                        } else {
-                            let target = *used;
-                            slots.get(target)
-                        };
-
-                        if let Some((prefix, _)) = slot_to_use {
-                            new_mappings.push(PlaceholderMapping {
-                                index: *idx,
-                                slot_prefix: prefix.clone(),
-                                field: default.field.clone(),
-                                format: default.format.clone(),
-                            });
-                            if instance == 0 {
-                                *used += 1;
-                            }
-                        } else {
-                            new_mappings.push(PlaceholderMapping {
-                                index: *idx,
-                                slot_prefix: String::new(),
-                                field: default.field.clone(),
-                                format: default.format.clone(),
-                            });
-                        }
-                    } else {
-                        new_mappings.push(PlaceholderMapping {
-                            index: *idx,
-                            slot_prefix: String::new(),
-                            field: default.field.clone(),
-                            format: default.format.clone(),
-                        });
-                    }
-                    i += 1;
-                }
-            }
-
-            drop(defaults);
-            drop(summaries);
-
-            // Apply new mappings
-            self_config.borrow_mut().mappings = new_mappings;
-
-            // Rebuild UI - clear existing rows
-            while let Some(child) = self_mappings_container.first_child() {
-                self_mappings_container.remove(&child);
-            }
-
-            // Add rows for each mapping, detecting groups
-            let config = self_config.borrow();
-            let mappings = &config.mappings;
-            let mut map_idx = 0;
-
-            while map_idx < mappings.len() {
-                // Check if this could be the start of a group (4 consecutive with same prefix and standard fields)
-                let is_group_ui = if map_idx + 3 < mappings.len() {
-                    let prefix = &mappings[map_idx].slot_prefix;
-                    let fields: Vec<&str> = mappings[map_idx..map_idx + 4]
-                        .iter()
-                        .map(|m| m.field.as_str())
-                        .collect();
-
-                    // Check if all 4 have the same prefix and are caption/value/unit/max
-                    let same_prefix = mappings[map_idx..map_idx + 4]
-                        .iter()
-                        .all(|m| &m.slot_prefix == prefix);
-
-                    same_prefix && fields == ["caption", "value", "unit", "max"]
-                } else {
-                    false
-                };
-
-                if is_group_ui {
-                    let group_mappings: Vec<PlaceholderMapping> =
-                        mappings[map_idx..map_idx + 4].to_vec();
-                    CssTemplateConfigWidget::add_source_group_row(
-                        &self_mappings_container,
-                        map_idx,
-                        &group_mappings,
-                        self_config.clone(),
-                        self_on_change.clone(),
-                        self_source_summaries.clone(),
-                        self_placeholder_hints.clone(),
-                    );
-                    map_idx += 4;
-                } else {
-                    CssTemplateConfigWidget::add_mapping_row(
-                        &self_mappings_container,
-                        map_idx,
-                        &mappings[map_idx],
-                        self_config.clone(),
-                        self_on_change.clone(),
-                        self_source_summaries.clone(),
-                        self_placeholder_hints.clone(),
-                    );
-                    map_idx += 1;
-                }
-            }
-            drop(config);
-
-            // Trigger change callback
-            if let Some(ref cb) = *self_on_change.borrow() {
-                cb();
-            }
+            Self::apply_auto_config_internal(
+                &self_config,
+                &self_on_change,
+                &self_source_summaries,
+                &self_placeholder_hints,
+                &self_placeholder_defaults,
+                &self_mappings_container,
+            );
         });
     }
 
@@ -1656,24 +1492,6 @@ impl CssTemplateConfigWidget {
         });
     }
 
-    /// Set available sources
-    pub fn set_available_sources(&self, sources: Vec<(String, String, Vec<FieldMetadata>)>) {
-        // Convert to summaries format: (prefix, label, slot_index, group_index)
-        let mut summaries = Vec::new();
-        for (group_idx, (_source_id, source_name, _fields)) in sources.iter().enumerate() {
-            // Create summaries for typical combo source prefixes
-            for slot_idx in 1..=10 {
-                let prefix = format!("group{}_{}", group_idx + 1, slot_idx);
-                let label = format!("{} Slot {}", source_name, slot_idx);
-                summaries.push((prefix, label, slot_idx, group_idx as u32));
-            }
-        }
-        *self.source_summaries.borrow_mut() = summaries;
-
-        // Rebuild mappings UI
-        self.rebuild_mappings();
-    }
-
     /// Set source summaries directly (from combo widget)
     pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         *self.source_summaries.borrow_mut() = summaries;
@@ -1699,14 +1517,35 @@ impl CssTemplateConfigWidget {
             self.update_hints_from_html(&config.html_path);
         }
 
+        Self::rebuild_mapping_rows(
+            &self.mappings_container,
+            &self.config,
+            &self.on_change,
+            &self.source_summaries,
+            &self.placeholder_hints,
+        );
+    }
+
+    /// Clear the mappings container and rebuild every row from the config.
+    ///
+    /// Row handlers capture their construction-time index into `mappings`, so
+    /// after ANY removal the remaining rows must be rebuilt — otherwise their
+    /// stale indices write into (or silently miss) the wrong mappings.
+    fn rebuild_mapping_rows(
+        container: &GtkBox,
+        config: &Rc<RefCell<CssTemplateDisplayConfig>>,
+        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        placeholder_hints: &Rc<RefCell<HashMap<u32, String>>>,
+    ) {
         // Clear existing rows
-        while let Some(child) = self.mappings_container.first_child() {
-            self.mappings_container.remove(&child);
+        while let Some(child) = container.first_child() {
+            container.remove(&child);
         }
 
         // Add rows for each mapping, detecting groups
-        let config = self.config.borrow();
-        let mappings = &config.mappings;
+        let cfg = config.borrow();
+        let mappings = &cfg.mappings;
         let mut idx = 0;
 
         while idx < mappings.len() {
@@ -1735,25 +1574,25 @@ impl CssTemplateConfigWidget {
                 let group_mappings: Vec<PlaceholderMapping> = mappings[idx..idx + 4].to_vec();
 
                 Self::add_source_group_row(
-                    &self.mappings_container,
+                    container,
                     idx,
                     &group_mappings,
-                    self.config.clone(),
-                    self.on_change.clone(),
-                    self.source_summaries.clone(),
-                    self.placeholder_hints.clone(),
+                    config.clone(),
+                    on_change.clone(),
+                    source_summaries.clone(),
+                    placeholder_hints.clone(),
                 );
                 idx += 4;
             } else {
                 // Display as individual mapping
                 Self::add_mapping_row(
-                    &self.mappings_container,
+                    container,
                     idx,
                     &mappings[idx],
-                    self.config.clone(),
-                    self.on_change.clone(),
-                    self.source_summaries.clone(),
-                    self.placeholder_hints.clone(),
+                    config.clone(),
+                    on_change.clone(),
+                    source_summaries.clone(),
+                    placeholder_hints.clone(),
                 );
                 idx += 1;
             }

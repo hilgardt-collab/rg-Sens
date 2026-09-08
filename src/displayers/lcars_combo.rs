@@ -159,8 +159,11 @@ impl LcarsComboDisplayer {
             item_orientation,
         );
 
-        // Pre-allocate bar_key buffer to avoid repeated allocations
-        let mut bar_key_buf = String::with_capacity(32);
+        // Pre-allocate key buffer to avoid repeated allocations (reused for
+        // bar and graph key lookups)
+        let mut key_buf = String::with_capacity(32);
+        // Hoisted default so per-item config lookups can borrow instead of clone
+        let default_item_config = ContentItemConfig::default();
 
         // Draw each item
         for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
@@ -168,20 +171,19 @@ impl LcarsComboDisplayer {
             let item_data = combo_utils::get_item_data(values, prefix);
             let slot_values = combo_utils::get_slot_values(values, prefix);
 
-            // Get item config (or use default)
+            // Get item config (or use default) — borrow, don't clone per frame
             let item_config = config
                 .frame
                 .content_items
                 .get(prefix)
-                .cloned()
-                .unwrap_or_default();
+                .unwrap_or(&default_item_config);
 
             // Get animated percent - reuse buffer for bar_key
-            bar_key_buf.clear();
-            bar_key_buf.push_str(prefix);
-            bar_key_buf.push_str("_bar");
+            key_buf.clear();
+            key_buf.push_str(prefix);
+            key_buf.push_str("_bar");
             let animated_percent = bar_values
-                .get(bar_key_buf.as_str())
+                .get(key_buf.as_str())
                 .map(|av| av.current)
                 .unwrap_or_else(|| item_data.percent());
 
@@ -214,10 +216,14 @@ impl LcarsComboDisplayer {
                     )?;
                 }
                 ContentDisplayType::Graph => {
-                    // Get graph history for this slot
-                    let graph_key = format!("{}_graph", prefix);
+                    // Get graph history for this slot - reuse buffer for the key
+                    key_buf.clear();
+                    key_buf.push_str(prefix);
+                    key_buf.push_str("_graph");
                     let empty_history = VecDeque::new();
-                    let history = graph_history.get(&graph_key).unwrap_or(&empty_history);
+                    let history = graph_history
+                        .get(key_buf.as_str())
+                        .unwrap_or(&empty_history);
 
                     if let Err(e) = render_content_graph(
                         cr,
@@ -273,20 +279,24 @@ impl LcarsComboDisplayer {
                             .saturating_sub(core_bars_config.start_core)
                             + 1;
                         let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
+                        // Use KeyBuffer to avoid format! allocation per core
                         for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                            let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                            let value = values
-                                .get(&core_key)
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.0);
+                            let value = combo_utils::with_key_buffer(|buf| {
+                                let core_key = buf.build_core_key(prefix, core_idx);
+                                values.get(core_key).and_then(|v| v.as_f64())
+                            })
+                            .unwrap_or(0.0);
                             raw_values.push(value / 100.0);
                         }
 
                         // If no specific core values found, try to find any core values
                         if raw_values.is_empty() {
                             for core_idx in 0..128 {
-                                let core_key = format!("{}_core{}_usage", prefix, core_idx);
-                                if let Some(v) = values.get(&core_key).and_then(|v| v.as_f64()) {
+                                let value = combo_utils::with_key_buffer(|buf| {
+                                    let core_key = buf.build_core_key(prefix, core_idx);
+                                    values.get(core_key).and_then(|v| v.as_f64())
+                                });
+                                if let Some(v) = value {
                                     raw_values.push(v / 100.0);
                                 } else {
                                     break;
@@ -483,8 +493,7 @@ impl LcarsComboDisplayer {
         let group_count = data.config.frame.group_item_counts.len();
         let divider_config = &data.config.frame.divider_config;
         if group_count > 1 {
-            for group_idx in 0..group_count - 1 {
-                let (gx, gy, gw, gh) = group_layouts[group_idx];
+            for &(gx, gy, gw, gh) in group_layouts.iter().take(group_count - 1) {
                 match data.config.frame.layout_orientation {
                     SplitOrientation::Vertical => {
                         let divider_x = gx + gw + divider_config.spacing_before;
@@ -597,19 +606,6 @@ impl Displayer for LcarsComboDisplayer {
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
-                // Periodic diagnostics (every ~5 seconds at 60fps)
-                static TICK_COUNT: std::sync::atomic::AtomicU64 =
-                    std::sync::atomic::AtomicU64::new(0);
-                let ticks = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if ticks.is_multiple_of(300) {
-                    log::info!(
-                        "LCARS anim: bar_values={}, core_bar_values={}, graph_history={}, group_prefixes={}",
-                        data.bar_values.len(),
-                        data.core_bar_values.len(),
-                        data.graph_history.len(),
-                        data.group_prefixes.len()
-                    );
-                }
                 let mut redraw = data.dirty;
                 if data.dirty {
                     data.dirty = false;
@@ -628,18 +624,25 @@ impl Displayer for LcarsComboDisplayer {
                             .any(|a| (a.current - a.target).abs() > ANIMATION_SNAP_THRESHOLD)
                     });
 
-                    if has_bar_animations || has_core_animations {
-                        let now = Instant::now();
-                        let elapsed = now.duration_since(data.last_update).as_secs_f64();
-                        data.last_update = now;
+                    // Refresh the timestamp on EVERY tick, not just while
+                    // animating: the first animating frame after idle must not
+                    // see the stale `elapsed` since the previous animation
+                    // converged (with speed 8.0 that overshot the target 4-8x).
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(data.last_update).as_secs_f64();
+                    data.last_update = now;
 
+                    if has_bar_animations || has_core_animations {
                         let speed = data.config.animation_speed;
+                        // Cap the step so a long frame lands at most exactly on
+                        // the target, never past it
+                        let step = (speed * elapsed).min(1.0);
 
                         // Animate bar values
                         if has_bar_animations {
                             for (_key, anim) in data.bar_values.iter_mut() {
                                 if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD {
-                                    let delta = (anim.target - anim.current) * speed * elapsed;
+                                    let delta = (anim.target - anim.current) * step;
                                     anim.current += delta;
 
                                     if (anim.current - anim.target).abs() < ANIMATION_SNAP_THRESHOLD
@@ -657,7 +660,7 @@ impl Displayer for LcarsComboDisplayer {
                                 for anim in core_anims.iter_mut() {
                                     if (anim.current - anim.target).abs() > ANIMATION_SNAP_THRESHOLD
                                     {
-                                        let delta = (anim.target - anim.current) * speed * elapsed;
+                                        let delta = (anim.target - anim.current) * step;
                                         anim.current += delta;
 
                                         if (anim.current - anim.target).abs()
@@ -697,14 +700,23 @@ impl Displayer for LcarsComboDisplayer {
                 .iter()
                 .map(|&x| x as usize)
                 .collect();
+            // Shape of the cached group_prefixes (lengths only) so phase 2 can
+            // decide whether a rebuild is needed without holding the lock
+            let group_prefixes_shape: Vec<usize> = display_data
+                .group_prefixes
+                .iter()
+                .map(|v| v.len())
+                .collect();
             (
                 display_data.config.animation_enabled,
                 display_data.graph_start_time.elapsed().as_secs_f64(),
                 group_item_counts,
                 display_data.config.frame.content_items.clone(),
+                group_prefixes_shape,
             )
         };
-        let (animation_enabled, timestamp, group_item_counts, content_items) = config_snapshot;
+        let (animation_enabled, timestamp, group_item_counts, content_items, group_prefixes_shape) =
+            config_snapshot;
 
         // Phase 2: Expensive pre-computation (no lock held)
         let prefixes = combo_utils::generate_prefixes(&group_item_counts);
@@ -713,22 +725,26 @@ impl Displayer for LcarsComboDisplayer {
         let mut filtered_values = HashMap::with_capacity(prefixes.len() * 8);
         combo_utils::filter_values_with_owned_prefix_set(data, &prefix_set, &mut filtered_values);
 
-        // Pre-compute group prefixes if structure changed (string allocations)
-        let group_prefixes: Option<Vec<Vec<String>>> = {
-            // Always compute — we'll check if rebuild is needed under lock
-            Some(
-                group_item_counts
-                    .iter()
-                    .enumerate()
-                    .map(|(group_idx, &count)| {
-                        let group_num = group_idx + 1;
-                        (1..=count)
-                            .map(|item_idx| format!("group{}_{}", group_num, item_idx))
-                            .collect()
-                    })
-                    .collect(),
-            )
-        };
+        // Pre-compute group prefixes only if the structure actually changed —
+        // rebuilding the full nested string Vecs on every update just to
+        // discard them wastes allocations
+        let needs_prefix_rebuild = group_prefixes_shape.len() != group_item_counts.len()
+            || group_prefixes_shape
+                .iter()
+                .zip(group_item_counts.iter())
+                .any(|(&cached, &count)| cached != count);
+        let group_prefixes: Option<Vec<Vec<String>>> = needs_prefix_rebuild.then(|| {
+            group_item_counts
+                .iter()
+                .enumerate()
+                .map(|(group_idx, &count)| {
+                    let group_num = group_idx + 1;
+                    (1..=count)
+                        .map(|item_idx| format!("group{}_{}", group_num, item_idx))
+                        .collect()
+                })
+                .collect()
+        });
 
         // Pre-extract per-item data
         struct ItemUpdate {
@@ -760,18 +776,9 @@ impl Displayer for LcarsComboDisplayer {
         if let Ok(mut display_data) = self.data.lock() {
             display_data.values = filtered_values;
 
-            // Only update group_prefixes if structure changed
+            // Only update group_prefixes if structure changed (built in phase 2)
             if let Some(new_group_prefixes) = group_prefixes {
-                let needs_rebuild =
-                    display_data.group_prefixes.len() != group_item_counts.len()
-                        || display_data
-                            .group_prefixes
-                            .iter()
-                            .zip(group_item_counts.iter())
-                            .any(|(cached, &count)| cached.len() != count);
-                if needs_rebuild {
-                    display_data.group_prefixes = new_group_prefixes;
-                }
+                display_data.group_prefixes = new_group_prefixes;
             }
 
             // Apply per-item animation updates (quick math)
@@ -807,13 +814,15 @@ impl Displayer for LcarsComboDisplayer {
                 }
             }
 
-            // Clean up stale animation entries
-            combo_utils::cleanup_bar_values(&mut display_data.bar_values, &prefixes);
-            combo_utils::cleanup_core_bar_values(
-                &mut display_data.core_bar_values,
+            // Clean up stale animation entries (builds the prefix set once).
+            // Reborrow through the guard so the field borrows can be split.
+            let dd = &mut *display_data;
+            combo_utils::cleanup_all_animation_state(
+                &mut dd.bar_values,
+                &mut dd.core_bar_values,
+                &mut dd.graph_history,
                 &prefixes,
             );
-            combo_utils::cleanup_graph_history(&mut display_data.graph_history, &prefixes);
 
             display_data.transform = transform;
             display_data.dirty = true;

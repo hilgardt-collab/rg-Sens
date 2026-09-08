@@ -2,7 +2,7 @@
 
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Button, Label, ListBox, ListBoxRow, Orientation, Scale, SpinButton};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::ui::background::{Color, ColorStop, LinearGradientConfig};
@@ -480,9 +480,8 @@ impl GradientEditor {
         let stops_ref = stops.borrow();
         let stop_count = stops_ref.len();
 
-        for (index, stop) in stops_ref.iter().enumerate() {
+        for stop in stops_ref.iter() {
             let row = Self::create_stop_row(
-                index,
                 stop,
                 stop_count,
                 stops,
@@ -498,7 +497,6 @@ impl GradientEditor {
 
     /// Create a row for a color stop
     fn create_stop_row(
-        index: usize,
         stop: &ColorStopSource,
         stop_count: usize,
         stops: &Rc<RefCell<Vec<ColorStopSource>>>,
@@ -532,6 +530,12 @@ impl GradientEditor {
         position_box.append(&percent_label);
         hbox.append(&position_box);
 
+        // Track this row's stop by its current position value rather than its
+        // construction-time index. A position edit re-sorts the stops vec but the
+        // list rebuild is deferred to idle, so sibling rows' indices are stale for
+        // one main-loop iteration; handlers locate the stop dynamically instead.
+        let tracked_position = Rc::new(Cell::new(stop.position));
+
         // Color selector using ThemeColorSelector
         let color_selector = ThemeColorSelector::new(stop.color.clone());
         if let Some(ref cfg) = *theme_config.borrow() {
@@ -544,6 +548,7 @@ impl GradientEditor {
         let on_change_clone = on_change.clone();
         let is_updating_clone = is_updating.clone();
         let update_preview_for_color = update_preview.clone();
+        let tracked_for_color = tracked_position.clone();
         color_selector.set_on_change(move |new_color_source| {
             // Skip if we're already updating (prevents infinite loop)
             if *is_updating_clone.borrow() {
@@ -552,7 +557,8 @@ impl GradientEditor {
 
             {
                 let mut stops = stops_clone.borrow_mut();
-                if let Some(stop) = stops.get_mut(index) {
+                let pos = tracked_for_color.get();
+                if let Some(stop) = stops.iter_mut().find(|s| s.position == pos) {
                     stop.color = new_color_source;
                 }
             }
@@ -576,6 +582,7 @@ impl GradientEditor {
             let theme_config_clone = theme_config.clone();
             let is_updating_clone = is_updating.clone();
             let update_preview_for_remove = update_preview.clone();
+            let tracked_for_remove = tracked_position.clone();
 
             remove_button.connect_clicked(move |_| {
                 // Skip if we're already updating (prevents infinite loop)
@@ -583,11 +590,22 @@ impl GradientEditor {
                     return;
                 }
 
-                let mut stops = stops_clone.borrow_mut();
-                if stops.len() > 2 {
-                    stops.remove(index);
-                    drop(stops);
+                let removed = {
+                    let mut stops = stops_clone.borrow_mut();
+                    let pos = tracked_for_remove.get();
+                    if stops.len() > 2 {
+                        if let Some(idx) = stops.iter().position(|s| s.position == pos) {
+                            stops.remove(idx);
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                };
 
+                if removed {
                     Self::rebuild_stops_list(
                         &listbox_clone,
                         &stops_clone,
@@ -616,12 +634,24 @@ impl GradientEditor {
         let theme_config_clone = theme_config.clone();
         let is_updating_clone = is_updating.clone();
         let update_preview_for_position = update_preview.clone();
+        let tracked_for_position = tracked_position.clone();
 
         position_spin.connect_value_changed(move |spin| {
             // Skip if we're already updating (prevents infinite loop)
             if *is_updating_clone.borrow() {
                 return;
             }
+
+            // Locate this row's stop dynamically (indices may be stale between a
+            // sibling's re-sort and the deferred idle rebuild)
+            let index = {
+                let stops = stops_clone.borrow();
+                let pos = tracked_for_position.get();
+                match stops.iter().position(|s| s.position == pos) {
+                    Some(i) => i,
+                    None => return,
+                }
+            };
 
             let mut new_position = spin.value() / 100.0; // Convert from percentage to 0.0-1.0
 
@@ -662,6 +692,7 @@ impl GradientEditor {
                 if let Some(stop) = stops.get_mut(index) {
                     stop.position = new_position;
                 }
+                tracked_for_position.set(new_position);
                 stops.sort_by(|a, b| {
                     a.position
                         .partial_cmp(&b.position)

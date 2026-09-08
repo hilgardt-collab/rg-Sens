@@ -52,16 +52,6 @@ pub struct DisplayData {
     pub js_update_count: u32,
     /// Cached prefix set for O(1) lookups (avoids regenerating prefixes every frame)
     pub cached_prefix_set: std::collections::HashSet<String>,
-    /// Reusable key buffer for get_mapped_value lookups
-    pub key_buffer: String,
-    /// Reusable buffer for building JS entries (avoids allocation per tick)
-    pub entries_buffer: Vec<String>,
-    /// Reusable buffer for the final JS values string
-    pub js_values_buffer: String,
-    /// Reusable buffer for intermediate value formatting
-    pub value_buffer: String,
-    /// Reusable buffer for building the JS call
-    pub js_call_buffer: String,
 }
 
 impl Default for DisplayData {
@@ -86,11 +76,6 @@ impl Default for DisplayData {
             last_js_values: String::new(),
             js_update_count: 0,
             cached_prefix_set,
-            key_buffer: String::with_capacity(64),
-            entries_buffer: Vec::with_capacity(64),
-            js_values_buffer: String::with_capacity(1024),
-            value_buffer: String::with_capacity(64),
-            js_call_buffer: String::with_capacity(2048),
         }
     }
 }

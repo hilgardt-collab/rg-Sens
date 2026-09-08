@@ -104,15 +104,10 @@ impl AppConfig {
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
 
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
         // Always save as v2
         let save_config = self.as_v2();
         let content = serde_json::to_string_pretty(&save_config)?;
-        std::fs::write(config_path, content)?;
+        super::write_atomic(&config_path, &content)?;
         Ok(())
     }
 
@@ -131,15 +126,10 @@ impl AppConfig {
     }
 
     /// Save configuration to a specific file path
-    pub fn save_to_path(&self, path: &PathBuf) -> Result<()> {
-        // Ensure parent directory exists
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
+    pub fn save_to_path(&self, path: &std::path::Path) -> Result<()> {
         let save_config = self.as_v2();
         let content = serde_json::to_string_pretty(&save_config)?;
-        std::fs::write(path, content)?;
+        super::write_atomic(path, &content)?;
         Ok(())
     }
 

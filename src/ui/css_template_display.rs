@@ -283,6 +283,28 @@ html, body {
 "#
 }
 
+/// Case-insensitive search for an ASCII needle, returning a byte offset valid
+/// for the ORIGINAL haystack.
+///
+/// Searching in `haystack.to_lowercase()` is NOT safe for computing insertion
+/// offsets: some Unicode lowercase mappings change byte length (e.g. 'İ' is 2
+/// bytes but lowercases to 3), shifting every later offset and potentially
+/// causing `insert_str` to panic on a non-char-boundary. Comparing raw byte
+/// windows with `eq_ignore_ascii_case` preserves offsets, and any match starts
+/// with an ASCII byte ('<'), which is always a char boundary in UTF-8.
+fn find_ascii_ci(haystack: &str, needle: &str) -> Option<usize> {
+    debug_assert!(needle.is_ascii());
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() {
+        return Some(0);
+    }
+    if h.len() < n.len() {
+        return None;
+    }
+    h.windows(n.len()).position(|w| w.eq_ignore_ascii_case(n))
+}
+
 /// Combine HTML template with CSS and JavaScript for WebView loading
 ///
 /// This creates a complete HTML document ready for loading into the WebView,
@@ -296,16 +318,16 @@ pub fn prepare_html_document(
     let bridge_script = generate_update_script();
 
     // Check if the template already has <html> structure
-    let has_html_tag = transformed_html.to_lowercase().contains("<html");
-    let has_head_tag = transformed_html.to_lowercase().contains("<head");
-    let has_body_tag = transformed_html.to_lowercase().contains("<body");
+    let has_html_tag = find_ascii_ci(transformed_html, "<html").is_some();
+    let has_head_tag = find_ascii_ci(transformed_html, "<head").is_some();
+    let has_body_tag = find_ascii_ci(transformed_html, "<body").is_some();
 
     if has_html_tag && has_head_tag && has_body_tag {
         // Template has full structure - inject our styles and scripts
         let mut result = transformed_html.to_string();
 
         // Inject base styles at the start of <head>
-        if let Some(pos) = result.to_lowercase().find("<head>") {
+        if let Some(pos) = find_ascii_ci(&result, "<head>") {
             let insert_pos = pos + 6;
             let styles = format!("<style>{}</style>", base_styles);
             result.insert_str(insert_pos, &styles);
@@ -313,7 +335,7 @@ pub fn prepare_html_document(
 
         // Inject user CSS if provided
         if let Some(css) = user_css {
-            if let Some(pos) = result.to_lowercase().find("</head>") {
+            if let Some(pos) = find_ascii_ci(&result, "</head>") {
                 let styles = format!("<style>{}</style>", css);
                 result.insert_str(pos, &styles);
             }
@@ -321,14 +343,14 @@ pub fn prepare_html_document(
 
         // Inject embedded CSS if provided
         if let Some(css) = embedded_css {
-            if let Some(pos) = result.to_lowercase().find("</head>") {
+            if let Some(pos) = find_ascii_ci(&result, "</head>") {
                 let styles = format!("<style>{}</style>", css);
                 result.insert_str(pos, &styles);
             }
         }
 
         // Inject bridge script at end of body
-        if let Some(pos) = result.to_lowercase().find("</body>") {
+        if let Some(pos) = find_ascii_ci(&result, "</body>") {
             let script = format!("<script>{}</script>", bridge_script);
             result.insert_str(pos, &script);
         }

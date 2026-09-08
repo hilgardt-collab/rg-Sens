@@ -236,6 +236,10 @@ fn draw_track(
             .map(|stop| stop.resolve(theme))
             .collect();
 
+        // Fetch the gradient LUT once for the whole track (avoids re-hashing
+        // the stop list for each of the 100 segments below)
+        let lut = crate::render_cache::get_cached_gradient_lut(&resolved_stops);
+
         // Draw track with gradient by drawing many small segments
         let segments = 100;
         for i in 0..segments {
@@ -245,8 +249,8 @@ fn draw_track(
             let angle1 = start_rad + sweep * t1;
             let angle2 = start_rad + sweep * t2;
 
-            // Interpolate color from resolved stops
-            let color = interpolate_color_stops(&resolved_stops, t1);
+            // Interpolate color from the pre-fetched LUT
+            let color = lut.get_color(t1);
 
             cr.set_source_rgba(color.r, color.g, color.b, color.a);
             cr.set_line_width(arc_width_pixels);
@@ -298,9 +302,13 @@ fn draw_ticks(
         .and_then(|v| v.as_f64())
         .unwrap_or(100.0);
 
+    // Guard against major_tick_count = 0 (hand-edited config): 0/0 below would
+    // render a "NaN" tick label
+    let major_tick_count = config.major_tick_count.max(1);
+
     // Draw major ticks and labels
-    for i in 0..=config.major_tick_count {
-        let t = i as f64 / config.major_tick_count as f64;
+    for i in 0..=major_tick_count {
+        let t = i as f64 / major_tick_count as f64;
         let angle = start_rad + sweep * t;
 
         // Draw major tick
@@ -347,8 +355,8 @@ fn draw_ticks(
         }
 
         // Draw minor ticks between major ticks
-        if config.show_minor_ticks && i < config.major_tick_count {
-            let major_span = 1.0 / config.major_tick_count as f64;
+        if config.show_minor_ticks && i < major_tick_count {
+            let major_span = 1.0 / major_tick_count as f64;
             let minor_span = major_span / (config.minor_ticks_per_major + 1) as f64;
 
             for j in 1..=config.minor_ticks_per_major {
@@ -652,17 +660,3 @@ fn draw_center_hub(
     Ok(())
 }
 
-fn interpolate_color_stops(stops: &[ColorStop], t: f64) -> Color {
-    use crate::render_cache::get_cached_color_at;
-
-    if stops.is_empty() {
-        return Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 1.0,
-        };
-    }
-
-    get_cached_color_at(stops, t)
-}

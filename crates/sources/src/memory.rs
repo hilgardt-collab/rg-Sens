@@ -188,18 +188,20 @@ impl DataSource for MemorySource {
             .unwrap_or_else(|| self.generate_auto_caption());
 
         // Calculate derived values
+        // Keep percentages as f64 (consistent with disk.rs) — truncating to
+        // u32 turned 99.9% into 99
         let free_memory = self.total_memory.saturating_sub(self.used_memory);
         let memory_percent = if self.total_memory > 0 {
-            (self.used_memory as f64 / self.total_memory as f64 * 100.0) as u32
+            self.used_memory as f64 / self.total_memory as f64 * 100.0
         } else {
-            0
+            0.0
         };
 
         let free_swap = self.total_swap.saturating_sub(self.used_swap);
         let swap_percent = if self.total_swap > 0 {
-            (self.used_swap as f64 / self.total_swap as f64 * 100.0) as u32
+            self.used_swap as f64 / self.total_swap as f64 * 100.0
         } else {
-            0
+            0.0
         };
 
         // Apply field configuration to determine what goes in the main value/unit fields

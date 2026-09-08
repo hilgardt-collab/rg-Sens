@@ -105,6 +105,217 @@ pub(crate) fn create_panel_context_menu() -> gtk4::gio::Menu {
     menu
 }
 
+thread_local! {
+    /// One CssProvider per panel for the corner-radius clip class.
+    /// Updated in place on radius changes instead of registering a new
+    /// provider per Apply (providers were previously never removed and
+    /// accumulated for the app lifetime).
+    static PANEL_RADIUS_PROVIDERS: RefCell<HashMap<String, gtk4::CssProvider>> =
+        RefCell::new(HashMap::new());
+
+    /// Panel IDs that currently have a live indicator-background refresh timer.
+    /// Keeps ensure_indicator_background_timer() idempotent.
+    static INDICATOR_TIMER_PANELS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+}
+
+/// Apply (or update) the widget-level corner-radius CSS clip for a panel's frame.
+///
+/// Shared by panel creation, all copy paths, and the properties-dialog Apply
+/// path so the clip behavior can't drift between them. Maintains a single
+/// CssProvider per panel, updating its CSS in place; a radius of 0 removes the
+/// class and clears the provider's CSS.
+pub(crate) fn apply_corner_radius_css(frame: &Frame, panel_id: &str, radius: f64) {
+    let css_class = format!("panel-radius-{}", panel_id.replace('-', "_"));
+    PANEL_RADIUS_PROVIDERS.with(|providers| {
+        let mut providers = providers.borrow_mut();
+        if radius > 0.0 {
+            let provider = providers.entry(panel_id.to_string()).or_insert_with(|| {
+                let provider = gtk4::CssProvider::new();
+                gtk4::style_context_add_provider_for_display(
+                    &frame.display(),
+                    &provider,
+                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+                provider
+            });
+            frame.add_css_class(&css_class);
+            provider.load_from_data(&format!(
+                ".{} {{ border-radius: {}px; overflow: hidden; }}",
+                css_class, radius
+            ));
+        } else {
+            frame.remove_css_class(&css_class);
+            if let Some(provider) = providers.get(panel_id) {
+                provider.load_from_data("");
+            }
+        }
+    });
+}
+
+/// Remove a panel's corner-radius provider from the display (panel deleted).
+pub(crate) fn remove_corner_radius_css(panel_id: &str) {
+    let provider = PANEL_RADIUS_PROVIDERS.with(|providers| providers.borrow_mut().remove(panel_id));
+    if let Some(provider) = provider {
+        if let Some(display) = gtk4::gdk::Display::default() {
+            gtk4::style_context_remove_provider_for_display(&display, &provider);
+        }
+    }
+}
+
+/// Attach the alarm/timer click handler used by clock displayers.
+///
+/// No-op for non-clock displayers. Shared by add_panel, the copy paths, and
+/// the displayer-swap path in grid_properties_dialog so a panel swapped or
+/// copied to clock_analog/clock_digital can open the AlarmTimerDialog and
+/// dismiss ringing alarms just like a freshly created one.
+pub(crate) fn attach_clock_click_handler(
+    widget: &Widget,
+    panel: &Arc<RwLock<Panel>>,
+    displayer_id: &str,
+) {
+    if displayer_id != "clock_analog" && displayer_id != "clock_digital" {
+        return;
+    }
+
+    let gesture = gtk4::GestureClick::new();
+    gesture.set_button(1); // Left click only - don't interfere with right-click context menu
+    let panel_for_click = panel.clone();
+    gesture.connect_released(move |gesture, _, click_x, click_y| {
+        if let Some(widget) = gesture.widget() {
+            // First check if any alarm is triggered or timer is finished - if so, clicking anywhere dismisses it
+            // Use global timer manager for accurate state
+            let (alarm_triggered, timer_finished) = {
+                if let Ok(manager) = crate::core::global_timer_manager().read() {
+                    (manager.any_alarm_triggered(), manager.any_timer_finished())
+                } else {
+                    (false, false)
+                }
+            };
+
+            if alarm_triggered || timer_finished {
+                // Click anywhere dismisses all triggered alarms and finished timers
+                // Also stop any playing sounds
+                crate::core::stop_all_sounds();
+                if let Ok(mut manager) = crate::core::global_timer_manager().write() {
+                    if alarm_triggered {
+                        manager.dismiss_all_alarms();
+                    }
+                    if timer_finished {
+                        manager.dismiss_finished_timers();
+                    }
+                }
+                return; // Don't open dialog when dismissing
+            }
+
+            // Check if click is on the icon - only open dialog if clicked on icon
+            let on_icon = if let Ok(panel_guard) = panel_for_click.try_read() {
+                if let Some((ix, iy, iw, ih)) = panel_guard.displayer.get_icon_bounds() {
+                    click_x >= ix && click_x <= ix + iw && click_y >= iy && click_y <= iy + ih
+                } else {
+                    // No icon bounds means no icon shown, allow click anywhere
+                    true
+                }
+            } else {
+                true // Couldn't read panel, allow click
+            };
+
+            if on_icon {
+                let window = widget
+                    .root()
+                    .and_then(|r| r.downcast::<gtk4::Window>().ok());
+
+                crate::ui::AlarmTimerDialog::show(window.as_ref());
+            }
+        }
+    });
+    widget.add_controller(gesture);
+}
+
+/// Ensure the 500ms indicator-background refresh timer is running for a panel.
+///
+/// No-op if the panel's background isn't indicator-type, or if a timer is
+/// already live for this panel (idempotent). The timer self-terminates when
+/// the widget is destroyed/orphaned or the background type changes away, at
+/// which point it deregisters itself so a later call can restart it.
+///
+/// Shared by add_panel, all copy paths, and the properties-dialog Apply path
+/// (which previously never (re)created the timer, leaving indicator
+/// backgrounds static).
+pub(crate) fn ensure_indicator_background_timer(
+    panel: &Arc<RwLock<Panel>>,
+    background_area: &DrawingArea,
+) {
+    let (panel_id, is_indicator_bg) = {
+        let guard = panel.blocking_read();
+        (guard.id.clone(), guard.background.background.is_indicator())
+    };
+    if !is_indicator_bg {
+        return;
+    }
+
+    // Idempotent: don't start a second timer for the same panel
+    let inserted = INDICATOR_TIMER_PANELS.with(|set| set.borrow_mut().insert(panel_id.clone()));
+    if !inserted {
+        return;
+    }
+
+    let panel_for_bg_timer = panel.clone();
+    let background_area_weak_timer = background_area.downgrade();
+    let last_indicator_value: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
+    gtk4::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
+        let deregister = || {
+            INDICATOR_TIMER_PANELS.with(|set| {
+                set.borrow_mut().remove(&panel_id);
+            });
+        };
+
+        // Stop if background area is gone (panel deleted)
+        let Some(bg_area) = background_area_weak_timer.upgrade() else {
+            log::debug!("Indicator background timer stopping: widget destroyed");
+            deregister();
+            return gtk4::glib::ControlFlow::Break;
+        };
+
+        // Stop if widget is orphaned (removed from widget tree but not destroyed)
+        // This prevents memory leaks when panels are replaced
+        if bg_area.root().is_none() {
+            log::debug!("Indicator background timer stopping: widget orphaned");
+            deregister();
+            return gtk4::glib::ControlFlow::Break;
+        }
+
+        // Check if panel background is still indicator type and value changed
+        if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
+            if let crate::ui::BackgroundType::Indicator(ref indicator) =
+                panel_guard.background.background
+            {
+                // Get current value from source (not config - config stores source settings, not values)
+                let source_values = panel_guard.source.get_values();
+                let current_value = if !indicator.value_field.is_empty() {
+                    source_values
+                        .get(&indicator.value_field)
+                        .and_then(|v| v.as_f64())
+                } else {
+                    Some(indicator.static_value)
+                };
+
+                // Only redraw if value changed
+                let mut last_val = last_indicator_value.borrow_mut();
+                if *last_val != current_value {
+                    *last_val = current_value;
+                    bg_area.queue_draw();
+                }
+            } else {
+                // Background type changed from indicator to something else, stop timer
+                log::debug!("Indicator background timer stopping: background type changed");
+                deregister();
+                return gtk4::glib::ControlFlow::Break;
+            }
+        }
+        gtk4::glib::ControlFlow::Continue
+    });
+}
+
 // PANEL_PROPERTIES_DIALOG thread_local moved to grid_properties_dialog.rs
 
 /// Grid configuration
@@ -316,18 +527,21 @@ impl GridLayout {
         let states = self.panel_states.borrow();
 
         for state in states.values() {
-            if let Ok(panel_guard) = state.panel.try_read() {
-                let geom = &panel_guard.geometry;
-                let panel_x = geom.x as f64 * (config.cell_width + config.spacing) as f64;
-                let panel_y = geom.y as f64 * (config.cell_height + config.spacing) as f64;
-                let panel_w = geom.width as f64 * config.cell_width as f64
-                    + (geom.width as f64 - 1.0) * config.spacing as f64;
-                let panel_h = geom.height as f64 * config.cell_height as f64
-                    + (geom.height as f64 - 1.0) * config.spacing as f64;
+            // One-time user action (right-click dispatch): use blocking_read so a
+            // contended lock can't make the right-click open the wrong menu.
+            let geom = {
+                let panel_guard = state.panel.blocking_read();
+                panel_guard.geometry
+            };
+            let panel_x = geom.x as f64 * (config.cell_width + config.spacing) as f64;
+            let panel_y = geom.y as f64 * (config.cell_height + config.spacing) as f64;
+            let panel_w = geom.width as f64 * config.cell_width as f64
+                + (geom.width as f64 - 1.0) * config.spacing as f64;
+            let panel_h = geom.height as f64 * config.cell_height as f64
+                + (geom.height as f64 - 1.0) * config.spacing as f64;
 
-                if x >= panel_x && x < panel_x + panel_w && y >= panel_y && y < panel_y + panel_h {
-                    return true;
-                }
+            if x >= panel_x && x < panel_x + panel_w && y >= panel_y && y < panel_y + panel_h {
+                return true;
             }
         }
 
@@ -607,7 +821,7 @@ impl GridLayout {
             }
 
             // Sort by z_index descending (highest z_index = topmost panel)
-            candidates.sort_by(|a, b| b.1.cmp(&a.1));
+            candidates.sort_by_key(|c| std::cmp::Reverse(c.1));
 
             // Show context menu for the topmost panel
             if let Some((state, _, panel_x, panel_y, panel_width, panel_height)) =
@@ -909,63 +1123,7 @@ impl GridLayout {
         widget.set_size_request(width, height);
 
         // For clock displayers, add click handler for alarm/timer management
-        if displayer_id == "clock_analog" || displayer_id == "clock_digital" {
-            let gesture = gtk4::GestureClick::new();
-            gesture.set_button(1); // Left click only - don't interfere with right-click context menu
-            let panel_for_click = panel.clone();
-            gesture.connect_released(move |gesture, _, click_x, click_y| {
-                if let Some(widget) = gesture.widget() {
-                    // First check if any alarm is triggered or timer is finished - if so, clicking anywhere dismisses it
-                    // Use global timer manager for accurate state
-                    let (alarm_triggered, timer_finished) = {
-                        if let Ok(manager) = crate::core::global_timer_manager().read() {
-                            (manager.any_alarm_triggered(), manager.any_timer_finished())
-                        } else {
-                            (false, false)
-                        }
-                    };
-
-                    if alarm_triggered || timer_finished {
-                        // Click anywhere dismisses all triggered alarms and finished timers
-                        // Also stop any playing sounds
-                        crate::core::stop_all_sounds();
-                        if let Ok(mut manager) = crate::core::global_timer_manager().write() {
-                            if alarm_triggered {
-                                manager.dismiss_all_alarms();
-                            }
-                            if timer_finished {
-                                manager.dismiss_finished_timers();
-                            }
-                        }
-                        return; // Don't open dialog when dismissing
-                    }
-
-                    // Check if click is on the icon - only open dialog if clicked on icon
-                    let on_icon = if let Ok(panel_guard) = panel_for_click.try_read() {
-                        if let Some((ix, iy, iw, ih)) = panel_guard.displayer.get_icon_bounds() {
-                            click_x >= ix
-                                && click_x <= ix + iw
-                                && click_y >= iy
-                                && click_y <= iy + ih
-                        } else {
-                            // No icon bounds means no icon shown, allow click anywhere
-                            true
-                        }
-                    } else {
-                        true // Couldn't read panel, allow click
-                    };
-
-                    if on_icon {
-                        let window = widget
-                            .root()
-                            .and_then(|r| r.downcast::<gtk4::Window>().ok());
-
-                        crate::ui::AlarmTimerDialog::show(window.as_ref());
-                    }
-                }
-            });
-            widget.add_controller(gesture);
-        }
+        attach_clock_click_handler(&widget, &panel, &displayer_id);
 
         // Create background drawing area
         let background_area = DrawingArea::new();
@@ -1111,60 +1269,8 @@ impl GridLayout {
             }
         });
 
-        // Set up periodic redraw for indicator backgrounds
-        // This ensures the background color updates when source values change
-        // Only redraws when the indicator value actually changes to avoid wasting CPU
-        // 500ms interval is sufficient since panel update cycle also triggers redraws
-        // Only create timer if panel has indicator background to avoid unnecessary timers
-        let is_indicator_bg = panel.blocking_read().background.background.is_indicator();
-        if is_indicator_bg {
-            let panel_for_bg_timer = panel.clone();
-            let background_area_weak_timer = background_area.downgrade();
-            let last_indicator_value: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
-            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-                // Stop if background area is gone (panel deleted)
-                let Some(bg_area) = background_area_weak_timer.upgrade() else {
-                    log::debug!("Indicator background timer stopping: widget destroyed");
-                    return gtk4::glib::ControlFlow::Break;
-                };
-
-                // Stop if widget is orphaned (removed from widget tree but not destroyed)
-                // This prevents memory leaks when panels are replaced
-                if bg_area.root().is_none() {
-                    log::debug!("Indicator background timer stopping: widget orphaned");
-                    return gtk4::glib::ControlFlow::Break;
-                }
-
-                // Check if panel background is still indicator type and value changed
-                if let Ok(panel_guard) = panel_for_bg_timer.try_read() {
-                    if let crate::ui::BackgroundType::Indicator(ref indicator) =
-                        panel_guard.background.background
-                    {
-                        // Get current value from source (not config - config stores source settings, not values)
-                        let source_values = panel_guard.source.get_values();
-                        let current_value = if !indicator.value_field.is_empty() {
-                            source_values
-                                .get(&indicator.value_field)
-                                .and_then(|v| v.as_f64())
-                        } else {
-                            Some(indicator.static_value)
-                        };
-
-                        // Only redraw if value changed
-                        let mut last_val = last_indicator_value.borrow_mut();
-                        if *last_val != current_value {
-                            *last_val = current_value;
-                            bg_area.queue_draw();
-                        }
-                    } else {
-                        // Background type changed from indicator to something else, stop timer
-                        log::debug!("Indicator background timer stopping: background type changed");
-                        return gtk4::glib::ControlFlow::Break;
-                    }
-                }
-                gtk4::glib::ControlFlow::Continue
-            });
-        }
+        // Set up periodic redraw for indicator backgrounds (shared helper, idempotent)
+        ensure_indicator_background_timer(&panel, &background_area);
 
         // Create overlay to stack background and widget
         let overlay = Overlay::new();
@@ -1180,29 +1286,10 @@ impl GridLayout {
         frame.set_child(Some(&overlay));
         frame.set_size_request(width, height);
 
-        // Apply corner radius clipping via CSS
+        // Apply corner radius clipping via CSS (shared helper, one provider per panel)
         {
-            let panel_guard = panel.blocking_read();
-            let radius = panel_guard.corner_radius;
-            let panel_id = panel_guard.id.clone();
-            drop(panel_guard);
-
-            if radius > 0.0 {
-                // Use a unique CSS class per panel to avoid global style conflicts
-                let css_class = format!("panel-radius-{}", panel_id.replace('-', "_"));
-                frame.add_css_class(&css_class);
-
-                let css_provider = gtk4::CssProvider::new();
-                let css = format!(".{} {{ border-radius: {}px; }}", css_class, radius);
-                css_provider.load_from_data(&css);
-                // Add provider to display (CSS class ensures it only affects this panel)
-                let display = frame.display();
-                gtk4::style_context_add_provider_for_display(
-                    &display,
-                    &css_provider,
-                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-                );
-            }
+            let radius = panel.blocking_read().corner_radius;
+            apply_corner_radius_css(&frame, &panel_id, radius);
         }
 
         // Setup drag-and-drop and selection - returns context popover for global handler
@@ -1962,7 +2049,12 @@ impl GridLayout {
                 (config.columns, config.rows)
             };
 
-            // Calculate new positions and check collisions
+            // Calculate new positions and check collisions.
+            // First pass: compute each panel's ideal (unclamped) grid position so
+            // the group's relative layout is preserved.
+            let mut ideal_positions: Vec<(String, i64, i64)> = Vec::new();
+            let mut group_min = (i64::MAX, i64::MAX);
+            let mut group_max = (i64::MIN, i64::MIN);
             for id in selected.iter() {
                 if states.contains_key(id) {
                     let (orig_x, orig_y) = positions.get(id).unwrap_or(&(0.0, 0.0));
@@ -1972,40 +2064,68 @@ impl GridLayout {
                     // Calculate grid position from final position
                     let grid_x = ((final_x + config.cell_width as f64 / 2.0)
                         / (config.cell_width + config.spacing) as f64)
-                        .floor() as u32;
+                        .floor() as i64;
                     let grid_y = ((final_y + config.cell_height as f64 / 2.0)
                         / (config.cell_height + config.spacing) as f64)
-                        .floor() as u32;
+                        .floor() as i64;
 
-                    let grid_x = grid_x.min(available_cols.saturating_sub(1));
-                    let grid_y = grid_y.min(available_rows.saturating_sub(1));
+                    group_min.0 = group_min.0.min(grid_x);
+                    group_min.1 = group_min.1.min(grid_y);
+                    group_max.0 = group_max.0.max(grid_x);
+                    group_max.1 = group_max.1.max(grid_y);
+                    ideal_positions.push((id.clone(), grid_x, grid_y));
+                }
+            }
 
+            // Clamp the GROUP's translation once instead of clamping each panel's
+            // origin independently (which collapsed group members onto the same
+            // edge cell, creating persisted overlaps). If the group is larger than
+            // the grid, keeping origins non-negative takes priority.
+            let last_col = available_cols.saturating_sub(1) as i64;
+            let last_row = available_rows.saturating_sub(1) as i64;
+            let mut shift_x = 0i64;
+            let mut shift_y = 0i64;
+            if group_max.0 > last_col {
+                shift_x = last_col - group_max.0;
+            }
+            if group_min.0 + shift_x < 0 {
+                shift_x = -group_min.0;
+            }
+            if group_max.1 > last_row {
+                shift_y = last_row - group_max.1;
+            }
+            if group_min.1 + shift_y < 0 {
+                shift_y = -group_min.1;
+            }
 
-                    // Check if this panel would collide (skip for panels with ignore_collision)
-                    // Use cached values from drag_begin to avoid blocking reads
-                    let ignore_collision = cached_ignore.get(id).copied().unwrap_or(false);
-                    if let Some(geom) = cached_geoms.get(id) {
-                        if !ignore_collision {
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    let cell = (grid_x + dx, grid_y + dy);
-                                    if occupied.contains(&cell) {
-                                        group_has_collision = true;
-                                        break;
-                                    }
-                                }
-                                if group_has_collision {
+            for (id, ideal_x, ideal_y) in ideal_positions {
+                let grid_x = (ideal_x + shift_x).max(0) as u32;
+                let grid_y = (ideal_y + shift_y).max(0) as u32;
+
+                // Check if this panel would collide (skip for panels with ignore_collision)
+                // Use cached values from drag_begin to avoid blocking reads
+                let ignore_collision = cached_ignore.get(&id).copied().unwrap_or(false);
+                if let Some(geom) = cached_geoms.get(&id) {
+                    if !ignore_collision {
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                let cell = (grid_x + dx, grid_y + dy);
+                                if occupied.contains(&cell) {
+                                    group_has_collision = true;
                                     break;
                                 }
                             }
+                            if group_has_collision {
+                                break;
+                            }
                         }
-
-                        // Calculate snapped pixel position
-                        let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
-                        let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
-
-                        new_positions.push((id.clone(), grid_x, grid_y, snapped_x, snapped_y));
                     }
+
+                    // Calculate snapped pixel position
+                    let snapped_x = grid_x as f64 * (config.cell_width + config.spacing) as f64;
+                    let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
+
+                    new_positions.push((id, grid_x, grid_y, snapped_x, snapped_y));
                 }
             }
 
@@ -2147,6 +2267,9 @@ impl GridLayout {
                                 };
                                 widget.set_size_request(width, height);
 
+                                // For clock displayers, add click handler for alarm/timer management
+                                attach_clock_click_handler(&widget, &new_panel, &displayer_id);
+
                                 // Create background drawing area
                                 use gtk4::DrawingArea;
                                 let background_area = DrawingArea::new();
@@ -2228,6 +2351,11 @@ impl GridLayout {
                                 let frame = Frame::new(None);
                                 frame.set_child(Some(&overlay));
                                 frame.set_size_request(width, height);
+
+                                // Widget-level corner-radius clip + indicator background timer
+                                // (shared helpers; the copy paths previously skipped both)
+                                apply_corner_radius_css(&frame, &new_id, corner_radius);
+                                ensure_indicator_background_timer(&new_panel, &background_area);
 
                                 // Store panel state first (context_popover added later)
                                 panel_states_end.borrow_mut().insert(
@@ -2796,17 +2924,17 @@ impl GridLayout {
 
                                     // Phase 1: Clear occupied cells (only if moving, not copying)
                                     // Panels with ignore_collision don't participate in collision detection
+                                    // Drop is a one-time user action: use blocking_read so a contended
+                                    // lock can't corrupt the occupied-cells map (ghost cells).
                                     if !is_copy_mode {
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                // Use try_read to avoid blocking tokio update thread
-                                                if let Ok(panel_guard) = state.panel.try_read() {
-                                                    if !panel_guard.ignore_collision {
-                                                        let geom = panel_guard.geometry;
-                                                        for dx in 0..geom.width {
-                                                            for dy in 0..geom.height {
-                                                                occupied.remove(&(geom.x + dx, geom.y + dy));
-                                                            }
+                                                let panel_guard = state.panel.blocking_read();
+                                                if !panel_guard.ignore_collision {
+                                                    let geom = panel_guard.geometry;
+                                                    for dx in 0..geom.width {
+                                                        for dy in 0..geom.height {
+                                                            occupied.remove(&(geom.x + dx, geom.y + dy));
                                                         }
                                                     }
                                                 }
@@ -2837,8 +2965,10 @@ impl GridLayout {
                                                 let snapped_y = grid_y as f64 * (config.cell_height + config.spacing) as f64;
 
                                                 // Check collision (skip for panels with ignore_collision)
-                                                // Use try_read to avoid blocking tokio update thread
-                                                if let Ok(panel_guard) = state.panel.try_read() {
+                                                // blocking_read: skipping this check on contention would
+                                                // allow silent overlaps (drop is a one-time action)
+                                                {
+                                                    let panel_guard = state.panel.blocking_read();
                                                     let geom = panel_guard.geometry;
                                                     if !panel_guard.ignore_collision {
                                                         for dx in 0..geom.width {
@@ -2864,16 +2994,16 @@ impl GridLayout {
                                     // Phase 3: Apply changes
                                     if group_has_collision && !is_copy_mode {
                                         // Restore original positions (only for panels that participate in collision)
+                                        // blocking_read: failing to restore cells here would leave
+                                        // ghost holes in the collision map
                                         for id in selected.iter() {
                                             if let Some(state) = states.get(id) {
-                                                // Use try_read to avoid blocking tokio update thread
-                                                if let Ok(panel_guard) = state.panel.try_read() {
-                                                    if !panel_guard.ignore_collision {
-                                                        let geom = panel_guard.geometry;
-                                                        for dx in 0..geom.width {
-                                                            for dy in 0..geom.height {
-                                                                occupied.insert((geom.x + dx, geom.y + dy));
-                                                            }
+                                                let panel_guard = state.panel.blocking_read();
+                                                if !panel_guard.ignore_collision {
+                                                    let geom = panel_guard.geometry;
+                                                    for dx in 0..geom.width {
+                                                        for dy in 0..geom.height {
+                                                            occupied.insert((geom.x + dx, geom.y + dy));
                                                         }
                                                     }
                                                 }
@@ -2962,6 +3092,13 @@ impl GridLayout {
                                                             // Add to panels list
                                                             panels_drag_end.borrow_mut().push(new_panel.clone());
 
+                                                            // Register with update manager so the panel gets periodic
+                                                            // updates (the other copy paths do this too; omitting it
+                                                            // left nested copies rendered once and frozen)
+                                                            if let Some(update_manager) = crate::core::global_update_manager() {
+                                                                update_manager.queue_add_panel(new_panel.clone());
+                                                            }
+
                                                             // Mark cells as occupied (only if panel participates in collision detection)
                                                             if !ignore_collision {
                                                                 let mut occupied_write = occupied_cells_drag_end.borrow_mut();
@@ -2989,6 +3126,9 @@ impl GridLayout {
                                                                 panel_guard.displayer.create_widget()
                                                             };
                                                             widget.set_size_request(width, height);
+
+                                                            // For clock displayers, add click handler for alarm/timer management
+                                                            attach_clock_click_handler(&widget, &new_panel, &displayer_id);
 
                                                             // Create background drawing area
                                                             use gtk4::DrawingArea;
@@ -3065,6 +3205,10 @@ impl GridLayout {
                                                             let frame = Frame::new(None);
                                                             frame.set_child(Some(&overlay));
                                                             frame.set_size_request(width, height);
+
+                                                            // Widget-level corner-radius clip + indicator background timer
+                                                            apply_corner_radius_css(&frame, &new_id, corner_radius);
+                                                            ensure_indicator_background_timer(&new_panel, &background_area);
 
                                                             // Store panel state (context_popover added by deferred setup)
                                                             panel_states_drag_end.borrow_mut().insert(
@@ -3149,32 +3293,22 @@ impl GridLayout {
                                                         }
                                                     }
 
-                                                    // Update geometry using try_write to avoid blocking tokio update thread
-                                                    match state.panel.try_write() {
-                                                        Ok(mut panel_guard) => {
-                                                            panel_guard.geometry.x = grid_x;
-                                                            panel_guard.geometry.y = grid_y;
-                                                        }
-                                                        Err(_) => {
-                                                            // Defer update to next idle if lock unavailable
-                                                            let panel = state.panel.clone();
-                                                            gtk4::glib::idle_add_local_once(move || {
-                                                                if let Ok(mut guard) = panel.try_write() {
-                                                                    guard.geometry.x = grid_x;
-                                                                    guard.geometry.y = grid_y;
-                                                                }
-                                                            });
-                                                        }
-                                                    }
+                                                    // Update geometry and mark cells using blocking_write:
+                                                    // drop is a one-time user action, and a contended lock
+                                                    // previously deferred the geometry write (or skipped the
+                                                    // occupied-cell marking), corrupting the collision map
+                                                    let mut panel_guard = state.panel.blocking_write();
+                                                    panel_guard.geometry.x = grid_x;
+                                                    panel_guard.geometry.y = grid_y;
+                                                    let ignore_collision = panel_guard.ignore_collision;
+                                                    let geom = panel_guard.geometry;
+                                                    drop(panel_guard);
 
                                                     // Mark new cells as occupied (only if panel participates in collision)
-                                                    if let Ok(panel_guard) = state.panel.try_read() {
-                                                        if !panel_guard.ignore_collision {
-                                                            let geom = panel_guard.geometry;
-                                                            for dx in 0..geom.width {
-                                                                for dy in 0..geom.height {
-                                                                    occupied.insert((grid_x + dx, grid_y + dy));
-                                                                }
+                                                    if !ignore_collision {
+                                                        for dx in 0..geom.width {
+                                                            for dy in 0..geom.height {
+                                                                occupied.insert((grid_x + dx, grid_y + dy));
                                                             }
                                                         }
                                                     }
@@ -3219,32 +3353,22 @@ impl GridLayout {
                             }
                         }
 
-                        // Update geometry using try_write to avoid blocking tokio update thread
-                        match state.panel.try_write() {
-                            Ok(mut panel_guard) => {
-                                panel_guard.geometry.x = grid_x;
-                                panel_guard.geometry.y = grid_y;
-                            }
-                            Err(_) => {
-                                // Defer update to next idle if lock unavailable
-                                let panel = state.panel.clone();
-                                gtk4::glib::idle_add_local_once(move || {
-                                    if let Ok(mut guard) = panel.try_write() {
-                                        guard.geometry.x = grid_x;
-                                        guard.geometry.y = grid_y;
-                                    }
-                                });
-                            }
-                        }
+                        // Update geometry and mark cells using blocking_write: drop is a
+                        // one-time user action, and a contended lock previously deferred
+                        // the geometry write (or skipped the occupied-cell marking),
+                        // corrupting the collision map
+                        let mut panel_guard = state.panel.blocking_write();
+                        panel_guard.geometry.x = grid_x;
+                        panel_guard.geometry.y = grid_y;
+                        let ignore_collision = panel_guard.ignore_collision;
+                        let geom = panel_guard.geometry;
+                        drop(panel_guard);
 
                         // Mark new cells as occupied (only if panel participates in collision)
-                        if let Ok(panel_guard) = state.panel.try_read() {
-                            if !panel_guard.ignore_collision {
-                                let geom = panel_guard.geometry;
-                                for dx in 0..geom.width {
-                                    for dy in 0..geom.height {
-                                        occupied.insert((grid_x + dx, grid_y + dy));
-                                    }
+                        if !ignore_collision {
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.insert((grid_x + dx, grid_y + dy));
                                 }
                             }
                         }
@@ -3296,13 +3420,14 @@ impl GridLayout {
 
     /// Remove a panel by ID
     pub fn remove_panel(&mut self, panel_id: &str) -> Option<Arc<RwLock<Panel>>> {
-        // Find position first, then release borrow before mutating
-        // Use try_read to avoid blocking tokio update thread
+        // Find position first, then release borrow before mutating.
+        // Delete is a one-time user action: blocking_read so a contended lock
+        // can't make a panel silently survive its own deletion.
         let pos = self
             .panels
             .borrow()
             .iter()
-            .position(|p| p.try_read().map(|g| g.id == panel_id).unwrap_or(false));
+            .position(|p| p.blocking_read().id == panel_id);
 
         if let Some(pos) = pos {
             let panel = self.panels.borrow_mut().remove(pos);
@@ -3326,17 +3451,19 @@ impl GridLayout {
 
                 self.container.remove(&state.frame);
 
+                // Drop the panel's corner-radius CSS provider
+                remove_corner_radius_css(panel_id);
+
                 // Clear occupied cells (only if panel participated in collision detection)
-                // Use try_read to avoid blocking tokio update thread
-                if let Ok(panel_guard) = state.panel.try_read() {
-                    if !panel_guard.ignore_collision {
-                        let geom = panel_guard.geometry;
-                        drop(panel_guard); // Release lock before borrowing occupied_cells
-                        let mut occupied = self.occupied_cells.borrow_mut();
-                        for dx in 0..geom.width {
-                            for dy in 0..geom.height {
-                                occupied.remove(&(geom.x + dx, geom.y + dy));
-                            }
+                // blocking_read: a contended lock here previously left ghost cells behind
+                let panel_guard = state.panel.blocking_read();
+                if !panel_guard.ignore_collision {
+                    let geom = panel_guard.geometry;
+                    drop(panel_guard); // Release lock before borrowing occupied_cells
+                    let mut occupied = self.occupied_cells.borrow_mut();
+                    for dx in 0..geom.width {
+                        for dy in 0..geom.height {
+                            occupied.remove(&(geom.x + dx, geom.y + dy));
                         }
                     }
                 }
@@ -3353,12 +3480,12 @@ impl GridLayout {
 
     /// Remove all panels from the grid
     pub fn clear_all_panels(&mut self) {
-        // Get all panel IDs using try_read to avoid blocking tokio update thread
+        // One-time action: blocking_read so no panel is silently skipped
         let panel_ids: Vec<String> = self
             .panels
             .borrow()
             .iter()
-            .filter_map(|p| p.try_read().ok().map(|g| g.id.clone()))
+            .map(|p| p.blocking_read().id.clone())
             .collect();
 
         // Remove each panel
@@ -4035,17 +4162,17 @@ fn setup_copied_panel_interaction(
         let is_copy_mode = modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
 
         // Clear occupied cells only if moving (skip panels with ignore_collision)
+        // Drop is a one-time user action: blocking_read so a contended lock
+        // can't corrupt the occupied-cells map
         if !is_copy_mode {
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    // Use try_read to avoid blocking tokio update thread
-                    if let Ok(panel_guard) = state.panel.try_read() {
-                        if !panel_guard.ignore_collision {
-                            let geom = panel_guard.geometry;
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    occupied.remove(&(geom.x + dx, geom.y + dy));
-                                }
+                    let panel_guard = state.panel.blocking_read();
+                    if !panel_guard.ignore_collision {
+                        let geom = panel_guard.geometry;
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.remove(&(geom.x + dx, geom.y + dy));
                             }
                         }
                     }
@@ -4071,25 +4198,16 @@ fn setup_copied_panel_interaction(
                 .max(0.0) as u32;
 
             if let Some(dragged_state) = states.get(&*dragged_id) {
-                // Use try_read to avoid blocking tokio update thread
-                let dragged_geom = match dragged_state.panel.try_read() {
-                    Ok(guard) => guard.geometry,
-                    Err(_) => {
-                        // Skip position calculation if lock unavailable
-                        log::debug!("Skipping drag_end position calculation - lock unavailable");
-                        *drag_preview_cells_end.borrow_mut() = Vec::new();
-                        *is_dragging_end.borrow_mut() = false;
-                        drop_zone_end.queue_draw();
-                        return;
-                    }
-                };
+                // blocking_read: the previous try_read early-return left the
+                // phase-1-removed cells un-restored, corrupting the collision map
+                let dragged_geom = dragged_state.panel.blocking_read().geometry;
                 let delta_grid_x = dragged_grid_x as i32 - dragged_geom.x as i32;
                 let delta_grid_y = dragged_grid_y as i32 - dragged_geom.y as i32;
 
                 for id in selected.iter() {
                     if let Some(state) = states.get(id) {
-                        // Use try_read to avoid blocking tokio update thread
-                        if let Ok(panel_guard) = state.panel.try_read() {
+                        {
+                            let panel_guard = state.panel.blocking_read();
                             let geom = panel_guard.geometry;
                             let ignore_collision = panel_guard.ignore_collision;
                             drop(panel_guard);
@@ -4126,16 +4244,15 @@ fn setup_copied_panel_interaction(
         // Apply changes
         if group_has_collision && !is_copy_mode {
             // Restore original positions (only for panels that participate in collision)
+            // blocking_read: failing to restore cells would leave ghost holes
             for id in selected.iter() {
                 if let Some(state) = states.get(id) {
-                    // Use try_read to avoid blocking tokio update thread
-                    if let Ok(panel_guard) = state.panel.try_read() {
-                        if !panel_guard.ignore_collision {
-                            let geom = panel_guard.geometry;
-                            for dx in 0..geom.width {
-                                for dy in 0..geom.height {
-                                    occupied.insert((geom.x + dx, geom.y + dy));
-                                }
+                    let panel_guard = state.panel.blocking_read();
+                    if !panel_guard.ignore_collision {
+                        let geom = panel_guard.geometry;
+                        for dx in 0..geom.width {
+                            for dy in 0..geom.height {
+                                occupied.insert((geom.x + dx, geom.y + dy));
                             }
                         }
                     }
@@ -4260,6 +4377,9 @@ fn setup_copied_panel_interaction(
                                 };
                                 new_widget.set_size_request(width, height);
 
+                                // For clock displayers, add click handler for alarm/timer management
+                                attach_clock_click_handler(&new_widget, &new_panel, &displayer_id);
+
                                 let new_background_area = DrawingArea::new();
                                 new_background_area.set_size_request(width, height);
 
@@ -4378,6 +4498,10 @@ fn setup_copied_panel_interaction(
                                 new_frame.set_child(Some(&new_overlay));
                                 new_frame.set_size_request(width, height);
 
+                                // Widget-level corner-radius clip + indicator background timer
+                                apply_corner_radius_css(&new_frame, &new_id, corner_radius);
+                                ensure_indicator_background_timer(&new_panel, &new_background_area);
+
                                 panel_states_end.borrow_mut().insert(
                                     new_id.clone(),
                                     PanelState {
@@ -4450,32 +4574,22 @@ fn setup_copied_panel_interaction(
                             }
                         }
 
-                        // Update geometry using try_write to avoid blocking tokio update thread
-                        match state.panel.try_write() {
-                            Ok(mut panel_guard) => {
-                                panel_guard.geometry.x = grid_x;
-                                panel_guard.geometry.y = grid_y;
-                            }
-                            Err(_) => {
-                                // Defer update to next idle if lock unavailable
-                                let panel = state.panel.clone();
-                                gtk4::glib::idle_add_local_once(move || {
-                                    if let Ok(mut guard) = panel.try_write() {
-                                        guard.geometry.x = grid_x;
-                                        guard.geometry.y = grid_y;
-                                    }
-                                });
-                            }
-                        }
+                        // Update geometry and mark cells using blocking_write: drop is a
+                        // one-time user action, and a contended lock previously deferred
+                        // the geometry write (or skipped the occupied-cell marking),
+                        // corrupting the collision map
+                        let mut panel_guard = state.panel.blocking_write();
+                        panel_guard.geometry.x = grid_x;
+                        panel_guard.geometry.y = grid_y;
+                        let ignore_collision = panel_guard.ignore_collision;
+                        let geom = panel_guard.geometry;
+                        drop(panel_guard);
 
                         // Mark new cells as occupied (only if panel participates in collision)
-                        if let Ok(panel_guard) = state.panel.try_read() {
-                            if !panel_guard.ignore_collision {
-                                let geom = panel_guard.geometry;
-                                for dx in 0..geom.width {
-                                    for dy in 0..geom.height {
-                                        occupied.insert((grid_x + dx, grid_y + dy));
-                                    }
+                        if !ignore_collision {
+                            for dx in 0..geom.width {
+                                for dy in 0..geom.height {
+                                    occupied.insert((grid_x + dx, grid_y + dy));
                                 }
                             }
                         }
@@ -4531,10 +4645,17 @@ pub(crate) fn delete_selected_panels(
 
             container.remove(&state.frame);
 
+            // Drop the panel's corner-radius CSS provider
+            remove_corner_radius_css(panel_id);
+
             // Clear occupied cells (only if panel participated in collision detection)
-            if let Ok(panel_guard) = state.panel.try_read() {
+            // Delete is a one-time user action: blocking_read so contention can't
+            // leave ghost cells or resurrect the panel after restart
+            {
+                let panel_guard = state.panel.blocking_read();
                 if !panel_guard.ignore_collision {
                     let geom = panel_guard.geometry;
+                    drop(panel_guard);
                     let mut occupied = occupied_cells.borrow_mut();
                     for dx in 0..geom.width {
                         for dy in 0..geom.height {
@@ -4544,10 +4665,11 @@ pub(crate) fn delete_selected_panels(
                 }
             }
 
-            // Remove from panels list using try_read to avoid blocking tokio update thread
-            panels.borrow_mut().retain(|p| {
-                p.try_read().map(|g| g.id != *panel_id).unwrap_or(true)
-            });
+            // Remove from panels list (blocking_read: a skipped panel here
+            // resurrects on restart because it stays in the saved config)
+            panels
+                .borrow_mut()
+                .retain(|p| p.blocking_read().id != *panel_id);
 
             log::info!("Panel deleted: {}", panel_id);
         } else {

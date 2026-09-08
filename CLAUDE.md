@@ -46,15 +46,15 @@ cargo clippy
 
 The architecture separates **data collection** from **visualization** through two main traits:
 
-**DataSource trait** (`src/core/data_source.rs`):
+**DataSource trait** (`crates/core/src/data_source.rs`, re-exported via `crate::core`):
 - Collects system metrics (CPU, GPU, memory, etc.)
 - Must be `Send + Sync` for multi-threaded updates
 - Implements `update()` to refresh data and `get_values()` to expose data as JSON
 - Implements `fields()` to describe available data fields with metadata
 - Implements `configure()` to accept source-specific configuration
-- Examples: `CpuSource`, `GpuSource`, `MemorySource` in `src/sources/`
+- Examples: `CpuSource`, `GpuSource`, `MemorySource` in `crates/sources/src/`
 
-**Displayer trait** (`src/core/displayer.rs`):
+**Displayer trait** (`crates/core/src/displayer.rs`, re-exported via `crate::core`):
 - Visualizes data from any source
 - Must be `Send + Sync` despite GTK widget usage
 - Creates GTK widgets via `create_widget()` and renders via Cairo in `draw()`
@@ -130,9 +130,9 @@ Registration happens in `src/main.rs` at startup. If a displayer/source doesn't 
 ### UI Widget Architecture
 
 **Configuration Widgets:** Each complex UI component has a paired config widget:
-- `src/ui/bar_display.rs` (rendering) + `src/ui/bar_config_widget.rs` (UI)
-- `src/ui/arc_display.rs` (rendering) + `src/ui/arc_config_widget.rs` (UI)
-- `src/ui/background.rs` (rendering) + `src/ui/background_config_widget.rs` (UI)
+- `crates/render/src/bar_display.rs` (rendering) + `src/ui/bar_config_widget.rs` (UI)
+- `crates/render/src/arc_display.rs` (rendering) + `src/ui/arc_config_widget.rs` (UI)
+- `crates/render/src/background.rs` (rendering) + `src/ui/background_config_widget.rs` (UI)
 
 **Pattern:** Rendering code is separate from GTK configuration UI. Rendering modules export:
 - Data structures (e.g., `BarDisplayConfig`, `ArcDisplayConfig`)
@@ -143,9 +143,10 @@ Config widgets create UI controls and call the render function in a preview `Dra
 ### Cairo Rendering
 
 All custom visualizations use Cairo (`cairo-rs`):
-- Bar displays: `src/ui/bar_display.rs`
-- Arc gauges: `src/ui/arc_display.rs`
-- Backgrounds: `src/ui/background.rs` (gradients, images, polygons)
+- Bar displays: `crates/render/src/bar_display.rs`
+- Arc gauges: `crates/render/src/arc_display.rs`
+- Backgrounds: `crates/render/src/background.rs` (gradients, images, polygons)
+- Themed combo rendering: `crates/render/src/*_display.rs`
 - Custom displayers: `src/displayers/*/draw()`
 
 **Key Cairo patterns:**
@@ -175,7 +176,7 @@ cr.stroke().ok();
 - ❌ `FileChooserDialog` → ✅ `FileDialog`
 - ❌ `ComboBoxText` → ✅ `DropDown` + `StringList`
 
-When creating new UI components, use modern GTK4 APIs. Check `src/ui/image_picker.rs` for a reference implementation replacing deprecated `FileChooserDialog`.
+When creating new UI components, use modern GTK4 APIs. See the `FileDialog` usage in `src/ui/background_config_widget.rs` or `src/ui/css_template_config_widget.rs` for reference implementations replacing deprecated `FileChooserDialog`.
 
 ### Configuration System
 
@@ -193,47 +194,35 @@ pub struct AppConfig {
 
 **Serialization:** Uses `serde` + `serde_json`. All configs implement `Serialize + Deserialize`.
 
-**Migration:** `src/config/migration.rs` handles importing from Python gSens configs.
+**Migration:** v1→v2 config migration is handled inline in `src/config/settings.rs` (`AppConfigV1::migrate_to_v2`).
+
+**Saving:** All config writes go through `write_atomic()` in `src/config/mod.rs` (temp file + fsync + rename) — never `std::fs::write` a config file directly; a crash mid-write must not be able to truncate user data.
 
 ## Module Organization
 
+This is a Cargo workspace. The GTK-free logic lives in `crates/`; the main crate holds GTK UI and orchestration.
+
 ```
+crates/
+├── core/           # DataSource + Displayer traits, registry, constants (no GTK)
+├── types/          # Serde config types shared across crates
+├── render/         # Pure Cairo rendering (bar/arc/background/themed *_display.rs, render_cache)
+├── sources/        # Data sources: cpu, memory, disk, network, gpu/, fan_speed,
+│                   #   system_temp, claude.rs + claude_auth.rs, combo, static_text
+└── audio/          # Alarm/timer sound playback
+
 src/
-├── core/           # Core traits and fundamental types
-│   ├── data_source.rs    # DataSource trait
-│   ├── displayer.rs      # Displayer trait
-│   ├── panel.rs          # Panel combining source + displayer
-│   ├── registry.rs       # Global source/displayer registry
-│   └── update_manager.rs # Periodic update coordination
-├── sources/        # Data source implementations
-│   ├── cpu.rs           # CPU metrics via sysinfo
-│   ├── memory.rs        # Memory metrics via sysinfo
-│   └── gpu/
-│       ├── mod.rs       # GPU source (multi-vendor)
-│       ├── backend.rs   # GPU backend trait
-│       ├── nvidia.rs    # NVIDIA GPU via nvml-wrapper
-│       ├── amd.rs       # AMD GPU via sysfs
-│       └── detector.rs  # GPU detection logic
-├── displayers/     # Visualization implementations
-│   ├── text.rs          # Text display with Pango
-│   ├── bar.rs           # Bar/gauge displays
-│   ├── arc.rs           # Arc gauge displays
-│   └── text_config.rs   # Text display configuration types
-├── ui/             # GTK UI components
-│   ├── main_window.rs   # Application window
-│   ├── grid_layout.rs   # Drag-drop panel grid
-│   ├── config_dialog.rs # Settings dialog
-│   ├── bar_display.rs   # Bar rendering logic
-│   ├── bar_config_widget.rs  # Bar configuration UI
-│   ├── arc_display.rs   # Arc rendering logic
-│   ├── arc_config_widget.rs  # Arc configuration UI
-│   ├── background.rs    # Background rendering (gradients/images)
-│   ├── background_config_widget.rs  # Background configuration UI
-│   └── [component]_config_widget.rs  # Config UIs for various components
-├── config/         # Configuration management
+├── core/           # Panel, UpdateManager, SharedSourceManager, AnimationManager,
+│                   #   TimerAlarmManager (+ re-exports of crates/core traits)
+├── sources/        # GTK-adjacent sources (clock.rs drives the timer manager)
+├── displayers/     # Displayer impls wiring sources to crates/render rendering
+├── ui/             # GTK components: grid_layout.rs (drag-drop grid),
+│                   #   grid_properties_dialog.rs, window_settings_dialog.rs,
+│                   #   [component]_config_widget.rs config UIs, custom_color_picker.rs
+├── config/         # AppConfig load/save (atomic writes), defaults, v1→v2 migration
 ├── plugin/         # Future: dynamic plugin loading
 ├── lib.rs          # Library exports
-└── main.rs         # Application entry point
+└── main.rs         # Application entry point + main window setup
 ```
 
 ## Important Patterns
@@ -361,10 +350,10 @@ register_animation(drawing_area.downgrade(), move || {
 ```
 
 **Key design:**
-- Uses GTK frame clock (`add_tick_callback`) for VSync-synchronized animation
-- Falls back to `timeout_add_local_full` with `Priority::DEFAULT_IDLE` (user input takes priority)
-- Generation counter prevents callback accumulation when widgets are destroyed/recreated
-- Adaptive frame rate: 60fps when animating, ~4fps when idle
+- Single repeating `timeout_add_local_full` timer at `Priority::DEFAULT_IDLE` (user input takes priority); a `timer_active` flag prevents duplicates and the timer stops (`ControlFlow::Break`) when no entries remain
+- `tick()` retains entries, dropping dead (weak `upgrade()` fails) or orphaned (`root().is_none()`) widgets
+- Adaptive frame rate: 60fps when animating; idle mode skip-counts frames (~4fps) once nothing has animated recently
+- Animation ticks must refresh their elapsed-time timestamp on EVERY tick (not only while animating) and cap the step factor at 1.0 — see `src/displayers/bar.rs` — otherwise the first frame after idle overshoots the target
 
 ## Performance Considerations
 

@@ -1,17 +1,41 @@
 //! NVIDIA GPU backend using NVML
 
-use super::backend::{GpuBackend, GpuInfo, GpuMetrics, GpuVendor};
+use super::backend::{GpuBackend, GpuInfo, GpuMetrics};
+#[cfg(feature = "nvidia")]
+use super::backend::GpuVendor;
 use anyhow::{anyhow, Result};
 
 #[cfg(feature = "nvidia")]
 use nvml_wrapper::{enum_wrappers::device::TemperatureSensor, Nvml};
+#[cfg(feature = "nvidia")]
+use once_cell::sync::Lazy;
+#[cfg(feature = "nvidia")]
+use std::sync::Arc;
+
+/// Process-wide NVML handle, initialized once and shared between GPU
+/// detection and every NVIDIA backend (NVML init is not free — previously it
+/// ran N+1 times at startup).
+#[cfg(feature = "nvidia")]
+static SHARED_NVML: Lazy<Option<Arc<Nvml>>> = Lazy::new(|| match Nvml::init() {
+    Ok(nvml) => Some(Arc::new(nvml)),
+    Err(e) => {
+        log::info!("NVML: Not available ({})", e);
+        None
+    }
+});
+
+/// Get the shared NVML instance (`None` if NVML is unavailable).
+#[cfg(feature = "nvidia")]
+pub fn shared_nvml() -> Option<Arc<Nvml>> {
+    SHARED_NVML.clone()
+}
 
 /// NVIDIA GPU backend
 pub struct NvidiaBackend {
     info: GpuInfo,
     metrics: GpuMetrics,
     #[cfg(feature = "nvidia")]
-    nvml: Nvml,
+    nvml: Arc<Nvml>,
     #[cfg(feature = "nvidia")]
     device_index: u32,
 }
@@ -20,7 +44,7 @@ impl NvidiaBackend {
     /// Create a new NVIDIA backend for the specified GPU index
     #[cfg(feature = "nvidia")]
     pub fn new(index: u32) -> Result<Self> {
-        let nvml = Nvml::init()?;
+        let nvml = shared_nvml().ok_or_else(|| anyhow!("NVML not available"))?;
         let device = nvml.device_by_index(index)?;
         let name = device
             .name()
@@ -38,11 +62,6 @@ impl NvidiaBackend {
         })
     }
 
-    /// Create a new NVIDIA backend (disabled when nvidia feature is off)
-    #[cfg(not(feature = "nvidia"))]
-    pub fn new(_index: u32) -> Result<Self> {
-        Err(anyhow!("NVIDIA support not enabled at compile time"))
-    }
 }
 
 impl GpuBackend for NvidiaBackend {
@@ -67,10 +86,16 @@ impl GpuBackend for NvidiaBackend {
             // Utilization
             self.metrics.utilization = device.utilization_rates().ok().map(|u| u.gpu);
 
-            // Memory
-            if let Ok(mem_info) = device.memory_info() {
-                self.metrics.memory_used = Some(mem_info.used);
-                self.metrics.memory_total = Some(mem_info.total);
+            // Memory (reset to None on failure so stale values don't freeze)
+            match device.memory_info() {
+                Ok(mem_info) => {
+                    self.metrics.memory_used = Some(mem_info.used);
+                    self.metrics.memory_total = Some(mem_info.total);
+                }
+                Err(_) => {
+                    self.metrics.memory_used = None;
+                    self.metrics.memory_total = None;
+                }
             }
 
             // Power

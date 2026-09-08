@@ -108,19 +108,25 @@ impl Displayer for BarDisplayer {
         register_animation(drawing_area.downgrade(), move || {
             // Use try_lock to avoid blocking UI thread if lock is held
             if let Ok(mut data) = data_for_animation.try_lock() {
+                // Refresh the frame timestamp on EVERY tick (not just while
+                // animating): the first animating frame after an idle period
+                // must not see the huge stale `elapsed` accumulated since the
+                // previous animation ended, which made values overshoot.
+                let now = std::time::Instant::now();
+                let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
+                data.last_frame_time = now;
+
                 // Check if animation is in progress
                 if data.config.smooth_animation
                     && (data.animated_value - data.value).abs() > ANIMATION_SNAP_THRESHOLD
                 {
-                    // Calculate elapsed time for smooth animation
-                    let now = std::time::Instant::now();
-                    let elapsed = now.duration_since(data.last_frame_time).as_secs_f64();
-                    data.last_frame_time = now;
-
                     // Animation speed: higher value = faster animation
                     // animation_speed of 1.0 means very fast, 0.1 means slow
                     let animation_speed = data.config.animation_speed.clamp(0.01, 1.0) * 10.0;
-                    let delta = (data.value - data.animated_value) * animation_speed * elapsed;
+                    // Cap the step factor at 1.0 so a long frame can at most
+                    // land exactly on the target, never past it
+                    let step = (animation_speed * elapsed).min(1.0);
+                    let delta = (data.value - data.animated_value) * step;
 
                     // Apply delta with smoothing
                     data.animated_value += delta;

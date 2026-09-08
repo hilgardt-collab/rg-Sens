@@ -227,20 +227,26 @@ impl AnimationManager {
     /// Process one animation frame for all registered widgets.
     /// Returns true if any animation needed a redraw.
     fn tick(&self) -> bool {
-        let mut entries = self.entries.borrow_mut();
+        // Take the entries out of the RefCell so tick_fns run without the
+        // borrow held — a tick_fn that (transitively) calls register_animation
+        // would otherwise panic on re-borrow. Registrations made during the
+        // run land in the now-empty Vec and are merged back afterwards.
+        let entries = std::mem::take(&mut *self.entries.borrow_mut());
+        let mut kept: Vec<AnimationEntry> = Vec::with_capacity(entries.len());
         let mut any_active = false;
         let mut active_count = 0;
         let mut mapped_count = 0;
 
-        // Use retain to process entries and remove dead ones in a single pass
-        entries.retain(|entry| {
+        // Process entries, dropping dead ones (same semantics as the previous
+        // single-pass retain)
+        for entry in entries {
             // Check if widget still exists
             let Some(widget) = entry.widget_weak.upgrade() else {
-                // Widget destroyed, remove entry
-                return false;
+                // Widget destroyed, drop entry
+                continue;
             };
 
-            // Remove entry if widget has been orphaned (removed from widget tree)
+            // Drop entry if widget has been orphaned (removed from widget tree)
             // This is critical for preventing memory leaks when displayers are changed -
             // the old widget may still have a parent (e.g., an overlay) but that parent
             // is no longer attached to any window. We check for root() being None to
@@ -248,16 +254,17 @@ impl AnimationManager {
             // Without this check, the tick_fn closure holds Arc references indefinitely.
             if widget.root().is_none() {
                 log::debug!("Removing animation entry for orphaned widget (no root)");
-                return false;
+                continue;
             }
 
             // Skip if widget is not visible (saves CPU)
             if !widget.is_mapped() {
-                return true; // Keep entry, just skip this frame
+                kept.push(entry); // Keep entry, just skip this frame
+                continue;
             }
             mapped_count += 1;
 
-            // Call the tick function
+            // Call the tick function (no RefCell borrow held here)
             let needs_redraw = (entry.tick_fn)();
 
             // Queue redraw if needed
@@ -267,8 +274,17 @@ impl AnimationManager {
                 active_count += 1;
             }
 
-            true // Keep entry
-        });
+            kept.push(entry);
+        }
+
+        // Merge back: prepend survivors to anything registered during the run
+        let entry_len = {
+            let mut slot = self.entries.borrow_mut();
+            let registered_during_tick = std::mem::take(&mut *slot);
+            kept.extend(registered_during_tick);
+            *slot = kept;
+            slot.len()
+        };
 
         // Log periodically to debug high CPU and memory issues
         static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -277,7 +293,7 @@ impl AnimationManager {
             // Log every ~5 seconds at 60fps
             log::info!(
                 "Animation manager: {} entries, {} mapped, {} active",
-                entries.len(),
+                entry_len,
                 mapped_count,
                 active_count
             );
@@ -288,7 +304,7 @@ impl AnimationManager {
             log::trace!(
                 "Animation tick {}: {} entries, {} mapped, {} active",
                 count,
-                entries.len(),
+                entry_len,
                 mapped_count,
                 active_count
             );

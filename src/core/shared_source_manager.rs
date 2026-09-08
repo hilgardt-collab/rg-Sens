@@ -12,15 +12,18 @@
 //!
 //! **CRITICAL: Locking order must always be: RwLock first, then Mutex**
 //!
-//! To avoid deadlocks, we follow this pattern:
+//! For read-mostly accessors, we follow this pattern:
 //! 1. Acquire RwLock (read or write)
 //! 2. Clone the Arc<Mutex<>> handle we need
 //! 3. Release the RwLock
 //! 4. Acquire the Mutex on the cloned handle
 //!
-//! This ensures we never hold both locks simultaneously, preventing deadlocks.
-//! Any code that needs to access both the collection and individual source data
-//! MUST follow this pattern.
+//! Ref-count bookkeeping (join in `get_or_create_source`, the final check in
+//! `release_source`) instead acquires the Mutex WHILE holding the RwLock —
+//! still respecting the RwLock → Mutex order — because the increment/removal
+//! decision must be atomic with respect to the map (otherwise a concurrent
+//! release can remove an entry another panel just joined). Never acquire the
+//! RwLock while holding a source Mutex.
 
 use super::panel_data::SourceConfig;
 use super::{BoxedDataSource, Registry};
@@ -190,21 +193,24 @@ impl SharedSourceManager {
         let key = Self::generate_source_key(source_config);
         let interval = Duration::from_millis(source_config.update_interval_ms());
 
-        // Phase 1: Check if source exists (quick read lock)
-        // Clone the Arc handle while holding the lock, then release lock before acquiring Mutex
-        // This avoids potential deadlock from nested RwLock -> Mutex acquisition
-        let existing_handle = {
+        // Phase 1: Try to join an existing source.
+        //
+        // The ref_count increment must happen while the map lock is held:
+        // release_source removes an entry (under the write lock) after seeing
+        // ref_count == 0, so an increment done after releasing the read lock
+        // could land on a handle already gone from the map — a ghost handle
+        // that strands the panel on direct polling forever. Locking the source
+        // Mutex while holding the RwLock follows the documented RwLock → Mutex
+        // order (release_source's final check does the same), so no deadlock.
+        // Poisoned mutexes are recovered (not skipped): silently skipping the
+        // increment while returning Ok would cause early source removal.
+        {
             let sources = self
                 .sources
                 .read()
                 .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-            sources.get(&key).cloned()
-        };
-        // Read lock released here - now safe to acquire Mutex
-
-        if let Some(handle) = existing_handle {
-            // Source already exists, increment ref count and track panel interval
-            if let Ok(mut shared) = handle.source.lock() {
+            if let Some(handle) = sources.get(&key) {
+                let mut shared = handle.source.lock().unwrap_or_else(|p| p.into_inner());
                 shared.ref_count += 1;
                 shared
                     .panel_intervals
@@ -214,8 +220,8 @@ impl SharedSourceManager {
                     "Reusing shared source {} for panel {} (ref_count: {}, min_interval: {:?})",
                     key, panel_id, shared.ref_count, shared.min_interval
                 );
+                return Ok(key);
             }
-            return Ok(key);
         }
 
         // Phase 2: Create new source OUTSIDE the lock (slow I/O)
@@ -234,20 +240,21 @@ impl SharedSourceManager {
         // source is immediately "due"), so values appear within a tick.
         let shared = SharedSource::new(source, interval, panel_id.to_string());
 
-        // Phase 3: Insert into map (quick write lock)
-        // Re-check in case another thread created it while we were doing I/O
-        // Clone handle while holding lock to avoid nested RwLock -> Mutex deadlock
-        let existing_handle = {
-            let sources = self
-                .sources
-                .read()
-                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-            sources.get(&key).cloned()
-        };
-
-        if let Some(handle) = existing_handle {
-            // Another thread created it - just increment ref count and discard ours
-            if let Ok(mut existing) = handle.source.lock() {
+        // Phase 3: Insert into map (write lock). If another thread created the
+        // same key while we were doing I/O, join its handle and discard ours —
+        // incrementing under the map lock for the same TOCTOU reason as phase 1.
+        use std::collections::hash_map::Entry;
+        let mut sources = self
+            .sources
+            .write()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        match sources.entry(key.clone()) {
+            Entry::Occupied(entry) => {
+                let mut existing = entry
+                    .get()
+                    .source
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner());
                 existing.ref_count += 1;
                 existing
                     .panel_intervals
@@ -258,16 +265,9 @@ impl SharedSourceManager {
                     key, existing.ref_count
                 );
             }
-        } else {
-            // No existing source, insert new one
-            let mut sources = self
-                .sources
-                .write()
-                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-            // Double-check after acquiring write lock (another thread may have inserted)
-            sources
-                .entry(key.clone())
-                .or_insert_with(|| SharedSourceHandle::new(shared));
+            Entry::Vacant(entry) => {
+                entry.insert(SharedSourceHandle::new(shared));
+            }
         }
 
         Ok(key)
@@ -484,22 +484,22 @@ impl SharedSourceManager {
         };
         // RwLock released here - now safe to acquire Mutex
 
-        // Phase 2: Update data with only Mutex held
+        // Phase 2: Update data with only Mutex held (recover from poisoning —
+        // silently skipping would leave the old interval in effect)
         if let Some(handle) = handle {
-            if let Ok(mut shared) = handle.source.lock() {
-                // Update this panel's interval and recalculate minimum
-                let old_min = shared.min_interval;
-                shared
-                    .panel_intervals
-                    .insert(panel_id.to_string(), new_interval);
-                shared.recalculate_min_interval();
+            let mut shared = handle.source.lock().unwrap_or_else(|p| p.into_inner());
+            // Update this panel's interval and recalculate minimum
+            let old_min = shared.min_interval;
+            shared
+                .panel_intervals
+                .insert(panel_id.to_string(), new_interval);
+            shared.recalculate_min_interval();
 
-                if shared.min_interval != old_min {
-                    info!(
-                        "Panel {} updated interval for source {} from {:?} to {:?}",
-                        panel_id, key, old_min, shared.min_interval
-                    );
-                }
+            if shared.min_interval != old_min {
+                info!(
+                    "Panel {} updated interval for source {} from {:?} to {:?}",
+                    panel_id, key, old_min, shared.min_interval
+                );
             }
         }
     }

@@ -291,7 +291,7 @@ pub use crate::core::FieldMetadata;
 
 // Re-export generic combo framework types
 pub use combo_displayer_base::{ComboFrameConfig, FrameRenderer};
-pub use combo_generic::{GenericComboDisplayer, GenericComboDisplayerShared};
+pub use combo_generic::GenericComboDisplayerShared;
 // pub use level_bar::LevelBarDisplayer;
 
 /// Register all built-in displayers with the global registry

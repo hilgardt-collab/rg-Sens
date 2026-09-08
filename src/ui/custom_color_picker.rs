@@ -4,7 +4,7 @@ use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, DrawingArea, Grid, Label, Orientation, Scale, SpinButton, Window,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -486,6 +486,9 @@ pub struct CustomColorPicker {
     value_spin: SpinButton,
     // Saved colors
     saved_colors_grid: Grid,
+    /// Set by the OK button; Cancel or closing the window leaves it false so
+    /// `pick_color` can return `None` instead of committing the color.
+    confirmed: Rc<Cell<bool>>,
 }
 
 impl CustomColorPicker {
@@ -776,6 +779,7 @@ impl CustomColorPicker {
             saturation_spin,
             value_spin,
             saved_colors_grid,
+            confirmed: Rc::new(Cell::new(false)),
         };
 
         // Wire up all the handlers
@@ -1514,7 +1518,9 @@ impl CustomColorPicker {
         });
 
         let dialog_clone = self.dialog.clone();
+        let confirmed = self.confirmed.clone();
         ok_button.connect_clicked(move |_| {
+            confirmed.set(true);
             dialog_clone.close();
         });
 
@@ -1554,16 +1560,23 @@ impl CustomColorPicker {
         use std::task::{Context, Poll, Waker};
 
         let picker = Self::new(parent, initial_color);
-        let result = Rc::new(RefCell::new(None));
+        // Outer Option = "dialog closed yet?", inner Option = OK vs Cancel
+        let result: Rc<RefCell<Option<Option<Color>>>> = Rc::new(RefCell::new(None));
         let waker = Rc::new(RefCell::new(None::<Waker>));
 
         let result_clone = result.clone();
         let waker_clone = waker.clone();
         let current_color = picker.current_color.clone();
+        let confirmed = picker.confirmed.clone();
 
         // Handle close to capture result and wake the future
         picker.dialog.connect_close_request(move |_| {
-            *result_clone.borrow_mut() = Some(*current_color.borrow());
+            let outcome = if confirmed.get() {
+                Some(*current_color.borrow())
+            } else {
+                None // Cancel or window close: don't commit the color
+            };
+            *result_clone.borrow_mut() = Some(outcome);
             if let Some(waker) = waker_clone.borrow_mut().take() {
                 waker.wake();
             }
@@ -1574,7 +1587,7 @@ impl CustomColorPicker {
 
         // Create a future that waits for the dialog to close
         struct DialogFuture {
-            result: Rc<RefCell<Option<Color>>>,
+            result: Rc<RefCell<Option<Option<Color>>>>,
             waker: Rc<RefCell<Option<Waker>>>,
         }
 
@@ -1582,8 +1595,8 @@ impl CustomColorPicker {
             type Output = Option<Color>;
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                if let Some(color) = *self.result.borrow() {
-                    Poll::Ready(Some(color))
+                if let Some(outcome) = *self.result.borrow() {
+                    Poll::Ready(outcome)
                 } else {
                     *self.waker.borrow_mut() = Some(cx.waker().clone());
                     Poll::Pending

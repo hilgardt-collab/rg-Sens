@@ -7,7 +7,7 @@ use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Entry, Label, Notebook, Orientation,
     SpinButton, StringList,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::core::FieldMetadata;
@@ -104,6 +104,8 @@ struct SplitWidgets {
     div_color_widget: Rc<ThemeColorSelector>,
     start_cap_dropdown: DropDown,
     end_cap_dropdown: DropDown,
+    spacing_before_spin: SpinButton,
+    spacing_after_spin: SpinButton,
     /// Container for combined group settings (weight + orientation per group)
     group_settings_box: GtkBox,
     /// Checkbox for syncing segments with groups
@@ -152,6 +154,10 @@ pub struct LcarsConfigWidget {
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
     content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
+    /// Guard flag: set during programmatic set_config so widget change handlers
+    /// (e.g. the segment count spinner's tab rebuild) don't double up with the
+    /// explicit updates set_config performs itself
+    updating_from_config: Rc<Cell<bool>>,
 }
 
 impl LcarsConfigWidget {
@@ -178,6 +184,7 @@ impl LcarsConfigWidget {
             Rc::new(RefCell::new(Vec::new()));
         let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
+        let updating_from_config = Rc::new(Cell::new(false));
 
         // Preview at the top
         let preview = DrawingArea::new();
@@ -238,6 +245,7 @@ impl LcarsConfigWidget {
             &segments_widgets,
             &split_widgets,
             &theme_ref_refreshers,
+            &updating_from_config,
         );
         notebook.append_page(&segments_page, Some(&Label::new(Some("Segments"))));
 
@@ -310,6 +318,7 @@ impl LcarsConfigWidget {
             theme_widgets,
             theme_ref_refreshers,
             content_cleanup_callbacks,
+            updating_from_config,
         }
     }
 
@@ -1113,6 +1122,7 @@ impl LcarsConfigWidget {
         segments_widgets_out: &Rc<RefCell<Option<SegmentsWidgets>>>,
         split_widgets: &Rc<RefCell<Option<SplitWidgets>>>,
         theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+        updating_from_config: &Rc<Cell<bool>>,
     ) -> GtkBox {
         let page = GtkBox::new(Orientation::Vertical, 8);
         combo_config_base::set_page_margins(&page);
@@ -1168,7 +1178,13 @@ impl LcarsConfigWidget {
         let on_change_clone = on_change.clone();
         let split_widgets_clone = split_widgets.clone();
         let segment_widgets_clone = segment_widgets.clone();
+        let updating_from_config_clone = updating_from_config.clone();
         count_spin.connect_value_changed(move |spin| {
+            // Skip during programmatic set_config - it rebuilds the tabs explicitly
+            if updating_from_config_clone.get() {
+                return;
+            }
+
             let count = spin.value() as usize;
 
             // Update config
@@ -1773,6 +1789,8 @@ impl LcarsConfigWidget {
             div_color_widget: div_color_widget.clone(),
             start_cap_dropdown: start_cap_dropdown.clone(),
             end_cap_dropdown: end_cap_dropdown.clone(),
+            spacing_before_spin: spacing_before_spin.clone(),
+            spacing_after_spin: spacing_after_spin.clone(),
             group_settings_box: group_settings_box.clone(),
             sync_segments_check: sync_segments_check.clone(),
         });
@@ -1849,11 +1867,12 @@ impl LcarsConfigWidget {
         // This causes redundant updates since we're setting the config directly anyway.
         let saved_callback = self.on_change.borrow_mut().take();
 
-        // First update the internal config with the new values
-        let config_to_use = new_config.clone();
+        // Guard widget change handlers that do more than fire on_change (e.g. the
+        // segment count spinner rebuilds its tabs) - set_config does that explicitly.
+        self.updating_from_config.set(true);
 
-        // Update internal config
-        *self.config.borrow_mut() = config_to_use.clone();
+        // Update internal config (single assignment - widgets below read from new_config)
+        *self.config.borrow_mut() = new_config.clone();
 
         // Update frame widgets to reflect the new config
         if let Some(ref widgets) = *self.frame_widgets.borrow() {
@@ -1919,64 +1938,76 @@ impl LcarsConfigWidget {
             // Top header
             widgets
                 .top_show_check
-                .set_active(config_to_use.frame.top_header.position == HeaderPosition::Top);
+                .set_active(new_config.frame.top_header.position == HeaderPosition::Top);
             widgets
                 .top_text_entry
-                .set_text(&config_to_use.frame.top_header.text);
-            let top_shape_idx = match config_to_use.frame.top_header.shape {
+                .set_text(&new_config.frame.top_header.text);
+            let top_shape_idx = match new_config.frame.top_header.shape {
                 HeaderShape::Pill => 0,
                 HeaderShape::Square => 1,
             };
             widgets.top_shape_dropdown.set_selected(top_shape_idx);
             widgets
                 .top_bg_widget
-                .set_source(config_to_use.frame.top_header.bg_color.clone());
+                .set_source(new_config.frame.top_header.bg_color.clone());
             widgets
                 .top_text_color_widget
-                .set_source(config_to_use.frame.top_header.text_color.clone());
+                .set_source(new_config.frame.top_header.text_color.clone());
             widgets
                 .top_font_selector
-                .set_source(config_to_use.frame.top_header.font.clone());
+                .set_source(new_config.frame.top_header.font.clone());
             widgets
                 .top_bold_check
-                .set_active(config_to_use.frame.top_header.font_bold);
-            let top_align_idx = match config_to_use.frame.top_header.align {
+                .set_active(new_config.frame.top_header.font_bold);
+            let top_align_idx = match new_config.frame.top_header.align {
                 HeaderAlign::Left => 0,
                 HeaderAlign::Center => 1,
                 HeaderAlign::Right => 2,
             };
             widgets.top_align_dropdown.set_selected(top_align_idx);
+            widgets
+                .top_height_spin
+                .set_value(new_config.frame.top_header.height_percent * 100.0);
+            widgets
+                .top_width_spin
+                .set_value(new_config.frame.top_header.width_percent * 100.0);
 
             // Bottom header
             widgets
                 .bottom_show_check
-                .set_active(config_to_use.frame.bottom_header.position == HeaderPosition::Bottom);
+                .set_active(new_config.frame.bottom_header.position == HeaderPosition::Bottom);
             widgets
                 .bottom_text_entry
-                .set_text(&config_to_use.frame.bottom_header.text);
-            let bottom_shape_idx = match config_to_use.frame.bottom_header.shape {
+                .set_text(&new_config.frame.bottom_header.text);
+            let bottom_shape_idx = match new_config.frame.bottom_header.shape {
                 HeaderShape::Pill => 0,
                 HeaderShape::Square => 1,
             };
             widgets.bottom_shape_dropdown.set_selected(bottom_shape_idx);
             widgets
                 .bottom_bg_widget
-                .set_source(config_to_use.frame.bottom_header.bg_color.clone());
+                .set_source(new_config.frame.bottom_header.bg_color.clone());
             widgets
                 .bottom_text_color_widget
-                .set_source(config_to_use.frame.bottom_header.text_color.clone());
+                .set_source(new_config.frame.bottom_header.text_color.clone());
             widgets
                 .bottom_font_selector
-                .set_source(config_to_use.frame.bottom_header.font.clone());
+                .set_source(new_config.frame.bottom_header.font.clone());
             widgets
                 .bottom_bold_check
-                .set_active(config_to_use.frame.bottom_header.font_bold);
-            let bottom_align_idx = match config_to_use.frame.bottom_header.align {
+                .set_active(new_config.frame.bottom_header.font_bold);
+            let bottom_align_idx = match new_config.frame.bottom_header.align {
                 HeaderAlign::Left => 0,
                 HeaderAlign::Center => 1,
                 HeaderAlign::Right => 2,
             };
             widgets.bottom_align_dropdown.set_selected(bottom_align_idx);
+            widgets
+                .bottom_height_spin
+                .set_value(new_config.frame.bottom_header.height_percent * 100.0);
+            widgets
+                .bottom_width_spin
+                .set_value(new_config.frame.bottom_header.width_percent * 100.0);
         } else {
             log::warn!("LCARS headers_widgets not available when setting config");
         }
@@ -2028,6 +2059,12 @@ impl LcarsConfigWidget {
                 DividerCapStyle::Round => 1,
             };
             widgets.end_cap_dropdown.set_selected(end_cap_idx);
+            widgets
+                .spacing_before_spin
+                .set_value(new_config.frame.divider_config.spacing_before);
+            widgets
+                .spacing_after_spin
+                .set_value(new_config.frame.divider_config.spacing_after);
         }
 
         // Update animation widgets
@@ -2082,9 +2119,8 @@ impl LcarsConfigWidget {
                 .set_value(new_config.frame.theme.font2_size);
         }
 
-        *self.config.borrow_mut() = new_config;
-
-        // Restore the on_change callback now that widget updates are complete
+        // Clear guard and restore the on_change callback now that widget updates are complete
+        self.updating_from_config.set(false);
         *self.on_change.borrow_mut() = saved_callback;
 
         // Update Theme Reference section with new theme colors

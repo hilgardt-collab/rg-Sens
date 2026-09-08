@@ -27,6 +27,12 @@ use crate::ui::css_template_display::{
 /// Global shutdown flag - when set, all CSS template timers will stop
 static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
 
+/// Number of consecutive timer ticks a WebView must stay orphaned (no root)
+/// before its web process is terminated. Widgets can be transiently unparented
+/// (displayer swap, panel re-parenting), so terminating on the first orphan
+/// tick would permanently kill a panel that still exists.
+const ORPHAN_GRACE_TICKS: u32 = 5;
+
 // Thread-local registry of active WebViews for proper shutdown.
 // Uses thread_local because GTK widgets are not Send+Sync and all GTK
 // operations happen on the main thread anyway.
@@ -109,6 +115,8 @@ struct WebViewState {
     last_html_modified: Option<std::time::SystemTime>,
     /// Last CSS modification time for hot-reload
     last_css_modified: Option<std::time::SystemTime>,
+    /// Consecutive ticks the WebView has been orphaned (no root)
+    orphan_ticks: u32,
 }
 
 /// WebKit-based backend for CSS Template rendering
@@ -250,6 +258,7 @@ impl TemplateBackend for WebKitBackend {
             js_cancellable: gtk4::gio::Cancellable::new(),
             last_html_modified,
             last_css_modified,
+            orphan_ticks: 0,
         }));
 
         // Set up periodic timer for updates and WebView recycling
@@ -282,26 +291,38 @@ impl TemplateBackend for WebKitBackend {
                 }
 
                 // Check if widget is orphaned - use pattern matching for safety
-                if let Some(webview) = state.webview.as_ref() {
-                    if webview.root().is_none() {
-                        log::debug!("WebKit backend timer stopping: WebView orphaned");
-                        state.js_cancellable.cancel();
-                        destroy_webview(webview);
-                        state.webview = None;
-                        if let Ok(mut data) = data_clone.try_lock() {
-                            clear_display_data(&mut data);
-                        }
+                let (is_orphaned, is_mapped) = match state.webview.as_ref() {
+                    Some(webview) => (webview.root().is_none(), webview.is_mapped()),
+                    None => {
+                        // webview was None despite earlier check - shouldn't happen but handle gracefully
+                        log::debug!("WebKit backend timer stopping: WebView disappeared");
                         return glib::ControlFlow::Break;
                     }
+                };
 
-                    // Skip if not visible
-                    if !webview.is_mapped() {
+                if is_orphaned {
+                    // Only terminate after the widget has stayed orphaned for
+                    // several consecutive ticks — transient reparents (displayer
+                    // swap, panel drag) must not kill the web process.
+                    state.orphan_ticks += 1;
+                    if state.orphan_ticks < ORPHAN_GRACE_TICKS {
                         return glib::ControlFlow::Continue;
                     }
-                } else {
-                    // webview was None despite earlier check - shouldn't happen but handle gracefully
-                    log::debug!("WebKit backend timer stopping: WebView disappeared");
+                    log::debug!("WebKit backend timer stopping: WebView orphaned");
+                    state.js_cancellable.cancel();
+                    if let Some(webview) = state.webview.take() {
+                        destroy_webview(&webview);
+                    }
+                    if let Ok(mut data) = data_clone.try_lock() {
+                        clear_display_data(&mut data);
+                    }
                     return glib::ControlFlow::Break;
+                }
+                state.orphan_ticks = 0;
+
+                // Skip if not visible
+                if !is_mapped {
+                    return glib::ControlFlow::Continue;
                 }
 
                 // Check for config change
@@ -372,11 +393,6 @@ impl TemplateBackend for WebKitBackend {
                                 // Clear buffers
                                 let values_len = data.values.len();
                                 data.values = HashMap::with_capacity(values_len);
-                                data.entries_buffer = Vec::with_capacity(64);
-                                data.js_values_buffer = String::with_capacity(1024);
-                                data.value_buffer = String::with_capacity(64);
-                                data.key_buffer = String::with_capacity(64);
-                                data.js_call_buffer = String::with_capacity(2048);
                                 data.last_js_values.clear();
 
                                 let cached_html = data.cached_html.clone();
@@ -470,17 +486,13 @@ fn build_js_values(data: &DisplayData) -> String {
         let mut value = String::new();
         write_mapped_value(&data.values, mapping, &mut value);
 
-        // Escape for JavaScript
-        let escaped: String = value
-            .chars()
-            .flat_map(|c| match c {
-                '\\' => vec!['\\', '\\'],
-                '"' => vec!['\\', '"'],
-                _ => vec![c],
-            })
-            .collect();
-
-        entries.push(format!("\"{}\": \"{}\"", mapping.index, escaped));
+        // Serialize via serde_json: unlike hand-rolled escaping this handles
+        // newlines, CR, control chars, etc. (one multi-line value would
+        // otherwise syntax-error the whole updateValues payload). JSON string
+        // output is valid JS for all these cases.
+        let quoted =
+            serde_json::to_string(&value).unwrap_or_else(|_| "\"--\"".to_string());
+        entries.push(format!("\"{}\": {}", mapping.index, quoted));
     }
 
     entries.sort();
@@ -578,17 +590,15 @@ fn load_html_content(data: &Arc<Mutex<DisplayData>>) -> Option<(String, Option<S
     })
 }
 
-/// Clear all buffers in DisplayData to release memory
+/// Clear all buffers in DisplayData to release memory.
+///
+/// NOTE: `cached_prefix_set` is intentionally NOT cleared — it is only populated
+/// in `DisplayData::default()` and never rebuilt, and the same DisplayData Arc is
+/// reused if the widget is recreated. Clearing it would filter out every value
+/// forever ("--" until restart).
 fn clear_display_data(data: &mut DisplayData) {
     data.values.clear();
     data.values.shrink_to_fit();
     data.cached_html = None;
     data.last_js_values = String::new();
-    data.entries_buffer = Vec::new();
-    data.js_values_buffer = String::new();
-    data.value_buffer = String::new();
-    data.key_buffer = String::new();
-    data.js_call_buffer = String::new();
-    data.cached_prefix_set.clear();
-    data.cached_prefix_set.shrink_to_fit();
 }

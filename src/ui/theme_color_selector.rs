@@ -102,6 +102,11 @@ impl ThemeColorSelector {
             container.append(button);
         }
 
+        // Create the drawing area for the custom color swatch early so the
+        // theme button handlers can queue redraws on it (draw func is set below).
+        let color_drawing_area = DrawingArea::new();
+        color_drawing_area.set_size_request(32, 20);
+
         // Connect theme button click handlers
         for (i, theme_button) in theme_buttons.iter().enumerate() {
             let source_clone = source.clone();
@@ -109,8 +114,7 @@ impl ThemeColorSelector {
             let selected_clone = selected_index.clone();
             let custom_color_clone = custom_color.clone();
             let theme_drawings_clone: Vec<DrawingArea> = theme_drawings.to_vec();
-            let color_drawing_ref = Rc::new(RefCell::new(None::<DrawingArea>));
-            let color_drawing_ref_clone = color_drawing_ref.clone();
+            let color_drawing_clone = color_drawing_area.clone();
             let idx = (i + 1) as u8;
 
             theme_button.connect_clicked(move |_| {
@@ -142,9 +146,7 @@ impl ThemeColorSelector {
                     drawing.queue_draw();
                 }
                 // Redraw custom color swatch
-                if let Some(ref da) = *color_drawing_ref_clone.borrow() {
-                    da.queue_draw();
-                }
+                color_drawing_clone.queue_draw();
             });
         }
 
@@ -158,10 +160,6 @@ impl ThemeColorSelector {
         let color_button = Button::new();
         color_button.set_tooltip_text(Some("Custom color (click to change)"));
 
-        // Create the drawing area for the custom color swatch
-        let color_drawing_area = DrawingArea::new();
-        color_drawing_area.set_size_request(32, 20);
-
         // Set up the draw function for custom color
         let custom_color_for_draw = custom_color.clone();
         let selected_for_draw = selected_index.clone();
@@ -172,10 +170,6 @@ impl ThemeColorSelector {
         });
 
         color_button.set_child(Some(&color_drawing_area));
-
-        // Now update the button references in the theme button handlers
-        // We need to reconnect the handlers with the actual button references
-        // This is a bit awkward but necessary since we created the handlers before the button
 
         // Create copy button with icon
         let copy_button = Button::from_icon_name("edit-copy-symbolic");

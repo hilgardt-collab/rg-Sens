@@ -147,68 +147,6 @@ pub fn generate_prefixes(group_item_counts: &[usize]) -> Vec<String> {
     prefixes
 }
 
-/// Create a HashSet from prefixes for O(1) lookups
-#[inline]
-pub fn prefix_set(prefixes: &[String]) -> HashSet<&str> {
-    prefixes.iter().map(|s| s.as_str()).collect()
-}
-
-/// Filter values to only those matching any of the given prefixes
-/// Optimized single-pass algorithm: O(n) where n = data.len()
-///
-/// DEPRECATED: Use `filter_values_by_prefixes_into` for better performance
-pub fn filter_values_by_prefixes(
-    data: &HashMap<String, Value>,
-    prefixes: &[String],
-) -> HashMap<String, Value> {
-    let mut result = HashMap::with_capacity(prefixes.len() * 8);
-    filter_values_by_prefixes_into(data, prefixes, &mut result);
-    result
-}
-
-/// Filter values in-place, reusing the output HashMap to avoid allocations
-/// Clears `output` and fills it with matching values
-#[inline]
-pub fn filter_values_by_prefixes_into(
-    data: &HashMap<String, Value>,
-    prefixes: &[String],
-    output: &mut HashMap<String, Value>,
-) {
-    let prefix_set = prefix_set(prefixes);
-    filter_values_with_prefix_set(data, &prefix_set, output);
-}
-
-/// Filter values in-place using a pre-built prefix HashSet (borrowed &str version)
-/// Use this variant when calling repeatedly with the same prefixes to avoid HashSet allocation
-#[inline]
-pub fn filter_values_with_prefix_set(
-    data: &HashMap<String, Value>,
-    prefix_set: &HashSet<&str>,
-    output: &mut HashMap<String, Value>,
-) {
-    output.clear();
-
-    // Single pass through data - O(n)
-    for (k, v) in data.iter() {
-        // Check if key matches any prefix exactly
-        if prefix_set.contains(k.as_str()) {
-            output.insert(k.clone(), v.clone());
-            continue;
-        }
-
-        // Check if key starts with any prefix followed by underscore
-        // Extract potential prefix from key (everything before first underscore after "group")
-        if let Some(underscore_pos) = k.find('_') {
-            if let Some(second_underscore) = k[underscore_pos + 1..].find('_') {
-                let potential_prefix = &k[..underscore_pos + 1 + second_underscore];
-                if prefix_set.contains(potential_prefix) {
-                    output.insert(k.clone(), v.clone());
-                }
-            }
-        }
-    }
-}
-
 /// Filter values in-place using a pre-built prefix HashSet (owned String version)
 /// Use this variant when you have a cached HashSet<String> to avoid repeated HashSet creation
 #[inline]
@@ -243,26 +181,30 @@ pub fn filter_values_with_owned_prefix_set(
 /// Get content item data from values with a given prefix
 /// Optimized to minimize allocations
 pub fn get_item_data(values: &HashMap<String, Value>, prefix: &str) -> ContentItemData {
-    // Use a reusable buffer for key construction
-    let mut key_buf = String::with_capacity(prefix.len() + 20);
-
-    // Helper to build keys efficiently
-    let mut make_key = |suffix: &str| -> String {
+    // Lookup borrows the reusable key buffer directly — no per-key String
+    // allocation (this runs per item per frame in the combo draw paths)
+    fn lookup<'v>(
+        values: &'v HashMap<String, Value>,
+        key_buf: &mut String,
+        prefix: &str,
+        suffix: &str,
+    ) -> Option<&'v Value> {
         key_buf.clear();
         key_buf.push_str(prefix);
         key_buf.push('_');
         key_buf.push_str(suffix);
-        key_buf.clone()
-    };
+        values.get(key_buf.as_str())
+    }
 
-    let caption = values
-        .get(&make_key("caption"))
+    // Reusable buffer for key construction
+    let mut key_buf = String::with_capacity(prefix.len() + 20);
+
+    let caption = lookup(values, &mut key_buf, prefix, "caption")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
 
-    let value = values
-        .get(&make_key("value"))
+    let value = lookup(values, &mut key_buf, prefix, "value")
         .map(|v| match v {
             Value::String(s) => s.clone(),
             Value::Number(n) => {
@@ -276,28 +218,22 @@ pub fn get_item_data(values: &HashMap<String, Value>, prefix: &str) -> ContentIt
         })
         .unwrap_or_default();
 
-    let unit = values
-        .get(&make_key("unit"))
+    let unit = lookup(values, &mut key_buf, prefix, "unit")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
 
     // Try numerical_value first, fall back to value
-    let numerical_value_key = make_key("numerical_value");
-    let value_key = make_key("value");
-    let numerical_value = values
-        .get(&numerical_value_key)
-        .or_else(|| values.get(&value_key))
+    let numerical_value = lookup(values, &mut key_buf, prefix, "numerical_value")
+        .or_else(|| lookup(values, &mut key_buf, prefix, "value"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
-    let min_value = values
-        .get(&make_key("min_limit"))
+    let min_value = lookup(values, &mut key_buf, prefix, "min_limit")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
-    let max_value = values
-        .get(&make_key("max_limit"))
+    let max_value = lookup(values, &mut key_buf, prefix, "max_limit")
         .and_then(|v| v.as_f64())
         .unwrap_or(100.0);
 
@@ -361,38 +297,6 @@ pub fn update_bar_animation(
         anim.current = target_percent;
         anim.first_update = false;
     }
-}
-
-/// Update bar animation target, returning true if the value changed meaningfully
-pub fn update_bar_animation_with_change_detection(
-    bar_values: &mut HashMap<String, AnimatedValue>,
-    prefix: &str,
-    target_percent: f64,
-    animation_enabled: bool,
-) -> bool {
-    // Build the key string - we need an owned String for HashMap operations
-    let bar_key = KEY_BUFFER.with(|buf| {
-        let mut key_buf = buf.borrow_mut();
-        key_buf.build_bar_key(prefix).to_string()
-    });
-
-    // Use entry API to avoid TOCTOU issues
-    let anim = bar_values.entry(bar_key).or_default();
-
-    const TARGET_CHANGE_THRESHOLD: f64 = 0.005;
-    let target_changed = (anim.target - target_percent).abs() > TARGET_CHANGE_THRESHOLD;
-
-    if target_changed {
-        anim.target = target_percent;
-    }
-
-    if anim.first_update || !animation_enabled {
-        anim.current = target_percent;
-        anim.first_update = false;
-        return true; // First update always counts as a change
-    }
-
-    target_changed
 }
 
 /// Update graph history - optimized version using thread-local KeyBuffer
@@ -520,80 +424,4 @@ pub fn cleanup_all_animation_state(
             .map(|p| prefix_set.contains(p))
             .unwrap_or(false)
     });
-}
-
-/// Clean up stale bar animation entries using retain
-/// Prefer cleanup_all_animation_state when cleaning multiple collections
-#[inline]
-pub fn cleanup_bar_values(bar_values: &mut HashMap<String, AnimatedValue>, prefixes: &[String]) {
-    let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
-    bar_values.retain(|k, _| {
-        k.strip_suffix("_bar")
-            .map(|p| prefix_set.contains(p))
-            .unwrap_or(false)
-    });
-}
-
-/// Clean up stale core bar animation entries using retain
-/// Prefer cleanup_all_animation_state when cleaning multiple collections
-#[inline]
-pub fn cleanup_core_bar_values(
-    core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>,
-    prefixes: &[String],
-) {
-    let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
-    core_bar_values.retain(|k, _| prefix_set.contains(k.as_str()));
-}
-
-/// Clean up stale graph history entries using retain
-/// Prefer cleanup_all_animation_state when cleaning multiple collections
-#[inline]
-pub fn cleanup_graph_history(
-    graph_history: &mut HashMap<String, VecDeque<DataPoint>>,
-    prefixes: &[String],
-) {
-    let prefix_set: HashSet<&str> = prefixes.iter().map(|s| s.as_str()).collect();
-    graph_history.retain(|k, _| {
-        k.strip_suffix("_graph")
-            .map(|p| prefix_set.contains(p))
-            .unwrap_or(false)
-    });
-}
-
-/// Process animation frame - interpolate all animated values toward targets
-/// Returns true if any value changed (needs redraw)
-pub fn animate_values(
-    bar_values: &mut HashMap<String, AnimatedValue>,
-    core_bar_values: &mut HashMap<String, Vec<AnimatedValue>>,
-    animation_speed: f64,
-    snap_threshold: f64,
-) -> bool {
-    let mut needs_redraw = false;
-    let delta = animation_speed * 0.016; // ~60fps frame time
-
-    for anim in bar_values.values_mut() {
-        let diff = anim.target - anim.current;
-        if diff.abs() > snap_threshold {
-            anim.current += diff * delta;
-            needs_redraw = true;
-        } else if (anim.current - anim.target).abs() > f64::EPSILON {
-            anim.current = anim.target;
-            needs_redraw = true;
-        }
-    }
-
-    for core_anims in core_bar_values.values_mut() {
-        for anim in core_anims.iter_mut() {
-            let diff = anim.target - anim.current;
-            if diff.abs() > snap_threshold {
-                anim.current += diff * delta;
-                needs_redraw = true;
-            } else if (anim.current - anim.target).abs() > f64::EPSILON {
-                anim.current = anim.target;
-                needs_redraw = true;
-            }
-        }
-    }
-
-    needs_redraw
 }

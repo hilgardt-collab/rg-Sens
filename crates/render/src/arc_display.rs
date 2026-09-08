@@ -17,6 +17,43 @@ struct ResolvedArcConfig<'a> {
     background_color: Color,
 }
 
+/// Per-draw color lookup that fetches the gradient LUT once, so segment loops
+/// (up to 50 lookups per frame) don't re-hash the entire stop list on every
+/// call to `get_cached_color_at`.
+enum SegmentColorLookup<'a> {
+    /// 0 or 1 stops: constant color
+    Constant(Color),
+    /// Abrupt transition: direct stop scan (cheap, no hashing)
+    Abrupt(&'a [ColorStop]),
+    /// Smooth transition: pre-fetched LUT handle
+    Smooth(std::sync::Arc<crate::render_cache::ColorGradientLUT>),
+}
+
+impl<'a> SegmentColorLookup<'a> {
+    fn new(stops: &'a [ColorStop], transition: ColorTransitionStyle) -> Self {
+        if stops.is_empty() {
+            return Self::Constant(Color::default());
+        }
+        if stops.len() == 1 {
+            return Self::Constant(stops[0].color);
+        }
+        match transition {
+            ColorTransitionStyle::Abrupt => Self::Abrupt(stops),
+            ColorTransitionStyle::Smooth => {
+                Self::Smooth(crate::render_cache::get_cached_gradient_lut(stops))
+            }
+        }
+    }
+
+    fn color_at(&self, t: f64) -> Color {
+        match self {
+            Self::Constant(color) => *color,
+            Self::Abrupt(stops) => crate::render_cache::get_abrupt_color(stops, t),
+            Self::Smooth(lut) => lut.get_color(t),
+        }
+    }
+}
+
 /// Render an arc gauge display
 pub fn render_arc(
     cr: &cairo::Context,
@@ -227,6 +264,11 @@ fn render_continuous_arc(
         let total_angle_step = total_angle / total_num_segments as f64;
         let num_filled_segments = (value * total_num_segments as f64).ceil() as u32;
 
+        // Fetch the gradient LUT once for the whole loop (not per segment)
+        let color_lookup = SegmentColorLookup::new(&resolved.color_stops, config.color_transition);
+        // Progressive mode: all segments share the color at the current value
+        let progressive_color = color_lookup.color_at(value);
+
         for i in 0..num_filled_segments {
             // t is position along the TOTAL arc (0.0 to 1.0)
             let t = i as f64 / total_num_segments as f64;
@@ -238,10 +280,10 @@ fn render_continuous_arc(
 
             // Color based on mode
             let seg_color = if config.color_mode == ColorApplicationMode::Progressive {
-                get_color_at_value(value, &resolved.color_stops, config.color_transition)
+                progressive_color
             } else {
                 // Segments mode: color based on position in total arc
-                get_color_at_value(t, &resolved.color_stops, config.color_transition)
+                color_lookup.color_at(t)
             };
 
             seg_color.apply_to_cairo(cr);
@@ -304,6 +346,11 @@ fn render_segmented_arc(
             filled_segments
         };
 
+    // Fetch the gradient LUT once for the whole loop (not per segment)
+    let color_lookup = SegmentColorLookup::new(&resolved.color_stops, config.color_transition);
+    // Progressive mode: all filled segments share the color at the current value
+    let progressive_color = color_lookup.color_at(value);
+
     for i in 0..segments_to_draw {
         let seg_start =
             start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
@@ -315,13 +362,13 @@ fn render_segmented_arc(
         let color = match config.color_mode {
             ColorApplicationMode::Progressive => {
                 // All filled segments have the same color based on current value
-                get_color_at_value(value, &resolved.color_stops, config.color_transition)
+                progressive_color
             }
             ColorApplicationMode::Segments => {
                 // Each segment has its own color based on position
                 if is_filled {
                     // Filled segments show their position color
-                    get_color_at_value(seg_value, &resolved.color_stops, config.color_transition)
+                    color_lookup.color_at(seg_value)
                 } else {
                     // Unfilled segments use background arc color
                     resolved.background_color
@@ -464,13 +511,16 @@ fn render_full_segmented_arc(
         ArcCapStyle::Pointed => cairo::LineCap::Butt,
     });
 
+    // Fetch the gradient LUT once for the whole loop (not per segment)
+    let color_lookup = SegmentColorLookup::new(&resolved.color_stops, config.color_transition);
+
     for i in 0..config.segment_count {
         let seg_start =
             start_rad + (i as f64 * (segment_angle + config.segment_spacing)).to_radians();
         let seg_end = seg_start + segment_angle.to_radians();
         let seg_value = (i as f64 + 0.5) / config.segment_count as f64;
 
-        let color = get_color_at_value(seg_value, &resolved.color_stops, config.color_transition);
+        let color = color_lookup.color_at(seg_value);
         color.apply_to_cairo(cr);
 
         // Apply tapering if enabled

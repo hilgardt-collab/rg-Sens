@@ -15,8 +15,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::grid_layout::{
-    create_panel_context_menu, delete_selected_panels, filter_source_config_keys, GridConfig,
-    PanelState,
+    apply_corner_radius_css, attach_clock_click_handler, create_panel_context_menu,
+    delete_selected_panels, ensure_indicator_background_timer, filter_source_config_keys,
+    GridConfig, PanelState,
 };
 use super::widget_builder::create_spin_row_with_value;
 
@@ -112,6 +113,11 @@ pub(crate) fn show_panel_properties_dialog(
     let old_geometry = Rc::new(RefCell::new(panel_guard.geometry));
     let old_source_id = panel_guard.source.metadata().id.clone();
     let old_displayer_id = panel_guard.displayer.id().to_string();
+    // The panel's CURRENT source/displayer ids, refreshed after every Apply.
+    // Without this, every subsequent Apply saw the dialog-open-time ids and
+    // re-swapped the source (losing rate baselines) and rebuilt the widget.
+    let current_source_id = Rc::new(RefCell::new(old_source_id.clone()));
+    let current_displayer_id = Rc::new(RefCell::new(old_displayer_id.clone()));
     let displayer_name = panel_guard.displayer.name().to_string();
 
     // Get parent window for transient_for
@@ -2454,14 +2460,18 @@ pub(crate) fn show_panel_properties_dialog(
         displayer_combo.connect_selected_notify(move |combo| {
             let selected_idx = combo.selected() as usize;
             if let Some(displayer_id) = displayers_clone.borrow().get(selected_idx).cloned() {
-                let fields = (*available_fields_clone).clone();
+                // NOTE: the field-metadata Vec is only cloned inside the branches
+                // that actually construct a widget (i.e. when is_none()), not on
+                // every dropdown change.
                 let panel_clone = panel_for_lazy.clone();
 
                 match displayer_id.as_str() {
                     "text" => {
                         let mut widget_ref = text_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
-                            let widget = crate::ui::TextLineConfigWidget::new(fields);
+                            let widget = crate::ui::TextLineConfigWidget::new(
+                                (*available_fields_clone).clone(),
+                            );
                             widget.set_theme(global_theme_lazy.clone());
                             text_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
@@ -2470,7 +2480,8 @@ pub(crate) fn show_panel_properties_dialog(
                     "bar" => {
                         let mut widget_ref = bar_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
-                            let widget = crate::ui::BarConfigWidget::new(fields);
+                            let widget =
+                                crate::ui::BarConfigWidget::new((*available_fields_clone).clone());
                             widget.set_theme(global_theme_lazy.clone());
                             bar_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
@@ -2479,7 +2490,8 @@ pub(crate) fn show_panel_properties_dialog(
                     "arc" => {
                         let mut widget_ref = arc_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
-                            let widget = crate::ui::ArcConfigWidget::new(fields);
+                            let widget =
+                                crate::ui::ArcConfigWidget::new((*available_fields_clone).clone());
                             widget.set_theme(global_theme_lazy.clone());
                             arc_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
@@ -2488,7 +2500,9 @@ pub(crate) fn show_panel_properties_dialog(
                     "speedometer" => {
                         let mut widget_ref = speedometer_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
-                            let widget = crate::ui::SpeedometerConfigWidget::new(fields);
+                            let widget = crate::ui::SpeedometerConfigWidget::new(
+                                (*available_fields_clone).clone(),
+                            );
                             widget.set_theme(global_theme_lazy.clone());
                             speedometer_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
@@ -2497,7 +2511,9 @@ pub(crate) fn show_panel_properties_dialog(
                     "graph" => {
                         let mut widget_ref = graph_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
-                            let widget = crate::ui::GraphConfigWidget::new(fields);
+                            let widget = crate::ui::GraphConfigWidget::new(
+                                (*available_fields_clone).clone(),
+                            );
                             widget.set_theme(global_theme_lazy.clone());
                             graph_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
@@ -2525,8 +2541,8 @@ pub(crate) fn show_panel_properties_dialog(
                         if widget_ref.is_none() {
                             let widget = crate::ui::CoreBarsConfigWidget::new();
                             widget.set_theme(global_theme_lazy.clone());
-                            // Count available CPU cores
-                            let core_count = fields
+                            // Count available CPU cores (no clone needed, just iterate)
+                            let core_count = available_fields_clone
                                 .iter()
                                 .filter(|f| f.id.starts_with("core") && f.id.ends_with("_usage"))
                                 .count();
@@ -2541,7 +2557,9 @@ pub(crate) fn show_panel_properties_dialog(
                     "indicator" => {
                         let mut widget_ref = indicator_widget_clone.borrow_mut();
                         if widget_ref.is_none() {
-                            let widget = crate::ui::IndicatorConfigWidget::new(fields);
+                            let widget = crate::ui::IndicatorConfigWidget::new(
+                                (*available_fields_clone).clone(),
+                            );
                             widget.set_on_change(|| {});
                             indicator_placeholder_clone.append(widget.widget());
                             *widget_ref = Some(widget);
@@ -3195,6 +3213,7 @@ pub(crate) fn show_panel_properties_dialog(
         Some(crate::core::DisplayerConfig::Synthwave(cfg)) => cfg.frame.theme.clone(),
         Some(crate::core::DisplayerConfig::ArtDeco(cfg)) => cfg.frame.theme.clone(),
         Some(crate::core::DisplayerConfig::ArtNouveau(cfg)) => cfg.frame.theme.clone(),
+        Some(crate::core::DisplayerConfig::Steampunk(cfg)) => cfg.frame.theme.clone(),
         _ => global_theme.clone(),
     };
     background_widget.set_theme_config(background_theme);
@@ -3251,25 +3270,37 @@ pub(crate) fn show_panel_properties_dialog(
 
     let panel_for_paste_btn = panel.clone();
     let background_widget_paste = background_widget.clone();
+    let panel_states_for_paste = panel_states.clone();
+    let panel_id_for_paste = panel_id.clone();
 
     paste_style_btn.connect_clicked(move |_| {
         use crate::ui::CLIPBOARD;
 
         if let Ok(clipboard) = CLIPBOARD.lock() {
             if let Some(style) = clipboard.paste_panel_style() {
-                let mut panel_guard = panel_for_paste_btn.blocking_write();
-                // Apply the style to panel data
-                panel_guard.background = style.background.clone();
-                panel_guard.corner_radius = style.corner_radius;
-                panel_guard.border = style.border.clone();
+                // NOTE: this writes into the LIVE panel immediately; Cancel does
+                // not revert it (pre-existing behavior, intentionally unchanged).
+                {
+                    let mut panel_guard = panel_for_paste_btn.blocking_write();
+                    // Apply the style to panel data
+                    panel_guard.background = style.background.clone();
+                    panel_guard.corner_radius = style.corner_radius;
+                    panel_guard.border = style.border.clone();
 
-                // Merge displayer config (keep source-specific configs)
-                for (key, value) in style.displayer_config {
-                    panel_guard.config.insert(key, value);
-                }
+                    // Merge displayer config (keep source-specific configs)
+                    for (key, value) in style.displayer_config {
+                        panel_guard.config.insert(key, value);
+                    }
+                } // release panel lock before touching widgets
 
                 // Update background widget UI
                 background_widget_paste.set_config(style.background);
+
+                // Queue a redraw so the pasted style is visible immediately
+                if let Some(state) = panel_states_for_paste.borrow().get(&panel_id_for_paste) {
+                    state.background_area.queue_draw();
+                    state.widget.queue_draw();
+                }
 
                 log::info!("Panel style pasted from clipboard via button (close and reopen dialog to see all changes)");
             } else {
@@ -3427,12 +3458,12 @@ pub(crate) fn show_panel_properties_dialog(
         let new_source_id = sources
             .get(source_combo.selected() as usize)
             .cloned()
-            .unwrap_or_else(|| old_source_id.clone());
+            .unwrap_or_else(|| current_source_id.borrow().clone());
         let new_displayer_id = displayers
             .borrow()
             .get(displayer_combo.selected() as usize)
             .cloned()
-            .unwrap_or_else(|| old_displayer_id.clone());
+            .unwrap_or_else(|| current_displayer_id.borrow().clone());
 
         // Get new background config
         let new_background = background_widget_clone.get_config();
@@ -3440,19 +3471,13 @@ pub(crate) fn show_panel_properties_dialog(
         // Get current geometry (it may have changed from previous Apply)
         let current_geometry = *old_geometry.borrow();
 
-        // Check if anything changed
-        let size_changed =
+        // Check what changed. Compare against the panel's CURRENT ids (refreshed
+        // after each Apply), not the dialog-open-time ids, so repeated Applies
+        // don't re-swap the source/displayer.
+        let mut size_changed =
             new_width != current_geometry.width || new_height != current_geometry.height;
-        let source_changed = new_source_id != old_source_id;
-        let displayer_changed = new_displayer_id != old_displayer_id;
-
-        // Check if background changed (we'll always apply for now, can optimize later)
-        let background_changed = true;
-
-        if !size_changed && !source_changed && !displayer_changed && !background_changed {
-            // No changes to apply
-            return;
-        }
+        let source_changed = new_source_id != *current_source_id.borrow();
+        let displayer_changed = new_displayer_id != *current_displayer_id.borrow();
 
         // Get panel state and clone all widget references upfront to avoid borrow conflicts
         // Note: `widget` is mutable because it needs to be updated if the displayer changes
@@ -3475,6 +3500,10 @@ pub(crate) fn show_panel_properties_dialog(
         }; // states borrow is dropped here
 
         // Handle size change (collision check)
+        // On collision, ONLY the size is reverted; all other pending changes
+        // still apply below (the old early-return silently discarded them
+        // while claiming just "Size has been reverted").
+        let mut size_reverted = false;
         if size_changed {
             // Check if panel has ignore_collision
             let panel_ignore_collision = panel_clone.blocking_read().ignore_collision;
@@ -3513,32 +3542,21 @@ pub(crate) fn show_panel_properties_dialog(
                         occupied.insert((current_geometry.x + dx, current_geometry.y + dy));
                     }
                 }
-                drop(occupied);
 
-                log::warn!("Cannot resize panel: collision detected");
-
-                // Show error dialog and revert spinners
-                let error_dialog = gtk4::AlertDialog::builder()
-                    .message("Cannot Resize Panel")
-                    .detail(
-                        "The new size would overlap with another panel. Size has been reverted.",
-                    )
-                    .modal(true)
-                    .buttons(vec!["OK"])
-                    .build();
+                log::warn!(
+                    "Cannot resize panel: collision detected — reverting size, applying other changes"
+                );
 
                 // Revert spinners to current values
                 width_spin_for_collision.set_value(current_geometry.width as f64);
                 height_spin_for_collision.set_value(current_geometry.height as f64);
 
-                if let Some(d) = dialog_weak_for_apply.upgrade() {
-                    error_dialog.show(Some(&d));
-                }
-                return;
-            }
-
-            // Mark new cells as occupied (only if panel participates in collision)
-            if !panel_ignore_collision {
+                // Revert only the size and continue with the remaining changes;
+                // the alert is shown after they have been applied.
+                size_changed = false;
+                size_reverted = true;
+            } else if !panel_ignore_collision {
+                // Mark new cells as occupied (only if panel participates in collision)
                 for dx in 0..new_width {
                     for dy in 0..new_height {
                         occupied.insert((current_geometry.x + dx, current_geometry.y + dy));
@@ -3573,10 +3591,9 @@ pub(crate) fn show_panel_properties_dialog(
                 );
             }
 
-            // Update background if changed
-            if background_changed {
-                panel_guard.background = new_background;
-            }
+            // Update background (always applied; the config widget is the
+            // source of truth and re-applying an unchanged config is cheap)
+            panel_guard.background = new_background;
 
             // Update corner radius and border (always apply)
             let new_corner_radius = corner_radius_spin_clone.value();
@@ -3753,6 +3770,12 @@ pub(crate) fn show_panel_properties_dialog(
                         new_widget.set_size_request(pixel_width, pixel_height);
 
                         new_widget.add_css_class("transparent-background");
+
+                        // For clock displayers, attach the alarm/timer click handler
+                        // (shared with add_panel; previously missing here, so a panel
+                        // swapped to a clock couldn't open the AlarmTimerDialog or
+                        // dismiss a ringing alarm)
+                        attach_clock_click_handler(&new_widget, &panel_clone, &new_displayer_id);
 
                         // Swap the displayer widget IN PLACE inside the existing overlay.
                         // The previous code built a *fresh* Overlay and tried to move the
@@ -4204,20 +4227,11 @@ pub(crate) fn show_panel_properties_dialog(
 
                         new_widget.insert_action_group("panel", Some(&action_group));
 
-                        // Right-click gesture
-                        let gesture_secondary = gtk4::GestureClick::new();
-                        gesture_secondary.set_button(3); // Right mouse button
-
-                        let popover_clone = popover_menu.clone();
-                        gesture_secondary.connect_pressed(move |gesture, _, x, y| {
-                            popover_clone.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                                x as i32, y as i32, 1, 1,
-                            )));
-                            popover_clone.popup();
-                            gesture.set_state(gtk4::EventSequenceState::Claimed);
-                        });
-
-                        new_widget.add_controller(gesture_secondary);
+                        // No per-widget right-click gesture: the global z-order-aware
+                        // dispatcher in grid_layout shows `state.context_popover`
+                        // (updated above), same as every other panel. A claiming
+                        // per-widget gesture here bypassed the dispatcher and opened
+                        // the wrong panel's menu when panels overlapped.
 
                         // Note: Drag gesture is attached to the frame, not the widget, so it doesn't need to be re-attached
                     }
@@ -4976,34 +4990,23 @@ pub(crate) fn show_panel_properties_dialog(
         background_area.queue_draw();
         widget.queue_draw();
 
-        // Update CSS corner radius if changed
+        // (Re)start the indicator-background refresh timer if the new background
+        // is indicator-type (idempotent; no-op otherwise). Without this, setting
+        // an indicator background via Apply left it static because the timer is
+        // otherwise only created in add_panel.
+        ensure_indicator_background_timer(&panel_clone, &background_area);
+
+        // Update CSS corner radius if changed (shared helper: updates the
+        // panel's single CssProvider in place instead of leaking a new one)
         if corner_radius_changed {
             let new_corner_radius = corner_radius_spin_clone.value();
-            let css_class = format!("panel-radius-{}", panel_id_for_apply.replace('-', "_"));
-
-            // Remove old CSS class if it exists
-            frame.remove_css_class(&css_class);
-
-            if new_corner_radius > 0.0 {
-                // Add CSS class back and update the style
-                frame.add_css_class(&css_class);
-
-                let css_provider = gtk4::CssProvider::new();
-                let css = format!(
-                    ".{} {{ border-radius: {}px; overflow: hidden; }}",
-                    css_class, new_corner_radius
-                );
-                css_provider.load_from_data(&css);
-                gtk4::style_context_add_provider_for_display(
-                    &frame.display(),
-                    &css_provider,
-                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-                );
-            }
+            apply_corner_radius_css(&frame, &panel_id_for_apply, new_corner_radius);
         }
 
-        // Update widget and frame sizes if size changed (and displayer wasn't replaced)
-        if size_changed && !displayer_changed {
+        // Update widget and frame sizes if size changed. This must also run when
+        // the displayer was replaced: the new widget already got the new size,
+        // but the frame and background_area kept the old pixel size.
+        if size_changed {
             let cfg = config_for_apply.borrow();
             let pixel_width =
                 new_width as i32 * cfg.cell_width + (new_width as i32 - 1) * cfg.spacing;
@@ -5034,6 +5037,31 @@ pub(crate) fn show_panel_properties_dialog(
         if size_changed {
             old_geometry.borrow_mut().width = new_width;
             old_geometry.borrow_mut().height = new_height;
+        }
+
+        // Refresh the stored current ids from the panel's ACTUAL state (a failed
+        // create_source/create_displayer leaves the old one in place), so the
+        // next Apply doesn't needlessly re-swap the source or rebuild the widget.
+        {
+            let guard = panel_clone.blocking_read();
+            *current_source_id.borrow_mut() = guard.source.metadata().id.clone();
+            *current_displayer_id.borrow_mut() = guard.displayer.id().to_string();
+        }
+
+        // Notify about a size revert AFTER all other changes were applied
+        if size_reverted {
+            let error_dialog = gtk4::AlertDialog::builder()
+                .message("Cannot Resize Panel")
+                .detail(
+                    "The new size would overlap with another panel. \
+                     The size has been reverted; all other changes were applied.",
+                )
+                .modal(true)
+                .buttons(vec!["OK"])
+                .build();
+            if let Some(d) = dialog_weak_for_apply.upgrade() {
+                error_dialog.show(Some(&d));
+            }
         }
     });
 

@@ -167,7 +167,17 @@ pub fn is_signed_in() -> bool {
 }
 
 /// Forget rg-Sens's token. Does not affect Claude Code.
+///
+/// Takes `AUTH_LOCK` (the same lock the refresh path holds across
+/// refresh+save) so an in-flight background refresh can't re-persist the
+/// tokens after the user signs out.
 pub fn sign_out() {
+    let _guard = AUTH_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    sign_out_locked();
+}
+
+/// Sign-out body. Caller must hold `AUTH_LOCK` (not re-entrant).
+fn sign_out_locked() {
     *mem_lock() = None;
     if let Some(path) = auth_path() {
         let _ = std::fs::remove_file(path);
@@ -206,7 +216,8 @@ pub fn access_token() -> Option<String> {
             // retrying every cycle and fall back to Claude Code's read-only
             // token; the config tab will show "not signed in".
             log::warn!("claude_auth: refresh rejected ({}); signing out", e.message);
-            sign_out();
+            // Already holding AUTH_LOCK — call the lock-free body directly.
+            sign_out_locked();
             None
         }
         Err(e) => {
@@ -332,20 +343,40 @@ fn save(tokens: &StoredTokens) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let content = serde_json::to_string_pretty(tokens).map_err(|e| e.to_string())?;
-    std::fs::write(&path, content).map_err(|e| e.to_string())?;
-    restrict_permissions(&path);
-    Ok(())
+    write_private_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
-/// Best-effort `chmod 600` so the token file isn't world/group readable.
+/// Write `content` to `path` atomically (temp file + fsync + rename), with the
+/// temp file created owner-read/write only from the start — the tokens are
+/// never on disk world-readable (the old write-then-chmod left a window), and
+/// a crash mid-write can't truncate the stored tokens.
 #[cfg(unix)]
-fn restrict_permissions(path: &std::path::Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+fn write_private_atomic(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let tmp = path.with_extension("json.tmp");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)?;
+    // `mode` only applies on creation; clamp permissions in case a stale tmp
+    // file with looser permissions survived an earlier crash.
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    file.write_all(content)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&tmp, path)
 }
 
 #[cfg(not(unix))]
-fn restrict_permissions(_path: &std::path::Path) {}
+fn write_private_atomic(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, content)?;
+    std::fs::rename(&tmp, path)
+}
 
 // --- PKCE helpers --------------------------------------------------------
 
