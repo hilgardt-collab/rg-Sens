@@ -42,13 +42,35 @@ use std::time::{Duration, Instant, SystemTime};
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA: &str = "oauth-2025-04-20";
 /// Minimum wall-clock between live usage fetches, regardless of update interval,
-/// so a fast panel refresh can't hammer the endpoint.
-const MIN_FETCH_INTERVAL: Duration = Duration::from_secs(30);
+/// so a fast panel refresh can't hammer the endpoint. The endpoint's quota is
+/// small and unpublished: polling every 30s got the source locked out with a
+/// `Retry-After` of ~56 minutes. The figures are percentages of 5-hour / 7-day
+/// windows, so a few minutes of staleness is invisible on a panel.
+const MIN_FETCH_INTERVAL: Duration = Duration::from_secs(300);
 
-/// Back-off applied after an HTTP 429, since the usage endpoint's rate limit is
-/// tight (a single fetch tripped 429 in testing) and we don't want to sit in a
-/// permanent retry loop.
+/// Retry delay after a fetch that got no HTTP response (no credentials, DNS,
+/// connect, timeout). Those cost the endpoint nothing, so retry sooner than
+/// `MIN_FETCH_INTERVAL` — e.g. the app autostarting before the network is up.
+const NO_RESPONSE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Back-off after an HTTP 429 that carried no usable `Retry-After`, and the
+/// floor applied to one that did.
 const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(300);
+
+/// Ceiling on a server-supplied `Retry-After`, so a bogus header can't park the
+/// source for days.
+const MAX_RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(2 * 3600);
+
+/// Why a usage fetch produced no payload. Each variant is retried on its own
+/// schedule — see `plan_usage`.
+enum FetchError {
+    /// HTTP 429, with the wait the server asked for in `Retry-After` (if any).
+    RateLimited(Option<Duration>),
+    /// No HTTP response at all (no credentials, DNS, connect, timeout).
+    NoResponse(String),
+    /// Any other HTTP or body failure. The message is the `status` text.
+    Http(String),
+}
 
 /// Process-wide cache for the plan-usage response, shared across every
 /// `ClaudeSource` instance so that N panels make at most one fetch per
@@ -480,7 +502,7 @@ impl ClaudeSource {
 
     /// Perform the blocking GET. `update()` runs off the GTK thread (the update
     /// manager wraps sources in `spawn_blocking`), so blocking I/O is fine here.
-    fn fetch(token: &str) -> Result<Value, String> {
+    fn fetch(token: &str) -> Result<Value, FetchError> {
         let resp = ureq::get(USAGE_URL)
             .set("Authorization", &format!("Bearer {token}"))
             .set("anthropic-beta", OAUTH_BETA)
@@ -494,12 +516,15 @@ impl ClaudeSource {
         match resp {
             Ok(r) => r
                 .into_json::<Value>()
-                .map_err(|e| format!("bad response body: {e}")),
-            Err(ureq::Error::Status(code, _)) => Err(match code {
+                .map_err(|e| FetchError::Http(format!("bad response body: {e}"))),
+            Err(ureq::Error::Status(429, r)) => Err(FetchError::RateLimited(
+                r.header("retry-after").and_then(parse_retry_after),
+            )),
+            Err(ureq::Error::Status(code, _)) => Err(FetchError::Http(match code {
                 401 | 403 => "token expired — open Claude Code to refresh".to_string(),
                 _ => format!("HTTP {code}"),
-            }),
-            Err(e) => Err(format!("network error: {e}")),
+            })),
+            Err(e) => Err(FetchError::NoResponse(format!("network error: {e}"))),
         }
     }
 
@@ -539,10 +564,11 @@ impl ClaudeSource {
         // Phase 2: fetch with the lock released.
         let result = match Self::read_access_token() {
             Some(token) => Self::fetch(&token),
-            None => Err("no credentials found".to_string()),
+            None => Err(FetchError::NoResponse("no credentials found".to_string())),
         };
 
-        // Phase 3: re-lock and store the outcome.
+        // Phase 3: re-lock and store the outcome. Failures keep the last good
+        // payload and only move `next_allowed` + `status`.
         let mut cache = lock();
         match result {
             Ok(payload) => {
@@ -550,19 +576,51 @@ impl ClaudeSource {
                 cache.status = "ok".to_string();
                 cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
             }
-            Err(e) => {
-                // Back off harder on rate-limiting; keep the last good payload.
-                let backoff = if e.contains("429") {
-                    RATE_LIMIT_BACKOFF
-                } else {
-                    MIN_FETCH_INTERVAL
-                };
+            Err(FetchError::RateLimited(retry_after)) => {
+                let backoff = rate_limit_backoff(retry_after);
                 cache.next_allowed = Some(Instant::now() + backoff);
+                // Report a wall-clock time rather than a countdown: the status
+                // string is cached, so a countdown would freeze at this value.
+                let retry_at =
+                    chrono::Local::now() + chrono::Duration::seconds(backoff.as_secs() as i64);
+                cache.status = format!("rate limited — retrying at {}", retry_at.format("%H:%M"));
+                log::warn!(
+                    "claude: usage endpoint rate limited (Retry-After: {:?}); next fetch in {}s",
+                    retry_after.map(|d| d.as_secs()),
+                    backoff.as_secs()
+                );
+            }
+            Err(FetchError::NoResponse(e)) => {
+                cache.next_allowed = Some(Instant::now() + NO_RESPONSE_RETRY_INTERVAL);
+                cache.status = e;
+            }
+            Err(FetchError::Http(e)) => {
+                cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
                 cache.status = e;
             }
         }
         (cache.payload.clone(), cache.status.clone())
     }
+}
+
+/// Parse a `Retry-After` header in its delta-seconds form (what the usage
+/// endpoint sends). The HTTP-date form is not handled → `None`.
+fn parse_retry_after(value: &str) -> Option<Duration> {
+    value.trim().parse::<u64>().ok().map(Duration::from_secs)
+}
+
+/// How long to stay away from the usage endpoint after an HTTP 429.
+///
+/// The server's `Retry-After` is honoured when present: the lockout ends at a
+/// fixed time (observed waits of ~56 min, and the unlock time did not move
+/// across repeated rejected requests), so an earlier retry is just a wasted
+/// request. It is clamped to
+/// `[RATE_LIMIT_BACKOFF, MAX_RATE_LIMIT_BACKOFF]`; with no usable header the
+/// floor is used.
+fn rate_limit_backoff(retry_after: Option<Duration>) -> Duration {
+    retry_after
+        .unwrap_or(RATE_LIMIT_BACKOFF)
+        .clamp(RATE_LIMIT_BACKOFF, MAX_RATE_LIMIT_BACKOFF)
 }
 
 fn usage_field(usage: &serde_json::Map<String, Value>, key: &str) -> u64 {
@@ -1313,6 +1371,34 @@ mod tests {
         assert_eq!(
             legacy_model_weekly_pct(&payload, "seven_day_sonnet", "sonnet"),
             None
+        );
+    }
+
+    #[test]
+    fn retry_after_parses_delta_seconds_only() {
+        assert_eq!(parse_retry_after("3346"), Some(Duration::from_secs(3346)));
+        assert_eq!(parse_retry_after(" 60 "), Some(Duration::from_secs(60)));
+        assert_eq!(parse_retry_after("-5"), None);
+        assert_eq!(parse_retry_after("Sat, 03 Oct 2026 13:09:23 GMT"), None);
+    }
+
+    #[test]
+    fn rate_limit_backoff_honours_retry_after_within_bounds() {
+        // An observed Retry-After (~56 min), far beyond a fixed 5-minute retry.
+        assert_eq!(
+            rate_limit_backoff(Some(Duration::from_secs(3346))),
+            Duration::from_secs(3346)
+        );
+        // No header, or a tiny one → floor.
+        assert_eq!(rate_limit_backoff(None), RATE_LIMIT_BACKOFF);
+        assert_eq!(
+            rate_limit_backoff(Some(Duration::from_secs(1))),
+            RATE_LIMIT_BACKOFF
+        );
+        // Absurd header → ceiling.
+        assert_eq!(
+            rate_limit_backoff(Some(Duration::from_secs(7 * 24 * 3600))),
+            MAX_RATE_LIMIT_BACKOFF
         );
     }
 
