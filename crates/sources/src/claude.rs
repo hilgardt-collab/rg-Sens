@@ -57,6 +57,13 @@ const NO_RESPONSE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 /// floor applied to one that did.
 const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(300);
 
+/// Retry delay after the endpoint rejected our credentials outright (HTTP 403
+/// with an Anthropic error body — e.g. a token from the wrong organisation).
+/// Nothing changes until the user signs in again, and repeated rejections are
+/// what arm the hour-long 429 lockout (observed: 2–4 of them at 5-minute
+/// spacing were enough), so stay away for a long time.
+const AUTH_REJECTED_RETRY_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
 /// Ceiling on a server-supplied `Retry-After`, so a bogus header can't park the
 /// source for days.
 const MAX_RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(2 * 3600);
@@ -64,11 +71,27 @@ const MAX_RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(2 * 3600);
 /// Why a usage fetch produced no payload. Each variant is retried on its own
 /// schedule — see `plan_usage`.
 enum FetchError {
-    /// HTTP 429, with the wait the server asked for in `Retry-After` (if any).
-    RateLimited(Option<Duration>),
-    /// No HTTP response at all (no credentials, DNS, connect, timeout).
+    /// HTTP 429 or 403 — Anthropic's own client (`fetchUtilization` in the
+    /// Claude Code bundle) treats both as rate limiting and honours
+    /// `Retry-After`. Carries the status, the wait the server asked for (if
+    /// any) and a snippet of the error body for the log.
+    RateLimited {
+        status: u16,
+        retry_after: Option<Duration>,
+        detail: String,
+    },
+    /// The server rejected the credential itself: HTTP 401, or HTTP 403 with
+    /// an Anthropic error body (the same test Claude Code's client applies —
+    /// a bare 403 is rate limiting, a 403 that explains itself is not).
+    /// `detail` is the server's message.
+    AuthRejected { status: u16, detail: String },
+    /// The request never reached the server (no credentials, DNS, connection
+    /// refused). Costs the endpoint's quota nothing, so it is retried soon.
     NoResponse(String),
-    /// Any other HTTP or body failure. The message is the `status` text.
+    /// Any other failure after the request was (or may have been) sent: a
+    /// non-rate-limit HTTP status, a read timeout, a garbled body. As far as
+    /// we know it counted against the quota, so it waits the normal interval.
+    /// The message is the `status` text.
     Http(String),
 }
 
@@ -81,6 +104,11 @@ struct UsageCache {
     next_allowed: Option<Instant>,
     payload: Option<Value>,
     status: String,
+    /// rg-Sens's own access token, if the usage endpoint rejected it (HTTP
+    /// 401/403). While the stored token still equals this, fetches skip it and
+    /// use Claude Code's read-only token instead; a re-sign-in (or refresh)
+    /// yields a different token and gets tried again. Cleared on success.
+    rejected_rg_sens_token: Option<String>,
 }
 
 static USAGE_CACHE: Lazy<Mutex<UsageCache>> = Lazy::new(|| {
@@ -88,6 +116,7 @@ static USAGE_CACHE: Lazy<Mutex<UsageCache>> = Lazy::new(|| {
         next_allowed: None,
         payload: None,
         status: "not yet fetched".to_string(),
+        rejected_rg_sens_token: None,
     })
 });
 
@@ -473,20 +502,27 @@ impl ClaudeSource {
     /// The fallback token is read but NEVER written or refreshed — refreshing it
     /// could rotate Claude Code's refresh token and break its login. Sign in via
     /// the source config tab so rg-Sens keeps its own refreshable token.
-    fn read_access_token() -> Option<String> {
+    ///
+    /// Returns the token with a short label of where it came from (`"rg-sens"`
+    /// or `"claude-code"`), so a fetch log line says which credential was used.
+    ///
+    /// `rejected` is an rg-Sens token the usage endpoint already refused (see
+    /// `UsageCache::rejected_rg_sens_token`): if the stored token is still that
+    /// one, fall through to Claude Code's token rather than be refused again.
+    fn read_access_token(rejected: Option<&str>) -> Option<(String, &'static str)> {
         if let Some(token) = crate::claude_auth::access_token() {
-            return Some(token);
-        }
-        // No usable rg-Sens token. If the user IS signed in, access_token()
-        // returning None means a refresh failed (transient) — log it, since the
-        // silent fall-through to Claude Code's read-only token is otherwise hard
-        // to diagnose.
-        if crate::claude_auth::is_signed_in() {
-            log::debug!(
+            if rejected != Some(token.as_str()) {
+                return Some((token, "rg-sens"));
+            }
+        } else if crate::claude_auth::is_signed_in() {
+            // Signed in, but access_token() returned None: a refresh failed
+            // (transient). Log it, since the silent fall-through to Claude
+            // Code's read-only token is otherwise hard to diagnose.
+            log::warn!(
                 "claude: rg-Sens token unavailable (refresh failed?); falling back to Claude Code token"
             );
         }
-        Self::read_claude_code_token()
+        Self::read_claude_code_token().map(|t| (t, "claude-code"))
     }
 
     /// Read Claude Code's OAuth access token read-only from its credentials file.
@@ -517,14 +553,58 @@ impl ClaudeSource {
             Ok(r) => r
                 .into_json::<Value>()
                 .map_err(|e| FetchError::Http(format!("bad response body: {e}"))),
-            Err(ureq::Error::Status(429, r)) => Err(FetchError::RateLimited(
-                r.header("retry-after").and_then(parse_retry_after),
-            )),
-            Err(ureq::Error::Status(code, _)) => Err(FetchError::Http(match code {
-                401 | 403 => "token expired — open Claude Code to refresh".to_string(),
-                _ => format!("HTTP {code}"),
-            })),
-            Err(e) => Err(FetchError::NoResponse(format!("network error: {e}"))),
+            Err(ureq::Error::Status(status @ (429 | 403), r)) => {
+                let retry_after = r.header("retry-after").and_then(parse_retry_after);
+                let body = r.into_string().unwrap_or_default();
+                // A 403 that carries Anthropic's error envelope is a verdict on
+                // the credential (e.g. "OAuth authentication is currently not
+                // allowed for this organization"), not throttling. Classify on
+                // the full body, not the log snippet, so a long message can't
+                // be mistaken for throttling.
+                if status == 403 {
+                    if let Some(message) = anthropic_error_message(&body) {
+                        return Err(FetchError::AuthRejected {
+                            status,
+                            detail: message,
+                        });
+                    }
+                }
+                Err(FetchError::RateLimited {
+                    status,
+                    retry_after,
+                    detail: snip(&body),
+                })
+            }
+            Err(ureq::Error::Status(401, r)) => {
+                let body = r.into_string().unwrap_or_default();
+                Err(FetchError::AuthRejected {
+                    status: 401,
+                    detail: anthropic_error_message(&body).unwrap_or_else(|| snip(&body)),
+                })
+            }
+            Err(ureq::Error::Status(code, r)) => {
+                Err(FetchError::Http(format!("HTTP {code} {}", body_snippet(r))))
+            }
+            Err(ureq::Error::Transport(t)) => {
+                use ureq::ErrorKind as K;
+                let msg = format!("network error: {t}");
+                match t.kind() {
+                    // Nothing was sent, so nothing counted against the quota.
+                    K::InvalidUrl
+                    | K::UnknownScheme
+                    | K::Dns
+                    | K::InsecureRequestHttpsOnly
+                    | K::ConnectionFailed
+                    | K::InvalidProxyUrl
+                    | K::ProxyConnect
+                    | K::ProxyUnauthorized => Err(FetchError::NoResponse(msg)),
+                    // Io (how a timeout surfaces), BadStatus, BadHeader,
+                    // TooManyRedirects, HTTP: the request went out and may have
+                    // been counted — a slow endpoint must not become a
+                    // 30-second retry loop that trips the lockout.
+                    _ => Err(FetchError::Http(msg)),
+                }
+            }
         }
     }
 
@@ -547,7 +627,7 @@ impl ClaudeSource {
         };
 
         // Phase 1: under lock, decide whether to fetch and claim the slot.
-        {
+        let rejected = {
             let mut cache = lock();
             let due = want_fetch
                 && cache
@@ -559,47 +639,191 @@ impl ClaudeSource {
             }
             // Claim the slot so concurrent siblings don't also fetch.
             cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
-        }
+            cache.rejected_rg_sens_token.clone()
+        };
 
         // Phase 2: fetch with the lock released.
-        let result = match Self::read_access_token() {
-            Some(token) => Self::fetch(&token),
-            None => Err(FetchError::NoResponse("no credentials found".to_string())),
+        let started = Instant::now();
+        let (result, token, token_source) = match Self::read_access_token(rejected.as_deref()) {
+            Some((token, source)) => (Self::fetch(&token), Some(token), source),
+            None => (
+                Err(FetchError::NoResponse("no credentials found".to_string())),
+                None,
+                "none",
+            ),
         };
+        let elapsed_ms = started.elapsed().as_millis();
 
         // Phase 3: re-lock and store the outcome. Failures keep the last good
         // payload and only move `next_allowed` + `status`.
         let mut cache = lock();
-        match result {
+        let (new_status, wait, line) = match result {
             Ok(payload) => {
+                // Log the two headline figures: a payload that parses as JSON
+                // but no longer matches the expected shape shows up as `None`
+                // here instead of silently reading 0% on the panel.
+                let line = format!(
+                    "claude: usage fetch ok ({elapsed_ms}ms, token={token_source}, session={:?}, weekly={:?})",
+                    session_pct_of(&payload),
+                    weekly_pct_of(&payload)
+                );
                 cache.payload = Some(payload);
-                cache.status = "ok".to_string();
-                cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
+                if token_source == "rg-sens" {
+                    cache.rejected_rg_sens_token = None;
+                }
+                ("ok".to_string(), MIN_FETCH_INTERVAL, line)
             }
-            Err(FetchError::RateLimited(retry_after)) => {
+            Err(FetchError::AuthRejected { status, detail }) => {
+                let (status_text, wait) = if token_source == "rg-sens" {
+                    // Remember the refused token so the next fetch uses Claude
+                    // Code's instead — soon, if one is on disk (a different
+                    // credential is not a repeat), otherwise not for a long
+                    // while: only a fresh sign-in can change the answer.
+                    cache.rejected_rg_sens_token = token;
+                    let has_fallback = Self::read_claude_code_token().is_some();
+                    (
+                        format!(
+                            "rg-Sens sign-in rejected (HTTP {status}: {detail}) — sign out and \
+                             sign in again with your claude.ai account in the Claude source settings"
+                        ),
+                        if has_fallback {
+                            NO_RESPONSE_RETRY_INTERVAL
+                        } else {
+                            AUTH_REJECTED_RETRY_INTERVAL
+                        },
+                    )
+                } else {
+                    (
+                        format!(
+                            "Claude Code token rejected (HTTP {status}: {detail}) — open Claude Code \
+                             to refresh it, or sign in via the Claude source settings"
+                        ),
+                        // 401 = routine expiry that Claude Code fixes on its next
+                        // run; check back at the normal cadence. 403 = policy.
+                        if status == 401 {
+                            MIN_FETCH_INTERVAL
+                        } else {
+                            AUTH_REJECTED_RETRY_INTERVAL
+                        },
+                    )
+                };
+                let line = format!(
+                    "claude: usage endpoint rejected the credential (HTTP {status}: {detail}; \
+                     {elapsed_ms}ms, token={token_source})"
+                );
+                (status_text, wait, line)
+            }
+            Err(FetchError::RateLimited {
+                status,
+                retry_after,
+                detail,
+            }) => {
                 let backoff = rate_limit_backoff(retry_after);
-                cache.next_allowed = Some(Instant::now() + backoff);
                 // Report a wall-clock time rather than a countdown: the status
                 // string is cached, so a countdown would freeze at this value.
                 let retry_at =
                     chrono::Local::now() + chrono::Duration::seconds(backoff.as_secs() as i64);
-                cache.status = format!("rate limited — retrying at {}", retry_at.format("%H:%M"));
-                log::warn!(
-                    "claude: usage endpoint rate limited (Retry-After: {:?}); next fetch in {}s",
-                    retry_after.map(|d| d.as_secs()),
-                    backoff.as_secs()
-                );
+                let which = if status == 429 {
+                    String::new()
+                } else {
+                    format!(" (HTTP {status})")
+                };
+                (
+                    format!(
+                        "rate limited{which} — retrying at {}",
+                        retry_at.format("%H:%M")
+                    ),
+                    backoff,
+                    format!(
+                        "claude: usage endpoint rate limited (HTTP {status}, Retry-After: {:?}, \
+                         {elapsed_ms}ms, token={token_source}, body: {detail})",
+                        retry_after.map(|d| d.as_secs())
+                    ),
+                )
             }
             Err(FetchError::NoResponse(e)) => {
-                cache.next_allowed = Some(Instant::now() + NO_RESPONSE_RETRY_INTERVAL);
-                cache.status = e;
+                let line = format!(
+                    "claude: usage fetch did not reach the server ({e}; token={token_source})"
+                );
+                (e, NO_RESPONSE_RETRY_INTERVAL, line)
             }
             Err(FetchError::Http(e)) => {
-                cache.next_allowed = Some(Instant::now() + MIN_FETCH_INTERVAL);
-                cache.status = e;
+                let line = format!(
+                    "claude: usage fetch failed ({e}; {elapsed_ms}ms, token={token_source})"
+                );
+                (e, MIN_FETCH_INTERVAL, line)
             }
+        };
+        cache.next_allowed = Some(Instant::now() + wait);
+
+        // Log policy: every change of outcome is visible at the default (warn)
+        // level — including the first success and a recovery — so the journal
+        // alone can reconstruct what the endpoint did. A repeat of the same
+        // outcome drops a level (ok → info, failure → debug) so an offline
+        // machine retrying every 30s doesn't flood the journal. A 429's status
+        // text carries the retry time, so each lockout still logs at warn.
+        let repeat = new_status == cache.status;
+        let ok = new_status == "ok";
+        cache.status = new_status;
+        let wait_s = wait.as_secs();
+        match (ok, repeat) {
+            (true, true) => log::info!("{line}; next fetch in {wait_s}s"),
+            (false, true) => log::debug!("{line}; next fetch in {wait_s}s"),
+            (_, false) => log::warn!("{line}; next fetch in {wait_s}s"),
         }
         (cache.payload.clone(), cache.status.clone())
+    }
+}
+
+/// Collapse an error response body to one short line for logs and the
+/// `status` text. Error bodies are tiny JSON
+/// (`{"error":{"type":…,"message":…}}`); anything longer is cut so a surprise
+/// HTML page can't flood the journal.
+fn body_snippet(r: ureq::Response) -> String {
+    snip(&r.into_string().unwrap_or_default())
+}
+
+/// Whitespace-folded, length-capped copy of `text` (see `body_snippet`).
+fn snip(text: &str) -> String {
+    const MAX: usize = 160;
+    truncate_chars(text.split_whitespace().collect::<Vec<_>>().join(" "), MAX)
+}
+
+/// Cut `s` to at most `max` bytes on a char boundary, marking the cut with `…`.
+fn truncate_chars(mut s: String, max: usize) -> String {
+    if s.len() > max {
+        let mut cut = max;
+        while !s.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        s.truncate(cut);
+        s.push('…');
+    }
+    s
+}
+
+/// The `error.message` of an Anthropic error envelope
+/// (`{"type":"error","error":{"type":…,"message":…}}`), if `body` is one.
+/// Works on a `body_snippet` too: serde stops at the message before reaching
+/// any truncated tail only if the JSON is complete, so fall back to a regex-free
+/// scan for `"message":"…"` when the envelope was cut short.
+fn anthropic_error_message(body: &str) -> Option<String> {
+    const MAX: usize = 300;
+    let msg = match serde_json::from_str::<Value>(body) {
+        Ok(v) => v.get("error")?.get("message")?.as_str()?.to_string(),
+        Err(_) => {
+            // Truncated envelope: pull the message out by hand.
+            let start = body.find("\"message\":\"")? + "\"message\":\"".len();
+            let rest = &body[start..];
+            let end = rest.find('"')?;
+            rest[..end].to_string()
+        }
+    };
+    if msg.is_empty() {
+        None
+    } else {
+        // Capped so a verbose server can't bloat the panel's `status` text.
+        Some(truncate_chars(msg, MAX))
     }
 }
 
@@ -712,7 +936,10 @@ fn legacy_model_weekly_pct(payload: &Value, legacy_key: &str, model_hint: &str) 
         return Some(pct);
     }
     let name = scoped_model_name(payload)?;
-    if name.to_ascii_lowercase().contains(&model_hint.to_ascii_lowercase()) {
+    if name
+        .to_ascii_lowercase()
+        .contains(&model_hint.to_ascii_lowercase())
+    {
         limit_pct(payload, "weekly_scoped")
     } else {
         None
@@ -1025,7 +1252,13 @@ impl DataSource for ClaudeSource {
             for (i, total) in cache.alltime.iter().enumerate() {
                 alltime[i] += total;
             }
-            session_entries.extend(cache.entries.iter().filter(|e| e.ts >= session_cutoff).copied());
+            session_entries.extend(
+                cache
+                    .entries
+                    .iter()
+                    .filter(|e| e.ts >= session_cutoff)
+                    .copied(),
+            );
         }
         let (session, _active) = current_session(&session_entries, now, window_ms);
         let session_total: u64 = session.iter().sum();
@@ -1159,17 +1392,15 @@ impl DataSource for ClaudeSource {
             ClaudeMetric::WeeklySonnetUsage => {
                 (weekly_sonnet_pct, "Claude Weekly Sonnet".to_string())
             }
-            ClaudeMetric::SessionTokens => (session_total as f64, "Claude Session Tokens".to_string()),
+            ClaudeMetric::SessionTokens => {
+                (session_total as f64, "Claude Session Tokens".to_string())
+            }
             ClaudeMetric::AllTimeTokens => (alltime_total as f64, "Claude Tokens".to_string()),
             ClaudeMetric::SessionResetIn => (session_minutes, "Claude Session Reset".to_string()),
             ClaudeMetric::WeeklyResetIn => (weekly_minutes, "Claude Weekly Reset".to_string()),
         };
 
-        let caption = self
-            .config
-            .custom_caption
-            .clone()
-            .unwrap_or(auto_caption);
+        let caption = self.config.custom_caption.clone().unwrap_or(auto_caption);
         let (unit, max_limit) = if self.config.metric.is_percentage() {
             ("%", 100.0)
         } else if self.config.metric.is_reset_time() {
@@ -1183,14 +1414,19 @@ impl DataSource for ClaudeSource {
         } else {
             (
                 "tokens",
-                self.config.max_limit.unwrap_or_else(|| self.running_max.max(1.0)),
+                self.config
+                    .max_limit
+                    .unwrap_or_else(|| self.running_max.max(1.0)),
             )
         };
 
-        self.values.insert("caption".to_string(), Value::from(caption));
-        self.values.insert("value".to_string(), Value::from(raw_value));
+        self.values
+            .insert("caption".to_string(), Value::from(caption));
+        self.values
+            .insert("value".to_string(), Value::from(raw_value));
         self.values.insert("unit".to_string(), Value::from(unit));
-        self.values.insert("min_limit".to_string(), Value::from(0.0));
+        self.values
+            .insert("min_limit".to_string(), Value::from(0.0));
         self.values
             .insert("max_limit".to_string(), Value::from(max_limit));
 
@@ -1245,7 +1481,10 @@ mod tests {
     #[test]
     fn families_bucket_by_substring_and_skip_pseudo_models() {
         assert_eq!(Family::from_model("claude-opus-4-8"), Some(Family::Opus));
-        assert_eq!(Family::from_model("claude-sonnet-4-6"), Some(Family::Sonnet));
+        assert_eq!(
+            Family::from_model("claude-sonnet-4-6"),
+            Some(Family::Sonnet)
+        );
         assert_eq!(
             Family::from_model("claude-haiku-4-5-20251001"),
             Some(Family::Haiku)
@@ -1380,6 +1619,50 @@ mod tests {
         assert_eq!(parse_retry_after(" 60 "), Some(Duration::from_secs(60)));
         assert_eq!(parse_retry_after("-5"), None);
         assert_eq!(parse_retry_after("Sat, 03 Oct 2026 13:09:23 GMT"), None);
+    }
+
+    #[test]
+    fn anthropic_error_message_reads_complete_and_truncated_envelopes() {
+        let full = r#"{"type":"error","error":{"type":"permission_error","message":"OAuth authentication is currently not allowed for this organization."}}"#;
+        assert_eq!(
+            anthropic_error_message(full).as_deref(),
+            Some("OAuth authentication is currently not allowed for this organization.")
+        );
+        // What `body_snippet` produces when the envelope's `details` tail is cut.
+        let cut = r#"{"type":"error","error":{"type":"permission_error","message":"Not allowed.","details":{"error_visibility…"#;
+        assert_eq!(
+            anthropic_error_message(cut).as_deref(),
+            Some("Not allowed.")
+        );
+        // A bare 429 body or HTML page is not an envelope.
+        assert_eq!(anthropic_error_message("Rate limited"), None);
+        assert_eq!(anthropic_error_message(r#"{"error":"nope"}"#), None);
+        // Full-body path handles escaped quotes and caps the length.
+        let quoted = r#"{"type":"error","error":{"type":"x","message":"say \"hi\""}}"#;
+        assert_eq!(
+            anthropic_error_message(quoted).as_deref(),
+            Some("say \"hi\"")
+        );
+        let long = format!(r#"{{"error":{{"message":"{}"}}}}"#, "m".repeat(500));
+        let got = anthropic_error_message(&long).unwrap();
+        assert!(got.ends_with('…') && got.len() <= 300 + '…'.len_utf8());
+    }
+
+    #[test]
+    fn body_snippet_folds_whitespace_and_truncates() {
+        let r = ureq::Response::new(
+            429,
+            "Too Many",
+            "{\n  \"error\": {\n    \"type\": \"x\"\n  }\n}",
+        )
+        .unwrap();
+        assert_eq!(body_snippet(r), "{ \"error\": { \"type\": \"x\" } }");
+
+        let long = "é".repeat(400); // multi-byte: the cut must land on a char boundary
+        let r = ureq::Response::new(500, "Err", &long).unwrap();
+        let s = body_snippet(r);
+        assert!(s.ends_with('…'));
+        assert!(s.len() <= 160 + '…'.len_utf8());
     }
 
     #[test]

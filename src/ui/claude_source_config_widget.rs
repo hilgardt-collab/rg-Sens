@@ -27,7 +27,8 @@ fn account_status_text(signed_in: bool) -> String {
         "✓ Signed in to rg-Sens — the token refreshes automatically.".to_string()
     } else {
         "Not signed in. Plan-usage % falls back to Claude Code's login (read-only) \
-         if present, but sign in here so rg-Sens can refresh its own token."
+         if present, but sign in here (with your claude.ai subscription account) \
+         so rg-Sens can refresh its own token."
             .to_string()
     }
 }
@@ -162,8 +163,9 @@ impl ClaudeSourceConfigWidget {
                 paste_entry.set_text("");
                 paste_entry.grab_focus();
                 status_label.set_text(
-                    "Approve access in your browser, then paste the code shown there \
-                     and click \"Complete sign-in\".",
+                    "Approve access in your browser using your claude.ai subscription \
+                     account (a Console/API account is refused by the usage endpoint), \
+                     then paste the code shown there and click \"Complete sign-in\".",
                 );
             });
         }
@@ -204,8 +206,9 @@ impl ClaudeSourceConfigWidget {
                         Ok(Err(e)) => status_label.set_text(&format!(
                             "Sign-in failed: {e}. Click \"Sign in to Claude\" to retry."
                         )),
-                        Err(_) => status_label
-                            .set_text("Sign-in failed (internal error). Please retry."),
+                        Err(_) => {
+                            status_label.set_text("Sign-in failed (internal error). Please retry.")
+                        }
                     }
                 });
             });
@@ -254,7 +257,8 @@ impl ClaudeSourceConfigWidget {
     }
 
     pub fn set_config(&self, config: ClaudeSourceConfig) {
-        self.metric_combo.set_selected(index_from_metric(config.metric));
+        self.metric_combo
+            .set_selected(index_from_metric(config.metric));
 
         if let Some(ref caption) = config.custom_caption {
             self.caption_entry.set_text(caption);

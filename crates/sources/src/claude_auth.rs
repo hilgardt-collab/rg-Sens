@@ -38,9 +38,20 @@ use std::time::Duration;
 //
 // Extracted verbatim from the installed Claude Code binary (the public client;
 // these are not secrets). If Anthropic changes this flow these will need
-// updating — the source degrades to "token expired" status, it does not crash.
+// updating — the source degrades to a `status` error, it does not crash.
+//
+// Claude Code offers two sign-in flows with the same client, redirect and
+// token endpoint, differing only in the authorize URL:
+//   - `CLAUDE_AI_AUTHORIZE_URL` = https://claude.com/cai/oauth/authorize — the
+//     claude.ai *subscription* account. The token lands on the claude.ai
+//     organisation, which is where plan usage (`/api/oauth/usage`) lives.
+//   - `CONSOLE_AUTHORIZE_URL` = https://platform.claude.com/oauth/authorize —
+//     the Console/API-billing account. A token from this flow is accepted by
+//     `/api/oauth/profile` but `/api/oauth/usage` answers HTTP 403
+//     "OAuth authentication is currently not allowed for this organization".
+// rg-Sens must use the claude.ai flow. (Learned the hard way on 2026-10-08.)
 const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
-const AUTHORIZE_URL: &str = "https://platform.claude.com/oauth/authorize";
+const AUTHORIZE_URL: &str = "https://claude.com/cai/oauth/authorize";
 const TOKEN_URL: &str = "https://platform.claude.com/v1/oauth/token";
 const REDIRECT_URI: &str = "https://platform.claude.com/oauth/code/callback";
 const SCOPES: &str = "user:profile user:inference user:sessions:claude_code user:mcp_servers";
