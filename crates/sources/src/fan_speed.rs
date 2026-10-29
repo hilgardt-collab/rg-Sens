@@ -2,148 +2,142 @@
 //!
 //! Provides access to all available fan speed sensors on the system,
 //! including CPU fans, chassis fans, GPU fans, and other cooling fans.
+//!
+//! A fan is identified in saved configs by its unique label (see
+//! `super::hwmon` for the identity rules). The numeric index is only used for
+//! configs written before labels existed and is interpreted against the raw
+//! discovery order those configs were saved with.
 
+use anyhow::Result;
+use once_cell::sync::Lazy;
 use rg_sens_core::{
     DataSource, FieldMetadata, FieldPurpose, FieldType, SourceConfig, SourceMetadata,
 };
-use anyhow::Result;
-use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use super::hwmon::{self, HwmonSensor, SensorIdentity};
+
 // Re-export fan speed source config types from rg-sens-types
 pub use rg_sens_types::source_configs::fan_speed::{FanCategory, FanInfo, FanSpeedConfig};
 
-/// Resolve sensor_label to sensor_index, updating the index if label is set.
-/// Returns the effective sensor index to use.
-pub fn resolve_fan_index(config: &mut FanSpeedConfig) -> usize {
-    if let Some(ref label) = config.sensor_label {
-        if let Some(idx) = FAN_SENSORS.iter().position(|f| f.label == *label) {
-            config.sensor_index = idx;
-            return idx;
-        } else {
-            log::warn!(
-                "Fan label '{}' not found, falling back to index {}",
-                label,
-                config.sensor_index
-            );
-        }
+impl SensorIdentity for FanInfo {
+    fn label(&self) -> &str {
+        &self.label
     }
-    config.sensor_index
+    fn base_label(&self) -> &str {
+        &self.base_label
+    }
 }
 
-/// Set fan by index and also store the label for stability.
-pub fn set_fan_by_index(config: &mut FanSpeedConfig, index: usize) {
-    config.sensor_index = index;
-    config.sensor_label = FAN_SENSORS.get(index).map(|f| f.label.clone());
+struct FanDiscovery {
+    /// Fans sorted by (driver name, device, fan number), with unique labels
+    sensors: Vec<FanInfo>,
+    /// Raw discovery position -> index into `sensors` (legacy index-only configs)
+    raw_order: Vec<usize>,
 }
 
 /// Cached fan sensor information (discovered once at startup)
-static FAN_SENSORS: Lazy<Vec<FanInfo>> = Lazy::new(|| {
+static FAN_DISCOVERY: Lazy<FanDiscovery> = Lazy::new(|| {
     log::warn!("=== Discovering fan speed sensors (one-time initialization) ===");
 
-    let fans = discover_all_fans();
+    let (sorted, raw_order) = hwmon::finalize(discover_all_fans());
+    let sensors: Vec<FanInfo> = sorted
+        .into_iter()
+        .enumerate()
+        .map(|(index, s)| {
+            let category = categorize_fan(&s.base_label);
+            log::info!(
+                "  [{}] {:?}: {} ({})",
+                index,
+                category,
+                s.label,
+                s.path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default()
+            );
+            FanInfo {
+                index,
+                label: s.label,
+                category,
+                base_label: s.base_label,
+                path: s.path,
+            }
+        })
+        .collect();
 
-    log::warn!("Fan speed discovery complete: {} sensors found", fans.len());
+    log::warn!(
+        "Fan speed discovery complete: {} sensors found",
+        sensors.len()
+    );
 
-    fans
+    FanDiscovery { sensors, raw_order }
 });
 
-/// Discover all fan speed sensors on the system
-fn discover_all_fans() -> Vec<FanInfo> {
-    let mut fans = Vec::new();
+/// Resolve the fan a config refers to and normalize the config to it
+/// (index set to this run's position, label filled in / upgraded to the
+/// unique form). Returns `None` when the saved fan is not present; the
+/// config is left untouched in that case so the user's choice is preserved.
+pub fn resolve_fan_index(config: &mut FanSpeedConfig) -> Option<usize> {
+    let discovery = &*FAN_DISCOVERY;
+    let idx = hwmon::resolve_sensor(
+        &discovery.sensors,
+        config.sensor_label.as_deref(),
+        config.sensor_index,
+        Some(&discovery.raw_order),
+    )?;
+    set_fan_by_index(config, idx);
+    Some(idx)
+}
 
+/// Select a fan by its position in `available_sensors()`, storing both the
+/// index and the label (the label is what survives restarts).
+pub fn set_fan_by_index(config: &mut FanSpeedConfig, index: usize) {
+    config.sensor_index = index;
+    config.sensor_label = FAN_DISCOVERY.sensors.get(index).map(|f| f.label.clone());
+}
+
+/// Discover all fan speed sensors on the system, in raw sysfs order
+#[cfg(target_os = "linux")]
+fn discover_all_fans() -> Vec<HwmonSensor> {
     log::info!("Scanning for fan speed sensors...");
 
-    #[cfg(target_os = "linux")]
-    {
-        // On Linux, read from /sys/class/hwmon
-        if let Ok(entries) = std::fs::read_dir("/sys/class/hwmon") {
-            for entry in entries.flatten() {
-                let path = entry.path();
-
-                // Look for fan input files
-                if let Ok(files) = std::fs::read_dir(&path) {
-                    for file in files.flatten() {
-                        let filename = file.file_name();
-                        let filename_str = filename.to_string_lossy();
-
-                        // Match fan*_input files
-                        if filename_str.starts_with("fan") && filename_str.ends_with("_input") {
-                            let fan_path = file.path();
-
-                            // Try to read the fan speed. Keep every fan that
-                            // exposes a readable input file regardless of the
-                            // current speed: zero-RPM-idle fans (GPU fan-stop,
-                            // PSU hybrid mode) are legitimate sensors, and
-                            // dropping them would also shift later fans'
-                            // indices.
-                            if let Ok(speed_str) = std::fs::read_to_string(&fan_path) {
-                                if let Ok(speed) = speed_str.trim().parse::<i32>() {
-                                    // Get the label for this fan
-                                    let label = get_fan_label(&path, &filename_str);
-                                    let category = categorize_fan(&label);
-
-                                    let index = fans.len();
-                                    fans.push(FanInfo {
-                                        index,
-                                        label: label.clone(),
-                                        category,
-                                        path: Some(fan_path.clone()),
-                                    });
-
-                                    log::info!(
-                                        "  [{}] {:?}: {} = {} RPM ({})",
-                                        index,
-                                        category,
-                                        label,
-                                        speed,
-                                        fan_path.display()
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
+    // Keep every fan that exposes a readable input file regardless of the
+    // current speed: zero-RPM-idle fans (GPU fan-stop, PSU hybrid mode) are
+    // legitimate sensors.
+    let fans: Vec<HwmonSensor> = hwmon::scan("fan", get_fan_label)
+        .into_iter()
+        .filter(|fan| {
+            let readable = fan.path.as_deref().and_then(hwmon::read_i64).is_some();
+            if !readable {
+                log::debug!("Skipping unreadable fan input {:?}", fan.path);
             }
-        }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        log::warn!("Fan speed monitoring is currently only supported on Linux");
-    }
+            readable
+        })
+        .collect();
 
     log::info!("Total fan speed sensors discovered: {}", fans.len());
     fans
 }
 
-/// Get the label for a fan sensor
+#[cfg(not(target_os = "linux"))]
+fn discover_all_fans() -> Vec<HwmonSensor> {
+    log::warn!("Fan speed monitoring is currently only supported on Linux");
+    Vec::new()
+}
+
+/// Label for a fan: the driver's `fanN_label` when present, otherwise
+/// "{driver name} Fan N"
 #[cfg(target_os = "linux")]
-fn get_fan_label(hwmon_path: &std::path::Path, fan_filename: &str) -> String {
-    // Try to read the fan label file
-    let fan_num = fan_filename
-        .trim_start_matches("fan")
-        .trim_end_matches("_input");
-
-    let label_path = hwmon_path.join(format!("fan{}_label", fan_num));
-    if let Ok(label) = std::fs::read_to_string(&label_path) {
-        return label.trim().to_string();
+fn get_fan_label(hwmon_dir: &std::path::Path, name: &str, fan_num: u32) -> String {
+    if let Some(label) = hwmon::read_trimmed(&hwmon_dir.join(format!("fan{}_label", fan_num))) {
+        if !label.is_empty() {
+            return label;
+        }
     }
-
-    // Try to read the device name
-    let name_path = hwmon_path.join("name");
-    if let Ok(name) = std::fs::read_to_string(&name_path) {
-        return format!("{} Fan {}", name.trim(), fan_num);
-    }
-
-    // Fallback to hwmon name and fan number
-    if let Some(hwmon_name) = hwmon_path.file_name() {
-        return format!("{} Fan {}", hwmon_name.to_string_lossy(), fan_num);
-    }
-
-    format!("Fan {}", fan_num)
+    format!("{} Fan {}", name, fan_num)
 }
 
 /// Categorize a fan based on its label
@@ -192,6 +186,9 @@ fn categorize_fan(label: &str) -> FanCategory {
 pub struct FanSpeedSource {
     metadata: SourceMetadata,
     config: FanSpeedConfig,
+    /// Index into `FAN_DISCOVERY.sensors`; `None` when the configured fan is
+    /// not present on this system (published as "N/A")
+    resolved: Option<usize>,
     /// `None` when the sensor could not be read (published as "N/A")
     current_rpm: Option<f64>,
     detected_min: Option<f64>,
@@ -203,8 +200,9 @@ pub struct FanSpeedSource {
 
 impl FanSpeedSource {
     pub fn new() -> Self {
-        // Force initialization of sensor discovery
-        let _ = &*FAN_SENSORS;
+        // Resolving the default config also forces sensor discovery
+        let mut config = FanSpeedConfig::default();
+        let resolved = resolve_fan_index(&mut config);
 
         Self {
             metadata: SourceMetadata {
@@ -221,7 +219,8 @@ impl FanSpeedSource {
                 ],
                 default_interval: Duration::from_millis(1000),
             },
-            config: FanSpeedConfig::default(),
+            config,
+            resolved,
             current_rpm: None,
             detected_min: None,
             detected_max: None,
@@ -231,7 +230,7 @@ impl FanSpeedSource {
 
     /// Get list of all available fan sensors
     pub fn available_sensors() -> &'static [FanInfo] {
-        &FAN_SENSORS
+        &FAN_DISCOVERY.sensors
     }
 }
 
@@ -288,29 +287,16 @@ impl DataSource for FanSpeedSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        // Read the selected fan sensor using the path stored in FAN_SENSORS
-        // This ensures we always read from the correct fan file
-        self.current_rpm = None;
-        if let Some(fan_info) = FAN_SENSORS.get(self.config.sensor_index) {
-            if let Some(ref fan_path) = fan_info.path {
-                if let Ok(speed_str) = std::fs::read_to_string(fan_path) {
-                    if let Ok(speed) = speed_str.trim().parse::<i32>() {
-                        self.current_rpm = Some(speed as f64);
-                    } else {
-                        log::warn!("Failed to parse fan speed from {:?}", fan_path);
-                    }
-                } else {
-                    log::warn!("Failed to read fan speed from {:?}", fan_path);
-                }
-            } else {
-                log::warn!("Fan sensor {} has no path stored", self.config.sensor_index);
+        let fan = self.resolved.and_then(|idx| FAN_DISCOVERY.sensors.get(idx));
+
+        // Read the selected fan through the path captured at discovery
+        self.current_rpm = fan.and_then(|f| f.path.as_deref()).and_then(|path| {
+            let rpm = hwmon::read_i64(path);
+            if rpm.is_none() {
+                log::warn!("Failed to read fan speed from {:?}", path);
             }
-        } else {
-            log::warn!(
-                "Selected fan sensor index {} not found in FAN_SENSORS",
-                self.config.sensor_index
-            );
-        }
+            rpm.map(|v| v as f64)
+        });
 
         // Update detected limits if auto-detect is enabled (only from real reads)
         if let Some(rpm) = self.current_rpm {
@@ -327,8 +313,8 @@ impl DataSource for FanSpeedSource {
         self.values.clear();
 
         // Fan speed value - MUST provide "value" key for displayers.
-        // On read failure publish "N/A" (same convention as cpu/gpu/disk)
-        // instead of a misleading 0.
+        // On read failure (or a fan that is not present) publish "N/A" (same
+        // convention as cpu/gpu/disk) instead of a misleading 0.
         match self.current_rpm {
             Some(rpm) => {
                 self.values.insert("value".to_string(), Value::from(rpm));
@@ -340,16 +326,23 @@ impl DataSource for FanSpeedSource {
             }
         }
 
-        // Sensor label
-        let sensor_label = FAN_SENSORS
-            .get(self.config.sensor_index)
-            .map(|s| s.label.as_str())
-            .unwrap_or("Unknown");
-        self.values
-            .insert("sensor_label".to_string(), Value::from(sensor_label));
+        // Sensor label: the discovered label, or the saved one when the fan
+        // is missing so the panel still says which fan it is waiting for
+        let sensor_label = fan
+            .map(|f| f.label.clone())
+            .or_else(|| self.config.sensor_label.clone())
+            .unwrap_or_else(|| "Unknown".to_string());
+        self.values.insert(
+            "sensor_label".to_string(),
+            Value::from(sensor_label.as_str()),
+        );
 
         // Unit (empty when the value is N/A, matching cpu/gpu/disk)
-        let unit = if self.current_rpm.is_some() { "RPM" } else { "" };
+        let unit = if self.current_rpm.is_some() {
+            "RPM"
+        } else {
+            ""
+        };
         self.values.insert("unit".to_string(), Value::from(unit));
 
         // Caption (custom or auto-generated)
@@ -357,7 +350,7 @@ impl DataSource for FanSpeedSource {
             .config
             .custom_caption
             .clone()
-            .unwrap_or_else(|| sensor_label.to_string());
+            .unwrap_or_else(|| sensor_label.clone());
         self.values
             .insert("caption".to_string(), Value::from(caption));
 
@@ -419,24 +412,15 @@ impl DataSource for FanSpeedSource {
         if let Some(config_value) = config.get("fan_speed_config") {
             let mut new_config: FanSpeedConfig = serde_json::from_value(config_value.clone())?;
 
-            // Stable fan selection across hwmon reordering: prefer the stored
-            // label. Exception: the config UI only writes sensor_index, so an
-            // index change with an unchanged label means the user picked a
-            // different fan — the index wins and the label is refreshed from it.
-            if new_config.sensor_index != self.config.sensor_index
-                && new_config.sensor_label == self.config.sensor_label
-            {
-                let idx = new_config.sensor_index;
-                set_fan_by_index(&mut new_config, idx);
-            } else {
-                resolve_fan_index(&mut new_config);
-                // Backfill the label for configs saved before labels existed,
-                // so the selection becomes stable on the next save.
-                if new_config.sensor_label.is_none() {
-                    new_config.sensor_label = FAN_SENSORS
-                        .get(new_config.sensor_index)
-                        .map(|f| f.label.clone());
-                }
+            // Label first, legacy index only for label-less configs. The
+            // config widget always writes both, so there is no need to guess
+            // which one the user changed.
+            self.resolved = resolve_fan_index(&mut new_config);
+            if self.resolved.is_none() {
+                log::warn!(
+                    "Fan {} is not present on this system; publishing N/A until another fan is selected",
+                    describe_selection(&new_config)
+                );
             }
             self.config = new_config;
 
@@ -451,6 +435,14 @@ impl DataSource for FanSpeedSource {
 
     fn get_typed_config(&self) -> Option<SourceConfig> {
         Some(SourceConfig::FanSpeed(self.config.clone()))
+    }
+}
+
+/// "'label'" or "#index" for log/UI messages about a saved selection
+pub fn describe_selection(config: &FanSpeedConfig) -> String {
+    match config.sensor_label.as_deref() {
+        Some(label) if !label.is_empty() => format!("'{}'", label),
+        _ => format!("#{}", config.sensor_index),
     }
 }
 

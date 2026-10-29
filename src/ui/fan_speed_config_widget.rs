@@ -5,10 +5,13 @@ use gtk4::{
     Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
     StringList,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::sources::{FanCategory, FanSpeedConfig, FanSpeedSource};
+use crate::sources::{
+    describe_fan_selection, resolve_fan_index, set_fan_by_index, FanCategory, FanSpeedConfig,
+    FanSpeedSource,
+};
 use crate::ui::widget_builder::create_page_container;
 
 /// Widget for configuring Fan Speed source
@@ -21,6 +24,14 @@ pub struct FanSpeedConfigWidget {
     min_limit_spin: SpinButton,
     max_limit_spin: SpinButton,
     auto_detect_check: CheckButton,
+    /// Warning shown when the saved fan is not present on this system
+    missing_label: Label,
+    /// False while the dropdown does not reflect the stored config (the saved
+    /// fan is missing, so nothing could be selected for it). `get_config` then
+    /// keeps the stored selection instead of syncing from the dropdown. GTK's
+    /// DropDown cannot be set to "no selection" (`set_selected` with
+    /// `INVALID_LIST_POSITION` is a no-op), hence the flag.
+    selection_valid: Rc<Cell<bool>>,
 }
 
 impl FanSpeedConfigWidget {
@@ -48,6 +59,14 @@ impl FanSpeedConfigWidget {
 
         sensor_box.append(&sensor_combo);
         widget.append(&sensor_box);
+
+        // Shown when the saved fan is not present on this system
+        let missing_label = Label::new(None);
+        missing_label.set_halign(gtk4::Align::Start);
+        missing_label.set_wrap(true);
+        missing_label.add_css_class("warning");
+        missing_label.set_visible(false);
+        widget.append(&missing_label);
 
         // Add info label showing sensor count
         let info_label = Label::new(Some(&format!(
@@ -132,13 +151,20 @@ impl FanSpeedConfigWidget {
         widget.append(&limits_box);
 
         // Wire up handlers
+        let selection_valid = Rc::new(Cell::new(true));
         let config_clone = config.clone();
         let sensor_count = sensors.len();
+        let missing_label_clone = missing_label.clone();
+        let selection_valid_clone = selection_valid.clone();
         sensor_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             // GTK returns u32::MAX (GTK_INVALID_LIST_POSITION) when nothing is selected
             if selected != gtk4::INVALID_LIST_POSITION && (selected as usize) < sensor_count {
-                config_clone.borrow_mut().sensor_index = selected as usize;
+                // Store both index and label: the label is the stable identity
+                // that survives hwmon reordering across boots
+                set_fan_by_index(&mut config_clone.borrow_mut(), selected as usize);
+                selection_valid_clone.set(true);
+                missing_label_clone.set_visible(false);
             }
         });
 
@@ -183,6 +209,8 @@ impl FanSpeedConfigWidget {
             min_limit_spin,
             max_limit_spin,
             auto_detect_check,
+            missing_label,
+            selection_valid,
         }
     }
 
@@ -192,6 +220,14 @@ impl FanSpeedConfigWidget {
 
     pub fn get_config(&self) -> FanSpeedConfig {
         let mut config = self.config.borrow().clone();
+
+        // Sync index + label from the dropdown, unless the dropdown does not
+        // reflect the stored config (saved fan not present): then the stored
+        // selection is kept as-is rather than replaced by whatever is showing.
+        let selected = self.sensor_combo.selected();
+        if self.selection_valid.get() && selected != gtk4::INVALID_LIST_POSITION {
+            set_fan_by_index(&mut config, selected as usize);
+        }
 
         // When auto_detect is disabled, ensure we use the spinbutton values
         // This handles the case where set_config was called with None limits
@@ -205,10 +241,31 @@ impl FanSpeedConfigWidget {
     }
 
     pub fn set_config(&self, config: &FanSpeedConfig) {
+        // Resolve the saved label to this run's index (hwmon order changes
+        // across boots); this also normalizes index/label in the stored config
+        let mut config = config.clone();
+        let resolved = resolve_fan_index(&mut config);
         *self.config.borrow_mut() = config.clone();
 
         // Update UI
-        self.sensor_combo.set_selected(config.sensor_index as u32);
+        match resolved {
+            Some(index) => {
+                self.missing_label.set_visible(false);
+                self.sensor_combo.set_selected(index as u32);
+                self.selection_valid.set(true);
+            }
+            None => {
+                // The dropdown keeps showing some fan, but it is not the
+                // configured one; ignore it until the user picks explicitly
+                self.selection_valid.set(false);
+                self.missing_label.set_text(&format!(
+                    "Saved fan {} was not found on this system, so the panel shows N/A. \
+                     Pick a fan above to replace it.",
+                    describe_fan_selection(&config)
+                ));
+                self.missing_label.set_visible(true);
+            }
+        }
         self.caption_entry
             .set_text(config.custom_caption.as_deref().unwrap_or(""));
         self.update_interval_spin

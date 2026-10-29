@@ -36,8 +36,16 @@ pub enum SensorCategory {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorInfo {
     pub index: usize,
+    /// Unique, human-readable label; this is the sensor's identity in saved configs
     pub label: String,
     pub category: SensorCategory,
+    /// Label before collision disambiguation (equal to `label` unless another
+    /// sensor shared it). Matches configs saved before disambiguation existed.
+    #[serde(skip)]
+    pub base_label: String,
+    /// Path to the `tempN_input` file (None when read through sysinfo)
+    #[serde(skip)]
+    pub path: Option<std::path::PathBuf>,
 }
 
 fn default_update_interval() -> u64 {
@@ -51,10 +59,11 @@ fn default_auto_detect_limits() -> bool {
 /// Configuration for system temperature source
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemTempConfig {
-    /// Sensor label - stable identifier (preferred over index)
+    /// Sensor label - the stable identifier. A set label that matches no
+    /// sensor means "not found"; the index is never used as a substitute.
     #[serde(default)]
     pub sensor_label: Option<String>,
-    /// Sensor index - deprecated, kept for backward compatibility
+    /// Sensor index - only consulted for configs saved before labels existed
     #[serde(default)]
     pub sensor_index: usize,
     #[serde(default)]

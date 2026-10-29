@@ -7,6 +7,7 @@ mod cpu;
 mod disk;
 mod fan_speed;
 mod gpu;
+mod hwmon;
 mod memory;
 mod network;
 mod shared_sensors;
@@ -19,14 +20,18 @@ pub use claude::ClaudeSource;
 pub use combo::{ComboSource, ComboSourceConfig, GroupConfig, SlotConfig};
 pub use cpu::{CpuSensor, CpuSource};
 pub use disk::DiskSource;
-pub use fan_speed::{FanCategory, FanInfo, FanSpeedConfig, FanSpeedSource};
+pub use fan_speed::{
+    describe_selection as describe_fan_selection, resolve_fan_index, set_fan_by_index,
+    FanCategory, FanInfo, FanSpeedConfig, FanSpeedSource,
+};
 pub use gpu::GpuSource;
 pub use memory::MemorySource;
 pub use network::NetworkSource;
 pub use static_text::{StaticTextLine, StaticTextSource, StaticTextSourceConfig};
 pub use system_temp::{
-    resolve_sensor_index, set_sensor_by_index, SensorCategory, SensorInfo, SystemTempConfig,
-    SystemTempSource, TemperatureUnit as SystemTempUnit,
+    describe_selection as describe_temp_selection, resolve_sensor_index, set_sensor_by_index,
+    SensorCategory, SensorInfo, SystemTempConfig, SystemTempSource,
+    TemperatureUnit as SystemTempUnit,
 };
 pub use test::{TestMode, TestSource, TestSourceConfig, TEST_SOURCE_STATE};
 

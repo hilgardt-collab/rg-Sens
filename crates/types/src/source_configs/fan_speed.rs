@@ -21,8 +21,13 @@ pub enum FanCategory {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FanInfo {
     pub index: usize,
+    /// Unique, human-readable label; this is the fan's identity in saved configs
     pub label: String,
     pub category: FanCategory,
+    /// Label before collision disambiguation (equal to `label` unless another
+    /// fan shared it). Matches configs saved before disambiguation existed.
+    #[serde(skip)]
+    pub base_label: String,
     /// Path to the fan input file (e.g., /sys/class/hwmon/hwmon0/fan1_input)
     #[serde(skip)]
     pub path: Option<std::path::PathBuf>,
@@ -39,11 +44,13 @@ fn default_auto_detect_limits() -> bool {
 /// Configuration for fan speed source
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FanSpeedConfig {
-    /// Fan label - stable identifier (preferred over index, since hwmon
-    /// ordering can change across boots)
+    /// Fan label - the stable identifier (hwmon ordering changes across
+    /// boots). A set label that matches no fan means "not found"; the index
+    /// is never used as a substitute.
     #[serde(default)]
     pub sensor_label: Option<String>,
-    /// Fan index - kept for backward compatibility and as fallback
+    /// Fan index - only consulted for configs saved before labels existed,
+    /// interpreted against the raw discovery order those configs were saved with
     #[serde(default)]
     pub sensor_index: usize,
     #[serde(default = "default_update_interval")]

@@ -1,8 +1,10 @@
 //! Shared temperature sensor components cache
 //!
 //! This module provides a single global instance of sysinfo::Components that is
-//! initialized once at startup and shared by all sources that need temperature data.
-//! This avoids the expensive sensor discovery happening every time a source is created.
+//! initialized once at startup and shared by the sources that read temperatures
+//! through sysinfo (the CPU source; the system temperature source reads hwmon
+//! directly on Linux). This avoids the expensive sensor discovery happening
+//! every time a source is created.
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -82,17 +84,6 @@ pub fn get_temperature_by_label(label: &str) -> Option<f32> {
         .iter()
         .find(|c| c.label() == label)
         .map(|c| c.temperature())
-}
-
-/// Get temperature by index (refreshes if needed)
-pub fn get_temperature_by_index(index: usize) -> Option<f32> {
-    // Use unwrap_or_else to recover from poisoned mutex - data may still be valid
-    let mut sensors = SHARED_COMPONENTS.lock().unwrap_or_else(|poisoned| {
-        log::warn!("Shared sensors mutex was poisoned, recovering");
-        poisoned.into_inner()
-    });
-    sensors.refresh_if_needed();
-    sensors.components.get(index).map(|c| c.temperature())
 }
 
 /// Force initialization of the shared components

@@ -5,12 +5,12 @@ use gtk4::{
     Adjustment, Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
     StringList,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::sources::{
-    resolve_sensor_index, set_sensor_by_index, SensorCategory, SystemTempConfig, SystemTempSource,
-    SystemTempUnit,
+    describe_temp_selection, resolve_sensor_index, set_sensor_by_index, SensorCategory,
+    SystemTempConfig, SystemTempSource, SystemTempUnit,
 };
 use crate::ui::widget_builder::create_page_container;
 
@@ -27,6 +27,14 @@ pub struct SystemTempConfigWidget {
     auto_detect_check: CheckButton,
     min_unit_label: Label,
     max_unit_label: Label,
+    /// Warning shown when the saved sensor is not present on this system
+    missing_label: Label,
+    /// False while the dropdown does not reflect the stored config (the saved
+    /// sensor is missing, so nothing could be selected for it). `get_config`
+    /// then keeps the stored selection instead of syncing from the dropdown.
+    /// GTK's DropDown cannot be set to "no selection" (`set_selected` with
+    /// `INVALID_LIST_POSITION` is a no-op), hence the flag.
+    selection_valid: Rc<Cell<bool>>,
 }
 
 impl Default for SystemTempConfigWidget {
@@ -60,6 +68,14 @@ impl SystemTempConfigWidget {
 
         sensor_box.append(&sensor_combo);
         widget.append(&sensor_box);
+
+        // Shown when the saved sensor is not present on this system
+        let missing_label = Label::new(None);
+        missing_label.set_halign(gtk4::Align::Start);
+        missing_label.set_wrap(true);
+        missing_label.add_css_class("warning");
+        missing_label.set_visible(false);
+        widget.append(&missing_label);
 
         // Add info label showing sensor count
         let info_label = Label::new(Some(&format!(
@@ -157,7 +173,10 @@ impl SystemTempConfigWidget {
         widget.append(&limits_box);
 
         // Wire up handlers
+        let selection_valid = Rc::new(Cell::new(true));
         let config_clone = config.clone();
+        let missing_label_clone = missing_label.clone();
+        let selection_valid_clone = selection_valid.clone();
         sensor_combo.connect_selected_notify(move |combo| {
             let selected = combo.selected();
             // GTK returns u32::MAX (GTK_INVALID_LIST_POSITION) when nothing is selected
@@ -168,10 +187,9 @@ impl SystemTempConfigWidget {
             if let Some(model) = combo.model() {
                 if (selected as usize) < model.n_items() as usize {
                     // Use set_sensor_by_index to store both index and label for stability
-                    set_sensor_by_index(
-                        &mut config_clone.borrow_mut(),
-                        selected as usize,
-                    );
+                    set_sensor_by_index(&mut config_clone.borrow_mut(), selected as usize);
+                    selection_valid_clone.set(true);
+                    missing_label_clone.set_visible(false);
                 }
             }
         });
@@ -245,6 +263,8 @@ impl SystemTempConfigWidget {
             auto_detect_check,
             min_unit_label,
             max_unit_label,
+            missing_label,
+            selection_valid,
         }
     }
 
@@ -253,12 +273,30 @@ impl SystemTempConfigWidget {
     }
 
     pub fn set_config(&self, config: SystemTempConfig) {
-        // Resolve sensor_label to get the correct index (handles sensor order changes)
+        // Resolve sensor_label to this run's index (handles sensor order
+        // changes); this also normalizes index/label in the stored config
         let mut config = config;
-        let sensor_index = resolve_sensor_index(&mut config);
+        let resolved = resolve_sensor_index(&mut config);
 
         // Update UI widgets based on config
-        self.sensor_combo.set_selected(sensor_index as u32);
+        match resolved {
+            Some(index) => {
+                self.missing_label.set_visible(false);
+                self.sensor_combo.set_selected(index as u32);
+                self.selection_valid.set(true);
+            }
+            None => {
+                // The dropdown keeps showing some sensor, but it is not the
+                // configured one; ignore it until the user picks explicitly
+                self.selection_valid.set(false);
+                self.missing_label.set_text(&format!(
+                    "Saved sensor {} was not found on this system, so the panel shows N/A. \
+                     Pick a sensor above to replace it.",
+                    describe_temp_selection(&config)
+                ));
+                self.missing_label.set_visible(true);
+            }
+        }
 
         self.unit_combo.set_selected(match config.temp_unit {
             SystemTempUnit::Celsius => 0,
@@ -306,10 +344,11 @@ impl SystemTempConfigWidget {
     pub fn get_config(&self) -> SystemTempConfig {
         let mut config = self.config.borrow().clone();
 
-        // Ensure sensor_label is set based on current index for stability across restarts
+        // Sync index + label from the dropdown, unless the dropdown does not
+        // reflect the stored config (saved sensor not present): then the stored
+        // selection is kept as-is rather than replaced by whatever is showing.
         let selected = self.sensor_combo.selected();
-        // Only update if a valid selection (GTK returns INVALID_LIST_POSITION when nothing selected)
-        if selected != gtk4::INVALID_LIST_POSITION {
+        if self.selection_valid.get() && selected != gtk4::INVALID_LIST_POSITION {
             set_sensor_by_index(&mut config, selected as usize);
         }
 
