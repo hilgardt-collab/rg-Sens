@@ -84,7 +84,20 @@ impl ClaudeMetric {
     /// True for the minutes-until-reset metrics (countdown, "min" unit). These
     /// scale a gauge against their *window length*, not the token running-max.
     pub fn is_reset_time(self) -> bool {
-        matches!(self, ClaudeMetric::SessionResetIn | ClaudeMetric::WeeklyResetIn)
+        matches!(
+            self,
+            ClaudeMetric::SessionResetIn | ClaudeMetric::WeeklyResetIn
+        )
+    }
+
+    /// True for the local token-count metrics. Only these drive the transcript
+    /// scan in the source (just as only the percentage metrics drive the
+    /// network fetch).
+    pub fn is_token_count(self) -> bool {
+        matches!(
+            self,
+            ClaudeMetric::SessionTokens | ClaudeMetric::AllTimeTokens
+        )
     }
 }
 
