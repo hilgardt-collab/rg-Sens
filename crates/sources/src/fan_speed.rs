@@ -82,12 +82,24 @@ static FAN_DISCOVERY: Lazy<FanDiscovery> = Lazy::new(|| {
 /// config is left untouched in that case so the user's choice is preserved.
 pub fn resolve_fan_index(config: &mut FanSpeedConfig) -> Option<usize> {
     let discovery = &*FAN_DISCOVERY;
+    let legacy = config.sensor_label.as_deref().is_none_or(str::is_empty);
     let idx = hwmon::resolve_sensor(
         &discovery.sensors,
         config.sensor_label.as_deref(),
         config.sensor_index,
         Some(&discovery.raw_order),
     )?;
+    if legacy {
+        // Index-only configs predate labels; the index is interpreted the
+        // way it always was (raw sysfs order), which keeps the panel showing
+        // what it shows today but cannot know whether that was the intent.
+        log::info!(
+            "Fan config has no label; raw index {} maps to '{}' on this boot. \
+             Re-select the fan if this is not the intended one.",
+            config.sensor_index,
+            discovery.sensors[idx].label
+        );
+    }
     set_fan_by_index(config, idx);
     Some(idx)
 }
@@ -131,13 +143,10 @@ fn discover_all_fans() -> Vec<HwmonSensor> {
 /// Label for a fan: the driver's `fanN_label` when present, otherwise
 /// "{driver name} Fan N"
 #[cfg(target_os = "linux")]
-fn get_fan_label(hwmon_dir: &std::path::Path, name: &str, fan_num: u32) -> String {
-    if let Some(label) = hwmon::read_trimmed(&hwmon_dir.join(format!("fan{}_label", fan_num))) {
-        if !label.is_empty() {
-            return label;
-        }
-    }
-    format!("{} Fan {}", name, fan_num)
+fn get_fan_label(dir: &hwmon::HwmonDir, fan_num: u32) -> String {
+    hwmon::read_trimmed(&dir.path.join(format!("fan{}_label", fan_num)))
+        .filter(|label| !label.is_empty())
+        .unwrap_or_else(|| format!("{} Fan {}", dir.name, fan_num))
 }
 
 /// Categorize a fan based on its label
@@ -191,6 +200,9 @@ pub struct FanSpeedSource {
     resolved: Option<usize>,
     /// `None` when the sensor could not be read (published as "N/A")
     current_rpm: Option<f64>,
+    /// Set while reads of a present fan fail, so the failure is logged once
+    /// per transition instead of once per update
+    read_failed: bool,
     detected_min: Option<f64>,
     detected_max: Option<f64>,
 
@@ -222,6 +234,7 @@ impl FanSpeedSource {
             config,
             resolved,
             current_rpm: None,
+            read_failed: false,
             detected_min: None,
             detected_max: None,
             values: HashMap::with_capacity(8),
@@ -290,13 +303,25 @@ impl DataSource for FanSpeedSource {
         let fan = self.resolved.and_then(|idx| FAN_DISCOVERY.sensors.get(idx));
 
         // Read the selected fan through the path captured at discovery
-        self.current_rpm = fan.and_then(|f| f.path.as_deref()).and_then(|path| {
-            let rpm = hwmon::read_i64(path);
-            if rpm.is_none() {
-                log::warn!("Failed to read fan speed from {:?}", path);
+        self.current_rpm = fan
+            .and_then(|f| f.path.as_deref())
+            .and_then(hwmon::read_i64)
+            .map(|v| v as f64);
+
+        // Log read failures once per transition, not once per second
+        if let Some(f) = fan {
+            match (self.current_rpm.is_some(), self.read_failed) {
+                (false, false) => {
+                    log::warn!("Failed to read fan '{}' from {:?}", f.label, f.path);
+                    self.read_failed = true;
+                }
+                (true, true) => {
+                    log::info!("Fan '{}' is readable again", f.label);
+                    self.read_failed = false;
+                }
+                _ => {}
             }
-            rpm.map(|v| v as f64)
-        });
+        }
 
         // Update detected limits if auto-detect is enabled (only from real reads)
         if let Some(rpm) = self.current_rpm {
@@ -419,10 +444,14 @@ impl DataSource for FanSpeedSource {
             if self.resolved.is_none() {
                 log::warn!(
                     "Fan {} is not present on this system; publishing N/A until another fan is selected",
-                    describe_selection(&new_config)
+                    hwmon::describe_selection(
+                        new_config.sensor_label.as_deref(),
+                        new_config.sensor_index
+                    )
                 );
             }
             self.config = new_config;
+            self.read_failed = false;
 
             // Reset detected limits when configuration changes
             if self.config.auto_detect_limits {
@@ -435,14 +464,6 @@ impl DataSource for FanSpeedSource {
 
     fn get_typed_config(&self) -> Option<SourceConfig> {
         Some(SourceConfig::FanSpeed(self.config.clone()))
-    }
-}
-
-/// "'label'" or "#index" for log/UI messages about a saved selection
-pub fn describe_selection(config: &FanSpeedConfig) -> String {
-    match config.sensor_label.as_deref() {
-        Some(label) if !label.is_empty() => format!("'{}'", label),
-        _ => format!("#{}", config.sensor_index),
     }
 }
 

@@ -92,10 +92,10 @@ pub fn set_sensor_by_index(config: &mut SystemTempConfig, index: usize) {
 fn discover_all_temps() -> Vec<HwmonSensor> {
     log::info!("Scanning for temperature sensors...");
 
-    let mut sensors = hwmon::scan("temp", |dir, name, n| {
-        let label = hwmon::read_trimmed(&dir.join(format!("temp{}_label", n))).unwrap_or_default();
-        let model = hwmon::read_trimmed(&dir.join("device/model"));
-        format_temp_label(name, &label, model.as_deref(), n)
+    let mut sensors = hwmon::scan("temp", |dir, n| {
+        let label =
+            hwmon::read_trimmed(&dir.path.join(format!("temp{}_label", n))).unwrap_or_default();
+        format_temp_label(&dir.name, &label, dir.model.as_deref(), n)
     });
 
     if sensors.is_empty() {
@@ -108,16 +108,20 @@ fn discover_all_temps() -> Vec<HwmonSensor> {
     sensors
 }
 
-/// Non-Linux: discover through sysinfo (no device identity available, so no
-/// collision handling; sensors are read back by label)
+/// Non-Linux: discover through sysinfo. There is no device identity, so
+/// colliding labels are told apart by position only, and sysinfo's order is
+/// preserved (empty sort keys) so that a sensor's index is its sysinfo index
+/// and `read_sensor` can read it back by position.
 #[cfg(not(target_os = "linux"))]
 fn discover_all_temps() -> Vec<HwmonSensor> {
     super::shared_sensors::get_refreshed_temperatures()
         .into_iter()
         .enumerate()
         .map(|(i, (label, _temp))| HwmonSensor {
-            name: label.clone(),
+            name: String::new(),
             device_id: String::new(),
+            device_leaf: String::new(),
+            channel: format!("#{}", i),
             number: i as u32,
             base_label: label.clone(),
             label,
@@ -146,14 +150,17 @@ fn format_temp_label(name: &str, label: &str, model: Option<&str>, n: u32) -> St
     }
 }
 
-/// Current reading of a discovered sensor in degrees Celsius
+/// Current reading of a discovered sensor in degrees Celsius (hwmon reports
+/// millidegrees)
+#[cfg(target_os = "linux")]
 fn read_sensor(info: &SensorInfo) -> Option<f32> {
-    match &info.path {
-        // hwmon reports millidegrees
-        Some(path) => hwmon::read_i64(path).map(|v| v as f32 / 1000.0),
-        None => super::shared_sensors::get_temperature_by_label(&info.base_label),
-    }
-    .filter(|t| t.is_finite())
+    hwmon::read_i64(info.path.as_deref()?).map(|v| v as f32 / 1000.0)
+}
+
+/// Current reading through sysinfo, by position (see `discover_all_temps`)
+#[cfg(not(target_os = "linux"))]
+fn read_sensor(info: &SensorInfo) -> Option<f32> {
+    super::shared_sensors::get_temperature_by_index(info.index).filter(|t| t.is_finite())
 }
 
 /// Categorize a sensor based on its label
@@ -219,6 +226,9 @@ pub struct SystemTempSource {
     resolved: Option<usize>,
     /// `None` when the sensor could not be read (published as "N/A")
     current_temp: Option<f64>,
+    /// Set while reads of a present sensor fail, so the failure is logged
+    /// once per transition instead of once per update
+    read_failed: bool,
     detected_min: Option<f64>,
     detected_max: Option<f64>,
 
@@ -257,6 +267,7 @@ impl SystemTempSource {
             config,
             resolved,
             current_temp: None,
+            read_failed: false,
             detected_min: None,
             detected_max: None,
             values: HashMap::with_capacity(8),
@@ -343,10 +354,23 @@ impl DataSource for SystemTempSource {
         let sensor = self.resolved.and_then(|idx| SYSTEM_SENSORS.get(idx));
 
         let celsius = sensor.and_then(read_sensor);
-        if let (Some(s), None) = (sensor, celsius) {
-            log::warn!("Failed to read temperature sensor '{}'", s.label);
-        }
         self.current_temp = celsius.map(|c| self.convert_temperature(c as f64));
+
+        // Log read failures once per transition, not once per second (a drive
+        // in standby or a GPU in D3cold can refuse reads for a long time)
+        if let Some(s) = sensor {
+            match (celsius.is_some(), self.read_failed) {
+                (false, false) => {
+                    log::warn!("Failed to read temperature sensor '{}'", s.label);
+                    self.read_failed = true;
+                }
+                (true, true) => {
+                    log::info!("Temperature sensor '{}' is readable again", s.label);
+                    self.read_failed = false;
+                }
+                _ => {}
+            }
+        }
 
         // Update detected limits if auto-detect is enabled (only from real reads)
         if let Some(temp) = self.current_temp {
@@ -472,10 +496,14 @@ impl DataSource for SystemTempSource {
             if self.resolved.is_none() {
                 log::warn!(
                     "Temperature sensor {} is not present on this system; publishing N/A until another sensor is selected",
-                    describe_selection(&new_config)
+                    hwmon::describe_selection(
+                        new_config.sensor_label.as_deref(),
+                        new_config.sensor_index
+                    )
                 );
             }
             self.config = new_config;
+            self.read_failed = false;
 
             // Reset detected limits when configuration changes
             if self.config.auto_detect_limits {
@@ -488,14 +516,6 @@ impl DataSource for SystemTempSource {
 
     fn get_typed_config(&self) -> Option<SourceConfig> {
         Some(SourceConfig::SystemTemp(self.config.clone()))
-    }
-}
-
-/// "'label'" or "#index" for log/UI messages about a saved selection
-pub fn describe_selection(config: &SystemTempConfig) -> String {
-    match config.sensor_label.as_deref() {
-        Some(label) if !label.is_empty() => format!("'{}'", label),
-        _ => format!("#{}", config.sensor_index),
     }
 }
 
@@ -523,16 +543,5 @@ mod tests {
             format_temp_label("drivetemp", "", Some("WDC WD40EFRX"), 1),
             "drivetemp WDC WD40EFRX"
         );
-    }
-
-    #[test]
-    fn describe_selection_prefers_label() {
-        let mut cfg = SystemTempConfig::default();
-        cfg.sensor_index = 4;
-        assert_eq!(describe_selection(&cfg), "#4");
-        cfg.sensor_label = Some(String::new());
-        assert_eq!(describe_selection(&cfg), "#4");
-        cfg.sensor_label = Some("k10temp Tctl".into());
-        assert_eq!(describe_selection(&cfg), "'k10temp Tctl'");
     }
 }

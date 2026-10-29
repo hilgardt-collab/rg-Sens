@@ -48,6 +48,7 @@ mod grid_properties_dialog;
 mod memory_source_config_widget;
 mod network_source_config_widget;
 mod position_grid_widget;
+mod sensor_picker;
 mod shared_font_dialog;
 mod speedometer_config_widget;
 mod system_temp_config_widget;
