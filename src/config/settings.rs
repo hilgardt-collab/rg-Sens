@@ -97,6 +97,7 @@ impl AppConfig {
                 if missing {
                     migrate_inline_theme(panel);
                 }
+                adopt_frame_group_weights(panel);
             }
             AppConfig {
                 version: loaded.version,
@@ -449,6 +450,35 @@ fn migrate_inline_theme(panel: &mut PanelConfigV2) {
     }
 }
 
+/// Phase-2 adoption: the source's `groups[].size_weight` owns group size
+/// weights, but configs saved earlier only ever edited the frame's copy (the
+/// source's stayed at its default). Copy frame → source once where they
+/// differ. Every save after this writes the two equal, so it never fires
+/// again; a frame without that group keeps the source value.
+fn adopt_frame_group_weights(panel: &mut PanelConfigV2) {
+    let SourceConfig::Combo(cs) = &mut panel.source_config else {
+        return;
+    };
+    cs.migrate_legacy();
+    let Some(frame_weights) = panel.displayer_config.group_size_weights() else {
+        return;
+    };
+    let mut adopted = 0;
+    for (group, &w) in cs.groups.iter_mut().zip(frame_weights) {
+        if w > 0.0 && (group.size_weight - w).abs() > 1e-9 {
+            group.size_weight = w;
+            adopted += 1;
+        }
+    }
+    if adopted > 0 {
+        log::info!(
+            "Panel {}: adopted {} group size weight(s) from the frame config",
+            panel.id,
+            adopted
+        );
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -491,6 +521,7 @@ impl AppConfigV1 {
                     let mut panel = PanelConfigV2::from_panel_data(p.to_panel_data());
                     // V1 never had a theme key: same migration as v2 key-absence
                     migrate_inline_theme(&mut panel);
+                    adopt_frame_group_weights(&mut panel);
                     panel
                 })
                 .collect(),

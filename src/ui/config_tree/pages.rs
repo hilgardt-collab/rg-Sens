@@ -535,17 +535,19 @@ impl State {
     fn build_group_page(self: &Rc<Self>, group: usize) -> GtkBox {
         let page = page_box();
         page.append(&heading(&format!("Group {}", group + 1)));
-        let (count, total) = self
+        let (count, weight, total) = self
             .combo_source
             .borrow()
             .as_ref()
             .map(|cs| {
+                let g = cs.groups.get(group);
                 (
-                    cs.groups.get(group).map(|g| g.item_count).unwrap_or(1),
+                    g.map(|g| g.item_count).unwrap_or(1),
+                    g.map(|g| g.size_weight).unwrap_or(1.0),
                     cs.groups.len(),
                 )
             })
-            .unwrap_or((1, 1));
+            .unwrap_or((1, 1.0, 1));
         let count_spin = spin_row(&page, "Items:", 1.0, 16.0, 1.0, count as f64);
         {
             let weak = Rc::downgrade(self);
@@ -553,6 +555,21 @@ impl State {
                 if let Some(s) = weak.upgrade() {
                     if !s.loading.get() {
                         s.set_item_count(group, spin.value() as u32);
+                    }
+                }
+            });
+        }
+        let weight_spin = spin_row(&page, "Size weight:", 0.1, 10.0, 0.1, weight);
+        weight_spin.set_digits(1);
+        weight_spin.set_tooltip_text(Some(
+            "Share of the content area this group gets, relative to the other groups",
+        ));
+        {
+            let weak = Rc::downgrade(self);
+            weight_spin.connect_value_changed(move |spin| {
+                if let Some(s) = weak.upgrade() {
+                    if !s.loading.get() {
+                        s.set_group_weight(group, spin.value());
                     }
                 }
             });
@@ -591,7 +608,7 @@ impl State {
             });
         }
         page.append(&hint(
-            "Size weights and orientation per group are under Display › Layout.",
+            "Item orientation within each group is under Display › Layout.",
         ));
         page
     }

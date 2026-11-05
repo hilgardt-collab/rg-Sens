@@ -574,6 +574,8 @@ impl GridLayout {
         if let Some(frame_theme) = data.displayer_config.theme_mut() {
             *frame_theme = theme.clone();
         }
+        // --- Groups: the source's groups own the structure; the frame caches it
+        data.sync_group_structure();
 
         let new_geometry = data.geometry;
         let new_radius = data.appearance.corner_radius;

@@ -17,7 +17,7 @@ use crate::ui::theme::ComboThemeConfig;
 use crate::ui::ComboReorder;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
-use rg_sens_types::combo::{ComboFrameConfig, ThemedFrameConfig};
+use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -65,7 +65,10 @@ pub trait ComboDisplayEditor {
     /// the editor's own container is not shown afterwards. The "Content"
     /// page is returned too; the caller strips its per-slot notebook.
     fn take_pages(&self) -> Vec<(String, Widget)>;
-    fn set_available_fields(&self, fields: Vec<FieldMetadata>);
+    /// Write the frame's per-group size weights directly (live drags of the
+    /// group node's weight spin); the source stays the owner and the next
+    /// apply re-derives them.
+    fn set_group_weights(&self, weights: &[f64]);
     fn transferable(&self) -> TransferableComboConfig;
     fn apply_transferable(&self, transfer: &TransferableComboConfig);
     /// Apply a group/item swap to the frame config (content item keys move
@@ -569,8 +572,9 @@ macro_rules! combo_editor {
             fn take_pages(&self) -> Vec<(String, Widget)> {
                 detach_notebook_pages(self.0.widget())
             }
-            fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-                self.0.set_available_fields(fields);
+            fn set_group_weights(&self, weights: &[f64]) {
+                let rc = self.0.get_config_rc();
+                *rc.borrow_mut().frame.group_size_weights_mut() = weights.to_vec();
             }
             fn transferable(&self) -> TransferableComboConfig {
                 self.0.get_transferable_config()

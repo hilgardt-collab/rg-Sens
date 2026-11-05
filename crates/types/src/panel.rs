@@ -5,17 +5,16 @@ use std::collections::HashMap;
 
 use crate::background::BackgroundConfig;
 use crate::color::Color;
-use crate::display_configs::{
-    ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, CssTemplateDisplayConfig,
-    DigitalClockConfig, GraphDisplayConfig, IndicatorConfig, SpeedometerConfig,
-    AnalogClockConfig,
-};
 use crate::display_configs::lcars::ContentItemConfig;
 use crate::display_configs::themed_configs::{
-    ArtDecoDisplayConfig, ArtNouveauDisplayConfig, CyberpunkDisplayConfig,
-    FighterHudDisplayConfig, IndustrialDisplayConfig, LcarsDisplayConfig,
-    MaterialDisplayConfig, RetroTerminalDisplayConfig, SteampunkDisplayConfig,
-    SynthwaveDisplayConfig,
+    ArtDecoDisplayConfig, ArtNouveauDisplayConfig, CyberpunkDisplayConfig, FighterHudDisplayConfig,
+    IndustrialDisplayConfig, LcarsDisplayConfig, MaterialDisplayConfig, RetroTerminalDisplayConfig,
+    SteampunkDisplayConfig, SynthwaveDisplayConfig,
+};
+use crate::display_configs::{
+    AnalogClockConfig, ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig,
+    CssTemplateDisplayConfig, DigitalClockConfig, GraphDisplayConfig, IndicatorConfig,
+    SpeedometerConfig,
 };
 use crate::source_configs::claude::ClaudeSourceConfig;
 use crate::source_configs::clock::ClockSourceConfig;
@@ -449,6 +448,51 @@ impl DisplayerConfig {
         }
     }
 
+    /// Make a combo frame's group structure follow the source's `groups`,
+    /// the single owner of group count, item counts and size weights. The
+    /// frame copies are a rendering cache written here. Standalone
+    /// displayers are untouched.
+    pub fn sync_group_structure(&mut self, groups: &[crate::source_configs::GroupConfig]) {
+        macro_rules! sync {
+            ($cfg:expr) => {{
+                let frame = &mut $cfg.frame;
+                frame.group_count = groups.len() as _;
+                frame.group_item_counts = groups.iter().map(|g| g.item_count as _).collect();
+                frame.group_size_weights = groups.iter().map(|g| g.size_weight).collect();
+            }};
+        }
+        match self {
+            DisplayerConfig::Lcars(cfg) => sync!(cfg),
+            DisplayerConfig::Cyberpunk(cfg) => sync!(cfg),
+            DisplayerConfig::Material(cfg) => sync!(cfg),
+            DisplayerConfig::Industrial(cfg) => sync!(cfg),
+            DisplayerConfig::RetroTerminal(cfg) => sync!(cfg),
+            DisplayerConfig::FighterHud(cfg) => sync!(cfg),
+            DisplayerConfig::Synthwave(cfg) => sync!(cfg),
+            DisplayerConfig::ArtDeco(cfg) => sync!(cfg),
+            DisplayerConfig::ArtNouveau(cfg) => sync!(cfg),
+            DisplayerConfig::Steampunk(cfg) => sync!(cfg),
+            _ => {}
+        }
+    }
+
+    /// The frame's group size weights of a combo displayer.
+    pub fn group_size_weights(&self) -> Option<&[f64]> {
+        match self {
+            DisplayerConfig::Lcars(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::Cyberpunk(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::Material(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::Industrial(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::RetroTerminal(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::FighterHud(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::Synthwave(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::ArtDeco(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::ArtNouveau(cfg) => Some(&cfg.frame.group_size_weights),
+            DisplayerConfig::Steampunk(cfg) => Some(&cfg.frame.group_size_weights),
+            _ => None,
+        }
+    }
+
     /// Convert to HashMap<String, Value> for legacy interface compatibility
     pub fn to_hashmap(&self) -> HashMap<String, serde_json::Value> {
         let mut map = HashMap::new();
@@ -814,6 +858,16 @@ pub struct PanelData {
 }
 
 impl PanelData {
+    /// Make the combo frame's group structure follow the source's groups
+    /// (see [`DisplayerConfig::sync_group_structure`]). Legacy flat combo
+    /// configs are migrated to groups first. No-op for standalone panels.
+    pub fn sync_group_structure(&mut self) {
+        if let SourceConfig::Combo(cs) = &mut self.source_config {
+            cs.migrate_legacy();
+            self.displayer_config.sync_group_structure(&cs.groups);
+        }
+    }
+
     /// Create a new PanelData with default configurations
     pub fn new(id: String, geometry: PanelGeometry) -> Self {
         Self {

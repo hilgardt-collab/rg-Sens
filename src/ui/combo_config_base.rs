@@ -7,7 +7,7 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DrawingArea, DropDown, Label, Notebook, Orientation,
-    ScrolledWindow, Separator, SpinButton, Switch,
+    ScrolledWindow, SpinButton, Switch,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -480,7 +480,9 @@ pub fn create_combined_group_settings_section(page: &GtkBox) -> GtkBox {
     settings_label.set_margin_top(12);
     page.append(&settings_label);
 
-    let info_label = Label::new(Some("Configure weight and item arrangement for each group"));
+    let info_label = Label::new(Some(
+        "Item arrangement for each group (sizes are set on the group in the Content tree)",
+    ));
     info_label.set_halign(gtk4::Align::Start);
     info_label.add_css_class("dim-label");
     page.append(&info_label);
@@ -492,10 +494,11 @@ pub fn create_combined_group_settings_section(page: &GtkBox) -> GtkBox {
     group_settings_box
 }
 
-/// Rebuild combined group settings rows (weight + orientation per group) using a switch widget.
+/// Rebuild the per-group settings rows (orientation per group) using a switch widget.
 ///
-/// Each row displays: "Group N | Weight: [spin] | Horizontal [switch] Vertical"
-/// This is a generic function that can be used by all themed config widgets.
+/// Each row displays: "Group N | Horizontal [switch] Vertical". Group size
+/// weights are owned by the source's groups and edited on the group node of
+/// the Panel Properties tree.
 pub fn rebuild_combined_group_settings<C, L, F>(
     container: &GtkBox,
     config: &Rc<RefCell<C>>,
@@ -513,18 +516,15 @@ pub fn rebuild_combined_group_settings<C, L, F>(
         container.remove(&child);
     }
 
-    let (group_count, weights, orientations, default_orientation) = {
+    let (group_count, orientations, default_orientation) = {
         let mut cfg = config.borrow_mut();
         let frame = get_frame(&mut cfg);
         let count = frame.group_count();
-        let w: Vec<f64> = (0..count)
-            .map(|i| frame.group_size_weights().get(i).copied().unwrap_or(1.0))
-            .collect();
         let o: Vec<Option<SplitOrientation>> = (0..count)
             .map(|i| frame.group_item_orientations().get(i).copied())
             .collect();
         let default = frame.split_orientation();
-        (count, w, o, default)
+        (count, o, default)
     };
 
     if group_count == 0 {
@@ -537,7 +537,7 @@ pub fn rebuild_combined_group_settings<C, L, F>(
         return;
     }
 
-    // Create a combined row for each group: "Group N | Weight: [spin] | Horizontal [switch] Vertical"
+    // One row per group: "Group N | Horizontal [switch] Vertical"
     for group_idx in 0..group_count {
         let row = GtkBox::new(Orientation::Horizontal, 8);
 
@@ -545,36 +545,6 @@ pub fn rebuild_combined_group_settings<C, L, F>(
         let group_label = Label::new(Some(&format!("Group {}", group_idx + 1)));
         group_label.set_width_chars(8);
         row.append(&group_label);
-
-        // Weight spinner
-        row.append(&Label::new(Some("Weight:")));
-        let weight_spin = SpinButton::with_range(0.1, 10.0, 0.1);
-        weight_spin.set_value(weights[group_idx]);
-        weight_spin.set_digits(1);
-        weight_spin.set_width_chars(5);
-        row.append(&weight_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let get_frame_clone = get_frame.clone();
-        weight_spin.connect_value_changed(move |spin| {
-            let mut cfg = config_clone.borrow_mut();
-            let frame = get_frame_clone(&mut cfg);
-            let weights = frame.group_size_weights_mut();
-            while weights.len() <= group_idx {
-                weights.push(1.0);
-            }
-            weights[group_idx] = spin.value();
-            drop(cfg);
-            queue_redraw(&preview_clone, &on_change_clone);
-        });
-
-        // Separator
-        let sep = Separator::new(Orientation::Vertical);
-        sep.set_margin_start(8);
-        sep.set_margin_end(8);
-        row.append(&sep);
 
         // Orientation: "Horizontal [switch] Vertical"
         // Switch OFF = Horizontal, ON = Vertical

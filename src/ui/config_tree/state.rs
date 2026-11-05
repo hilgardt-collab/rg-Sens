@@ -432,20 +432,22 @@ impl State {
         let editor = Rc::new(editor);
         let resolved = self.resolved_theme();
         editor.set_theme(&resolved);
-        editor.load(&self.applied.borrow().displayer_config);
+        let mut cfg = self.applied.borrow().displayer_config.clone();
+        if let Some(cs) = self.combo_source.borrow().as_ref() {
+            // The source's groups own the structure; the frame caches it.
+            cfg.sync_group_structure(&cs.groups);
+        }
+        editor.load(&cfg);
         // `load` wrote the panel's cached frame theme; a shared reference
         // shows (and is compared against) the resolved theme.
         if !self.theme_ref.borrow().is_inline() {
             editor.set_theme(&resolved);
         }
-        if let Some(combo) = editor.combo() {
-            combo.set_available_fields(fields);
+        if editor.combo().is_none() {
             if let Some(cs) = self.combo_source.borrow().as_ref() {
+                // css_template: slot summaries for its placeholder mapping
                 editor.set_source_summaries(combo_summaries(cs));
             }
-        } else if let Some(cs) = self.combo_source.borrow().as_ref() {
-            // css_template: slot summaries for its placeholder mapping
-            editor.set_source_summaries(combo_summaries(cs));
         }
         let weak = Rc::downgrade(self);
         let has_signal = editor.set_on_change(Rc::new(move || {
@@ -705,11 +707,19 @@ impl State {
         // Item pages are keyed by slot; structure changes invalidate them.
         self.drop_item_pages();
         if let Some(e) = self.display_editor.borrow().as_ref() {
-            if let Some(c) = e.combo() {
-                c.set_available_fields(fields.clone());
-            }
             self.loading.set(true);
-            e.set_source_summaries(summaries);
+            if e.combo().is_some() {
+                // Reload the themed editor with the new structure so its
+                // Layout page (orientation per group) follows.
+                if let Some(mut cfg) = e.store() {
+                    if let Some(cs) = self.combo_source.borrow().as_ref() {
+                        cfg.sync_group_structure(&cs.groups);
+                    }
+                    e.load(&cfg);
+                }
+            } else {
+                e.set_source_summaries(summaries);
+            }
             self.loading.set(false);
         }
         if let Some(bg) = self.background_editor.borrow().as_ref() {
@@ -781,6 +791,26 @@ impl State {
             self.defer(move |state| state.structure_changed(NodeKind::ContentGroup(group)));
         }
     }
+    /// Size weight of one group (live; the frame copy follows at once, the
+    /// source stays the owner).
+    pub(super) fn set_group_weight(self: &Rc<Self>, group: usize, weight: f64) {
+        let weights = self.with_combo(|cs| {
+            if let Some(g) = cs.groups.get_mut(group) {
+                g.size_weight = weight.max(0.1);
+            }
+            cs.groups
+                .iter()
+                .map(|g| g.size_weight)
+                .collect::<Vec<f64>>()
+        });
+        if let (Some(weights), Some(e)) = (weights, self.display_editor.borrow().as_ref()) {
+            if let Some(c) = e.combo() {
+                c.set_group_weights(&weights);
+            }
+        }
+        self.changed();
+    }
+
     pub(super) fn set_update_interval(self: &Rc<Self>, ms: u64) {
         self.with_combo(|cs| cs.update_interval_ms = ms);
         self.changed();

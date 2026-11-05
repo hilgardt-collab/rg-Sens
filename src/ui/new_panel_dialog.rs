@@ -92,9 +92,11 @@ pub fn create_panel_from_config(
 
 /// Create a panel from PanelData (new unified format)
 pub fn create_panel_from_data(
-    data: PanelData,
+    mut data: PanelData,
     registry: &crate::core::Registry,
 ) -> anyhow::Result<Arc<RwLock<Panel>>> {
+    // The source's groups own a combo's group structure; the frame caches it.
+    data.sync_group_structure();
     // Use Panel::from_data_with_registry which handles everything
     let panel = Panel::from_data_with_registry(data, registry)?;
     Ok(Arc::new(RwLock::new(panel)))
