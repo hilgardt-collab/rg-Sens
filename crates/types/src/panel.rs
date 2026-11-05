@@ -932,3 +932,79 @@ impl Default for PanelData {
         Self::new("default".to_string(), PanelGeometry::default())
     }
 }
+
+#[cfg(test)]
+mod group_structure_tests {
+    use super::*;
+    use crate::display_configs::themed_configs::{ArtDecoDisplayConfig, LcarsDisplayConfig};
+    use crate::source_configs::ComboSourceConfig;
+
+    fn combo_panel(displayer: DisplayerConfig) -> PanelData {
+        let mut data = PanelData::new(
+            "p".to_string(),
+            PanelGeometry {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 4,
+            },
+        );
+        data.source_config = SourceConfig::Combo(ComboSourceConfig::default());
+        data.displayer_config = displayer;
+        data
+    }
+
+    /// A brand-new combination panel must come out of the sync with the
+    /// source default's structure, never empty.
+    #[test]
+    fn new_combo_gets_the_source_defaults_structure() {
+        let mut data = combo_panel(DisplayerConfig::ArtDeco(ArtDecoDisplayConfig::default()));
+        data.sync_group_structure();
+        let DisplayerConfig::ArtDeco(cfg) = &data.displayer_config else {
+            panic!("variant changed");
+        };
+        assert!(cfg.frame.group_count >= 1);
+        assert_eq!(cfg.frame.group_count, cfg.frame.group_item_counts.len());
+        assert_eq!(cfg.frame.group_item_counts, vec![2]);
+        assert_eq!(cfg.frame.group_size_weights, vec![1.0]);
+    }
+
+    /// LCARS stores the counts as u32; the sync must cast, not skip it.
+    #[test]
+    fn lcars_counts_follow_the_source() {
+        let mut data = combo_panel(DisplayerConfig::Lcars(LcarsDisplayConfig::default()));
+        if let SourceConfig::Combo(cs) = &mut data.source_config {
+            cs.groups.push(crate::source_configs::GroupConfig {
+                item_count: 3,
+                size_weight: 0.5,
+            });
+        }
+        data.sync_group_structure();
+        let DisplayerConfig::Lcars(cfg) = &data.displayer_config else {
+            panic!("variant changed");
+        };
+        assert_eq!(cfg.frame.group_count, 2);
+        assert_eq!(cfg.frame.group_item_counts, vec![2u32, 3]);
+        assert_eq!(cfg.frame.group_size_weights, vec![1.0, 0.5]);
+    }
+
+    /// Standalone displayers are left alone.
+    #[test]
+    fn standalone_panels_are_untouched() {
+        let mut data = PanelData::new(
+            "p".to_string(),
+            PanelGeometry {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 4,
+            },
+        );
+        let before = serde_json::to_value(&data.displayer_config).unwrap();
+        data.sync_group_structure();
+        assert_eq!(
+            serde_json::to_value(&data.displayer_config).unwrap(),
+            before
+        );
+    }
+}
