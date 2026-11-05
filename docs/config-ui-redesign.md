@@ -955,6 +955,18 @@ stale after a dropdown change. Three defects, fixed together:
   signal-free on unchanged values. (Second GUI round: without the self-push
   the Display sections kept showing the inherited swatches after a Theme-tab
   edit.)
+* **`rebuild_content_tabs` dropped the page-level theme refreshers.** Third
+  GUI round (Art Deco: Theme › Color preset changed the panel and the item
+  editors, but Display › Frame / Background / Header kept the inherited
+  swatches). The themed widgets' Frame/Header/Background selectors follow
+  theme changes only through refreshers registered at construction, and the
+  generic content rebuild cleared that list on every call, keeping just its
+  first entry — so after the first `set_config` or `set_source_summaries`
+  those selectors were frozen. LCARS was immune because its `set_theme`
+  updates its selectors explicitly. Content items now register into a list
+  of their own behind one forwarding entry, which the rebuild's cleanup
+  removes; the page-level entries are never touched. Pre-existing in the
+  classic dialog too (visible after any Apply).
 * **Themed widgets' `set_theme` did not refresh their Theme tab.** Only
   `set_config` updated the C1–C4 buttons, gradient editor and font controls,
   so a theme pushed by the dialog left the tab showing the previous values.

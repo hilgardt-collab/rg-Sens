@@ -1092,25 +1092,44 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     let generation =
         CONTENT_REBUILD_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
 
-    // CRITICAL: Preserve the first callback (main theme reference) before clearing.
-    // Content items add multiple callbacks that accumulate on every rebuild.
-    // We need to clear those but preserve the main theme reference callback.
-    let preserved_callback = {
-        let refreshers = theme_ref_refreshers.borrow();
-        refreshers.first().cloned()
-    };
-    theme_ref_refreshers.borrow_mut().clear();
-    // Re-add the preserved main callback
-    if let Some(cb) = preserved_callback {
-        theme_ref_refreshers.borrow_mut().push(cb);
-    }
-
-    // Clear existing content cleanup callbacks when rebuilding
-    // Call each cleanup before clearing to break existing reference cycles
+    // Run the previous build's cleanup callbacks (breaking the Lazy widgets'
+    // reference cycles and, see below, dropping the theme refreshers those
+    // content items registered), then forget them.
     for cleanup in content_cleanup_callbacks.borrow().iter() {
         cleanup();
     }
     content_cleanup_callbacks.borrow_mut().clear();
+
+    // Content items register theme refreshers while they are built
+    // (incrementally, below). They go into a list of their own; a single
+    // forwarding entry in the widget's list runs them, and the cleanup
+    // callback registered here removes that entry on the next rebuild.
+    // Clearing the widget's whole list — as this used to, keeping only the
+    // first entry — left every page-level selector (frame, header,
+    // background) frozen on the theme of the last rebuild.
+    let content_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(Vec::new()));
+    let forwarder: Rc<dyn Fn()> = {
+        let list = content_refreshers.clone();
+        Rc::new(move || {
+            for refresher in list.borrow().iter() {
+                refresher();
+            }
+        })
+    };
+    theme_ref_refreshers.borrow_mut().push(forwarder.clone());
+    {
+        let widget_list = theme_ref_refreshers.clone();
+        let list = content_refreshers.clone();
+        let forwarder_ptr = Rc::as_ptr(&forwarder) as *const ();
+        content_cleanup_callbacks
+            .borrow_mut()
+            .push(Box::new(move || {
+                widget_list
+                    .borrow_mut()
+                    .retain(|r| Rc::as_ptr(r) as *const () != forwarder_ptr);
+                list.borrow_mut().clear();
+            }));
+    }
 
     let notebook = content_notebook.borrow();
 
@@ -1230,7 +1249,7 @@ pub fn rebuild_content_tabs<C, F, S, G>(
     let on_change_clone = on_change.clone();
     let preview_clone = preview.clone();
     let available_fields_clone = available_fields.clone();
-    let theme_ref_refreshers_clone = theme_ref_refreshers.clone();
+    let theme_ref_refreshers_clone = content_refreshers;
     let content_cleanup_callbacks_clone = content_cleanup_callbacks.clone();
 
     glib::source::idle_add_local_full(glib::Priority::DEFAULT_IDLE, move || {
