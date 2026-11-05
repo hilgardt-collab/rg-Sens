@@ -924,6 +924,12 @@ impl GradientEditor {
 
     /// Set gradient from LinearGradientSourceConfig (preserves theme references)
     pub fn set_gradient_source_config(&self, config: &LinearGradientSourceConfig) {
+        // `set_gradient_source` rebuilds the stop rows; a theme pushed back
+        // into an editor that already shows it must not destroy a stop the
+        // user is dragging.
+        if self.get_gradient_source_config() == *config {
+            return;
+        }
         self.set_gradient_source(config.angle, config.stops.clone());
     }
 

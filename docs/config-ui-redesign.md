@@ -945,7 +945,16 @@ stale after a dropdown change. Three defects, fixed together:
   edited from this page — that stays in the Themes & Groups window. After a
   successful apply, a baseline that no longer matches the resolution
   re-propagates, so an Inline edit reaches the background and item editors
-  and an external change reaches the theme editor.
+  and an external change reaches the theme editor. That re-propagation also
+  calls the themed widget's `set_theme` with its own payload: the widgets
+  refresh their Display-section colour and font selectors (LCARS headers,
+  segments, divider; the other widgets' registered refreshers) only there.
+  To make that self-push harmless, `GradientEditor::set_gradient_source_config`
+  returns early when the gradient is unchanged instead of rebuilding the stop
+  rows under the pointer; the colour buttons and font controls were already
+  signal-free on unchanged values. (Second GUI round: without the self-push
+  the Display sections kept showing the inherited swatches after a Theme-tab
+  edit.)
 * **Themed widgets' `set_theme` did not refresh their Theme tab.** Only
   `set_config` updated the C1–C4 buttons, gradient editor and font controls,
   so a theme pushed by the dialog left the tab showing the previous values.
