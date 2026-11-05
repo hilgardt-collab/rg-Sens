@@ -10,6 +10,7 @@ pub mod combo;
 pub mod display_configs;
 pub mod field;
 pub mod panel;
+pub mod schema;
 pub mod source_configs;
 pub mod text;
 pub mod theme;
@@ -25,6 +26,7 @@ pub use field::{FieldMetadata, FieldPurpose, FieldType};
 pub use panel::{
     DisplayerConfig, PanelAppearance, PanelBorderConfig, PanelData, PanelGeometry, SourceConfig,
 };
+pub use schema::{Condition, Prop, PropKind, Schema};
 pub use text::{
     CombineAlignment, CombineDirection, HorizontalPosition, TextBackgroundConfig,
     TextBackgroundType, TextDisplayerConfig, TextFillType, TextLineConfig, TextOverlayConfig,

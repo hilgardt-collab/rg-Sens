@@ -76,3 +76,115 @@ impl Default for NetworkSourceConfig {
         }
     }
 }
+
+impl crate::schema::Schema for NetworkSourceConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "custom_caption",
+                "Caption",
+                PropKind::OptionalText {
+                    placeholder: "Auto-generated if empty",
+                },
+            ),
+            Prop::new(
+                "interface",
+                "Interface",
+                PropKind::DynamicChoice {
+                    provider: "network_interfaces",
+                },
+            ),
+            Prop::new(
+                "field",
+                "Field",
+                PropKind::Enum {
+                    options: vec![
+                        ("DownloadSpeed", "Download speed"),
+                        ("UploadSpeed", "Upload speed"),
+                        ("TotalDownload", "Total downloaded"),
+                        ("TotalUpload", "Total uploaded"),
+                    ],
+                },
+            ),
+            Prop::new(
+                "speed_unit",
+                "Speed unit",
+                PropKind::Enum {
+                    options: vec![
+                        ("BytesPerSec", "B/s"),
+                        ("KBPerSec", "KB/s"),
+                        ("MBPerSec", "MB/s"),
+                        ("GBPerSec", "GB/s"),
+                    ],
+                },
+            )
+            .visible_when(Condition::Equals {
+                key: "field",
+                values: vec!["DownloadSpeed", "UploadSpeed"],
+            }),
+            Prop::new(
+                "total_unit",
+                "Total unit",
+                PropKind::Enum {
+                    options: vec![("Bytes", "Bytes"), ("KB", "KB"), ("MB", "MB"), ("GB", "GB")],
+                },
+            )
+            .visible_when(Condition::Equals {
+                key: "field",
+                values: vec!["TotalDownload", "TotalUpload"],
+            }),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 100,
+                    max: 60_000,
+                    step: 100,
+                },
+            ),
+            Prop::new("auto_detect_limits", "Auto-detect limits", PropKind::Bool)
+                .section("Limits")
+                .help("Scale the value range to the highest rate seen"),
+            Prop::new(
+                "min_limit",
+                "Minimum",
+                PropKind::OptionalFloat {
+                    min: 0.0,
+                    max: 1.0e9,
+                    step: 1.0,
+                    digits: 1,
+                },
+            )
+            .section("Limits")
+            .visible_when(Condition::IsFalse {
+                key: "auto_detect_limits",
+            }),
+            Prop::new(
+                "max_limit",
+                "Maximum",
+                PropKind::OptionalFloat {
+                    min: 0.0,
+                    max: 1.0e9,
+                    step: 1.0,
+                    digits: 1,
+                },
+            )
+            .section("Limits")
+            .visible_when(Condition::IsFalse {
+                key: "auto_detect_limits",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<NetworkSourceConfig>(&NetworkSourceConfig::props()).unwrap();
+    }
+}

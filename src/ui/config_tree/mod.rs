@@ -13,6 +13,7 @@
 
 mod node;
 mod pages;
+pub mod schema_editor;
 mod state;
 mod util;
 
@@ -154,6 +155,7 @@ pub fn show_tree_properties_dialog(
         source_editor: RefCell::new(None),
         display_editor: RefCell::new(None),
         display_needs_poll: Cell::new(false),
+        source_needs_poll: Cell::new(false),
         display_pages: RefCell::new(Vec::new()),
         theme_page: RefCell::new(None),
         background_editor: RefCell::new(None),

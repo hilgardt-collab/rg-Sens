@@ -37,14 +37,11 @@ mod clock_source_config_widget;
 mod color_picker;
 mod cpu_source_config_widget;
 pub mod custom_color_picker;
-mod disk_source_config_widget;
 mod fan_speed_config_widget;
 mod gpu_source_config_widget;
 mod gradient_editor;
 mod graph_config_widget;
 mod grid_layout;
-mod memory_source_config_widget;
-mod network_source_config_widget;
 mod position_grid_widget;
 mod sensor_picker;
 mod shared_font_dialog;
@@ -134,7 +131,6 @@ pub use clock_display::{
 pub use clock_source_config_widget::ClockSourceConfigWidget;
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;
-pub use editor_registry::ComboReorder;
 pub use core_bars_config_widget::{CoreBarsConfigWidget, LazyCoreBarsConfigWidget};
 pub use core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
 pub use cpu_source_config_widget::{
@@ -149,9 +145,7 @@ pub use cyberpunk_display::{
     CornerStyle as CyberpunkCornerStyle, CyberpunkFrameConfig, CyberpunkRenderer,
     DividerStyle as CyberpunkDividerStyle, HeaderStyle as CyberpunkHeaderStyle,
 };
-pub use disk_source_config_widget::{
-    DiskField, DiskSourceConfig, DiskSourceConfigWidget, DiskUnit,
-};
+pub use editor_registry::ComboReorder;
 pub use fan_speed_config_widget::FanSpeedConfigWidget;
 pub use fighter_hud_config_widget::FighterHudConfigWidget;
 pub use fighter_hud_display::{
@@ -195,17 +189,17 @@ pub use material_display::{
     DividerStyle as MaterialDividerStyle, HeaderStyle as MaterialHeaderStyle, MaterialFrameConfig,
     MaterialRenderer, ThemeVariant,
 };
-pub use memory_source_config_widget::{MemoryField, MemorySourceConfig, MemorySourceConfigWidget};
-pub use network_source_config_widget::{
-    NetworkField, NetworkSourceConfig, NetworkSourceConfigWidget, NetworkSpeedUnit,
-    NetworkTotalUnit,
-};
 pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
 pub use retro_terminal_display::{
     calculate_group_layouts as retro_calculate_group_layouts,
     draw_group_dividers as retro_draw_group_dividers, render_retro_terminal_frame,
     BezelStyle as RetroBezelStyle, PhosphorColor, RetroTerminalFrameConfig, RetroTerminalRenderer,
     TerminalDividerStyle, TerminalHeaderStyle,
+};
+pub use rg_sens_types::source_configs::disk::{DiskField, DiskSourceConfig, DiskUnit};
+pub use rg_sens_types::source_configs::memory::{MemoryField, MemorySourceConfig};
+pub use rg_sens_types::source_configs::network::{
+    NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit,
 };
 pub use speedometer_config_widget::{LazySpeedometerConfigWidget, SpeedometerConfigWidget};
 pub use speedometer_display::{

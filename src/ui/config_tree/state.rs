@@ -98,6 +98,8 @@ pub(super) fn theme_mode_hint(theme_ref: &ThemeRef) -> &'static str {
 /// Everything built for one content item page.
 pub(super) struct ItemEditor {
     pub source_editor: RefCell<Option<Box<dyn SourceEditor>>>,
+    /// The editor has no change signal and must be polled.
+    pub needs_poll: Cell<bool>,
 }
 
 pub struct State {
@@ -123,6 +125,7 @@ pub struct State {
     pub(super) source_editor: RefCell<Option<Box<dyn SourceEditor>>>,
     pub(super) display_editor: RefCell<Option<Rc<Box<dyn DisplayEditor>>>>,
     pub(super) display_needs_poll: Cell<bool>,
+    pub(super) source_needs_poll: Cell<bool>,
     /// Detached themed-editor pages other than Theme and Content.
     pub(super) display_pages: RefCell<Vec<(String, Widget)>>,
     pub(super) theme_page: RefCell<Option<Widget>>,
@@ -478,11 +481,12 @@ impl State {
             let editor = editor_registry::create_source_editor(&id)?;
             editor.load(&self.applied.borrow().source_config);
             let weak = Rc::downgrade(self);
-            editor.set_on_change(Rc::new(move || {
+            let has_signal = editor.set_on_change(Rc::new(move || {
                 if let Some(s) = weak.upgrade() {
                     s.changed();
                 }
             }));
+            self.source_needs_poll.set(!has_signal);
             *self.source_editor.borrow_mut() = Some(editor);
         }
         self.source_editor.borrow().as_ref().map(|e| e.widget())
@@ -868,16 +872,21 @@ impl State {
             return;
         }
         let mut current: Vec<(String, String)> = Vec::new();
-        if let Some(json) = self
-            .source_editor
-            .borrow()
-            .as_ref()
-            .and_then(|e| e.store())
-            .and_then(|c| serde_json::to_string(&c).ok())
-        {
-            current.push((NodeKind::Source.id(), json));
+        if self.source_needs_poll.get() {
+            if let Some(json) = self
+                .source_editor
+                .borrow()
+                .as_ref()
+                .and_then(|e| e.store())
+                .and_then(|c| serde_json::to_string(&c).ok())
+            {
+                current.push((NodeKind::Source.id(), json));
+            }
         }
         for (slot, item) in self.item_editors.borrow().iter() {
+            if !item.needs_poll.get() {
+                continue;
+            }
             if let Some(json) = item
                 .source_editor
                 .borrow()

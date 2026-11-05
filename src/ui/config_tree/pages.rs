@@ -15,7 +15,7 @@ use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Expander, Label, Orientation,
     ScrolledWindow, SpinButton, StringList, Widget,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 fn page_box() -> GtkBox {
@@ -719,6 +719,7 @@ impl State {
 
         let source_editor: RefCell<Option<Box<dyn crate::ui::editor_registry::SourceEditor>>> =
             RefCell::new(None);
+        let needs_poll = Cell::new(false);
         if !source_id.is_empty() && source_id != "none" {
             let btn_row = GtkBox::new(Orientation::Horizontal, 6);
             let copy_btn = Button::with_label("Copy");
@@ -740,11 +741,12 @@ impl State {
                         editor.load(&cfg);
                     }
                     let weak = Rc::downgrade(self);
-                    editor.set_on_change(Rc::new(move || {
+                    let has_signal = editor.set_on_change(Rc::new(move || {
                         if let Some(s) = weak.upgrade() {
                             s.changed();
                         }
                     }));
+                    needs_poll.set(!has_signal);
                     source_box.append(&editor.widget());
                     *source_editor.borrow_mut() = Some(editor);
                 }
@@ -840,9 +842,13 @@ impl State {
         display_expander.set_child(Some(&display_box));
         page.append(&display_expander);
 
-        self.item_editors
-            .borrow_mut()
-            .insert(slot.to_string(), Rc::new(ItemEditor { source_editor }));
+        self.item_editors.borrow_mut().insert(
+            slot.to_string(),
+            Rc::new(ItemEditor {
+                source_editor,
+                needs_poll,
+            }),
+        );
         page
     }
 

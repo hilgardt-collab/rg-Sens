@@ -13,10 +13,13 @@
 
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::combo_config_base::{self, TransferableComboConfig};
+use crate::ui::config_tree::schema_editor::{register_choice_provider, SchemaSourceEditor};
 use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
 use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use rg_sens_types::schema::Schema;
+use rg_sens_types::source_configs::{DiskSourceConfig, MemorySourceConfig, NetworkSourceConfig};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -48,6 +51,10 @@ pub trait SourceEditor {
         false
     }
     fn cleanup(&self) {}
+    /// Words the tree search box may match for this editor (schema labels).
+    fn search_terms(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Editor for one displayer type's configuration.
@@ -224,13 +231,6 @@ source_editor!(GpuEditor, GpuSourceConfigWidget, Gpu, by_value, |w| {
     w.set_available_gpus(&names);
 });
 source_editor!(
-    MemoryEditor,
-    MemorySourceConfigWidget,
-    Memory,
-    by_value,
-    |_w| {}
-);
-source_editor!(
     SystemTempEditor,
     SystemTempConfigWidget,
     SystemTemp,
@@ -243,18 +243,6 @@ source_editor!(
     FanSpeed,
     by_ref,
     |_w| {}
-);
-source_editor!(DiskEditor, DiskSourceConfigWidget, Disk, by_value, |w| {
-    w.set_available_disks(&crate::sources::DiskSource::get_available_disks());
-});
-source_editor!(
-    NetworkEditor,
-    NetworkSourceConfigWidget,
-    Network,
-    by_value,
-    |w| {
-        w.set_available_interfaces(&crate::sources::NetworkSource::get_available_interfaces());
-    }
 );
 source_editor!(ClockEditor, ClockSourceConfigWidget, Clock, by_ref, |_w| {});
 source_editor!(
@@ -719,13 +707,40 @@ combo_editor!(
 /// Register every built-in editor. Called once at startup next to the
 /// source/displayer registration.
 pub fn register_all_editors() {
+    // Choice lists for schema-driven editors (read once, cached by the sources).
+    register_choice_provider("network_interfaces", || {
+        crate::sources::NetworkSource::get_available_interfaces()
+            .into_iter()
+            .map(|n| (n.clone(), n))
+            .collect()
+    });
+    register_choice_provider("disk_mounts", || {
+        crate::sources::DiskSource::get_available_disks()
+            .into_iter()
+            .map(|(mount, name)| {
+                let label = if name.is_empty() {
+                    mount.clone()
+                } else {
+                    format!("{} ({})", mount, name)
+                };
+                (mount, label)
+            })
+            .collect()
+    });
+
     register_source_editor("cpu", CpuEditor::create);
     register_source_editor("gpu", GpuEditor::create);
-    register_source_editor("memory", MemoryEditor::create);
+    register_source_editor("memory", || {
+        SchemaSourceEditor::create("memory", MemorySourceConfig::props())
+    });
     register_source_editor("system_temp", SystemTempEditor::create);
     register_source_editor("fan_speed", FanSpeedEditor::create);
-    register_source_editor("disk", DiskEditor::create);
-    register_source_editor("network", NetworkEditor::create);
+    register_source_editor("disk", || {
+        SchemaSourceEditor::create("disk", DiskSourceConfig::props())
+    });
+    register_source_editor("network", || {
+        SchemaSourceEditor::create("network", NetworkSourceConfig::props())
+    });
     register_source_editor("clock", ClockEditor::create);
     register_source_editor("claude", ClaudeEditor::create);
     register_source_editor("static_text", StaticTextEditor::create);

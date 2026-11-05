@@ -78,3 +78,63 @@ impl Default for MemorySourceConfig {
         }
     }
 }
+
+impl crate::schema::Schema for MemorySourceConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "custom_caption",
+                "Caption",
+                PropKind::OptionalText {
+                    placeholder: "Auto-generated if empty",
+                },
+            ),
+            Prop::new(
+                "field",
+                "Field",
+                PropKind::Enum {
+                    options: vec![
+                        ("Used", "RAM used"),
+                        ("Free", "RAM free"),
+                        ("Available", "RAM available"),
+                        ("Percent", "RAM percent"),
+                        ("SwapUsed", "Swap used"),
+                        ("SwapPercent", "Swap percent"),
+                    ],
+                },
+            ),
+            Prop::new(
+                "memory_unit",
+                "Unit",
+                PropKind::Enum {
+                    options: vec![("MB", "MB"), ("GB", "GB")],
+                },
+            )
+            .visible_when(Condition::Equals {
+                key: "field",
+                values: vec!["Used", "Free", "Available", "SwapUsed"],
+            }),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 100,
+                    max: 60_000,
+                    step: 100,
+                },
+            ),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<MemorySourceConfig>(&MemorySourceConfig::props()).unwrap();
+    }
+}
