@@ -515,8 +515,15 @@ impl State {
     /// and record what the theme editor holds afterwards as the baseline.
     pub(super) fn propagate_theme(&self) {
         let resolved = self.resolved_theme();
-        if let Some(e) = self.display_editor.borrow().as_ref() {
-            e.set_theme(&resolved);
+        // A combo editor *is* the theme payload: pushing its own value back
+        // would rebuild its gradient stop widgets (`set_gradient_source`)
+        // under the user's pointer on every Inline edit. Push only when it
+        // holds something else (a shared theme changed elsewhere).
+        let editor_holds_it = self.is_combo() && self.inline_payload().as_ref() == Some(&resolved);
+        if !editor_holds_it {
+            if let Some(e) = self.display_editor.borrow().as_ref() {
+                e.set_theme(&resolved);
+            }
         }
         // The standalone theme editor *is* the payload when Inline; for a
         // shared reference it mirrors the resolved theme.
