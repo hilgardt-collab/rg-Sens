@@ -1029,3 +1029,37 @@ Four commits, each green on its own:
 Net: about 9,500 lines removed. Still open from §11: row context menu,
 Themes & Groups window not linked from the Theme node, the Phase-1
 "both windows open" caveats, and `ThemeLibrary::resolve_missing_named`.
+
+---
+
+## 13. Phase 3a as shipped (2026-11-05)
+
+The first slice toward Option C: schema infrastructure plus the three
+sources that need no custom widget.
+
+* `crates/types/src/schema.rs`: `Prop { key, label, help, section, kind,
+  visible_when }`, `PropKind::{Bool, Int, Float, OptionalFloat, Text,
+  OptionalText, Enum, DynamicChoice}`, `Condition::{Equals, IsFalse}`, the
+  `Schema` trait (`fn props() -> Vec<Prop>`) and `check_props_fit::<T>()`,
+  which verifies every key and enum option against the type (the one
+  failure a stringly schema hides from the compiler). Enum option values are
+  serde variant names verbatim.
+* `src/ui/config_tree/schema_editor.rs`: `SchemaEditor` renders rows over
+  the flat JSON form of a config (keys without a prop pass through; integers
+  stay integers; optional text stores `null` when empty; dynamic choices keep
+  a saved value the provider does not list as its own row). Change signal,
+  conditional visibility, section headings. `SchemaSourceEditor` implements
+  `SourceEditor` through the per-slot flat form, so one editor serves the
+  Source node and combo item pages. Choice providers (`network_interfaces`,
+  `disk_mounts`) are registered in `register_all_editors()`.
+* Memory, disk and network implement `Schema`; their widgets are deleted.
+  The dialog now polls only editors that report no change signal (standalone
+  and per item).
+* Search box above the tree: nodes whose title, summary, schema labels or
+  page keywords match stay, with their ancestors; clearing restores the tree.
+
+Next slices, in the doc's order: static_text (list-of-struct kind), clock
+(timezone picker as a field editor), claude (sign-in buttons as an editor
+footer), the four sensor sources (sensor picker kind honouring label
+identity), then bar/arc/graph/text/speedometer, then the themed frames with
+`sections()` as child nodes.
