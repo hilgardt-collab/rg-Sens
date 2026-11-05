@@ -990,3 +990,42 @@ scrolled page; a widget-level preset dropdown (Cyberpunk, Industrial, Retro,
 Synthwave, Art Deco, Art Nouveau, Steampunk) is not reset when the dialog
 pushes a theme, so it may name a preset the colours no longer match (same as
 `set_config` today).
+
+---
+
+## 12. Phase 2 as shipped (2026-11-05)
+
+Four commits, each green on its own:
+
+1. **Single owner of group structure.** `ComboSourceConfig.groups` owns
+   group count, item counts and size weights; the frame's
+   `group_count / group_item_counts / group_size_weights` are a rendering
+   cache written by `DisplayerConfig::sync_group_structure`, called from
+   `GridLayout::apply_panel_data` and `create_panel_from_data`. Size
+   weights had only ever been edited in the frame (the source's stayed at
+   the default), so loading adopts frame weights into the source once where
+   they differ (`settings.rs::adopt_frame_group_weights`, logged); every
+   save after that writes them equal. Verified on the live config: four
+   combos adopted, save/reload identical. The group node gained a size
+   weight spin (`State::set_group_weight`, live through
+   `ComboDisplayEditor::set_group_weights`); the themed editors' Layout page
+   keeps only the per-group orientation switch; a structure change reloads
+   the themed editor with the synced frame (`store → sync → load`).
+2. **Classic dialog deleted.** `grid_properties_dialog.rs`, the
+   "Properties (classic)…" entry and its three action blocks. The tree
+   dialog took over the two hooks: `config_tree::close_tree_properties`
+   (panel deleted) and `close_all_tree_properties` (main window closing).
+3. **`ComboSourceConfigWidget` deleted.** `ComboReorder` moved to
+   `editor_registry.rs`.
+4. **Content tab removed from the ten themed widgets.** The per-slot
+   notebook, `rebuild_content_tabs` / `create_content_page` /
+   `cancel_pending_content_rebuilds`, `set_source_summaries`,
+   `set_available_fields` and the content cleanup list are gone;
+   `new()` takes no fields. `create_content_item_config` stays: it is how
+   `ComboDisplayEditor::item_editor` builds the per-item editors.
+   `DisplayEditor::set_source_summaries` stays on the trait for
+   css_template's placeholder mapping.
+
+Net: about 9,500 lines removed. Still open from §11: row context menu,
+Themes & Groups window not linked from the Theme node, the Phase-1
+"both windows open" caveats, and `ThemeLibrary::resolve_missing_named`.
