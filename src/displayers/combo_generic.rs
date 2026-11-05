@@ -89,6 +89,16 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         }
     }
 
+    /// Render frame, dividers and content items to any Cairo context, for
+    /// example an offscreen `ImageSurface` (tests, previews, mockups). The
+    /// GTK widget path is `create_widget`; this shares its drawing code.
+    pub fn render_to_context(&self, cr: &Context, width: i32, height: i32) {
+        if let Ok(data) = self.data.lock() {
+            let cache = Rc::new(RefCell::new(None));
+            Self::render_frame_and_content(cr, width, height, &data, &self.renderer, &cache);
+        }
+    }
+
     /// Render the complete frame (static frame + dynamic content) directly to
     /// the GTK-provided Cairo context.
     ///
