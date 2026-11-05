@@ -3,10 +3,10 @@
 //! This source is designed for complex displayers (like LCARS) that need
 //! to show data from multiple sources simultaneously.
 
+use anyhow::Result;
 use rg_sens_core::{
     global_registry, DataSource, FieldMetadata, FieldPurpose, FieldType, SourceMetadata,
 };
-use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,6 +23,9 @@ pub struct ComboSource {
     config: ComboSourceConfig,
     /// Child source instances, keyed by slot name
     child_sources: HashMap<String, Box<dyn DataSource>>,
+    /// The (source_id, source_config) each child was last configured with,
+    /// so a reconcile can tell "unchanged" from "needs configure()".
+    child_configs: HashMap<String, (String, HashMap<String, Value>)>,
     /// Aggregated values from all children
     values: HashMap<String, Value>,
 }
@@ -49,135 +52,259 @@ impl ComboSource {
             metadata,
             config: ComboSourceConfig::default(),
             child_sources: HashMap::new(),
+            child_configs: HashMap::new(),
             values: HashMap::new(),
         }
     }
 
-    /// Set up child sources based on current configuration
+    /// Rebuild every child source from scratch.
+    ///
+    /// Prefer [`ComboSource::apply_config`], which reconciles incrementally;
+    /// this is the full rebuild for callers that have no previous state.
     pub fn setup_child_sources(&mut self) {
-        // Clear existing child sources
         self.child_sources.clear();
+        let stats = self.reconcile_children();
+        log::info!(
+            "ComboSource: Set up {} child sources ({:?})",
+            self.child_sources.len(),
+            stats
+        );
+    }
 
-        // Get slot names based on mode
-        let slot_names = self.get_slot_names();
+    /// Replace the configuration and reconcile the child sources with the
+    /// minimum work (see [`ComboSource::reconcile_children`]).
+    pub fn apply_config(&mut self, mut new_config: ComboSourceConfig) -> ReconcileStats {
+        new_config.migrate_legacy();
+        self.config = new_config;
+        let stats = self.reconcile_children();
+        log::info!(
+            "ComboSource: reconciled {} child sources ({:?})",
+            self.child_sources.len(),
+            stats
+        );
+        stats
+    }
 
-        // Create child sources for each configured slot
-        for slot_name in slot_names {
-            if let Some(slot_config) = self.config.slots.get(&slot_name) {
-                if !slot_config.source_id.is_empty() && slot_config.source_id != "none" {
-                    match global_registry().create_source(&slot_config.source_id) {
-                        Ok(mut source) => {
-                            // Configure the child source
-                            if !slot_config.source_config.is_empty() {
-                                // The source_config HashMap already contains the flattened config
-                                // (e.g., {"field": "usage", "unit": "percent", ...})
-                                // Wrap it under the expected key (e.g., "cpu_config")
-                                let config_key = format!("{}_config", slot_config.source_id);
-                                let mut config_map = HashMap::new();
-                                // Convert the HashMap to a Value object
-                                let config_obj = Value::Object(
-                                    slot_config
-                                        .source_config
-                                        .iter()
-                                        .map(|(k, v)| (k.clone(), v.clone()))
-                                        .collect(),
-                                );
-                                log::info!(
-                                    "ComboSource: Configuring '{}' for slot '{}' with config: {:?}",
-                                    slot_config.source_id,
-                                    slot_name,
-                                    config_obj
-                                );
-                                config_map.insert(config_key, config_obj);
-                                if let Err(e) = source.configure(&config_map) {
-                                    log::warn!(
-                                        "ComboSource: Failed to configure '{}' for slot '{}': {}",
-                                        slot_config.source_id,
-                                        slot_name,
-                                        e
-                                    );
-                                }
-                            }
-                            self.child_sources.insert(slot_name.clone(), source);
-                            log::debug!(
-                                "ComboSource: Created child source '{}' for slot '{}'",
-                                slot_config.source_id,
-                                slot_name
-                            );
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "ComboSource: Failed to create source '{}' for slot '{}': {}",
-                                slot_config.source_id,
-                                slot_name,
-                                e
-                            );
-                        }
-                    }
-                }
+    /// Bring `child_sources` in line with `self.config` without recreating
+    /// children that did not change:
+    ///
+    /// | old → new                                   | action              |
+    /// |---------------------------------------------|---------------------|
+    /// | same `source_id`, same `source_config`      | keep child          |
+    /// | same `source_id`, different `source_config` | `child.configure()` |
+    /// | different `source_id` (including `none`)    | drop, create new    |
+    /// | slot removed or group shrunk                | drop                |
+    /// | slot added                                  | create              |
+    ///
+    /// The source config a child was last given is remembered in
+    /// `child_configs`, so "different" is a value comparison, not a guess.
+    pub fn reconcile_children(&mut self) -> ReconcileStats {
+        let mut stats = ReconcileStats::default();
+        let slot_names = slot_names_for(&self.config);
+
+        // Drop children whose slot vanished, is now unconfigured, or changed type.
+        let mut to_drop = Vec::new();
+        for slot_name in self.child_sources.keys() {
+            let wanted = slot_names.contains(slot_name);
+            let keep_type = self
+                .config
+                .slots
+                .get(slot_name)
+                .filter(|slot| is_configured(slot))
+                .map(|slot| {
+                    self.child_configs
+                        .get(slot_name)
+                        .map(|(id, _)| id == &slot.source_id)
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+            if !wanted || !keep_type {
+                to_drop.push(slot_name.clone());
             }
         }
+        for slot_name in to_drop {
+            self.child_sources.remove(&slot_name);
+            self.child_configs.remove(&slot_name);
+            stats.dropped += 1;
+        }
 
-        log::info!(
-            "ComboSource: Set up {} child sources",
-            self.child_sources.len()
-        );
+        // Keep, reconfigure, or create the rest.
+        for slot_name in slot_names {
+            let Some(slot_config) = self.config.slots.get(&slot_name).cloned() else {
+                continue;
+            };
+            if !is_configured(&slot_config) {
+                continue;
+            }
+            if let Some(child) = self.child_sources.get_mut(&slot_name) {
+                let unchanged = self
+                    .child_configs
+                    .get(&slot_name)
+                    .map(|(_, cfg)| *cfg == slot_config.source_config)
+                    .unwrap_or(false);
+                if unchanged {
+                    stats.kept += 1;
+                    continue;
+                }
+                if let Err(e) = configure_child(child.as_mut(), &slot_name, &slot_config) {
+                    log::warn!(
+                        "ComboSource: failed to reconfigure slot '{}': {}",
+                        slot_name,
+                        e
+                    );
+                }
+                self.child_configs.insert(
+                    slot_name.clone(),
+                    (
+                        slot_config.source_id.clone(),
+                        slot_config.source_config.clone(),
+                    ),
+                );
+                stats.reconfigured += 1;
+                continue;
+            }
+            match create_child(&slot_name, &slot_config) {
+                Some(child) => {
+                    self.child_sources.insert(slot_name.clone(), child);
+                    self.child_configs.insert(
+                        slot_name,
+                        (
+                            slot_config.source_id.clone(),
+                            slot_config.source_config.clone(),
+                        ),
+                    );
+                    stats.created += 1;
+                }
+                None => {}
+            }
+        }
+        stats
     }
 
     /// Get the list of slot names based on configuration
     fn get_slot_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
+        slot_names_for(&self.config)
+    }
+}
 
-        match self.config.mode.as_str() {
-            "lcars" => {
-                // Groups with items: group1_1, group1_2, group2_1, etc.
-                for (group_idx, group) in self.config.groups.iter().enumerate() {
-                    let group_num = group_idx + 1;
-                    for item_idx in 1..=group.item_count {
-                        names.push(format!("group{}_{}", group_num, item_idx));
-                    }
-                }
+/// Counts of what [`ComboSource::reconcile_children`] did; mostly for tests
+/// and logs.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ReconcileStats {
+    pub kept: usize,
+    pub reconfigured: usize,
+    pub created: usize,
+    pub dropped: usize,
+}
+
+fn is_configured(slot: &SlotConfig) -> bool {
+    !slot.source_id.is_empty() && slot.source_id != "none"
+}
+
+/// Wrap a slot's flattened source config under the `{source_id}_config` key
+/// the child source expects and apply it.
+fn configure_child(
+    child: &mut dyn DataSource,
+    slot_name: &str,
+    slot_config: &SlotConfig,
+) -> Result<()> {
+    if slot_config.source_config.is_empty() {
+        return Ok(());
+    }
+    let config_key = format!("{}_config", slot_config.source_id);
+    let config_obj = Value::Object(
+        slot_config
+            .source_config
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    );
+    log::debug!(
+        "ComboSource: configuring '{}' for slot '{}'",
+        slot_config.source_id,
+        slot_name
+    );
+    let mut config_map = HashMap::new();
+    config_map.insert(config_key, config_obj);
+    child.configure(&config_map)
+}
+
+/// Create and configure the child source for one slot.
+fn create_child(slot_name: &str, slot_config: &SlotConfig) -> Option<Box<dyn DataSource>> {
+    match global_registry().create_source(&slot_config.source_id) {
+        Ok(mut source) => {
+            if let Err(e) = configure_child(source.as_mut(), slot_name, slot_config) {
+                log::warn!(
+                    "ComboSource: Failed to configure '{}' for slot '{}': {}",
+                    slot_config.source_id,
+                    slot_name,
+                    e
+                );
             }
-            "arc" => {
-                // Center source
-                names.push("center".to_string());
-                // Arc sources from first group's item count
-                let arc_count = self
-                    .config
-                    .groups
-                    .first()
-                    .map(|g| g.item_count)
-                    .unwrap_or(4);
-                for i in 1..=arc_count {
-                    names.push(format!("arc{}", i));
-                }
-            }
-            "level_bar" => {
-                // Bar sources from first group's item count
-                let bar_count = self
-                    .config
-                    .groups
-                    .first()
-                    .map(|g| g.item_count)
-                    .unwrap_or(4);
-                for i in 1..=bar_count {
-                    names.push(format!("bar{}", i));
-                }
-            }
-            _ => {
-                // Default to lcars pattern
-                for (group_idx, group) in self.config.groups.iter().enumerate() {
-                    let group_num = group_idx + 1;
-                    for item_idx in 1..=group.item_count {
-                        names.push(format!("group{}_{}", group_num, item_idx));
-                    }
+            log::debug!(
+                "ComboSource: Created child source '{}' for slot '{}'",
+                slot_config.source_id,
+                slot_name
+            );
+            Some(source)
+        }
+        Err(e) => {
+            log::warn!(
+                "ComboSource: Failed to create source '{}' for slot '{}': {}",
+                slot_config.source_id,
+                slot_name,
+                e
+            );
+            None
+        }
+    }
+}
+
+/// Slot names a configuration defines, in group/item order.
+pub fn slot_names_for(config: &ComboSourceConfig) -> Vec<String> {
+    let mut names = Vec::new();
+
+    match config.mode.as_str() {
+        "lcars" => {
+            // Groups with items: group1_1, group1_2, group2_1, etc.
+            for (group_idx, group) in config.groups.iter().enumerate() {
+                let group_num = group_idx + 1;
+                for item_idx in 1..=group.item_count {
+                    names.push(format!("group{}_{}", group_num, item_idx));
                 }
             }
         }
-
-        names
+        "arc" => {
+            // Center source
+            names.push("center".to_string());
+            // Arc sources from first group's item count
+            let arc_count = config.groups.first().map(|g| g.item_count).unwrap_or(4);
+            for i in 1..=arc_count {
+                names.push(format!("arc{}", i));
+            }
+        }
+        "level_bar" => {
+            // Bar sources from first group's item count
+            let bar_count = config.groups.first().map(|g| g.item_count).unwrap_or(4);
+            for i in 1..=bar_count {
+                names.push(format!("bar{}", i));
+            }
+        }
+        _ => {
+            // Default to lcars pattern
+            for (group_idx, group) in config.groups.iter().enumerate() {
+                let group_num = group_idx + 1;
+                for item_idx in 1..=group.item_count {
+                    names.push(format!("group{}_{}", group_num, item_idx));
+                }
+            }
+        }
     }
 
+    names
+}
+
+impl ComboSource {
     /// Aggregate values from all child sources
     fn aggregate_values(&mut self) {
         self.values.clear();
@@ -308,14 +435,12 @@ impl DataSource for ComboSource {
     fn configure(&mut self, config: &HashMap<String, Value>) -> Result<()> {
         // Look for combo_config in the configuration
         if let Some(combo_config_value) = config.get("combo_config") {
-            if let Ok(mut combo_config) =
+            if let Ok(combo_config) =
                 serde_json::from_value::<ComboSourceConfig>(combo_config_value.clone())
             {
-                // Migrate legacy primary/secondary config to groups format
-                combo_config.migrate_legacy();
-                self.config = combo_config;
-                // Re-setup child sources with new configuration
-                self.setup_child_sources();
+                // Reconcile children incrementally: unchanged slots keep their
+                // (possibly expensive) child source instance.
+                self.apply_config(combo_config);
             }
         }
 
@@ -342,7 +467,7 @@ impl DataSource for ComboSource {
         }
 
         if modified {
-            self.setup_child_sources();
+            self.reconcile_children();
         }
 
         Ok(())
@@ -350,5 +475,187 @@ impl DataSource for ComboSource {
 
     fn get_typed_config(&self) -> Option<rg_sens_core::SourceConfig> {
         Some(rg_sens_core::SourceConfig::Combo(self.config.clone()))
+    }
+}
+
+#[cfg(test)]
+mod reconcile_tests {
+    use super::*;
+    use std::sync::Once;
+
+    static REGISTER: Once = Once::new();
+
+    fn registry_ready() {
+        REGISTER.call_once(|| crate::register_all());
+    }
+
+    fn slot(source_id: &str, caption: &str) -> SlotConfig {
+        let mut source_config = HashMap::new();
+        source_config.insert("custom_caption".to_string(), Value::from(caption));
+        SlotConfig {
+            source_id: source_id.to_string(),
+            caption_override: String::new(),
+            source_config,
+        }
+    }
+
+    fn config(items: &[(&str, &str, &str)]) -> ComboSourceConfig {
+        let mut cfg = ComboSourceConfig {
+            groups: vec![GroupConfig {
+                item_count: items.len() as u32,
+                size_weight: 1.0,
+            }],
+            ..ComboSourceConfig::default()
+        };
+        for (i, (name, source_id, caption)) in items.iter().enumerate() {
+            assert_eq!(*name, format!("group1_{}", i + 1));
+            cfg.slots.insert(name.to_string(), slot(source_id, caption));
+        }
+        cfg
+    }
+
+    fn child_ptr(src: &ComboSource, slot: &str) -> *const () {
+        src.child_sources
+            .get(slot)
+            .map(|b| b.as_ref() as *const dyn DataSource as *const ())
+            .expect("child exists")
+    }
+
+    #[test]
+    fn unchanged_slots_keep_their_child_instance() {
+        registry_ready();
+        let mut src = ComboSource::new();
+        let stats = src.apply_config(config(&[
+            ("group1_1", "static_text", "a"),
+            ("group1_2", "static_text", "b"),
+        ]));
+        assert_eq!(
+            stats,
+            ReconcileStats {
+                created: 2,
+                ..Default::default()
+            }
+        );
+        let p1 = child_ptr(&src, "group1_1");
+        let p2 = child_ptr(&src, "group1_2");
+
+        // Same config again: nothing recreated
+        let stats = src.apply_config(config(&[
+            ("group1_1", "static_text", "a"),
+            ("group1_2", "static_text", "b"),
+        ]));
+        assert_eq!(
+            stats,
+            ReconcileStats {
+                kept: 2,
+                ..Default::default()
+            }
+        );
+        assert_eq!(child_ptr(&src, "group1_1"), p1);
+        assert_eq!(child_ptr(&src, "group1_2"), p2);
+    }
+
+    #[test]
+    fn changed_source_config_reconfigures_in_place() {
+        registry_ready();
+        let mut src = ComboSource::new();
+        src.apply_config(config(&[("group1_1", "static_text", "a")]));
+        let p1 = child_ptr(&src, "group1_1");
+        let stats = src.apply_config(config(&[("group1_1", "static_text", "changed")]));
+        assert_eq!(
+            stats,
+            ReconcileStats {
+                reconfigured: 1,
+                ..Default::default()
+            }
+        );
+        assert_eq!(
+            child_ptr(&src, "group1_1"),
+            p1,
+            "same instance, reconfigured"
+        );
+    }
+
+    #[test]
+    fn changed_source_type_recreates_only_that_slot() {
+        registry_ready();
+        let mut src = ComboSource::new();
+        src.apply_config(config(&[
+            ("group1_1", "static_text", "a"),
+            ("group1_2", "static_text", "b"),
+        ]));
+        let p2 = child_ptr(&src, "group1_2");
+        let stats = src.apply_config(config(&[
+            ("group1_1", "test", "a"),
+            ("group1_2", "static_text", "b"),
+        ]));
+        assert_eq!(
+            stats,
+            ReconcileStats {
+                kept: 1,
+                dropped: 1,
+                created: 1,
+                ..Default::default()
+            }
+        );
+        assert_eq!(child_ptr(&src, "group1_2"), p2);
+        assert_eq!(
+            src.child_sources.get("group1_1").unwrap().metadata().id,
+            "test"
+        );
+    }
+
+    #[test]
+    fn removed_and_none_slots_are_dropped_added_slots_created() {
+        registry_ready();
+        let mut src = ComboSource::new();
+        src.apply_config(config(&[
+            ("group1_1", "static_text", "a"),
+            ("group1_2", "static_text", "b"),
+            ("group1_3", "static_text", "c"),
+        ]));
+        // Shrink to two items, set the first to none, keep the second
+        let mut next = config(&[("group1_1", "none", ""), ("group1_2", "static_text", "b")]);
+        next.groups[0].item_count = 2;
+        let stats = src.apply_config(next);
+        assert_eq!(
+            stats,
+            ReconcileStats {
+                kept: 1,
+                dropped: 2,
+                ..Default::default()
+            }
+        );
+        assert_eq!(src.child_sources.len(), 1);
+
+        // Grow again
+        let stats = src.apply_config(config(&[
+            ("group1_1", "static_text", "x"),
+            ("group1_2", "static_text", "b"),
+            ("group1_3", "static_text", "c"),
+        ]));
+        assert_eq!(
+            stats,
+            ReconcileStats {
+                kept: 1,
+                created: 2,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn configure_via_hashmap_is_incremental_too() {
+        registry_ready();
+        let mut src = ComboSource::new();
+        src.apply_config(config(&[("group1_1", "static_text", "a")]));
+        let p1 = child_ptr(&src, "group1_1");
+        let mut map = HashMap::new();
+        map.insert(
+            "combo_config".to_string(),
+            serde_json::to_value(config(&[("group1_1", "static_text", "a")])).unwrap(),
+        );
+        src.configure(&map).unwrap();
+        assert_eq!(child_ptr(&src, "group1_1"), p1);
     }
 }
