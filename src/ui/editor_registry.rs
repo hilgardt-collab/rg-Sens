@@ -14,13 +14,24 @@
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::combo_config_base::{self, TransferableComboConfig};
 use crate::ui::theme::ComboThemeConfig;
-use crate::ui::ComboReorder;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
 use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+/// A group or item swap requested from the properties tree. The dialog
+/// applies it to the combo source config and, through
+/// [`ComboDisplayEditor::reorder`], to the display config, so per-slot
+/// display settings stay attached to their source. All indices are 0-based.
+#[derive(Clone, Copy, Debug)]
+pub enum ComboReorder {
+    /// Swap two groups.
+    Group { a: usize, b: usize },
+    /// Swap two items within a group.
+    Item { group: usize, i: usize, j: usize },
+}
 
 /// Change notification handed to an editor.
 pub type ChangeCallback = Rc<dyn Fn()>;

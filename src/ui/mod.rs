@@ -35,7 +35,6 @@ mod clock_analog_config_widget;
 mod clock_digital_config_widget;
 mod clock_source_config_widget;
 mod color_picker;
-mod combo_source_config_widget;
 mod cpu_source_config_widget;
 pub mod custom_color_picker;
 mod disk_source_config_widget;
@@ -135,7 +134,7 @@ pub use clock_display::{
 pub use clock_source_config_widget::ClockSourceConfigWidget;
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;
-pub use combo_source_config_widget::{ComboReorder, ComboSourceConfigWidget};
+pub use editor_registry::ComboReorder;
 pub use core_bars_config_widget::{CoreBarsConfigWidget, LazyCoreBarsConfigWidget};
 pub use core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
 pub use cpu_source_config_widget::{
