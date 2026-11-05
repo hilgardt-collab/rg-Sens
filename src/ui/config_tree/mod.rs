@@ -167,6 +167,7 @@ pub fn show_tree_properties_dialog(
         appearance: RefCell::new(None),
         theme_controls: RefCell::new(None),
         tree_spec,
+        filter: RefCell::new(String::new()),
         root_store: root_store.clone(),
         selection: selection.clone(),
         stack: stack.clone(),
@@ -272,8 +273,25 @@ pub fn show_tree_properties_dialog(
     tree_scroll.set_margin_top(8);
     tree_scroll.set_margin_bottom(8);
 
+    // Search box: filters the tree to matching nodes and their ancestors.
+    let search = gtk4::SearchEntry::new();
+    search.set_placeholder_text(Some("Search settings"));
+    search.set_margin_start(8);
+    search.set_margin_top(8);
+    {
+        let weak = weak.clone();
+        search.connect_search_changed(move |entry| {
+            if let Some(state) = weak.upgrade() {
+                state.set_filter(&entry.text());
+            }
+        });
+    }
+    let tree_column = GtkBox::new(Orientation::Vertical, 0);
+    tree_column.append(&search);
+    tree_column.append(&tree_scroll);
+
     let paned = Paned::new(Orientation::Horizontal);
-    paned.set_start_child(Some(&tree_scroll));
+    paned.set_start_child(Some(&tree_column));
     paned.set_end_child(Some(&stack));
     paned.set_position(300);
     paned.set_shrink_start_child(false);

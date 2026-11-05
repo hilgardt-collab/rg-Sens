@@ -140,6 +140,8 @@ pub struct State {
 
     // ---- UI ----
     pub(super) tree_spec: Rc<RefCell<HashMap<String, Vec<NodeKind>>>>,
+    /// Lower-case search text; empty shows the whole tree.
+    pub(super) filter: RefCell<String>,
     pub(super) root_store: gio::ListStore,
     pub(super) selection: SingleSelection,
     pub(super) stack: Stack,
@@ -966,6 +968,10 @@ impl State {
                 spec.insert(NodeKind::ContentGroup(g).id(), items);
             }
         }
+        let needle = self.filter.borrow().clone();
+        if !needle.is_empty() {
+            spec = self.prune_spec(&spec, &needle);
+        }
         *self.tree_spec.borrow_mut() = spec;
 
         self.root_store.remove_all();
@@ -973,6 +979,88 @@ impl State {
         if let Some(target) = reselect {
             self.select_node(&target);
         }
+    }
+
+    /// Keep only nodes that match `needle` or have a matching descendant
+    /// (Root always stays).
+    fn prune_spec(
+        &self,
+        spec: &HashMap<String, Vec<NodeKind>>,
+        needle: &str,
+    ) -> HashMap<String, Vec<NodeKind>> {
+        fn keep(
+            state: &State,
+            kind: &NodeKind,
+            spec: &HashMap<String, Vec<NodeKind>>,
+            needle: &str,
+            out: &mut HashMap<String, Vec<NodeKind>>,
+        ) -> bool {
+            let mut kept_children = Vec::new();
+            if let Some(children) = spec.get(&kind.id()) {
+                for child in children {
+                    if keep(state, child, spec, needle, out) {
+                        kept_children.push(child.clone());
+                    }
+                }
+            }
+            let has_kept = !kept_children.is_empty();
+            if has_kept {
+                out.insert(kind.id(), kept_children);
+            }
+            has_kept || state.node_matches(kind, needle)
+        }
+        let mut out = HashMap::new();
+        keep(self, &NodeKind::Root, spec, needle, &mut out);
+        out.entry(NodeKind::Root.id()).or_default();
+        out
+    }
+
+    /// Whether a node's title, summary, editor labels or page keywords
+    /// contain `needle` (lower-case).
+    fn node_matches(&self, kind: &NodeKind, needle: &str) -> bool {
+        let (title, summary) = self.row_text(kind);
+        if title.to_lowercase().contains(needle) || summary.to_lowercase().contains(needle) {
+            return true;
+        }
+        let mut terms: Vec<String> = match kind {
+            NodeKind::Geometry => {
+                vec!["width height size scale offset translate z-index collision".into()]
+            }
+            NodeKind::Theme => vec!["theme colour color font gradient inline preset".into()],
+            NodeKind::Background => vec!["background colour color gradient image polygon".into()],
+            NodeKind::Appearance => vec!["border corner radius style".into()],
+            NodeKind::Content => vec!["groups items update interval".into()],
+            NodeKind::ContentGroup(_) => vec!["items size weight order".into()],
+            NodeKind::Source => self
+                .source_editor
+                .borrow()
+                .as_ref()
+                .map(|e| e.search_terms())
+                .unwrap_or_default(),
+            NodeKind::ContentItem(slot) => self
+                .item_editors
+                .borrow()
+                .get(slot)
+                .and_then(|i| i.source_editor.borrow().as_ref().map(|e| e.search_terms()))
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        if matches!(kind, NodeKind::Source) {
+            terms.push("source update interval caption".into());
+        }
+        terms.iter().any(|t| t.to_lowercase().contains(needle))
+    }
+
+    /// Set the search text and rebuild the tree, keeping the selection
+    /// when it survives the filter.
+    pub(super) fn set_filter(self: &Rc<Self>, text: &str) {
+        let needle = text.trim().to_lowercase();
+        if *self.filter.borrow() == needle {
+            return;
+        }
+        *self.filter.borrow_mut() = needle;
+        let selected = self.selected_node();
+        self.rebuild_tree(selected);
     }
 
     pub(super) fn selected_node(&self) -> Option<NodeKind> {
