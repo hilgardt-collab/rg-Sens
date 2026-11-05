@@ -472,28 +472,28 @@ impl TextLineConfigWidget {
                     if !current_line.is_combined {
                         false
                     } else {
-                    let this_position = current_line.position;
+                        let this_position = current_line.position;
 
-                    // Find first line in group with same position and count lines in group with same position
-                    let mut first_index_in_group_with_pos: Option<usize> = None;
-                    let mut group_count_with_same_pos = 0;
+                        // Find first line in group with same position and count lines in group with same position
+                        let mut first_index_in_group_with_pos: Option<usize> = None;
+                        let mut group_count_with_same_pos = 0;
 
-                    for (i, line) in all_lines.iter().enumerate() {
-                        if line.is_combined
-                            && line.group_id.as_ref() == Some(group_id)
-                            && line.position == this_position
-                        {
-                            // Track first line in group with same position
-                            if first_index_in_group_with_pos.is_none() {
-                                first_index_in_group_with_pos = Some(i);
+                        for (i, line) in all_lines.iter().enumerate() {
+                            if line.is_combined
+                                && line.group_id.as_ref() == Some(group_id)
+                                && line.position == this_position
+                            {
+                                // Track first line in group with same position
+                                if first_index_in_group_with_pos.is_none() {
+                                    first_index_in_group_with_pos = Some(i);
+                                }
+                                group_count_with_same_pos += 1;
                             }
-                            group_count_with_same_pos += 1;
                         }
-                    }
 
-                    // Show only if this is the first line in group with same position AND there are 2+ such lines
-                    first_index_in_group_with_pos == Some(list_index)
-                        && group_count_with_same_pos >= 2
+                        // Show only if this is the first line in group with same position AND there are 2+ such lines
+                        first_index_in_group_with_pos == Some(list_index)
+                            && group_count_with_same_pos >= 2
                     }
                 } else {
                     false

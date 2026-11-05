@@ -40,6 +40,27 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
+/// Close the properties dialog of one panel (the panel is being deleted).
+pub fn close_tree_properties(panel_id: &str) {
+    let window = OPEN.with(|o| o.borrow().get(panel_id).and_then(|(w, _)| w.upgrade()));
+    if let Some(w) = window {
+        w.close();
+    }
+}
+
+/// Close every open properties dialog (the main window is closing).
+pub fn close_all_tree_properties() {
+    let windows: Vec<Window> = OPEN.with(|o| {
+        o.borrow()
+            .values()
+            .filter_map(|(w, _)| w.upgrade())
+            .collect()
+    });
+    for w in windows {
+        w.close();
+    }
+}
+
 /// Open (or present) the tree properties dialog for a panel.
 ///
 /// `anchor` is any widget in the main window, used to find the parent window.

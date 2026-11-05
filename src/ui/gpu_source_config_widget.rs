@@ -10,8 +10,10 @@ use std::rc::Rc;
 use crate::ui::widget_builder::create_page_container;
 
 // Re-export GPU source config types from rg-sens-types
-pub use rg_sens_types::source_configs::gpu::{FrequencyUnit, GpuField, GpuSourceConfig, MemoryUnit};
 pub use rg_sens_types::source_configs::cpu::TemperatureUnit;
+pub use rg_sens_types::source_configs::gpu::{
+    FrequencyUnit, GpuField, GpuSourceConfig, MemoryUnit,
+};
 
 /// Widget for configuring GPU source
 pub struct GpuSourceConfigWidget {

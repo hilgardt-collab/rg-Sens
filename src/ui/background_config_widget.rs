@@ -1712,7 +1712,9 @@ impl BackgroundConfigWidget {
         }
         if let BackgroundType::RadialGradient(ref grad) = new_config.background {
             self.radial_gradient_editor.set_stops(grad.stops.clone());
-            self.synced_controls.radial_radius_scale.set_value(grad.radius);
+            self.synced_controls
+                .radial_radius_scale
+                .set_value(grad.radius);
         }
         if let BackgroundType::Image {
             ref path,
@@ -1727,7 +1729,9 @@ impl BackgroundConfigWidget {
                 ImageDisplayMode::Zoom => 2,
                 ImageDisplayMode::Tile => 3,
             };
-            self.synced_controls.image_mode_dropdown.set_selected(mode_idx);
+            self.synced_controls
+                .image_mode_dropdown
+                .set_selected(mode_idx);
             self.synced_controls.image_alpha_scale.set_value(alpha);
         }
         if let BackgroundType::Polygons(ref poly) = new_config.background {

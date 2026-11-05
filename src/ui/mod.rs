@@ -2,12 +2,15 @@
 
 // Re-export rendering modules from rg-sens-render crate
 pub use rg_sens_render::arc_display;
+pub use rg_sens_render::art_deco_display;
+pub use rg_sens_render::art_nouveau_display;
 pub use rg_sens_render::background;
 pub use rg_sens_render::bar_display;
 pub use rg_sens_render::clock_display;
 pub use rg_sens_render::combo_traits;
 pub use rg_sens_render::core_bars_display;
 pub use rg_sens_render::cyberpunk_display;
+pub use rg_sens_render::fighter_hud_display;
 pub use rg_sens_render::graph_display;
 pub use rg_sens_render::industrial_display;
 pub use rg_sens_render::lcars_display;
@@ -15,22 +18,19 @@ pub use rg_sens_render::material_display;
 pub use rg_sens_render::pango_text;
 pub use rg_sens_render::render_cache;
 pub use rg_sens_render::render_utils;
-pub use rg_sens_render::speedometer_display;
-pub use rg_sens_render::text_renderer;
-pub use rg_sens_render::art_deco_display;
-pub use rg_sens_render::art_nouveau_display;
-pub use rg_sens_render::fighter_hud_display;
 pub use rg_sens_render::retro_terminal_display;
+pub use rg_sens_render::speedometer_display;
 pub use rg_sens_render::steampunk_display;
 pub use rg_sens_render::synthwave_display;
+pub use rg_sens_render::text_renderer;
 
 // Local UI modules (config widgets, dialogs, etc.)
 mod alarm_timer_dialog;
 mod arc_config_widget;
 mod background_config_widget;
 mod bar_config_widget;
-pub mod clipboard;
 mod claude_source_config_widget;
+pub mod clipboard;
 mod clock_analog_config_widget;
 mod clock_digital_config_widget;
 mod clock_source_config_widget;
@@ -44,7 +44,6 @@ mod gpu_source_config_widget;
 mod gradient_editor;
 mod graph_config_widget;
 mod grid_layout;
-mod grid_properties_dialog;
 mod memory_source_config_widget;
 mod network_source_config_widget;
 mod position_grid_widget;
@@ -64,12 +63,14 @@ mod color_button_widget;
 pub mod combo_config_base;
 pub mod config;
 pub mod config_helpers;
+pub mod config_tree;
 pub mod context_menu;
 mod core_bars_config_widget;
 #[cfg(feature = "webkit")]
 mod css_template_config_widget; // Config widget only when webkit is available
 pub mod css_template_display; // Config types always available for serialization
 mod cyberpunk_config_widget;
+pub mod editor_registry;
 mod fighter_hud_config_widget;
 mod global_theme_widget;
 mod indicator_config_widget;
@@ -84,12 +85,10 @@ mod steampunk_config_widget;
 mod synthwave_config_widget;
 mod test_source_config_widget;
 mod test_source_dialog;
-pub mod themes_groups_dialog;
-pub mod editor_registry;
-pub mod config_tree;
 pub mod theme;
 mod theme_color_selector;
 mod theme_font_selector;
+pub mod themes_groups_dialog;
 pub mod window_settings_dialog;
 
 pub use alarm_timer_dialog::{AlarmTimerDialog, TimerAction};
@@ -126,13 +125,13 @@ pub use bar_display::{
     render_bar, BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
     BarStyle, BorderConfig,
 };
+pub use claude_source_config_widget::{ClaudeMetric, ClaudeSourceConfig, ClaudeSourceConfigWidget};
 pub use clipboard::{PanelStyle, CLIPBOARD};
 pub use clock_analog_config_widget::ClockAnalogConfigWidget;
 pub use clock_digital_config_widget::ClockDigitalConfigWidget;
 pub use clock_display::{
     render_analog_clock, AnalogClockConfig, FaceStyle, HandStyle, TickStyle as ClockTickStyle,
 };
-pub use claude_source_config_widget::{ClaudeMetric, ClaudeSourceConfig, ClaudeSourceConfigWidget};
 pub use clock_source_config_widget::ClockSourceConfigWidget;
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;
@@ -272,13 +271,12 @@ impl CssTemplateConfigWidget {
 
 // Dialog close functions
 pub use alarm_timer_dialog::close_alarm_timer_dialog;
-pub use grid_properties_dialog::close_panel_properties_dialog;
 pub use timezone_dialog::close_timezone_dialog;
 
 /// Close all open singleton dialogs
 /// Call this when the main window is closing to clean up
 pub fn close_all_dialogs() {
-    close_panel_properties_dialog();
+    config_tree::close_all_tree_properties();
     close_alarm_timer_dialog();
     close_timezone_dialog();
 }

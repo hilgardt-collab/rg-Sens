@@ -71,9 +71,9 @@ fn schedule_auto_scroll(
         let viewport_width = cfg
             .window
             .effective_viewport_width(h_adj.page_size() as i32) as f64;
-        let viewport_height = cfg
-            .window
-            .effective_viewport_height(v_adj.page_size() as i32) as f64;
+        let viewport_height =
+            cfg.window
+                .effective_viewport_height(v_adj.page_size() as i32) as f64;
         drop(cfg);
 
         let (max_h_scroll, max_v_scroll, container_width, container_height) =

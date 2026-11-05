@@ -15,7 +15,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // Import show_panel_properties_dialog from extracted module
-use super::grid_properties_dialog::show_panel_properties_dialog;
 
 /// Source-specific config keys that should be filtered out when copying panel styles.
 /// These keys contain data source configuration, not visual styling.
@@ -80,10 +79,6 @@ pub(crate) fn create_panel_context_menu() -> gtk4::gio::Menu {
     // Section 1: Properties
     let section1 = gio::Menu::new();
     section1.append(Some("Properties..."), Some("panel.properties"));
-    section1.append(
-        Some("Properties (classic)..."),
-        Some("panel.properties_classic"),
-    );
     menu.append_section(None, &section1);
 
     // Section 2: Copy/Paste Style
@@ -169,7 +164,7 @@ pub(crate) fn remove_corner_radius_css(panel_id: &str) {
 /// Attach the alarm/timer click handler used by clock displayers.
 ///
 /// No-op for non-clock displayers. Shared by add_panel, the copy paths, and
-/// the displayer-swap path in grid_properties_dialog so a panel swapped or
+/// the displayer-swap path in `apply_panel_data` so a panel swapped or
 /// copied to clock_analog/clock_digital can open the AlarmTimerDialog and
 /// dismiss ringing alarms just like a freshly created one.
 pub(crate) fn attach_clock_click_handler(
@@ -319,8 +314,6 @@ pub(crate) fn ensure_indicator_background_timer(
         gtk4::glib::ControlFlow::Continue
     });
 }
-
-// PANEL_PROPERTIES_DIALOG thread_local moved to grid_properties_dialog.rs
 
 /// Grid configuration
 #[derive(Debug, Clone, Copy)]
@@ -1738,43 +1731,7 @@ impl GridLayout {
         // Setup action group for this panel
         let action_group = gio::SimpleActionGroup::new();
 
-        // Properties action
-        let panel_clone = panel.clone();
-        let config = self.config.clone();
-        let panel_states = self.panel_states.clone();
-        let occupied_cells = self.occupied_cells.clone();
-        let container = self.container.clone();
-        let on_change = self.on_change.clone();
-        let drop_zone = self.drop_zone_layer.clone();
-        let app_config_props = self.app_config.clone();
-
-        let properties_action = gio::SimpleAction::new("properties_classic", None);
-        let selected_panels_props = self.selected_panels.clone();
-        let panels_props = self.panels.clone();
-        properties_action.connect_activate(move |_, _| {
-            let registry = crate::core::global_registry();
-            show_panel_properties_dialog(
-                &panel_clone,
-                *config.borrow(),
-                panel_states.clone(),
-                occupied_cells.clone(),
-                container.clone(),
-                on_change.clone(),
-                drop_zone.clone(),
-                registry,
-                selected_panels_props.clone(),
-                panels_props.clone(),
-                {
-                    let g = panel_clone.blocking_read();
-                    app_config_props
-                        .borrow()
-                        .resolve_theme_for(&g.theme_ref(), g.group_id())
-                },
-            );
-        });
-        action_group.add_action(&properties_action);
-
-        // Tree-based properties dialog (default)
+        // Properties dialog
         let tree_action = gio::SimpleAction::new("properties", None);
         let panel_tree = panel.clone();
         let anchor_tree = widget.clone();
@@ -2663,55 +2620,15 @@ impl GridLayout {
                                 let panel_for_menu = new_panel.clone();
                                 let frame_for_menu: Widget = frame.clone().upcast();
                                 let panel_id_for_menu = new_id.clone();
-                                let config_for_menu = config_for_end.clone();
                                 let panel_states_for_menu = panel_states_end.clone();
                                 let occupied_cells_for_menu = occupied_cells_end.clone();
                                 let on_change_for_menu = on_change_end.clone();
-                                let drop_zone_for_menu = drop_zone_layer_end.clone();
 
                                 // Create action group for context menu
                                 use gtk4::gio;
                                 let action_group = gio::SimpleActionGroup::new();
 
-                                // Properties action
-                                let properties_action = gio::SimpleAction::new("properties_classic", None);
-                                let panel_clone_props = panel_for_menu.clone();
-                                let config_clone_props = config_for_menu.clone();
-                                let panel_states_props = panel_states_for_menu.clone();
-                                let occupied_cells_props = occupied_cells_for_menu.clone();
-                                let on_change_props = on_change_for_menu.clone();
-                                let drop_zone_props = drop_zone_for_menu.clone();
-                                let panel_id_props = panel_id_for_menu.clone();
-                                let container_props = container_for_copy.clone();
-                                let selected_panels_props = selected_panels_end.clone();
-                                let panels_props = panels_for_copy.clone();
-                                let app_config_props = app_config_for_copy.clone();
-
-                                properties_action.connect_activate(move |_, _| {
-                                    log::info!("Opening properties dialog for copied panel: {}", panel_id_props);
-                                    let registry = crate::core::global_registry();
-                                    show_panel_properties_dialog(
-                                        &panel_clone_props,
-                                        *config_clone_props.borrow(),
-                                        panel_states_props.clone(),
-                                        occupied_cells_props.clone(),
-                                        container_props.clone(),
-                                        on_change_props.clone(),
-                                        drop_zone_props.clone(),
-                                        registry,
-                                        selected_panels_props.clone(),
-                                        panels_props.clone(),
-                                        {
-                                            let g = panel_clone_props.blocking_read();
-                                            app_config_props
-                                                .borrow()
-                                                .resolve_theme_for(&g.theme_ref(), g.group_id())
-                                        },
-                                    );
-                                });
-                                action_group.add_action(&properties_action);
-
-                                // Tree-based properties dialog (default)
+                                // Properties dialog
                                 let tree_action = gio::SimpleAction::new("properties", None);
                                 let panel_tree = panel_for_menu.clone();
                                 let anchor_tree = frame_for_menu.clone();
@@ -4031,45 +3948,7 @@ fn setup_copied_panel_interaction(
     // Setup action group
     let action_group = gio::SimpleActionGroup::new();
 
-    // Properties action
-    let properties_action = gio::SimpleAction::new("properties_classic", None);
-    let panel_props = panel.clone();
-    let config_props = config.clone();
-    let panel_states_props = panel_states.clone();
-    let occupied_cells_props = occupied_cells.clone();
-    let on_change_props = on_change.clone();
-    let drop_zone_props = drop_zone_layer.clone();
-    let container_props = container.clone();
-    let selected_panels_props = selected_panels.clone();
-    let panels_props = panels.clone();
-    let panel_id_props = panel_id.clone();
-    let app_config_props = app_config.clone();
-
-    properties_action.connect_activate(move |_, _| {
-        log::info!("Opening properties dialog for panel: {}", panel_id_props);
-        let registry = crate::core::global_registry();
-        show_panel_properties_dialog(
-            &panel_props,
-            *config_props.borrow(),
-            panel_states_props.clone(),
-            occupied_cells_props.clone(),
-            container_props.clone(),
-            on_change_props.clone(),
-            drop_zone_props.clone(),
-            registry,
-            selected_panels_props.clone(),
-            panels_props.clone(),
-            {
-                let g = panel_props.blocking_read();
-                app_config_props
-                    .borrow()
-                    .resolve_theme_for(&g.theme_ref(), g.group_id())
-            },
-        );
-    });
-    action_group.add_action(&properties_action);
-
-    // Tree-based properties dialog (default)
+    // Properties dialog
     let tree_action = gio::SimpleAction::new("properties", None);
     let panel_tree = panel.clone();
     let anchor_tree = widget.clone();
@@ -4948,8 +4827,8 @@ pub(crate) fn delete_selected_panels(
     log::info!("Deleting {} panels", panel_ids.len());
 
     for panel_id in panel_ids {
-        // Close and remove any cached properties dialog for this panel
-        crate::ui::grid_properties_dialog::remove_cached_dialog(panel_id);
+        // Close the panel's properties dialog if it is open
+        crate::ui::config_tree::close_tree_properties(panel_id);
 
         // Remove from update manager
         if let Some(update_manager) = crate::core::global_update_manager() {
