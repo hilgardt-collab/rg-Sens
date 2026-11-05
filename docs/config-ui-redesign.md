@@ -910,6 +910,15 @@ Known Phase-1 limitations:
   buttons and the grid context menu cover those actions.
 * The Themes & Groups window is not linked from the Theme node (it needs
   handles the dialog does not hold); open it from the dashboard menu.
+* The Themes & Groups window and this dialog can both be open; a theme
+  assigned by drag there is overwritten by this dialog's own theme choice
+  on its next commit. Likewise the classic and tree dialogs can be open for
+  the same panel at once; the last edit wins.
+* Per-item theme refreshers and cleanup callbacks accumulate across
+  structural changes until the window closes (bounded by one session).
+* Not exercised by the author in a running GTK session (no headless display
+  available while the user's instance was running): the §6 checklist is the
+  acceptance test.
 * Window Settings' background widgets receive the global theme when the
   dialog opens; theme edits made in the Themes window while it is open show
   up on reopen.

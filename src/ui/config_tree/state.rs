@@ -507,65 +507,89 @@ impl State {
     // Type switches
     // ------------------------------------------------------------------
 
+    /// Run `f` on the next main-loop iteration. Structural changes are
+    /// triggered from signal handlers of widgets they would destroy (a
+    /// dropdown on the page being rebuilt), so the rebuild is deferred.
+    fn defer(self: &Rc<Self>, f: impl FnOnce(&Rc<State>) + 'static) {
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            if let Some(state) = weak.upgrade() {
+                f(&state);
+            }
+        });
+    }
+
     pub(super) fn switch_source_type(self: &Rc<Self>, new_id: &str) {
         if new_id == self.source_type() {
             return;
         }
-        let registry = global_registry();
-        let mut data = self.build_data();
-        data.source_config = SourceConfig::default_for_type(new_id).unwrap_or_default();
-        let compatible: Vec<String> = registry
-            .get_compatible_displayers(new_id)
-            .into_iter()
-            .map(|d| d.id)
-            .collect();
-        let current = data.displayer_config.displayer_type().to_string();
-        if !compatible.contains(&current) {
-            let fallback = compatible
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "text".to_string());
-            data.displayer_config = default_displayer_config(&fallback);
-        }
-        if self.apply(data) {
-            let applied = self.applied.borrow().clone();
-            self.reset_from(applied);
-            self.select_node(&NodeKind::Source);
-        }
+        let new_id = new_id.to_string();
+        self.defer(move |state| {
+            let registry = global_registry();
+            let mut data = state.build_data();
+            data.source_config = SourceConfig::default_for_type(&new_id).unwrap_or_default();
+            let compatible: Vec<String> = registry
+                .get_compatible_displayers(&new_id)
+                .into_iter()
+                .map(|d| d.id)
+                .collect();
+            let current = data.displayer_config.displayer_type().to_string();
+            if !compatible.contains(&current) {
+                let fallback = compatible
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "text".to_string());
+                data.displayer_config = default_displayer_config(&fallback);
+            }
+            if state.apply(data) {
+                let applied = state.applied.borrow().clone();
+                state.reset_from(applied);
+                state.select_node(&NodeKind::Source);
+            }
+        });
     }
 
     pub(super) fn switch_displayer_type(self: &Rc<Self>, new_id: &str) {
         if new_id == self.displayer_type() {
             return;
         }
-        let mut data = self.build_data();
-        let transfer = self
-            .display_editor
-            .borrow()
-            .as_ref()
-            .and_then(|e| e.combo().map(|c| c.transferable()));
-        data.displayer_config = default_displayer_config(new_id);
-        // Combo → combo keeps layout and content (TransferableComboConfig)
-        if let (Some(transfer), true) = (transfer, editor_registry::is_combo_display(new_id)) {
-            if let Some(editor) = editor_registry::create_display_editor(new_id, self.all_fields())
-            {
-                editor.load(&data.displayer_config);
-                if let Some(c) = editor.combo() {
-                    c.apply_transferable(&transfer);
+        let new_id = new_id.to_string();
+        self.defer(move |state| {
+            let mut data = state.build_data();
+            let transfer = state
+                .display_editor
+                .borrow()
+                .as_ref()
+                .and_then(|e| e.combo().map(|c| c.transferable()));
+            data.displayer_config = default_displayer_config(&new_id);
+            // Combo → combo keeps layout and content (TransferableComboConfig)
+            if let (Some(transfer), true) = (transfer, editor_registry::is_combo_display(&new_id)) {
+                if let Some(editor) =
+                    editor_registry::create_display_editor(&new_id, state.all_fields())
+                {
+                    editor.load(&data.displayer_config);
+                    if let Some(c) = editor.combo() {
+                        c.apply_transferable(&transfer);
+                    }
+                    if let Some(cfg) = editor.store() {
+                        data.displayer_config = cfg;
+                    }
+                    editor.cleanup();
                 }
-                if let Some(cfg) = editor.store() {
-                    data.displayer_config = cfg;
-                }
-                editor.cleanup();
             }
-        }
-        if self.apply(data) {
-            let applied = self.applied.borrow().clone();
-            self.reset_from(applied);
-            self.select_node(&NodeKind::Display);
-        }
+            if state.apply(data) {
+                let applied = state.applied.borrow().clone();
+                state.reset_from(applied);
+                state.select_node(&NodeKind::Display);
+                if let Some(w) = state.window() {
+                    w.set_title(Some(&format!(
+                        "Panel Properties — {}",
+                        displayer_display_name(&state.displayer_type())
+                    )));
+                }
+            }
+        });
     }
-
     // ------------------------------------------------------------------
     // Combo structure
     // ------------------------------------------------------------------
@@ -642,7 +666,7 @@ impl State {
             })
             .unwrap_or(false);
         if changed {
-            self.structure_changed(NodeKind::Content);
+            self.defer(|state| state.structure_changed(NodeKind::Content));
         }
     }
 
@@ -657,10 +681,9 @@ impl State {
             })
             .unwrap_or(false);
         if changed {
-            self.structure_changed(NodeKind::ContentGroup(group));
+            self.defer(move |state| state.structure_changed(NodeKind::ContentGroup(group)));
         }
     }
-
     pub(super) fn set_update_interval(self: &Rc<Self>, ms: u64) {
         self.with_combo(|cs| cs.update_interval_ms = ms);
         self.changed();
@@ -682,7 +705,7 @@ impl State {
                 c.reorder(op);
             }
         }
-        self.structure_changed(reselect);
+        self.defer(move |state| state.structure_changed(reselect));
     }
 
     pub(super) fn set_item_source(self: &Rc<Self>, slot: &str, source_id: &str) {
@@ -698,10 +721,10 @@ impl State {
             })
             .unwrap_or(false);
         if changed {
-            self.structure_changed(NodeKind::ContentItem(slot.to_string()));
+            let slot = slot.to_string();
+            self.defer(move |state| state.structure_changed(NodeKind::ContentItem(slot)));
         }
     }
-
     pub(super) fn set_item_caption(self: &Rc<Self>, slot: &str, caption: String) {
         self.with_combo(|cs| {
             cs.slots
@@ -716,52 +739,67 @@ impl State {
     // Polling for editors without a change signal
     // ------------------------------------------------------------------
 
+    /// Poll every built editor that has no change signal, whichever page is
+    /// visible, so an edit made just before navigating away is still
+    /// committed. The serialised configs are tiny.
     pub(super) fn poll(self: &Rc<Self>) {
-        let Some(kind) = self.selected_node() else {
+        if self.loading.get() {
             return;
-        };
-        let id = kind.id();
-        let current = match &kind {
-            NodeKind::Source => self
+        }
+        let mut current: Vec<(String, String)> = Vec::new();
+        if let Some(json) = self
+            .source_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.store())
+            .and_then(|c| serde_json::to_string(&c).ok())
+        {
+            current.push((NodeKind::Source.id(), json));
+        }
+        for (slot, item) in self.item_editors.borrow().iter() {
+            if let Some(json) = item
                 .source_editor
                 .borrow()
                 .as_ref()
                 .and_then(|e| e.store())
-                .and_then(|c| serde_json::to_string(&c).ok()),
-            NodeKind::ContentItem(slot) => self
-                .item_editors
-                .borrow()
-                .get(slot)
-                .and_then(|i| i.source_editor.borrow().as_ref().and_then(|e| e.store()))
-                .and_then(|c| serde_json::to_string(&c).ok()),
-            NodeKind::Display if self.display_needs_poll.get() => self
+                .and_then(|c| serde_json::to_string(&c).ok())
+            {
+                current.push((NodeKind::ContentItem(slot.clone()).id(), json));
+            }
+        }
+        if self.display_needs_poll.get() {
+            if let Some(json) = self
                 .display_editor
                 .borrow()
                 .as_ref()
                 .and_then(|e| e.store())
-                .and_then(|c| serde_json::to_string(&c).ok()),
-            _ => None,
-        };
-        let Some(current) = current else {
-            return;
-        };
-        let previous = self.poll_last.borrow_mut().insert(id, current.clone());
-        if let Some(prev) = previous {
-            if prev != current {
-                self.changed();
+                .and_then(|c| serde_json::to_string(&c).ok())
+            {
+                current.push((NodeKind::Display.id(), json));
             }
         }
-    }
-
-    /// Record the current editor values for the selected node so the first
-    /// poll after selection does not report a change.
-    pub(super) fn reset_poll_baseline(self: &Rc<Self>) {
-        if let Some(kind) = self.selected_node() {
-            self.poll_last.borrow_mut().remove(&kind.id());
-            self.poll();
+        let mut changed = false;
+        {
+            let mut last = self.poll_last.borrow_mut();
+            for (id, json) in current {
+                // First observation of an editor records the baseline only.
+                if let Some(prev) = last.insert(id, json.clone()) {
+                    if prev != json {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if changed {
+            self.changed();
         }
     }
 
+    /// Record the current values of newly built editors before the next
+    /// tick, so creating a page never reads as an edit.
+    pub(super) fn reset_poll_baseline(self: &Rc<Self>) {
+        self.poll();
+    }
     // ------------------------------------------------------------------
     // Tree
     // ------------------------------------------------------------------
