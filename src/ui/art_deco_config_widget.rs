@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::core::FieldMetadata;
 use crate::displayers::ArtDecoDisplayConfig;
 use crate::ui::art_deco_display::{
-    BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, HeaderStyle,
+    BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, GroupFrameStyle, HeaderStyle,
 };
 use crate::ui::background::Color;
 use crate::ui::color_button_widget::ColorButtonWidget;
@@ -181,6 +181,7 @@ struct LayoutWidgets {
     divider_style_dropdown: DropDown,
     divider_width_spin: SpinButton,
     divider_padding_spin: SpinButton,
+    group_frame_dropdown: DropDown,
     group_settings_box: GtkBox,
 }
 
@@ -943,6 +944,7 @@ impl ArtDecoConfigWidget {
             BackgroundPattern::DiamondGrid => 2,
             BackgroundPattern::Sunburst => 3,
             BackgroundPattern::Chevrons => 4,
+            BackgroundPattern::Lattice => 5,
         };
         let pattern_dropdown = builder.dropdown_row(
             &page,
@@ -953,6 +955,7 @@ impl ArtDecoConfigWidget {
                 "Diamond Grid",
                 "Sunburst",
                 "Chevrons",
+                "Lattice",
             ],
             pattern_idx,
             |cfg, idx| {
@@ -961,7 +964,8 @@ impl ArtDecoConfigWidget {
                     1 => BackgroundPattern::VerticalLines,
                     2 => BackgroundPattern::DiamondGrid,
                     3 => BackgroundPattern::Sunburst,
-                    _ => BackgroundPattern::Chevrons,
+                    4 => BackgroundPattern::Chevrons,
+                    _ => BackgroundPattern::Lattice,
                 }
             },
         );
@@ -1050,18 +1054,20 @@ impl ArtDecoConfigWidget {
             HeaderStyle::Banner => 1,
             HeaderStyle::Stepped => 2,
             HeaderStyle::None => 3,
+            HeaderStyle::Sunburst => 4,
         };
         let header_style_dropdown = builder.dropdown_row(
             &page,
             "Style:",
-            &["Centered", "Banner", "Stepped", "None"],
+            &["Centered", "Banner", "Stepped", "None", "Sunburst"],
             style_idx,
             |cfg, idx| {
                 cfg.frame.header_style = match idx {
                     0 => HeaderStyle::Centered,
                     1 => HeaderStyle::Banner,
                     2 => HeaderStyle::Stepped,
-                    _ => HeaderStyle::None,
+                    3 => HeaderStyle::None,
+                    _ => HeaderStyle::Sunburst,
                 }
             },
         );
@@ -1179,6 +1185,9 @@ impl ArtDecoConfigWidget {
             DividerStyle::Heartbeat => 10,
             DividerStyle::DiamondGrid => 11,
             DividerStyle::None => 12,
+            DividerStyle::Zigzag => 13,
+            DividerStyle::Fan => 14,
+            DividerStyle::Pyramid => 15,
         };
         let divider_style_dropdown = builder.dropdown_row(
             &page,
@@ -1197,6 +1206,9 @@ impl ArtDecoConfigWidget {
                 "Heartbeat",
                 "Diamond Grid",
                 "None",
+                "Zigzag",
+                "Fan",
+                "Pyramid",
             ],
             div_style_idx,
             |cfg, idx| {
@@ -1213,7 +1225,10 @@ impl ArtDecoConfigWidget {
                     9 => DividerStyle::FleurDeLis,
                     10 => DividerStyle::Heartbeat,
                     11 => DividerStyle::DiamondGrid,
-                    _ => DividerStyle::None,
+                    12 => DividerStyle::None,
+                    13 => DividerStyle::Zigzag,
+                    14 => DividerStyle::Fan,
+                    _ => DividerStyle::Pyramid,
                 }
             },
         );
@@ -1236,6 +1251,27 @@ impl ArtDecoConfigWidget {
             2.0,
             config.borrow().frame.divider_padding,
             |cfg, v| cfg.frame.divider_padding = v,
+        );
+
+        // Group frames
+        page.append(&create_section_header("Group Frames"));
+        let group_frame_idx = match config.borrow().frame.group_frame {
+            GroupFrameStyle::None => 0,
+            GroupFrameStyle::Panel => 1,
+            GroupFrameStyle::Stepped => 2,
+        };
+        let group_frame_dropdown = builder.dropdown_row(
+            &page,
+            "Frame:",
+            &["None", "Panel", "Stepped Corners"],
+            group_frame_idx,
+            |cfg, idx| {
+                cfg.frame.group_frame = match idx {
+                    1 => GroupFrameStyle::Panel,
+                    2 => GroupFrameStyle::Stepped,
+                    _ => GroupFrameStyle::None,
+                }
+            },
         );
 
         // Divider color (theme-aware)
@@ -1278,6 +1314,7 @@ impl ArtDecoConfigWidget {
             divider_style_dropdown,
             divider_width_spin,
             divider_padding_spin,
+            group_frame_dropdown,
             group_settings_box,
         });
 
@@ -1376,6 +1413,7 @@ impl ArtDecoConfigWidget {
                     BackgroundPattern::DiamondGrid => 2,
                     BackgroundPattern::Sunburst => 3,
                     BackgroundPattern::Chevrons => 4,
+                    BackgroundPattern::Lattice => 5,
                 });
             widgets
                 .pattern_spacing_spin
@@ -1400,6 +1438,7 @@ impl ArtDecoConfigWidget {
                     HeaderStyle::Banner => 1,
                     HeaderStyle::Stepped => 2,
                     HeaderStyle::None => 3,
+                    HeaderStyle::Sunburst => 4,
                 });
         }
 
@@ -1430,6 +1469,9 @@ impl ArtDecoConfigWidget {
                     DividerStyle::Heartbeat => 10,
                     DividerStyle::DiamondGrid => 11,
                     DividerStyle::None => 12,
+                    DividerStyle::Zigzag => 13,
+                    DividerStyle::Fan => 14,
+                    DividerStyle::Pyramid => 15,
                 });
             widgets
                 .divider_width_spin
@@ -1437,6 +1479,13 @@ impl ArtDecoConfigWidget {
             widgets
                 .divider_padding_spin
                 .set_value(config.frame.divider_padding);
+            widgets
+                .group_frame_dropdown
+                .set_selected(match config.frame.group_frame {
+                    GroupFrameStyle::None => 0,
+                    GroupFrameStyle::Panel => 1,
+                    GroupFrameStyle::Stepped => 2,
+                });
 
             combo_config_base::rebuild_combined_group_settings(
                 &widgets.group_settings_box,

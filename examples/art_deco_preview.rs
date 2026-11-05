@@ -14,7 +14,8 @@ use rg_sens::core::{global_registry, Displayer, DisplayerConfig, PanelData};
 use rg_sens::displayers::GenericComboDisplayerShared;
 use rg_sens::ui::art_deco_display::ArtDecoRenderer;
 use rg_sens_types::display_configs::art_deco::{
-    ArtDecoFrameConfig, BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, HeaderStyle,
+    ArtDecoFrameConfig, BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, GroupFrameStyle,
+    HeaderStyle,
 };
 use rg_sens_types::field::FieldType;
 use serde_json::{json, Value};
@@ -77,6 +78,8 @@ fn main() -> Result<()> {
     recommended.corner_size = 36.0;
     recommended.divider_padding = 9.0;
     recommended.content_padding = 16.0;
+    recommended.header_style = HeaderStyle::Sunburst;
+    recommended.group_frame = GroupFrameStyle::Stepped;
     render_png(
         &recommended,
         &values,
@@ -159,6 +162,9 @@ fn main() -> Result<()> {
             DividerStyle::Heartbeat,
             DividerStyle::DiamondGrid,
             DividerStyle::None,
+            DividerStyle::Zigzag,
+            DividerStyle::Fan,
+            DividerStyle::Pyramid,
         ]
         .iter()
         .map(|s| {
@@ -177,6 +183,7 @@ fn main() -> Result<()> {
             HeaderStyle::Banner,
             HeaderStyle::Stepped,
             HeaderStyle::None,
+            HeaderStyle::Sunburst,
         ]
         .iter()
         .map(|s| {
@@ -197,11 +204,31 @@ fn main() -> Result<()> {
             BackgroundPattern::DiamondGrid,
             BackgroundPattern::Sunburst,
             BackgroundPattern::Chevrons,
+            BackgroundPattern::Lattice,
         ]
         .iter()
         .map(|s| {
             let mut f = small.clone();
             f.background_pattern = *s;
+            (format!("{:?}", s), f)
+        })
+        .collect(),
+    )?;
+
+    sheet(
+        &out,
+        "frames",
+        &values,
+        [
+            GroupFrameStyle::None,
+            GroupFrameStyle::Panel,
+            GroupFrameStyle::Stepped,
+        ]
+        .iter()
+        .map(|s| {
+            let mut f = small.clone();
+            f.group_frame = *s;
+            f.divider_padding = 9.0;
             (format!("{:?}", s), f)
         })
         .collect(),

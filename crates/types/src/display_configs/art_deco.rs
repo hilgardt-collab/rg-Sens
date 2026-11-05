@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::ContentItemConfig;
-use crate::theme::{deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig, FontSource};
+use crate::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types from lcars that this module uses
 pub use crate::display_configs::lcars::SplitOrientation;
@@ -77,6 +80,8 @@ pub enum BackgroundPattern {
     Sunburst,
     /// Chevron/arrow pattern
     Chevrons,
+    /// Wide, faint 45° lattice
+    Lattice,
 }
 
 /// Header display style
@@ -92,6 +97,8 @@ pub enum HeaderStyle {
     Stepped,
     /// No header
     None,
+    /// Half sunburst rising behind the title
+    Sunburst,
 }
 
 /// Divider style between content groups
@@ -125,13 +132,32 @@ pub enum DividerStyle {
     DiamondGrid,
     /// No divider
     None,
+    /// Tight zigzag line with a ring at the centre
+    Zigzag,
+    /// Scalloped fan curve with dots in the arches
+    Fan,
+    /// Stepped pyramid rising to a centre jewel
+    Pyramid,
+}
+
+/// Frame drawn around each content group
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupFrameStyle {
+    /// No group frame
+    #[default]
+    None,
+    /// Tinted panel with a thin border
+    Panel,
+    /// Tinted panel with stepped corner brackets
+    Stepped,
 }
 
 fn default_border_width() -> f64 {
-    3.0
+    4.0
 }
 fn default_corner_size() -> f64 {
-    24.0
+    36.0
 }
 fn default_accent_width() -> f64 {
     2.0
@@ -140,13 +166,13 @@ fn default_pattern_spacing() -> f64 {
     16.0
 }
 fn default_content_padding() -> f64 {
-    12.0
+    16.0
 }
 fn default_divider_width() -> f64 {
     2.0
 }
 fn default_divider_padding() -> f64 {
-    6.0
+    9.0
 }
 fn default_group_count() -> usize {
     2
@@ -287,6 +313,10 @@ pub struct ArtDecoFrameConfig {
     #[serde(default = "default_divider_padding")]
     pub divider_padding: f64,
 
+    /// Frame around each content group
+    #[serde(default)]
+    pub group_frame: GroupFrameStyle,
+
     // Content items (per slot)
     #[serde(default)]
     pub content_items: HashMap<String, ContentItemConfig>,
@@ -334,6 +364,7 @@ impl Default for ArtDecoFrameConfig {
             divider_color: default_divider_color_source(),
             divider_width: default_divider_width(),
             divider_padding: default_divider_padding(),
+            group_frame: GroupFrameStyle::default(),
             content_items: HashMap::new(),
             theme: default_art_deco_theme(),
             animation_enabled: default_animation_enabled(),

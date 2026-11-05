@@ -352,6 +352,21 @@ fn draw_background_pattern(
             }
             cr.stroke().ok();
         }
+        BackgroundPattern::Lattice => {
+            // Wide, faint 45° lattice (the reference panel's background).
+            set_color_alpha(cr, &c, 0.05);
+            cr.set_line_width(1.0);
+            let step = spacing * 3.5;
+            let mut d = -h;
+            while d < w {
+                cr.move_to(x + d, y);
+                cr.line_to(x + d + h, y + h);
+                cr.move_to(x + d + h, y);
+                cr.line_to(x + d, y + h);
+                d += step;
+            }
+            cr.stroke().ok();
+        }
     }
     cr.restore().ok();
 }
@@ -702,7 +717,10 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
     let (family, size) = config.header_font.resolve(&config.theme);
     let hc = config.header_color.resolve(&config.theme);
     let ac = config.accent_color.resolve(&config.theme);
-    let hh = size + 20.0;
+    let hh = match config.header_style {
+        HeaderStyle::Sunburst => size + 30.0,
+        _ => size + 20.0,
+    };
     let clear = config.corner_size.max(u * 2.0) + u;
 
     cr.save().ok();
@@ -710,11 +728,53 @@ fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64
     let (tw, th) = layout.pixel_size();
     let (tw, th) = (tw as f64, th as f64);
     let tx = x + (w - tw) / 2.0;
-    let ty = y + (hh - th) / 2.0;
+    let ty = match config.header_style {
+        HeaderStyle::Sunburst => y + (hh - th) / 2.0 - u * 0.4,
+        _ => y + (hh - th) / 2.0,
+    };
     let mid = y + hh / 2.0;
 
     match config.header_style {
         HeaderStyle::None => {}
+        HeaderStyle::Sunburst => {
+            // A half sunburst rising from the base of the band behind the
+            // title: alternating faint wedges, fine rays, a metal hub.
+            let (cx, cy) = (x + w / 2.0, y + hh);
+            let radius = (w * 0.5).max(hh * 2.0);
+            let rays = 15;
+            cr.save().ok();
+            cr.rectangle(x + clear, y, w - clear * 2.0, hh);
+            cr.clip();
+            for i in 0..rays {
+                let a0 = PI + PI * i as f64 / rays as f64;
+                let a1 = PI + PI * (i + 1) as f64 / rays as f64;
+                if i % 2 == 0 {
+                    cr.new_sub_path();
+                    cr.move_to(cx, cy);
+                    cr.arc(cx, cy, radius, a0, a1);
+                    cr.close_path();
+                    set_color_alpha(cr, &ac, 0.07);
+                    cr.fill().ok();
+                }
+            }
+            set_color_alpha(cr, &ac, 0.5);
+            cr.set_line_width(1.0);
+            for i in 0..=rays {
+                let a = PI + PI * i as f64 / rays as f64;
+                cr.move_to(cx, cy);
+                cr.line_to(cx + radius * a.cos(), cy + radius * a.sin());
+            }
+            cr.stroke().ok();
+            cr.restore().ok();
+            let hub = (u * 0.9).max(4.0);
+            cr.new_sub_path();
+            cr.move_to(cx - hub, cy);
+            cr.arc(cx, cy, hub, PI, 2.0 * PI);
+            cr.close_path();
+            let g = metal_gradient(&ac, cx - hub, 0.0, cx + hub, 0.0);
+            cr.set_source(&g).ok();
+            cr.fill().ok();
+        }
         HeaderStyle::Centered => {
             // Rules fading in towards the title, jewel at each end.
             let gap = u * 1.6;
@@ -823,6 +883,53 @@ fn divider_extent(config: &ArtDecoFrameConfig) -> f64 {
     config.divider_width + config.divider_padding * 2.0
 }
 
+/// How far a group frame reaches outside its group's content rectangle.
+const GROUP_FRAME_OUTSET: f64 = 3.0;
+
+/// Tinted panels behind the groups, optionally with stepped corner
+/// brackets (the reference panel's sections). Drawn before the content.
+fn draw_group_frames(cr: &Context, config: &ArtDecoFrameConfig, layouts: &[(f64, f64, f64, f64)]) {
+    if matches!(config.group_frame, GroupFrameStyle::None) {
+        return;
+    }
+    let ac = config.accent_color.resolve(&config.theme);
+    let o = GROUP_FRAME_OUTSET;
+    cr.save().ok();
+    for &(x, y, w, h) in layouts {
+        let (fx, fy, fw, fh) = (x - o, y - o, w + o * 2.0, h + o * 2.0);
+        if fw <= 2.0 || fh <= 2.0 {
+            continue;
+        }
+        let fill = cairo::LinearGradient::new(0.0, fy, 0.0, fy + fh);
+        fill.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 0.045);
+        fill.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.18);
+        cr.set_source(&fill).ok();
+        cr.rectangle(fx, fy, fw, fh);
+        cr.fill().ok();
+        set_color_alpha(cr, &ac, 0.28);
+        cr.set_line_width(1.0);
+        cr.rectangle(fx + 0.5, fy + 0.5, fw - 1.0, fh - 1.0);
+        cr.stroke().ok();
+        if matches!(config.group_frame, GroupFrameStyle::Stepped) {
+            let l = (fw.min(fh) * 0.12).clamp(8.0, 20.0);
+            set_color_alpha(cr, &ac, 0.9);
+            cr.set_line_width(2.0);
+            for (cx, cy, sx, sy) in [
+                (fx, fy, 1.0, 1.0),
+                (fx + fw, fy, -1.0, 1.0),
+                (fx + fw, fy + fh, -1.0, -1.0),
+                (fx, fy + fh, 1.0, -1.0),
+            ] {
+                cr.move_to(cx, cy + sy * l);
+                cr.line_to(cx, cy);
+                cr.line_to(cx + sx * l, cy);
+            }
+            cr.stroke().ok();
+        }
+    }
+    cr.restore().ok();
+}
+
 /// Draw a divider along the centre line starting at (x, y): horizontal to
 /// the right, or vertical downwards. Vertical dividers are the horizontal
 /// motif rotated, so every motif is written once.
@@ -849,8 +956,13 @@ fn draw_divider(
 fn draw_divider_motif(cr: &Context, config: &ArtDecoFrameConfig, len: f64) {
     let c = config.divider_color.resolve(&config.theme);
     let lw = config.divider_width.max(1.0);
-    // Band the motif may occupy, centred on y = 0.
-    let hb = (divider_extent(config) - 2.0).max(4.0);
+    // Band the motif may occupy, centred on y = 0; group frames reach
+    // into the gap from both sides and need clearance.
+    let allowance = match config.group_frame {
+        GroupFrameStyle::None => 2.0,
+        _ => GROUP_FRAME_OUTSET * 2.0 + 4.0,
+    };
+    let hb = (divider_extent(config) - allowance).max(4.0);
     let half = hb / 2.0;
     let mid = len / 2.0;
     let jr = (half * 0.9).max(3.0);
@@ -886,6 +998,83 @@ fn draw_divider_motif(cr: &Context, config: &ArtDecoFrameConfig, len: f64) {
 
     match config.divider_style {
         DividerStyle::None => {}
+        DividerStyle::Zigzag => {
+            let amp = (half * 0.8).max(1.5);
+            let period = (hb * 0.9).max(6.0);
+            let gap = jr * 1.5;
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            zigzag_path(cr, 0.0, mid - gap, 0.0, period, amp);
+            zigzag_path(cr, mid + gap, len, 0.0, period, amp);
+            cr.stroke().ok();
+            cr.new_sub_path();
+            cr.arc(mid, 0.0, jr * 0.75, 0.0, 2.0 * PI);
+            cr.set_line_width(lw * 1.2);
+            cr.stroke().ok();
+        }
+        DividerStyle::Fan => {
+            // Scalloped arches with a dot under each.
+            let n = ((len / (hb * 6.0)).round() as usize).clamp(2, 12);
+            let seg = len / n as f64;
+            let base = half * 0.7;
+            let peak = -half * 0.9;
+            let cy = peak * 2.0 - base;
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            cr.new_sub_path();
+            cr.move_to(0.0, base);
+            for i in 0..n {
+                let x0 = i as f64 * seg;
+                let x1 = x0 + seg;
+                let cx = x0 + seg / 2.0;
+                cr.curve_to(
+                    x0 + (cx - x0) * 2.0 / 3.0,
+                    base + (cy - base) * 2.0 / 3.0,
+                    x1 + (cx - x1) * 2.0 / 3.0,
+                    base + (cy - base) * 2.0 / 3.0,
+                    x1,
+                    base,
+                );
+            }
+            cr.stroke().ok();
+            for i in 0..n {
+                let cx = i as f64 * seg + seg / 2.0;
+                cr.new_sub_path();
+                cr.arc(cx, (base + peak) / 2.0, (lw * 1.3).max(1.5), 0.0, 2.0 * PI);
+                cr.fill().ok();
+            }
+        }
+        DividerStyle::Pyramid => {
+            // Steps rising to a jewel on the summit; rules fading outwards
+            // with a small jewel at each foot.
+            let n = 3;
+            let step_w = (hb * 1.2).max(6.0);
+            let rise = hb / (n as f64 + 1.5);
+            let base = half * 0.9;
+            let foot = n as f64 * step_w;
+            rule(cr, 0.0, mid - foot - jr, base, 0.8);
+            rule(cr, mid + foot + jr, len, base, 0.8);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            cr.new_sub_path();
+            cr.move_to(mid - foot, base);
+            for i in 0..n {
+                let xx = mid - foot + i as f64 * step_w;
+                let yy = base - i as f64 * rise;
+                cr.line_to(xx, yy - rise);
+                cr.line_to(xx + step_w, yy - rise);
+            }
+            for i in (0..n).rev() {
+                let xx = mid + foot - (i + 1) as f64 * step_w;
+                let yy = base - i as f64 * rise;
+                cr.line_to(xx + step_w, yy - rise);
+                cr.line_to(xx + step_w, yy);
+            }
+            cr.stroke().ok();
+            jewel(cr, mid, base - n as f64 * rise, jr * 0.55, &c);
+            jewel(cr, mid - foot - jr * 2.5, base, jr * 0.45, &c);
+            jewel(cr, mid + foot + jr * 2.5, base, jr * 0.45, &c);
+        }
         DividerStyle::Line => rule(cr, 0.0, len, 0.0, 0.9),
         DividerStyle::DoubleLine => {
             let off = (half * 0.7).max(lw * 1.5);
@@ -1159,6 +1348,7 @@ pub fn draw_group_dividers(
     config: &ArtDecoFrameConfig,
     group_layouts: &[(f64, f64, f64, f64)],
 ) {
+    draw_group_frames(cr, config, group_layouts);
     if group_layouts.len() < 2 {
         return;
     }

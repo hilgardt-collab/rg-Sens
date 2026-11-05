@@ -442,3 +442,13 @@ Run with logging:
 ```bash
 RUST_LOG=debug cargo test
 ```
+
+## Art Deco Frame Renderer
+
+`crates/render/src/art_deco_display.rs` draws every ornament filled or double-ruled, sized from the configured widths plus a panel-size unit, and coloured from the resolved theme colours (`metal_gradient` derives dark–bright–dark metal from the configured colour; never use gold constants). The layout contract is fixed: frame inset `border_width + 4`, content inset `content_padding` plus the header height, groups separated by `divider_extent()`; a divider motif must fit that band (group frames reduce it). Preview headlessly, no display needed:
+
+```bash
+cargo run --example art_deco_preview -- /tmp/deco [panel.json]
+```
+
+It renders a saved panel (default `examples/Art Deco.json`) and one contact sheet per style enum through `GenericComboDisplayerShared::render_to_context`; look at the PNGs before and after touching the drawing code. New enum variants are appended, and the three match sites per enum in `src/ui/art_deco_config_widget.rs` (index from style, style from index, `refresh_all_widgets`) must be extended together.
