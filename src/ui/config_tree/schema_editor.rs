@@ -132,13 +132,16 @@ impl SchemaEditor {
     pub fn load(&self, map: Map<String, Value>) {
         self.loading.set(true);
         *self.model.borrow_mut() = map;
+        // Refresh from a snapshot: setting a control emits its signal
+        // synchronously, and a handler must never find the model borrowed
+        // (gotcha 12). The handlers also return early while loading.
+        let snapshot = self.model.borrow().clone();
         {
-            let model = self.model.borrow();
             let rows = self.rows.borrow();
             for row in rows.iter() {
-                (row.refresh)(&model);
+                (row.refresh)(&snapshot);
             }
-            update_visibility(&rows, &model);
+            update_visibility(&rows, &self.model.borrow());
         }
         self.loading.set(false);
     }
@@ -209,7 +212,11 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 check.connect_toggled(move |c| {
+                    if loading.get() {
+                        return;
+                    }
                     model
                         .borrow_mut()
                         .insert(key.to_string(), Value::Bool(c.is_active()));
@@ -231,7 +238,11 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 spin.connect_value_changed(move |s| {
+                    if loading.get() {
+                        return;
+                    }
                     model
                         .borrow_mut()
                         .insert(key.to_string(), Value::from(s.value().round() as i64));
@@ -260,7 +271,11 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 spin.connect_value_changed(move |s| {
+                    if loading.get() {
+                        return;
+                    }
                     model
                         .borrow_mut()
                         .insert(key.to_string(), Value::from(s.value()));
@@ -297,8 +312,8 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let spin = spin.clone();
                 let loading = loading.clone();
+                let spin = spin.clone();
                 check.connect_toggled(move |c| {
                     spin.set_sensitive(c.is_active());
                     if loading.get() {
@@ -316,8 +331,12 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 let check = check.clone();
                 spin.connect_value_changed(move |s| {
+                    if loading.get() {
+                        return;
+                    }
                     if check.is_active() {
                         model
                             .borrow_mut()
@@ -346,7 +365,11 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 entry.connect_changed(move |e| {
+                    if loading.get() {
+                        return;
+                    }
                     let text = e.text().to_string();
                     let value = if optional && text.is_empty() {
                         Value::Null
@@ -376,8 +399,12 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 let values = values.clone();
                 dropdown.connect_selected_notify(move |d| {
+                    if loading.get() {
+                        return;
+                    }
                     if let Some(v) = values.get(d.selected() as usize) {
                         model
                             .borrow_mut()
@@ -407,8 +434,12 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
+                let loading = loading.clone();
                 let values = values.clone();
                 dropdown.connect_selected_notify(move |d| {
+                    if loading.get() {
+                        return;
+                    }
                     if let Some(v) = values.borrow().get(d.selected() as usize) {
                         model
                             .borrow_mut()
