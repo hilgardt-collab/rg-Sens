@@ -17,7 +17,7 @@ mod test;
 
 pub use rg_sens_types::timer::{AlarmConfig, AlarmSoundConfig, TimerConfig, TimerDisplayConfig, TimerMode, TimerState};
 pub use claude::ClaudeSource;
-pub use combo::{ComboSource, ComboSourceConfig, GroupConfig, SlotConfig};
+pub use combo::{slot_names_for, ComboSource, ComboSourceConfig, GroupConfig, SlotConfig};
 pub use cpu::{CpuSensor, CpuSource};
 pub use disk::DiskSource;
 pub use fan_speed::{

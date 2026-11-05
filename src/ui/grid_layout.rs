@@ -1,7 +1,7 @@
 //! Grid layout manager for panels with advanced features
 
 use crate::config::AppConfig;
-use crate::core::Panel;
+use crate::core::{Panel, PanelData};
 use crate::ui::pango_text::pango_show_text;
 use gtk4::gdk::ModifierType;
 use gtk4::{
@@ -10,7 +10,7 @@ use gtk4::{
 use log::info;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -377,6 +377,21 @@ pub struct GridLayout {
     viewport_size: Rc<RefCell<(i32, i32)>>,
     /// Application config for accessing global theme
     app_config: Rc<RefCell<AppConfig>>,
+    /// Weak self-reference so dialogs opened from panel actions can call
+    /// back into the grid (set by main after wrapping in `Rc<RefCell>`).
+    self_weak: Option<Weak<RefCell<GridLayout>>>,
+}
+
+/// What [`GridLayout::apply_panel_data`] did.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ApplyOutcome {
+    /// The requested size collided with another panel and was kept as before;
+    /// every other change was still applied.
+    pub size_reverted: bool,
+    /// The displayer type changed and its widget was swapped in the grid.
+    pub displayer_swapped: bool,
+    /// The source type changed and the source was recreated.
+    pub source_recreated: bool,
 }
 
 impl GridLayout {
@@ -425,11 +440,234 @@ impl GridLayout {
             on_borderless_drag: Rc::new(RefCell::new(None)),
             viewport_size: Rc::new(RefCell::new((800, 600))), // Default, updated by main window
             app_config,
+            self_weak: None,
         };
 
         grid_layout.setup_drop_zone_drawing();
         grid_layout.setup_container_interaction();
         grid_layout
+    }
+
+    /// Store the weak self-reference (see the field doc).
+    pub fn set_self_weak(&mut self, weak: Weak<RefCell<GridLayout>>) {
+        self.self_weak = Some(weak);
+    }
+
+    /// Weak handle to this grid, for dialogs that outlive the action that
+    /// opened them.
+    pub fn self_weak(&self) -> Option<Weak<RefCell<GridLayout>>> {
+        self.self_weak.clone()
+    }
+
+    /// The application config shared with the main window.
+    pub fn app_config(&self) -> Rc<RefCell<AppConfig>> {
+        self.app_config.clone()
+    }
+
+    /// Find a panel by id.
+    pub fn panel_by_id(&self, id: &str) -> Option<Arc<RwLock<Panel>>> {
+        self.panels
+            .borrow()
+            .iter()
+            .find(|p| p.blocking_read().id == id)
+            .cloned()
+    }
+
+    /// Apply a complete `PanelData` to a live panel: the one place that knows
+    /// how to turn an edited configuration into grid state.
+    ///
+    /// Handles, in order: size change with collision check (on collision only
+    /// the size is kept as before), occupied-cell bookkeeping for
+    /// `ignore_collision`, writing the resolved theme into a combo frame,
+    /// `Panel::update_from_data` (source/displayer recreation, shared-source
+    /// re-key, typed config application), the displayer widget swap when the
+    /// type changed (context menu re-attached through the same path
+    /// `add_panel` uses), corner-radius CSS, size requests, z-order,
+    /// indicator background timer, redraws, and the dirty callback.
+    ///
+    /// Position (`x`, `y`) is owned by drag-and-drop and is always taken from
+    /// the live panel, not from `data`.
+    pub(crate) fn apply_panel_data(
+        &self,
+        panel: &Arc<RwLock<Panel>>,
+        mut data: PanelData,
+    ) -> anyhow::Result<ApplyOutcome> {
+        let registry = crate::core::global_registry();
+        let mut outcome = ApplyOutcome::default();
+
+        let (panel_id, old_geometry, old_z, old_ignore, old_radius, old_source_type, old_displayer) = {
+            let g = panel.blocking_read();
+            (
+                g.id.clone(),
+                g.geometry,
+                g.z_index,
+                g.ignore_collision,
+                g.corner_radius,
+                g.source.metadata().id.clone(),
+                g.displayer.id().to_string(),
+            )
+        };
+        data.geometry.x = old_geometry.x;
+        data.geometry.y = old_geometry.y;
+        data.id = panel_id.clone();
+
+        // --- Size + collision + occupied cells --------------------------------
+        let new_ignore = data.appearance.ignore_collision;
+        let mut size_changed = data.geometry.width != old_geometry.width
+            || data.geometry.height != old_geometry.height;
+        {
+            let mut occupied = self.occupied_cells.borrow_mut();
+            if !old_ignore {
+                for dx in 0..old_geometry.width {
+                    for dy in 0..old_geometry.height {
+                        occupied.remove(&(old_geometry.x + dx, old_geometry.y + dy));
+                    }
+                }
+            }
+            if size_changed && !new_ignore {
+                let g = data.geometry;
+                let collides = (0..g.width)
+                    .any(|dx| (0..g.height).any(|dy| occupied.contains(&(g.x + dx, g.y + dy))));
+                if collides {
+                    log::warn!(
+                        "Cannot resize panel {}: collision detected; keeping size, applying the rest",
+                        panel_id
+                    );
+                    data.geometry = old_geometry;
+                    size_changed = false;
+                    outcome.size_reverted = true;
+                }
+            }
+            if !new_ignore {
+                let g = data.geometry;
+                for dx in 0..g.width {
+                    for dy in 0..g.height {
+                        occupied.insert((g.x + dx, g.y + dy));
+                    }
+                }
+            }
+        }
+
+        // --- Theme: a combo frame carries the resolved theme as a cache ------
+        let theme = self
+            .app_config
+            .borrow()
+            .resolve_theme_for(&data.theme, data.group_id.as_deref());
+        if let Some(frame_theme) = data.displayer_config.theme_mut() {
+            *frame_theme = theme.clone();
+        }
+
+        let new_geometry = data.geometry;
+        let new_radius = data.appearance.corner_radius;
+        let new_z = data.appearance.z_index;
+        let displayer_changed = data.displayer_config.displayer_type() != old_displayer;
+        outcome.source_recreated = data.source_config.source_type() != old_source_type;
+
+        // --- Panel: configs, source, displayer --------------------------------
+        {
+            let mut g = panel.blocking_write();
+            g.update_from_data_with_registry(data, registry)?;
+            // Standalone displayers take the theme from the `global_theme`
+            // key; applying a typed config alone would leave it stale.
+            if let Err(e) = g.apply_resolved_theme(&theme) {
+                log::warn!("Panel {}: theme push failed: {}", panel_id, e);
+            }
+        }
+
+        // --- Widgets ------------------------------------------------------------
+        let (frame, mut widget, background_area) = {
+            let states = self.panel_states.borrow();
+            let state = states
+                .get(&panel_id)
+                .ok_or_else(|| anyhow::anyhow!("no grid state for panel {}", panel_id))?;
+            (
+                state.frame.clone(),
+                state.widget.clone(),
+                state.background_area.clone(),
+            )
+        };
+        let cfg = *self.config.borrow();
+        let pixel_width = new_geometry.width as i32 * cfg.cell_width
+            + (new_geometry.width as i32 - 1) * cfg.spacing;
+        let pixel_height = new_geometry.height as i32 * cfg.cell_height
+            + (new_geometry.height as i32 - 1) * cfg.spacing;
+
+        if displayer_changed {
+            let (new_widget, displayer_id) = {
+                let g = panel.blocking_read();
+                (g.displayer.create_widget(), g.displayer.id().to_string())
+            };
+            new_widget.set_size_request(pixel_width, pixel_height);
+            new_widget.add_css_class("transparent-background");
+            attach_clock_click_handler(&new_widget, panel, &displayer_id);
+
+            // Swap inside the existing overlay (rebuilding it orphaned the old
+            // widget tree and segfaulted on the next swap; see git 58b5372).
+            if let Some(overlay) = frame.child().and_then(|w| w.downcast::<Overlay>().ok()) {
+                overlay.remove_overlay(&widget);
+                overlay.add_overlay(&new_widget);
+            } else {
+                if let Some(old) = background_area
+                    .parent()
+                    .and_then(|w| w.downcast::<Overlay>().ok())
+                {
+                    old.set_child(Widget::NONE);
+                }
+                let overlay = Overlay::new();
+                overlay.set_child(Some(&background_area));
+                overlay.add_overlay(&new_widget);
+                frame.set_child(Some(&overlay));
+            }
+
+            // Unparent the old context popover before its DrawingArea goes,
+            // then re-attach the menu through the same path add_panel uses.
+            let old_popover = {
+                let mut states = self.panel_states.borrow_mut();
+                states.get_mut(&panel_id).and_then(|state| {
+                    state.widget = new_widget.clone();
+                    state.context_popover.take()
+                })
+            };
+            if let Some(p) = old_popover {
+                p.unparent();
+            }
+            let popover = self.setup_context_menu(&new_widget, panel.clone(), panel_id.clone());
+            if let Some(state) = self.panel_states.borrow_mut().get_mut(&panel_id) {
+                state.context_popover = Some(popover);
+            }
+            widget = new_widget;
+            outcome.displayer_swapped = true;
+        }
+
+        if (new_radius - old_radius).abs() > 0.01 {
+            apply_corner_radius_css(&frame, &panel_id, new_radius);
+        }
+
+        if size_changed || displayer_changed {
+            widget.set_size_request(pixel_width, pixel_height);
+            frame.set_size_request(pixel_width, pixel_height);
+            background_area.set_size_request(pixel_width, pixel_height);
+            widget.queue_resize();
+            frame.queue_resize();
+            background_area.queue_resize();
+            self.update_content_bounds();
+        }
+
+        if new_z != old_z {
+            self.reorder_panels_by_z_index();
+        }
+
+        ensure_indicator_background_timer(panel, &background_area);
+
+        background_area.queue_draw();
+        widget.queue_draw();
+        self.drop_zone_layer.queue_draw();
+
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
+
+        Ok(outcome)
     }
 
     /// Set a callback to be called when panel positions change

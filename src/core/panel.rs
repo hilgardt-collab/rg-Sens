@@ -647,14 +647,52 @@ impl Panel {
         let new_displayer_type = new_data.displayer_config.displayer_type();
 
         // Handle shared source changes
+        let old_source_type: String = self
+            .data
+            .as_ref()
+            .map(|d| d.source_config.source_type().to_string())
+            .unwrap_or_else(|| self.source.metadata().id.clone());
         if old_source_key != new_source_key {
-            self.release_shared_source();
+            if old_source_type == new_source_type && self.source_key.is_some() {
+                // Same source type, different config: keep the live instance
+                // when we are its only user (a combo keeps its children) and
+                // just re-key it; the metadata source below is reconfigured by
+                // apply_configs_from_data.
+                let old_key = self.source_key.clone().unwrap_or_default();
+                let manager = global_shared_source_manager();
+                let rekeyed = manager.and_then(|m| {
+                    m.reconfigure_or_recreate(
+                        &old_key,
+                        &self.id,
+                        &new_data.source_config,
+                        registry,
+                    )
+                    .map_err(|e| {
+                        log::warn!(
+                            "Panel {}: in-place reconfigure failed ({}); recreating source",
+                            self.id,
+                            e
+                        )
+                    })
+                    .ok()
+                });
+                match rekeyed {
+                    Some(key) => self.source_key = Some(key),
+                    None => {
+                        self.release_shared_source();
+                        self.source = registry.create_source(new_source_type)?;
+                        self.register_shared_source(&new_data.source_config, registry);
+                    }
+                }
+            } else {
+                self.release_shared_source();
 
-            // Create new source instance (for metadata/fields)
-            self.source = registry.create_source(new_source_type)?;
+                // Create new source instance (for metadata/fields)
+                self.source = registry.create_source(new_source_type)?;
 
-            // Register with shared source manager
-            self.register_shared_source(&new_data.source_config, registry);
+                // Register with shared source manager
+                self.register_shared_source(&new_data.source_config, registry);
+            }
         } else if let Some(ref key) = self.source_key {
             // Source key unchanged but config might have - update the shared source config
             if let Some(manager) = global_shared_source_manager() {

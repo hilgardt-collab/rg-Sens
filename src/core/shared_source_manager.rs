@@ -250,11 +250,7 @@ impl SharedSourceManager {
             .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
         match sources.entry(key.clone()) {
             Entry::Occupied(entry) => {
-                let mut existing = entry
-                    .get()
-                    .source
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner());
+                let mut existing = entry.get().source.lock().unwrap_or_else(|p| p.into_inner());
                 existing.ref_count += 1;
                 existing
                     .panel_intervals
@@ -271,6 +267,91 @@ impl SharedSourceManager {
         }
 
         Ok(key)
+    }
+
+    /// Re-key a panel's shared source after its configuration changed.
+    ///
+    /// Source keys hash the configuration, so a config change normally means
+    /// release + create. When this panel is the only user of the old key and
+    /// nobody owns the new key yet, the live instance is reconfigured in place
+    /// and moved under the new key instead. A combo source then keeps its
+    /// child sources (see `ComboSource::reconcile_children`), which is what
+    /// makes live editing cheap. Shared instances fall back to the old path.
+    ///
+    /// Locking order as everywhere in this file: RwLock → Mutex, never a
+    /// Mutex while taking the write RwLock.
+    pub fn reconfigure_or_recreate(
+        &self,
+        old_key: &str,
+        panel_id: &str,
+        new_config: &SourceConfig,
+        registry: &Registry,
+    ) -> Result<String> {
+        let new_key = Self::generate_source_key(new_config);
+        let interval = Duration::from_millis(new_config.update_interval_ms());
+
+        if new_key == old_key {
+            self.configure_source(old_key, new_config)?;
+            self.update_interval(old_key, panel_id, interval);
+            return Ok(new_key);
+        }
+
+        // Phase 1 (read lock): candidate handle, only if the new key is free.
+        let handle = {
+            let sources = self
+                .sources
+                .read()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            if sources.contains_key(&new_key) {
+                None
+            } else {
+                sources.get(old_key).cloned()
+            }
+        };
+
+        if let Some(handle) = handle {
+            // Phase 2 (Mutex only): sole user → reconfigure in place.
+            let reconfigured = {
+                let mut shared = handle.source.lock().unwrap_or_else(|p| p.into_inner());
+                if shared.ref_count == 1 && shared.panel_intervals.contains_key(panel_id) {
+                    shared.source.configure_typed(new_config)?;
+                    shared
+                        .panel_intervals
+                        .insert(panel_id.to_string(), interval);
+                    shared.recalculate_min_interval();
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if reconfigured {
+                // Phase 3 (write lock): move the entry, re-checking identity.
+                let mut sources = self
+                    .sources
+                    .write()
+                    .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+                let same_handle = sources
+                    .get(old_key)
+                    .map(|h| Arc::ptr_eq(&h.source, &handle.source))
+                    .unwrap_or(false);
+                if same_handle && !sources.contains_key(&new_key) {
+                    if let Some(h) = sources.remove(old_key) {
+                        sources.insert(new_key.clone(), h);
+                        info!(
+                            "Reconfigured shared source in place for panel {}: {} -> {}",
+                            panel_id, old_key, new_key
+                        );
+                        return Ok(new_key);
+                    }
+                }
+                // Lost a race; the instance already carries the new config and
+                // is simply released below.
+            }
+        }
+
+        self.release_source(old_key, panel_id);
+        self.get_or_create_source(new_config, panel_id, registry)
     }
 
     /// Release a reference to a shared source
@@ -333,7 +414,8 @@ impl SharedSourceManager {
 
             // Check ref_count without holding any RwLock (avoids deadlock)
             let still_empty = if let Some(ref h) = handle_for_recheck {
-                h.source.lock()
+                h.source
+                    .lock()
                     .unwrap_or_else(|poisoned| {
                         log::warn!("Shared source mutex poisoned during cleanup check");
                         poisoned.into_inner()

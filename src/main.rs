@@ -353,6 +353,7 @@ fn main() {
     // CSS Template requires --webkit-enable or --servo-enable (mutually exclusive)
     sources::register_all();
     displayers::register_all(webkit_enable, servo_enable);
+    rg_sens::ui::editor_registry::register_all_editors();
 
     // Create GTK application
     let app = Application::builder().application_id(APP_ID).build();
@@ -1032,6 +1033,9 @@ fn build_ui(app: &Application) {
 
     // Wrap grid_layout in Rc<RefCell<>> for sharing across closures
     let grid_layout = Rc::new(RefCell::new(grid_layout));
+    grid_layout
+        .borrow_mut()
+        .set_self_weak(Rc::downgrade(&grid_layout));
 
     // Set the grid_layout reference for the on_change callback (now that it's wrapped)
     *grid_layout_for_change.borrow_mut() = Some(grid_layout.clone());
