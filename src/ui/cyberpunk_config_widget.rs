@@ -10,7 +10,6 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::displayers::CyberpunkDisplayConfig;
 use crate::ui::combo_config_base;
 use crate::ui::cyberpunk_display::{CornerStyle, DividerStyle, HeaderStyle};
@@ -82,12 +81,6 @@ pub struct CyberpunkConfigWidget {
     config: Rc<RefCell<CyberpunkDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
-    /// Notebook for per-slot content configuration
-    content_notebook: Rc<RefCell<Notebook>>,
-    /// Source summaries for labeling tabs (slot_name, summary, group_num, item_idx)
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    /// Available fields from the source for text overlay configuration
-    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
     /// Frame tab widgets
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     /// Effects tab widgets
@@ -104,23 +97,13 @@ pub struct CyberpunkConfigWidget {
     /// Callbacks to refresh theme reference sections
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    /// Cleanup callbacks for Lazy*ConfigWidget instances in content tabs
-    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
 }
 
 impl CyberpunkConfigWidget {
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        log::info!(
-            "=== CyberpunkConfigWidget::new() called with {} fields ===",
-            available_fields.len()
-        );
+    pub fn new() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(CyberpunkDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
-            Rc::new(RefCell::new(available_fields));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let effects_widgets: Rc<RefCell<Option<EffectsWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
@@ -128,8 +111,6 @@ impl CyberpunkConfigWidget {
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
@@ -203,20 +184,6 @@ impl CyberpunkConfigWidget {
         );
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 6: Content - with dynamic per-slot notebook
-        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(
-            &config,
-            &on_change,
-            &preview,
-            &content_notebook,
-            &source_summaries,
-            &available_fields,
-            &theme_ref_refreshers,
-            &content_cleanup_callbacks,
-        );
-        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
-
         // Tab 7: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
@@ -231,9 +198,6 @@ impl CyberpunkConfigWidget {
             config,
             on_change,
             preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
             frame_widgets,
             effects_widgets,
             header_widgets,
@@ -241,7 +205,6 @@ impl CyberpunkConfigWidget {
             animation_widgets,
             theme_widgets,
             theme_ref_refreshers,
-            content_cleanup_callbacks,
         }
     }
 
@@ -791,76 +754,6 @@ impl CyberpunkConfigWidget {
 
         page
     }
-    fn create_content_page(
-        config: &Rc<RefCell<CyberpunkDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
-
-        let info_label = Label::new(Some("Configure content items for each slot.\nSlots are named: group1_1, group1_2, group2_1, etc."));
-        info_label.set_halign(gtk4::Align::Start);
-        info_label.add_css_class("dim-label");
-        page.append(&info_label);
-
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_vexpand(true);
-        scrolled.set_hexpand(true);
-        scrolled.set_min_content_height(300);
-
-        let notebook = content_notebook.borrow();
-        scrolled.set_child(Some(&*notebook));
-        page.append(&scrolled);
-
-        // Initial build of content tabs
-        drop(notebook);
-        Self::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            theme_ref_refreshers,
-            content_cleanup_callbacks,
-        );
-
-        page
-    }
-
-    fn rebuild_content_tabs(
-        config: &Rc<RefCell<CyberpunkDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) {
-        combo_config_base::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            content_cleanup_callbacks,
-        );
-    }
-
     /// Default bar config with cyberpunk colors (cyan/magenta gradient)
     #[allow(dead_code)]
     #[allow(clippy::field_reassign_with_default)]
@@ -1269,11 +1162,6 @@ impl CyberpunkConfigWidget {
     }
 
     pub fn set_config(&self, config: &CyberpunkDisplayConfig) {
-        log::debug!(
-            "CyberpunkConfigWidget::set_config - loading {} groups, {} content_items",
-            config.frame.group_count,
-            config.frame.content_items.len()
-        );
         for (slot_name, item_cfg) in &config.frame.content_items {
             log::debug!(
                 "  loading content_item '{}': display_as={:?}",
@@ -1429,103 +1317,11 @@ impl CyberpunkConfigWidget {
         // Update Theme widgets (fonts and colors)
         self.refresh_theme_tab(&config.frame.theme);
 
-        // Rebuild content tabs
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-    }
-
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        log::debug!(
-            "CyberpunkConfigWidget::set_source_summaries - received {} summaries",
-            summaries.len()
-        );
-        for (slot_name, _, group_num, item_idx) in &summaries {
-            log::debug!(
-                "  summary: slot='{}', group={}, item={}",
-                slot_name,
-                group_num,
-                item_idx
-            );
-        }
-        // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> =
-            std::collections::HashMap::new();
-        for (_, _, group_num, item_idx) in &summaries {
-            let current_max = group_item_counts.entry(*group_num).or_insert(0);
-            if *item_idx > *current_max {
-                *current_max = *item_idx;
-            }
-        }
-
-        // Convert to sorted vec
-        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
-        group_nums.sort();
-        let group_counts: Vec<usize> = group_nums
-            .iter()
-            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
-            .collect();
-
-        // Update the frame config with group information
-        {
-            let mut cfg = self.config.borrow_mut();
-            let new_group_count = group_nums.len();
-            cfg.frame.group_count = new_group_count;
-            cfg.frame.group_item_counts = group_counts;
-
-            // Ensure group_size_weights has the right length
-            while cfg.frame.group_size_weights.len() < new_group_count {
-                cfg.frame.group_size_weights.push(1.0);
-            }
-            // Trim if we have fewer groups now
-            cfg.frame.group_size_weights.truncate(new_group_count);
-        }
-
-        *self.source_summaries.borrow_mut() = summaries;
-
-        // Rebuild combined group settings in Layout tab
-        if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            combo_config_base::rebuild_combined_group_settings(
-                &widgets.group_settings_box,
-                &self.config,
-                |c: &mut CyberpunkDisplayConfig| &mut c.frame,
-                &self.on_change,
-                &self.preview,
-            );
-        }
-
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
-        // Notify that config has changed so displayer gets updated
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-        *self.available_fields.borrow_mut() = fields;
     }
 
     /// Extract transferable configuration (layout, content items, animation settings).
@@ -1579,11 +1375,7 @@ impl CyberpunkConfigWidget {
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("CyberpunkConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields_with_content(
-            &self.on_change,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
         *self.frame_widgets.borrow_mut() = None;
         *self.effects_widgets.borrow_mut() = None;
         *self.header_widgets.borrow_mut() = None;
@@ -1595,6 +1387,6 @@ impl CyberpunkConfigWidget {
 
 impl Default for CyberpunkConfigWidget {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new()
     }
 }

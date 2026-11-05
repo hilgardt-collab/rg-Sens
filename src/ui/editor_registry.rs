@@ -569,9 +569,6 @@ macro_rules! combo_editor {
             fn set_theme(&self, theme: &ComboThemeConfig) {
                 self.0.set_theme(theme.clone());
             }
-            fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-                self.0.set_source_summaries(summaries);
-            }
             fn cleanup(&self) {
                 self.0.cleanup();
             }
@@ -777,36 +774,36 @@ pub fn register_all_editors() {
         Box::new(CssTemplateEditor(w))
     });
 
-    register_display_editor("lcars", |f| {
-        Box::new(LcarsEditor(crate::ui::LcarsConfigWidget::new(f)))
+    register_display_editor("lcars", |_| {
+        Box::new(LcarsEditor(crate::ui::LcarsConfigWidget::new()))
     });
-    register_display_editor("cyberpunk", |f| {
-        Box::new(CyberpunkEditor(crate::ui::CyberpunkConfigWidget::new(f)))
+    register_display_editor("cyberpunk", |_| {
+        Box::new(CyberpunkEditor(crate::ui::CyberpunkConfigWidget::new()))
     });
-    register_display_editor("material", |f| {
-        Box::new(MaterialEditor(crate::ui::MaterialConfigWidget::new(f)))
+    register_display_editor("material", |_| {
+        Box::new(MaterialEditor(crate::ui::MaterialConfigWidget::new()))
     });
-    register_display_editor("industrial", |f| {
-        Box::new(IndustrialEditor(crate::ui::IndustrialConfigWidget::new(f)))
+    register_display_editor("industrial", |_| {
+        Box::new(IndustrialEditor(crate::ui::IndustrialConfigWidget::new()))
     });
-    register_display_editor("retro_terminal", |f| {
+    register_display_editor("retro_terminal", |_| {
         Box::new(RetroTerminalEditor(
-            crate::ui::RetroTerminalConfigWidget::new(f),
+            crate::ui::RetroTerminalConfigWidget::new(),
         ))
     });
-    register_display_editor("fighter_hud", |f| {
-        Box::new(FighterHudEditor(crate::ui::FighterHudConfigWidget::new(f)))
+    register_display_editor("fighter_hud", |_| {
+        Box::new(FighterHudEditor(crate::ui::FighterHudConfigWidget::new()))
     });
-    register_display_editor("synthwave", |f| {
-        Box::new(SynthwaveEditor(crate::ui::SynthwaveConfigWidget::new(f)))
+    register_display_editor("synthwave", |_| {
+        Box::new(SynthwaveEditor(crate::ui::SynthwaveConfigWidget::new()))
     });
-    register_display_editor("art_deco", |f| {
-        Box::new(ArtDecoEditor(crate::ui::ArtDecoConfigWidget::new(f)))
+    register_display_editor("art_deco", |_| {
+        Box::new(ArtDecoEditor(crate::ui::ArtDecoConfigWidget::new()))
     });
-    register_display_editor("art_nouveau", |f| {
-        Box::new(ArtNouveauEditor(crate::ui::ArtNouveauConfigWidget::new(f)))
+    register_display_editor("art_nouveau", |_| {
+        Box::new(ArtNouveauEditor(crate::ui::ArtNouveauConfigWidget::new()))
     });
-    register_display_editor("steampunk", |f| {
-        Box::new(SteampunkEditor(crate::ui::SteampunkConfigWidget::new(f)))
+    register_display_editor("steampunk", |_| {
+        Box::new(SteampunkEditor(crate::ui::SteampunkConfigWidget::new()))
     });
 }

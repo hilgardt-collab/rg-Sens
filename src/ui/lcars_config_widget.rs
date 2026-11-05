@@ -10,7 +10,6 @@ use gtk4::{
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::displayers::LcarsDisplayConfig;
 use crate::ui::background::Color;
 use crate::ui::clipboard::CLIPBOARD;
@@ -129,12 +128,6 @@ pub struct LcarsConfigWidget {
     config: Rc<RefCell<LcarsDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
-    /// Notebook for per-slot content configuration
-    content_notebook: Rc<RefCell<Notebook>>,
-    /// Source summaries for labeling tabs (slot_name, summary, group_num, item_idx)
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    /// Available fields from the source for text overlay configuration
-    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
     /// Frame tab widgets for updating on set_config
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     /// Headers tab widgets
@@ -153,7 +146,6 @@ pub struct LcarsConfigWidget {
     /// Callbacks to refresh theme reference sections when theme changes
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
     /// Guard flag: set during programmatic set_config so widget change handlers
     /// (e.g. the segment count spinner's tab rebuild) don't double up with the
     /// explicit updates set_config performs itself
@@ -161,18 +153,10 @@ pub struct LcarsConfigWidget {
 }
 
 impl LcarsConfigWidget {
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
-        log::info!(
-            "=== LcarsConfigWidget::new() called with {} fields ===",
-            available_fields.len()
-        );
+    pub fn new() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(LcarsDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
-            Rc::new(RefCell::new(available_fields));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let headers_widgets: Rc<RefCell<Option<HeadersWidgets>>> = Rc::new(RefCell::new(None));
         let segments_widgets: Rc<RefCell<Option<SegmentsWidgets>>> = Rc::new(RefCell::new(None));
@@ -181,8 +165,6 @@ impl LcarsConfigWidget {
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
         let updating_from_config = Rc::new(Cell::new(false));
 
@@ -249,21 +231,6 @@ impl LcarsConfigWidget {
         );
         notebook.append_page(&segments_page, Some(&Label::new(Some("Segments"))));
 
-        // Tab 5: Content - with dynamic per-slot notebook
-        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(
-            &config,
-            &on_change,
-            &preview,
-            &content_notebook,
-            &source_summaries,
-            &content_widgets,
-            &available_fields,
-            &theme_ref_refreshers,
-            &content_cleanup_callbacks,
-        );
-        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
-
         // Tab 6: Layout
         let split_page = Self::create_split_page(&config, &on_change, &preview, &split_widgets);
         notebook.append_page(&split_page, Some(&Label::new(Some("Layout"))));
@@ -306,9 +273,6 @@ impl LcarsConfigWidget {
             config,
             on_change,
             preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
             frame_widgets,
             headers_widgets,
             segments_widgets,
@@ -317,7 +281,6 @@ impl LcarsConfigWidget {
             animation_widgets,
             theme_widgets,
             theme_ref_refreshers,
-            content_cleanup_callbacks,
             updating_from_config,
         }
     }
@@ -1475,107 +1438,6 @@ impl LcarsConfigWidget {
         )
     }
 
-    fn create_content_page(
-        config: &Rc<RefCell<LcarsDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        content_widgets_out: &Rc<RefCell<Option<ContentWidgets>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
-
-        // Item spacing
-        let spacing_box = GtkBox::new(Orientation::Horizontal, 6);
-        spacing_box.append(&Label::new(Some("Item Spacing:")));
-        let spacing_spin = SpinButton::with_range(0.0, 20.0, 1.0);
-        spacing_spin.set_value(config.borrow().frame.item_spacing);
-        spacing_spin.set_hexpand(true);
-        spacing_box.append(&spacing_spin);
-
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        spacing_spin.connect_value_changed(move |spin| {
-            config_clone.borrow_mut().frame.item_spacing = spin.value();
-            combo_config_base::notify_change(&on_change_clone);
-        });
-        page.append(&spacing_box);
-
-        // Per-slot display configuration heading
-        let slots_heading = Label::new(Some("Per-Slot Display Configuration"));
-        slots_heading.add_css_class("heading");
-        slots_heading.set_margin_top(12);
-        slots_heading.set_halign(gtk4::Align::Start);
-        page.append(&slots_heading);
-
-        // Note about configuring sources first
-        let note_label = Label::new(Some(
-            "Configure data sources in the 'Data Source' tab first.\n\
-             Each slot's tab shows its source and allows display type configuration.",
-        ));
-        note_label.set_halign(gtk4::Align::Start);
-        note_label.add_css_class("dim-label");
-        page.append(&note_label);
-
-        // Content notebook for per-slot configuration
-        let nb = content_notebook.borrow();
-        nb.set_scrollable(true);
-        nb.set_vexpand(true);
-        nb.set_margin_top(8);
-        page.append(&*nb);
-        drop(nb);
-
-        // Build initial tabs based on source summaries
-        Self::rebuild_content_notebook_tabs(
-            content_notebook,
-            source_summaries,
-            config,
-            on_change,
-            preview,
-            available_fields,
-            theme_ref_refreshers,
-            content_cleanup_callbacks,
-        );
-
-        // Store widget references for updating when config changes
-        *content_widgets_out.borrow_mut() = Some(ContentWidgets {
-            spacing_spin: spacing_spin.clone(),
-        });
-
-        page
-    }
-
-    /// Rebuild the content notebook tabs based on source summaries (organized by groups)
-    fn rebuild_content_notebook_tabs(
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        config: &Rc<RefCell<LcarsDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) {
-        combo_config_base::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            content_cleanup_callbacks,
-        );
-    }
     fn create_split_page(
         config: &Rc<RefCell<LcarsDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -1847,11 +1709,6 @@ impl LcarsConfigWidget {
 
     pub fn set_config(&self, new_config: LcarsDisplayConfig) {
         // Debug: Log the font values being loaded
-        log::debug!(
-            "LCARS set_config - top font: '{:?}', bottom font: '{:?}'",
-            new_config.frame.top_header.font,
-            new_config.frame.bottom_header.font
-        );
         // Debug: Log text_overlay for each content item
         for (slot_name, item) in &new_config.frame.content_items {
             log::debug!(
@@ -2038,6 +1895,13 @@ impl LcarsConfigWidget {
 
         // Update layout widgets
         if let Some(ref widgets) = *self.split_widgets.borrow() {
+            combo_config_base::rebuild_combined_group_settings(
+                &widgets.group_settings_box,
+                &self.config,
+                |c: &mut LcarsDisplayConfig| &mut c.frame,
+                &self.on_change,
+                &self.preview,
+            );
             let orient_idx = match new_config.frame.layout_orientation {
                 SplitOrientation::Vertical => 0,
                 SplitOrientation::Horizontal => 1,
@@ -2165,82 +2029,6 @@ impl LcarsConfigWidget {
         }
     }
 
-    /// Update the source summaries and rebuild the content notebook tabs
-    /// Call this when the combo source configuration changes
-    /// summaries: Vec of (slot_name, source_summary, group_num, item_idx)
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> =
-            std::collections::HashMap::new();
-        for (_, _, group_num, item_idx) in &summaries {
-            let current_max = group_item_counts.entry(*group_num).or_insert(0);
-            if *item_idx > *current_max {
-                *current_max = *item_idx;
-            }
-        }
-
-        // Convert to sorted vec
-        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
-        group_nums.sort();
-        let group_counts: Vec<u32> = group_nums
-            .iter()
-            .map(|n| *group_item_counts.get(n).unwrap_or(&0))
-            .collect();
-
-        // Update the frame config with group information
-        {
-            let mut cfg = self.config.borrow_mut();
-            let new_group_count = group_nums.len();
-            cfg.frame.group_count = new_group_count as u32;
-            cfg.frame.group_item_counts = group_counts;
-
-            // Ensure group_size_weights has the right length
-            while cfg.frame.group_size_weights.len() < new_group_count {
-                cfg.frame.group_size_weights.push(1.0);
-            }
-            // Trim if we have fewer groups now
-            cfg.frame.group_size_weights.truncate(new_group_count);
-        }
-
-        *self.source_summaries.borrow_mut() = summaries;
-        Self::rebuild_content_notebook_tabs(
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
-        // Rebuild combined group settings and update sync checkbox in Layout tab if available
-        if let Some(ref widgets) = *self.split_widgets.borrow() {
-            combo_config_base::rebuild_combined_group_settings(
-                &widgets.group_settings_box,
-                &self.config,
-                |c: &mut LcarsDisplayConfig| &mut c.frame,
-                &self.on_change,
-                &self.preview,
-            );
-            Self::update_sync_checkbox_sensitivity(&widgets.sync_segments_check, &self.config);
-        }
-
-        // Notify that config has changed so displayer gets updated
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    /// Update the available fields for content configuration.
-    /// NOTE: This only stores the fields - it does NOT rebuild tabs.
-    /// Call set_source_summaries() after this to trigger the rebuild.
-    /// This avoids double-rebuilding when both methods are called together.
-    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-        *self.available_fields.borrow_mut() = fields;
-        // Don't rebuild here - set_source_summaries() will be called next and will rebuild
-    }
-
     /// Extract transferable configuration (layout, content items, animation settings).
     /// This excludes theme-specific settings like colors, fonts, and frame styles.
     pub fn get_transferable_config(&self) -> crate::ui::combo_config_base::TransferableComboConfig {
@@ -2285,11 +2073,7 @@ impl LcarsConfigWidget {
     pub fn cleanup(&self) {
         log::debug!("LcarsConfigWidget::cleanup() - breaking reference cycles");
         // Clear common fields (on_change, theme_ref_refreshers, content_cleanup_callbacks)
-        combo_config_base::cleanup_common_fields_with_content(
-            &self.on_change,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
         // Clear widget-specific optional widget holders
         *self.frame_widgets.borrow_mut() = None;
         *self.headers_widgets.borrow_mut() = None;
@@ -2309,6 +2093,6 @@ impl Drop for LcarsConfigWidget {
 
 impl Default for LcarsConfigWidget {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new()
     }
 }

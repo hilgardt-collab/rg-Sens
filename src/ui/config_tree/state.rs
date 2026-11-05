@@ -21,8 +21,8 @@ use crate::ui::{
 };
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, SingleSelection,
-    SpinButton, Stack, TreeListRow, Widget, Window,
+    gio, glib, Box as GtkBox, Button, CheckButton, DropDown, Label, SingleSelection, SpinButton,
+    Stack, TreeListRow, Widget, Window,
 };
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -126,7 +126,6 @@ pub struct State {
     /// Detached themed-editor pages other than Theme and Content.
     pub(super) display_pages: RefCell<Vec<(String, Widget)>>,
     pub(super) theme_page: RefCell<Option<Widget>>,
-    pub(super) content_page: RefCell<Option<Widget>>,
     pub(super) background_editor: RefCell<Option<Rc<BackgroundConfigWidget>>>,
     pub(super) inline_theme_widget: RefCell<Option<Rc<GlobalThemeWidget>>>,
     pub(super) item_editors: RefCell<HashMap<String, Rc<ItemEditor>>>,
@@ -404,7 +403,6 @@ impl State {
         }
         self.display_pages.borrow_mut().clear();
         *self.theme_page.borrow_mut() = None;
-        *self.content_page.borrow_mut() = None;
         *self.background_editor.borrow_mut() = None;
         *self.inline_theme_widget.borrow_mut() = None;
         *self.geometry.borrow_mut() = None;
@@ -462,10 +460,6 @@ impl State {
             for (name, page) in combo.take_pages() {
                 match name.as_str() {
                     "Theme" => *self.theme_page.borrow_mut() = Some(page),
-                    "Content" => {
-                        strip_content_page(&page);
-                        *self.content_page.borrow_mut() = Some(page);
-                    }
                     _ => sections.push((name, page)),
                 }
             }
@@ -1150,40 +1144,6 @@ pub(super) fn default_displayer_config(id: &str) -> DisplayerConfig {
         .and_then(|v| DisplayerConfig::from_value_for_type(id, v.clone()))
         .or_else(|| DisplayerConfig::default_for_type(id))
         .unwrap_or_default()
-}
-
-/// Remove the per-slot notebook (and its explanatory labels) from a themed
-/// editor's Content page; the content-wide controls that remain are shown
-/// under the Content node, and items get their own nodes.
-fn strip_content_page(page: &Widget) {
-    let Some(container) = page.downcast_ref::<GtkBox>() else {
-        return;
-    };
-    let mut to_remove = Vec::new();
-    let mut child = container.first_child();
-    while let Some(c) = child {
-        child = c.next_sibling();
-        let holds_notebook = c.is::<Notebook>()
-            || c.downcast_ref::<gtk4::ScrolledWindow>()
-                .and_then(|sw| sw.child())
-                .map(|inner| inner.is::<Notebook>())
-                .unwrap_or(false);
-        if holds_notebook {
-            to_remove.push(c);
-        } else if let Some(label) = c.downcast_ref::<Label>() {
-            let text = label.text();
-            if text.starts_with("Per-Slot")
-                || text.starts_with("Per-slot")
-                || text.starts_with("Configure data sources")
-                || text.starts_with("Content items are configured")
-            {
-                to_remove.push(c.clone());
-            }
-        }
-    }
-    for c in to_remove {
-        container.remove(&c);
-    }
 }
 
 pub(super) fn flat_button(label: &str) -> Button {

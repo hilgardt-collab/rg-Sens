@@ -10,7 +10,6 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::displayers::ArtDecoDisplayConfig;
 use crate::ui::art_deco_display::{
     BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, GroupFrameStyle, HeaderStyle,
@@ -22,9 +21,7 @@ use crate::ui::lcars_display::SplitOrientation;
 use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::{ColorStopSource, ComboThemeConfig, LinearGradientSourceConfig};
 use crate::ui::theme_color_selector::ThemeColorSelector;
-use crate::ui::widget_builder::{
-    create_page_container, create_section_header, ConfigWidgetBuilder,
-};
+use crate::ui::widget_builder::{create_section_header, ConfigWidgetBuilder};
 use crate::ui::{GradientEditor, ThemeFontSelector};
 
 /// Art Deco color preset names
@@ -197,9 +194,6 @@ pub struct ArtDecoConfigWidget {
     config: Rc<RefCell<ArtDecoDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
-    content_notebook: Rc<RefCell<Notebook>>,
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
     theme_widgets: Rc<RefCell<Option<ThemeWidgets>>>,
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     background_widgets: Rc<RefCell<Option<BackgroundWidgets>>>,
@@ -207,18 +201,19 @@ pub struct ArtDecoConfigWidget {
     layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
     animation_widgets: Rc<RefCell<Option<AnimationWidgets>>>,
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
+}
+
+impl Default for ArtDecoConfigWidget {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ArtDecoConfigWidget {
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+    pub fn new() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(ArtDecoDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
-            Rc::new(RefCell::new(available_fields));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let background_widgets: Rc<RefCell<Option<BackgroundWidgets>>> =
@@ -227,8 +222,6 @@ impl ArtDecoConfigWidget {
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
@@ -245,7 +238,6 @@ impl ArtDecoConfigWidget {
                 cfg.frame.theme.clone()
             });
 
-        // Push main theme callback FIRST so it's preserved when rebuild_content_tabs clears
         theme_ref_refreshers
             .borrow_mut()
             .push(main_theme_refresh_cb);
@@ -253,9 +245,6 @@ impl ArtDecoConfigWidget {
         // Main tabbed notebook
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
-
-        // Content notebook (for dynamic tabs based on source data)
-        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
 
         // Create pages - Theme first
         let theme_page = Self::create_theme_page(
@@ -298,8 +287,6 @@ impl ArtDecoConfigWidget {
             &theme_ref_refreshers,
         );
 
-        let content_page = Self::create_content_page(&content_notebook);
-
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
 
         // Add pages to notebook (Theme first)
@@ -308,7 +295,6 @@ impl ArtDecoConfigWidget {
         notebook.append_page(&background_page, Some(&Label::new(Some("Background"))));
         notebook.append_page(&header_page, Some(&Label::new(Some("Header"))));
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
-        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
 
         // Assemble container
@@ -322,9 +308,6 @@ impl ArtDecoConfigWidget {
             config,
             on_change,
             preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
             theme_widgets,
             frame_widgets,
             background_widgets,
@@ -332,7 +315,6 @@ impl ArtDecoConfigWidget {
             layout_widgets,
             animation_widgets,
             theme_ref_refreshers,
-            content_cleanup_callbacks,
         }
     }
 
@@ -1321,22 +1303,6 @@ impl ArtDecoConfigWidget {
         page
     }
 
-    fn create_content_page(content_notebook: &Rc<RefCell<Notebook>>) -> GtkBox {
-        let page = create_page_container();
-
-        let info_label = Label::new(Some(
-            "Content configuration will appear here based on the connected data source.",
-        ));
-        info_label.set_halign(gtk4::Align::Start);
-        info_label.add_css_class("dim-label");
-        page.append(&info_label);
-
-        let notebook = content_notebook.borrow();
-        page.append(&*notebook);
-
-        page
-    }
-
     fn create_animation_page(
         config: &Rc<RefCell<ArtDecoDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -1502,89 +1468,8 @@ impl ArtDecoConfigWidget {
             widgets.speed_spin.set_value(config.animation_speed);
         }
 
-        // Rebuild content tabs
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-    }
-
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> =
-            std::collections::HashMap::new();
-        for (_, _, group_num, item_idx) in &summaries {
-            let current_max = group_item_counts.entry(*group_num).or_insert(0);
-            if *item_idx > *current_max {
-                *current_max = *item_idx;
-            }
-        }
-
-        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
-        group_nums.sort();
-        let group_counts: Vec<usize> = group_nums
-            .iter()
-            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
-            .collect();
-
-        // Update the frame config with group information
-        {
-            let mut cfg = self.config.borrow_mut();
-            let new_group_count = group_nums.len();
-            cfg.frame.group_count = new_group_count;
-            cfg.frame.group_item_counts = group_counts;
-
-            while cfg.frame.group_size_weights.len() < new_group_count {
-                cfg.frame.group_size_weights.push(1.0);
-            }
-            cfg.frame.group_size_weights.truncate(new_group_count);
-        }
-
-        *self.source_summaries.borrow_mut() = summaries;
-
-        // Rebuild combined group settings in Layout tab
-        if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            combo_config_base::rebuild_combined_group_settings(
-                &widgets.group_settings_box,
-                &self.config,
-                |c: &mut ArtDecoDisplayConfig| &mut c.frame,
-                &self.on_change,
-                &self.preview,
-            );
-        }
-
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
-        // Notify that config has changed so displayer gets updated
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    /// Update the available fields for content configuration.
-    /// NOTE: This only stores the fields - it does NOT rebuild tabs.
-    /// Call set_source_summaries() after this to trigger the rebuild.
-    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-        *self.available_fields.borrow_mut() = fields;
-        // Don't rebuild here - set_source_summaries() will be called next and will rebuild
     }
 
     /// Extract transferable configuration that can be applied to another combo panel type.
@@ -1633,41 +1518,10 @@ impl ArtDecoConfigWidget {
         }
     }
 
-    fn rebuild_content_tabs(
-        config: &Rc<RefCell<ArtDecoDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) {
-        combo_config_base::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            content_cleanup_callbacks,
-        );
-    }
-
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("ArtDecoConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields_with_content(
-            &self.on_change,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
         *self.theme_widgets.borrow_mut() = None;
         *self.frame_widgets.borrow_mut() = None;
         *self.background_widgets.borrow_mut() = None;

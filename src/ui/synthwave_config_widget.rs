@@ -10,7 +10,6 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::displayers::SynthwaveDisplayConfig;
 use crate::ui::combo_config_base;
 use crate::ui::lcars_display::SplitOrientation;
@@ -82,9 +81,6 @@ pub struct SynthwaveConfigWidget {
     config: Rc<RefCell<SynthwaveDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
-    content_notebook: Rc<RefCell<Notebook>>,
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
     theme_widgets: Rc<RefCell<Option<ThemeWidgets>>>,
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     grid_widgets: Rc<RefCell<Option<GridWidgets>>>,
@@ -94,18 +90,13 @@ pub struct SynthwaveConfigWidget {
     /// Callbacks to refresh theme reference sections when theme changes
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
 }
 
 impl SynthwaveConfigWidget {
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+    pub fn new() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(SynthwaveDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
-            Rc::new(RefCell::new(available_fields));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let grid_widgets: Rc<RefCell<Option<GridWidgets>>> = Rc::new(RefCell::new(None));
@@ -113,8 +104,6 @@ impl SynthwaveConfigWidget {
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
@@ -164,25 +153,6 @@ impl SynthwaveConfigWidget {
         let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 6: Content
-        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = combo_config_base::create_content_page(
-            &config,
-            &on_change,
-            &preview,
-            &content_notebook,
-            &source_summaries,
-            &available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            &theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            &content_cleanup_callbacks,
-        );
-        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
-
         // Tab 7: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
@@ -197,9 +167,6 @@ impl SynthwaveConfigWidget {
             config,
             on_change,
             preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
             theme_widgets,
             frame_widgets,
             grid_widgets,
@@ -207,7 +174,6 @@ impl SynthwaveConfigWidget {
             layout_widgets,
             animation_widgets,
             theme_ref_refreshers,
-            content_cleanup_callbacks,
         }
     }
 
@@ -940,6 +906,13 @@ impl SynthwaveConfigWidget {
             widgets.item_spacing_spin.set_value(item_spacing);
             widgets.divider_style_dropdown.set_selected(div_style_idx);
             widgets.divider_padding_spin.set_value(divider_padding);
+            combo_config_base::rebuild_combined_group_settings(
+                &widgets.group_settings_box,
+                &self.config,
+                |c: &mut SynthwaveDisplayConfig| &mut c.frame,
+                &self.on_change,
+                &self.preview,
+            );
         }
 
         if let Some(ref widgets) = *self.animation_widgets.borrow() {
@@ -989,80 +962,6 @@ impl SynthwaveConfigWidget {
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
         }
-    }
-
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> =
-            std::collections::HashMap::new();
-        for (_, _, group_num, item_idx) in &summaries {
-            let current_max = group_item_counts.entry(*group_num).or_insert(0);
-            if *item_idx > *current_max {
-                *current_max = *item_idx;
-            }
-        }
-
-        // Convert to sorted vec (same approach as LCARS)
-        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
-        group_nums.sort();
-        let group_counts: Vec<usize> = group_nums
-            .iter()
-            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
-            .collect();
-
-        // Update config with group info
-        {
-            let mut cfg = self.config.borrow_mut();
-            let new_group_count = group_nums.len().max(1);
-            cfg.frame.group_count = new_group_count;
-            cfg.frame.group_item_counts = group_counts;
-
-            // Ensure weights are set
-            while cfg.frame.group_size_weights.len() < new_group_count {
-                cfg.frame.group_size_weights.push(1.0);
-            }
-            // Trim if we have fewer groups now
-            cfg.frame.group_size_weights.truncate(new_group_count);
-        }
-
-        *self.source_summaries.borrow_mut() = summaries;
-
-        // Rebuild combined group settings in Layout tab
-        if let Some(ref widgets) = *self.layout_widgets.borrow() {
-            combo_config_base::rebuild_combined_group_settings(
-                &widgets.group_settings_box,
-                &self.config,
-                |c: &mut SynthwaveDisplayConfig| &mut c.frame,
-                &self.on_change,
-                &self.preview,
-            );
-        }
-
-        // Rebuild content tabs
-        combo_config_base::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            &self.theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            &self.content_cleanup_callbacks,
-        );
-
-        // Notify that config changed
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-        *self.available_fields.borrow_mut() = fields;
     }
 
     /// Extract transferable configuration that can be applied to another combo panel type.
@@ -1115,11 +1014,7 @@ impl SynthwaveConfigWidget {
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("SynthwaveConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields_with_content(
-            &self.on_change,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
         *self.theme_widgets.borrow_mut() = None;
         *self.frame_widgets.borrow_mut() = None;
         *self.grid_widgets.borrow_mut() = None;
@@ -1131,6 +1026,6 @@ impl SynthwaveConfigWidget {
 
 impl Default for SynthwaveConfigWidget {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new()
     }
 }

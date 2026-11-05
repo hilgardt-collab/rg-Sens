@@ -10,7 +10,6 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::displayers::MaterialDisplayConfig;
 use crate::ui::color_button_widget::ColorButtonWidget;
 use crate::ui::combo_config_base;
@@ -90,9 +89,6 @@ pub struct MaterialConfigWidget {
     config: Rc<RefCell<MaterialDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
-    content_notebook: Rc<RefCell<Notebook>>,
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
     card_widgets: Rc<RefCell<Option<CardWidgets>>>,
     header_widgets: Rc<RefCell<Option<HeaderWidgets>>>,
     layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
@@ -102,26 +98,19 @@ pub struct MaterialConfigWidget {
     /// Callbacks to refresh theme reference sections
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
 }
 
 impl MaterialConfigWidget {
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+    pub fn new() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(MaterialDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
-            Rc::new(RefCell::new(available_fields));
         let card_widgets: Rc<RefCell<Option<CardWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview at the top
@@ -179,20 +168,6 @@ impl MaterialConfigWidget {
         );
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 5: Content - with dynamic per-slot notebook
-        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(
-            &config,
-            &on_change,
-            &preview,
-            &content_notebook,
-            &source_summaries,
-            &available_fields,
-            &theme_ref_refreshers,
-            &content_cleanup_callbacks,
-        );
-        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
-
         // Tab 6: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
@@ -207,16 +182,12 @@ impl MaterialConfigWidget {
             config,
             on_change,
             preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
             card_widgets,
             header_widgets,
             layout_widgets,
             animation_widgets,
             theme_widgets,
             theme_ref_refreshers,
-            content_cleanup_callbacks,
         }
     }
 
@@ -1106,75 +1077,6 @@ impl MaterialConfigWidget {
         page
     }
 
-    fn create_content_page(
-        config: &Rc<RefCell<MaterialDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
-
-        let info_label = Label::new(Some("Configure content items for each slot.\nSlots are named: group1_1, group1_2, group2_1, etc."));
-        info_label.set_halign(gtk4::Align::Start);
-        info_label.add_css_class("dim-label");
-        page.append(&info_label);
-
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_vexpand(true);
-        scrolled.set_hexpand(true);
-        scrolled.set_min_content_height(300);
-
-        let notebook = content_notebook.borrow();
-        scrolled.set_child(Some(&*notebook));
-        page.append(&scrolled);
-
-        drop(notebook);
-        Self::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            theme_ref_refreshers,
-            content_cleanup_callbacks,
-        );
-
-        page
-    }
-
-    fn rebuild_content_tabs(
-        config: &Rc<RefCell<MaterialDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) {
-        combo_config_base::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            content_cleanup_callbacks,
-        );
-    }
-
     /// Default bar config with Material Design colors
     #[allow(dead_code, clippy::field_reassign_with_default)]
     fn default_bar_config_material() -> crate::ui::BarDisplayConfig {
@@ -1509,88 +1411,11 @@ impl MaterialConfigWidget {
             widgets.speed_spin.set_value(config.animation_speed);
         }
 
-        // Rebuild content tabs
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
 
         // Update Theme Reference section with new theme colors
         combo_config_base::refresh_theme_refs(&self.theme_ref_refreshers);
-    }
-
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        // Extract group configuration from summaries
-        let mut group_item_counts: std::collections::HashMap<usize, u32> =
-            std::collections::HashMap::new();
-        for (_, _, group_num, item_idx) in &summaries {
-            let current_max = group_item_counts.entry(*group_num).or_insert(0);
-            if *item_idx > *current_max {
-                *current_max = *item_idx;
-            }
-        }
-
-        let mut group_nums: Vec<usize> = group_item_counts.keys().cloned().collect();
-        group_nums.sort();
-        let group_counts: Vec<usize> = group_nums
-            .iter()
-            .map(|n| *group_item_counts.get(n).unwrap_or(&0) as usize)
-            .collect();
-
-        // Update the frame config with group information
-        {
-            let mut cfg = self.config.borrow_mut();
-            let new_group_count = group_nums.len();
-            cfg.frame.group_count = new_group_count;
-            cfg.frame.group_item_counts = group_counts;
-
-            while cfg.frame.group_size_weights.len() < new_group_count {
-                cfg.frame.group_size_weights.push(1.0);
-            }
-            cfg.frame.group_size_weights.truncate(new_group_count);
-        }
-
-        *self.source_summaries.borrow_mut() = summaries;
-
-        // Rebuild combined group settings in Layout tab
-        if let Some(widgets) = self.layout_widgets.borrow().as_ref() {
-            combo_config_base::rebuild_combined_group_settings(
-                &widgets.group_settings_box,
-                &self.config,
-                |c: &mut MaterialDisplayConfig| &mut c.frame,
-                &self.on_change,
-                &self.preview,
-            );
-        }
-
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
-        // Notify that config has changed so displayer gets updated
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-        *self.available_fields.borrow_mut() = fields;
     }
 
     /// Extract transferable configuration (layout, content items, animation settings).
@@ -1642,11 +1467,7 @@ impl MaterialConfigWidget {
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("MaterialConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields_with_content(
-            &self.on_change,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
         *self.card_widgets.borrow_mut() = None;
         *self.header_widgets.borrow_mut() = None;
         *self.layout_widgets.borrow_mut() = None;
@@ -1657,6 +1478,6 @@ impl MaterialConfigWidget {
 
 impl Default for MaterialConfigWidget {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new()
     }
 }

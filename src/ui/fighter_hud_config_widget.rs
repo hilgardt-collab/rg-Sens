@@ -10,7 +10,6 @@ use gtk4::{
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::core::FieldMetadata;
 use crate::displayers::FighterHudDisplayConfig;
 use crate::ui::background::Color;
 use crate::ui::color_button_widget::ColorButtonWidget;
@@ -87,9 +86,6 @@ pub struct FighterHudConfigWidget {
     config: Rc<RefCell<FighterHudDisplayConfig>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     preview: DrawingArea,
-    content_notebook: Rc<RefCell<Notebook>>,
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    available_fields: Rc<RefCell<Vec<FieldMetadata>>>,
     frame_widgets: Rc<RefCell<Option<FrameWidgets>>>,
     header_widgets: Rc<RefCell<Option<HeaderWidgets>>>,
     layout_widgets: Rc<RefCell<Option<LayoutWidgets>>>,
@@ -100,26 +96,19 @@ pub struct FighterHudConfigWidget {
     /// Callbacks to refresh theme reference sections
     #[allow(dead_code)] // Kept for Rc ownership; callbacks are invoked via clones
     theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
 }
 
 impl FighterHudConfigWidget {
-    pub fn new(available_fields: Vec<FieldMetadata>) -> Self {
+    pub fn new() -> Self {
         let container = GtkBox::new(Orientation::Vertical, 12);
         let config = Rc::new(RefCell::new(FighterHudDisplayConfig::default()));
         let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let available_fields: Rc<RefCell<Vec<FieldMetadata>>> =
-            Rc::new(RefCell::new(available_fields));
         let frame_widgets: Rc<RefCell<Option<FrameWidgets>>> = Rc::new(RefCell::new(None));
         let header_widgets: Rc<RefCell<Option<HeaderWidgets>>> = Rc::new(RefCell::new(None));
         let layout_widgets: Rc<RefCell<Option<LayoutWidgets>>> = Rc::new(RefCell::new(None));
         let animation_widgets: Rc<RefCell<Option<AnimationWidgets>>> = Rc::new(RefCell::new(None));
         let theme_widgets: Rc<RefCell<Option<ThemeWidgets>>> = Rc::new(RefCell::new(None));
         let theme_ref_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let content_cleanup_callbacks: Rc<RefCell<Vec<combo_config_base::CleanupCallback>>> =
             Rc::new(RefCell::new(Vec::new()));
 
         // Preview (hidden - kept for API compatibility)
@@ -173,20 +162,6 @@ impl FighterHudConfigWidget {
         let layout_page = Self::create_layout_page(&config, &on_change, &preview, &layout_widgets);
         notebook.append_page(&layout_page, Some(&Label::new(Some("Layout"))));
 
-        // Tab 6: Content
-        let content_notebook = Rc::new(RefCell::new(Notebook::new()));
-        let content_page = Self::create_content_page(
-            &config,
-            &on_change,
-            &preview,
-            &content_notebook,
-            &source_summaries,
-            &available_fields,
-            &theme_ref_refreshers,
-            &content_cleanup_callbacks,
-        );
-        notebook.append_page(&content_page, Some(&Label::new(Some("Content"))));
-
         // Tab 7: Animation
         let animation_page = Self::create_animation_page(&config, &on_change, &animation_widgets);
         notebook.append_page(&animation_page, Some(&Label::new(Some("Animation"))));
@@ -200,16 +175,12 @@ impl FighterHudConfigWidget {
             config,
             on_change,
             preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
             frame_widgets,
             header_widgets,
             layout_widgets,
             animation_widgets,
             theme_widgets,
             theme_ref_refreshers,
-            content_cleanup_callbacks,
         }
     }
 
@@ -1092,51 +1063,6 @@ impl FighterHudConfigWidget {
 
         page
     }
-    fn create_content_page(
-        config: &Rc<RefCell<FighterHudDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) -> GtkBox {
-        let page = GtkBox::new(Orientation::Vertical, 8);
-        combo_config_base::set_page_margins(&page);
-
-        let info_label = Label::new(Some("Content items are configured per source slot.\nSelect a slot tab to configure its display type."));
-        info_label.set_halign(gtk4::Align::Start);
-        info_label.add_css_class("dim-label");
-        page.append(&info_label);
-
-        // Create scrolled window for content tabs
-        let scroll = ScrolledWindow::new();
-        scroll.set_vexpand(true);
-        scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
-
-        {
-            let notebook = content_notebook.borrow();
-            scroll.set_child(Some(&*notebook));
-        }
-
-        page.append(&scroll);
-
-        // Build initial content tabs
-        Self::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            theme_ref_refreshers,
-            content_cleanup_callbacks,
-        );
-
-        page
-    }
-
     fn create_animation_page(
         config: &Rc<RefCell<FighterHudDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
@@ -1173,33 +1099,6 @@ impl FighterHudConfigWidget {
         });
 
         page
-    }
-
-    fn rebuild_content_tabs(
-        config: &Rc<RefCell<FighterHudDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        preview: &DrawingArea,
-        content_notebook: &Rc<RefCell<Notebook>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        available_fields: &Rc<RefCell<Vec<FieldMetadata>>>,
-        theme_ref_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        content_cleanup_callbacks: &Rc<RefCell<Vec<combo_config_base::CleanupCallback>>>,
-    ) {
-        combo_config_base::rebuild_content_tabs(
-            config,
-            on_change,
-            preview,
-            content_notebook,
-            source_summaries,
-            available_fields,
-            |cfg| &cfg.frame.content_items,
-            |cfg, slot_name, item| {
-                cfg.frame.content_items.insert(slot_name.to_string(), item);
-            },
-            theme_ref_refreshers,
-            |cfg| cfg.frame.theme.clone(),
-            content_cleanup_callbacks,
-        );
     }
 
     // Public API
@@ -1335,6 +1234,13 @@ impl FighterHudConfigWidget {
             widgets.divider_style_dropdown.set_selected(div_style_idx);
             widgets.divider_padding_spin.set_value(divider_padding);
             widgets.tick_spacing_spin.set_value(tick_spacing);
+            combo_config_base::rebuild_combined_group_settings(
+                &widgets.group_settings_box,
+                &self.config,
+                |c: &mut FighterHudDisplayConfig| &mut c.frame,
+                &self.on_change,
+                &self.preview,
+            );
         }
 
         if let Some(ref widgets) = *self.animation_widgets.borrow() {
@@ -1346,18 +1252,6 @@ impl FighterHudConfigWidget {
         // Update Theme widgets (fonts and colors)
         let theme = self.config.borrow().frame.theme.clone();
         self.refresh_theme_tab(&theme);
-
-        // Rebuild content tabs to update theme reference sections
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
 
         // Restore the on_change callback now that widget updates are complete
         *self.on_change.borrow_mut() = saved_callback;
@@ -1405,73 +1299,6 @@ impl FighterHudConfigWidget {
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();
         }
-    }
-
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        // Extract group configuration from summaries (lesson #1)
-        let mut group_item_counts: std::collections::HashMap<usize, u32> =
-            std::collections::HashMap::new();
-        for (_, _, group_num, item_idx) in &summaries {
-            let current_max = group_item_counts.entry(*group_num).or_insert(0);
-            if *item_idx > *current_max {
-                *current_max = *item_idx;
-            }
-        }
-
-        // Update config with group info
-        {
-            let mut cfg = self.config.borrow_mut();
-            let group_count = group_item_counts.len().max(1);
-            cfg.frame.group_count = group_count;
-
-            // Convert to Vec
-            let mut counts_vec: Vec<usize> = vec![0; group_count];
-            for (group_idx, max_item) in group_item_counts {
-                if group_idx > 0 && group_idx <= group_count {
-                    counts_vec[group_idx - 1] = max_item as usize;
-                }
-            }
-            cfg.frame.group_item_counts = counts_vec;
-
-            // Ensure weights are set
-            while cfg.frame.group_size_weights.len() < group_count {
-                cfg.frame.group_size_weights.push(1.0);
-            }
-        }
-
-        *self.source_summaries.borrow_mut() = summaries;
-
-        // Rebuild combined group settings in Layout tab
-        if let Some(ref widgets) = *self.layout_widgets.borrow() {
-            combo_config_base::rebuild_combined_group_settings(
-                &widgets.group_settings_box,
-                &self.config,
-                |c: &mut FighterHudDisplayConfig| &mut c.frame,
-                &self.on_change,
-                &self.preview,
-            );
-        }
-
-        // Rebuild content tabs
-        Self::rebuild_content_tabs(
-            &self.config,
-            &self.on_change,
-            &self.preview,
-            &self.content_notebook,
-            &self.source_summaries,
-            &self.available_fields,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
-
-        // Notify that config changed (lesson #12)
-        if let Some(cb) = self.on_change.borrow().as_ref() {
-            cb();
-        }
-    }
-
-    pub fn set_available_fields(&self, fields: Vec<FieldMetadata>) {
-        *self.available_fields.borrow_mut() = fields;
     }
 
     /// Extract transferable configuration that can be applied to another combo panel type.
@@ -1523,11 +1350,7 @@ impl FighterHudConfigWidget {
     /// Cleanup method to break reference cycles and allow garbage collection.
     pub fn cleanup(&self) {
         log::debug!("FighterHudConfigWidget::cleanup() - breaking reference cycles");
-        combo_config_base::cleanup_common_fields_with_content(
-            &self.on_change,
-            &self.theme_ref_refreshers,
-            &self.content_cleanup_callbacks,
-        );
+        combo_config_base::cleanup_common_fields(&self.on_change, &self.theme_ref_refreshers);
         *self.frame_widgets.borrow_mut() = None;
         *self.header_widgets.borrow_mut() = None;
         *self.layout_widgets.borrow_mut() = None;
@@ -1538,6 +1361,6 @@ impl FighterHudConfigWidget {
 
 impl Default for FighterHudConfigWidget {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new()
     }
 }

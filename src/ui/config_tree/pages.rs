@@ -525,10 +525,6 @@ impl State {
             "Each group is a child node; each item is a node under its group with \
              its own source and display settings.",
         ));
-        if let Some(content) = self.content_page.borrow().as_ref() {
-            page.append(&heading("Content settings"));
-            page.append(content);
-        }
         page
     }
 
