@@ -29,6 +29,7 @@ use crate::source_configs::static_text::StaticTextSourceConfig;
 use crate::source_configs::system_temp::SystemTempConfig;
 use crate::source_configs::test::TestSourceConfig;
 use crate::text::TextDisplayerConfig;
+use crate::theme::{ComboThemeConfig, ThemeRef};
 
 /// Position and size of a panel in the grid
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
@@ -388,6 +389,47 @@ impl DisplayerConfig {
         }
     }
 
+    /// The theme embedded in a combo displayer's frame, if this is one of the
+    /// ten themed combo displayers. `None` for standalone displayers, which
+    /// take their theme from the `global_theme` config key instead.
+    pub fn theme(&self) -> Option<&ComboThemeConfig> {
+        match self {
+            DisplayerConfig::Lcars(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::Cyberpunk(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::Material(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::Industrial(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::RetroTerminal(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::FighterHud(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::Synthwave(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::ArtDeco(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::ArtNouveau(cfg) => Some(&cfg.frame.theme),
+            DisplayerConfig::Steampunk(cfg) => Some(&cfg.frame.theme),
+            _ => None,
+        }
+    }
+
+    /// Mutable access to the combo frame theme; see [`Self::theme`].
+    pub fn theme_mut(&mut self) -> Option<&mut ComboThemeConfig> {
+        match self {
+            DisplayerConfig::Lcars(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::Cyberpunk(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::Material(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::Industrial(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::RetroTerminal(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::FighterHud(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::Synthwave(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::ArtDeco(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::ArtNouveau(cfg) => Some(&mut cfg.frame.theme),
+            DisplayerConfig::Steampunk(cfg) => Some(&mut cfg.frame.theme),
+            _ => None,
+        }
+    }
+
+    /// Whether this displayer carries its own frame theme (a combo displayer).
+    pub fn has_frame_theme(&self) -> bool {
+        self.theme().is_some()
+    }
+
     /// Convert to HashMap<String, Value> for legacy interface compatibility
     pub fn to_hashmap(&self) -> HashMap<String, serde_json::Value> {
         let mut map = HashMap::new();
@@ -740,6 +782,16 @@ pub struct PanelData {
 
     /// Visual appearance (background, border, corners)
     pub appearance: PanelAppearance,
+
+    /// Which theme this panel's `Theme{index}` colour/font references resolve
+    /// against. Absent in configs written before the theme library existed;
+    /// the loader migrates combo panels to `Inline` so they keep their look.
+    #[serde(default)]
+    pub theme: ThemeRef,
+
+    /// The panel group this panel belongs to, if any (`PanelGroup::id`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
 }
 
 impl PanelData {
@@ -751,6 +803,8 @@ impl PanelData {
             source_config: SourceConfig::default(),
             displayer_config: DisplayerConfig::default(),
             appearance: PanelAppearance::default(),
+            theme: ThemeRef::default(),
+            group_id: None,
         }
     }
 
@@ -767,6 +821,8 @@ impl PanelData {
             source_config: SourceConfig::default_for_type(source_type).unwrap_or_default(),
             displayer_config: DisplayerConfig::default_for_type(displayer_type).unwrap_or_default(),
             appearance: PanelAppearance::default(),
+            theme: ThemeRef::default(),
+            group_id: None,
         }
     }
 

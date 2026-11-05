@@ -33,5 +33,5 @@ pub use text::{
 pub use theme::{
     deserialize_color_or_source, deserialize_color_stop_or_source, deserialize_color_stops_vec,
     deserialize_font_or_source, ColorSource, ColorStopSource, ComboThemeConfig, FontOrString,
-    FontSource, GradientSource, LinearGradientSourceConfig,
+    FontSource, GradientSource, LinearGradientSourceConfig, PanelGroup, ThemeLibrary, ThemeRef,
 };

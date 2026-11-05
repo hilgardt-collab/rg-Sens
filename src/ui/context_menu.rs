@@ -91,6 +91,10 @@ pub fn show_context_menu<F>(
     let options_btn = create_menu_button("Options");
     menu_box.append(&options_btn);
 
+    // Themes & Groups button
+    let themes_btn = create_menu_button("Themes & Groups...");
+    menu_box.append(&themes_btn);
+
     // Quit button
     let quit_btn = create_menu_button("Quit");
     menu_box.append(&quit_btn);
@@ -518,6 +522,26 @@ pub fn show_context_menu<F>(
         crate::ui::show_test_source_dialog_with_callback(&window_for_test, Some(save_callback));
     });
 
+    // Themes & Groups button handler
+    {
+        let window = window.clone();
+        let app_config = app_config.clone();
+        let window_background = window_background.clone();
+        let grid_layout = grid_layout.clone();
+        let config_dirty = config_dirty.clone();
+        let popover = popover_ref.clone();
+        themes_btn.connect_clicked(move |_| {
+            popover.popdown();
+            crate::ui::themes_groups_dialog::show_themes_groups_dialog(
+                window.upcast_ref(),
+                &app_config,
+                &grid_layout,
+                &config_dirty,
+                &window_background,
+            );
+        });
+    }
+
     // Options button handler
     let window_for_options = window.clone();
     let app_config_for_options = app_config.clone();
@@ -637,6 +661,10 @@ where
     // Options button
     let options_btn = create_menu_button("Options");
     menu_box.append(&options_btn);
+
+    // Themes & Groups button
+    let themes_btn = create_menu_button("Themes & Groups...");
+    menu_box.append(&themes_btn);
 
     menu_box.append(&Separator::new(Orientation::Horizontal));
 
@@ -922,6 +950,26 @@ where
         config_dirty_for_borderless.store(true, Ordering::Relaxed);
         info!("Toggled borderless: {}", new_borderless);
     });
+
+    // Themes & Groups button handler
+    {
+        let window = window.clone();
+        let app_config = app_config.clone();
+        let window_background = window_background.clone();
+        let grid_layout = grid_layout.clone();
+        let config_dirty = config_dirty.clone();
+        let popover = popover_ref.clone();
+        themes_btn.connect_clicked(move |_| {
+            popover.popdown();
+            crate::ui::themes_groups_dialog::show_themes_groups_dialog(
+                window.upcast_ref(),
+                &app_config,
+                &grid_layout,
+                &config_dirty,
+                &window_background,
+            );
+        });
+    }
 
     // Options button handler
     let window_for_options = window.clone();

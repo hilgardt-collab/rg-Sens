@@ -4,6 +4,7 @@ use super::constants::TRANSFORM_THRESHOLD;
 use super::panel_data::{DisplayerConfig, PanelAppearance, PanelData, SourceConfig};
 use super::shared_source_manager::{global_shared_source_manager, SharedSourceManager};
 use super::{global_registry, BoxedDataSource, BoxedDisplayer, Registry};
+use crate::ui::theme::{ComboThemeConfig, ThemeRef};
 use crate::ui::BackgroundConfig;
 use anyhow::Result;
 use std::borrow::Cow;
@@ -95,6 +96,20 @@ pub struct Panel {
     /// Whether the last direct-poll fallback update failed. Used to log the
     /// error only on state transitions instead of every tick.
     direct_poll_errored: bool,
+}
+
+/// Keep an `Inline` theme reference in step with the combo frame it mirrors.
+///
+/// Invariant: for a combo panel, `frame.theme` is the resolved theme (a
+/// cache written by [`Panel::apply_resolved_theme`]) and the `Inline` payload
+/// is the truth. The Phase-0 properties dialog still edits `frame.theme`
+/// directly, so when the reference is `Inline` the frame wins on save;
+/// otherwise an edit in the dialog's Theme tab would be lost on reload.
+pub(crate) fn sync_inline_theme(theme: ThemeRef, displayer_config: &DisplayerConfig) -> ThemeRef {
+    match (&theme, displayer_config.theme()) {
+        (ThemeRef::Inline { .. }, Some(frame_theme)) => ThemeRef::inline(frame_theme.clone()),
+        _ => theme,
+    }
 }
 
 impl Panel {
@@ -495,6 +510,8 @@ impl Panel {
             .get_typed_config()
             .unwrap_or_else(|| self.extract_displayer_config(displayer_type));
 
+        let theme = sync_inline_theme(self.theme_ref(), &displayer_config);
+
         PanelData {
             id: self.id.clone(),
             geometry: self.geometry,
@@ -510,6 +527,74 @@ impl Panel {
                 z_index: self.z_index,
                 ignore_collision: self.ignore_collision,
             },
+            theme,
+            group_id: self.group_id().map(|s| s.to_string()),
+        }
+    }
+
+    /// This panel's theme reference (`Inherit` for legacy panels without data).
+    pub fn theme_ref(&self) -> ThemeRef {
+        self.data
+            .as_ref()
+            .map(|d| d.theme.clone())
+            .unwrap_or_default()
+    }
+
+    /// Set the theme reference. Does not push a resolved theme; call
+    /// [`Panel::apply_resolved_theme`] with the resolved value afterwards.
+    pub fn set_theme_ref(&mut self, theme: ThemeRef) {
+        if let Some(data) = self.data.as_mut() {
+            data.theme = theme;
+        }
+    }
+
+    /// The panel group this panel belongs to, if any.
+    pub fn group_id(&self) -> Option<&str> {
+        self.data.as_ref().and_then(|d| d.group_id.as_deref())
+    }
+
+    /// Set (or clear) group membership.
+    pub fn set_group_id(&mut self, group_id: Option<String>) {
+        if let Some(data) = self.data.as_mut() {
+            data.group_id = group_id;
+        }
+    }
+
+    /// Push a resolved theme into the displayer.
+    ///
+    /// Standalone displayers read it from the `global_theme` config key (the
+    /// key name is load-bearing: `displayers::apply_global_theme` and the
+    /// per-displayer readers match on it). Combo displayers carry the theme
+    /// inside their frame config, which is treated as a resolved cache: it is
+    /// overwritten here and re-applied as a whole typed config.
+    pub fn apply_resolved_theme(&mut self, theme: &ComboThemeConfig) -> Result<()> {
+        match self.displayer.get_typed_config() {
+            Some(mut typed) if typed.has_frame_theme() => {
+                if let Some(frame_theme) = typed.theme_mut() {
+                    if *frame_theme == *theme {
+                        return Ok(());
+                    }
+                    *frame_theme = theme.clone();
+                }
+                self.displayer.apply_config_typed(&typed)?;
+                // The legacy map and the stored data are still read by the
+                // (Phase 0) properties dialog; keep them in step.
+                for (key, value) in typed.to_hashmap() {
+                    self.config.insert(key, value);
+                }
+                if let Some(data) = self.data.as_mut() {
+                    data.displayer_config = typed;
+                }
+                Ok(())
+            }
+            _ => {
+                let mut theme_config = HashMap::new();
+                theme_config.insert(
+                    "global_theme".to_string(),
+                    serde_json::to_value(theme).unwrap_or_default(),
+                );
+                self.displayer.apply_config(&theme_config)
+            }
         }
     }
 
@@ -696,5 +781,46 @@ impl Drop for Panel {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod inline_theme_sync_tests {
+    use super::*;
+    use rg_sens_types::display_configs::themed_configs::LcarsDisplayConfig;
+    use rg_sens_types::display_configs::BarDisplayConfig;
+    use rg_sens_types::Color;
+
+    fn theme(r: f64) -> ComboThemeConfig {
+        ComboThemeConfig {
+            color1: Color::new(r, 0.0, 0.0, 1.0),
+            ..ComboThemeConfig::default()
+        }
+    }
+
+    #[test]
+    fn inline_follows_frame_theme_on_combo() {
+        let mut cfg = LcarsDisplayConfig::default();
+        cfg.frame.theme = theme(0.8);
+        let combo = DisplayerConfig::Lcars(cfg);
+        // The dialog edited frame.theme; the Inline payload must follow.
+        assert_eq!(
+            sync_inline_theme(ThemeRef::inline(theme(0.1)), &combo),
+            ThemeRef::inline(theme(0.8))
+        );
+        // Named/Global/Inherit are untouched even on a combo.
+        assert_eq!(
+            sync_inline_theme(ThemeRef::named("X"), &combo),
+            ThemeRef::named("X")
+        );
+    }
+
+    #[test]
+    fn inline_on_standalone_is_kept() {
+        let bar = DisplayerConfig::Bar(BarDisplayConfig::default());
+        assert_eq!(
+            sync_inline_theme(ThemeRef::inline(theme(0.1)), &bar),
+            ThemeRef::inline(theme(0.1))
+        );
     }
 }

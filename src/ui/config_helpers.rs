@@ -138,6 +138,21 @@ pub fn find_monitor_by_connector(connector: &str) -> Option<u32> {
     None
 }
 
+/// Push each panel's resolved theme (panel → group → global) into its
+/// displayer. Call after anything that changes the global theme, the theme
+/// library, a group, or a panel's theme/group.
+pub fn apply_resolved_themes(app_config: &AppConfig, panels: &[Arc<RwLock<Panel>>]) {
+    for panel in panels {
+        // User-initiated or startup: blocking_write so a contended panel
+        // can't silently keep a stale theme.
+        let mut guard = panel.blocking_write();
+        let theme = app_config.resolve_theme_for(&guard.theme_ref(), guard.group_id());
+        if let Err(e) = guard.apply_resolved_theme(&theme) {
+            warn!("Failed to apply theme to panel {}: {}", guard.id, e);
+        }
+    }
+}
+
 /// Save current configuration to disk
 ///
 /// Updates the config in place and saves it, avoiding an extra clone.

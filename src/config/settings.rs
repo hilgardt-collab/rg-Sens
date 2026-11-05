@@ -3,7 +3,7 @@
 use anyhow::Result;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use crate::audio::AlarmSoundConfig;
@@ -13,6 +13,7 @@ use crate::core::{
 };
 use crate::ui::background::BackgroundConfig;
 use crate::ui::theme::ComboThemeConfig;
+use rg_sens_types::theme::{PanelGroup, ThemeLibrary, ThemeRef};
 
 /// Current config format version
 pub const CONFIG_VERSION: u32 = 2;
@@ -47,6 +48,13 @@ pub struct AppConfig {
     /// Global theme for non-combo panels (colors, fonts, gradient)
     #[serde(default)]
     pub global_theme: ComboThemeConfig,
+    /// User theme library, keyed by name. Built-in presets are not stored
+    /// here; see `ComboThemeConfig::builtin_presets`.
+    #[serde(default)]
+    pub themes: BTreeMap<String, ComboThemeConfig>,
+    /// Panel groups (sets of standalone panels sharing a theme).
+    #[serde(default)]
+    pub groups: Vec<PanelGroup>,
 }
 
 fn default_version() -> u32 {
@@ -72,19 +80,36 @@ impl AppConfig {
         let version = raw.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
         let mut config = if version >= 2 {
+            // Panels written before the theme library existed have no "theme"
+            // key. Detect that by key ABSENCE (not by value): a new combo panel
+            // legitimately saved as `Inherit` must not be migrated on reload.
+            let panels_missing_theme: Vec<bool> = raw
+                .get("panels")
+                .and_then(|p| p.as_array())
+                .map(|arr| arr.iter().map(|p| p.get("theme").is_none()).collect())
+                .unwrap_or_default();
+
             // V2 format - use AppConfigLoad which has the correct "panels" field
             // Use from_value to avoid parsing the JSON string twice
             let loaded: AppConfigLoad = serde_json::from_value(raw)?;
+            let mut panels = loaded.panels;
+            for (panel, missing) in panels.iter_mut().zip(panels_missing_theme) {
+                if missing {
+                    migrate_inline_theme(panel);
+                }
+            }
             AppConfig {
                 version: loaded.version,
                 window: loaded.window,
                 grid: loaded.grid,
-                panels_v2: loaded.panels,
+                panels_v2: panels,
                 panels_v1: Vec::new(),
                 timers: loaded.timers,
                 alarms: loaded.alarms,
                 global_timer_sound: loaded.global_timer_sound,
                 global_theme: loaded.global_theme,
+                themes: loaded.themes,
+                groups: loaded.groups,
             }
         } else {
             // V1 format - load and migrate
@@ -174,6 +199,8 @@ impl AppConfig {
             alarms: self.alarms.clone(),
             global_timer_sound: self.global_timer_sound.clone(),
             global_theme: self.global_theme.clone(),
+            themes: self.themes.clone(),
+            groups: self.groups.clone(),
         }
     }
 
@@ -201,6 +228,224 @@ impl AppConfig {
         if window_corrected || grid_corrected {
             log::info!("Configuration sanitized: corrected invalid values");
         }
+
+        // A group_id naming no group would silently resolve to the global
+        // theme with nothing in the UI explaining why; drop it and say so.
+        let group_ids: Vec<String> = self.groups.iter().map(|g| g.id.clone()).collect();
+        for panel in &mut self.panels_v2 {
+            if let Some(gid) = &panel.group_id {
+                if !group_ids.contains(gid) {
+                    warn!(
+                        "Panel {} references missing group {}; removing it from the group",
+                        panel.id, gid
+                    );
+                    panel.group_id = None;
+                }
+            }
+        }
+        for group in &self.groups {
+            if let Some(name) = group.theme.named_name() {
+                if !self.themes.contains_key(name) && !ComboThemeConfig::is_builtin_name(name) {
+                    warn!(
+                        "Group '{}' references missing theme '{}'; it will fall back",
+                        group.name, name
+                    );
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Theme library
+    // ------------------------------------------------------------------
+
+    /// Borrowed view used for theme resolution.
+    pub fn theme_library(&self) -> ThemeLibrary<'_> {
+        ThemeLibrary {
+            global: &self.global_theme,
+            themes: &self.themes,
+            groups: &self.groups,
+        }
+    }
+
+    /// Resolve the concrete theme for a panel: panel → group → global.
+    pub fn resolve_theme_for(&self, theme: &ThemeRef, group_id: Option<&str>) -> ComboThemeConfig {
+        self.theme_library().resolve(theme, group_id)
+    }
+
+    /// Resolve the theme for a stored panel by id. Unknown ids resolve to
+    /// the global theme.
+    pub fn resolve_theme_for_panel_id(&self, panel_id: &str) -> ComboThemeConfig {
+        match self.panels_v2.iter().find(|p| p.id == panel_id) {
+            Some(p) => self.resolve_theme_for(&p.theme, p.group_id.as_deref()),
+            None => self.global_theme.clone(),
+        }
+    }
+
+    /// Find a group by id.
+    pub fn group(&self, id: &str) -> Option<&PanelGroup> {
+        self.groups.iter().find(|g| g.id == id)
+    }
+
+    /// Mutable access to a group by id.
+    pub fn group_mut(&mut self, id: &str) -> Option<&mut PanelGroup> {
+        self.groups.iter_mut().find(|g| g.id == id)
+    }
+
+    /// Ids of the panels in a group, in stored order.
+    pub fn group_members(&self, group_id: &str) -> Vec<String> {
+        self.panels_v2
+            .iter()
+            .filter(|p| p.group_id.as_deref() == Some(group_id))
+            .map(|p| p.id.clone())
+            .collect()
+    }
+
+    /// Everything that references a library theme by name: panel ids and
+    /// group ids. Used for the "Used by" label and to refuse deletion.
+    pub fn theme_users(&self, name: &str) -> (Vec<String>, Vec<String>) {
+        let panels = self
+            .panels_v2
+            .iter()
+            .filter(|p| p.theme.named_name() == Some(name))
+            .map(|p| p.id.clone())
+            .collect();
+        let groups = self
+            .groups
+            .iter()
+            .filter(|g| g.theme.named_name() == Some(name))
+            .map(|g| g.id.clone())
+            .collect();
+        (panels, groups)
+    }
+
+    /// A theme name not yet taken by a user theme or a built-in preset,
+    /// derived from `base` (`base`, `base 2`, `base 3`, …).
+    pub fn unique_theme_name(&self, base: &str) -> String {
+        let taken = |n: &str| self.themes.contains_key(n) || ComboThemeConfig::is_builtin_name(n);
+        if !taken(base) {
+            return base.to_string();
+        }
+        (2..)
+            .map(|i| format!("{} {}", base, i))
+            .find(|n| !taken(n))
+            .expect("unbounded counter")
+    }
+
+    /// Add or replace a user theme. Built-in names cannot be shadowed.
+    pub fn set_theme(&mut self, name: &str, theme: ComboThemeConfig) -> Result<()> {
+        if ComboThemeConfig::is_builtin_name(name) {
+            anyhow::bail!("'{}' is a built-in preset and cannot be replaced", name);
+        }
+        self.themes.insert(name.to_string(), theme);
+        Ok(())
+    }
+
+    /// Rename a user theme and rewrite every reference to it.
+    pub fn rename_theme(&mut self, old: &str, new: &str) -> Result<()> {
+        if old == new {
+            return Ok(());
+        }
+        if ComboThemeConfig::is_builtin_name(old) {
+            anyhow::bail!("'{}' is a built-in preset and cannot be renamed", old);
+        }
+        if new.trim().is_empty() {
+            anyhow::bail!("Theme name cannot be empty");
+        }
+        if self.themes.contains_key(new) || ComboThemeConfig::is_builtin_name(new) {
+            anyhow::bail!("A theme named '{}' already exists", new);
+        }
+        let theme = self
+            .themes
+            .remove(old)
+            .ok_or_else(|| anyhow::anyhow!("No theme named '{}'", old))?;
+        self.themes.insert(new.to_string(), theme);
+        for panel in &mut self.panels_v2 {
+            if panel.theme.named_name() == Some(old) {
+                panel.theme = ThemeRef::named(new);
+            }
+        }
+        for group in &mut self.groups {
+            if group.theme.named_name() == Some(old) {
+                group.theme = ThemeRef::named(new);
+            }
+        }
+        Ok(())
+    }
+
+    /// Delete a user theme. Refused while any panel or group references it.
+    pub fn delete_theme(&mut self, name: &str) -> Result<()> {
+        if ComboThemeConfig::is_builtin_name(name) {
+            anyhow::bail!("'{}' is a built-in preset and cannot be deleted", name);
+        }
+        let (panels, groups) = self.theme_users(name);
+        if !panels.is_empty() || !groups.is_empty() {
+            anyhow::bail!(
+                "Theme '{}' is in use by {} panel(s) and {} group(s)",
+                name,
+                panels.len(),
+                groups.len()
+            );
+        }
+        self.themes
+            .remove(name)
+            .map(|_| ())
+            .ok_or_else(|| anyhow::anyhow!("No theme named '{}'", name))
+    }
+
+    /// Create a new group with the global theme; returns its id.
+    pub fn add_group(&mut self, name: &str) -> String {
+        let group = PanelGroup::new(name);
+        let id = group.id.clone();
+        self.groups.push(group);
+        id
+    }
+
+    /// Delete a group. Its members become ungrouped.
+    pub fn delete_group(&mut self, group_id: &str) {
+        self.groups.retain(|g| g.id != group_id);
+        for panel in &mut self.panels_v2 {
+            if panel.group_id.as_deref() == Some(group_id) {
+                panel.group_id = None;
+            }
+        }
+    }
+
+    /// Move a stored panel into a group (`None` = ungrouped).
+    pub fn set_panel_group(&mut self, panel_id: &str, group_id: Option<&str>) -> Result<()> {
+        if let Some(gid) = group_id {
+            if self.group(gid).is_none() {
+                anyhow::bail!("No group with id {}", gid);
+            }
+        }
+        let panel = self
+            .panels_v2
+            .iter_mut()
+            .find(|p| p.id == panel_id)
+            .ok_or_else(|| anyhow::anyhow!("No panel with id {}", panel_id))?;
+        panel.group_id = group_id.map(|s| s.to_string());
+        Ok(())
+    }
+
+    /// Set a stored panel's theme reference.
+    pub fn set_panel_theme(&mut self, panel_id: &str, theme: ThemeRef) -> Result<()> {
+        let panel = self
+            .panels_v2
+            .iter_mut()
+            .find(|p| p.id == panel_id)
+            .ok_or_else(|| anyhow::anyhow!("No panel with id {}", panel_id))?;
+        panel.theme = theme;
+        Ok(())
+    }
+}
+
+/// Phase-0 migration: a combo panel saved before the theme library existed
+/// keeps rendering with the theme embedded in its frame by becoming
+/// `Inline { frame.theme }`. Unconditional on key absence, so a combo whose
+/// frame theme happens to equal the defaults is preserved too.
+fn migrate_inline_theme(panel: &mut PanelConfigV2) {
+    if let Some(frame_theme) = panel.displayer_config.theme() {
+        panel.theme = ThemeRef::inline(frame_theme.clone());
     }
 }
 
@@ -216,6 +461,8 @@ impl Default for AppConfig {
             alarms: Vec::new(),
             global_timer_sound: AlarmSoundConfig::default(),
             global_theme: ComboThemeConfig::default(),
+            themes: BTreeMap::new(),
+            groups: Vec::new(),
         }
     }
 }
@@ -240,13 +487,20 @@ impl AppConfigV1 {
             panels_v2: self
                 .panels
                 .iter()
-                .map(|p| PanelConfigV2::from_panel_data(p.to_panel_data()))
+                .map(|p| {
+                    let mut panel = PanelConfigV2::from_panel_data(p.to_panel_data());
+                    // V1 never had a theme key: same migration as v2 key-absence
+                    migrate_inline_theme(&mut panel);
+                    panel
+                })
                 .collect(),
             panels_v1: Vec::new(), // Don't keep v1 after migration
             timers: Vec::new(),    // V1 configs don't have global timers
             alarms: Vec::new(),    // V1 configs don't have global alarms
             global_timer_sound: AlarmSoundConfig::default(),
             global_theme: ComboThemeConfig::default(),
+            themes: BTreeMap::new(),
+            groups: Vec::new(),
         }
     }
 }
@@ -262,6 +516,8 @@ struct AppConfigSave {
     pub alarms: Vec<AlarmConfig>,
     pub global_timer_sound: AlarmSoundConfig,
     pub global_theme: ComboThemeConfig,
+    pub themes: BTreeMap<String, ComboThemeConfig>,
+    pub groups: Vec<PanelGroup>,
 }
 
 /// Config format for loading v2 configs
@@ -281,6 +537,10 @@ struct AppConfigLoad {
     pub global_timer_sound: AlarmSoundConfig,
     #[serde(default)]
     pub global_theme: ComboThemeConfig,
+    #[serde(default)]
+    pub themes: BTreeMap<String, ComboThemeConfig>,
+    #[serde(default)]
+    pub groups: Vec<PanelGroup>,
 }
 
 /// Window configuration
@@ -510,6 +770,12 @@ pub struct PanelConfigV2 {
     pub displayer_config: DisplayerConfig,
     /// Visual appearance
     pub appearance: PanelAppearance,
+    /// Theme reference (absent in pre-library configs; see `migrate_inline_theme`)
+    #[serde(default)]
+    pub theme: ThemeRef,
+    /// Panel group membership
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
 }
 
 impl PanelConfigV2 {
@@ -521,6 +787,8 @@ impl PanelConfigV2 {
             source_config: self.source_config.clone(),
             displayer_config: self.displayer_config.clone(),
             appearance: self.appearance.clone(),
+            theme: self.theme.clone(),
+            group_id: self.group_id.clone(),
         }
     }
 
@@ -532,6 +800,8 @@ impl PanelConfigV2 {
             source_config: data.source_config,
             displayer_config: data.displayer_config,
             appearance: data.appearance,
+            theme: data.theme,
+            group_id: data.group_id,
         }
     }
 }
@@ -600,6 +870,8 @@ impl PanelConfig {
             source_config,
             displayer_config,
             appearance,
+            theme: ThemeRef::Inherit,
+            group_id: None,
         }
     }
 
@@ -913,5 +1185,201 @@ impl PanelConfig {
                 DisplayerConfig::default()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod theme_library_tests {
+    use super::*;
+    use rg_sens_types::display_configs::themed_configs::LcarsDisplayConfig;
+    use rg_sens_types::display_configs::BarDisplayConfig;
+    use rg_sens_types::source_configs::cpu::CpuSourceConfig;
+    use rg_sens_types::Color;
+
+    fn theme(r: f64) -> ComboThemeConfig {
+        ComboThemeConfig {
+            color1: Color::new(r, 0.0, 0.0, 1.0),
+            ..ComboThemeConfig::default()
+        }
+    }
+
+    fn combo_panel(id: &str, frame_theme: ComboThemeConfig) -> PanelConfigV2 {
+        let mut cfg = LcarsDisplayConfig::default();
+        cfg.frame.theme = frame_theme;
+        PanelConfigV2 {
+            id: id.to_string(),
+            geometry: PanelGeometry::default(),
+            source_config: SourceConfig::Cpu(CpuSourceConfig::default()),
+            displayer_config: DisplayerConfig::Lcars(cfg),
+            appearance: PanelAppearance::default(),
+            theme: ThemeRef::Inherit,
+            group_id: None,
+        }
+    }
+
+    fn bar_panel(id: &str) -> PanelConfigV2 {
+        PanelConfigV2 {
+            id: id.to_string(),
+            geometry: PanelGeometry::default(),
+            source_config: SourceConfig::Cpu(CpuSourceConfig::default()),
+            displayer_config: DisplayerConfig::Bar(BarDisplayConfig::default()),
+            appearance: PanelAppearance::default(),
+            theme: ThemeRef::Inherit,
+            group_id: None,
+        }
+    }
+
+    fn config_with(panels: Vec<PanelConfigV2>) -> AppConfig {
+        AppConfig {
+            panels_v2: panels,
+            ..AppConfig::default()
+        }
+    }
+
+    /// Serialise through the save path and strip the `theme` key from the
+    /// named panels, producing a file as an older binary would have written it.
+    fn save_without_theme_keys(config: &AppConfig, strip_ids: &[&str]) -> String {
+        let mut raw = serde_json::to_value(config.as_v2()).unwrap();
+        for panel in raw["panels"].as_array_mut().unwrap() {
+            let id = panel["id"].as_str().unwrap().to_string();
+            if strip_ids.contains(&id.as_str()) {
+                panel.as_object_mut().unwrap().remove("theme");
+            }
+        }
+        serde_json::to_string(&raw).unwrap()
+    }
+
+    #[test]
+    fn missing_theme_key_migrates_combo_to_inline_but_not_explicit_inherit() {
+        // "old": written by a binary without the theme key; its frame theme
+        // equals the defaults, which must still be preserved as Inline.
+        // "new": a combo saved by this binary with an explicit Inherit.
+        let old = combo_panel("old", ComboThemeConfig::default());
+        let new = combo_panel("new", theme(0.5));
+        let bar = bar_panel("bar");
+        let config = config_with(vec![old, new, bar]);
+        let json = save_without_theme_keys(&config, &["old", "bar"]);
+
+        let loaded = AppConfig::load_from_string(&json).unwrap();
+        let by_id = |id: &str| loaded.panels_v2.iter().find(|p| p.id == id).unwrap();
+
+        assert_eq!(
+            by_id("old").theme,
+            ThemeRef::inline(ComboThemeConfig::default()),
+            "combo without a theme key becomes Inline with its frame theme"
+        );
+        assert_eq!(
+            by_id("new").theme,
+            ThemeRef::Inherit,
+            "an explicit Inherit written by this binary is left alone"
+        );
+        assert_eq!(
+            by_id("bar").theme,
+            ThemeRef::Inherit,
+            "standalone panels have no frame theme and stay Inherit"
+        );
+    }
+
+    #[test]
+    fn combo_round_trip_preserves_frame_theme_exactly() {
+        let config = config_with(vec![combo_panel("c", theme(0.42))]);
+        let json = save_without_theme_keys(&config, &["c"]);
+        let loaded = AppConfig::load_from_string(&json).unwrap();
+        let saved_again = serde_json::to_string_pretty(&loaded.as_v2()).unwrap();
+        let reloaded = AppConfig::load_from_string(&saved_again).unwrap();
+        let frame_theme = reloaded.panels_v2[0]
+            .displayer_config
+            .theme()
+            .unwrap()
+            .clone();
+        assert_eq!(frame_theme, theme(0.42));
+        assert_eq!(reloaded.panels_v2[0].theme, ThemeRef::inline(theme(0.42)));
+        assert_eq!(
+            reloaded.resolve_theme_for_panel_id("c"),
+            theme(0.42),
+            "Inline resolves to the embedded theme regardless of global"
+        );
+    }
+
+    #[test]
+    fn themes_and_groups_round_trip() {
+        let mut config = config_with(vec![bar_panel("a"), bar_panel("b")]);
+        config.themes.insert("Blue".to_string(), theme(0.2));
+        let gid = config.add_group("Left");
+        config.group_mut(&gid).unwrap().theme = ThemeRef::named("Blue");
+        config.set_panel_group("a", Some(&gid)).unwrap();
+
+        let json = serde_json::to_string(&config.as_v2()).unwrap();
+        let loaded = AppConfig::load_from_string(&json).unwrap();
+        assert_eq!(loaded.themes.get("Blue"), Some(&theme(0.2)));
+        assert_eq!(loaded.groups.len(), 1);
+        assert_eq!(loaded.group_members(&gid), vec!["a".to_string()]);
+        assert_eq!(loaded.resolve_theme_for_panel_id("a"), theme(0.2));
+        assert_eq!(loaded.resolve_theme_for_panel_id("b"), loaded.global_theme);
+    }
+
+    #[test]
+    fn sanitize_drops_dangling_group_id() {
+        let mut config = config_with(vec![bar_panel("a")]);
+        config.panels_v2[0].group_id = Some("ghost".to_string());
+        config.sanitize();
+        assert_eq!(config.panels_v2[0].group_id, None);
+    }
+
+    #[test]
+    fn rename_rewrites_all_references() {
+        let mut config = config_with(vec![bar_panel("a"), bar_panel("b")]);
+        config.themes.insert("Old".to_string(), theme(0.3));
+        let gid = config.add_group("G");
+        config.group_mut(&gid).unwrap().theme = ThemeRef::named("Old");
+        config.set_panel_theme("a", ThemeRef::named("Old")).unwrap();
+
+        config.rename_theme("Old", "New").unwrap();
+        assert!(config.themes.contains_key("New"));
+        assert!(!config.themes.contains_key("Old"));
+        assert_eq!(config.panels_v2[0].theme, ThemeRef::named("New"));
+        assert_eq!(config.panels_v2[1].theme, ThemeRef::Inherit);
+        assert_eq!(config.group(&gid).unwrap().theme, ThemeRef::named("New"));
+
+        // Collisions and built-ins are refused
+        config.themes.insert("Other".to_string(), theme(0.1));
+        assert!(config.rename_theme("New", "Other").is_err());
+        assert!(config.rename_theme("New", "LCARS").is_err());
+        assert!(config.rename_theme("New", "  ").is_err());
+    }
+
+    #[test]
+    fn delete_refused_while_in_use() {
+        let mut config = config_with(vec![bar_panel("a")]);
+        config.themes.insert("T".to_string(), theme(0.3));
+        config.set_panel_theme("a", ThemeRef::named("T")).unwrap();
+        assert!(config.delete_theme("T").is_err());
+        config.set_panel_theme("a", ThemeRef::Inherit).unwrap();
+        config.delete_theme("T").unwrap();
+        assert!(
+            config.delete_theme("LCARS").is_err(),
+            "built-ins are not deletable"
+        );
+    }
+
+    #[test]
+    fn delete_group_ungroups_members() {
+        let mut config = config_with(vec![bar_panel("a")]);
+        let gid = config.add_group("G");
+        config.set_panel_group("a", Some(&gid)).unwrap();
+        config.delete_group(&gid);
+        assert!(config.groups.is_empty());
+        assert_eq!(config.panels_v2[0].group_id, None);
+        assert!(config.set_panel_group("a", Some("missing")).is_err());
+    }
+
+    #[test]
+    fn unique_theme_name_avoids_user_and_builtin_names() {
+        let mut config = AppConfig::default();
+        assert_eq!(config.unique_theme_name("Mine"), "Mine");
+        config.themes.insert("Mine".to_string(), theme(0.1));
+        assert_eq!(config.unique_theme_name("Mine"), "Mine 2");
+        assert_eq!(config.unique_theme_name("LCARS"), "LCARS 2");
+        assert!(config.set_theme("LCARS", theme(0.1)).is_err());
     }
 }

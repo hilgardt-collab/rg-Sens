@@ -752,28 +752,45 @@ pub fn show_window_settings_dialog<F>(
     window_mode_scroll.set_child(Some(&window_mode_tab_box));
     notebook.append_page(&window_mode_scroll, Some(&Label::new(Some("Window Mode"))));
 
-    // === Tab 4: Global Theme ===
-    let theme_scroll = gtk4::ScrolledWindow::new();
-    theme_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
-    theme_scroll.set_vexpand(true);
-
-    let global_theme_widget = Rc::new(crate::ui::GlobalThemeWidget::new());
-    global_theme_widget.set_config(app_config.borrow().global_theme.clone());
-    theme_scroll.set_child(Some(global_theme_widget.widget()));
-
-    // When global theme changes, update all widgets that use theme colors
+    // === Tab 4: Themes ===
+    // The global theme, the theme library and panel groups live in the
+    // Themes & Groups window (docs/config-ui-redesign.md §9.1); this tab
+    // only opens it. Background widgets on the other tabs were given the
+    // global theme when this dialog opened; they pick up later theme edits
+    // the next time the dialog is opened.
+    let theme_tab_box = GtkBox::new(Orientation::Vertical, 12);
+    theme_tab_box.set_margin_top(12);
+    theme_tab_box.set_margin_bottom(12);
+    theme_tab_box.set_margin_start(12);
+    theme_tab_box.set_margin_end(12);
+    let theme_help = Label::new(Some(
+        "The global theme, named themes and panel groups are managed in the \
+         Themes & Groups window.",
+    ));
+    theme_help.set_wrap(true);
+    theme_help.set_halign(gtk4::Align::Start);
+    theme_tab_box.append(&theme_help);
+    let open_themes_btn = Button::with_label("Open Themes & Groups…");
+    open_themes_btn.set_halign(gtk4::Align::Start);
     {
-        let global_theme_widget_for_change = global_theme_widget.clone();
-        let background_widget_for_theme = background_widget.clone();
-        let default_bg_widget_for_theme = default_bg_widget.clone();
-        global_theme_widget.set_on_change(move || {
-            let new_theme = global_theme_widget_for_change.get_config();
-            background_widget_for_theme.set_theme_config(new_theme.clone());
-            default_bg_widget_for_theme.set_theme_config(new_theme);
+        let parent = parent_window.clone();
+        let app_config = app_config.clone();
+        let grid_layout = grid_layout.clone();
+        let config_dirty = config_dirty.clone();
+        let window_background = window_background.clone();
+        open_themes_btn.connect_clicked(move |_| {
+            crate::ui::themes_groups_dialog::show_themes_groups_dialog(
+                parent.upcast_ref(),
+                &app_config,
+                &grid_layout,
+                &config_dirty,
+                &window_background,
+            );
         });
     }
+    theme_tab_box.append(&open_themes_btn);
 
-    notebook.append_page(&theme_scroll, Some(&Label::new(Some("Global Theme"))));
+    notebook.append_page(&theme_tab_box, Some(&Label::new(Some("Themes"))));
 
     vbox.append(&notebook);
 
@@ -826,8 +843,6 @@ pub fn show_window_settings_dialog<F>(
     let panel_width_spin_clone = panel_width_spin.clone();
     let panel_height_spin_clone = panel_height_spin.clone();
     let default_bg_widget_clone = default_bg_widget.clone();
-    // Clone for global theme
-    let global_theme_widget_clone = global_theme_widget.clone();
 
     let apply_changes: Rc<dyn Fn()> = Rc::new(move || {
         let new_background = background_widget_clone.get_config();
@@ -886,8 +901,6 @@ pub fn show_window_settings_dialog<F>(
         cfg.window.auto_scroll_whole_pages = whole_pages_check_clone.is_active();
         cfg.window.viewport_width = viewport_width_spin_clone.value() as i32;
         cfg.window.viewport_height = viewport_height_spin_clone.value() as i32;
-        // Save global theme
-        cfg.global_theme = global_theme_widget_clone.get_config();
 
         // Save renderer setting (requires restart to take effect)
         let renderer_selection = renderer_dropdown_clone.selected();
@@ -966,20 +979,10 @@ pub fn show_window_settings_dialog<F>(
             new_spacing,
         );
 
-        // Apply global theme to all panel displayers
+        // Re-push each panel's resolved theme (panel → group → global)
         {
-            let global_theme = app_config_clone.borrow().global_theme.clone();
-            let theme_value = serde_json::to_value(&global_theme).unwrap_or_default();
-            let mut theme_config = std::collections::HashMap::new();
-            theme_config.insert("global_theme".to_string(), theme_value);
-
             let panels = grid_layout_clone.borrow().get_panels();
-            for panel in &panels {
-                // Apply is a one-time user action: blocking_write so a contended
-                // panel can't silently keep the old theme
-                let mut panel_guard = panel.blocking_write();
-                let _ = panel_guard.displayer.apply_config(&theme_config);
-            }
+            crate::ui::config_helpers::apply_resolved_themes(&app_config_clone.borrow(), &panels);
         }
 
         // Trigger all panels to redraw with new theme

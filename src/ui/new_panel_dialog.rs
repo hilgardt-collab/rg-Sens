@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 use crate::config::AppConfig;
 use crate::core::{Panel, PanelData, PanelGeometry};
+use crate::ui::theme::ThemeRef;
 use crate::ui::GridLayout;
 
 /// Create a panel from configuration parameters
@@ -74,6 +75,8 @@ pub fn create_panel_from_config(
             z_index: 0,
             ignore_collision: false,
         },
+        theme: ThemeRef::default(),
+        group_id: None,
     };
 
     // Create panel from PanelData (this properly initializes panel.data)

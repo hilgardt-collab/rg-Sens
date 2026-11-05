@@ -1181,7 +1181,9 @@ impl GridLayout {
                     cr.clip();
                     // Get source values for indicator backgrounds and theme for color resolution
                     let source_values = panel_guard.source.get_values();
-                    let theme = app_config_bg.borrow().global_theme.clone();
+                    let theme = app_config_bg
+                        .borrow()
+                        .resolve_theme_for(&panel_guard.theme_ref(), panel_guard.group_id());
                     if let Err(e) = crate::ui::render_background_with_source_and_theme(
                         cr,
                         &panel_guard.background,
@@ -1494,7 +1496,12 @@ impl GridLayout {
                 registry,
                 selected_panels_props.clone(),
                 panels_props.clone(),
-                app_config_props.borrow().global_theme.clone(),
+                {
+                    let g = panel_clone.blocking_read();
+                    app_config_props
+                        .borrow()
+                        .resolve_theme_for(&g.theme_ref(), g.group_id())
+                },
             );
         });
         action_group.add_action(&properties_action);
@@ -2302,7 +2309,9 @@ impl GridLayout {
                                             cr.save().ok();
                                             cr.clip();
                                             let source_values = panel_guard.source.get_values();
-                                            let theme = app_config_bg.borrow().global_theme.clone();
+                                            let theme = app_config_bg
+                        .borrow()
+                        .resolve_theme_for(&panel_guard.theme_ref(), panel_guard.group_id());
                                             if let Err(e) = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme)) {
                                                 log::warn!("Failed to render background: {}", e);
                                             }
@@ -2415,7 +2424,12 @@ impl GridLayout {
                                         registry,
                                         selected_panels_props.clone(),
                                         panels_props.clone(),
-                                        app_config_props.borrow().global_theme.clone(),
+                                        {
+                                            let g = panel_clone_props.blocking_read();
+                                            app_config_props
+                                                .borrow()
+                                                .resolve_theme_for(&g.theme_ref(), g.group_id())
+                                        },
                                     );
                                 });
                                 action_group.add_action(&properties_action);
@@ -3160,7 +3174,9 @@ impl GridLayout {
                                                                         cr.save().ok();
                                                                         cr.clip();
                                                                         let source_values = panel_guard.source.get_values();
-                                                                        let theme = app_config_bg.borrow().global_theme.clone();
+                                                                        let theme = app_config_bg
+                        .borrow()
+                        .resolve_theme_for(&panel_guard.theme_ref(), panel_guard.group_id());
                                                                         if let Err(e) = crate::ui::render_background_with_source_and_theme(cr, &panel_guard.background, width, height, &source_values, Some(&theme)) {
                                                                             log::warn!("Failed to render background: {}", e);
                                                                         }
@@ -3756,7 +3772,12 @@ fn setup_copied_panel_interaction(
             registry,
             selected_panels_props.clone(),
             panels_props.clone(),
-            app_config_props.borrow().global_theme.clone(),
+            {
+                let g = panel_props.blocking_read();
+                app_config_props
+                    .borrow()
+                    .resolve_theme_for(&g.theme_ref(), g.group_id())
+            },
         );
     });
     action_group.add_action(&properties_action);
@@ -4433,7 +4454,10 @@ fn setup_copied_panel_interaction(
                                         cr.save().ok();
                                         cr.clip();
                                         let source_values = panel_guard.source.get_values();
-                                        let theme = app_config_bg.borrow().global_theme.clone();
+                                        let theme = app_config_bg.borrow().resolve_theme_for(
+                                            &panel_guard.theme_ref(),
+                                            panel_guard.group_id(),
+                                        );
                                         let _ = crate::ui::render_background_with_source_and_theme(
                                             cr,
                                             &panel_guard.background,

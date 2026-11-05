@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::color::{Color, ColorStop, LinearGradientConfig};
 
@@ -574,9 +575,9 @@ impl ComboThemeConfig {
     /// Default theme for Material Design panels (Teal variant)
     pub fn default_for_material_teal() -> Self {
         Self {
-            color1: Color::new(0.0, 0.588, 0.533, 1.0),   // Teal 500 #009688
-            color2: Color::new(0.0, 0.447, 0.420, 1.0),   // Teal 700 #00796b
-            color3: Color::new(1.0, 0.341, 0.133, 1.0),   // Deep Orange #ff5722
+            color1: Color::new(0.0, 0.588, 0.533, 1.0), // Teal 500 #009688
+            color2: Color::new(0.0, 0.447, 0.420, 1.0), // Teal 700 #00796b
+            color3: Color::new(1.0, 0.341, 0.133, 1.0), // Deep Orange #ff5722
             color4: Color::new(0.459, 0.459, 0.459, 1.0), // Gray #757575
             gradient: LinearGradientSourceConfig {
                 angle: 180.0,
@@ -658,9 +659,9 @@ impl ComboThemeConfig {
     /// Default theme for Fighter HUD panels
     pub fn default_for_fighter_hud() -> Self {
         Self {
-            color1: Color::new(0.0, 0.902, 0.302, 1.0),   // Military green #00e64d
-            color2: Color::new(0.0, 0.451, 0.149, 1.0),   // Dim green #007326
-            color3: Color::new(0.0, 1.0, 0.333, 1.0),     // Bright green #00ff55
+            color1: Color::new(0.0, 0.902, 0.302, 1.0), // Military green #00e64d
+            color2: Color::new(0.0, 0.451, 0.149, 1.0), // Dim green #007326
+            color3: Color::new(0.0, 1.0, 0.333, 1.0),   // Bright green #00ff55
             color4: Color::new(0.039, 0.039, 0.039, 1.0), // Black #0a0a0a
             gradient: LinearGradientSourceConfig {
                 angle: 180.0,
@@ -737,6 +738,203 @@ impl ComboThemeConfig {
             font2_family: "Sans".to_string(),
             font2_size: 11.0,
         }
+    }
+}
+
+// ============================================================================
+// Theme library: named themes, panel groups, and reference resolution
+// ============================================================================
+
+/// How a panel or group finds the [`ComboThemeConfig`] that its
+/// `ColorSource::Theme` / `FontSource::Theme` references resolve against.
+///
+/// Resolution order for a panel is panel → group → global; see
+/// [`ThemeLibrary::resolve`]. Serialised with a `kind` tag:
+/// `{"kind":"named","name":"My Blue"}`, `{"kind":"inline","theme":{…}}`.
+/// A config written before this type existed has no `theme` key at all and
+/// deserialises to `Inherit`; the loader then migrates combo panels to
+/// `Inline` so they keep rendering with the theme embedded in their frame.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ThemeRef {
+    /// Use the group's theme when the panel is in a group, otherwise the
+    /// global theme.
+    #[default]
+    Inherit,
+    /// Always use the global theme, even inside a group.
+    Global,
+    /// Use a theme from the library: user themes first, then built-in presets.
+    Named { name: String },
+    /// A private theme stored with this panel or group.
+    Inline { theme: ComboThemeConfig },
+}
+
+impl ThemeRef {
+    /// Create a reference to a library theme.
+    pub fn named(name: impl Into<String>) -> Self {
+        Self::Named { name: name.into() }
+    }
+
+    /// Create an inline (private) theme reference.
+    pub fn inline(theme: ComboThemeConfig) -> Self {
+        Self::Inline { theme }
+    }
+
+    /// The library theme name this reference points at, if any.
+    pub fn named_name(&self) -> Option<&str> {
+        match self {
+            Self::Named { name } => Some(name),
+            _ => None,
+        }
+    }
+
+    /// Whether this is a private inline theme.
+    pub fn is_inline(&self) -> bool {
+        matches!(self, Self::Inline { .. })
+    }
+
+    /// Short human-readable description for UI labels.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Inherit => "Inherit".to_string(),
+            Self::Global => "Global".to_string(),
+            Self::Named { name } => name.clone(),
+            Self::Inline { .. } => "Inline".to_string(),
+        }
+    }
+}
+
+/// A set of standalone panels that share a theme.
+///
+/// Membership is stored on the panel (`PanelData::group_id`), not here, so a
+/// panel can never be in two groups.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PanelGroup {
+    /// Stable identifier referenced by `PanelData::group_id`.
+    pub id: String,
+    /// Display name, editable by the user.
+    pub name: String,
+    /// Theme shared by the members. `Inherit` here means the global theme.
+    #[serde(default)]
+    pub theme: ThemeRef,
+}
+
+impl PanelGroup {
+    /// Create a group with a fresh id and the global theme.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            id: format!("group_{}", uuid::Uuid::new_v4()),
+            name: name.into(),
+            theme: ThemeRef::Inherit,
+        }
+    }
+}
+
+/// Borrowed view over everything theme resolution needs.
+///
+/// Built from `AppConfig` (global theme, user themes, groups) and handed to
+/// anything that must turn a [`ThemeRef`] into a concrete
+/// [`ComboThemeConfig`].
+pub struct ThemeLibrary<'a> {
+    pub global: &'a ComboThemeConfig,
+    pub themes: &'a BTreeMap<String, ComboThemeConfig>,
+    pub groups: &'a [PanelGroup],
+}
+
+impl<'a> ThemeLibrary<'a> {
+    /// Resolve a panel's theme reference: panel → group → global.
+    ///
+    /// `Inline` and `Named` on the panel win outright; `Global` skips the
+    /// group; `Inherit` defers to the group (whose own `Inherit`/`Global`
+    /// mean the global theme).
+    pub fn resolve(&self, panel_theme: &ThemeRef, group_id: Option<&str>) -> ComboThemeConfig {
+        match panel_theme {
+            ThemeRef::Inline { theme } => theme.clone(),
+            ThemeRef::Global => self.global.clone(),
+            ThemeRef::Named { name } => self.named(name),
+            ThemeRef::Inherit => match group_id.and_then(|id| self.group(id)) {
+                Some(group) => match &group.theme {
+                    ThemeRef::Inline { theme } => theme.clone(),
+                    ThemeRef::Named { name } => self.named(name),
+                    ThemeRef::Global | ThemeRef::Inherit => self.global.clone(),
+                },
+                None => self.global.clone(),
+            },
+        }
+    }
+
+    /// Find a group by id.
+    pub fn group(&self, id: &str) -> Option<&'a PanelGroup> {
+        self.groups.iter().find(|g| g.id == id)
+    }
+
+    /// Look a name up in the user library, then the built-in presets.
+    pub fn lookup_named(&self, name: &str) -> Option<ComboThemeConfig> {
+        self.themes
+            .get(name)
+            .cloned()
+            .or_else(|| ComboThemeConfig::builtin_preset(name))
+    }
+
+    /// Resolve a `Named` reference, applying the missing-theme policy when
+    /// the name matches nothing.
+    pub fn named(&self, name: &str) -> ComboThemeConfig {
+        self.lookup_named(name)
+            .unwrap_or_else(|| self.resolve_missing_named(name))
+    }
+
+    /// Policy for a `Named` reference whose theme is not in the library
+    /// (deleted by hand in the JSON, or a layout file shared from another
+    /// machine whose library differs).
+    ///
+    /// TODO(user): decide the fallback. Candidates:
+    /// - the global theme (provisional behaviour below: predictable, but the
+    ///   panel silently changes look);
+    /// - a built-in preset whose name is a prefix/case-insensitive match;
+    /// - refuse, returning a clearly "broken" theme so the dangling reference
+    ///   is visible on the dashboard.
+    pub fn resolve_missing_named(&self, name: &str) -> ComboThemeConfig {
+        log::warn!(
+            "Theme '{}' is referenced but not in the library; using the global theme",
+            name
+        );
+        self.global.clone()
+    }
+}
+
+impl ComboThemeConfig {
+    /// Read-only presets shipped with the application, shown in the theme
+    /// library below the user's own themes. Names are stable: configs may
+    /// reference them via `ThemeRef::Named`.
+    pub fn builtin_presets() -> Vec<(&'static str, ComboThemeConfig)> {
+        vec![
+            ("Synthwave", Self::default_for_synthwave()),
+            ("LCARS", Self::default_for_lcars()),
+            ("Cyberpunk", Self::default_for_cyberpunk()),
+            ("Material Light", Self::default_for_material_light()),
+            ("Material Dark", Self::default_for_material_dark()),
+            ("Material Teal", Self::default_for_material_teal()),
+            ("Material Purple", Self::default_for_material_purple()),
+            ("Industrial", Self::default_for_industrial()),
+            ("Retro Terminal", Self::default_for_retro_terminal()),
+            ("Fighter HUD", Self::default_for_fighter_hud()),
+            ("Art Deco", Self::default_for_art_deco()),
+            ("Art Nouveau", Self::default_for_art_nouveau()),
+            ("Steampunk", Self::default_for_steampunk()),
+        ]
+    }
+
+    /// Look up a built-in preset by its stable name.
+    pub fn builtin_preset(name: &str) -> Option<ComboThemeConfig> {
+        Self::builtin_presets()
+            .into_iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, t)| t)
+    }
+
+    /// Whether `name` is one of the built-in preset names.
+    pub fn is_builtin_name(name: &str) -> bool {
+        Self::builtin_presets().iter().any(|(n, _)| *n == name)
     }
 }
 
@@ -834,5 +1032,147 @@ mod tests {
         assert_eq!(result.stops.len(), 2);
         assert_eq!(result.stops[0].color, ColorSource::Theme { index: 1 });
         assert_eq!(result.stops[1].color, ColorSource::Theme { index: 2 });
+    }
+}
+
+#[cfg(test)]
+mod theme_ref_tests {
+    use super::*;
+
+    fn theme(r: f64) -> ComboThemeConfig {
+        ComboThemeConfig {
+            color1: Color::new(r, 0.0, 0.0, 1.0),
+            ..ComboThemeConfig::default()
+        }
+    }
+
+    fn library<'a>(
+        global: &'a ComboThemeConfig,
+        themes: &'a BTreeMap<String, ComboThemeConfig>,
+        groups: &'a [PanelGroup],
+    ) -> ThemeLibrary<'a> {
+        ThemeLibrary {
+            global,
+            themes,
+            groups,
+        }
+    }
+
+    #[test]
+    fn theme_ref_serde_round_trip_all_variants() {
+        let variants = vec![
+            ThemeRef::Inherit,
+            ThemeRef::Global,
+            ThemeRef::named("My Blue"),
+            ThemeRef::inline(theme(0.5)),
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: ThemeRef = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back, "{}", json);
+        }
+        assert_eq!(
+            serde_json::to_string(&ThemeRef::named("X")).unwrap(),
+            r#"{"kind":"named","name":"X"}"#
+        );
+    }
+
+    #[test]
+    fn missing_theme_key_deserialises_to_inherit() {
+        #[derive(Deserialize)]
+        struct Holder {
+            #[serde(default)]
+            theme: ThemeRef,
+        }
+        let h: Holder = serde_json::from_str("{}").unwrap();
+        assert_eq!(h.theme, ThemeRef::Inherit);
+    }
+
+    #[test]
+    fn resolve_precedence_panel_group_global() {
+        let global = theme(0.1);
+        let mut themes = BTreeMap::new();
+        themes.insert("blue".to_string(), theme(0.2));
+        themes.insert("red".to_string(), theme(0.3));
+        let groups = vec![PanelGroup {
+            id: "g1".to_string(),
+            name: "G".to_string(),
+            theme: ThemeRef::named("blue"),
+        }];
+        let lib = library(&global, &themes, &groups);
+
+        // Inherit without a group → global
+        assert_eq!(lib.resolve(&ThemeRef::Inherit, None), global);
+        // Inherit with a group → the group's theme
+        assert_eq!(lib.resolve(&ThemeRef::Inherit, Some("g1")), theme(0.2));
+        // Inherit with an unknown group → global
+        assert_eq!(lib.resolve(&ThemeRef::Inherit, Some("nope")), global);
+        // Global on the panel skips the group
+        assert_eq!(lib.resolve(&ThemeRef::Global, Some("g1")), global);
+        // Named on the panel wins over the group
+        assert_eq!(lib.resolve(&ThemeRef::named("red"), Some("g1")), theme(0.3));
+        // Inline on the panel wins over everything
+        assert_eq!(
+            lib.resolve(&ThemeRef::inline(theme(0.9)), Some("g1")),
+            theme(0.9)
+        );
+    }
+
+    #[test]
+    fn group_inline_and_group_global() {
+        let global = theme(0.1);
+        let themes = BTreeMap::new();
+        let groups = vec![
+            PanelGroup {
+                id: "inline".to_string(),
+                name: "I".to_string(),
+                theme: ThemeRef::inline(theme(0.7)),
+            },
+            PanelGroup {
+                id: "global".to_string(),
+                name: "G".to_string(),
+                theme: ThemeRef::Global,
+            },
+        ];
+        let lib = library(&global, &themes, &groups);
+        assert_eq!(lib.resolve(&ThemeRef::Inherit, Some("inline")), theme(0.7));
+        assert_eq!(lib.resolve(&ThemeRef::Inherit, Some("global")), global);
+    }
+
+    #[test]
+    fn named_falls_through_to_builtin_presets() {
+        let global = theme(0.1);
+        let themes = BTreeMap::new();
+        let lib = library(&global, &themes, &[]);
+        assert_eq!(
+            lib.resolve(&ThemeRef::named("LCARS"), None),
+            ComboThemeConfig::default_for_lcars()
+        );
+        // A user theme shadows a built-in of the same name
+        let mut themes = BTreeMap::new();
+        themes.insert("LCARS".to_string(), theme(0.4));
+        let lib = library(&global, &themes, &[]);
+        assert_eq!(lib.resolve(&ThemeRef::named("LCARS"), None), theme(0.4));
+    }
+
+    #[test]
+    fn missing_named_uses_provisional_policy() {
+        // Documents the provisional fallback; update when the policy in
+        // `resolve_missing_named` is decided.
+        let global = theme(0.1);
+        let themes = BTreeMap::new();
+        let lib = library(&global, &themes, &[]);
+        assert_eq!(lib.resolve(&ThemeRef::named("gone"), None), global);
+    }
+
+    #[test]
+    fn builtin_preset_names_are_unique() {
+        let presets = ComboThemeConfig::builtin_presets();
+        let mut names: Vec<&str> = presets.iter().map(|(n, _)| *n).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), presets.len());
+        assert!(ComboThemeConfig::is_builtin_name("Steampunk"));
+        assert!(!ComboThemeConfig::is_builtin_name("My Blue"));
     }
 }
