@@ -1354,6 +1354,20 @@ impl GridLayout {
             panel_guard.geometry
         };
 
+        // A panel entering the grid renders with its resolved theme
+        // (panel → group → global). Without this push a new combo keeps the
+        // displayer's default frame theme until the next edit or restart.
+        {
+            let mut panel_guard = panel.blocking_write();
+            let theme = self
+                .app_config
+                .borrow()
+                .resolve_theme_for(&panel_guard.theme_ref(), panel_guard.group_id());
+            if let Err(e) = panel_guard.apply_resolved_theme(&theme) {
+                log::warn!("Panel {}: theme push failed: {}", panel_id, e);
+            }
+        }
+
         // Calculate pixel position
         let config = self.config.borrow();
         let x = geometry.x as i32 * (config.cell_width + config.spacing);

@@ -647,10 +647,6 @@ fn build_ui(app: &Application) {
     // Ensure proper z-ordering after all panels are loaded
     grid_layout.reorder_panels_by_z_index();
 
-    // Push each panel's resolved theme (panel → group → global) into its
-    // displayer; displayers need it for Theme{index} colour resolution.
-    rg_sens::ui::config_helpers::apply_resolved_themes(&app_config.borrow(), &panels);
-
     // Debug: Print shared source statistics to verify source sharing
     if let Some(manager) = rg_sens::core::global_shared_source_manager() {
         manager.debug_print_sources();

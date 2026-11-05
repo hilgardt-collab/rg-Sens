@@ -965,8 +965,22 @@ impl SynthwaveConfigWidget {
 
     /// Set the theme configuration. Call this BEFORE set_config to ensure
     /// font selectors have the correct theme when the UI is rebuilt.
+    /// Refresh the Theme tab controls (colours, gradient, fonts) from
+    /// `theme`. Callers suppress `on_change` first: the size spin buttons
+    /// emit value-changed on `set_value`.
+    fn refresh_theme_tab(&self, theme: &crate::ui::theme::ComboThemeConfig) {
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.common.apply_theme_preset(theme);
+        }
+    }
+
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
         self.config.borrow_mut().frame.theme = theme.clone();
+        // Refresh the Theme tab without firing on_change (the size spin
+        // buttons emit value-changed on set_value).
+        let saved_callback = self.on_change.borrow_mut().take();
+        self.refresh_theme_tab(&theme);
+        *self.on_change.borrow_mut() = saved_callback;
         // Update header font selector with new theme
         if let Some(ref widgets) = *self.header_widgets.borrow() {
             widgets.header_font_selector.set_theme_config(theme.clone());

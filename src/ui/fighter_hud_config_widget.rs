@@ -1344,35 +1344,8 @@ impl FighterHudConfigWidget {
         }
 
         // Update Theme widgets (fonts and colors)
-        if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            let cfg = self.config.borrow();
-            widgets
-                .theme_color1_widget
-                .set_color(cfg.frame.theme.color1);
-            widgets
-                .theme_color2_widget
-                .set_color(cfg.frame.theme.color2);
-            widgets
-                .theme_color3_widget
-                .set_color(cfg.frame.theme.color3);
-            widgets
-                .theme_color4_widget
-                .set_color(cfg.frame.theme.color4);
-            widgets
-                .theme_gradient_editor
-                .set_theme_config(cfg.frame.theme.clone());
-            widgets
-                .theme_gradient_editor
-                .set_gradient_source_config(&cfg.frame.theme.gradient);
-            widgets.font1_btn.set_label(&cfg.frame.theme.font1_family);
-            widgets
-                .font1_size_spin
-                .set_value(cfg.frame.theme.font1_size);
-            widgets.font2_btn.set_label(&cfg.frame.theme.font2_family);
-            widgets
-                .font2_size_spin
-                .set_value(cfg.frame.theme.font2_size);
-        }
+        let theme = self.config.borrow().frame.theme.clone();
+        self.refresh_theme_tab(&theme);
 
         // Rebuild content tabs to update theme reference sections
         Self::rebuild_content_tabs(
@@ -1399,8 +1372,35 @@ impl FighterHudConfigWidget {
 
     /// Set the theme configuration. Call this BEFORE set_config to ensure
     /// font selectors have the correct theme when the UI is rebuilt.
+    /// Refresh the Theme tab controls (colours, gradient, fonts) from
+    /// `theme`. Callers suppress `on_change` first: the size spin buttons
+    /// emit value-changed on `set_value`.
+    fn refresh_theme_tab(&self, theme: &crate::ui::theme::ComboThemeConfig) {
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.theme_color1_widget.set_color(theme.color1);
+            widgets.theme_color2_widget.set_color(theme.color2);
+            widgets.theme_color3_widget.set_color(theme.color3);
+            widgets.theme_color4_widget.set_color(theme.color4);
+            widgets
+                .theme_gradient_editor
+                .set_theme_config(theme.clone());
+            widgets
+                .theme_gradient_editor
+                .set_gradient_source_config(&theme.gradient);
+            widgets.font1_btn.set_label(&theme.font1_family);
+            widgets.font1_size_spin.set_value(theme.font1_size);
+            widgets.font2_btn.set_label(&theme.font2_family);
+            widgets.font2_size_spin.set_value(theme.font2_size);
+        }
+    }
+
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
-        self.config.borrow_mut().frame.theme = theme;
+        self.config.borrow_mut().frame.theme = theme.clone();
+        // Refresh the Theme tab without firing on_change (the size spin
+        // buttons emit value-changed on set_value).
+        let saved_callback = self.on_change.borrow_mut().take();
+        self.refresh_theme_tab(&theme);
+        *self.on_change.borrow_mut() = saved_callback;
         // Trigger all theme refreshers to update child widgets
         for refresher in self.theme_ref_refreshers.borrow().iter() {
             refresher();

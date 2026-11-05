@@ -129,6 +129,7 @@ pub fn show_tree_properties_dialog(
         applied: RefCell::new(data.clone()),
         combo_source: RefCell::new(None),
         theme_ref: RefCell::new(data.theme.clone()),
+        theme_baseline: RefCell::new(None),
         source_editor: RefCell::new(None),
         display_editor: RefCell::new(None),
         display_needs_poll: Cell::new(false),

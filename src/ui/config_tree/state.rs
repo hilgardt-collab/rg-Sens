@@ -21,8 +21,8 @@ use crate::ui::{
 };
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Box as GtkBox, Button, CheckButton, Label, Notebook, SingleSelection, SpinButton,
-    Stack, TreeListRow, Widget, Window,
+    gio, glib, Box as GtkBox, Button, CheckButton, DropDown, Label, Notebook, SingleSelection,
+    SpinButton, Stack, TreeListRow, Widget, Window,
 };
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -65,7 +65,34 @@ pub(super) enum ThemeChoice {
 
 pub(super) struct ThemeControls {
     pub choices: Vec<ThemeChoice>,
-    pub inline_box: GtkBox,
+    pub dropdown: DropDown,
+    /// Says whether the editor below shows a shared theme (an edit makes it
+    /// private) or this panel's private theme.
+    pub mode_hint: Label,
+}
+
+/// Dropdown row for `theme_ref` in `choices` (Inherit, Global, named and
+/// built-in themes, then Inline last).
+pub(super) fn theme_choice_index(choices: &[ThemeChoice], theme_ref: &ThemeRef) -> usize {
+    match theme_ref {
+        ThemeRef::Inherit => 0,
+        ThemeRef::Global => 1,
+        ThemeRef::Named { name } => choices
+            .iter()
+            .position(|c| matches!(c, ThemeChoice::Named(n) if n == name))
+            .unwrap_or(0),
+        ThemeRef::Inline { .. } => choices.len().saturating_sub(1),
+    }
+}
+
+/// Hint shown under the theme dropdown.
+pub(super) fn theme_mode_hint(theme_ref: &ThemeRef) -> &'static str {
+    if theme_ref.is_inline() {
+        "This theme is private to this panel. Pick a theme above to share one instead."
+    } else {
+        "Showing the theme this panel resolves to. Changing a colour, gradient or font \
+         below makes the theme private to this panel (Inline)."
+    }
 }
 
 /// Everything built for one content item page.
@@ -87,6 +114,10 @@ pub struct State {
     /// for standalone panels.
     pub(super) combo_source: RefCell<Option<ComboSourceConfig>>,
     pub(super) theme_ref: RefCell<ThemeRef>,
+    /// What the theme editor held after the last programmatic push. A
+    /// shared reference whose editor payload differs from this was edited by
+    /// the user and becomes `Inline` at the next commit.
+    pub(super) theme_baseline: RefCell<Option<ComboThemeConfig>>,
 
     // ---- editors (built lazily, kept for the dialog's lifetime) ----
     pub(super) source_editor: RefCell<Option<Box<dyn SourceEditor>>>,
@@ -158,7 +189,7 @@ impl State {
 
     /// Current payload of an `Inline` reference: the themed editor's frame
     /// theme for combos, the inline widget for standalone panels.
-    fn inline_payload(&self) -> Option<ComboThemeConfig> {
+    pub(super) fn inline_payload(&self) -> Option<ComboThemeConfig> {
         if self.is_combo() {
             self.display_editor
                 .borrow()
@@ -273,6 +304,7 @@ impl State {
 
     /// Apply the editors' state to the live panel.
     pub(super) fn commit_now(self: &Rc<Self>) {
+        self.detach_theme_if_edited();
         let data = self.build_data();
         self.apply(data);
     }
@@ -297,6 +329,16 @@ impl State {
                         "Cannot resize panel",
                         "The new size would overlap another panel. The size was kept; everything else was applied.",
                     );
+                }
+                // Keep the editors' theme in step: an Inline edit must reach
+                // the background and item editors, and a shared theme changed
+                // in the Themes & Groups window must reach the theme editor.
+                let stale = match self.theme_baseline.borrow().as_ref() {
+                    Some(baseline) => *baseline != self.resolved_theme(),
+                    None => false,
+                };
+                if stale {
+                    self.propagate_theme();
                 }
                 self.refresh_row_texts();
                 true
@@ -368,6 +410,7 @@ impl State {
         *self.geometry.borrow_mut() = None;
         *self.appearance.borrow_mut() = None;
         *self.theme_controls.borrow_mut() = None;
+        *self.theme_baseline.borrow_mut() = None;
     }
 
     // ------------------------------------------------------------------
@@ -390,6 +433,11 @@ impl State {
         let resolved = self.resolved_theme();
         editor.set_theme(&resolved);
         editor.load(&self.applied.borrow().displayer_config);
+        // `load` wrote the panel's cached frame theme; a shared reference
+        // shows (and is compared against) the resolved theme.
+        if !self.theme_ref.borrow().is_inline() {
+            editor.set_theme(&resolved);
+        }
         if let Some(combo) = editor.combo() {
             combo.set_available_fields(fields);
             if let Some(cs) = self.combo_source.borrow().as_ref() {
@@ -422,6 +470,7 @@ impl State {
             *self.display_pages.borrow_mut() = sections;
         }
         *self.display_editor.borrow_mut() = Some(editor);
+        *self.theme_baseline.borrow_mut() = self.inline_payload();
     }
 
     pub(super) fn ensure_source_editor(self: &Rc<Self>) -> Option<Widget> {
@@ -462,11 +511,21 @@ impl State {
         bg
     }
 
-    /// Push the resolved theme into every editor that renders theme colours.
+    /// Push the resolved theme into every editor that renders theme colours
+    /// and record what the theme editor holds afterwards as the baseline.
     pub(super) fn propagate_theme(&self) {
         let resolved = self.resolved_theme();
         if let Some(e) = self.display_editor.borrow().as_ref() {
             e.set_theme(&resolved);
+        }
+        // The standalone theme editor *is* the payload when Inline; for a
+        // shared reference it mirrors the resolved theme.
+        if !self.theme_ref.borrow().is_inline() {
+            if let Some(w) = self.inline_theme_widget.borrow().as_ref() {
+                let was_loading = self.loading.replace(true);
+                w.set_config(resolved.clone());
+                self.loading.set(was_loading);
+            }
         }
         if let Some(bg) = self.background_editor.borrow().as_ref() {
             bg.set_theme_config(resolved.clone());
@@ -474,33 +533,66 @@ impl State {
         for r in self.item_theme_refreshers.borrow().iter() {
             r();
         }
+        *self.theme_baseline.borrow_mut() = self.inline_payload();
     }
 
-    /// Change the theme reference (dropdown or Inline edit).
+    /// Change the theme reference from the dropdown.
     pub(super) fn apply_theme_ref(self: &Rc<Self>, theme_ref: ThemeRef) {
-        let inline = theme_ref.is_inline();
-        if inline {
+        let theme_ref = if theme_ref.is_inline() {
             // Start the private theme from what the panel resolves to now so
             // switching to Inline does not change its look.
-            let current = self.resolved_theme();
-            self.loading.set(true);
-            if self.is_combo() {
-                if let Some(e) = self.display_editor.borrow().as_ref() {
-                    e.set_theme(&current);
-                }
-            } else if let Some(w) = self.inline_theme_widget.borrow().as_ref() {
-                w.set_config(current.clone());
-            }
-            self.loading.set(false);
-            *self.theme_ref.borrow_mut() = ThemeRef::inline(current);
+            ThemeRef::inline(self.resolved_theme())
         } else {
-            *self.theme_ref.borrow_mut() = theme_ref;
-        }
-        if let Some(t) = self.theme_controls.borrow().as_ref() {
-            t.inline_box.set_visible(inline);
-        }
+            theme_ref
+        };
+        *self.theme_ref.borrow_mut() = theme_ref;
+        self.sync_theme_controls();
         self.propagate_theme();
         self.changed();
+    }
+
+    /// The standalone theme editor changed.
+    pub(super) fn theme_editor_changed(self: &Rc<Self>) {
+        if self.loading.get() {
+            return;
+        }
+        if self.theme_ref.borrow().is_inline() {
+            self.propagate_theme();
+        }
+        self.changed();
+    }
+
+    /// An edit in the theme editor while the reference is shared (Inherit,
+    /// Global or Named) makes the theme private to this panel. Runs before
+    /// each commit. The editor payload is compared with the last pushed
+    /// baseline, not with the current resolution, so a shared theme changed
+    /// in the Themes & Groups window meanwhile does not detach this panel.
+    fn detach_theme_if_edited(&self) {
+        if self.theme_ref.borrow().is_inline() {
+            return;
+        }
+        let Some(payload) = self.inline_payload() else {
+            return;
+        };
+        if self.theme_baseline.borrow().as_ref() == Some(&payload) {
+            return;
+        }
+        *self.theme_ref.borrow_mut() = ThemeRef::inline(payload);
+        self.sync_theme_controls();
+    }
+
+    /// Make the Theme page's dropdown and hint reflect the current reference.
+    fn sync_theme_controls(&self) {
+        let theme_ref = self.theme_ref.borrow().clone();
+        let controls = self.theme_controls.borrow();
+        let Some(t) = controls.as_ref() else {
+            return;
+        };
+        let was_loading = self.loading.replace(true);
+        t.dropdown
+            .set_selected(theme_choice_index(&t.choices, &theme_ref) as u32);
+        self.loading.set(was_loading);
+        t.mode_hint.set_text(theme_mode_hint(&theme_ref));
     }
 
     // ------------------------------------------------------------------

@@ -2076,48 +2076,7 @@ impl LcarsConfigWidget {
         }
 
         // Update theme widgets (fonts and colors)
-        if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets
-                .common
-                .color1_widget
-                .set_color(new_config.frame.theme.color1);
-            widgets
-                .common
-                .color2_widget
-                .set_color(new_config.frame.theme.color2);
-            widgets
-                .common
-                .color3_widget
-                .set_color(new_config.frame.theme.color3);
-            widgets
-                .common
-                .color4_widget
-                .set_color(new_config.frame.theme.color4);
-            widgets
-                .common
-                .gradient_editor
-                .set_theme_config(new_config.frame.theme.clone());
-            widgets
-                .common
-                .gradient_editor
-                .set_gradient_source_config(&new_config.frame.theme.gradient);
-            widgets
-                .common
-                .font1_btn
-                .set_label(&new_config.frame.theme.font1_family);
-            widgets
-                .common
-                .font1_size_spin
-                .set_value(new_config.frame.theme.font1_size);
-            widgets
-                .common
-                .font2_btn
-                .set_label(&new_config.frame.theme.font2_family);
-            widgets
-                .common
-                .font2_size_spin
-                .set_value(new_config.frame.theme.font2_size);
-        }
+        self.refresh_theme_tab(&new_config.frame.theme);
 
         // Clear guard and restore the on_change callback now that widget updates are complete
         self.updating_from_config.set(false);
@@ -2155,15 +2114,24 @@ impl LcarsConfigWidget {
 
     /// Set the theme configuration. Call this BEFORE set_config to ensure
     /// font selectors have the correct theme when the UI is rebuilt.
+    /// Refresh the Theme tab controls (colours, gradient, fonts) from
+    /// `theme`. Callers suppress `on_change` first: the size spin buttons
+    /// emit value-changed on `set_value`.
+    fn refresh_theme_tab(&self, theme: &crate::ui::theme::ComboThemeConfig) {
+        if let Some(ref widgets) = *self.theme_widgets.borrow() {
+            widgets.common.apply_theme_preset(theme);
+        }
+    }
+
     pub fn set_theme(&self, theme: crate::ui::theme::ComboThemeConfig) {
         self.config.borrow_mut().frame.theme = theme.clone();
-        // Update gradient editor with new theme colors
-        if let Some(ref widgets) = *self.theme_widgets.borrow() {
-            widgets
-                .common
-                .gradient_editor
-                .set_theme_config(theme.clone());
-        }
+        // Refresh the Theme tab without firing on_change (the size spin
+        // buttons emit value-changed on set_value).
+        let saved_callback = self.on_change.borrow_mut().take();
+        self.updating_from_config.set(true);
+        self.refresh_theme_tab(&theme);
+        self.updating_from_config.set(false);
+        *self.on_change.borrow_mut() = saved_callback;
         // Update header widgets with new theme colors and fonts
         if let Some(ref widgets) = *self.headers_widgets.borrow() {
             widgets.top_bg_widget.set_theme_config(theme.clone());

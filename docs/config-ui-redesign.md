@@ -888,8 +888,10 @@ Known Phase-0 limitations, all removed by Phase 1:
   (300 ms) while their page is visible. Item node = caption + order, Source
   expander (dropdown, editor, copy/paste), Display expander (display-as and
   the embedded lazily built display editors). Theme node = reference
-  chooser; the themed editor's own Theme page (combos) or a
-  `GlobalThemeWidget` (standalone) appears for Inline. Display node has the
+  chooser over an always-visible theme editor (the themed editor's own Theme
+  page for combos, a `GlobalThemeWidget` for standalone panels): a shared
+  reference shows the resolved theme and any edit to it makes the panel's
+  theme `Inline` (see §11.1). Display node has the
   displayer dropdown (combo → combo switches carry `TransferableComboConfig`;
   new displayers start from their saved default style) and "Save as Default
   Style". Border & Corners has Copy/Paste Style.
@@ -923,3 +925,47 @@ Known Phase-1 limitations:
   dialog opens; theme edits made in the Themes window while it is open show
   up on reopen.
 * Live edit of a combo item's *source* is still batched (needs §9.3).
+
+### 11.1 First GUI feedback (2026-11-05, same day)
+
+The user's first run found the Theme node unusable for new panels: it showed
+only the reference dropdown, and the colours shown for existing combos went
+stale after a dropdown change. Three defects, fixed together:
+
+* **Theme editor hidden unless Inline.** The editor is now always on the
+  page. For Inherit / Global / Named it shows the resolved theme; for Inline
+  the private one. Editing a colour, gradient or font under a shared
+  reference detaches the panel: `State::detach_theme_if_edited` runs before
+  every commit and compares the editor payload with `theme_baseline`, the
+  value last pushed into the editor (not with the current resolution, so a
+  theme changed in the Themes & Groups window meanwhile does not detach the
+  panel). The dropdown jumps to Inline and the row summary follows. Picking
+  a built-in preset keeps a `Named` reference; tweaking it afterwards makes
+  it Inline with the preset's values plus the tweak. Library themes are never
+  edited from this page — that stays in the Themes & Groups window. After a
+  successful apply, a baseline that no longer matches the resolution
+  re-propagates, so an Inline edit reaches the background and item editors
+  and an external change reaches the theme editor.
+* **Themed widgets' `set_theme` did not refresh their Theme tab.** Only
+  `set_config` updated the C1–C4 buttons, gradient editor and font controls,
+  so a theme pushed by the dialog left the tab showing the previous values.
+  Each of the ten widgets now has `refresh_theme_tab`, called from both
+  `set_theme` (with `on_change` suppressed — the size spin buttons emit
+  `value-changed` on `set_value`) and `set_config`. The five
+  `CommonThemeWidgets`-based widgets use `apply_theme_preset`, which also
+  fixes a latent bug: `set_config` never updated the gradient editor's
+  `current_colors`, so the first colour edit after a load re-synced the
+  gradient from construction-time colours.
+* **New panels never received a resolved theme.** `GridLayout::add_panel`
+  now pushes the resolved theme before creating the widget; `main.rs` no
+  longer needs its startup pass (`config_helpers::apply_resolved_themes`
+  stays for the Themes & Groups window). Until then a new combo rendered
+  with the displayer's default frame theme until the first edit or restart,
+  and the dialog's first commit would have detached such a panel.
+
+Open points: nested scrolling where a themed editor's Theme page carries its
+own `ScrolledWindow` (Art Deco, Art Nouveau, Steampunk) inside the dialog's
+scrolled page; a widget-level preset dropdown (Cyberpunk, Industrial, Retro,
+Synthwave, Art Deco, Art Nouveau, Steampunk) is not reset when the dialog
+pushes a theme, so it may name a preset the colours no longer match (same as
+`set_config` today).

@@ -2,8 +2,8 @@
 
 use super::node::NodeKind;
 use super::state::{
-    flat_button, AppearanceControls, GeometryControls, ItemEditor, State, ThemeChoice,
-    ThemeControls,
+    flat_button, theme_choice_index, theme_mode_hint, AppearanceControls, GeometryControls,
+    ItemEditor, State, ThemeChoice, ThemeControls,
 };
 use super::util::*;
 use crate::core::{global_registry, DisplayerConfig};
@@ -258,45 +258,37 @@ impl State {
         names.push("Inline (private to this panel)".to_string());
 
         let current = self.theme_ref.borrow().clone();
-        let selected = match &current {
-            ThemeRef::Inherit => 0,
-            ThemeRef::Global => 1,
-            ThemeRef::Named { name } => choices
-                .iter()
-                .position(|c| matches!(c, ThemeChoice::Named(n) if n == name))
-                .unwrap_or(0),
-            ThemeRef::Inline { .. } => choices.len() - 1,
-        };
-        let dropdown = dropdown_row(&page, "Use theme:", &names, selected);
+        let dropdown = dropdown_row(
+            &page,
+            "Use theme:",
+            &names,
+            theme_choice_index(&choices, &current),
+        );
+        let mode_hint = hint(theme_mode_hint(&current));
+        page.append(&mode_hint);
 
-        let inline_box = GtkBox::new(Orientation::Vertical, 6);
-        inline_box.append(&heading("Inline theme"));
+        // The theme editor is always shown: the resolved theme for a shared
+        // reference, the private theme for Inline. Editing under a shared
+        // reference detaches the panel (`State::detach_theme_if_edited`).
         if self.is_combo() {
             if let Some(theme_page) = self.theme_page.borrow().as_ref() {
-                inline_box.append(theme_page);
+                page.append(theme_page);
             }
         } else {
             let widget = Rc::new(GlobalThemeWidget::new());
-            if let ThemeRef::Inline { theme } = &current {
-                widget.set_config(theme.clone());
-            } else {
-                widget.set_config(self.resolved_theme());
-            }
+            // Inline: the reference's payload (no editor exists yet to ask);
+            // shared: the resolved theme.
+            widget.set_config(self.resolved_theme());
             let weak = Rc::downgrade(self);
             widget.set_on_change(move || {
                 if let Some(s) = weak.upgrade() {
-                    if s.loading.get() {
-                        return;
-                    }
-                    s.propagate_theme();
-                    s.changed();
+                    s.theme_editor_changed();
                 }
             });
-            inline_box.append(widget.widget());
+            page.append(widget.widget());
             *self.inline_theme_widget.borrow_mut() = Some(widget);
+            *self.theme_baseline.borrow_mut() = self.inline_payload();
         }
-        inline_box.set_visible(current.is_inline());
-        page.append(&inline_box);
 
         {
             let weak = Rc::downgrade(self);
@@ -322,7 +314,8 @@ impl State {
         }
         *self.theme_controls.borrow_mut() = Some(ThemeControls {
             choices,
-            inline_box,
+            dropdown,
+            mode_hint,
         });
         page
     }
