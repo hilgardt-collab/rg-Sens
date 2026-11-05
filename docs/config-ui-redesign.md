@@ -1,7 +1,9 @@
 # Config UI Redesign: Tree-Based Configuration
 
 Status: design accepted 2026-11-05 (Option A, see §8 and §9).
-**Phase 0 implemented 2026-11-05** (see §10); Phases 1–3 not started.
+**Phase 0 implemented 2026-11-05** (see §10). **Phase 1 implemented
+2026-11-05** (see §11), pending user testing against the §6 checklist;
+the classic dialog is still reachable. Phases 2–3 not started.
 
 Goal: replace the tab-in-tab-in-tab configuration dialogs with a tree that
 shows the structure of what is being configured, without losing a single
@@ -856,6 +858,58 @@ Known Phase-0 limitations, all removed by Phase 1:
   model should keep theme/group/labels without cloning whole configs.
 * The global theme is editable in the window but, by design, not renamable
   or deletable; built-in presets are read-only and must be duplicated.
+
+---
+
+## 11. Phase 1 as shipped (2026-11-05)
+
+* `crates/sources/src/combo.rs`: `ComboSource::reconcile_children` (§9.3):
+  unchanged slots keep their child instance, config changes reconfigure in
+  place, type changes recreate one slot. Tested.
+* `src/core/shared_source_manager.rs::reconfigure_or_recreate`: a panel that
+  is its source's only user keeps the live instance across config changes
+  (re-keyed), so a combo keeps its children through live edits. Used by
+  `Panel::update_from_data` when the source type is unchanged.
+* `src/ui/editor_registry.rs`: `SourceEditor` / `DisplayEditor` /
+  `ComboDisplayEditor` traits, adapters over all 11 source widgets and 20
+  displayer widgets (css_template behind the `webkit` feature), registered
+  by id in `register_all_editors()`. Themed combo editors detach their
+  notebook pages (`take_pages`) and build per-item editors bound to their
+  shared config (`item_editor`, via `create_content_item_config`).
+* `GridLayout::apply_panel_data` (`grid_layout.rs`): the one path from a
+  `PanelData` to grid state. The grid publishes a weak handle
+  (`grid_layout::grid_weak()`) so dialogs opened from any of the three
+  panel-menu construction paths can reach it.
+* `src/ui/config_tree/`: the dialog. Tree: Panel › Position & Size, Theme,
+  Source (standalone), Display (› sections for combos), Content (› Group ›
+  Item, combos), Background, Border & Corners. Live commit after a 50 ms
+  debounce; Revert re-applies the opening snapshot and rebuilds the editors;
+  Close. Source and clock editors have no change signal and are polled
+  (300 ms) while their page is visible. Item node = caption + order, Source
+  expander (dropdown, editor, copy/paste), Display expander (display-as and
+  the embedded lazily built display editors). Theme node = reference
+  chooser; the themed editor's own Theme page (combos) or a
+  `GlobalThemeWidget` (standalone) appears for Inline. Display node has the
+  displayer dropdown (combo → combo switches carry `TransferableComboConfig`;
+  new displayers start from their saved default style) and "Save as Default
+  Style". Border & Corners has Copy/Paste Style.
+* Context menu: "Properties…" opens the tree dialog on all three
+  construction paths; "Properties (classic)…" opens the old dialog until the
+  §6 checklist has been verified, then `grid_properties_dialog.rs` goes
+  (Phase 2).
+
+Known Phase-1 limitations:
+
+* Group size weights and orientation are edited under Display › Layout (the
+  themed editor's page), not on the group node; the source-side
+  `GroupConfig.size_weight` is not exposed (rendering uses the frame's).
+* Structural changes (group/item count, reorder, item source change) rebuild
+  the Content subtree and drop its item pages; per-item display editors are
+  recreated on next selection.
+* No row context menu yet (copy/paste/reset per node); the per-editor
+  buttons and the grid context menu cover those actions.
+* The Themes & Groups window is not linked from the Theme node (it needs
+  handles the dialog does not hold); open it from the dashboard menu.
 * Window Settings' background widgets receive the global theme when the
   dialog opens; theme edits made in the Themes window while it is open show
   up on reopen.

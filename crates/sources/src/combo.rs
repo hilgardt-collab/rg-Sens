@@ -163,19 +163,16 @@ impl ComboSource {
                 stats.reconfigured += 1;
                 continue;
             }
-            match create_child(&slot_name, &slot_config) {
-                Some(child) => {
-                    self.child_sources.insert(slot_name.clone(), child);
-                    self.child_configs.insert(
-                        slot_name,
-                        (
-                            slot_config.source_id.clone(),
-                            slot_config.source_config.clone(),
-                        ),
-                    );
-                    stats.created += 1;
-                }
-                None => {}
+            if let Some(child) = create_child(&slot_name, &slot_config) {
+                self.child_sources.insert(slot_name.clone(), child);
+                self.child_configs.insert(
+                    slot_name,
+                    (
+                        slot_config.source_id.clone(),
+                        slot_config.source_config.clone(),
+                    ),
+                );
+                stats.created += 1;
             }
         }
         stats

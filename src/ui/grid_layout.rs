@@ -80,6 +80,10 @@ pub(crate) fn create_panel_context_menu() -> gtk4::gio::Menu {
     // Section 1: Properties
     let section1 = gio::Menu::new();
     section1.append(Some("Properties..."), Some("panel.properties"));
+    section1.append(
+        Some("Properties (classic)..."),
+        Some("panel.properties_classic"),
+    );
     menu.append_section(None, &section1);
 
     // Section 2: Copy/Paste Style
@@ -382,6 +386,18 @@ pub struct GridLayout {
     self_weak: Option<Weak<RefCell<GridLayout>>>,
 }
 
+thread_local! {
+    /// The main grid, published by `set_self_weak`, so dialogs opened from
+    /// any of the panel-menu construction paths can reach it without each
+    /// path threading a handle through its closures.
+    static GRID_WEAK: RefCell<Option<Weak<RefCell<GridLayout>>>> = const { RefCell::new(None) };
+}
+
+/// Weak handle to the main grid (`None` before the main window exists).
+pub fn grid_weak() -> Option<Weak<RefCell<GridLayout>>> {
+    GRID_WEAK.with(|g| g.borrow().clone())
+}
+
 /// What [`GridLayout::apply_panel_data`] did.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ApplyOutcome {
@@ -448,8 +464,10 @@ impl GridLayout {
         grid_layout
     }
 
-    /// Store the weak self-reference (see the field doc).
+    /// Store the weak self-reference (see the field doc) and publish it for
+    /// [`grid_weak`].
     pub fn set_self_weak(&mut self, weak: Weak<RefCell<GridLayout>>) {
+        GRID_WEAK.with(|g| *g.borrow_mut() = Some(weak.clone()));
         self.self_weak = Some(weak);
     }
 
@@ -1040,11 +1058,7 @@ impl GridLayout {
                             && y <= panel_y + panel_height
                         {
                             // Get z_index from the panel using try_read with fallback
-                            let z_index = state
-                                .panel
-                                .try_read()
-                                .map(|g| g.z_index)
-                                .unwrap_or(0);
+                            let z_index = state.panel.try_read().map(|g| g.z_index).unwrap_or(0);
                             candidates.push((
                                 state,
                                 z_index,
@@ -1718,7 +1732,7 @@ impl GridLayout {
         let drop_zone = self.drop_zone_layer.clone();
         let app_config_props = self.app_config.clone();
 
-        let properties_action = gio::SimpleAction::new("properties", None);
+        let properties_action = gio::SimpleAction::new("properties_classic", None);
         let selected_panels_props = self.selected_panels.clone();
         let panels_props = self.panels.clone();
         properties_action.connect_activate(move |_, _| {
@@ -1743,6 +1757,15 @@ impl GridLayout {
             );
         });
         action_group.add_action(&properties_action);
+
+        // Tree-based properties dialog (default)
+        let tree_action = gio::SimpleAction::new("properties", None);
+        let panel_tree = panel.clone();
+        let anchor_tree = widget.clone();
+        tree_action.connect_activate(move |_, _| {
+            crate::ui::config_tree::open_tree_properties(&panel_tree, &anchor_tree);
+        });
+        action_group.add_action(&tree_action);
 
         // Copy Style action
         let panel_copy_style = panel.clone();
@@ -2635,7 +2658,7 @@ impl GridLayout {
                                 let action_group = gio::SimpleActionGroup::new();
 
                                 // Properties action
-                                let properties_action = gio::SimpleAction::new("properties", None);
+                                let properties_action = gio::SimpleAction::new("properties_classic", None);
                                 let panel_clone_props = panel_for_menu.clone();
                                 let config_clone_props = config_for_menu.clone();
                                 let panel_states_props = panel_states_for_menu.clone();
@@ -2671,6 +2694,15 @@ impl GridLayout {
                                     );
                                 });
                                 action_group.add_action(&properties_action);
+
+                                // Tree-based properties dialog (default)
+                                let tree_action = gio::SimpleAction::new("properties", None);
+                                let panel_tree = panel_for_menu.clone();
+                                let anchor_tree = frame_for_menu.clone();
+                                tree_action.connect_activate(move |_, _| {
+                                    crate::ui::config_tree::open_tree_properties(&panel_tree, &anchor_tree);
+                                });
+                                action_group.add_action(&tree_action);
 
                                 // Delete action - deletes all selected panels
                                 let delete_action = gio::SimpleAction::new("delete", None);
@@ -3772,7 +3804,8 @@ impl GridLayout {
 
                 // Calculate pixel position + size for this panel
                 let panel_right = (geom.x + geom.width) as i32 * (cell_width + spacing) - spacing;
-                let panel_bottom = (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
+                let panel_bottom =
+                    (geom.y + geom.height) as i32 * (cell_height + spacing) - spacing;
 
                 max_width = max_width.max(panel_right);
                 max_height = max_height.max(panel_bottom);
@@ -3983,7 +4016,7 @@ fn setup_copied_panel_interaction(
     let action_group = gio::SimpleActionGroup::new();
 
     // Properties action
-    let properties_action = gio::SimpleAction::new("properties", None);
+    let properties_action = gio::SimpleAction::new("properties_classic", None);
     let panel_props = panel.clone();
     let config_props = config.clone();
     let panel_states_props = panel_states.clone();
@@ -4019,6 +4052,15 @@ fn setup_copied_panel_interaction(
         );
     });
     action_group.add_action(&properties_action);
+
+    // Tree-based properties dialog (default)
+    let tree_action = gio::SimpleAction::new("properties", None);
+    let panel_tree = panel.clone();
+    let anchor_tree = widget.clone();
+    tree_action.connect_activate(move |_, _| {
+        crate::ui::config_tree::open_tree_properties(&panel_tree, &anchor_tree);
+    });
+    action_group.add_action(&tree_action);
 
     // Delete action
     let delete_action = gio::SimpleAction::new("delete", None);
@@ -4378,7 +4420,12 @@ fn setup_copied_panel_interaction(
                                 let geom = guard.geometry;
                                 let new_grid_x = (geom.x as i32 + delta_grid_x).max(0) as u32;
                                 let new_grid_y = (geom.y as i32 + delta_grid_y).max(0) as u32;
-                                preview_rects.push((new_grid_x, new_grid_y, geom.width, geom.height));
+                                preview_rects.push((
+                                    new_grid_x,
+                                    new_grid_y,
+                                    geom.width,
+                                    geom.height,
+                                ));
                             }
                         }
                     }

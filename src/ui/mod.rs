@@ -86,6 +86,7 @@ mod test_source_config_widget;
 mod test_source_dialog;
 pub mod themes_groups_dialog;
 pub mod editor_registry;
+pub mod config_tree;
 pub mod theme;
 mod theme_color_selector;
 mod theme_font_selector;

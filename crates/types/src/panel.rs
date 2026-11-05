@@ -10,6 +10,7 @@ use crate::display_configs::{
     DigitalClockConfig, GraphDisplayConfig, IndicatorConfig, SpeedometerConfig,
     AnalogClockConfig,
 };
+use crate::display_configs::lcars::ContentItemConfig;
 use crate::display_configs::themed_configs::{
     ArtDecoDisplayConfig, ArtNouveauDisplayConfig, CyberpunkDisplayConfig,
     FighterHudDisplayConfig, IndustrialDisplayConfig, LcarsDisplayConfig,
@@ -428,6 +429,24 @@ impl DisplayerConfig {
     /// Whether this displayer carries its own frame theme (a combo displayer).
     pub fn has_frame_theme(&self) -> bool {
         self.theme().is_some()
+    }
+
+    /// Per-item content configuration of a combo displayer, keyed by slot
+    /// (`"group{N}_{M}"`). `None` for standalone displayers.
+    pub fn content_items(&self) -> Option<&HashMap<String, ContentItemConfig>> {
+        match self {
+            DisplayerConfig::Lcars(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::Cyberpunk(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::Material(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::Industrial(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::RetroTerminal(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::FighterHud(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::Synthwave(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::ArtDeco(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::ArtNouveau(cfg) => Some(&cfg.frame.content_items),
+            DisplayerConfig::Steampunk(cfg) => Some(&cfg.frame.content_items),
+            _ => None,
+        }
     }
 
     /// Convert to HashMap<String, Value> for legacy interface compatibility
